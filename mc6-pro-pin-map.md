@@ -119,12 +119,214 @@ contains `0x83`, `0x81`, `0x82`, `0x07` for the four inputs; bit 7 selects ADC2.
 ADC1 and ADC2 bases are `0x400c4000` and `0x400c8000`.
 
 The expression test references these same objects. Another mode configures
-the first pin with an input pull-up. This does not yet establish the complete
-external-switch or MIDI modes.
+the first pin with an input pull-up. MIDI uses the same pin pairs, as traced
+below.
 
-Unknown: which conductor is tip/ring for each signal, the supply voltage and
-protection network, and configurable-port MIDI routing. A GPIO driven HIGH must
+Matching the MIDI mode branches to the documented connector configurations
+identifies the ADC/first pin as **tip** and the driven-high/second pin as **ring**.
+This is a software-plus-documentation inference, not continuity verification.
+Unknown: the supply voltage and protection network. A GPIO driven HIGH must
 not be treated as a characterized power supply or safe arbitrary-voltage input.
+
+## Configurable ports: MIDI routing and mode selection
+
+The stock configurable-port MIDI paths are **outputs only**. They are distinct
+from the dedicated DIN and 3.5 mm MIDI inputs described below. Morningstar's
+[MC6 Pro manual](https://help.morningstar.io/en/article/mc6-pro-user-manual-psevjy/)
+lists MIDI output, expression input and auxiliary-switch input for these jacks,
+not MIDI input. Firmware construction agrees: every serial instance created by
+the configurable-port initializer has its RX pin explicitly set to `-1`.
+
+### Signal and peripheral assignments: confirmed in firmware
+
+Each jack has two software-controlled signals. The contact names retain the
+inference qualification above. The firmware uses FlexIO timers and shifters to
+generate serial output, not the dedicated LPUART peripherals and not a
+CPU-timed GPIO bit-banging loop.
+
+| Port | Contact | Logical pin | GPIO | Processor pad | Selected FlexIO signal | Mux write |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Tip | 26 | GPIO6 bit 30 | `GPIO_AD_B1_14` | FlexIO3 D14 | `0x19` |
+| 1 | Ring | 32 | GPIO7 bit 12 | `GPIO_B0_12` | FlexIO2 D12 | `0x14` |
+| 2 | Tip | 38 | GPIO6 bit 28 | `GPIO_AD_B1_12` | FlexIO3 D12 | `0x19` |
+| 2 | Ring | 9 | GPIO7 bit 11 | `GPIO_B0_11` | FlexIO2 D11 | `0x14` |
+| 3 | Tip | 39 | GPIO6 bit 29 | `GPIO_AD_B1_13` | FlexIO3 D13 | `0x19` |
+| 3 | Ring | 37 | GPIO7 bit 19 | `GPIO_B1_03` | FlexIO2 D19 | `0x14` |
+| 4 | Tip | 14 | GPIO6 bit 18 | `GPIO_AD_B1_02` | FlexIO3 D2 | `0x19` |
+| 4 | Ring | 36 | GPIO7 bit 18 | `GPIO_B1_02` | FlexIO2 D18 | `0x14` |
+
+Mux values include SION (`0x10`): alternate function 9 for FlexIO3 and 4 for
+FlexIO2. These are writes to the processor mux registers, not MIDI mode IDs.
+Pins 36 and 37 also have FlexIO3 alternatives, but the firmware's mapping routine
+searches FlexIO1, FlexIO2, then FlexIO3 and selects FlexIO2 first for them.
+
+| Handler object | Peripheral base | Pin descriptor | IRQ | ISR |
+| --- | --- | --- | --- | --- |
+| `0x200079e4` | FlexIO1 `0x401ac000` | `0x20001e9c` | 90 | `0x49b74` |
+| `0x200079f4` | FlexIO2 `0x401b0000` | `0x20001ef8` | 91 | `0x49ba4` |
+| `0x20007a04` | FlexIO3 `0x42020000` | `0x20001f54` | 156 | `0x49bd4` |
+
+FlexIO1 is included to make the search order reproducible; none of the port
+signals selects it. The handler-pointer list is at `0x20007a28`. Each descriptor
+contains 22 logical-pin bytes at `+0x18`, corresponding FlexIO signal numbers
+at `+0x2e`, and mux bytes at `+0x44`. Mapper `0x49c04` selects the handler;
+`0x49c8c` applies its mux byte through the existing GPIO pin table.
+
+### Persisted modes and output initialization
+
+The per-port serial-wrapper pointers are at `0x20012fb8`, `0x20012fbc`,
+`0x20012fc0`, `0x20012fc4`, in port order. Construction at `0x315e0` through
+`0x31684` stores tip/ring pins at wrapper bytes `+8` / `+9` and the zero-based
+physical port number at `+0x0a`. This is separate from the expression objects.
+
+Startup calls mode setup `0x17e5c` from `0x32a4e`. The four mode bytes are
+read from EEPROM offsets `0x1e` through `0x21`, using `0xd81c` and `0x3c1c`.
+The selector disables expression polling initially. In a MIDI branch it also
+disables the two corresponding auxiliary-switch entries, initializes the serial
+wrapper, and appends it to the active-output array at `0x20012620`; the count
+is at `0x200133b8`. Disabling a switch entry through `0x4b05c` only clears its
+enabled byte. It does **not** change the processor pin's direction or mux.
+
+The following table separates the EEPROM mode value from the argument passed
+to serial initializer `0xae84`. Documented names are matched by conductor use.
+
+| EEPROM mode | Initializer argument | Serial TX conductor | Explicit action on the other conductor | Interpretation |
+| --- | --- | --- | --- | --- |
+| 4 or 5 | 0 | Tip | Ring set to GPIO output HIGH | Standard-style output; both values take the same branch |
+| 6 | 1 | Tip | No change in this initializer | Tip-active output |
+| 7 | 2 | Ring | No change in this initializer | Ring-active output |
+| 9 | 3 | Ring | Tip set to GPIO output HIGH | Type-B-style output |
+
+Port 1 selector evidence: `0x17f56` through `0x17f80`; standard branch
+`0x17fd0` through `0x17ffe`; tip-active `0x1842a`; ring-active `0x18582`;
+Type B `0x18616`. Equivalent branches configure ports 2 through 4. Mode 1
+enables expression input instead. Mode 10 follows a separate GPIO-control
+path through `0x15540`, not a MIDI receive path.
+
+Initializer evidence: argument 0 at `0xaed0` drives ring HIGH, then constructs
+a tip transmitter; argument 1 at `0xb040` constructs a tip transmitter;
+argument 2 at `0xafec` constructs a ring transmitter; argument 3 at `0xafdc`
+drives tip HIGH and joins argument 2. The standard branch also drives tip HIGH
+before assigning it to FlexIO. All four call serial begin `0x4a10c` with
+31,250 baud and format zero, with one-millisecond delays around initialization.
+
+There is also an argument-4 implementation at `0xaf42` that constructs two
+transmitters, one per conductor, and writes each queued byte to both. No caller
+selecting argument 4 was found in the traced port-mode selector. Its presence
+is not evidence of an exposed dual-output mode or MIDI reception.
+
+**Floating-conductor caveat:** the manual describes the unused conductor in
+tip-active/ring-active modes as floating. The serial initializer does not
+explicitly make that conductor an input or disconnect it. Expression-object
+construction earlier in startup calls `0x4a854`, initially making tip an input
+and ring an output HIGH. Later expression-polarity setup at `0x327b4` through
+`0x327d8` can change tip to input-with-pull-up; it does not explicitly release
+ring. Disabling expression polling at `0x4a538` also leaves pin configuration
+alone. Thus these output-mode names must not be translated into an assumption
+that the unused jack contact is electrically isolated. This discrepancy needs
+electrical validation; the trace alone cannot characterize circuitry between
+processor and jack, or establish a hardware fault.
+
+### Serial timing, queues and interrupt path
+
+Each selected transmitter allocates a FlexIO timer and shifter at runtime.
+Do not assign a fixed shifter number to a jack: it depends on allocation order
+and other users. Allocation routines are `0x49cc8` and `0x49d10`.
+
+Serial begin `0x4a10c` computes `7,500,000 / baud - 1`, giving `0xef` at
+31,250 baud. The traced TX setup programs:
+
+| Register | Value written |
+| --- | --- |
+| `SHIFTCFG[s]` | `0x32`, serial start/stop configuration |
+| `SHIFTCTL[s]` | `0x30002 \| ((t & 3) << 24) \| (signal << 8)` |
+| `TIMCMP[t]` | `0x0fef` |
+| `TIMCFG[t]` | `0x2222` |
+| `TIMCTL[t]` | `0xc00001 \| (signal << 8) \| ((4*s + 1) << 24)` |
+| `CTRL` | `1`, enable FlexIO |
+
+Here `s` is the allocated shifter, `t` the timer, and `signal` the D-number in
+the pin table above. Writes are at `0x4a19a` through `0x4a208`; pin mux and
+callback registration follow at `0x4a210` and `0x4a21a`. The constants and
+control flow match the public FlexSerial implementation's 8N1 TX configuration.
+They do not prove an exact library revision or measured baud accuracy.
+
+The byte path is:
+
+1. MIDI encoders select active wrappers and enqueue bytes in a 256-byte ring
+   at wrapper `+0x12`, using write/read indices at `+0x0e` / `+0x10`.
+   One slot is reserved to distinguish full from empty: 255 bytes are usable.
+   Enqueue helper `0xb054` drains a byte synchronously if the queue fills.
+2. Drain routine `0xc674` feeds queued bytes into each wrapper's transmitter.
+   A call at `0x25820` requests up to 16 queued bytes per active port per call.
+3. FlexSerial write `0x4a0a4` places each byte in a separate 128-slot TX ring
+   and enables interrupt service. Its write/read indices are at serial-object
+   `+0xa6` / `+0xa8`; the byte buffer starts at `+0x26`.
+4. FlexIO ISR dispatch reaches callback `0x49f2c`, which moves bytes to
+   `SHIFTBUF[s]` at peripheral offset `0x200 + 4*s`. FlexIO generates the bits.
+
+MIDI clock has special handling. Routine `0xc5fc` emits `0xf8` directly, or
+sets wrapper byte `+0x0c` while a queue write is in progress (`+0x0b`). The
+drainer emits a pending clock before continuing ordinary bytes. This is not
+an input buffer or a MIDI-clock receive mechanism.
+
+Program Change is a particularly clear routing example: `0xb9b0` extracts
+destination bits 2 through 5 from its mask, tests the wrapper's physical-port
+number at `+0x0a`, then enqueues a `0xc0` channel status and seven-bit value
+at `0xba06` and `0xba10`. Active-array position is not always the physical
+port number, because non-MIDI ports are absent from that array.
+
+### SysEx: implemented path, contrary to the manual
+
+The manual says these configurable outputs cannot transmit SysEx. However,
+this image contains a connected configurable-output SysEx encoder at `0xb720`:
+it selects active outputs, optionally enqueues `0xf0` at `0xb88c`, copies the
+supplied bytes, and optionally enqueues `0xf7` at `0xb820`. With argument
+`r2 == 0` it supplies framing; otherwise it copies already-framed data.
+It uses the same queues and transmitters as channel messages, so the 256-byte
+queue is not a whole-message-length limit; full-queue paths drain while copying.
+
+This is not merely an isolated library routine. The multi-transport sender
+at `0x1b370` calls it at `0x1b394`, and sender `0x15568` conditionally tail-calls
+it at `0x15606`. Other direct calls occur at `0x1b882`, `0x1b9ac`, `0x1bd68`
+and `0x1be6e`. Its presence and callers establish an implemented software path,
+not that every editor operation exposes it, every destination mask is correct,
+or long transfers work reliably on the real pedal. The SysEx loop also tests
+destination bits by active-array index, unlike the physical-port lookup in
+the Program Change example. Non-contiguous MIDI-port configurations deserve
+particular runtime verification. No SysEx was transmitted during this analysis.
+
+### MIDI input: what software establishes, and where tracing stops
+
+The included FlexSerial driver has generic RX setup at `0x4a22c` through
+`0x4a302` and an RX interrupt branch in `0x49f2c`. But every configurable-port
+serial construction in `0xae84` stores `0xffffffff` in its RX-pin word at
+`+0x14`. Serial begin tests that word at `0x4a224` and skips RX setup when it
+is `-1`. A generic receive implementation in the image therefore does **not**
+establish a hidden configurable-port MIDI-input mode.
+
+We now have the software-side assignments and mechanisms needed to write an
+independent configurable-port MIDI-output driver: signal pairs, pin muxes,
+peripheral bases, baud setup and interrupt handling. Remaining validation is
+at the physical/runtime boundary:
+
+- **Contact wiring and electrical interface:** continuity, series resistors,
+  buffers, inversion, protection, actual voltage and the unused conductor's
+  impedance require a schematic or board measurements. GPIO input capability
+  does not establish a safe MIDI current-loop receiver. Do not connect another
+  MIDI output as an experiment without establishing the input circuitry.
+- **Stock behavior:** a MIDI capture from the unmodified pedal could check
+  configurable-port SysEx and destination selection without custom firmware.
+  This would be hardware validation, not another conclusion from disassembly.
+- **Replacement-driver behavior:** actual output polarity, timing and startup
+  transitions need measurement or an independently established, recoverable
+  firmware-test route. No such route has been established here.
+
+A test image could report mux and GPIO-direction registers over USB, reducing
+the need for internal probing. It cannot prove external voltage tolerance,
+isolation or continuity by reporting processor registers. Do not patch or flash
+the production image just to answer those questions: bootloader acceptance and
+recovery remain unresolved. Nothing was flashed, and no device I/O was attempted.
 
 ## MIDI UARTs: confirmed startup pins and peripherals
 
@@ -412,6 +614,9 @@ Additional comparisons:
 [USB host initialization](https://github.com/PaulStoffregen/USBHost_t36/blob/master/ehci.cpp),
 [native SD driver](https://github.com/PaulStoffregen/SdFat/blob/master/src/SdCard/SdioTeensy.cpp),
 and [NXP RT1062 pin mux definitions](https://github.com/nxp-mcuxpresso/mcux-sdk/blob/master/devices/MIMXRT1062/drivers/fsl_iomuxc.h).
+Configurable-port serial comparisons:
+[FlexSerial](https://github.com/KurtE/FlexIO_t4/blob/master/src/FlexSerial.cpp)
+and [FlexIO pin mapping and resource allocation](https://github.com/KurtE/FlexIO_t4/blob/master/src/FlexIO_t4.cpp).
 These are comparison sources, not recovered Morningstar source or proof of an
 exact core-library version.
 
