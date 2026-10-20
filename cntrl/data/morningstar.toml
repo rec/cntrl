@@ -4,58 +4,38 @@
 # TODO: confirm physical DIN contact counts across models.
 # MC3 TRS MIDI outputs 3/4 use physical DIP switches to select wiring.
 
+['@omniport']
+kinds = ["expression", "switch", "midi-out"]
+physical = { connector = "trs", size = "6.35" }
+
+['@trs']
+kind = 'midi'
+physical = { connector = "trs", size = "3.5" }
+
+['@relay']
+kind = 'relay'
+physical = { connector = "trs", size = "3.5" }
+
 [mc6_pro]
 name = "Morningstar MC6 Pro"
 buttons = "ABCDEF"
-displays = { color_lcd = { instances = 3, kind = "graphical" } }
-ports = {
-    din-in = {
-        instances = 1,
-        physical = { connector = "din" },
-        modes = [{ direction = "input", protocol = { kind = "midi" } }],
-    },
-    din-out = {
-        instances = 1,
-        physical = { connector = "din" },
-        modes = [{ direction = "output", protocol = { kind = "midi" } }],
-    },
-    usb-c = "usb_c",
-    usb-host = "usb_c",
-    configurable-635 = {
-        instances = 4,
-        physical = { connector = "trs", contacts = 3, diameter_mm = 6.35 },
-        modes = [
-            { direction = "input", protocol = { kind = "expression" } },
-            { direction = "input", protocol = { kind = "switch" } },
-            { direction = "output", protocol = { kind = "midi" } },
-        ],
-    },
-    trs-in = {
-        instances = 1,
-        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
-        modes = [
-            {
-                direction = "input",
-                protocol = { kind = "midi", trs_wiring = "type_a" },
-            },
-        ],
-    },
-    trs-out = {
-        instances = 1,
-        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
-        modes = [
-            {
-                direction = "output",
-                protocol = { kind = "midi", trs_wiring = "type_a" },
-            },
-        ],
-    },
-    relay = {
-        instances = 2,
-        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
-        modes = [{ direction = "output", protocol = { kind = "relay" } }],
-    },
-}
+
+# 2-dimensional displays are pixel, and assumed to be color, unless color=1
+# 1-dimension displays are alphanumeric, and assumed to be monochromatic,
+# unless color > 1
+displays = ['200x200', '200x200', '200x200']
+
+[mc6_pro.ports]
+midi-in = 'midi-in'
+midi-out = 'midi-out'
+usb = "usb_c"
+usb-host = {kind = "usb_c", 'host' = true}
+omniport = ['@omniport', '@omniport', '@omniport', '@omniport']
+trs-in = '@trs-in'
+trs-out = '@trs-out'
+relay = ['@relay', '@relay']
+
+# I stopped editing here.
 
 [mc3]
 name = "Morningstar MC3"
