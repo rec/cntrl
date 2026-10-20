@@ -26,7 +26,7 @@ buttons = "ABCDEF"
 displays = ['200x200', '200x200', '200x200']
 
 [mc6_pro.ports]
-midi-in = 'midi-in'
+midi-in = 'midi-in'  # same as {kind='midi', direction='in'}
 midi-out = 'midi-out'
 usb = "usb_c"
 usb-host = {kind = "usb_c", 'host' = true}
