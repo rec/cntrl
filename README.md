@@ -41,11 +41,10 @@ there are no package-level re-exports.
 
 ## Data-only hardware catalogues
 
-`cntrl/data/morningstar.toml` has exactly one simple table header per model,
-such as `[mc3]`. Hardware declarations use nested dictionaries within that
-section, with multiline dictionaries parsed as TOML 1.1 by tomlkit.
-Dotted assignments, compound table headers and wrapper tables are
-excluded by a regression test and the repository instructions.
+`cntrl/data/morningstar.toml` declares models in tables such as `[mc3]`.
+Multiline nested dictionaries are parsed as TOML 1.1 by tomlkit.
+Compound table headers are allowed. Dotted assignments and wrapper tables remain
+excluded by the repository instructions.
 
 The `instances` field gives a count or a list of physical labels.
 Counts produce numbered instances; label lists preserve physical distinctions

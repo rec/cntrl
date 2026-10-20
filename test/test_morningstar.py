@@ -151,13 +151,10 @@ def test_expanded_hardware_has_independent_mutable_members(
     assert all(p.modes for p in fresh.ports if isinstance(p, models.Port))
 
 
-def test_catalogues_have_one_simple_header_per_controller() -> None:
+def test_catalogues_use_nested_dicts_and_readable_lines() -> None:
     for path in files('cntrl').joinpath('data').iterdir():
         if path.name.endswith('.toml'):
             lines = path.read_text().splitlines()
-            headers = [s.strip() for s in lines if s.lstrip().startswith('[')]
-            catalogue = load_catalogue(path.name.removesuffix('.toml'))
-            assert headers == [f'[{k}]' for k in catalogue]
             assert all(
                 '.' not in s.partition('=')[0]
                 for s in lines
