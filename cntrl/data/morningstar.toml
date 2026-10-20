@@ -7,288 +7,290 @@
 [mc3]
 name = "Morningstar MC3"
 buttons = "ABC"
-
-displays.lcd20x2.instances = 1
-displays.lcd20x2.kind = "alphanumeric"
-displays.lcd20x2.width = 20
-displays.lcd20x2.height = 2
-displays.lcd20x2.colors = 1
-
-ports.din-out.instances = 1
-ports.din-out.physical.connector = "din"
-ports.din-out.modes = [
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.usb-b = "usb_b"
-
-ports.configurable-635.instances = 1
-ports.configurable-635.physical.connector = "trs"
-ports.configurable-635.physical.contacts = 3
-ports.configurable-635.physical.diameter_mm = 6.35
-ports.configurable-635.modes = [
-    { direction = "input", protocol = { kind = "expression" } },
-    { direction = "input", protocol = { kind = "switch" } },
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.trs-out.instances = ["TRS MIDI out 1", "TRS MIDI out 2"]
-ports.trs-out.physical.connector = "trs"
-ports.trs-out.physical.contacts = 3
-ports.trs-out.physical.diameter_mm = 3.5
-ports.trs-out.modes = [
-    { direction = "output", protocol = { kind = "midi", trs_wiring = "type_a" } },
-]
-
-ports.trs-dip.instances = ["TRS MIDI out 3", "TRS MIDI out 4"]
-ports.trs-dip.physical.connector = "trs"
-ports.trs-dip.physical.contacts = 3
-ports.trs-dip.physical.diameter_mm = 3.5
-ports.trs-dip.modes = [
-    { direction = "output", protocol = { kind = "midi", trs_wiring = "type_a" } },
-    { direction = "output", protocol = { kind = "midi", trs_wiring = "tip_active" } },
-    { direction = "output", protocol = { kind = "midi", trs_wiring = "ring_active" } },
-]
+displays = {
+    lcd20x2 = {
+        instances = 1,
+        kind = "alphanumeric",
+        width = 20,
+        height = 2,
+        colors = 1,
+    },
+}
+ports = {
+    din-out = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "output", protocol = { kind = "midi" } }],
+    },
+    usb-b = "usb_b",
+    configurable-635 = {
+        instances = 1,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 6.35 },
+        modes = [
+            { direction = "input", protocol = { kind = "expression" } },
+            { direction = "input", protocol = { kind = "switch" } },
+            { direction = "output", protocol = { kind = "midi" } },
+        ],
+    },
+    trs-out = {
+        instances = ["TRS MIDI out 1", "TRS MIDI out 2"],
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            {
+                direction = "output",
+                protocol = { kind = "midi", trs_wiring = "type_a" },
+            },
+        ],
+    },
+    trs-dip = {
+        instances = ["TRS MIDI out 3", "TRS MIDI out 4"],
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            {
+                direction = "output",
+                protocol = { kind = "midi", trs_wiring = "type_a" },
+            },
+            {
+                direction = "output",
+                protocol = { kind = "midi", trs_wiring = "tip_active" },
+            },
+            {
+                direction = "output",
+                protocol = { kind = "midi", trs_wiring = "ring_active" },
+            },
+        ],
+    },
+}
 
 [mc6_mkii]
 name = "Morningstar MC6 MkII"
 buttons = "ABCDEF"
-
-displays.lcd24x2.instances = 1
-displays.lcd24x2.kind = "alphanumeric"
-displays.lcd24x2.width = 24
-displays.lcd24x2.height = 2
-displays.lcd24x2.colors = 1
-
-ports.din-in.instances = 1
-ports.din-in.physical.connector = "din"
-ports.din-in.modes = [
-    { direction = "input", protocol = { kind = "midi" } },
-]
-
-ports.din-out.instances = 1
-ports.din-out.physical.connector = "din"
-ports.din-out.modes = [
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.usb-b = "usb_b"
-
-ports.configurable-635.instances = 2
-ports.configurable-635.physical.connector = "trs"
-ports.configurable-635.physical.contacts = 3
-ports.configurable-635.physical.diameter_mm = 6.35
-ports.configurable-635.modes = [
-    { direction = "input", protocol = { kind = "expression" } },
-    { direction = "input", protocol = { kind = "switch" } },
-    { direction = "output", protocol = { kind = "midi" } },
-]
+displays = {
+    lcd24x2 = {
+        instances = 1,
+        kind = "alphanumeric",
+        width = 24,
+        height = 2,
+        colors = 1,
+    },
+}
+ports = {
+    din-in = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "input", protocol = { kind = "midi" } }],
+    },
+    din-out = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "output", protocol = { kind = "midi" } }],
+    },
+    usb-b = "usb_b",
+    configurable-635 = {
+        instances = 2,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 6.35 },
+        modes = [
+            { direction = "input", protocol = { kind = "expression" } },
+            { direction = "input", protocol = { kind = "switch" } },
+            { direction = "output", protocol = { kind = "midi" } },
+        ],
+    },
+}
 
 [mc8]
 name = "Morningstar MC8"
 buttons = "ABCDEFGH"
-
-displays.lcd40x4.instances = 1
-displays.lcd40x4.kind = "alphanumeric"
-displays.lcd40x4.width = 40
-displays.lcd40x4.height = 4
-displays.lcd40x4.colors = 1
-
-ports.din-in.instances = 1
-ports.din-in.physical.connector = "din"
-ports.din-in.modes = [
-    { direction = "input", protocol = { kind = "midi" } },
-]
-
-ports.din-out.instances = 1
-ports.din-out.physical.connector = "din"
-ports.din-out.modes = [
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.usb-b = "usb_b"
-
-ports.configurable-635.instances = 4
-ports.configurable-635.physical.connector = "trs"
-ports.configurable-635.physical.contacts = 3
-ports.configurable-635.physical.diameter_mm = 6.35
-ports.configurable-635.modes = [
-    { direction = "input", protocol = { kind = "expression" } },
-    { direction = "input", protocol = { kind = "switch" } },
-    { direction = "output", protocol = { kind = "midi" } },
-]
+displays = {
+    lcd40x4 = {
+        instances = 1,
+        kind = "alphanumeric",
+        width = 40,
+        height = 4,
+        colors = 1,
+    },
+}
+ports = {
+    din-in = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "input", protocol = { kind = "midi" } }],
+    },
+    din-out = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "output", protocol = { kind = "midi" } }],
+    },
+    usb-b = "usb_b",
+    configurable-635 = {
+        instances = 4,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 6.35 },
+        modes = [
+            { direction = "input", protocol = { kind = "expression" } },
+            { direction = "input", protocol = { kind = "switch" } },
+            { direction = "output", protocol = { kind = "midi" } },
+        ],
+    },
+}
 
 [mc4_pro]
 name = "Morningstar MC4 Pro"
 buttons = "ABCD"
-
-displays.color_lcd.instances = 1
-displays.color_lcd.kind = "graphical"
-
-ports.trs-in.instances = ["Rear TRS MIDI in", "Side TRS MIDI in"]
-ports.trs-in.physical.connector = "trs"
-ports.trs-in.physical.contacts = 3
-ports.trs-in.physical.diameter_mm = 3.5
-ports.trs-in.modes = [
-    { direction = "input", protocol = { kind = "midi", trs_wiring = "type_a" } },
-]
-
-ports.din-out.instances = 1
-ports.din-out.physical.connector = "din"
-ports.din-out.modes = [
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.usb-c = "usb_c"
-
-ports.usb-host = "usb_c"
-
-ports.configurable-635.instances = ["Configurable 1"]
-ports.configurable-635.physical.connector = "trs"
-ports.configurable-635.physical.contacts = 3
-ports.configurable-635.physical.diameter_mm = 6.35
-ports.configurable-635.modes = [
-    { direction = "input", protocol = { kind = "expression" } },
-    { direction = "input", protocol = { kind = "switch" } },
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.configurable-35.instances = ["Configurable 2"]
-ports.configurable-35.physical.connector = "trs"
-ports.configurable-35.physical.contacts = 3
-ports.configurable-35.physical.diameter_mm = 3.5
-ports.configurable-35.modes = [
-    { direction = "input", protocol = { kind = "expression" } },
-    { direction = "input", protocol = { kind = "switch" } },
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.trs-out.instances = 1
-ports.trs-out.physical.connector = "trs"
-ports.trs-out.physical.contacts = 3
-ports.trs-out.physical.diameter_mm = 3.5
-ports.trs-out.modes = [
-    { direction = "output", protocol = { kind = "midi", trs_wiring = "type_a" } },
-]
-
-ports.relay.instances = 1
-ports.relay.physical.connector = "trs"
-ports.relay.physical.contacts = 3
-ports.relay.physical.diameter_mm = 3.5
-ports.relay.modes = [
-    { direction = "output", protocol = { kind = "relay" } },
-]
+displays = { color_lcd = { instances = 1, kind = "graphical" } }
+ports = {
+    trs-in = {
+        instances = ["Rear TRS MIDI in", "Side TRS MIDI in"],
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            {
+                direction = "input",
+                protocol = { kind = "midi", trs_wiring = "type_a" },
+            },
+        ],
+    },
+    din-out = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "output", protocol = { kind = "midi" } }],
+    },
+    usb-c = "usb_c",
+    usb-host = "usb_c",
+    configurable-635 = {
+        instances = ["Configurable 1"],
+        physical = { connector = "trs", contacts = 3, diameter_mm = 6.35 },
+        modes = [
+            { direction = "input", protocol = { kind = "expression" } },
+            { direction = "input", protocol = { kind = "switch" } },
+            { direction = "output", protocol = { kind = "midi" } },
+        ],
+    },
+    configurable-35 = {
+        instances = ["Configurable 2"],
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            { direction = "input", protocol = { kind = "expression" } },
+            { direction = "input", protocol = { kind = "switch" } },
+            { direction = "output", protocol = { kind = "midi" } },
+        ],
+    },
+    trs-out = {
+        instances = 1,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            {
+                direction = "output",
+                protocol = { kind = "midi", trs_wiring = "type_a" },
+            },
+        ],
+    },
+    relay = {
+        instances = 1,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [{ direction = "output", protocol = { kind = "relay" } }],
+    },
+}
 
 [mc6_pro]
 name = "Morningstar MC6 Pro"
 buttons = "ABCDEF"
-
-displays.color_lcd.instances = 3
-displays.color_lcd.kind = "graphical"
-
-ports.din-in.instances = 1
-ports.din-in.physical.connector = "din"
-ports.din-in.modes = [
-    { direction = "input", protocol = { kind = "midi" } },
-]
-
-ports.din-out.instances = 1
-ports.din-out.physical.connector = "din"
-ports.din-out.modes = [
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.usb-c = "usb_c"
-
-ports.usb-host = "usb_c"
-
-ports.configurable-635.instances = 4
-ports.configurable-635.physical.connector = "trs"
-ports.configurable-635.physical.contacts = 3
-ports.configurable-635.physical.diameter_mm = 6.35
-ports.configurable-635.modes = [
-    { direction = "input", protocol = { kind = "expression" } },
-    { direction = "input", protocol = { kind = "switch" } },
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.trs-in.instances = 1
-ports.trs-in.physical.connector = "trs"
-ports.trs-in.physical.contacts = 3
-ports.trs-in.physical.diameter_mm = 3.5
-ports.trs-in.modes = [
-    { direction = "input", protocol = { kind = "midi", trs_wiring = "type_a" } },
-]
-
-ports.trs-out.instances = 1
-ports.trs-out.physical.connector = "trs"
-ports.trs-out.physical.contacts = 3
-ports.trs-out.physical.diameter_mm = 3.5
-ports.trs-out.modes = [
-    { direction = "output", protocol = { kind = "midi", trs_wiring = "type_a" } },
-]
-
-ports.relay.instances = 2
-ports.relay.physical.connector = "trs"
-ports.relay.physical.contacts = 3
-ports.relay.physical.diameter_mm = 3.5
-ports.relay.modes = [
-    { direction = "output", protocol = { kind = "relay" } },
-]
+displays = { color_lcd = { instances = 3, kind = "graphical" } }
+ports = {
+    din-in = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "input", protocol = { kind = "midi" } }],
+    },
+    din-out = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "output", protocol = { kind = "midi" } }],
+    },
+    usb-c = "usb_c",
+    usb-host = "usb_c",
+    configurable-635 = {
+        instances = 4,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 6.35 },
+        modes = [
+            { direction = "input", protocol = { kind = "expression" } },
+            { direction = "input", protocol = { kind = "switch" } },
+            { direction = "output", protocol = { kind = "midi" } },
+        ],
+    },
+    trs-in = {
+        instances = 1,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            {
+                direction = "input",
+                protocol = { kind = "midi", trs_wiring = "type_a" },
+            },
+        ],
+    },
+    trs-out = {
+        instances = 1,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            {
+                direction = "output",
+                protocol = { kind = "midi", trs_wiring = "type_a" },
+            },
+        ],
+    },
+    relay = {
+        instances = 2,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [{ direction = "output", protocol = { kind = "relay" } }],
+    },
+}
 
 [mc8_pro]
 name = "Morningstar MC8 Pro"
 buttons = "ABCDEFGH"
-
-displays.color_lcd.instances = 4
-displays.color_lcd.kind = "graphical"
-
-ports.din-in.instances = 1
-ports.din-in.physical.connector = "din"
-ports.din-in.modes = [
-    { direction = "input", protocol = { kind = "midi" } },
-]
-
-ports.din-out.instances = 1
-ports.din-out.physical.connector = "din"
-ports.din-out.modes = [
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.usb-c = "usb_c"
-
-ports.usb-host = "usb_c"
-
-ports.configurable-635.instances = 4
-ports.configurable-635.physical.connector = "trs"
-ports.configurable-635.physical.contacts = 3
-ports.configurable-635.physical.diameter_mm = 6.35
-ports.configurable-635.modes = [
-    { direction = "input", protocol = { kind = "expression" } },
-    { direction = "input", protocol = { kind = "switch" } },
-    { direction = "output", protocol = { kind = "midi" } },
-]
-
-ports.trs-in.instances = 1
-ports.trs-in.physical.connector = "trs"
-ports.trs-in.physical.contacts = 3
-ports.trs-in.physical.diameter_mm = 3.5
-ports.trs-in.modes = [
-    { direction = "input", protocol = { kind = "midi", trs_wiring = "type_a" } },
-]
-
-ports.trs-out.instances = 1
-ports.trs-out.physical.connector = "trs"
-ports.trs-out.physical.contacts = 3
-ports.trs-out.physical.diameter_mm = 3.5
-ports.trs-out.modes = [
-    { direction = "output", protocol = { kind = "midi", trs_wiring = "type_a" } },
-]
-
-ports.relay.instances = 2
-ports.relay.physical.connector = "trs"
-ports.relay.physical.contacts = 3
-ports.relay.physical.diameter_mm = 3.5
-ports.relay.modes = [
-    { direction = "output", protocol = { kind = "relay" } },
-]
+displays = { color_lcd = { instances = 4, kind = "graphical" } }
+ports = {
+    din-in = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "input", protocol = { kind = "midi" } }],
+    },
+    din-out = {
+        instances = 1,
+        physical = { connector = "din" },
+        modes = [{ direction = "output", protocol = { kind = "midi" } }],
+    },
+    usb-c = "usb_c",
+    usb-host = "usb_c",
+    configurable-635 = {
+        instances = 4,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 6.35 },
+        modes = [
+            { direction = "input", protocol = { kind = "expression" } },
+            { direction = "input", protocol = { kind = "switch" } },
+            { direction = "output", protocol = { kind = "midi" } },
+        ],
+    },
+    trs-in = {
+        instances = 1,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            {
+                direction = "input",
+                protocol = { kind = "midi", trs_wiring = "type_a" },
+            },
+        ],
+    },
+    trs-out = {
+        instances = 1,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [
+            {
+                direction = "output",
+                protocol = { kind = "midi", trs_wiring = "type_a" },
+            },
+        ],
+    },
+    relay = {
+        instances = 2,
+        physical = { connector = "trs", contacts = 3, diameter_mm = 3.5 },
+        modes = [{ direction = "output", protocol = { kind = "relay" } }],
+    },
+}

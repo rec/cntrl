@@ -1,15 +1,18 @@
 """Expand hardware counts and labels into controller descriptions."""
 
-import tomllib
 from importlib.resources import files
 from typing import cast
+
+import tomlkit
 
 from . import enums, models
 
 
 def load_catalogue(name: str) -> dict[str, models.Controller]:
     """Read a bundled hardware table and return independent controllers."""
-    data = tomllib.loads(files('cntrl').joinpath('data', f'{name}.toml').read_text())
+    data = tomlkit.loads(
+        files('cntrl').joinpath('data', f'{name}.toml').read_text()
+    ).unwrap()
     return {
         k: models.Controller(
             name=v['name'],
