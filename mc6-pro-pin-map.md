@@ -153,29 +153,147 @@ USB host reception is checked through `0xb45c`; USB device reception through
 `0x4fc58`. Their test paths display separate USB host/device success messages.
 TODO: establish USB controller instances, socket wiring and host-power control.
 
-## Displays and other peripherals: incomplete
+## Displays: confirmed firmware wiring
 
-Three display-associated object pointers occur at `0x20010194`, `0x20010198`
-and `0x2001019c`. Shared UI routines, including `0x188a0`, use all three.
-This does not yet identify the display controllers or their physical order.
+The three display drivers use GPIO-driven software SPI, not the LPSPI4 object
+listed below. They share data and clock, with individual CS, D/C and reset pins.
+No MISO input is configured for these drivers.
 
-Pin 6 is configured as an output at `0x31490`, then passed with value 5 to a
-PWM-style output routine at `0x3149a`. It is a backlight candidate only.
-TODO: trace the brightness-setting callback to establish its purpose.
+| Display slot / pointer location | Constructor call | CS pin | D/C pin | Reset pin |
+| --- | --- | --- | --- | --- |
+| 1 / `0x20010194` | `0x12b16` | 15 | 34 | 21 |
+| 2 / `0x20010198` | `0x12c40` | 24 | 23 | 22 |
+| 3 / `0x2001019c` | `0x12cbc` | 27 | 25 | 20 |
 
-Other initialized objects contain these peripheral bases:
+Slot numbers describe software order, not a verified left/centre/right order.
+Each pointer refers to a UI wrapper; its display-driver pointer is at `+0x2c`.
+The controller stores the wrappers at `+0x1b0`, `+0x1b4`, `+0x1b8`, then aliases
+them at `+0x158`, `+0x15c`, `+0x160` at `0x12d12` through `0x12d2c`.
+Startup copies those aliases to the three globals at `0x31994` through `0x319b6`.
+
+| Signal | Logical pin | GPIO | Processor pad |
+| --- | --- | --- | --- |
+| Shared data / MOSI | 11 | GPIO7 bit 2 | `GPIO_B0_02` |
+| Shared clock | 13 | GPIO7 bit 3 | `GPIO_B0_03` |
+| Slot 1 CS | 15 | GPIO6 bit 19 | `GPIO_AD_B1_03` |
+| Slot 1 D/C | 34 | GPIO7 bit 29 | `GPIO_B1_13` |
+| Slot 1 reset | 21 | GPIO6 bit 27 | `GPIO_AD_B1_11` |
+| Slot 2 CS | 24 | GPIO6 bit 12 | `GPIO_AD_B0_12` |
+| Slot 2 D/C | 23 | GPIO6 bit 25 | `GPIO_AD_B1_09` |
+| Slot 2 reset | 22 | GPIO6 bit 24 | `GPIO_AD_B1_08` |
+| Slot 3 CS | 27 | GPIO6 bit 31 | `GPIO_AD_B1_15` |
+| Slot 3 D/C | 25 | GPIO6 bit 13 | `GPIO_AD_B0_13` |
+| Slot 3 reset | 20 | GPIO6 bit 26 | `GPIO_AD_B1_10` |
+| Backlight PWM control | 6 | GPIO7 bit 10 | `GPIO_B0_10` |
+
+The constructor at `0x49858` takes CS, D/C, MOSI, clock and reset, in that order.
+It sets a native geometry of 128 by 160 and passes MISO as -1. The chain through
+`0x49a9c` to `0x48b84` stores the pins and GPIO set/clear register pointers.
+The SPI-type field at driver offset `+0x64` is set to 1. The matching byte-write
+branch at `0x48e48` shifts eight bits through those GPIO registers, establishing
+software SPI rather than merely inferring it from constructor arguments.
+
+All three drivers call initialization at `0x4988c` with argument zero. Its
+structure matches Adafruit's ST7735 `initR` path, including green-tab address
+offsets. Firmware command tables are at flash `0x60013828`, `0x60013864` and
+`0x60013894`. They configure ST7735-family registers, 16-bit pixel data
+(`COLMOD 0x05`), columns 2 through 129 and rows 1 through 160, then turn the
+display on. Timing, power and gamma values differ from the current upstream
+defaults. This identifies the driver family and configuration, not the exact
+physical controller revision, panel size or manufacturer.
+
+Reset initialization at `0x48cfc` through `0x48d34` drives the reset pin HIGH,
+LOW, HIGH with delays of 100, 100 and 200 ms. The wrappers subsequently request
+rotation 1 through the vtable entry for `0x4975c`, so the configured drawing
+orientation is landscape, 160 by 128.
+
+Backlight identification is no longer tentative. Startup configures pin 6 and
+writes PWM value 5 at `0x31490` / `0x3149a`. Brightness handling at `0x45fc`
+through `0x4628` reads setting `0x62`, clamps it to 0 through 7, then writes
+`32 * setting + 31` to pin 6 through `0x4e324`. The settings-write path repeats
+that calculation at `0x1ad14` through `0x1ad40`. The dimming path writes 31
+at `0x45c6` through `0x45d0`.
+
+Pin 13 is also the switch-reader clock. A replacement driver must account for
+that shared connection. The switch reader reloads its parallel inputs before
+each eight-bit sample; display clock edges must not be treated as switch scans.
+
+Unknown: panel positions, connector contact numbering, backlight driver circuit
+and voltage/current requirements. None of these connections has been probed.
+
+## EEPROM: confirmed external path and flash-emulation alternative
+
+Normal startup explicitly selects an external EEPROM, not flash emulation:
+
+| Property | Recovered value | Evidence |
+| --- | --- | --- |
+| Seven-bit I²C address | `0x54` | Constructor argument at `0x31420` |
+| Configured write-page size | 128 bytes | Constructor argument at `0x3141e` |
+| Read / write address bytes | High byte, then low byte | `0x3aab0`, `0x3ab68` |
+| I²C object | `0x200076fc` | EEPROM constructor and read/write routines |
+| Peripheral | LPI2C3, base `0x403f8000` | Object field `+0x10` |
+| SDA | Pin 17, `GPIO_AD_B1_06` | Hardware descriptor and begin-time mux setup |
+| SCL | Pin 16, `GPIO_AD_B1_07` | Hardware descriptor and begin-time mux setup |
+
+SDA and SCL correspond to GPIO6 bits 22 and 23 when used as GPIO. The I²C driver
+instead assigns their peripheral mux functions. Its hardware descriptor is at
+flash `0x60013720`: first SDA entry is pin 17, mux `0x11`, input-select value 2;
+first SCL entry is pin 16 with the same mux and input-select value. Alternate
+entries are pins 44 and 45. Initialized SDA/SCL indices at object offsets
+`+0x18` / `+0x19` are both zero. The traced constructor does not change them.
+
+At `0x31424`, startup calls EEPROM constructor `0x3aa28`, which saves address
+`0x54` and page size `0x80`, then initializes the I²C object via the trampoline
+at `0x64e88` to flash function `0x60001654`. That function selects the indexed
+SDA/SCL descriptor entries and writes their pad/mux/input-select registers.
+Startup stores the EEPROM pointer in `0x2001018c`, sets byte `+4` to 1 and
+byte `+5` to 0 at `0x3143a` through `0x31442`, selecting the external path.
+
+Single-byte read `0x3aaf8` first sends the memory address through `0x3aab0`,
+then requests one byte. Single-byte write `0x3abb4` uses `0x3ab68` to start
+the address/data transaction and finishes through `0x3aa90`, which also polls
+for device readiness. The base address produces wire address bytes `0xa8`
+for write and `0xa9` for read. These traces establish a 24xx-style I²C EEPROM
+interface, but not an exact chip model or capacity. A 128-byte page is a software
+configuration, not an independent measurement of the installed part.
+
+The storage wrapper also supports flash-backed EEPROM emulation. Its static
+constructor at `0x27d10` initially selects that path, but normal startup above
+replaces it. Emulation routines `0x4d9c8`, `0x4da10` and `0x4dc1c` use the
+flash tail beginning at `0x607c0000`, with sectors below `0x60800000`.
+Do not infer a separate EEPROM chip merely from calls to these core routines.
+
+### What the EEPROM test actually does
+
+The hardware-test dispatcher calls `0x17010` at `0x271e2`. This routine:
+
+1. Reads bytes 0 through 7 into a temporary buffer, then rereads and compares.
+2. Writes values 0 through 7 to those addresses and verifies them.
+3. Restores the saved bytes, verifies them and returns success.
+
+Each operation dispatches through the storage wrapper's selected backend.
+**This is a write test, not a harmless connectivity probe.** A mismatch returns
+failure immediately; in particular, a failure during pattern verification can
+return before restoring the original bytes. It was not executed during analysis.
+
+Unknown: exact EEPROM part, installed capacity, voltage, pull-ups, write-protect
+wiring and PCB connector/test-point locations. Firmware initialization does not
+prove that a device is present and responding on a particular physical board.
+
+## Other peripheral objects: incomplete
+
+Initialized objects also contain these peripheral bases:
 
 | Data location containing base | Peripheral | Base |
 | --- | --- | --- |
 | `0x20007494` | LPSPI4 | `0x403a0000` |
 | `0x200075cc` | LPI2C1 | `0x403f0000` |
-| `0x2000770c` | LPI2C3 | `0x403f8000` |
+| `0x2000770c` | LPI2C3, traced EEPROM path above | `0x403f8000` |
 | `0x2000784c` | LPI2C4 | `0x403fc000` |
 
-Presence in initialized data does not prove use. TODO: trace bus initialization,
-display command streams and EEPROM transactions. Display CS/DC/reset pins, bus
-sharing, EEPROM identity/address, and any SD-card interface remain unknown.
-The EEPROM test label alone does not identify an external EEPROM or its bus.
+Except for the EEPROM path above, presence in initialized data does not prove
+use. TODO: trace the remaining buses and any SD-card interface. In particular,
+the presence of an LPSPI4 object must not be used to assign the displays to it.
 
 ## Rechecking the evidence
 
@@ -199,6 +317,11 @@ Reference layouts used to interpret the binary:
 [Teensy 4.1 pin definitions](https://github.com/PaulStoffregen/cores/blob/master/teensy4/core_pins.h),
 [serial object layouts](https://github.com/PaulStoffregen/cores/blob/master/teensy4/HardwareSerial.h),
 and [peripheral registers](https://github.com/PaulStoffregen/cores/blob/master/teensy4/imxrt.h).
+Display comparisons:
+[ST7735 constructors and initialization](https://github.com/adafruit/Adafruit-ST7735-Library/blob/master/Adafruit_ST7735.cpp)
+and [ST77xx initialization](https://github.com/adafruit/Adafruit-ST7735-Library/blob/master/Adafruit_ST77xx.cpp).
+I²C comparison:
+[Teensy Wire implementation](https://github.com/PaulStoffregen/Wire/blob/master/WireIMXRT.cpp).
 These are comparison sources, not recovered Morningstar source or proof of an
 exact core-library version.
 
