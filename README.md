@@ -27,7 +27,8 @@ the description.
 Connector type and protocol are separate. A TRS connector can carry MIDI, sense
 an expression pedal, or sense switch contacts. MIDI modes may specify wiring.
 USB ports are single `UsbSocket` enum values, such as `"usb_b"` or `"usb_c"`.
-They have no protocol, direction, or role objects. Ethernet does not enumerate
+An explicit host declaration uses `UsbPort`, containing only its socket kind
+and `host` flag. Ethernet does not enumerate
 application protocols. CV declares a voltage range; relay outputs are distinct from switch
 inputs.
 
@@ -46,11 +47,39 @@ Multiline nested dictionaries are parsed as TOML 1.1 by tomlkit.
 Compound table headers are allowed. Dotted assignments and wrapper tables remain
 excluded by the repository instructions.
 
-The `instances` field gives a count or a list of physical labels.
-Counts produce numbered instances; label lists preserve physical distinctions
-such as the MC4 Pro's rear and side MIDI inputs. Instance IDs come from these
-labels, lowercased with spaces replaced by hyphens. Adding a model requires data
-only.
+Tables starting with `@` define shared ports and are excluded from the returned
+controllers. A port can reference a shared definition, use a shorthand string,
+or provide its properties inline:
+
+```toml
+['@trs']
+kind = 'midi'
+physical = {connector = 'trs', size = '3.5'}
+
+[example]
+name = 'Example'
+buttons = 'ABC'
+displays = ['24', '200x200']
+
+[example.ports]
+midi-in = 'midi-in'
+usb = 'usb_c'
+usb-host = {kind = 'usb_c', host = true}
+trs-in = '@trs-in'
+trs-out = '@trs-out'
+```
+
+`@trs-in` and `@trs-out` apply a direction to `@trs`. `midi-in` is shorthand
+for `{kind = 'midi', direction = 'in'}` and uses a DIN connector. Shared ports
+use `kind` for one electrical use or `kinds` for several, `physical.size` for
+the jack diameter in millimetres, and optional `wiring` for MIDI wiring choices.
+A list repeats ports, giving them IDs such as `omniport-1` and `omniport-2`.
+
+A one-dimensional display string describes a monochrome alphanumeric display;
+two dimensions describe graphical pixels with an unknown palette size. An
+explicit dictionary can override these defaults, for example
+`{size = '24x2', kind = 'alphanumeric', color = 1}` for a two-row character LCD.
+`{kind = 'graphical'}` keeps undocumented dimensions unknown.
 
 ```python
 from cntrl.catalogue import load_catalogue
@@ -88,8 +117,9 @@ The MC3's third and fourth TRS
 MIDI outputs have DIP-selectable wiring. MC4 Pro has separate rear and side TRS
 MIDI inputs and two different configurable-port jack sizes.
 
-Undocumented Pro display dimensions and palette sizes remain `None`, with TODOs
-in the data. Physical DIN contact counts also remain unknown pending confirmation.
+MC6 Pro uses the user-supplied 200 x 200 display dimensions. MC4 Pro and MC8 Pro
+dimensions and all Pro palette sizes remain unknown, with TODOs in the data.
+Physical DIN contact counts also remain unknown pending confirmation.
 External expression pedals and switches are not built-in controls. No firmware
 restrictions, presets, calibration, or live device state are represented.
 

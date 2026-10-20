@@ -126,6 +126,13 @@ class Port(BaseModel, frozen=True):
         return len(self.modes) > 1
 
 
+class UsbPort(BaseModel, frozen=True):
+    """A USB socket with an explicitly declared host role."""
+
+    kind: enums.UsbSocket
+    host: bool
+
+
 class Controller(BaseModel, frozen=True):
     name: str
     controls: list[
@@ -134,4 +141,4 @@ class Controller(BaseModel, frozen=True):
         ]
     ] = Field(default_factory=list)
     displays: list[Display] = Field(default_factory=list)
-    ports: list[Port | enums.UsbSocket] = Field(default_factory=list)
+    ports: list[Port | enums.UsbSocket | UsbPort] = Field(default_factory=list)

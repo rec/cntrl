@@ -39,7 +39,11 @@ def test_documented_hardware_inventory(
     assert len(restored.ports) == ports
     wired = [p for p in restored.ports if isinstance(p, models.Port)]
     assert len({p.id for p in wired}) == len(wired)
-    inputs = [p for p in wired if p.id.startswith('configurable-')]
+    inputs = [
+        p
+        for p in wired
+        if any(m.protocol.kind == enums.ProtocolKind.EXPRESSION for m in p.modes)
+    ]
     assert len(inputs) == configurable
     for port in inputs:
         assert port.configurable
@@ -68,7 +72,7 @@ def test_character_display_dimensions(
     assert display.height == height
 
 
-@pytest.mark.parametrize('name', ['mc4_pro', 'mc6_pro', 'mc8_pro'])
+@pytest.mark.parametrize('name', ['mc4_pro', 'mc8_pro'])
 def test_pro_displays_keep_undocumented_details_unknown(
     catalogue: dict[str, models.Controller], name: str
 ) -> None:
@@ -125,15 +129,20 @@ def test_mc4_pro_has_two_midi_inputs_and_two_configurable_jack_sizes(
         ('mc8_pro', enums.UsbSocket.USB_C, 2),
     ],
 )
-def test_usb_ports_are_socket_values(
+def test_usb_ports_preserve_socket_types_and_explicit_hosts(
     catalogue: dict[str, models.Controller],
     name: str,
     socket: enums.UsbSocket,
     count: int,
 ) -> None:
-    assert [p for p in catalogue[name].ports if isinstance(p, enums.UsbSocket)] == [
-        socket
-    ] * count
+    usb = [
+        p
+        for p in catalogue[name].ports
+        if isinstance(p, enums.UsbSocket | models.UsbPort)
+    ]
+    assert len(usb) == count
+    assert all((p.kind if isinstance(p, models.UsbPort) else p) == socket for p in usb)
+    assert sum(isinstance(p, models.UsbPort) and p.host for p in usb) == count - 1
 
 
 def test_expanded_hardware_has_independent_mutable_members(
@@ -149,6 +158,23 @@ def test_expanded_hardware_has_independent_mutable_members(
     fresh = load_catalogue('morningstar')['mc6_pro']
     assert len(fresh.controls) == 6
     assert all(p.modes for p in fresh.ports if isinstance(p, models.Port))
+
+
+def test_shared_definitions_are_excluded_from_controllers(
+    catalogue: dict[str, models.Controller],
+) -> None:
+    assert len(catalogue) == 6
+    assert all(not k.startswith('@') for k in catalogue)
+
+
+def test_mc6_pro_preserves_user_supplied_display_sizes(
+    catalogue: dict[str, models.Controller],
+) -> None:
+    for display in catalogue['mc6_pro'].displays:
+        assert display.kind == enums.DisplayKind.GRAPHICAL
+        assert display.width == 200
+        assert display.height == 200
+        assert display.colors is None
 
 
 def test_catalogues_use_nested_dicts_and_readable_lines() -> None:
