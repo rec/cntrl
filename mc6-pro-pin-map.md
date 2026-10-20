@@ -621,6 +621,6 @@ These are comparison sources, not recovered Morningstar source or proof of an
 exact core-library version.
 
 This map is useful for a replacement driver, but is not yet a complete schematic
-or evidence that flashing replacement firmware is recoverable. Bootloader,
-security configuration, flash layout constraints and recovery remain separate
-unresolved questions.
+or evidence that flashing replacement firmware is recoverable. See the separate
+[update and recovery trace](mc6-pro-recovery.md) for software bootloader entry,
+flash layout and the remaining requirement for crash-independent recovery.

@@ -4,6 +4,9 @@ For traced switch, relay, expression-input and MIDI connections, see the
 [pin and peripheral map](mc6-pro-pin-map.md). It distinguishes firmware-confirmed
 assignments from candidate pins and untraced hardware.
 
+For update paths, bootloader entry, crash recovery and the remaining pre-flash
+safety gate, see [firmware updating and recovery](mc6-pro-recovery.md).
+
 `cntrl.firmware` contains the Intel HEX inspection and analysis-artifact code.
 It reads files without connecting to or programming hardware. It has no extra
 dependencies or command-line interface.
