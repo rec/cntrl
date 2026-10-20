@@ -126,9 +126,9 @@ Unknown: which conductor is tip/ring for each signal, the supply voltage and
 protection network, and configurable-port MIDI routing. A GPIO driven HIGH must
 not be treated as a characterized power supply or safe arbitrary-voltage input.
 
-## MIDI UARTs: confirmed peripherals, candidate default pins
+## MIDI UARTs: confirmed startup pins and peripherals
 
-| Test label | MIDI object | Serial object | UART | Base | Default RX / TX pins |
+| Test label | MIDI object | Serial object | UART | Base | Startup RX / TX pins |
 | --- | --- | --- | --- | --- | --- |
 | DIN5 | `0x200101a0` | `0x200074f4` | LPUART6 | `0x40198000` | 0 / 1 |
 | 3.5MM | `0x20010a30` | `0x20007558` | LPUART4 | `0x40190000` | 7 / 8 |
@@ -144,14 +144,64 @@ The test polls the two MIDI objects at `0x26fdc` and `0x26f9a`. Their success
 paths at `0x270ec` and `0x27144` display `DIN5 Received!` and `3.5MM Received!`
 respectively. This establishes the jack-family-to-UART associations.
 
-The descriptor pins are supported/default choices, not proof of the final mux
-selection. TODO: trace all serial initialization and pin-remapping calls before
-treating them as confirmed board wiring. Default pad names are `GPIO_AD_B0_03`
-(RX0), `GPIO_AD_B0_02` (TX1), `GPIO_B1_01` (RX7), `GPIO_B1_00` (TX8).
+The initialization path now establishes that these default entries are actually
+selected at normal startup. Calls at `0x31472` and `0x3147a` initialize the two
+MIDI objects through `0x1bf94`. That routine follows their transport pointers and
+calls serial begin at `0x50a40` with 31,250 baud and format zero (8N1).
 
-USB host reception is checked through `0xb45c`; USB device reception through
-`0x4fc58`. Their test paths display separate USB host/device success messages.
-TODO: establish USB controller instances, socket wiring and host-power control.
+Serial begin reads RX/TX descriptor indices from object bytes `+0x1c` / `+0x1d`.
+Both are zero in each initialized serial object. RX pad/mux/input-select writes
+are at `0x50b22` through `0x50b58`; TX writes at `0x50b5a` through `0x50b8e`.
+No intervening pin-index change was found in the traced startup path.
+
+| Signal | Logical pin | Processor pad | Mux / input-select value |
+| --- | --- | --- | --- |
+| DIN RX, LPUART6 | 0 | `GPIO_AD_B0_03` | 2 / 1 |
+| DIN TX, LPUART6 | 1 | `GPIO_AD_B0_02` | 2 / 1 |
+| 3.5 mm RX, LPUART4 | 7 | `GPIO_B1_01` | 2 / 2 |
+| 3.5 mm TX, LPUART4 | 8 | `GPIO_B1_00` | 2 / 2 |
+
+This establishes startup configuration, not optocoupler/driver circuitry,
+connector-contact continuity or the absence of later changes in every mode.
+
+## USB: confirmed controller roles
+
+| Firmware path | Controller | Register base | PHY base | Role setup |
+| --- | --- | --- | --- | --- |
+| USB device | USB1 | `0x402e0000` | `0x400d9000` | Flash `0x60001f92` |
+| USB host | USB2 | `0x402e0200` | `0x400da000` | ITCM `0x42c86` |
+
+Device initialization begins at flash `0x60001f0c`. It resets USB1 and initializes
+USBPHY1, then writes USBMODE `0x0a`: controller-mode bits are 2 (device).
+It installs ISR `0x4eb9c` at vector-table offset `0x204`, IRQ 113.
+
+Normal startup calls host initialization `0x42b9c` at `0x3140a`. It initializes
+USBPHY2, resets USB2, writes USBMODE 3 (host), installs ISR `0x43314` at
+vector-table offset `0x200`, IRQ 112, and sets the port-power bit in PORTSC1
+at `0x42c9e` through `0x42ca8`.
+
+Host startup also configures an additional output that is not present in the
+55-entry logical-pin table:
+
+| Signal | Pad | GPIO | Mux register | Pad-control register | Startup level |
+| --- | --- | --- | --- | --- | --- |
+| Host-startup output, likely VBUS enable | `GPIO_EMC_40` | GPIO8 bit 26 | `0x401f80b4` | `0x401f82a4` | HIGH |
+
+Instructions `0x42c22` through `0x42c30` select mux 5, set pad control `0x08`,
+enable the GPIO output and drive it HIGH before the controller starts. This
+matches the public Teensy 4.1 host initialization sequence. Its actual connection
+to a power switch, current limit and polarity at the socket remain unverified.
+Do not confuse this GPIO output with the pad's alternative overcurrent function.
+
+The MIDI test's host reception routine `0xb45c` calls the host task dispatcher
+`0x43bd0` before polling its MIDI objects. Device reception `0x4fc58` consumes
+USB-MIDI packets through `0x4fbc8`; that routine masks/unmasks IRQ 113 while
+manipulating the receive queue, matching USB1's installed interrupt.
+
+The USB data pairs use the dedicated controller/PHY connections, not ordinary
+digital-pin numbers. Unknown: physical socket-contact routing, USB-C CC circuitry,
+VBUS sensing/protection, and whether the extra output actually controls socket
+power on this board revision. Software role selection is not a continuity test.
 
 ## Displays: confirmed firmware wiring
 
@@ -280,6 +330,42 @@ Unknown: exact EEPROM part, installed capacity, voltage, pull-ups, write-protect
 wiring and PCB connector/test-point locations. Firmware initialization does not
 prove that a device is present and responding on a particular physical board.
 
+## SD card: confirmed native four-bit interface
+
+Normal startup calls `0x3bb88` at `0x319b8` with argument `0xfe`, selecting
+the native SD branch at `0x3bc14`, not the SPI branch. The card/filesystem object
+is at `0x200112c0`. That branch calls `0x419cc`, whose register accesses establish
+USDHC1 at `0x402c0000`.
+
+| SD signal | Logical pin | Processor pad | Mux register | GPIO when not muxed to USDHC |
+| --- | --- | --- | --- | --- |
+| CMD | 45 | `GPIO_SD_B0_00` | `0x401f81bc` | GPIO8 bit 12 |
+| CLK | 44 | `GPIO_SD_B0_01` | `0x401f81c0` | GPIO8 bit 13 |
+| DATA0 | 43 | `GPIO_SD_B0_02` | `0x401f81c4` | GPIO8 bit 14 |
+| DATA1 | 42 | `GPIO_SD_B0_03` | `0x401f81c8` | GPIO8 bit 15 |
+| DATA2 | 47 | `GPIO_SD_B0_04` | `0x401f81cc` | GPIO8 bit 16 |
+| DATA3 | 46 | `GPIO_SD_B0_05` | `0x401f81d0` | GPIO8 bit 17 |
+
+Initialization first sets these pads to GPIO mode, then `0x411b4` selects mux 0
+on all six pads and configures their pad controls. The SD command sequence
+subsequently requests four-bit operation at `0x41c2a` through `0x41c2e`, then
+sets USDHC1 PROT_CTRL data-width bits to 1 at `0x41c38` through `0x41c50`.
+Its ISR is `0x40f44`, installed at vector-table offset `0x1f8`, IRQ 110.
+
+The wrapper at `0x3bb88` also contains an SPI-card alternative, with a default
+25 MHz requested clock and caller-supplied CS. That is not the branch selected
+by this startup. Likewise, an initialized LPSPI4 object is not evidence that the
+installed card uses SPI.
+
+On a card-initialization or filesystem-mount failure, the wrapper configures
+pin 46 as an input with pull-down at `0x3bc38` through `0x3bc48` and records it
+in a card-status field. This is the DATA3 pad reused as GPIO, not evidence of
+a separate mechanical card-detect switch. The exact later detection behavior
+and any mechanical switch connection remain TODO.
+
+Unknown: physical microSD contact continuity, power switching, protection and
+installed-card capacity. No card was accessed during this analysis.
+
 ## Other peripheral objects: incomplete
 
 Initialized objects also contain these peripheral bases:
@@ -292,8 +378,8 @@ Initialized objects also contain these peripheral bases:
 | `0x2000784c` | LPI2C4 | `0x403fc000` |
 
 Except for the EEPROM path above, presence in initialized data does not prove
-use. TODO: trace the remaining buses and any SD-card interface. In particular,
-the presence of an LPSPI4 object must not be used to assign the displays to it.
+use. TODO: establish any board-specific users of the remaining SPI/I²C objects.
+Neither the traced display path nor the selected SD-card path uses LPSPI4.
 
 ## Rechecking the evidence
 
@@ -322,6 +408,10 @@ Display comparisons:
 and [ST77xx initialization](https://github.com/adafruit/Adafruit-ST7735-Library/blob/master/Adafruit_ST77xx.cpp).
 I²C comparison:
 [Teensy Wire implementation](https://github.com/PaulStoffregen/Wire/blob/master/WireIMXRT.cpp).
+Additional comparisons:
+[USB host initialization](https://github.com/PaulStoffregen/USBHost_t36/blob/master/ehci.cpp),
+[native SD driver](https://github.com/PaulStoffregen/SdFat/blob/master/src/SdCard/SdioTeensy.cpp),
+and [NXP RT1062 pin mux definitions](https://github.com/nxp-mcuxpresso/mcux-sdk/blob/master/devices/MIMXRT1062/drivers/fsl_iomuxc.h).
 These are comparison sources, not recovered Morningstar source or proof of an
 exact core-library version.
 
