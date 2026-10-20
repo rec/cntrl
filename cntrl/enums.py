@@ -42,11 +42,16 @@ class ProtocolKind(StrEnum):
     CV = auto()
     EXPRESSION = auto()
     SWITCH = auto()
+    RELAY = auto()
 
 
 class MidiWiring(StrEnum):
+    """TRS MIDI wiring; active-only modes leave the other signal contact floating."""
+
     TYPE_A = auto()
     TYPE_B = auto()
+    TIP_ACTIVE = auto()
+    RING_ACTIVE = auto()
 
 
 class UsbRole(StrEnum):

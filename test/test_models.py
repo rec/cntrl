@@ -27,7 +27,7 @@ def test_controller_round_trip_preserves_control_types() -> None:
 @pytest.mark.parametrize('kind', list(enums.DisplayKind))
 def test_display_describes_dimensions_and_colors(kind: enums.DisplayKind) -> None:
     display = models.Display(id='screen', name='Screen', kind=kind, width=16, colors=3)
-    assert display.height == 1
+    assert display.height is None
     assert display.colors == 3
 
 
@@ -37,7 +37,7 @@ def test_ranges_reject_invalid_bounds(minimum: float, maximum: float) -> None:
         models.ValueRange(minimum=minimum, maximum=maximum)
 
 
-@pytest.mark.parametrize('colors', [0, 4])
+@pytest.mark.parametrize('colors', [0, -1])
 def test_display_rejects_unsupported_color_counts(colors: int) -> None:
     with pytest.raises(ValidationError):
         models.Display(
@@ -47,6 +47,21 @@ def test_display_rejects_unsupported_color_counts(colors: int) -> None:
             width=3,
             colors=colors,
         )
+
+
+def test_display_preserves_unknown_details() -> None:
+    display = models.Display(id='lcd', name='LCD', kind=enums.DisplayKind.GRAPHICAL)
+    restored = models.Display.model_validate_json(display.model_dump_json())
+    assert restored.width is None
+    assert restored.height is None
+    assert restored.colors is None
+
+
+def test_display_accepts_more_than_three_colors() -> None:
+    display = models.Display(
+        id='lcd', name='LCD', kind=enums.DisplayKind.GRAPHICAL, colors=256
+    )
+    assert display.colors == 256
 
 
 def test_configurable_port_keeps_one_physical_connector() -> None:
@@ -89,13 +104,15 @@ def test_configurable_port_keeps_one_physical_connector() -> None:
         models.UsbProtocol(role=enums.UsbRole.DEVICE, functions=['midi']),
         models.EthernetProtocol(protocols=['RTP-MIDI']),
         models.CvProtocol(voltage_range=models.ValueRange(minimum=-5, maximum=5)),
+        models.RelayProtocol(),
     ],
 )
 def test_protocols_round_trip_in_configurations(
     protocol: models.MidiProtocol
     | models.UsbProtocol
     | models.EthernetProtocol
-    | models.CvProtocol,
+    | models.CvProtocol
+    | models.RelayProtocol,
 ) -> None:
     configuration = models.PortConfiguration(
         id='default', direction=enums.Direction.BIDIRECTIONAL, protocol=protocol

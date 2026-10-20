@@ -47,14 +47,15 @@ class Display(BaseModel, frozen=True):
     """Dimensions are character cells for text displays, pixels for graphical ones.
 
     Colours count independently selectable display colours, excluding the background.
+    None means that a dimension or colour count is unknown.
     """
 
     id: str
     name: str
     kind: enums.DisplayKind
-    width: int = Field(gt=0)
-    height: int = Field(default=1, gt=0)
-    colors: int = Field(default=1, ge=1, le=3)
+    width: int | None = Field(default=None, gt=0)
+    height: int | None = Field(default=None, gt=0)
+    colors: int | None = Field(default=None, ge=1)
 
 
 class PhysicalSpecification(BaseModel, frozen=True):
@@ -100,6 +101,12 @@ class SwitchProtocol(BaseModel, frozen=True):
     kind: Literal[enums.ProtocolKind.SWITCH] = enums.ProtocolKind.SWITCH
 
 
+class RelayProtocol(BaseModel, frozen=True):
+    """Relay-contact switching output, rather than switch-contact sensing."""
+
+    kind: Literal[enums.ProtocolKind.RELAY] = enums.ProtocolKind.RELAY
+
+
 class PortConfiguration(BaseModel, frozen=True):
     id: str
     direction: enums.Direction
@@ -109,7 +116,8 @@ class PortConfiguration(BaseModel, frozen=True):
         | EthernetProtocol
         | CvProtocol
         | ExpressionProtocol
-        | SwitchProtocol,
+        | SwitchProtocol
+        | RelayProtocol,
         Field(discriminator='kind'),
     ]
 

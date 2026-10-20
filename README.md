@@ -13,9 +13,10 @@ an editor, or support for importing manufacturers' patches.
   potentiometer or expression pedal.
 - `RelativeControl`: direction or steps from an endless dial, without an
   absolute position. An encoder's push switch is a separate `Button`.
-- `Display`: numeric, alphanumeric, or graphical, with one to three selectable
-  foreground colours. Width and height measure character cells for numeric and
-  alphanumeric displays, and pixels for graphical displays.
+- `Display`: numeric, alphanumeric, or graphical. Width and height measure
+  character cells for numeric and alphanumeric displays, and pixels for graphical
+  displays. Dimensions and foreground colour counts may be `None` when unknown;
+  known colour counts are positive and are not capped at three.
 
 ## Ports
 
@@ -27,10 +28,11 @@ relative to the controller. A port is fixed when it has one configuration;
 
 Physical connector type and protocol are separate. A TRS connector can carry
 MIDI, sense an expression pedal, or sense switch contacts according to its
-configuration. MIDI configurations can specify TRS Type A or Type B wiring.
+configuration. MIDI configurations can specify TRS Type A or Type B wiring, or
+tip-active/ring-active wiring with the other contact floating.
 USB configurations describe host/device role and MIDI/HID functions. Ethernet
 configurations can name higher-level protocols. CV configurations declare a
-voltage range.
+voltage range. Relay outputs use `RelayProtocol`, separately from switch inputs.
 
 Power-only connectors are deliberately excluded. A combined USB power/data
 connector is represented as a USB data connection.
@@ -42,6 +44,30 @@ their list members are not deeply immutable. Use `model_dump_json()` and
 
 Import symbols from their defining modules, `cntrl.models` and `cntrl.enums`.
 There are no package-level re-exports.
+
+## Morningstar MC6 Pro
+
+`cntrl.morningstar.mc6_pro()` creates a fresh `Controller` description containing
+six footswitches, three graphical LCDs, and twelve physical data/switching ports:
+two DIN MIDI, two 3.5 mm TRS MIDI, two USB-C, four configurable TRS ports, and two
+relay outputs. External expression pedals and aux switches are not built-in
+controls. The dedicated power jack is excluded; the USB device port is included
+despite also supplying power. The DIN output accepts seven-pin cables for phantom
+power, although its MIDI data interface is conventionally called five-pin MIDI.
+
+The description is based on the manufacturer's [product specifications](https://www.morningstar.io/mc6-pro)
+and [user manual](https://help.morningstar.io/en/article/mc6-pro-user-manual-psevjy/),
+with jack sizes also described in the [release announcement](https://www.morningstar.io/post/mc6-pro-release)
+and [earlier manual](https://manuals.morningstar.io/mc-midi-controller/mc6-pro-user-manual).
+Undocumented LCD dimensions and palette sizes are `None`, with TODO comments.
+Active configurations are example selections, not factory defaults or live device
+state. The two USB device configurations correspond to MIDI-only and MIDI plus
+keyboard firmware variants; changing firmware may be needed to select one.
+
+This describes the existing model's capability categories, not every stock
+firmware feature. For example, the manual's configurable-port SysEx restriction,
+expression calibration modes, and individual relay tip/ring settings are not
+represented by these types. No Ethernet or CV capability is claimed.
 
 ## Development
 
