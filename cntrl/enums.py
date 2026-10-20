@@ -27,17 +27,19 @@ class ConnectorKind(StrEnum):
     DIN = auto()
     TS = auto()
     TRS = auto()
+    RJ45 = auto()
+
+
+class UsbSocket(StrEnum):
     USB_A = auto()
     USB_B = auto()
     USB_C = auto()
     USB_MINI_B = auto()
     USB_MICRO_B = auto()
-    RJ45 = auto()
 
 
 class ProtocolKind(StrEnum):
     MIDI = auto()
-    USB = auto()
     ETHERNET = auto()
     CV = auto()
     EXPRESSION = auto()
@@ -52,14 +54,3 @@ class MidiWiring(StrEnum):
     TYPE_B = auto()
     TIP_ACTIVE = auto()
     RING_ACTIVE = auto()
-
-
-class UsbRole(StrEnum):
-    HOST = auto()
-    DEVICE = auto()
-    DUAL = auto()
-
-
-class UsbFunction(StrEnum):
-    MIDI = auto()
-    HID = auto()

@@ -1,73 +1,97 @@
 # cntrl
 
 Hardware-independent descriptions of MIDI controllers, using Pydantic data models.
-Editors can inspect a controller's capabilities without knowing its hardware.
-Hardware-specific implementations will implement the corresponding operations.
-This initial project describes capabilities only; it does not contain drivers,
-an editor, or support for importing manufacturers' patches.
+The hardware model contains controls, displays and wired connectors, not firmware
+features, installed firmware, or active settings. There are no drivers, editors,
+or manufacturer patch importers.
 
 ## Controls and displays
 
 - `Button`: press and release events.
 - `AbsoluteControl`: a position within a declared `ValueRange`, such as a
   potentiometer or expression pedal.
-- `RelativeControl`: direction or steps from an endless dial, without an
-  absolute position. An encoder's push switch is a separate `Button`.
+- `RelativeControl`: direction or steps from an endless dial. An encoder's push
+  switch is a separate `Button`.
 - `Display`: numeric, alphanumeric, or graphical. Width and height measure
-  character cells for numeric and alphanumeric displays, and pixels for graphical
-  displays. Dimensions and foreground colour counts may be `None` when unknown;
-  known colour counts are positive and are not capped at three.
+  character cells for text displays, pixels for graphical displays. Unknown
+  dimensions and foreground colour counts are `None`.
 
 ## Ports
 
-Each `Port` has a `PhysicalSpecification`, a non-empty list of supported
-`PortConfiguration` objects, and an active configuration ID. Direction is
-relative to the controller. A port is fixed when it has one configuration;
-`port.configurable` is true when it has several. These are called
-**configurable ports**, independently of manufacturer.
+Each `Port` has a `PhysicalSpecification` and a non-empty list of `PortMode`
+objects describing supported electrical uses. Direction is relative to the
+controller. `port.configurable` is true when several modes are supported,
+whether selection uses software or hardware switches. No mode is selected by
+the description.
 
-Physical connector type and protocol are separate. A TRS connector can carry
-MIDI, sense an expression pedal, or sense switch contacts according to its
-configuration. MIDI configurations can specify TRS Type A or Type B wiring, or
-tip-active/ring-active wiring with the other contact floating.
-USB configurations describe host/device role and MIDI/HID functions. Ethernet
-configurations can name higher-level protocols. CV configurations declare a
-voltage range. Relay outputs use `RelayProtocol`, separately from switch inputs.
+Connector type and protocol are separate. A TRS connector can carry MIDI, sense
+an expression pedal, or sense switch contacts. MIDI modes may specify wiring.
+USB ports are single `UsbSocket` enum values, such as `"usb_b"` or `"usb_c"`.
+They have no protocol, direction, or role objects. Ethernet does not enumerate
+application protocols. CV declares a voltage range; relay outputs are distinct from switch
+inputs.
 
-Power-only connectors are deliberately excluded. A combined USB power/data
-connector is represented as a USB data connection.
+Power-only connectors are excluded. Combined USB power/data connectors remain
+included. Wireless radios are outside this wired-connector model.
 
-Absent capabilities are represented by empty lists, rather than placeholder
-controls or ports. Models use `frozen=True` to prevent field reassignment;
-their list members are not deeply immutable. Use `model_dump_json()` and
-`Controller.model_validate_json()` for JSON serialization and validation.
+Models use `frozen=True` to prevent field reassignment; list members are not
+deeply immutable. JSON serialization uses `model_dump_json()` and
+`Controller.model_validate_json()`. Import symbols from their defining modules;
+there are no package-level re-exports.
 
-Import symbols from their defining modules, `cntrl.models` and `cntrl.enums`.
-There are no package-level re-exports.
+## Data-only hardware catalogues
 
-## Morningstar MC6 Pro
+`cntrl/data/morningstar.toml` has exactly one simple table header per model,
+such as `[mc3]`. All hardware declarations use dotted assignments and inline
+values within that section. Compound table headers and wrapper tables are
+excluded by a regression test and the repository instructions.
 
-`cntrl.morningstar.mc6_pro()` creates a fresh `Controller` description containing
-six footswitches, three graphical LCDs, and twelve physical data/switching ports:
-two DIN MIDI, two 3.5 mm TRS MIDI, two USB-C, four configurable TRS ports, and two
-relay outputs. External expression pedals and aux switches are not built-in
-controls. The dedicated power jack is excluded; the USB device port is included
-despite also supplying power. The DIN output accepts seven-pin cables for phantom
-power, although its MIDI data interface is conventionally called five-pin MIDI.
+The `instances` field gives a count or a list of physical labels.
+Counts produce numbered instances; label lists preserve physical distinctions
+such as the MC4 Pro's rear and side MIDI inputs. Instance IDs come from these
+labels, lowercased with spaces replaced by hyphens. Adding a model requires data
+only.
 
-The description is based on the manufacturer's [product specifications](https://www.morningstar.io/mc6-pro)
-and [user manual](https://help.morningstar.io/en/article/mc6-pro-user-manual-psevjy/),
-with jack sizes also described in the [release announcement](https://www.morningstar.io/post/mc6-pro-release)
-and [earlier manual](https://manuals.morningstar.io/mc-midi-controller/mc6-pro-user-manual).
-Undocumented LCD dimensions and palette sizes are `None`, with TODO comments.
-Active configurations are example selections, not factory defaults or live device
-state. The two USB device configurations correspond to MIDI-only and MIDI plus
-keyboard firmware variants; changing firmware may be needed to select one.
+```python
+from cntrl.catalogue import load_catalogue
 
-This describes the existing model's capability categories, not every stock
-firmware feature. For example, the manual's configurable-port SysEx restriction,
-expression calibration modes, and individual relay tip/ring settings are not
-represented by these types. No Ethernet or CV capability is claimed.
+catalogue = load_catalogue('morningstar')
+controller = catalogue['mc6_pro']
+```
+
+The loader returns a dictionary of validated `Controller` objects. Repeated
+hardware has independent mutable lists. There are no catalogue wrapper classes
+or component-reference objects.
+
+| Model key | Buttons | Displays | Wired ports |
+| --- | ---: | --- | ---: |
+| `mc3` | 3 | 1 character LCD, 20 x 2 | 7 |
+| `mc6_mkii` | 6 | 1 character LCD, 24 x 2 | 5 |
+| `mc8` | 8 | 1 character LCD, 40 x 4 | 7 |
+| `mc4_pro` | 4 | 1 colour LCD | 9 |
+| `mc6_pro` | 6 | 3 colour LCDs | 12 |
+| `mc8_pro` | 8 | 4 colour LCDs | 12 |
+
+Sources are the manufacturer's specifications for
+[MC3](https://www.morningstar.io/mc3),
+[MC6 MkII](https://www.morningstar.io/mc6-mkii),
+[MC8](https://www.morningstar.io/mc8-midi-controller),
+[MC4 Pro](https://www.morningstar.io/mc4-pro),
+[MC6 Pro](https://www.morningstar.io/mc6-pro), and
+[MC8 Pro](https://www.morningstar.io/mc8-pro).
+Further detail comes from the manuals for
+[MC3](https://help.morningstar.io/en/article/mc3-user-manual-19hvw2w/),
+[MC4 Pro](https://help.morningstar.io/en/article/mc4-pro-user-manual-1p5o2cp/),
+[MC6 Pro](https://help.morningstar.io/en/article/mc6-pro-user-manual-psevjy/), and
+[MC8 Pro](https://help.morningstar.io/en/article/mc8-pro-user-manual-1yqqr1r/).
+The MC3's third and fourth TRS
+MIDI outputs have DIP-selectable wiring. MC4 Pro has separate rear and side TRS
+MIDI inputs and two different configurable-port jack sizes.
+
+Undocumented Pro display dimensions and palette sizes remain `None`, with TODOs
+in the data. Physical DIN contact counts also remain unknown pending confirmation.
+External expression pedals and switches are not built-in controls. No firmware
+restrictions, presets, calibration, or live device state are represented.
 
 ## Development
 

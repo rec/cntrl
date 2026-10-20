@@ -69,18 +69,9 @@ class MidiProtocol(BaseModel, frozen=True):
     trs_wiring: enums.MidiWiring | None = None
 
 
-class UsbProtocol(BaseModel, frozen=True):
-    """A USB data connection; power-only connections are not modelled."""
-
-    role: enums.UsbRole
-    functions: list[enums.UsbFunction]
-    kind: Literal[enums.ProtocolKind.USB] = enums.ProtocolKind.USB
-
-
 class EthernetProtocol(BaseModel, frozen=True):
-    """Higher-level protocol names, such as RTP-MIDI, describe the data service."""
+    """An Ethernet data connection, independent of application protocols."""
 
-    protocols: list[str] = Field(default_factory=list)
     kind: Literal[enums.ProtocolKind.ETHERNET] = enums.ProtocolKind.ETHERNET
 
 
@@ -107,12 +98,12 @@ class RelayProtocol(BaseModel, frozen=True):
     kind: Literal[enums.ProtocolKind.RELAY] = enums.ProtocolKind.RELAY
 
 
-class PortConfiguration(BaseModel, frozen=True):
-    id: str
+class PortMode(BaseModel, frozen=True):
+    """A supported electrical use, not an active setting or firmware feature."""
+
     direction: enums.Direction
     protocol: Annotated[
         MidiProtocol
-        | UsbProtocol
         | EthernetProtocol
         | CvProtocol
         | ExpressionProtocol
@@ -123,26 +114,16 @@ class PortConfiguration(BaseModel, frozen=True):
 
 
 class Port(BaseModel, frozen=True):
-    """One physical port with fixed or software-configurable signal meaning."""
+    """One physical port with fixed or configurable electrical uses."""
 
     id: str
     name: str
     physical: PhysicalSpecification
-    configurations: list[PortConfiguration] = Field(min_length=1)
-    active_configuration: str
+    modes: list[PortMode] = Field(min_length=1)
 
     @property
     def configurable(self) -> bool:
-        return len(self.configurations) > 1
-
-    @model_validator(mode='after')
-    def validate_configurations(self) -> Self:
-        ids = [c.id for c in self.configurations]
-        if len(ids) != len(set(ids)):
-            raise ValueError('port configuration IDs must be unique')
-        if self.active_configuration not in ids:
-            raise ValueError('active_configuration must name a supported configuration')
-        return self
+        return len(self.modes) > 1
 
 
 class Controller(BaseModel, frozen=True):
@@ -153,4 +134,4 @@ class Controller(BaseModel, frozen=True):
         ]
     ] = Field(default_factory=list)
     displays: list[Display] = Field(default_factory=list)
-    ports: list[Port] = Field(default_factory=list)
+    ports: list[Port | enums.UsbSocket] = Field(default_factory=list)

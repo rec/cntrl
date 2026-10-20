@@ -1,102 +1,163 @@
-from cntrl import enums, models, morningstar
+from importlib.resources import files
+
+import pytest
+
+from cntrl import enums, models
+from cntrl.catalogue import load_catalogue
 
 
-def test_mc6_pro_round_trip_preserves_documented_hardware() -> None:
-    controller = morningstar.mc6_pro()
+@pytest.fixture
+def catalogue() -> dict[str, models.Controller]:
+    return load_catalogue('morningstar')
+
+
+@pytest.mark.parametrize(
+    'name,buttons,displays,ports,configurable',
+    [
+        ('mc3', 3, 1, 7, 1),
+        ('mc6_mkii', 6, 1, 5, 2),
+        ('mc8', 8, 1, 7, 4),
+        ('mc4_pro', 4, 1, 9, 2),
+        ('mc6_pro', 6, 3, 12, 4),
+        ('mc8_pro', 8, 4, 12, 4),
+    ],
+)
+def test_documented_hardware_inventory(
+    catalogue: dict[str, models.Controller],
+    name: str,
+    buttons: int,
+    displays: int,
+    ports: int,
+    configurable: int,
+) -> None:
+    controller = catalogue[name]
     restored = models.Controller.model_validate_json(controller.model_dump_json())
     assert restored == controller
-    assert [c.name for c in restored.controls] == list('ABCDEF')
+    assert [c.name for c in restored.controls] == list('ABCDEFGH'[:buttons])
     assert all(isinstance(c, models.Button) for c in restored.controls)
-    assert len(restored.displays) == 3
-    assert all(d.kind == enums.DisplayKind.GRAPHICAL for d in restored.displays)
-    assert all(
-        d.width is None and d.height is None and d.colors is None
-        for d in restored.displays
-    )
-    assert len(restored.ports) == 12
-    assert len({p.id for p in restored.ports}) == 12
-
-
-def test_configurable_ports_offer_input_and_all_midi_wiring_modes() -> None:
-    ports = [p for p in morningstar.mc6_pro().ports if p.id.startswith('configurable-')]
-    assert len(ports) == 4
-    for port in ports:
+    assert len(restored.displays) == displays
+    assert len(restored.ports) == ports
+    wired = [p for p in restored.ports if isinstance(p, models.Port)]
+    assert len({p.id for p in wired}) == len(wired)
+    inputs = [p for p in wired if p.id.startswith('configurable-')]
+    assert len(inputs) == configurable
+    for port in inputs:
         assert port.configurable
-        assert port.physical.connector == enums.ConnectorKind.TRS
-        assert port.physical.diameter_mm == 6.35
-        assert port.active_configuration == 'expression'
-        assert {c.protocol.kind for c in port.configurations} == {
+        assert {m.protocol.kind for m in port.modes} == {
             enums.ProtocolKind.MIDI,
             enums.ProtocolKind.EXPRESSION,
             enums.ProtocolKind.SWITCH,
         }
-        midi = [
-            c
-            for c in port.configurations
-            if isinstance(c.protocol, models.MidiProtocol)
-        ]
-        assert {
-            c.protocol.trs_wiring
-            for c in midi
-            if isinstance(c.protocol, models.MidiProtocol)
-        } == {
-            enums.MidiWiring.TYPE_A,
-            enums.MidiWiring.TYPE_B,
-            enums.MidiWiring.TIP_ACTIVE,
-            enums.MidiWiring.RING_ACTIVE,
-        }
-        assert all(c.direction == enums.Direction.OUTPUT for c in midi)
         assert all(
-            c.direction == enums.Direction.INPUT
-            for c in port.configurations
-            if c not in midi
+            m.direction == enums.Direction.OUTPUT
+            if m.protocol.kind == enums.ProtocolKind.MIDI
+            else m.direction == enums.Direction.INPUT
+            for m in port.modes
         )
 
 
-def test_midi_and_relay_ports_have_distinct_protocols_and_directions() -> None:
-    ports = {p.id: p for p in morningstar.mc6_pro().ports}
-    for prefix in ['din', 'trs']:
-        assert (
-            ports[f'{prefix}-midi-in'].configurations[0].direction
-            == enums.Direction.INPUT
+@pytest.mark.parametrize(
+    'name,width,height', [('mc3', 20, 2), ('mc6_mkii', 24, 2), ('mc8', 40, 4)]
+)
+def test_character_display_dimensions(
+    catalogue: dict[str, models.Controller], name: str, width: int, height: int
+) -> None:
+    display = catalogue[name].displays[0]
+    assert display.kind == enums.DisplayKind.ALPHANUMERIC
+    assert display.width == width
+    assert display.height == height
+
+
+@pytest.mark.parametrize('name', ['mc4_pro', 'mc6_pro', 'mc8_pro'])
+def test_pro_displays_keep_undocumented_details_unknown(
+    catalogue: dict[str, models.Controller], name: str
+) -> None:
+    for display in catalogue[name].displays:
+        assert display.kind == enums.DisplayKind.GRAPHICAL
+        assert display.width is None
+        assert display.height is None
+        assert display.colors is None
+
+
+def test_mc3_distinguishes_fixed_and_dip_selectable_midi_wiring(
+    catalogue: dict[str, models.Controller],
+) -> None:
+    ports = {p.id: p for p in catalogue['mc3'].ports if isinstance(p, models.Port)}
+    for index in [1, 2, 3, 4]:
+        port = ports[f'trs-midi-out-{index}']
+        assert port.configurable == (index > 2)
+        assert all(m.direction == enums.Direction.OUTPUT for m in port.modes)
+        assert {
+            m.protocol.trs_wiring
+            for m in port.modes
+            if isinstance(m.protocol, models.MidiProtocol)
+        } == (
+            {enums.MidiWiring.TYPE_A}
+            if index <= 2
+            else {
+                enums.MidiWiring.TYPE_A,
+                enums.MidiWiring.TIP_ACTIVE,
+                enums.MidiWiring.RING_ACTIVE,
+            }
         )
-        assert (
-            ports[f'{prefix}-midi-out'].configurations[0].direction
-            == enums.Direction.OUTPUT
-        )
-    for name in ['trs-midi-in', 'trs-midi-out']:
-        protocol = ports[name].configurations[0].protocol
-        assert isinstance(protocol, models.MidiProtocol)
-        assert protocol.trs_wiring == enums.MidiWiring.TYPE_A
-    for name in ['relay-a', 'relay-b']:
-        configuration = ports[name].configurations[0]
-        assert isinstance(configuration.protocol, models.RelayProtocol)
-        assert configuration.direction == enums.Direction.OUTPUT
+
+
+def test_mc4_pro_has_two_midi_inputs_and_two_configurable_jack_sizes(
+    catalogue: dict[str, models.Controller],
+) -> None:
+    ports = {p.id: p for p in catalogue['mc4_pro'].ports if isinstance(p, models.Port)}
+    for name in ['rear-trs-midi-in', 'side-trs-midi-in']:
+        assert ports[name].modes[0].direction == enums.Direction.INPUT
+        assert isinstance(ports[name].modes[0].protocol, models.MidiProtocol)
         assert ports[name].physical.diameter_mm == 3.5
-    assert ports['din-midi-in'].physical.contacts == 5
-    assert ports['din-midi-out'].physical.contacts == 7
+    assert ports['configurable-1'].physical.diameter_mm == 6.35
+    assert ports['configurable-2'].physical.diameter_mm == 3.5
 
 
-def test_usb_ports_have_separate_host_and_device_roles() -> None:
-    ports = {p.id: p for p in morningstar.mc6_pro().ports}
-    for name, role in [
-        ('usb-device', enums.UsbRole.DEVICE),
-        ('usb-host', enums.UsbRole.HOST),
-    ]:
-        port = ports[name]
-        assert port.physical.connector == enums.ConnectorKind.USB_C
-        for configuration in port.configurations:
-            assert configuration.direction == enums.Direction.BIDIRECTIONAL
-            assert isinstance(configuration.protocol, models.UsbProtocol)
-            assert configuration.protocol.role == role
-            assert enums.UsbFunction.MIDI in configuration.protocol.functions
-    assert ports['usb-device'].configurable
+@pytest.mark.parametrize(
+    'name,socket,count',
+    [
+        ('mc3', enums.UsbSocket.USB_B, 1),
+        ('mc6_mkii', enums.UsbSocket.USB_B, 1),
+        ('mc8', enums.UsbSocket.USB_B, 1),
+        ('mc4_pro', enums.UsbSocket.USB_C, 2),
+        ('mc6_pro', enums.UsbSocket.USB_C, 2),
+        ('mc8_pro', enums.UsbSocket.USB_C, 2),
+    ],
+)
+def test_usb_ports_are_socket_values(
+    catalogue: dict[str, models.Controller],
+    name: str,
+    socket: enums.UsbSocket,
+    count: int,
+) -> None:
+    assert [p for p in catalogue[name].ports if isinstance(p, enums.UsbSocket)] == [
+        socket
+    ] * count
 
 
-def test_descriptions_do_not_share_mutable_collections() -> None:
-    first = morningstar.mc6_pro()
-    second = morningstar.mc6_pro()
+def test_expanded_hardware_has_independent_mutable_members(
+    catalogue: dict[str, models.Controller],
+) -> None:
+    first = catalogue['mc6_pro']
     first.controls.clear()
-    first.ports[6].configurations.clear()
-    assert len(second.controls) == 6
-    assert len(second.ports[6].configurations) == 6
+    ports = [p for p in first.ports if isinstance(p, models.Port)]
+    ports[2].modes.clear()
+    assert len(ports[3].modes) == 3
+    other = [p for p in catalogue['mc8_pro'].ports if isinstance(p, models.Port)]
+    assert len(other[2].modes) == 3
+    fresh = load_catalogue('morningstar')['mc6_pro']
+    assert len(fresh.controls) == 6
+    assert all(p.modes for p in fresh.ports if isinstance(p, models.Port))
+
+
+def test_catalogues_have_one_simple_header_per_controller() -> None:
+    for path in files('cntrl').joinpath('data').iterdir():
+        if path.name.endswith('.toml'):
+            headers = [
+                s.strip()
+                for s in path.read_text().splitlines()
+                if s.lstrip().startswith('[')
+            ]
+            catalogue = load_catalogue(path.name.removesuffix('.toml'))
+            assert headers == [f'[{k}]' for k in catalogue]

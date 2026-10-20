@@ -71,98 +71,73 @@ def test_configurable_port_keeps_one_physical_connector() -> None:
         physical=models.PhysicalSpecification(
             connector=enums.ConnectorKind.TRS, contacts=3, diameter_mm=6.35
         ),
-        configurations=[
-            models.PortConfiguration(
-                id='midi',
+        modes=[
+            models.PortMode(
                 direction=enums.Direction.OUTPUT,
                 protocol=models.MidiProtocol(trs_wiring=enums.MidiWiring.TYPE_A),
             ),
-            models.PortConfiguration(
-                id='expression',
+            models.PortMode(
                 direction=enums.Direction.INPUT,
                 protocol=models.ExpressionProtocol(),
             ),
-            models.PortConfiguration(
-                id='switch',
+            models.PortMode(
                 direction=enums.Direction.INPUT,
                 protocol=models.SwitchProtocol(),
             ),
         ],
-        active_configuration='expression',
     )
     restored = models.Port.model_validate_json(port.model_dump_json())
     assert restored == port
     assert restored.configurable
     assert restored.physical.connector == enums.ConnectorKind.TRS
-    assert isinstance(restored.configurations[1].protocol, models.ExpressionProtocol)
+    assert isinstance(restored.modes[1].protocol, models.ExpressionProtocol)
 
 
 @pytest.mark.parametrize(
     'protocol',
     [
         models.MidiProtocol(),
-        models.UsbProtocol(role=enums.UsbRole.DEVICE, functions=['midi']),
-        models.EthernetProtocol(protocols=['RTP-MIDI']),
+        models.EthernetProtocol(),
         models.CvProtocol(voltage_range=models.ValueRange(minimum=-5, maximum=5)),
         models.RelayProtocol(),
     ],
 )
-def test_protocols_round_trip_in_configurations(
+def test_protocols_round_trip_in_modes(
     protocol: models.MidiProtocol
-    | models.UsbProtocol
     | models.EthernetProtocol
     | models.CvProtocol
     | models.RelayProtocol,
 ) -> None:
-    configuration = models.PortConfiguration(
-        id='default', direction=enums.Direction.BIDIRECTIONAL, protocol=protocol
-    )
-    restored = models.PortConfiguration.model_validate_json(
-        configuration.model_dump_json()
-    )
-    assert restored == configuration
+    mode = models.PortMode(direction=enums.Direction.BIDIRECTIONAL, protocol=protocol)
+    restored = models.PortMode.model_validate_json(mode.model_dump_json())
+    assert restored == mode
     assert type(restored.protocol) is type(protocol)
 
 
-def test_single_configuration_port_is_fixed() -> None:
+def test_single_mode_port_is_fixed() -> None:
     port = models.Port(
         id='midi-in',
         name='MIDI in',
         physical=models.PhysicalSpecification(
             connector=enums.ConnectorKind.DIN, contacts=5
         ),
-        configurations=[
-            models.PortConfiguration(
-                id='midi',
+        modes=[
+            models.PortMode(
                 direction=enums.Direction.INPUT,
                 protocol=models.MidiProtocol(),
             )
         ],
-        active_configuration='midi',
     )
     assert not port.configurable
 
 
-@pytest.mark.parametrize(
-    'ids,active', [([], 'midi'), (['midi'], 'cv'), (['midi', 'midi'], 'midi')]
-)
-def test_port_requires_unambiguous_supported_configuration(
-    ids: list[str], active: str
-) -> None:
+def test_port_requires_a_supported_mode() -> None:
     with pytest.raises(ValidationError):
         models.Port(
             id='port',
             name='models.Port',
             physical=models.PhysicalSpecification(connector=enums.ConnectorKind.TRS),
-            configurations=[
-                models.PortConfiguration(
-                    id=i,
-                    direction=enums.Direction.OUTPUT,
-                    protocol=models.MidiProtocol(),
-                )
-                for i in ids
-            ],
-            active_configuration=active,
+            modes=[],
         )
 
 
@@ -171,6 +146,19 @@ def test_absent_capabilities_need_no_placeholder_implementation() -> None:
     assert not controller.controls
     assert not controller.displays
     assert not controller.ports
+
+
+def test_usb_sockets_round_trip_as_strings() -> None:
+    controller = models.Controller(name='USB', ports=list(enums.UsbSocket))
+    assert controller.model_dump(mode='json')['ports'] == [
+        s.value for s in enums.UsbSocket
+    ]
+    assert (
+        models.Controller.model_validate_json(controller.model_dump_json())
+        == controller
+    )
+    with pytest.raises(ValidationError):
+        models.Controller.model_validate({'name': 'USB', 'ports': ['not-a-socket']})
 
 
 def test_models_prevent_field_reassignment() -> None:
