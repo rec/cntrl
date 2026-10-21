@@ -8,7 +8,8 @@ peripheral-register read command, a debugger shell or a general GPIO-control API
 
 The useful new lead is a standalone display test. Relay and EEPROM tests also
 exist, but they are not read-only diagnostics and must not be tried as harmless
-queries. No command in this report was transmitted to the pedal.
+queries. The initial tracing did not transmit these commands. The subsequent
+controlled display-test trial is recorded below.
 
 ## Image and evidence
 
@@ -78,8 +79,8 @@ selectors for analysis, **not validated packets or instructions to send them**.
 
 The shared handler and surrounding UI state management mean these are not
 isolated functions that can safely be invoked just by guessing a short packet.
-Full packet construction, outer side effects and return-to-normal behaviour
-still need review before a live test.
+The display-specific follow-up below resolves its entry and cleanup path;
+the other commands remain untested.
 
 ### Standalone display test: the most useful next candidate
 
@@ -126,6 +127,98 @@ backup of this storage.
 
 The surrounding `00 / 31` branch also constructs a controller-restarting
 message after the test. Do not use it to discover what USB diagnostics return.
+
+## Display-test entry and return path
+
+Further tracing resolves the main controller's virtual methods using the
+initialized table at **`0x200026e0`**. The display command's full local path is:
+
+| Stage | Call site | Resolved operation |
+| --- | --- | --- |
+| Entry | `0x2ec5e` | `0x1a8fc` temporarily clears normal DIN MIDI callbacks |
+| Clear | `0x2f116`, virtual offset `+0x30` | `0xb18` clears all three display objects and RAM redraw flags |
+| Flush | `0x2f120`, virtual offset `+0xd0` | `0xad4` calls each display's `+0x64` method |
+| Test | `0x2f122` | `0x18974` draws the patterns and polls C |
+| Exit delay | `0x18c32` through `0x18c3c` | Returns after a 500 ms delay once C is detected |
+| Clear again | `0x2ef26`, virtual offset `+0x30` | `0xb18` clears the test graphics |
+| Redraw | `0x2ef30`, virtual offset `+0x34` | `0x29950` receives redraw mask `0xf7` |
+| Restore | `0x2ee2c` through `0x2ee70` | Reinstalls normal USB MIDI callbacks and registers the normal DIN/serial command handlers through `0x11dd4` |
+
+The `0xf7` passed at `0x2ef2a` is a **UI redraw mask**, not an outgoing SysEx
+terminator. The renderer at `0x29950` reads the current bank/preset and UI state,
+rebuilds display content and restores preset indicator presentation. It sets
+RAM redraw flags, including `+0xa5`, and returns to the receive pump. It does
+not request a bank change or execute a preset as part of this path.
+
+When controller flag `+0x85` is nonzero, the tail also updates a RAM timer at
+`0x20012618`, then reaches the common exit through the default `00 / 32`
+editor-table entry. This does not enter the adjacent `00 / 31` EEPROM test.
+
+No EEPROM-write, flash-update, bootloader-entry or reset operation was identified
+on this selected path. The display object's drawing/flush methods are the
+existing stock drivers, not host-supplied code. This justified a one-shot test;
+it is not a general safety claim about other factory commands.
+
+C is switch-container index 2, registered with object `0x20012dc4` at
+`0x3232c` through `0x32330`. Reader `0x4b070` calls the button's physical
+input method, not its saved MIDI/navigation preset. The test does not service
+normal incoming MIDI queries while looping. A queued information request is
+therefore useful for detecting that control has returned afterward.
+
+The test has no timeout-based exit in the traced loop. A user must operate C.
+Tap and release it promptly: the 500 ms return delay provides time to release
+before normal processing resumes. Holding it into normal operation could be
+interpreted by the regular button handler; no promise is made that a held
+button cannot subsequently navigate.
+
+### One-shot USB trial
+
+Before sending the display-test command, a fresh CoreMIDI inventory confirmed
+the MC6 Pro's input/output ownership. Read-only queries returned the previously
+observed firmware information and the current bank name. The received SysEx
+checksums were verified, including a fragmented bank-name reply.
+
+One command was then sent to the identified USB MIDI Port 1 output:
+
+```text
+f0 00 21 24 06 00 00 32 00 00 00 00 00 00 00 00 41 f7
+```
+
+The complete 18-byte frame selects `00 / 32`, not the neighbouring EEPROM or
+relay operations. The final `41` is the XOR checksum masked to seven bits.
+No bootloader request, serial-port open, configuration write or firmware upload
+was performed by the host.
+
+A single read-only `70 / 32` information query, transaction `43`, was queued
+after the display command to detect the return to the receive pump. It received
+no matching reply within 90 seconds, and the host script closed its connections.
+It did not retry the display command or issue a reset. The planned post-test
+bank-name query was consequently not sent.
+
+At this point visual confirmation and C-exit confirmation were still pending.
+The timeout is consistent with the blocking test loop, but does not independently
+prove that graphics appeared or identify why no reply arrived. Successful return
+to normal operation must not be claimed until a subsequent observation confirms
+it. If the pedal is still displaying patterns, the traced exit is a brief C tap;
+do not run the one-shot entry script again to check recovery.
+
+The owner subsequently confirmed that the colour patterns appeared and that
+tapping C returned the normal screen. This supplies the visual and physical
+exit confirmation missing from the timed-out host check; the delay in responding
+does not, by itself, establish the exact cause of the earlier USB timeout.
+
+A separate post-exit check then sent only the previously tested read-only
+`70 / 32` information query to each of the four USB MIDI outputs, with
+transaction IDs `0a` through `0d`. All four received matching replies on Port 1
+with the original information payload `06 03 0e 00 35 20 20 20 20`. All four
+input connections reported zero dropped packets. The display-test entry command
+was not repeated, and no reset or firmware upload was performed.
+
+Together, the owner's observation and this host check confirm that the stock
+display test ran, C exited it, and normal USB information-query processing
+resumed. They do not prove that every saved setting is unchanged or that all
+other controller functions have been tested; the post-test bank-name comparison
+from the original script was not completed.
 
 ## 3. USB serial is another SysEx transport, not an established shell
 
@@ -177,8 +270,9 @@ reading pins, dumping mux registers or controlling arbitrary peripherals.
 The tests are valuable primarily as executable references for implementing
 our own drivers using the [existing pin/peripheral map](mc6-pro-pin-map.md).
 
-The narrow next live candidate is the standalone display test, after reviewing
-its surrounding handler and establishing normal-mode restoration. Relay and
-EEPROM tests should remain unexecuted. There is no established software-only
+The standalone display-test entry and cleanup have now been traced, and one
+USB trial completed with owner-confirmed graphics/C-exit and successful
+post-exit USB queries. Relay and EEPROM tests remain unexecuted. There is no
+established software-only
 raw-register probe to substitute for physical measurements, and these findings
 do not improve recovery from firmware that cannot initialize USB.
