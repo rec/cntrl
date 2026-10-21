@@ -110,6 +110,51 @@ Receivers must reconstruct SysEx messages through the terminating `f7`; one
 transport callback is not necessarily one complete message. The observed
 48-byte division does not establish a universal transport limit.
 
+## Passive footswitch capture
+
+A subsequent 45-second capture listened to all four MC6 Pro inputs. It opened
+no MIDI output, sent no query, and did not open the serial interface. The user
+was asked to press and release A through F once, in order, and reported done.
+Expression pedals were excluded at the user's request.
+
+Five raw callbacks arrived, all on Port 1. Each contained two complete Program
+Change messages, on MIDI channels 1 and 2 respectively. Program values in the
+table are the zero-based values actually transmitted, not 1-based display
+numbers.
+
+| Seconds from start | Raw bytes | Channel 1 program | Channel 2 program |
+| --- | --- | --- | --- |
+| 7.588721 | `c0 2f c1 15` | 47 | 21 |
+| 10.771429 | `c0 39 c1 1a` | 57 | 26 |
+| 16.427461 | `c0 06 c1 06` | 6 | 6 |
+| 19.342734 | `c0 0b c1 0b` | 11 | 11 |
+| 22.942897 | `c0 10 c1 10` | 16 | 16 |
+
+Ports 2 through 4 delivered no packets. All four connections reported zero
+dropped packets. No SysEx, Control Change, note or explicit button-edge message
+was observed in this window. The capture itself was passive, but the user's
+button presses still executed their configured presets normally.
+
+Do not assign these five bursts to A through F by position. There are fewer
+bursts than requested presses, and no independent timestamped button markers.
+The saved backup does not establish the live bank/page or mutable preset state
+at each press. Inspecting its stored message records did not establish a
+reliable correspondence to the five captured program pairs.
+
+Neither the missing sixth burst nor the absence of release-specific messages
+proves a hardware fault. A preset may send nothing over USB, perform an internal
+action, use another destination or depend on runtime state. This experiment
+does not distinguish those possibilities.
+
+The original raw callback log, including host timestamps, was saved locally at
+`/private/tmp/mc6-pro-passive-20261021T120859Z.jsonl`; that temporary file is not
+a durable archive. The complete received byte sequences are preserved above.
+
+This also demonstrates the opposite framing case to the split SysEx replies:
+one raw callback can contain **multiple complete MIDI messages**. A decoder
+must handle both aggregation and fragmentation rather than count callbacks as
+messages or switch actions.
+
 ## What this establishes, and what remains
 
 We have a working, non-flashing path for querying the stock firmware directly,
@@ -120,7 +165,9 @@ These queries do not expose raw RAM, peripheral registers, flash readback or
 an executable upload facility. They do not demonstrate recovery from broken
 firmware. The recovery gate in the earlier report remains unresolved.
 
-The next low-risk experiment is passive capture of existing footswitch and
-expression-pedal output, with user-operated controls. Relating configurable-port
-signals to external wiring still requires a connected peer or measurement;
-the USB information queries alone cannot establish electrical behaviour.
+Passive footswitch capture now works without changing controller settings.
+A labelled, one-button-at-a-time capture would resolve which switches produced
+which output and whether a particular press is silent. Expression-pedal testing
+is outside the current scope. Relating configurable-port signals to external
+wiring still requires a connected peer or measurement; the USB information
+queries and passive capture alone cannot establish electrical behaviour.
