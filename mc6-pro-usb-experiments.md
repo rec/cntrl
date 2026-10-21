@@ -157,6 +157,11 @@ messages or switch actions.
 
 ## What this establishes, and what remains
 
+Follow-up static tracing found stock USB hardware-test entry points, including
+a standalone display test, but no established arbitrary memory-read command.
+See [stock USB diagnostics](mc6-pro-usb-diagnostics.md) for the command paths,
+side effects and limits. None of those newly traced commands was transmitted.
+
 We have a working, non-flashing path for querying the stock firmware directly,
 without controlling the Editor. Transaction IDs survive in replies, and the
 four-cable response behaviour is now observed rather than inferred.
