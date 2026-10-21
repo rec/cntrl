@@ -60,6 +60,15 @@ The application scans the six footswitches every 3 ms through pins 28 (load),
 Buttons held at boot are reported after debounce if serial is connected.
 Events occurring while disconnected are not queued or replayed.
 
+The button-event image also reports `held` once after 500 ms from a debounced
+press, and `double pressed` on the second debounced press within 300 ms of a
+short press's release. The 300 ms boundary is inclusive. Press/release events
+remain immediate after debounce; these extra events do not replace them.
+A hold does not arm a double press, and double presses use non-overlapping
+pairs. The second press of a double can itself produce a hold if kept down.
+Each event includes device uptime in milliseconds. Buttons are independent;
+simultaneous presses produce separate events, not a new chord action.
+
 Display chip-select pins 15, 24 and 27 are held HIGH before enabling the
 shared clock. Output latches are preloaded with constant-pin `digitalWriteFast`
 before `pinMode`; the pinned core's ordinary `digitalWrite` would only change
@@ -131,8 +140,29 @@ No Python or Python-consumed data changed, so Python checks were not run.
 - Raw SHA-256:
   `5f7c4cd4137beef63d175b5a041da54f6652a219e2d00f6fcb623152efc8ddcd`.
 
-This diagnostic image has not yet been uploaded. PROGRAM remains the established
-way to enter HalfKay for upload or stock recovery.
+This diagnostic image was uploaded. A live capture verified exactly one press
+and release for each of A-F, with the corresponding raw states:
+`00111011`, `00111101`, `00111110`, `00110111`, `00101111`, `00011111`.
+The released state was `00111111`. The earlier missing events remain
+unexplained; they do not establish a read-sequence failure.
+
+### Button-event image
+
+`make -C firmware test inspect` passed without compiler warnings. Host tests
+cover hold/double-press timing, exclusions, timer wraparound and all 63 nonempty
+button combinations in addition to the original debounce tests. Static image
+checks still pass; GPIO initialization and the read sequence are unchanged.
+
+- HEX SHA-256:
+  `0b0cffc0dd84cac0bb2ea9d21dae13df0d9dc606fb854ad46fae029151df0d59`.
+- Raw SHA-256:
+  `6c36b64adb7369f7bc35c0d7a6b42d611e03276ce1ebe21122aef141e64b7774`.
+
+The button-event image was uploaded after detecting HalfKay automatically;
+USB enumeration and raw reports resumed. Its new event types still need live
+validation: hold A for a second, double-tap B, then hold D and E together and
+release them separately. No MIDI or saved-setting operations were added. PROGRAM remains
+the established way to enter HalfKay for upload or stock recovery.
 
 ## Original USB-only image inspection, 2026-10-21
 

@@ -86,8 +86,10 @@ The stock reader uses 3 us load-low, load-high and clock-high waits; our faster
 inline GPIO implementation also adds a 3 us clock-low wait. Display CS pins
 15, 24 and 27 are held HIGH before clocking pin 13. Stock display initialization
 at `0x48c90` onward establishes HIGH as the deselected initial level.
-Build, image inspection and host debounce tests pass. Physical button mapping
-and scan behavior on this independent image remain unverified until upload.
+Build, image inspection and host debounce tests pass. A live USB capture on the
+independent raw-diagnostic image confirmed A-F in order, one press and release
+each, with exactly the active-low bit changes listed above. Released samples
+were `00111111`; no physical interpretation is assigned to bits 6 and 7.
 
 ## Relay outputs: confirmed
 

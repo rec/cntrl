@@ -52,10 +52,19 @@ void loop() {
         raw = read_buttons();
         ++scans;
         for (unsigned i = 0; i < 6; ++i) {
-            if (buttons[i].update(!(raw & (1u << button_bits[i])), now) && Serial) {
-                Serial.print("button ");
-                Serial.print(char('A' + i));
-                Serial.println(buttons[i].pressed ? " pressed" : " released");
+            const uint8_t events = buttons[i].update(!(raw & (1u << button_bits[i])), now);
+            if (Serial) {
+                const char *names[] = {"pressed", "released", "held", "double pressed"};
+                for (unsigned j = 0; j < 4; ++j) {
+                    if (events & (1u << j)) {
+                        Serial.print("button ");
+                        Serial.print(char('A' + i));
+                        Serial.print(' ');
+                        Serial.print(names[j]);
+                        Serial.print(" ms=");
+                        Serial.println(now);
+                    }
+                }
             }
         }
     }
