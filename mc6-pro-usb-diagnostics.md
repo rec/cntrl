@@ -220,6 +220,50 @@ resumed. They do not prove that every saved setting is unchanged or that all
 other controller functions have been tested; the post-test bank-name comparison
 from the original script was not completed.
 
+## Temporary preset-label text over USB
+
+The public `70 / 01` command provides a different, non-flashing route to our
+own displayed text: override a preset's short name in RAM. This uses the
+existing preset-label layout, not arbitrary pixel positioning or a new graphics
+driver. The dedicated `70 / 11` text-message case calls virtual offset `+0x48`,
+which resolves to no-op `0xb48` in the main controller table inspected here;
+its documented popup behaviour should not be assumed to work on this image.
+
+The short-name handler at `0x227e8` requires a 32-byte payload. It selects the
+preset, converts/copies that text and calls RAM setter `0x39b50` at `0x22810`.
+It compares the save argument to `7f` at `0x2281c`. Only that value branches to
+the separate save call at `0x22b26`; zero skips it and returns a success ACK.
+The RAM setter updates the name buffer and dirty/presentation flags.
+
+A controlled preset A trial used these steps:
+
+1. Verify device ownership and the previously observed firmware-information
+   payload, then read the current bank name and preset A's original 32 bytes.
+2. Preserve the original bytes in a private local recovery snapshot outside
+   this public repository.
+3. Send `70 / 01`, preset index zero, save byte zero, and
+   `HELLO FROM CNTRL` padded to 32 bytes with spaces.
+4. Require a matching success ACK, then query `70 / 21` and compare the
+   returned bytes exactly to the padded temporary text.
+5. Leave the temporary label for 30 seconds, without button presses or bank
+   changes, then restore the original bytes using the same save-disabled path.
+6. Read the label back and require an exact byte-for-byte match to the original.
+
+The original read returned `Flutes` padded to 32 bytes. The temporary write
+received a success ACK and its readback exactly matched the test text.
+After the 30-second interval, the bank-name read still matched. Restoration
+received its own success ACK, and the final label read matched all 32 original
+bytes exactly. The receiver reported zero dropped packets. All responses used
+matching transaction IDs and passed checksum verification. Visual confirmation
+is separate from this USB readback and was still pending when these results
+were recorded.
+
+The restoration step runs even if a trial write/readback fails. It checks that
+the current bank name still matches before writing, to avoid knowingly
+restoring into another bank. A bank-name match is not a unique bank identity;
+the experiment also relies on the user leaving bank selection untouched.
+No `7f` save flag, preset execution, reset or firmware-update command is sent.
+
 ## 3. USB serial is another SysEx transport, not an established shell
 
 The same receive pump checks availability at **`0x505b0`** and reads bytes
