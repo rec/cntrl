@@ -7,3 +7,4 @@ dist/
 *.egg-info/
 firmware/.tools/
 firmware/build/
+firmware/.upload-helper.sock

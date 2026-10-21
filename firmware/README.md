@@ -1,6 +1,8 @@
 # MC6 Pro USB-only experimental firmware
 
-Build and inspection only. This image has not been flashed or run on the pedal.
+The first upload has booted and communicated over USB serial on the pedal.
+For subsequent uploads, see the [upload-only helper](upload-helper.md), whose
+live transport test is still pending.
 It is an independent application using the public Teensy core, not a patched
 Morningstar executable. It is not yet a functional MIDI controller.
 
@@ -110,7 +112,8 @@ This resolves the identified flash-configuration blocker for a controlled first
 upload, not the broader question of whether independent firmware runs correctly
 on the board. Static inspection does not prove boot, USB enumeration, electrical
 inactivity of every board net, settings preservation, or acceptance of a custom
-image by the bootloader. No custom image has been flashed. Keep the verified
+image by the bootloader on other hardware. This image has since passed its
+first USB bring-up on this pedal. Keep the verified
 stock HEX and bank backup available, with PROGRAM accessible for recovery.
 
 ## Sources

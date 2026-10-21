@@ -6,7 +6,8 @@ features, installed firmware, or active settings. There are no drivers, editors,
 or manufacturer patch importers.
 
 A separate [USB-only experimental MC6 Pro firmware target](firmware/README.md)
-has build-only tooling and static inspection results. It has not been flashed.
+has build tooling and static inspection results. Its first USB bring-up succeeded;
+an [upload-only helper](firmware/upload-helper.md) supports the next transport test.
 
 ## Controls and displays
 
