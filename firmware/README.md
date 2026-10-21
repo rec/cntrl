@@ -1,4 +1,4 @@
-# MC6 Pro USB/button experimental firmware
+# MC6 Pro USB/button/display experimental firmware
 
 The first upload has booted and communicated over USB serial on the pedal.
 For subsequent uploads, see the [upload-only helper](upload-helper.md), whose
@@ -72,13 +72,34 @@ simultaneous presses produce separate events, not a new chord action.
 Display chip-select pins 15, 24 and 27 are held HIGH before enabling the
 shared clock. Output latches are preloaded with constant-pin `digitalWriteFast`
 before `pinMode`; the pinned core's ordinary `digitalWrite` would only change
-pull resistors on an input. No display commands or reset pulses are sent.
+pull resistors on an input.
 The scan follows stock reader `0x2648`, with 3 us load-low, load-high and
 clock-high delays. An explicit 3 us clock-low delay accommodates inlined GPIO.
 Bits 2, 1, 0, 3, 4 and 5 map to A through F, active low; bits 6 and 7 are ignored.
 
 There are no MIDI, EEPROM, SD-card, flash-programming, relay or configurable-port
 operations, and no presets. There is no LED blink: pin 13 is a shared clock.
+
+At startup, `usb_probe/displays.cpp` initializes all three panels and draws
+white `CNTRL` and `DISPLAY 1`, `DISPLAY 2` or `DISPLAY 3` on black. These numbers
+identify firmware slots, not yet established physical positions. This fixed-text
+bring-up uses independently drawn 5x7 glyphs only for the greeting, not a complete
+font or a runtime text API. There is no framebuffer, display library dependency,
+serial text command or vendor executable code.
+
+The driver uses MOSI 11, shared clock 13, D/C 34/23/25, reset 21/22/20 and
+the existing CS pins. Panel power/gamma values are traced hardware data.
+Hardware reset follows stock's HIGH/LOW/HIGH waits of 100/100/200 ms. Software
+reset and sleep-out waits are lengthened to 150 and 500 ms, matching the public
+[Adafruit ST7735 driver](https://github.com/adafruit/Adafruit-ST7735-Library/blob/master/Adafruit_ST7735.cpp).
+Rotation 1 uses MADCTL `0xa8`, 160x128 pixels and x/y offsets 1/2.
+Pin 6 PWM starts at stock's value 5, then changes to 63 after drawing, equivalent
+to stock brightness setting 1 without writing that setting to storage.
+
+Drawing happens only in setup and takes several seconds. Button scanning starts
+afterward. The displays are deselected and clock LOW on return, so later button
+scans cannot send display data. Runtime redraws interleaved with scanning have
+not been implemented or validated.
 
 `no-external-ram.patch` removes the startup call to `configure_external_ram()`,
 which would otherwise drive optional memory pins. It patches only the local
@@ -94,8 +115,8 @@ explicit reverse direction with automatic direction guessing disabled.
 This is not a no-hardware-access image. The core configures clocks, caches,
 RAM, timers, RTC, temperature monitoring, internal ADC/PWM blocks and USB1.
 The ADC/PWM startup routines do not configure external pin muxes. Boot reads
-external application flash. Application GPIO access is limited to the seven
-switch-reader and display-deselect pins listed above.
+external application flash. Application GPIO access is limited to the
+switch-reader, display and backlight pins listed above.
 
 The linked USB ISR retains the CDC baud-134 request and timer leading to
 `_reboot_Teensyduino_()`. That routine reads security state and uses the normal
@@ -159,10 +180,29 @@ checks still pass; GPIO initialization and the read sequence are unchanged.
   `6c36b64adb7369f7bc35c0d7a6b42d611e03276ce1ebe21122aef141e64b7774`.
 
 The button-event image was uploaded after detecting HalfKay automatically;
-USB enumeration and raw reports resumed. Its new event types still need live
-validation: hold A for a second, double-tap B, then hold D and E together and
-release them separately. No MIDI or saved-setting operations were added. PROGRAM remains
+USB enumeration and raw reports resumed. Live tests verified A held after
+501 ms, B double-pressed 123 ms after release, and independent D/E holds and
+releases. The repeated D/E test released E 543 ms before D, correctly reported.
+No MIDI or saved-setting operations were added. PROGRAM remains
 the established way to enter HalfKay for upload or stock recovery.
+
+## Display image inspection, 2026-10-21
+
+`make -C firmware test inspect` passed without compiler warnings. Host tests
+decode simulated GPIO SPI into per-panel command/data transactions, checking
+selection isolation, reset timing, rotation, address offsets, complete 160x128
+RGB565 images, black background, glyph pixels and different slot-number images.
+Both button and display tests pass. No Python-consumed files changed.
+
+- Raw image: 23,552 bytes; HEX SHA-256:
+  `2f09ceaa5c55d3841e5a9223e83e48529b5b70dbdd0e60d5d59bb38f73055020`.
+- Raw SHA-256:
+  `24981e85d6e95c01a450162e5767047d7adabd5e51bb0492c597a26bb54d9faa`.
+- Stock flash configuration verified; ELF-derived and HEX-derived binaries match.
+
+This image has not yet been uploaded. Visual confirmation is needed for text,
+orientation and physical slot order. USB and button regression checks are also
+needed after the display initialization.
 
 ## Original USB-only image inspection, 2026-10-21
 

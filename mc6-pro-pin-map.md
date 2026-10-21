@@ -484,6 +484,14 @@ each eight-bit sample; display clock edges must not be treated as switch scans.
 Unknown: panel positions, connector contact numbering, backlight driver circuit
 and voltage/current requirements. None of these connections has been probed.
 
+Independent bring-up: `firmware/usb_probe/displays.cpp` uses this wiring and
+register data to draw `CNTRL` and a numbered display label at startup. Stock
+rotation 1 resolves to MADCTL `0xa8`, with exchanged offsets x=1, y=2. All panel
+CS lines are HIGH and clock LOW before button scanning begins. Reset and
+sleep-out waits are conservative; PWM values 5 and 63 stay within traced stock
+usage. Host SPI-transaction tests and the build pass; visible output and panel
+positions remain unverified pending upload.
+
 ## EEPROM: confirmed external path and flash-emulation alternative
 
 Normal startup explicitly selects an external EEPROM, not flash emulation:

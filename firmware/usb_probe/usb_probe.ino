@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "buttons.h"
+#include "displays.h"
 
 void setup() {
     // Preload output latches before enabling drivers. Unlike digitalWrite,
@@ -18,6 +19,7 @@ void setup() {
     pinMode(29, OUTPUT);
     pinMode(13, OUTPUT);
     pinMode(12, INPUT);
+    initialize_displays();
 }
 
 uint8_t read_buttons() {

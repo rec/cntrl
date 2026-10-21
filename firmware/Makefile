@@ -20,6 +20,9 @@ test:
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
 	"$(ROOT)/build/test_buttons"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/test_support" \
+		"$(ROOT)/test_displays.cpp" "$(ROOT)/usb_probe/displays.cpp" -o "$(ROOT)/build/test_displays"
+	"$(ROOT)/build/test_displays"
 
 tools: $(ROOT)/.tools/flash-config-ready
 
