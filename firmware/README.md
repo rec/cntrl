@@ -1,8 +1,8 @@
-# MC6 Pro USB-only experimental firmware
+# MC6 Pro USB/button experimental firmware
 
 The first upload has booted and communicated over USB serial on the pedal.
 For subsequent uploads, see the [upload-only helper](upload-helper.md), whose
-live transport test is still pending.
+live upload and subsequent USB heartbeat have been verified on this pedal.
 It is an independent application using the public Teensy core, not a patched
 Morningstar executable. It is not yet a functional MIDI controller.
 
@@ -12,6 +12,7 @@ On macOS Apple Silicon, with `make`, `curl`, `tar`, `patch` and `shasum`:
 
 ```bash
 make -C firmware tools
+make -C firmware test
 make -C firmware inspect
 ```
 
@@ -46,13 +47,29 @@ outputs are under `firmware/build/`:
 The product string is `cntrl experimental`, manufacturer `cntrl`. USB Serial
 uses the core's VID:PID `16c0:0483`, not Morningstar's ID. This is a private
 development identity, not an allocation for a shipping product. With a serial
-connection open and DTR asserted, the application emits
-`cntrl experimental firmware` once per second. No serial commands are parsed.
+connection open and DTR asserted, the diagnostic application emits a line such
+as `cntrl raw ms=1200 scans=400 bits[7:0]=11111111` every 100 ms. Bits are
+printed most-significant first, including the two unknown inputs. Uptime and
+scan count distinguish fresh samples from buffered output or a stalled scan.
+No serial commands are parsed. These lines replace the original heartbeat.
 Do not monitor at baud 134: the core interprets it as a bootloader request.
 
-The application has no GPIO, display, MIDI, EEPROM, SD-card, flash-programming,
-relay or configurable-port operations. It does not implement presets. There is
-no LED blink: pin 13 is a shared hardware clock here.
+The application scans the six footswitches every 3 ms through pins 28 (load),
+29 (gate), 12 (input) and 13 (clock). It prints `button A pressed` and
+`button A released`, similarly through F, after 15 ms of unchanged samples.
+Buttons held at boot are reported after debounce if serial is connected.
+Events occurring while disconnected are not queued or replayed.
+
+Display chip-select pins 15, 24 and 27 are held HIGH before enabling the
+shared clock. Output latches are preloaded with constant-pin `digitalWriteFast`
+before `pinMode`; the pinned core's ordinary `digitalWrite` would only change
+pull resistors on an input. No display commands or reset pulses are sent.
+The scan follows stock reader `0x2648`, with 3 us load-low, load-high and
+clock-high delays. An explicit 3 us clock-low delay accommodates inlined GPIO.
+Bits 2, 1, 0, 3, 4 and 5 map to A through F, active low; bits 6 and 7 are ignored.
+
+There are no MIDI, EEPROM, SD-card, flash-programming, relay or configurable-port
+operations, and no presets. There is no LED blink: pin 13 is a shared clock.
 
 `no-external-ram.patch` removes the startup call to `configure_external_ram()`,
 which would otherwise drive optional memory pins. It patches only the local
@@ -68,7 +85,8 @@ explicit reverse direction with automatic direction guessing disabled.
 This is not a no-hardware-access image. The core configures clocks, caches,
 RAM, timers, RTC, temperature monitoring, internal ADC/PWM blocks and USB1.
 The ADC/PWM startup routines do not configure external pin muxes. Boot reads
-external application flash. The application explicitly drives no output pin.
+external application flash. Application GPIO access is limited to the seven
+switch-reader and display-deselect pins listed above.
 
 The linked USB ISR retains the CDC baud-134 request and timer leading to
 `_reboot_Teensyduino_()`. That routine reads security state and uses the normal
@@ -76,7 +94,47 @@ breakpoint or secure-ROM entry path; it does not program fuses. This is static
 evidence, not a successful test on this board. PROGRAM remains the established
 physical recovery method.
 
-## Inspection results, 2026-10-21
+## Button image inspection, 2026-10-21
+
+`make -C firmware test inspect` passed without compiler warnings. Host tests
+cover debounce, repeated samples, release, timer wraparound and A-F bit
+selection. They do not establish electrical behavior on the pedal.
+
+- Raw image: 21,504 bytes; HEX SHA-256:
+  `8b60338ce17700d0239a6d3dd0218b3fb85d4da7533e3b272534396b6007f5b9`.
+- Raw SHA-256:
+  `ca6a40df8dd24a02ba8c4ff875944ff0a3bf6727321f9e7b4404f4bcfef5d808`.
+- Boot data length `0x5400`, Thumb reset `0x600015e5`, zero CSF at `0x60004800`.
+- Stock 512-byte flash configuration verified; ELF-derived and HEX-derived
+  binaries match. Disassembly confirms latch preload before GPIO output enable,
+  data reads before clock pulses, and eight iterations per sample.
+- No calls to `configure_external_ram()` and no linked EEPROM or relay driver.
+
+This button image was uploaded and its USB heartbeat verified. Two subsequent
+captures contained no button events, so physical button scanning is not yet
+verified. The first capture's overlap with the presses was uncertain.
+
+### Raw diagnostic image
+
+The next image retains the same GPIO initialization, read sequence and debounce
+logic. Only reporting changes: all eight raw bits, uptime and scan count print
+every 100 ms, alongside any decoded press/release events. Hold each button for
+about one second during capture so its raw state appears in multiple reports.
+Displays are not initialized and the application does not write saved settings.
+
+`make -C firmware test inspect` passed without compiler warnings. The decoded
+HEX and ELF-derived binary match; the stock flash configuration still matches.
+No Python or Python-consumed data changed, so Python checks were not run.
+
+- Raw image: 21,504 bytes; HEX SHA-256:
+  `5ec0c929632461040b5fa0ea9e85ba8d493c06e6c1a0fdb5571f426951bd6ade`.
+- Raw SHA-256:
+  `5f7c4cd4137beef63d175b5a041da54f6652a219e2d00f6fcb623152efc8ddcd`.
+
+This diagnostic image has not yet been uploaded. PROGRAM remains the established
+way to enter HalfKay for upload or stock recovery.
+
+## Original USB-only image inspection, 2026-10-21
 
 `make -C firmware inspect` completed without compiler warnings. No device access
 or upload was performed. No Python or Python-consumed data changed, so Python

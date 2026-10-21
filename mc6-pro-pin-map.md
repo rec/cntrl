@@ -80,6 +80,15 @@ bit extraction and active-low comparison at `0x3b54` and `0x506c`.
 The switch test at `0x274d2` polls the six indices through `0x4b070` using
 the container at `0x20012fdc`.
 
+Independent implementation: `firmware/usb_probe/usb_probe.ino` now reproduces
+this read sequence with a 3 ms scan interval and 15 ms per-button debounce.
+The stock reader uses 3 us load-low, load-high and clock-high waits; our faster
+inline GPIO implementation also adds a 3 us clock-low wait. Display CS pins
+15, 24 and 27 are held HIGH before clocking pin 13. Stock display initialization
+at `0x48c90` onward establishes HIGH as the deselected initial level.
+Build, image inspection and host debounce tests pass. Physical button mapping
+and scan behavior on this independent image remain unverified until upload.
+
 ## Relay outputs: confirmed
 
 | Test action | Logical pin | GPIO | Processor pad | Object-pointer location | Test write |
