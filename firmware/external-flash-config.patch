@@ -1,0 +1,12 @@
+--- a/cores/teensy4/bootdata.c
++++ b/cores/teensy4/bootdata.c
+@@ -65,2 +65,3 @@
+-__attribute__ ((section(".flashconfig"), used))
+-uint32_t FlexSPI_NOR_Config[128] = {
++#ifndef CNTRL_EXTERNAL_FLASH_CONFIG
++__attribute__ ((section(".flashconfig"), used))
++uint32_t FlexSPI_NOR_Config[128] = {
+@@ -238,1 +239,2 @@
+-};
++};
++#endif

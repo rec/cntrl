@@ -1,0 +1,8 @@
+--- a/cores/teensy4/startup.c
++++ b/cores/teensy4/startup.c
+@@ -186,3 +186,4 @@
+ #ifdef ARDUINO_TEENSY41
+-	configure_external_ram();
++	// cntrl USB-only probe: do not drive optional external-memory pins.
++	// configure_external_ram();
+ #endif

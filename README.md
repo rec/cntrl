@@ -5,6 +5,9 @@ The hardware model contains controls, displays and wired connectors, not firmwar
 features, installed firmware, or active settings. There are no drivers, editors,
 or manufacturer patch importers.
 
+A separate [USB-only experimental MC6 Pro firmware target](firmware/README.md)
+has build-only tooling and static inspection results. It has not been flashed.
+
 ## Controls and displays
 
 - `Button`: press and release events.
