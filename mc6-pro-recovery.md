@@ -22,6 +22,11 @@ Address conventions and the application image hash are in
 [the pin map](mc6-pro-pin-map.md#address-conventions-and-evidence).
 Unqualified instruction addresses below are runtime ITCM addresses.
 
+Follow-up: [live USB experiments on 2026-10-21](mc6-pro-usb-experiments.md)
+established the normal application USB identity and read-only MIDI queries.
+They did not attempt reset or bootloader entry and do not resolve the recovery
+limitations described here.
+
 ## Evidence and limits
 
 The inspected application is
