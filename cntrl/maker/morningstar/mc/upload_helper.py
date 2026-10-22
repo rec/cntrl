@@ -76,7 +76,7 @@ def upload_image(request: Upload) -> UploadResult:
     """Snapshot and validate the sole allowed image, then upload to the sole target."""
     CACHE_DIRECTORY.mkdir(mode=0o700, parents=True, exist_ok=True)
     with TemporaryDirectory(prefix='upload-', dir=CACHE_DIRECTORY) as directory:
-        snapshot = Path(directory) / 'usb_probe.hex'
+        snapshot = Path(directory) / 'patch-switcher.hex'
         snapshot.write_bytes(IMAGE_PATH.read_bytes())
         image = read_hex(snapshot)
         if image.sha256 != request.sha256:
@@ -180,7 +180,7 @@ def main() -> None:
 
 
 ROOT = Path(__file__).resolve().parent
-IMAGE_PATH = ROOT / 'firmware/build/usb_probe.ino.hex'
+IMAGE_PATH = ROOT / 'firmware/build/patch-switcher.hex'
 SOCKET_PATH = ROOT / 'firmware/.upload-helper.sock'
 CACHE_DIRECTORY = Path.home() / 'Library/Caches/cntrl-upload'
 UPLOADER_PATH = (

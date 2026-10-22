@@ -42,7 +42,7 @@ uv run --frozen -m cntrl.maker.morningstar.mc.upload_helper upload --sha256 DIGE
 ```
 
 Codex runs this client command, not the server. `DIGEST` is the SHA-256 of
-`cntrl/maker/morningstar/mc/firmware/build/usb_probe.ino.hex`, obtained immediately
+`cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex`, obtained immediately
 before the request.
 The protocol accepts only that digest as a newline-terminated JSON object of
 at most 256 bytes. Unknown fields are rejected. No filename, target, executable
