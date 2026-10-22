@@ -1,6 +1,7 @@
 #include "displays.h"
 
 #include <Arduino.h>
+#include <SPI.h>
 
 namespace {
 struct Panel {
@@ -10,13 +11,20 @@ struct Panel {
 };
 
 void send_byte(uint8_t value) {
-    for (int bit = 7; bit >= 0; --bit) {
-        digitalWriteFast(11, (value >> bit) & 1);
-        delayMicroseconds(1);
-        digitalWriteFast(13, HIGH);
-        delayMicroseconds(1);
-        digitalWriteFast(13, LOW);
-    }
+    SPI.transfer(value);
+}
+
+void begin_transfer() {
+    // begin() restores the SPI mux after the switch reader's GPIO use.
+    SPI.begin();
+    SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0));
+}
+
+void end_transfer() {
+    SPI.endTransaction(); // Blocking transfers have drained before deselection.
+    digitalWriteFast(13, LOW);
+    pinMode(13, OUTPUT);
+    pinMode(12, INPUT); // SPI.begin() also muxes the switch-data pin as MISO.
 }
 
 void command(const Panel &panel, uint8_t code, const uint8_t *data, unsigned size) {
@@ -158,15 +166,18 @@ void initialize_displays(bool greeting) {
         digitalWrite(panel.reset, HIGH);
     }
     delay(200);
+    begin_transfer();
     for (unsigned i = 0; i < 3; ++i) {
         initialize(panels[i], char('1' + i), greeting);
     }
+    end_transfer();
     analogWrite(6, 63); // Stock brightness setting 1, not a saved-setting write.
 }
 
 void write_display_segment(unsigned index, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
     const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
     if (index >= 3 || x >= 160 || y >= 128 || count == 0 || count > 160 - x) return;
+    begin_transfer();
     const Panel &panel = panels[index];
     const uint8_t columns[] = {0, uint8_t(x + 1), 0, uint8_t(x + count)};
     const uint8_t rows[] = {0, uint8_t(y + 2), 0, uint8_t(y + 2)};
@@ -178,4 +189,5 @@ void write_display_segment(unsigned index, unsigned x, unsigned y, const uint8_t
     digitalWrite(panel.dc, HIGH);
     for (unsigned i = 0; i < count * 2; ++i) send_byte(pixels[i]);
     digitalWrite(panel.cs, HIGH);
+    end_transfer();
 }

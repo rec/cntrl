@@ -1,5 +1,6 @@
 #include "usb_probe/displays.h"
 #include <Arduino.h>
+#include <SPI.h>
 
 #include <array>
 #include <cassert>
@@ -21,6 +22,41 @@ static std::vector<int> brightness;
 static std::vector<unsigned long> waits;
 static unsigned bits = 0;
 static uint8_t byte = 0;
+SPIClass SPI;
+static bool spi_started = false, spi_active = false;
+static bool clock_gpio = true, data_gpio = true;
+static unsigned transactions = 0;
+
+void SPIClass::begin() {
+    assert(!spi_active);
+    for (uint8_t pin : chip_selects) assert(levels[pin]);
+    assert(!levels[13]);
+    spi_started = true;
+    clock_gpio = data_gpio = false;
+}
+
+void SPIClass::beginTransaction(SPISettings settings) {
+    assert(spi_started && !spi_active);
+    assert(settings.clock == 8000000 && settings.order == MSBFIRST && settings.mode == SPI_MODE0);
+    spi_active = true;
+    ++transactions;
+}
+
+uint8_t SPIClass::transfer(uint8_t value) {
+    assert(spi_active && !clock_gpio && !data_gpio);
+    for (int bit = 7; bit >= 0; --bit) {
+        digitalWrite(11, (value >> bit) & 1);
+        digitalWrite(13, HIGH);
+        digitalWrite(13, LOW);
+    }
+    return 0;
+}
+
+void SPIClass::endTransaction() {
+    assert(spi_active && !levels[13] && bits == 0);
+    for (uint8_t pin : chip_selects) assert(levels[pin]);
+    spi_active = false;
+}
 
 void digitalWrite(uint8_t pin, uint8_t value) {
     // Only known display signals may be driven by this implementation.
@@ -64,6 +100,14 @@ void digitalWriteFast(uint8_t pin, uint8_t value) {
 }
 
 void pinMode(uint8_t pin, uint8_t mode) {
+    if (pin == 12 || pin == 13) {
+        assert(!spi_active && !levels[13]);
+        for (uint8_t selected : chip_selects) assert(levels[selected]);
+        assert(mode == (pin == 12 ? INPUT : OUTPUT));
+        if (pin == 12) data_gpio = true;
+        else clock_gpio = true;
+        return;
+    }
     assert(mode == OUTPUT);
     if (pin != 11) {
         assert(levels[pin]); // D/C and reset latches preloaded before enable.
@@ -89,6 +133,7 @@ int main() {
         levels[pin] = true;
     }
     initialize_displays();
+    assert(transactions == 1 && clock_gpio && data_gpio && !spi_active);
     assert((brightness == std::vector<int>{5, 63}));
     assert((waits == std::vector<unsigned long>{100, 100, 200,
         150, 500, 10, 100, 150, 500, 10, 100, 150, 500, 10, 100}));
@@ -130,6 +175,7 @@ int main() {
     const uint8_t segment[] = {0xff, 0xff, 0, 0};
     unsigned before = unsigned(transfers[0].size());
     write_display_segment(0, 10, 20, segment, 2);
+    assert(transactions == 2 && clock_gpio && data_gpio && !spi_active);
     assert(transfers[0].size() == before + 3);
     assert((transfers[0][before].bytes == std::vector<uint8_t>{0x2a, 0, 11, 0, 12}));
     assert((transfers[0][before + 1].bytes == std::vector<uint8_t>{0x2b, 0, 22, 0, 22}));
@@ -138,4 +184,5 @@ int main() {
     write_display_segment(0, 159, 0, segment, 2);
     write_display_segment(3, 0, 0, segment, 2);
     assert(transfers[0].size() == before + 3);
+    assert(transactions == 2); // Invalid requests must not take over the clock.
 }

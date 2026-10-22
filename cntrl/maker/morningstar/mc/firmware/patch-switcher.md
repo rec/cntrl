@@ -62,17 +62,28 @@ receiver and are not equivalent to a confirmed instrument state change.
 
 Display slots currently follow the traced CS order. Their left/center/right
 physical order still needs verification. The three 160x128 drivers render the
-portable layout using the pinned public-core ASCII font. Runtime updates write
-eight-pixel segments, deselecting displays before button scanning resumes.
-Rendering snapshots the latest requested pane and coalesces further requests.
-No full framebuffer is allocated. Verify redraw speed and button latency on the
-pedal; SD and USB library calls can introduce latency beyond the bounded drawing
-transactions.
+portable layout using the pinned public-core ASCII font. Transfers use blocking
+hardware SPI at a requested 8 MHz, MSB first, mode 0. Initialization retains the
+traced panel commands, reset sequence and waits. Each runtime call processes at
+most one row and sends only the span between its first and last changed pixels.
+Unchanged rows generate no SPI traffic. A 7,680-byte monochrome cache records the
+pixels sent to all three panels; the first pass clears unknown panel RAM.
+Rendering snapshots the latest requested pane and coalesces further requests,
+including changes received during painting and erasure of shorter text.
+
+All panels are deselected before ending a transfer. Pin 13 is then restored to
+GPIO output LOW and pin 12 to GPIO input for the existing switch-register reader.
+The next transfer restores the SPI pin mux through `SPI.begin()`. No asynchronous
+transfer, interrupt masking or DMA ownership crosses a button scan. The largest
+row transaction sends 331 bytes, approximately 0.34 ms of wire time at 8 MHz,
+excluding CPU/peripheral setup. Verify redraw speed and button latency on the
+pedal; SD and USB library calls can still introduce latency. The previous
+software-clocked driver had an observed update time around 1,500 ms.
 
 ## Capacity measurements
 
-The font-data-only ARM link used 154,208 bytes for RAM1 variables, 65,536
-bytes for code plus ITCM padding, leaving 304,544 bytes for local variables.
+The hardware-SPI/dirty-row ARM link used 162,400 bytes for RAM1 variables, 65,536
+bytes for code plus ITCM padding, leaving 296,352 bytes for local variables.
 RAM2 static use was 17,568 bytes; no external RAM was allocated. Final link
 measurements are printed by `inspect-patch-switcher` and may vary as code changes.
 
@@ -108,3 +119,22 @@ error; that path is covered with fake storage but not yet physically tested.
   after Maynard. The capture reported nine messages, no loss and no failure.
 - Cold-boot persistence, recovery from this image, physical display ordering
   and power-loss behavior remain unverified at this point.
+
+## Hardware SPI and dirty-row upload: 2026-10-22
+
+- Firmware HEX SHA-256:
+  `13e18a18f090880a3455464c56785aecf6fc3974ab82e88c2b3a536c14a82fa7`.
+- Portable controller/persistence tests and target button, display-transfer and
+  renderer tests passed. Renderer tests compare the simulated panel contents
+  against the requested text, including shortened/cleared text and replacement
+  requests during painting. They verify one-row transfer bounds, initial clearing
+  and no transfers for unchanged content. SPI tests check transaction settings,
+  exclusive panel selection and GPIO restoration before returning to scanning.
+- The HEX/ELF comparison and stock flash-configuration check passed. Uploaded
+  through the helper; the official updater again returned status 1 after reset
+  and disappearance. The application responded over USB with
+  `CNTRL READY 1 20568 bb8baa89`, confirming a boot with the existing saved show.
+- Visible redraw speed and switch responsiveness still need the user's check.
+  The first post-upload MIDI capture returned ten events almost simultaneously,
+  not the requested timed sequence; buffered interface data cannot establish
+  current button latency or confirm that sequence.

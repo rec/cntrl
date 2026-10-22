@@ -9,6 +9,7 @@
 #include "buttons.h"
 #include "displays.h"
 #include "switches.h"
+#include "renderer.h"
 
 // Only the pinned public-core font data is included, not the display library's
 // driver or its DMA global constructors. Panel transactions are our shared code.
@@ -59,9 +60,7 @@ public:
         return true;
     }
     void show(unsigned pane, const cntrl::Pane &content) override {
-        if (pane >= 3 || !std::memcmp(&requested_[pane], &content, sizeof(content))) return;
-        requested_[pane] = content;
-        dirty_[pane] = true;
+        renderer_.show(pane, content);
     }
     void error(const char *message) override {
         cntrl::Pane view;
@@ -109,34 +108,15 @@ public:
         }
     }
     void draw() {
-        if (drawing_ < 0) {
-            for (unsigned i = 0; i < 3; ++i) if (dirty_[i]) {
-                drawing_ = int(i); dirty_[i] = false;
-                painting_ = requested_[i]; x_ = y_ = 0; break;
-            }
-        }
-        if (drawing_ < 0) return;
-        // Eight pixels per transaction: scanning can run between segments.
-        uint8_t pixels[16];
-        for (unsigned i = 0; i < 8; ++i) {
-            bool lit = cntrl::text_pixel(painting_, 160, 128, x_ + i, y_, glcdfont);
-            pixels[2 * i] = pixels[2 * i + 1] = lit ? 255 : 0;
-        }
-        write_display_segment(unsigned(drawing_), x_, y_, pixels, 8);
-        if ((x_ += 8) == 160) {
-            x_ = 0;
-            if (++y_ == 128) drawing_ = -1;
-        }
+        renderer_.draw(glcdfont);
     }
 private:
     struct Batch { uint8_t bytes[14]; unsigned length, route; };
     Batch queue_[32] = {};
     unsigned head_ = 0, queued_ = 0;
     bool enabled_[4] = {};
-    cntrl::Pane requested_[3], painting_;
-    bool dirty_[3] = {true, true, true};
-    int drawing_ = -1;
-    unsigned x_ = 0, y_ = 0, response_offset_ = 0;
+    DisplayRenderer renderer_;
+    unsigned response_offset_ = 0;
     char response_[128] = {};
 };
 
