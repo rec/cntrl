@@ -1,0 +1,34 @@
+{
+  "setups": [
+    {
+      "instrument": "vl70",
+      "name": "default",
+      "banks": {
+        "0": {
+          "msb": 33,
+          "lsb": 0
+        },
+        "1": {
+          "msb": 33,
+          "lsb": 1
+        }
+      },
+      "sysex": []
+    },
+    {
+      "instrument": "pman",
+      "name": "default",
+      "banks": {
+        "0": {
+          "msb": 33,
+          "lsb": 0
+        },
+        "1": {
+          "msb": 33,
+          "lsb": 1
+        }
+      },
+      "sysex": []
+    }
+  ]
+}
