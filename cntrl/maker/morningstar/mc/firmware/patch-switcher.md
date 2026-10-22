@@ -101,5 +101,10 @@ error; that path is covered with fake storage but not yet physically tested.
 - Uploaded the compiled `examples/patch-switcher/pman.json` show: 256 patches,
   15 categories, pman channel 1, `din` output. The receiver completed its durable
   commit/readback path and returned `CNTRL READY 1 20568 bb8baa89`.
-- Cold-boot persistence, recovery from this image, physical display ordering,
-  MIDI output and power-loss behavior remain unverified at this point.
+- Captured DIN output through CME U6MIDI Pro input 1 while the user performed
+  C, B, C, F. Received exactly three sequences on channel 1: bank MSB 33,
+  bank LSB 0, then programs 1, 2 and 1 respectively (human numbering).
+  This verifies send, browsing without an extra send, and Undo restoring Trumpet
+  after Maynard. The capture reported nine messages, no loss and no failure.
+- Cold-boot persistence, recovery from this image, physical display ordering
+  and power-loss behavior remain unverified at this point.
