@@ -1,7 +1,8 @@
 # MC6 Pro patch-switcher build
 
 This is the first complete application build, not a hardware-qualified release.
-No patch-switcher firmware or show document has been uploaded to the pedal.
+The first patch-switcher firmware and pman show were uploaded on 2026-10-22.
+See the live verification record below for confirmed results and remaining checks.
 
 ```bash
 make -C firmware test
@@ -38,8 +39,8 @@ reserved for cntrl. Upload replaces only the inactive cntrl file, writes a commi
 trailer last, flushes/closes it and reads it back before activation. Boot ignores
 partial or corrupt slots and selects the newest valid generation.
 
-The stock firmware's native-card path is traced, but our driver has not yet been
-tested against the installed card. FAT directory updates and SD-card internal
+The stock firmware's native-card path is traced, and a show upload has completed
+with write/readback verification against the installed card. FAT directory updates and SD-card internal
 caching mean simulated interrupted writes are not proof of physical power-loss
 safety. Qualification must check cold boot, two different uploaded shows,
 interrupted transfers and interrupted commits. If there is no readable card,
@@ -88,3 +89,17 @@ The two slots consume at most 131,112 file bytes, excluding filesystem overhead.
 The installed card's free space is unknown until hardware qualification. A full
 or failing card must leave the old committed slot usable and produce an upload
 error; that path is covered with fake storage but not yet physically tested.
+
+## First live upload: 2026-10-22
+
+- Firmware HEX SHA-256:
+  `1d350bc7cb018452e835c7fa5f73c0a880ddc5440443023ef8c963eaace9b4bb`.
+- The upload-only helper selected the expected HalfKay board and uploaded the
+  81 KiB image. The official uploader returned exit status 1 after sending reset
+  and reporting that the board disappeared. USB serial nevertheless returned
+  `CNTRL READY 1 0 00000000`, confirming the new application booted.
+- Uploaded the compiled `examples/patch-switcher/pman.json` show: 256 patches,
+  15 categories, pman channel 1, `din` output. The receiver completed its durable
+  commit/readback path and returned `CNTRL READY 1 20568 bb8baa89`.
+- Cold-boot persistence, recovery from this image, physical display ordering,
+  MIDI output and power-loss behavior remain unverified at this point.
