@@ -1,0 +1,9 @@
+{
+  "outputs": ["din", "trs"],
+  "max_document_bytes": 65536,
+  "max_instruments": 32,
+  "max_categories": 128,
+  "max_patches": 860,
+  "history_depth": 128,
+  "characters": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+}

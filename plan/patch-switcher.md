@@ -1,6 +1,11 @@
 # Patch switcher implementation plan
 
-Status: proposed, not implemented.
+Status: implemented for host testing and target builds. Hardware qualification
+and release qualification remain pending; nothing has been flashed.
+
+See the [implementation and host command](../firmware/README.md) and the target
+maker directory for build instructions, measured capacities and remaining
+physical verification.
 
 Source: [issue #1](https://github.com/rec/cntrl/issues/1), read 2026-10-22.
 

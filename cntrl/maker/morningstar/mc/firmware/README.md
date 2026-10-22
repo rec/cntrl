@@ -38,9 +38,13 @@ SHA-256, and reports hashes, ELF headers, load segments and section sizes. Ignor
 outputs are under this directory's `build/`:
 
 - `usb_probe.ino.hex`: upload-format image, not permission to upload it.
-- `usb_probe.ino.elf`: linked executable with debug information.
-- `usb_probe.ino.bin`: raw flash contents.
+- `usb-probe/usb_probe.ino.elf`: linked executable with debug information.
+- `usb-probe/usb_probe.ino.bin`: raw flash contents.
 - `symbols.txt` and `disassembly.txt`: inspection evidence.
+
+Each sketch has its own build directory, so Arduino CLI can clean or rebuild
+one without removing the other. The diagnostic HEX remains at the path used by
+the existing upload helper; `patch-switcher.hex` is a separate artifact.
 
 ## Application and startup boundary
 

@@ -63,7 +63,7 @@ void draw(const Panel &panel, char number) {
     digitalWrite(panel.cs, HIGH);
 }
 
-void initialize(const Panel &panel, char number) {
+void initialize(const Panel &panel, char number, bool greeting) {
     command(panel, 0x01, nullptr, 0);
     delay(150);
     command(panel, 0x11, nullptr, 0);
@@ -97,7 +97,7 @@ void initialize(const Panel &panel, char number) {
     }
     command(panel, 0x13, nullptr, 0);
     delay(10);
-    draw(panel, number);
+    if (greeting) draw(panel, number);
     command(panel, 0x29, nullptr, 0);
     delay(100);
 }
@@ -133,7 +133,7 @@ uint8_t glyph_row(char character, unsigned row) {
 }
 } // namespace
 
-void initialize_displays() {
+void initialize_displays(bool greeting) {
     const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
     // Setup has already deselected all panels and configured the shared clock.
     digitalWriteFast(11, LOW);
@@ -159,7 +159,23 @@ void initialize_displays() {
     }
     delay(200);
     for (unsigned i = 0; i < 3; ++i) {
-        initialize(panels[i], char('1' + i));
+        initialize(panels[i], char('1' + i), greeting);
     }
     analogWrite(6, 63); // Stock brightness setting 1, not a saved-setting write.
+}
+
+void write_display_segment(unsigned index, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
+    const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
+    if (index >= 3 || x >= 160 || y >= 128 || count == 0 || count > 160 - x) return;
+    const Panel &panel = panels[index];
+    const uint8_t columns[] = {0, uint8_t(x + 1), 0, uint8_t(x + count)};
+    const uint8_t rows[] = {0, uint8_t(y + 2), 0, uint8_t(y + 2)};
+    command(panel, 0x2a, columns, sizeof(columns));
+    command(panel, 0x2b, rows, sizeof(rows));
+    digitalWrite(panel.dc, LOW);
+    digitalWrite(panel.cs, LOW);
+    send_byte(0x2c);
+    digitalWrite(panel.dc, HIGH);
+    for (unsigned i = 0; i < count * 2; ++i) send_byte(pixels[i]);
+    digitalWrite(panel.cs, HIGH);
 }

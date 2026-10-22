@@ -1,0 +1,17 @@
+[[patches]]
+instrument = 'synth'
+setup = 'stock'
+program = 1
+bank = 0
+name = 'Flute'
+range = 'C2 - C6'
+description = 'Example patch; replace with the addresses for your instrument.'
+tags = ['wind']
+
+[[patches]]
+instrument = 'synth'
+setup = 'stock'
+program = 2
+bank = 0
+name = 'Soft pad'
+tags = ['synth']

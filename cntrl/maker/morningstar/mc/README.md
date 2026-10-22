@@ -46,6 +46,7 @@ restrictions, presets, calibration, or live device state are represented.
 ## Experimental firmware and analysis
 
 See the [firmware build and inspection instructions](firmware/README.md),
+[patch-switcher build](firmware/patch-switcher.md),
 [upload-only helper](firmware/upload-helper.md),
 [firmware analysis](firmware-analysis.md) and
 [pin/peripheral map](mc6-pro-pin-map.md).

@@ -127,4 +127,15 @@ int main() {
     }
     assert(images[0] != images[1] && images[1] != images[2] && images[0] != images[2]);
     assert(!levels[13]); // Ready for the next switch-reader load/clock cycle.
+    const uint8_t segment[] = {0xff, 0xff, 0, 0};
+    unsigned before = unsigned(transfers[0].size());
+    write_display_segment(0, 10, 20, segment, 2);
+    assert(transfers[0].size() == before + 3);
+    assert((transfers[0][before].bytes == std::vector<uint8_t>{0x2a, 0, 11, 0, 12}));
+    assert((transfers[0][before + 1].bytes == std::vector<uint8_t>{0x2b, 0, 22, 0, 22}));
+    assert((transfers[0][before + 2].bytes == std::vector<uint8_t>{0x2c, 0xff, 0xff, 0, 0}));
+    assert(!levels[13] && levels[chip_selects[0]]);
+    write_display_segment(0, 159, 0, segment, 2);
+    write_display_segment(3, 0, 0, segment, 2);
+    assert(transfers[0].size() == before + 3);
 }

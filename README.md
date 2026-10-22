@@ -2,8 +2,9 @@
 
 Hardware-independent descriptions of MIDI controllers, using Pydantic data models.
 The hardware model contains controls, displays and wired connectors, not firmware
-features, installed firmware, or active settings. There are no drivers, editors,
-or manufacturer patch importers.
+features, installed firmware, or active settings. The independent
+[patch-switcher application](firmware/README.md) adds a portable C++ controller
+and Python compiler/upload tools. There are no manufacturer patch importers.
 
 Manufacturer-specific catalogues, firmware and analysis live in their maker
 packages. See [Morningstar MC](cntrl/maker/morningstar/mc/README.md).

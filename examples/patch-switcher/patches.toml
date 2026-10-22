@@ -1,0 +1,21 @@
+take_first_match = false
+chord_ms = 100
+
+[instruments.keys]
+instrument = 'synth'
+setup = 'stock'
+channel = 1
+output = 'din'
+
+[[patches.wind]]
+instrument = 'keys'
+program = 'Flute'
+volume = 100
+pan = 0
+
+[[patches.synth]]
+patch = ':keys:Soft pad'
+name = 'Evening pad'
+
+[[patches.synth]]
+patch = ':keys:12'

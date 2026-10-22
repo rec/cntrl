@@ -7,14 +7,35 @@ CORE := $(ROOT)/.tools/data/packages/teensy/hardware/avr/1.62.0
 ARM := $(ROOT)/.tools/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin/arm-none-eabi
 INDEX := https://www.pjrc.com/teensy/package_teensy_index.json
 FQBN := teensy:avr:teensy41:usb=serial,speed=600,opt=osstd,keys=en-us
-IMAGE := $(ROOT)/build/usb_probe.ino
+IMAGE := $(ROOT)/build/usb-probe/usb_probe.ino
 
 export ARDUINO_DIRECTORIES_DATA := $(ROOT)/.tools/data
 export ARDUINO_DIRECTORIES_DOWNLOADS := $(ROOT)/.tools/downloads
 export ARDUINO_DIRECTORIES_USER := $(ROOT)/.tools/user
 export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
-.PHONY: tools build inspect test
+.PHONY: tools build inspect test patch-switcher inspect-patch-switcher
+
+patch-switcher: tools
+	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/no-external-ram.patch"
+	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/external-flash-config.patch"
+	"$(CLI)" compile --fqbn teensy:avr:teensy41:usb=serialmidi,speed=600,opt=osstd,keys=en-us --warnings all \
+		--build-path "$(ROOT)/build/patch-switcher" \
+		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe -I$(CORE)/libraries/ST7735_t3/src' \
+		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
+		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
+		"$(ROOT)/patch_switcher"
+	cp "$(ROOT)/build/patch-switcher/patch_switcher.ino.hex" "$(ROOT)/build/patch-switcher.hex"
+
+inspect-patch-switcher: patch-switcher
+	"$(ARM)-objcopy" -O binary "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" "$(ROOT)/build/patch-switcher/image.bin"
+	"$(ARM)-objcopy" -I ihex -O binary "$(ROOT)/build/patch-switcher.hex" "$(ROOT)/build/patch-switcher/from-hex.bin"
+	cmp "$(ROOT)/build/patch-switcher/image.bin" "$(ROOT)/build/patch-switcher/from-hex.bin"
+	dd if="$(ROOT)/build/patch-switcher/image.bin" bs=512 count=1 2>/dev/null | shasum -a 256 -c "$(ROOT)/stock-flash-config.sha256"
+	shasum -a 256 "$(ROOT)/build/patch-switcher.hex"
+	"$(ARM)-size" -A "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf"
+	"$(ARM)-nm" -n -C "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" > "$(ROOT)/build/patch-switcher/symbols.txt"
 
 test:
 	mkdir -p "$(ROOT)/build"
@@ -49,11 +70,12 @@ build: tools
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/no-external-ram.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/external-flash-config.patch"
 	"$(CLI)" compile --fqbn "$(FQBN)" --warnings all \
-		--build-path "$(ROOT)/build" \
+		--build-path "$(ROOT)/build/usb-probe" \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/usb_probe"
+	cp "$(IMAGE).hex" "$(ROOT)/build/usb_probe.ino.hex"
 
 inspect: build
 	"$(ARM)-objcopy" -O binary "$(IMAGE).elf" "$(IMAGE).bin"

@@ -1,0 +1,7 @@
+[[setups]]
+instrument = 'synth'
+name = 'stock'
+
+[setups.banks.0]
+msb = 0
+lsb = 0
