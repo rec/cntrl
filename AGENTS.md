@@ -1,5 +1,8 @@
 # Hardware catalogue invariant
 
+All Morningstar-specific code, tests, data, firmware, analysis and documentation
+must live under `cntrl/maker/morningstar/mc/`.
+
 Use nested dictionaries with readable line lengths for hardware declarations.
 Do not use dotted assignments or wrapper tables. Compound table headers are
 allowed. Multiline dictionaries use TOML 1.1, parsed by tomlkit.

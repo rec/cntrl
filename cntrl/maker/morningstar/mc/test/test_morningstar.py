@@ -8,7 +8,7 @@ from cntrl.catalogue import load_catalogue
 
 @pytest.fixture
 def catalogue() -> dict[str, models.Controller]:
-    return load_catalogue('morningstar')
+    return load_catalogue(files('cntrl.maker.morningstar.mc').joinpath('mc.toml'))
 
 
 @pytest.mark.parametrize(
@@ -155,7 +155,9 @@ def test_expanded_hardware_has_independent_mutable_members(
     assert len(ports[3].modes) == 3
     other = [p for p in catalogue['mc8_pro'].ports if isinstance(p, models.Port)]
     assert len(other[2].modes) == 3
-    fresh = load_catalogue('morningstar')['mc6_pro']
+    fresh = load_catalogue(files('cntrl.maker.morningstar.mc').joinpath('mc.toml'))[
+        'mc6_pro'
+    ]
     assert len(fresh.controls) == 6
     assert all(p.modes for p in fresh.ports if isinstance(p, models.Port))
 
@@ -178,12 +180,12 @@ def test_mc6_pro_preserves_user_supplied_display_sizes(
 
 
 def test_catalogues_use_nested_dicts_and_readable_lines() -> None:
-    for path in files('cntrl').joinpath('data').iterdir():
-        if path.name.endswith('.toml'):
-            lines = path.read_text().splitlines()
-            assert all(
-                '.' not in s.partition('=')[0]
-                for s in lines
-                if '=' in s and not s.lstrip().startswith('#')
-            )
-            assert all(len(s) <= 88 for s in lines)
+    lines = (
+        files('cntrl.maker.morningstar.mc').joinpath('mc.toml').read_text().splitlines()
+    )
+    assert all(
+        '.' not in s.partition('=')[0]
+        for s in lines
+        if '=' in s and not s.lstrip().startswith('#')
+    )
+    assert all(len(s) <= 88 for s in lines)

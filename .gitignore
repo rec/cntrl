@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 dist/
 *.egg-info/
-firmware/.tools/
-firmware/build/
-firmware/.upload-helper.sock
+.upload-helper.sock
+.tools/
+build/
+*.hex

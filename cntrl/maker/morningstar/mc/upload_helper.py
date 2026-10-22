@@ -179,7 +179,7 @@ def main() -> None:
         sys.exit(f'Upload helper: {error}')
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent
 IMAGE_PATH = ROOT / 'firmware/build/usb_probe.ino.hex'
 SOCKET_PATH = ROOT / 'firmware/.upload-helper.sock'
 CACHE_DIRECTORY = Path.home() / 'Library/Caches/cntrl-upload'

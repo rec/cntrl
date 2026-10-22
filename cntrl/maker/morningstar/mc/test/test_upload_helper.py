@@ -8,8 +8,8 @@ import pytest
 import tyro
 from test_firmware import hex_record
 
-from cntrl import upload_helper
-from cntrl.firmware import read_hex
+from cntrl.maker.morningstar.mc import upload_helper
+from cntrl.maker.morningstar.mc.firmware import read_hex
 
 
 @pytest.fixture
@@ -53,7 +53,9 @@ def firmware_path(tmp_path: Path) -> Path:
     struct.pack_into('<3I', data, 0x1020, 0x60000000, len(data), 0)
     path = tmp_path / 'firmware.hex'
     records = [hex_record(4, bytes.fromhex('6000'))]
-    records.extend(hex_record(0, data[a : a + 16], a) for a in range(0, len(data), 16))
+    records.extend(
+        hex_record(0, bytes(data[a : a + 16]), a) for a in range(0, len(data), 16)
+    )
     records.extend([hex_record(5, bytes.fromhex('60001000')), hex_record(1)])
     path.write_text('\n'.join(records))
     return path

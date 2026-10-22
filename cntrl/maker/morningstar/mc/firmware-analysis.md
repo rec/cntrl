@@ -7,17 +7,20 @@ assignments from candidate pins and untraced hardware.
 For update paths, bootloader entry, crash recovery and the remaining pre-flash
 safety gate, see [firmware updating and recovery](mc6-pro-recovery.md).
 
-`cntrl.firmware` contains the Intel HEX inspection and analysis-artifact code.
+`cntrl.maker.morningstar.mc.firmware` contains the Intel HEX inspection and
+analysis-artifact code.
 It reads files without connecting to or programming hardware. It has no extra
 dependencies or command-line interface.
 
 ```python
 from pathlib import Path
 
-from cntrl.firmware import inspect_firmware
+from cntrl.maker.morningstar.mc.firmware import inspect_firmware
 
 image = inspect_firmware(
-    Path('2026-10-16_MC6_PRO_Firmware_v_3_14_0_261016501_0.hex'),
+    Path(
+        'cntrl/maker/morningstar/mc/2026-10-16_MC6_PRO_Firmware_v_3_14_0_261016501_0.hex'
+    ),
     Path('/tmp/mc6-analysis'),
 )
 ```

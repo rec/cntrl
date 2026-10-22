@@ -11,15 +11,15 @@ Morningstar executable. It is not yet a functional MIDI controller.
 On macOS Apple Silicon, with `make`, `curl`, `tar`, `patch` and `shasum`:
 
 ```bash
-make -C firmware tools
-make -C firmware test
-make -C firmware inspect
+make -C cntrl/maker/morningstar/mc/firmware tools
+make -C cntrl/maker/morningstar/mc/firmware test
+make -C cntrl/maker/morningstar/mc/firmware inspect
 ```
 
 Run these from the repository root. Tool paths are resolved relative to the
 Makefile. The first command downloads Arduino CLI 1.5.1, verifies its pinned
 SHA-256, and installs PJRC's `teensy:avr@1.62.0` package and its dependencies,
-including Arm GCC 15.2.1. Everything stays in `firmware/.tools/`; Python
+including Arm GCC 15.2.1. Everything stays in this directory's `.tools/`; Python
 dependencies and global Arduino installations are unchanged. The package
 installer verifies archive checksums from the official indexes.
 
@@ -35,7 +35,7 @@ image to an already-running automatic loader.
 `inspect` rebuilds, checks that decoding the HEX reproduces the ELF-derived raw
 image, verifies the complete 512-byte flash configuration against its stock
 SHA-256, and reports hashes, ELF headers, load segments and section sizes. Ignored
-outputs are under `firmware/build/`:
+outputs are under this directory's `build/`:
 
 - `usb_probe.ino.hex`: upload-format image, not permission to upload it.
 - `usb_probe.ino.elf`: linked executable with debug information.
@@ -126,7 +126,8 @@ physical recovery method.
 
 ## Button image inspection, 2026-10-21
 
-`make -C firmware test inspect` passed without compiler warnings. Host tests
+`make -C cntrl/maker/morningstar/mc/firmware test inspect` passed without compiler
+warnings. Host tests
 cover debounce, repeated samples, release, timer wraparound and A-F bit
 selection. They do not establish electrical behavior on the pedal.
 
@@ -152,7 +153,8 @@ every 100 ms, alongside any decoded press/release events. Hold each button for
 about one second during capture so its raw state appears in multiple reports.
 Displays are not initialized and the application does not write saved settings.
 
-`make -C firmware test inspect` passed without compiler warnings. The decoded
+`make -C cntrl/maker/morningstar/mc/firmware test inspect` passed without compiler
+warnings. The decoded
 HEX and ELF-derived binary match; the stock flash configuration still matches.
 No Python or Python-consumed data changed, so Python checks were not run.
 
@@ -169,7 +171,8 @@ unexplained; they do not establish a read-sequence failure.
 
 ### Button-event image
 
-`make -C firmware test inspect` passed without compiler warnings. Host tests
+`make -C cntrl/maker/morningstar/mc/firmware test inspect` passed without compiler
+warnings. Host tests
 cover hold/double-press timing, exclusions, timer wraparound and all 63 nonempty
 button combinations in addition to the original debounce tests. Static image
 checks still pass; GPIO initialization and the read sequence are unchanged.
@@ -188,7 +191,8 @@ the established way to enter HalfKay for upload or stock recovery.
 
 ## Display image inspection, 2026-10-21
 
-`make -C firmware test inspect` passed without compiler warnings. Host tests
+`make -C cntrl/maker/morningstar/mc/firmware test inspect` passed without compiler
+warnings. Host tests
 decode simulated GPIO SPI into per-panel command/data transactions, checking
 selection isolation, reset timing, rotation, address offsets, complete 160x128
 RGB565 images, black background, glyph pixels and different slot-number images.
@@ -206,7 +210,8 @@ needed after the display initialization.
 
 ## Original USB-only image inspection, 2026-10-21
 
-`make -C firmware inspect` completed without compiler warnings. No device access
+`make -C cntrl/maker/morningstar/mc/firmware inspect` completed without compiler
+warnings. No device access
 or upload was performed. No Python or Python-consumed data changed, so Python
 tests were not run.
 

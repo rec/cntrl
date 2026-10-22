@@ -8,7 +8,8 @@ Its SHA-256 is:
 
 `65b509525e8b0e6e92e4e6bc8fa39575399b27532e04a55f7a7883212042fe7a`
 
-`make -C firmware inspect` checks this hash on the built binary, after verifying
+`make -C cntrl/maker/morningstar/mc/firmware inspect` checks this hash on the built
+binary, after verifying
 that the HEX decodes to the same bytes as the ELF. It fails on the previous
 generic Teensy configuration. Building needs neither the stock HEX nor a pedal.
 
@@ -82,7 +83,8 @@ an unapplied required patch cannot silently pass the build check.
 
 Completed checks:
 
-- Validated all stock HEX records using `cntrl.firmware.read_hex`, and verified
+- Validated all stock HEX records using
+  `cntrl.maker.morningstar.mc.firmware.read_hex`, and verified
   the source SHA-256 against `228d73e768fad383bc205c8fc1ef52f3a49de08c754aca11d4a069ca1aab9fc8`.
 - Compared all 512 stock FCB bytes with the decoded new HEX: exact equality.
 - Rebuilt the previous generic configuration separately; its raw SHA-256

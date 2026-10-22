@@ -7,17 +7,18 @@ it does not change Codex permissions or expose general HID access.
 
 ## Start once in Terminal
 
-Review `cntrl/upload_helper.py`, then run:
+Review `cntrl/maker/morningstar/mc/upload_helper.py`, then run:
 
 ```bash
 cd /Users/tom/code/cntrl
-uv run --frozen -m cntrl.upload_helper serve
+uv run --frozen -m cntrl.maker.morningstar.mc.upload_helper serve
 ```
 
 Keep that Terminal open. Do not use `sudo`. The helper must be launched by you,
 not inside Codex's sandbox, otherwise it will inherit the same HID restriction.
 No HID operation occurs at startup. It listens on the owner-only Unix socket
-`/Users/tom/code/cntrl/firmware/.upload-helper.sock`. There is no TCP listener,
+`/Users/tom/code/cntrl/cntrl/maker/morningstar/mc/firmware/.upload-helper.sock`.
+There is no TCP listener,
 background installation, automatic upload, reset command or general execution
 endpoint. Stop it with Ctrl-C **only when an upload is not in progress**.
 
@@ -37,11 +38,12 @@ After building and inspecting the image, close any serial monitor, briefly
 press PROGRAM, and request the upload with the exact image digest:
 
 ```bash
-uv run --frozen -m cntrl.upload_helper upload --sha256 DIGEST
+uv run --frozen -m cntrl.maker.morningstar.mc.upload_helper upload --sha256 DIGEST
 ```
 
 Codex runs this client command, not the server. `DIGEST` is the SHA-256 of
-`firmware/build/usb_probe.ino.hex`, obtained immediately before the request.
+`cntrl/maker/morningstar/mc/firmware/build/usb_probe.ino.hex`, obtained immediately
+before the request.
 The protocol accepts only that digest as a newline-terminated JSON object of
 at most 256 bytes. Unknown fields are rejected. No filename, target, executable
 or extra uploader flags can be supplied through a request.

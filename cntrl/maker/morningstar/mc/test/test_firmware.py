@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.firmware import inspect_firmware, read_hex
+from cntrl.maker.morningstar.mc.firmware import inspect_firmware, read_hex
 
 
 def hex_record(kind: int, payload: bytes = b'', address: int = 0) -> str:

@@ -1,6 +1,6 @@
 """Load controller descriptions with shared definitions and hardware shorthand."""
 
-from importlib.resources import files
+from importlib.resources.abc import Traversable
 from typing import cast
 
 import tomlkit
@@ -8,11 +8,9 @@ import tomlkit
 from . import enums, models
 
 
-def load_catalogue(name: str) -> dict[str, models.Controller]:
-    """Load bundled controllers, excluding their shared ``@`` definitions."""
-    data = tomlkit.loads(
-        files('cntrl').joinpath('data', f'{name}.toml').read_text()
-    ).unwrap()
+def load_catalogue(path: Traversable) -> dict[str, models.Controller]:
+    """Load a catalogue file, excluding its shared ``@`` definitions."""
+    data = tomlkit.loads(path.read_text()).unwrap()
     definitions = {k: v for k, v in data.items() if k.startswith('@')}
     return {
         k: models.Controller(

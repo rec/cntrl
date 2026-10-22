@@ -6,10 +6,10 @@ from cntrl import catalogue, enums, models
 
 
 def test_shorthand_and_explicit_definitions_resolve_equivalently(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    tmp_path.joinpath('data').mkdir()
-    tmp_path.joinpath('data', 'example.toml').write_text("""
+    path = tmp_path / 'example.toml'
+    path.write_text("""
 ['@jack']
 kind = 'midi'
 physical = {connector = 'trs', size = '3.5'}
@@ -30,8 +30,7 @@ midi = 'midi-in'
 usb = 'usb_c'
 usb-host = {kind = 'usb_c', host = true}
 """)
-    monkeypatch.setattr(catalogue, 'files', lambda _: tmp_path)
-    controller = catalogue.load_catalogue('example')['example']
+    controller = catalogue.load_catalogue(path)['example']
     first, explicit, output, midi = controller.ports[:4]
     assert isinstance(first, models.Port)
     assert isinstance(explicit, models.Port)
@@ -55,17 +54,14 @@ usb-host = {kind = 'usb_c', host = true}
 
 
 @pytest.mark.parametrize('reference', ['@missing', '@missing-in'])
-def test_unknown_shared_definition_is_rejected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reference: str
-) -> None:
-    tmp_path.joinpath('data').mkdir()
-    tmp_path.joinpath('data', 'example.toml').write_text(f"""
+def test_unknown_shared_definition_is_rejected(tmp_path: Path, reference: str) -> None:
+    path = tmp_path / 'example.toml'
+    path.write_text(f"""
 [example]
 name = 'Example'
 buttons = ''
 displays = []
 ports = {{jack = '{reference}'}}
 """)
-    monkeypatch.setattr(catalogue, 'files', lambda _: tmp_path)
     with pytest.raises(KeyError, match='missing'):
-        catalogue.load_catalogue('example')
+        catalogue.load_catalogue(path)
