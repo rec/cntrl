@@ -44,6 +44,10 @@ test:
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/test_support" \
 		"$(ROOT)/test_displays.cpp" "$(ROOT)/usb_probe/displays.cpp" -o "$(ROOT)/build/test_displays"
 	"$(ROOT)/build/test_displays"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+		-I"$(abspath $(ROOT)/../../../../..)/firmware/include" -I"$(ROOT)/usb_probe" \
+		"$(ROOT)/test_renderer.cpp" -o "$(ROOT)/build/test_renderer"
+	"$(ROOT)/build/test_renderer"
 
 tools: $(ROOT)/.tools/flash-config-ready
 
