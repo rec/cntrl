@@ -9,6 +9,9 @@ dependencies = [
     "tyro>=1.0.16",
 ]
 
+[project.scripts]
+cntrl = "cntrl.patch_switcher.cli:main"
+
 [dependency-groups]
 dev = ["pytest", "ruff", "ty", "pyupgrade"]
 
