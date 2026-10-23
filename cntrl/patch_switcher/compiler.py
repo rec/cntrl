@@ -23,10 +23,18 @@ class CompilationError(ValueError):
 def read_document(path: Path) -> object:
     with path.open() as source:
         if path.suffix == '.json':
-            return json.load(source)
-        if path.suffix == '.toml':
-            return tomlkit.load(source).unwrap()
-    raise ValueError(f'{path}: expected .toml or .json')
+            document = json.load(source)
+        elif path.suffix == '.toml':
+            document = tomlkit.load(source).unwrap()
+        else:
+            raise ValueError(f'{path}: expected .toml or .json')
+    if isinstance(document, dict) and isinstance(
+        patches := document.get('patches'), list
+    ):
+        for p in patches:
+            if isinstance(p, dict):
+                p.setdefault('instrument', path.stem)
+    return document
 
 
 def normalize_patch(value: object) -> models.Patch:
