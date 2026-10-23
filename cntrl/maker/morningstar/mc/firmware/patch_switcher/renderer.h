@@ -1,8 +1,9 @@
 #pragma once
 #include <cntrl/hardware.h>
 #include <cstring>
+#include <cstdio>
 #include "displays.h"
-#include "graphics.h"
+#include "show_graphics.h"
 
 // One library glyph or one changed row per loop, never a whole blocking redraw.
 class DisplayRenderer {
@@ -12,36 +13,34 @@ public:
         requested_[pane] = content;
         dirty_[pane] = true;
     }
+    void error(const char *message) {
+        cntrl::Pane view = requested_[1];
+        view.category[0] = 0;
+        std::snprintf(view.patch, sizeof(view.patch), "%s", message);
+        view.patch_x = view.graphics.pad;
+        show(1, view);
+    }
     void draw() {
         if (drawing_ < 0) {
             for (unsigned i = 0; i < 3; ++i) if (dirty_[i]) {
                 drawing_ = int(i); dirty_[i] = false;
-                painting_ = requested_[i]; y_ = field_ = letter_ = top_ = 0;
-                graphics_.fillScreen(0); rendering_ = true; break;
+                painting_ = requested_[i]; y_ = field_ = letter_ = 0;
+                graphics_.configure(painting_.graphics); rendering_ = true; break;
             }
         }
         if (drawing_ < 0) return;
         if (rendering_) {
-            const char *fields[] = {painting_.title, painting_.instrument,
-                                    painting_.category, painting_.patch};
+            const char *fields[] = {painting_.category, painting_.patch};
             const char *text = fields[field_];
-            unsigned scale = field_ == 3 ? 2 : 1;
-            unsigned columns = 160 / (6 * scale);
             unsigned length = std::strlen(text);
-            unsigned lines = length ? (length + columns - 1) / columns : 1;
-            if (top_ + lines * 8 * scale > 128) {
-                scale = 1; columns = 160 / 6;
-                lines = length ? (length + columns - 1) / columns : 1;
-            }
+            const auto &settings = painting_.graphics;
             if (letter_ < length) {
-                graphics_.setTextSize(scale);
-                graphics_.setCursor((letter_ % columns) * 6 * scale,
-                                    top_ + (letter_ / columns) * 8 * scale);
+                if (!letter_) graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
+                    settings.pad + settings.top + field_ * (settings.line_height + 2));
                 graphics_.write(uint8_t(text[letter_++]));
             } else {
-                top_ += lines * 8 * scale + 2;
                 letter_ = 0;
-                if (++field_ == 4) rendering_ = false;
+                if (++field_ == 2) rendering_ = false;
             }
             return;
         }
@@ -68,11 +67,11 @@ public:
     }
 private:
     cntrl::Pane requested_[3], painting_;
-    Graphics graphics_;
+    ShowGraphics graphics_;
     uint16_t cache_[3][160 * 128] = {};
     bool dirty_[3] = {true, true, true};
     bool valid_[3] = {};
     int drawing_ = -1;
     bool rendering_ = false;
-    unsigned y_ = 0, field_ = 0, letter_ = 0, top_ = 0;
+    unsigned y_ = 0, field_ = 0, letter_ = 0;
 };

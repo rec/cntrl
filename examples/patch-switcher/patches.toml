@@ -1,5 +1,8 @@
 take_first_match = false
 brightness = 64
+font_name = 'classic'
+pad = 4
+contrast = 0.6
 chord_ms = 100
 
 [instruments.keys]

@@ -24,10 +24,11 @@ separately using the established recovery/upload workflow only when authorized.
 
 ## Adapter and storage boundaries
 
-Show format version 2 adds top-level `brightness` (0..255, default 64), applied
-to backlight PWM pin 6 on show activation, including startup. Older binary shows
-are rejected; recompile the original show and upload it after updating firmware.
-The first version 2 upload is recorded in the library-graphics verification below.
+Show format version 3 includes shared top-level `font_name`/`font_size`/`pad` and
+`screens.undo`, `screens.sent`, `screens.next` colors. Brightness
+(0..255, default 64) applies to backlight PWM pin 6 on show activation, including
+startup. Older binary shows are rejected; recompile the original show and upload
+it after updating firmware. The version 3 graphics changes have not been flashed.
 
 USB exposes Serial + MIDI, using the public core's development VID/PID and the
 existing `cntrl experimental` product string. The serial receiver accepts show
@@ -67,7 +68,7 @@ receiver and are not equivalent to a confirmed instrument state change.
 
 Display slots currently follow the traced CS order. Their left/center/right
 physical order still needs verification. The three 160x128 drivers render
-through the pinned ST7735_t3 library's RAM framebuffer and classic font API.
+through the pinned ST7735_t3 library's RAM framebuffer and font API.
 Transfers use blocking hardware SPI at a requested 8 MHz, MSB first, mode 0.
 Initialization retains the
 traced panel commands, reset sequence and waits. Each runtime call processes at
@@ -89,18 +90,21 @@ software-clocked driver had an observed update time around 1,500 ms.
 
 ## Capacity measurements
 
-The library-graphics ARM link used 316,736 bytes for RAM1 variables, 98,304
-bytes for code plus ITCM padding, leaving 109,248 bytes for local variables.
+The configurable-graphics ARM link used approximately 309 KiB for RAM1 variables
+and 96 KiB for code plus ITCM padding, leaving approximately 107 KiB for local
+variables. Exact link measurements are printed by `inspect-patch-switcher`.
 RAM2 static use was 17,568 bytes; no external RAM was allocated. Final link
 measurements are printed by `inspect-patch-switcher` and may vary as code changes.
 
 The current allocation supports two 65,536-byte document buffers, 32 routed
 instruments, 128 categories and 128 Undo entries. Record sizes impose an upper
-bound of 860 patches for the smallest possible instrument/category tables;
+bound of 796 patches for the smallest possible instrument/category tables;
 larger tables reduce this through the document byte-size check. Instrument and
 output IDs occupy at most 31 printable ASCII characters; category/patch names
-occupy at most 63. The renderer wraps names and reduces patch scaling when
-needed. These are the implemented build's limits, not claims about maximum
+occupy at most 63. The compiler chooses one shared fitting font size; category
+and patch names are centered on separate lines using saved cursor offsets,
+without runtime width measurement, wrapping or font-size changes. These are the
+implemented build's limits, not claims about maximum
 hardware capacity. The target JSON records them for the compiler.
 
 The two slots consume at most 131,112 file bytes, excluding filesystem overhead.
@@ -180,3 +184,42 @@ The user confirmed the text, update speed and button response looked unchanged.
 The CME input-1 capture ended with the expected channel-1 bank MSB 33/LSB 0,
 program 1, program 2, program 1 sequence for C/B/C/F. It also contained earlier
 buffered traffic, so it is not a latency measurement; no lost events were reported.
+
+## Show graphics configuration
+
+See [show configuration](../../../../../firmware/README.md#screen-graphics).
+Every screen displays only its category and patch, not a title or instrument.
+`font_name`, `font_size` and `pad` are shared by all three screens. Only colors
+remain independent. The shared padding determines the common available
+width/height for automatic sizing; the selected font must fit both lines there.
+Foreground/background color selection and warnings are resolved on the host.
+Rendering fills the whole background and clips all text to the padded rectangle.
+
+Fonts are `classic` (default), `Arial`, and `ComicSansMS`. Classic sizes are 8,
+16, ... 96 (6x8 cell scaled by an integer). Native font sizes are 8, 9, 10, 11,
+12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 60, 72 and 96; these are the
+library's nominal size names. Unsupported sizes are errors, not silently rounded.
+Automatic sizing picks the largest supported size fitting every name and both
+lines. The selected size is resolved once on the Mac, never searched on the pedal.
+
+`build_font_metrics.py` exports advances, left bearings, widths and vertical
+extents from the pinned library into `patch-switcher-target.json`:
+
+```bash
+uv run --frozen -m cntrl.maker.morningstar.mc.build_font_metrics
+```
+
+Packed glyph metrics in the target file are generated data. The document stores
+only selected font IDs/sizes, RGB565 colors, padding, vertical metrics and
+precomputed name offsets, not glyph bitmaps. All supported font variants remain
+in the generic firmware so future shows can change fonts without reflashing.
+`fonts-in-flash.patch` places the library's immutable native font data in mapped
+program flash instead of DTCM. It does not change font contents or decoding.
+Native tests link the same library font tables; their graphics test double tests
+layout scheduling, clipping, color byte order and erasure, not actual font shapes.
+
+Python compilation tests cover default/omitted/null settings, shared sizing
+with shared padding, named/hex colors, contrast warnings and fallback,
+per-screen settings/offsets, proportional font metrics and accumulated errors.
+The receiver checks font support, a common font/size/padding in all three records,
+padding/height, offsets and reserved bytes before activation.

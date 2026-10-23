@@ -90,7 +90,8 @@ instrument's previous selection, leaving other instruments unchanged. If its
 previous selection is unknown, Undo pops the action without sending anything.
 
 UNDO previews the next restoration target. SENT shows the last selected or
-restored patch and instrument. Undo without a restoration leaves SENT unchanged
+restored patch. Screens contain only category and patch, not titles or instrument
+labels. Undo without a restoration leaves SENT unchanged
 while history remains; emptying history blanks UNDO and SENT. A new show and
 startup both clear history and select the first candidate without sending MIDI.
 
@@ -100,10 +101,65 @@ Recognized AB/AD/BE/DE pairs are reserved; all pairs currently do nothing. A pai
 blocks further A/B/D/E actions until all four are released. C/F remain immediate
 after electrical debounce. No hold, repeat or double-press actions are installed.
 
-## Binary and transfer protocol, version 2
+## Screen graphics
 
-Version 2 adds show brightness. Version 1 documents are rejected; recompile the
-source show and upload it after installing version 2 firmware. No automatic
+The font and padding are shared by all screens. Colors are independently
+configurable. All settings are optional and part of the show:
+
+```toml
+contrast = 0.6
+font_name = 'Arial'
+# font_size = 16  # Omit for automatic sizing across all three screens.
+pad = 4
+
+[screens.undo]
+foreground_color = 'white'
+background_color = 'black'
+
+[screens.sent]
+foreground_color = 'yellow'
+
+[screens.next]
+background_color = '0x002040'
+```
+
+Omitting `screens`, any individual screen, or any field uses its default. JSON
+`null` has the same meaning. The default font is `classic`, padding is 4, and
+both omitted colors mean white on black. Font size is automatic when omitted.
+Available font names and discrete sizes come from the target's font metrics.
+`font_name`, `font_size` and `pad` are top-level settings, never per-screen settings.
+
+Names are centered horizontally. The category is at the padded top, followed by
+the patch after one line height plus two pixels. The compiler measures all
+category/patch names with the target's actual glyph metrics. It refines the size
+estimate from the four widest strings, then verifies the largest available size
+that fits the effective width and two lines within the effective height of
+every screen, using the shared padding.
+An explicitly selected size must fit too. Names are not wrapped or truncated.
+Each category and patch stores three centered cursor offsets, including any
+negative-bearing correction. The pedal never measures text to center it.
+
+The whole screen is filled with its background, including empty history panes.
+Text is clipped to the rectangle inset by `pad` on every side. Runtime errors
+retain the center screen's colors/padding and use its left inset.
+
+Colors accept `0xRRGGBB` or case-insensitive names: black, white, red, green,
+lime, blue, yellow, cyan/aqua, magenta/fuchsia, silver, gray/grey, maroon, olive,
+purple, teal, navy and orange. Green is 0x008000; lime is 0x00FF00.
+Distance is Euclidean RGB distance divided by `255 * sqrt(3)`, so black/white
+distance is 1. This is not perceptual luminance contrast. A distance <= `contrast`
+warns without rejecting the show; `contrast` defaults to 0.6 and accepts 0..1.
+When only one color is supplied, the other starts at its RGB complement. The
+compiler chooses the smallest uniform integer brightness shift (with channel
+clamping) reaching the threshold. If no such shift works, it uses the furthest
+RGB-cube corner, warning if that distance is still <= the threshold. Contrast is
+computed in input 8-bit RGB; encoded display colors are rounded down to RGB565.
+
+## Binary and transfer protocol, version 3
+
+Version 3 adds screen graphics and precomputed text offsets. Older documents are
+rejected; recompile the source show and upload it after installing version 3
+firmware. No automatic
 conversion of stored documents is performed.
 
 All integers are little-endian; strings are NUL-terminated, zero-padded ASCII.
@@ -111,12 +167,14 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 24 bytes | `CSW1`, u16 version (2), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u16 brightness (0..255), u32 body CRC32 |
+| Header, 24 bytes | `CSW1`, u16 version (3), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u16 brightness (0..255), u32 body CRC32 |
+| Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
-| Category, 68 bytes | name[64], u16 first patch, u16 count |
-| Patch, 76 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, name[64] |
+| Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
+| Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, name[64], three u16 screen cursor offsets |
 
-Records occur in the order header, instruments, categories, patches. MIDI values
+Records occur in the order header, screens (undo/sent/next), instruments,
+categories, patches. MIDI values
 are 0..127; optional values use 255 for omission. Categories contain contiguous,
 nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
@@ -125,7 +183,7 @@ indices and message values before activating a document.
 The USB serial request is `CNTRL BEGIN SIZE CRC32_HEX\n`. The receiver replies
 `CNTRL SEND\n`, then accepts exactly SIZE binary bytes. After validation,
 storage commit and read-back verification it replies `CNTRL DONE SIZE CRC\n`.
-`CNTRL STATUS\n` replies `CNTRL READY 2 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 3 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 

@@ -120,21 +120,22 @@ private:
         hardware_.error("MIDI output unavailable");
         return false;
     }
-    void pane(unsigned slot, const char *title, int index) {
+    void pane(unsigned slot, int index) {
         Pane view;
+        view.graphics = document_.graphics(slot);
         if (index >= 0) {
-            std::snprintf(view.title, sizeof(view.title), "%s", title);
             const uint8_t *p = document_.patch(unsigned(index));
-            std::snprintf(view.instrument, sizeof(view.instrument), "%s", document_.instrument(u16(p)));
             std::snprintf(view.category, sizeof(view.category), "%s", document_.category(u16(p + 2)));
             std::snprintf(view.patch, sizeof(view.patch), "%s", p + 12);
+            view.category_x = u16(document_.category(u16(p + 2)) + 68 + slot * 2);
+            view.patch_x = u16(p + 76 + slot * 2);
         }
         hardware_.show(slot, view);
     }
     void render() {
-        pane(0, "UNDO", depth_ ? history_[depth_ - 1].previous : -1);
-        pane(1, "SENT", center_);
-        pane(2, "NEXT", int(candidate()));
+        pane(0, depth_ ? history_[depth_ - 1].previous : -1);
+        pane(1, center_);
+        pane(2, int(candidate()));
     }
 };
 } // namespace cntrl

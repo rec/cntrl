@@ -31,6 +31,11 @@ public:
         for (auto name : outputs) if (!std::strcmp(name, output)) return true;
         return false;
     }
+    bool supports_font(unsigned font, unsigned size) const override {
+        return ShowGraphics::supports_font(font, size);
+    }
+    unsigned display_width() const override { return 160; }
+    unsigned display_height() const override { return 128; }
     bool send(const char *output, const uint8_t *data, unsigned length) override {
         unsigned route = 0;
         while (route < 8 && std::strcmp(outputs[route], output)) ++route;
@@ -63,10 +68,7 @@ public:
         analogWrite(6, value);
     }
     void error(const char *message) override {
-        cntrl::Pane view;
-        std::snprintf(view.title, sizeof(view.title), "CNTRL");
-        std::snprintf(view.patch, sizeof(view.patch), "%s", message);
-        show(1, view);
+        renderer_.error(message);
     }
     void reply(const char *text) override {
         // Replies are bounded and only produced in response to host requests.

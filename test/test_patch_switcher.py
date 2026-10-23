@@ -34,7 +34,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 2
+    assert compiler.HEADER.unpack_from(result)[1] == 3
     assert compiler.HEADER.unpack_from(result)[7] == 64
 
 
@@ -151,7 +151,7 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
         compiler.compile_show(show, definitions, [table], target)
     show['take_first_match'] = True
     data = compiler.compile_show(show, definitions, [table], target)
-    patch_offset = 24 + 2 * 68 + 68
+    patch_offset = 72 + 2 * 68 + 74
     assert data[patch_offset + 4 : patch_offset + 7] == bytes([8, 1, 2])
     show['take_first_match'] = False
     show['patches'] = {'wind': [{'patch': ':a:Flute', 'bank': 0}]}
@@ -182,7 +182,7 @@ def test_bankless_pc_is_not_bank_zero_and_omission_sends_no_bank(
 ) -> None:
     show['patches'] = {'wind': [{'patch': ':a:12'}]}
     data = compiler.compile_show(show, definitions, [], target)
-    offset = 24 + 2 * 68 + 68
+    offset = 72 + 2 * 68 + 74
     assert data[offset + 4 : offset + 9] == bytes([11, 255, 255, 255, 255])
     assert data[offset + 12 : offset + 17] == b'PC 12'
     show['patches'] = {'wind': [{'patch': ':a:12:::0'}]}
