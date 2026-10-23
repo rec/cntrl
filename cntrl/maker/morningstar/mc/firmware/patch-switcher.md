@@ -99,8 +99,13 @@ The complete generated report is saved locally as
 
 ## Adapter and storage boundaries
 
-Show format version 5 includes shared top-level `font_name`/`font_size`/`pad` and
-`screens.undo`, `screens.sent`, `screens.next` colors. Brightness
+Show format version 6 includes shared top-level `font_name`/`font_size`/`pad` and
+`screens.undo`, `screens.sent`, `screens.next` colors, including optional `half`.
+Only the rightmost patch name uses `half` when it matches the last successful
+send for its instrument (program and bank select, not label/category). Without
+an explicit `half`, the Mac computes the RGB midpoint of foreground/background.
+Version 6 has been built and tested, not flashed. Existing shows need recompiling.
+Brightness
 (0..255, default 192) applies to backlight PWM pin 6 on show activation, including
 startup. Older binary shows are rejected; recompile the original show and upload
 it after updating firmware. Top-level `splash` defaults to false; when true, the

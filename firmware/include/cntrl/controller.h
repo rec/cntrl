@@ -15,6 +15,7 @@ public:
         selected_ = depth_ = 0;
         for (auto &c : cursors_) c = 0;
         for (auto &p : current_) p = -1;
+        for (auto &p : last_sent_) p = -1;
         center_ = -1;
         held_ = 0; pending_ = -1; locked_ = false;
         render();
@@ -101,6 +102,8 @@ private:
     Action history_[history_capacity] = {};
     uint16_t cursors_[max_categories] = {};
     int current_[max_instruments] = {};
+    // Unlike undo state, this changes only after a successful MIDI send.
+    int last_sent_[max_instruments] = {};
     unsigned selected_ = 0, depth_ = 0, held_ = 0;
     int center_ = -1, pending_ = -1;
     uint32_t since_ = 0;
@@ -117,15 +120,23 @@ private:
         cc(0, p[5]); cc(32, p[6]);
         data[n++] = 0xc0 | i[64]; data[n++] = p[4];
         cc(7, p[7]); cc(10, p[8]);
-        if (hardware_.send(reinterpret_cast<const char *>(i + 32), data, n)) return true;
+        if (hardware_.send(reinterpret_cast<const char *>(i + 32), data, n)) {
+            last_sent_[u16(p)] = int(index);
+            return true;
+        }
         hardware_.error("MIDI output unavailable");
         return false;
     }
     void pane(unsigned slot, int index) {
         Pane view;
         view.graphics = document_.graphics(slot);
+        view.patch_color = view.graphics.foreground;
         if (index >= 0) {
             const uint8_t *p = document_.patch(unsigned(index));
+            int sent = last_sent_[u16(p)];
+            if (slot == 2 && sent >= 0
+                && !std::memcmp(p + 4, document_.patch(unsigned(sent)) + 4, 3))
+                view.patch_color = view.graphics.half;
             std::snprintf(view.category, sizeof(view.category), "%s", document_.category(u16(p + 2)));
             std::snprintf(view.patch, sizeof(view.patch), "%s", p + 12);
             view.category_x = u16(document_.category(u16(p + 2)) + 68 + slot * 2);

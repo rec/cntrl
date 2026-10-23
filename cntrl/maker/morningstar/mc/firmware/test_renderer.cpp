@@ -4,9 +4,11 @@
 
 static uint16_t screens[3][128][160];
 static unsigned writes = 0, pixels_sent = 0;
+static bool patch_only = false;
 
 void write_display_segment(unsigned panel, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
     assert(panel < 3 && x + count <= 160 && y < 128 && count > 0);
+    if (patch_only) assert(panel == 2 && y >= 14 && y < 22);
     ++writes; pixels_sent += count;
     for (unsigned i = 0; i < count; ++i)
         screens[panel][y][x + i] = uint16_t(pixels[2 * i]) << 8 | pixels[2 * i + 1];
@@ -49,6 +51,7 @@ int main() {
     std::strcpy(view.patch, "A very long patch name that must be clipped");
     view.category_x = 40; view.patch_x = 4;
     view.graphics.foreground = 0xf800; view.graphics.background = 0x001f;
+    view.patch_color = view.graphics.foreground;
     renderer.show(2, view); drain(renderer);
     assert(screens[2][4][40] == 0xf800 && screens[2][14][4] == 0xf800);
     assert(screens[2][3][40] == 0x001f);
@@ -59,6 +62,15 @@ int main() {
     renderer.invalidate(); assert(!renderer.ready()); drain(renderer);
     assert(writes == before + 384);
     padding(2, 4, 0x001f); blank(0); blank(1);
+
+    view.patch_color = view.graphics.half = 0x780f;
+    patch_only = true;
+    renderer.show(2, view); drain(renderer);
+    assert(screens[2][4][40] == 0xf800 && screens[2][14][4] == 0x780f);
+    view.patch_color = view.graphics.foreground;
+    renderer.show(2, view); drain(renderer);
+    assert(screens[2][4][40] == 0xf800 && screens[2][14][4] == 0xf800);
+    patch_only = false;
 
     std::strcpy(view.patch, "Trumpet");
     renderer.show(2, view); drain(renderer);

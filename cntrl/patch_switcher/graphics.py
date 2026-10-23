@@ -23,7 +23,7 @@ def distance(first: tuple[int, int, int], second: tuple[int, int, int]) -> float
     )
 
 
-def colors(screen: models.ScreenGraphics, contrast: float) -> tuple[int, int]:
+def colors(screen: models.ScreenGraphics, contrast: float) -> tuple[int, int, int]:
     foreground, background = screen.foreground_color, screen.background_color
     if foreground is None and background is None:
         foreground, background = 'white', 'black'
@@ -57,7 +57,12 @@ def colors(screen: models.ScreenGraphics, contrast: float) -> tuple[int, int]:
             UserWarning,
             stacklevel=2,
         )
-    return rgb565(fg), rgb565(bg)
+    half = (
+        color(screen.half)
+        if screen.half
+        else tuple((a + b) // 2 for a, b in zip(fg, bg, strict=True))
+    )
+    return rgb565(fg), rgb565(bg), rgb565((half[0], half[1], half[2]))
 
 
 def rgb565(value: tuple[int, int, int]) -> int:
@@ -137,7 +142,7 @@ def compile_screens(
     ]
     pad = 4 if show.pad is None else show.pad
     errors: list[str] = []
-    pairs: list[tuple[int, int]] = []
+    pairs: list[tuple[int, int, int]] = []
     if 2 * pad >= min(target.display_width, target.display_height):
         errors.append('padding leaves no drawable display area')
     for name, screen in zip(('undo', 'sent', 'next'), entries, strict=True):
@@ -151,11 +156,11 @@ def compile_screens(
     metrics = face.sizes[size]
     records: list[bytes] = []
     positions: list[list[int]] = []
-    for fg, bg in pairs:
+    for fg, bg, half in pairs:
         width = target.display_width - 2 * pad
         records.append(
             SCREEN.pack(
-                face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top, 0, 0
+                face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top, half, 0
             )
         )
         positions.append(

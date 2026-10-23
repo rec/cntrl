@@ -70,6 +70,7 @@ class TablePatch(BaseModel, frozen=True):
 class ScreenGraphics(BaseModel, frozen=True):
     background_color: str | None = None
     foreground_color: str | None = None
+    half: str | None = None
 
     model_config = ConfigDict(extra='forbid')
 

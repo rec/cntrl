@@ -11,13 +11,14 @@ constexpr unsigned history_capacity = 128;
 struct ScreenGraphics {
     uint8_t font = 0, size = 8, pad = 4, reserved = 0;
     uint16_t foreground = 0xffff, background = 0, line_height = 8, top = 0;
+    uint16_t half = 0x7bef;
 };
 
 struct Pane {
     char category[64] = {};
     char patch[64] = {};
     ScreenGraphics graphics;
-    uint16_t category_x = 4, patch_x = 4;
+    uint16_t category_x = 4, patch_x = 4, patch_color = 0xffff;
 };
 
 struct Hardware {

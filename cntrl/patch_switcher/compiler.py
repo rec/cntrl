@@ -243,7 +243,7 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            5,
+            6,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),

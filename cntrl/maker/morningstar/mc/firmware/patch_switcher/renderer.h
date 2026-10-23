@@ -25,6 +25,7 @@ public:
         view.category[0] = 0;
         std::snprintf(view.patch, sizeof(view.patch), "%s", message);
         view.patch_x = view.graphics.pad;
+        view.patch_color = view.graphics.foreground;
         show(1, view);
     }
     void draw() {
@@ -42,8 +43,11 @@ public:
             unsigned length = std::strlen(text);
             const auto &settings = painting_.graphics;
             if (letter_ < length) {
-                if (!letter_) graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
-                    settings.pad + settings.top + field_ * (settings.line_height + 2));
+                if (!letter_) {
+                    graphics_.setTextColor(field_ ? painting_.patch_color : settings.foreground, settings.background);
+                    graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
+                        settings.pad + settings.top + field_ * (settings.line_height + 2));
+                }
                 graphics_.write(uint8_t(text[letter_++]));
             } else {
                 letter_ = 0;
