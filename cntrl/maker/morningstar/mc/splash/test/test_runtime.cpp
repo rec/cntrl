@@ -9,12 +9,13 @@ struct Device : cntrl::Hardware, cntrl::Replies, cntrl::splash::Replies {
     cntrl::splash::Session *session = nullptr;
     std::vector<std::string> replies;
     unsigned sent = 0;
+    cntrl::Pane panes[3];
     bool send(const char *, const uint8_t *, unsigned) override { ++sent; return true; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned font, unsigned size) const override { return font == 0 && size % 8 == 0; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
-    void show(unsigned, const cntrl::Pane &) override {}
+    void show(unsigned slot, const cntrl::Pane &pane) override { panes[slot] = pane; }
     void set_brightness(uint8_t) override {}
     void set_splash(bool enabled, uint32_t idle_ms = 0) override { session->configure(enabled, idle_ms, 0); }
     void error(const char *) override {}
@@ -33,6 +34,50 @@ void command(cntrl::splash::Router &router, const std::string &line) {
 int storage_queries = 0;
 int storage_scans = 0;
 void storage_info(bool scan) { ++storage_queries; if (scan) ++storage_scans; }
+
+void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<uint8_t> &show) {
+    for (unsigned phase = 0; phase < 3; ++phase) for (unsigned button = 0; button < 6; ++button) {
+        Device device;
+        Panels panels;
+        cntrl::splash::Player player(assets, panels);
+        cntrl::splash::Session session(assets, player);
+        device.session = &session;
+        cntrl::Controller controller(device);
+        cntrl::Document document;
+        assert(document.load(show.data(), unsigned(show.size()), device));
+        controller.activate(document);
+        session.configure(false, 3000, 0);
+        assert(!session.poll(0, true));
+        assert(!session.poll(3000, true));
+        uint32_t now;
+        if (phase == 0) {
+            now = 5000;
+            assert(!session.poll(now) && session.brightness(192, now) == 48);
+        } else {
+            assert(session.poll(7000));
+            unsigned rows = phase == 1 ? 64 : 256;
+            for (unsigned i = 0; i < rows; ++i) assert(session.poll(7000));
+            now = phase == 1 ? 7000 : 9000;
+            assert(session.poll(now));
+            assert(session.brightness(192, now) == (phase == 1 ? 0 : 48));
+        }
+        unsigned rows = panels.rows;
+        uint8_t mask = 1u << button, other = 1u << ((button + 1) % 6);
+        if (!session.controls(mask, now)) controller.button(button, true, now);
+        assert(device.sent == 0 && !std::strcmp(device.panes[2].patch, "Flute"));
+        assert(session.brightness(192, now) == 192);
+        assert(!session.poll(now, true) && session.take_redraw());
+        assert(panels.rows == rows); // Stopped animation cannot paint over the UI.
+        assert(session.controls(mask | other, now + 1));
+        assert(session.controls(other, now + 2));
+        if (!session.controls(0, now + 3)) controller.button(button, false, now + 3);
+        assert(device.sent == 0 && !std::strcmp(device.panes[2].patch, "Flute"));
+        assert(!session.controls(0, now + 4));
+        assert(!session.controls(1u << 2, now + 5));
+        controller.button(2, true, now + 5);
+        assert(device.sent == 1); // The very next press sends normally.
+    }
+}
 
 int main(int argc, char **argv) {
     assert(argc == 2);
@@ -95,6 +140,7 @@ int main(int argc, char **argv) {
     while (!router.accepts_input()) router.poll(0);
     assert(storage_queries == 2 && storage_scans == 1);
     assert(device.replies.back().find("CNTRL SPLASH DONE ") == 0);
+    test_cancel_idle_entry(assets, show);
     command(router, "CNTRL SPLASH STATUS");
     assert(device.replies.back().find("CNTRL SPLASH READY ") == 0);
     command(router, "CNTRL STATUS");
@@ -219,13 +265,11 @@ int main(int argc, char **argv) {
     assert(!session.poll(43000) && session.brightness(192, 43000) == 192);
     assert(!session.poll(43001)); // UI fades out, but remains the rendering owner.
     assert(!session.poll(45001) && session.brightness(192, 45001) == 48);
-    assert(!session.controls(1u << 2, 45001)); // Interrupt entry without a brightness jump.
-    assert(session.brightness(192, 45001) == 48);
-    assert(session.poll(45101) && session.brightness(192, 45101) == 12);
-    assert(!session.poll(45201) && session.take_redraw());
-    assert(!session.controls(0, 45202));
-    assert(!session.poll(45300, true));
-    assert(!session.poll(45400, true) && session.brightness(192, 45400) == 48);
+    assert(session.controls(1u << 2, 45001)); // Entry cancellation consumes the press.
+    assert(session.brightness(192, 45001) == 192);
+    assert(!session.poll(45001) && session.take_redraw());
+    assert(session.controls(0, 45002));
+    assert(!session.controls(0, 45003));
     assert(!session.poll(45500, true) && session.brightness(192, 45500) == 192);
 
     session.configure(false, 3000, 50000);

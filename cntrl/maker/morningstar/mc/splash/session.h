@@ -29,7 +29,12 @@ public:
         }
         if (held_) {
             if (!pressed) held_ = false;
-            return true; // Startup dismissal consumes the complete gesture.
+            return true; // Dismissal consumes the complete gesture.
+        }
+        if (saver_ && to_animation_ && fade_ != Fade::none && pressed) {
+            stop(); // Cancel entry without a wake fade or a musical action.
+            held_ = true;
+            return true;
         }
         if (saver_ && pressed) wake(now, 200);
         return false; // Screensaver wake also performs the normal action.
