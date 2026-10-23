@@ -11,6 +11,11 @@ test:
 		-I"$(PROJECT_ROOT)/firmware/include" \
 		"$(ROOT)/test/test_splash.cpp" -o "$(ROOT)/build/test_splash"
 	"$(ROOT)/build/test_splash"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic \
+		-fsanitize=address,undefined -fno-omit-frame-pointer \
+		-I"$(PROJECT_ROOT)/firmware/include" \
+		"$(ROOT)/test/test_runtime.cpp" -o "$(ROOT)/build/test_runtime"
+	"$(ROOT)/build/test_runtime" "$(PROJECT_ROOT)/firmware/test/show.golden"
 
 check-board:
 	ARDUINO_DIRECTORIES_DATA="$(TOOLS)/data" \

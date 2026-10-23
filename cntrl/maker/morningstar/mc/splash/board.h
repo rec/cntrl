@@ -41,13 +41,11 @@ private:
     const char *names_[2] = {"/cntrl-splash-0.bin", "/cntrl-splash-1.bin"};
 };
 
-// Immediately usable with the existing driver, but three serial panel writes
-// limit frame rate. A grouped-CS driver can replace this sink after integration.
+// The two identical outer rows share a single physical pixel transfer.
 class Panels : public Output {
 public:
     void row(uint8_t panels, unsigned y, const uint8_t *pixels) override {
-        for (unsigned i = 0; i < 3; ++i)
-            if (panels & (1u << i)) write_display_segment(i, 0, y, pixels, width);
+        write_display_group(panels, 0, y, pixels, width);
     }
 };
 } // namespace cntrl::splash

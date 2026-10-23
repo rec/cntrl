@@ -53,6 +53,10 @@ int main() {
     padding(2, 4, 0x001f);
     before = writes;
     renderer.show(2, view); drain(renderer); assert(writes == before);
+    std::memset(screens, 123, sizeof(screens)); // Splash bypassed the cached pixels.
+    renderer.invalidate(); drain(renderer);
+    assert(writes == before + 384);
+    padding(2, 4, 0x001f); blank(0); blank(1);
 
     std::strcpy(view.patch, "Trumpet");
     renderer.show(2, view); drain(renderer);

@@ -24,11 +24,15 @@ separately using the established recovery/upload workflow only when authorized.
 
 ## Adapter and storage boundaries
 
-Show format version 3 includes shared top-level `font_name`/`font_size`/`pad` and
+Show format version 4 includes shared top-level `font_name`/`font_size`/`pad` and
 `screens.undo`, `screens.sent`, `screens.next` colors. Brightness
 (0..255, default 64) applies to backlight PWM pin 6 on show activation, including
 startup. Older binary shows are rejected; recompile the original show and upload
-it after updating firmware. The version 3 graphics changes have not been flashed.
+it after updating firmware. Top-level `splash` defaults to false; when true, the
+installed animation plays until any button is pressed. See the
+[splash instructions](../splash/README.md) for preparation and upload. Splash
+images fill the panels without text padding. The dismissing gesture sends no
+MIDI, and all normal UI pixels are redrawn afterward.
 
 USB exposes Serial + MIDI, using the public core's development VID/PID and the
 existing `cntrl experimental` product string. The serial receiver accepts show
@@ -39,11 +43,13 @@ boot and recovery check after its first authorized upload.
 
 The adapter uses the traced native SD interface with the pinned SD/SdFat
 libraries. It requires an existing readable FAT/exFAT card. It does not format a
-card, migrate vendor data or probe the EEPROM. It owns exactly two filenames at
+card, migrate vendor data or probe the EEPROM. Show storage owns two filenames at
 the card root: `cntrl-show-0.bin` and `cntrl-show-1.bin`. Those names must be
 reserved for cntrl. Upload replaces only the inactive cntrl file, writes a commit
 trailer last, flushes/closes it and reads it back before activation. Boot ignores
-partial or corrupt slots and selects the newest valid generation.
+partial or corrupt slots and selects the newest valid generation. Splash assets
+use separate `cntrl-splash-0.bin` and `cntrl-splash-1.bin` slots with their own
+validation and commit markers.
 
 The stock firmware's native-card path is traced, and a show upload has completed
 with write/readback verification against the installed card. FAT directory updates and SD-card internal
@@ -161,7 +167,7 @@ classic font and patch-name size reduction are retained.
 
 Only the framebuffer graphics paths are used: no `initR`, hardware rotation,
 `updateScreen` or asynchronous flush is called. Drawing primitives and native/GFX
-font APIs are available on `Graphics`; selectable fonts are not yet show options.
+font APIs are available on `Graphics`; selectable fonts are now show options.
 The library's static initialization reserves three inactive DMA channels, but no
 display DMA transfers are started. Our driver still owns panel initialization,
 chip selects, SPI timing, coordinate offsets and the shared GPIO/SPI pin handoff.
@@ -223,3 +229,26 @@ with shared padding, named/hex colors, contrast warnings and fallback,
 per-screen settings/offsets, proportional font metrics and accumulated errors.
 The receiver checks font support, a common font/size/padding in all three records,
 padding/height, offsets and reserved bytes before activation.
+
+## Integrated splash: 2026-10-23
+
+Show format 4 enables the separately installed animation with `splash: true`.
+The Mac prepares full-bleed RGB565 rows, including the mirrored centre panel;
+the target streams one row pair per poll and broadcasts the outer rows. Button
+scanning, USB and output queues remain serviced. The dismissing gesture is
+consumed, then all normal renderer caches are invalidated for a complete repaint.
+
+All 135 Python tests, portable controller/persistence tests, target display and
+renderer tests, and splash runtime/persistence tests passed. Ruff, ty, pyupgrade
+and diff checks passed. The inspected HEX matched the ELF and stock flash
+configuration. Its SHA-256 is
+`27c176c6e831ddee191cf6d2d012f38347f503b0e5cfc75a231d434ca4fd8f37`.
+Flash use is 379,900 bytes; RAM1 has 104,320 bytes free and RAM2 has 506,720 free.
+
+Software bootloader entry and helper upload succeeded. The updater returned
+status 1 after reset/disappearance; subsequent USB status confirmed version 4
+running. The animation upload verified as
+`CNTRL SPLASH READY 1310800 4b7e5ee5`, followed by the recompiled pman show:
+`CNTRL READY 4 22242 e39424b7`. Visible orientation, frame rate, clean dismissal
+and cold-boot persistence still require physical confirmation. No physical
+power-loss or interrupted-write qualification is claimed.
