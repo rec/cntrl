@@ -95,7 +95,7 @@ def prepare_gif(source: Path) -> bytes:
             '-map',
             '0:v:0',
             '-vf',
-            'scale=160:128:force_original_aspect_ratio=increase:flags=lanczos,'
+            'scale=192:154:force_original_aspect_ratio=increase:flags=lanczos,'
             'crop=160:128',
             '-fps_mode',
             'passthrough',

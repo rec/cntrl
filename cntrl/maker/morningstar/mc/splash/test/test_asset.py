@@ -28,6 +28,39 @@ def test_mac_prepares_outer_and_mirrored_centre_rows() -> None:
             assert list(struct.unpack('>160H', centre)) == list(reversed(range(160)))
 
 
+def test_gif_is_enlarged_and_centre_cropped(tmp_path: Path) -> None:
+    source = tmp_path / 'border.gif'
+    subprocess.run(
+        [
+            'ffmpeg',
+            '-v',
+            'error',
+            '-f',
+            'lavfi',
+            '-i',
+            'color=blue:size=160x128,'
+            'drawbox=x=0:y=0:w=iw:h=ih:color=red:t=4,'
+            'drawbox=x=64:y=52:w=32:h=24:color=lime:t=fill',
+            '-frames:v',
+            '1',
+            str(source),
+        ],
+        capture_output=True,
+        check=True,
+    )
+    data = asset.prepare_gif(source)
+    assert asset.inspect_asset(data).frames == 1
+    rows = [
+        struct.unpack_from('>160H', data, asset.HEADER.size + 4 + y * 640)
+        for y in range(asset.HEIGHT)
+    ]
+    # Zoom removes the border on every edge, while enlarging the centre marker.
+    edges = list(rows[0] + rows[-1]) + [p for r in rows for p in (r[0], r[-1])]
+    # GIF palette quantization and RGB565 rounding need not preserve exact RGB.
+    assert all(p >> 11 < 3 and p & 0x07E0 < 0x100 and p & 0x1F > 24 for p in edges)
+    assert sum(p & 0x07E0 >= 0x600 for p in rows[64]) >= 36
+
+
 @pytest.mark.parametrize('durations', [[], [0], [-1], [True], [0x80000000]])
 def test_invalid_durations_are_rejected(durations: list[int]) -> None:
     with pytest.raises(ValueError):
