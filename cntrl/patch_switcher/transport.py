@@ -29,7 +29,7 @@ class SerialConnection:
             settings[6][termios.VTIME] = 0
             termios.tcsetattr(self.fd, termios.TCSANOW, settings)
             termios.tcflush(self.fd, termios.TCIFLUSH)
-        except OSError:
+        except (OSError, termios.error):
             os.close(self.fd)
             raise
         return self
@@ -55,10 +55,10 @@ class SerialConnection:
                 raise OSError('USB serial disconnected')
             pending = pending[count:]
 
-    def line(self) -> str:
+    def line(self, limit: int = 256) -> str:
         deadline = time.monotonic() + self.timeout
         result = bytearray()
-        while len(result) < 256:
+        while len(result) < limit:
             remaining = deadline - time.monotonic()
             if remaining <= 0 or not select.select([self.fd], [], [], remaining)[0]:
                 raise TimeoutError('USB serial response timed out')
@@ -71,7 +71,7 @@ class SerialConnection:
             if value == b'\n':
                 return result.decode('ascii').rstrip('\r')
             result.extend(value)
-        raise ValueError('USB serial response exceeds 255 bytes')
+        raise ValueError(f'USB serial response exceeds {limit - 1} bytes')
 
 
 def upload_document(port: Path, data: bytes) -> str:

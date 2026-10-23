@@ -30,21 +30,36 @@ uv run --frozen -m cntrl.maker.morningstar.mc.storage_info --port /dev/cu.usbmod
 
 This reports physical card capacity, SD/SDHC/SDXC type, manufacturer ID,
 OEM ID, product name, revision, serial number, manufacturing month,
-filesystem type, allocation-unit size and usable filesystem capacity.
+filesystem type, allocation-unit size and usable filesystem capacity. Output is
+TOML, including every file and directory recursively, with directory totals
+ordered by estimated file allocation size.
+Use `--output PATH` to save the same TOML report instead of printing it.
 Identification comes from the card's CID register; manufacturer IDs are reported
 as numbers rather than guessed brand names. SDXC is distinguished from SDHC by
 capacity. Usable capacity counts allocation clusters, not partition metadata.
 
-Add `--scan-free-space` to include free and used allocation space. This explicit
-scan can block the main loop while the library reads the allocation table or
-bitmap, so do not request it while performing. Without it, these two fields are
-`null`. Neither query writes files, changes settings, or sends MIDI.
+The command always scans free space and lists the whole card. This diagnostic
+can block the main loop while reading the allocation table/bitmap and streaming
+the directory tree, so do not run it while performing. It does not read file
+contents, write files, change settings or send MIDI.
+
+Each entry includes its path, file/directory flag, logical byte size and estimated
+allocation rounded up to the allocation-unit size. Directory totals count files
+recursively, excluding directory storage itself. `other_allocation_bytes` is
+filesystem-used space minus estimated file allocation, not proof of lost space:
+directories, filesystem bookkeeping and file preallocation can contribute.
 
 The USB commands are `CNTRL STORAGE` and `CNTRL STORAGE SCAN`. The single-line
 response is `CNTRL STORAGE SECTORS TYPE CID_HEX FAT CLUSTER_BYTES CLUSTERS FREE`.
 Sectors are 512 bytes, CID is 16 bytes in register order, and FREE is a cluster
-count or `-` when not requested. FAT is 16, 32 or 64 (exFAT). Errors use
-`CNTRL ERROR storage-unavailable`, `storage-read` or `storage-scan`. Commands
+count or `-` when not requested. FAT is 16, 32 or 64 (exFAT). `SCAN` then streams
+`CNTRL ENTRY ID PARENT D_OR_F SIZE_HEX NAME_HEX` for each entry and ends with
+`CNTRL STORAGE END COUNT`. Root has ID 0; entries have consecutive IDs starting
+at 1, with parents preceding children. Sizes use 16 hex digits, preserving
+64-bit exFAT sizes; hex-encoded names preserve spaces.
+The host rejects partial reports and reconstructs paths and totals on the Mac.
+The short `CNTRL STORAGE` metadata-only query remains unchanged. Errors use
+`CNTRL ERROR storage-unavailable`, `storage-read`, `storage-scan` or `storage-list`. Commands
 are handled only when no show/animation transfer or verification is active.
 
 Verified on the pedal, 2026-10-23:
@@ -61,6 +76,26 @@ queries. The inspected/uploaded HEX SHA-256 was
 `1f7a4b75bdedd44d6b678b24041b0a796c9b1975a9fc762fb4860767254a30ae`.
 The uploader returned status 1 after reset/disappearance, as in earlier uploads;
 the new command's successful responses established that the new firmware booted.
+
+The recursive TOML report was verified on the pedal on 2026-10-23. It found
+34,919 files with 76,083,789 bytes of content, requiring an estimated
+1,146,880,000 allocated bytes at 32 KiB per allocation unit. `/PF` alone had
+34,831 files, 72,480,824 logical bytes and 1,141,342,208 allocated bytes. Its
+numbered subtrees contain bank/preset `.dat` files; these paths suggest factory
+profile storage, but this query does not inspect their contents.
+
+The 1,057 listed directories account for an estimated 34,635,776 further bytes.
+The remaining difference from filesystem-used space is 360,448 bytes, not
+independently attributed. AppleDouble `._` files account for 3,073 of the files
+and 100,696,064 allocated bytes, already included in the totals above.
+No files were changed or removed. The active show remained
+`CNTRL READY 5 22246 bf83dc72` before and after upload/queries.
+The inspected/uploaded HEX SHA-256 was
+`777c5a23a655fa46bb90dd04adcb7b813a1f7d407bc10ad044d2b8d573ebe90f`.
+An initial live test exposed unsupported `%llu` formatting in the compact target
+C library; the protocol now uses two 32-bit hex halves for 64-bit file sizes.
+The complete generated report is saved locally as
+`firmware/build/storage-report.toml` under this directory, not committed.
 
 ## Adapter and storage boundaries
 
