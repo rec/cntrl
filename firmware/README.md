@@ -43,8 +43,8 @@ count and CRC32. Recheck status after a power cycle to verify persistence.
 Both TOML and JSON accept the same show, definition and table structures.
 User-adjustable controller settings belong in the show configuration whenever
 possible, rather than firmware build options.
-Set top-level `brightness = 64` in a TOML show, or `"brightness": 64` in JSON.
-It defaults to 64 and accepts integers from 0 (off) to 255 (maximum PWM).
+Set top-level `brightness = 192` in a TOML show, or `"brightness": 192` in JSON.
+It defaults to 192 and accepts integers from 0 (off) to 255 (maximum PWM).
 The controller applies it when the show is uploaded and whenever that show loads
 at startup. Changing it requires a show upload, not a firmware rebuild.
 

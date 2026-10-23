@@ -35,7 +35,7 @@ def test_compiler_matches_shared_cpp_fixture(
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
     assert compiler.HEADER.unpack_from(result)[1] == 4
-    assert compiler.HEADER.unpack_from(result)[7] == 64
+    assert compiler.HEADER.unpack_from(result)[7] == 192
 
 
 @pytest.mark.parametrize('brightness', [0, 32, 255])
@@ -53,7 +53,7 @@ def test_splash_is_optional_and_encoded_in_show(
     assert not models.Show.model_validate(show).splash
     show['splash'] = True
     result = compiler.compile_show(show, definitions, [], target)
-    assert result[18:20] == bytes([64, 1])
+    assert result[18:20] == bytes([192, 1])
 
 
 @pytest.mark.parametrize('brightness', [-1, 256, True, 1.5, '64'])

@@ -26,7 +26,7 @@ separately using the established recovery/upload workflow only when authorized.
 
 Show format version 4 includes shared top-level `font_name`/`font_size`/`pad` and
 `screens.undo`, `screens.sent`, `screens.next` colors. Brightness
-(0..255, default 64) applies to backlight PWM pin 6 on show activation, including
+(0..255, default 192) applies to backlight PWM pin 6 on show activation, including
 startup. Older binary shows are rejected; recompile the original show and upload
 it after updating firmware. Top-level `splash` defaults to false; when true, the
 installed animation plays until any button is pressed. See the

@@ -97,7 +97,7 @@ Hardware reset follows stock's HIGH/LOW/HIGH waits of 100/100/200 ms. Software
 reset and sleep-out waits are lengthened to 150 and 500 ms, matching the public
 [Adafruit ST7735 driver](https://github.com/adafruit/Adafruit-ST7735-Library/blob/master/Adafruit_ST7735.cpp).
 Rotation 1 uses MADCTL `0xa8`, 160x128 pixels and x/y offsets 1/2.
-Pin 6 PWM starts at stock's value 5, then changes to the default 64 after drawing.
+Pin 6 PWM starts at stock's value 5, then changes to the default 192 after drawing.
 The patch-switcher application applies the show's `brightness` (0..255, default
 64) when the show loads. This does not write a vendor setting to storage.
 

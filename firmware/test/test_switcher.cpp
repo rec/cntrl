@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
     corrupt = bytes; corrupt[4] = 1;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     app.activate(doc);
-    assert(hw.brightness == 64);
+    assert(hw.brightness == 192);
     assert(hw.sent.empty() && !hw.panes[0].patch[0] && !hw.panes[1].patch[0]);
     assert(!hw.panes[0].category[0] && !hw.panes[1].category[0]);
     assert(hw.panes[2].category_x >= 4 && hw.panes[2].patch_x >= 4);
