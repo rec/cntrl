@@ -38,6 +38,18 @@ def test_compiler_matches_shared_cpp_fixture(
     assert compiler.HEADER.unpack_from(result)[7] == 192
 
 
+def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) -> None:
+    path = tmp_path / 'pman.toml'
+    path.write_text(
+        '[[patches]]\nprogram = 1\n'
+        '[[patches]]\nprogram = 2\ninstrument = "vl70"\n'
+        '[[patches]]\nprogram = 3\ninstrument = ""\n'
+    )
+    table = compiler.read_document(path)
+    assert isinstance(table, dict)
+    assert [p['instrument'] for p in table['patches']] == ['pman', 'vl70', '']
+
+
 @pytest.mark.parametrize('brightness', [0, 32, 255])
 def test_brightness_is_encoded_in_show(
     show: dict[str, object], definitions: object, target: models.Target, brightness: int
