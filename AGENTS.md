@@ -1,3 +1,8 @@
+# Data file formats
+
+Do not create `.json` files unless explicitly requested by the user. Prefer
+TOML for configuration and structured data.
+
 # Hardware catalogue invariant
 
 All Morningstar-specific code, tests, data, firmware, analysis and documentation

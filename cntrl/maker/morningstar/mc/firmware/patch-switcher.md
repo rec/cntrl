@@ -214,7 +214,7 @@ error; that path is covered with fake storage but not yet physically tested.
   81 KiB image. The official uploader returned exit status 1 after sending reset
   and reporting that the board disappeared. USB serial nevertheless returned
   `CNTRL READY 1 0 00000000`, confirming the new application booted.
-- Uploaded the compiled `examples/patch-switcher/pman.json` show: 256 patches,
+- Uploaded the compiled `examples/patch-switcher/pman.toml` show: 256 patches,
   15 categories, pman channel 1, `din` output. The receiver completed its durable
   commit/readback path and returned `CNTRL READY 1 20568 bb8baa89`.
 - Captured DIN output through CME U6MIDI Pro input 1 while the user performed
