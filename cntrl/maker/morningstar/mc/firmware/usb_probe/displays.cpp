@@ -142,6 +142,7 @@ uint8_t glyph_row(char character, unsigned row) {
 } // namespace
 
 void initialize_displays(bool greeting) {
+    analogWrite(6, 0); // Hide uninitialized display RAM through reset and drawing.
     const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
     // Setup has already deselected all panels and configured the shared clock.
     digitalWriteFast(11, LOW);
@@ -156,7 +157,6 @@ void initialize_displays(bool greeting) {
         pinMode(panel.dc, OUTPUT);
         pinMode(panel.reset, OUTPUT);
     }
-    analogWrite(6, 5); // Stock startup brightness, before drawing.
     delay(100);
     for (const Panel &panel : panels) {
         digitalWrite(panel.reset, LOW);
@@ -171,7 +171,7 @@ void initialize_displays(bool greeting) {
         initialize(panels[i], char('1' + i), greeting);
     }
     end_transfer();
-    analogWrite(6, 192); // Startup default; a loaded show applies its brightness.
+    if (greeting) analogWrite(6, 192); // Application reveals its own first complete image.
 }
 
 void write_display_segment(unsigned index, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {

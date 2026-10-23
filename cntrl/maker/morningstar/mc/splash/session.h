@@ -65,9 +65,13 @@ public:
         } else if (fade_ == Fade::in && uint32_t(now - started_) >= duration_) {
             fade_ = Fade::none;
         }
+        // Unlock the backlight only after one complete boot image, never a partial row.
+        if (!first_image_ && !pending_
+            && (running_ ? player_.frame_ready() : ui_ready && !redraw_)) first_image_ = true;
         return running_ || pending_ || (fade_ == Fade::out && !to_animation_);
     }
     uint8_t brightness(uint8_t target, uint32_t now) const {
+        if (!first_image_) return 0;
         return uint32_t(target) * level(now) / 1000;
     }
     bool take_redraw() {
@@ -84,13 +88,14 @@ private:
         return 1000;
     }
     void wake(uint32_t now, uint32_t duration) {
-        from_ = level(now); duration_ = duration; started_ = now;
+        from_ = first_image_ ? level(now) : 0; duration_ = duration; started_ = now;
         to_animation_ = saver_ = false; fade_ = Fade::out;
     }
     Receiver &assets_;
     Player &player_;
     bool running_ = false, pending_ = false, held_ = false, redraw_ = false;
     bool saver_ = false, to_animation_ = false, clock_started_ = false;
+    bool first_image_ = false;
     uint8_t pressed_ = 0;
     Fade fade_ = Fade::none;
     uint32_t started_ = 0, duration_ = 1000, from_ = 1000;
