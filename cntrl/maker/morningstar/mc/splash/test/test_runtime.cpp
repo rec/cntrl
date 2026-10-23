@@ -30,6 +30,10 @@ void command(cntrl::splash::Router &router, const std::string &line) {
     for (unsigned char c : line + "\n") router.receive(c, 0);
 }
 
+int storage_queries = 0;
+int storage_scans = 0;
+void storage_info(bool scan) { ++storage_queries; if (scan) ++storage_scans; }
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     Memory show_card, asset_card;
@@ -40,12 +44,18 @@ int main(int argc, char **argv) {
     cntrl::splash::Receiver assets(asset_card, device);
     cntrl::splash::Player player(assets, panels);
     cntrl::splash::Session session(assets, player);
-    cntrl::splash::Router router(documents, assets, session, device);
+    cntrl::splash::Router router(documents, assets, session, device, storage_info);
     device.session = &session;
     assets.boot();
     while (!router.accepts_input()) router.poll(0);
     command(router, "CNTRL STATUS");
     assert(device.replies.back() == "CNTRL READY 4 0 00000000");
+    command(router, "CNTRL STORAGE");
+    assert(storage_queries == 1 && storage_scans == 0);
+    command(router, "CNTRL STORAGE SCAN");
+    assert(storage_queries == 2 && storage_scans == 1);
+    command(router, "CNTRL STORAGE unknown");
+    assert(storage_queries == 2 && device.replies.back() == "CNTRL ERROR invalid-command");
 
     std::ifstream input(argv[1]);
     std::string hex; input >> hex;
@@ -58,6 +68,7 @@ int main(int argc, char **argv) {
         (unsigned long)cntrl::checksum(show.data(), unsigned(show.size())));
     command(router, begin);
     assert(device.replies.back() == "CNTRL SEND");
+    assert(storage_queries == 2);
     for (uint8_t c : show) router.receive(c, 0);
     while (documents.busy()) router.poll(0);
     assert(device.replies.back().find("CNTRL DONE ") == 0);
@@ -69,8 +80,9 @@ int main(int argc, char **argv) {
     animation[4] = 1; animation[6] = 160; animation[8] = 128; animation[10] = 1;
     put32(animation.data() + 12, unsigned(animation.size()));
     put32(animation.data() + header_bytes, 100);
-    // Newlines in raw pixels must never reach either line-oriented parser.
-    animation[1000] = '\n';
+    // Command-shaped pixel bytes must never reach any line-oriented handler.
+    constexpr char embedded[] = "\nCNTRL STORAGE SCAN\n";
+    std::memcpy(animation.data() + 1000, embedded, sizeof(embedded) - 1);
     uint32_t crc = cntrl::checksum(animation.data(), unsigned(animation.size()));
     std::snprintf(begin, sizeof(begin), "CNTRL SPLASH BEGIN %u %08lx", unsigned(animation.size()),
                   (unsigned long)crc);
@@ -79,6 +91,7 @@ int main(int argc, char **argv) {
     for (uint8_t c : animation) router.receive(c, 0);
     assert(!router.accepts_input());
     while (!router.accepts_input()) router.poll(0);
+    assert(storage_queries == 2 && storage_scans == 1);
     assert(device.replies.back().find("CNTRL SPLASH DONE ") == 0);
     command(router, "CNTRL SPLASH STATUS");
     assert(device.replies.back().find("CNTRL SPLASH READY ") == 0);

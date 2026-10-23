@@ -22,6 +22,46 @@ Use the generic [host instructions](../../../../../firmware/README.md) with
 and compiled show format are independent of the controller. Install firmware
 separately using the established recovery/upload workflow only when authorized.
 
+## Read-only storage information
+
+```bash
+uv run --frozen -m cntrl.maker.morningstar.mc.storage_info --port /dev/cu.usbmodem144682801
+```
+
+This reports physical card capacity, SD/SDHC/SDXC type, manufacturer ID,
+OEM ID, product name, revision, serial number, manufacturing month,
+filesystem type, allocation-unit size and usable filesystem capacity.
+Identification comes from the card's CID register; manufacturer IDs are reported
+as numbers rather than guessed brand names. SDXC is distinguished from SDHC by
+capacity. Usable capacity counts allocation clusters, not partition metadata.
+
+Add `--scan-free-space` to include free and used allocation space. This explicit
+scan can block the main loop while the library reads the allocation table or
+bitmap, so do not request it while performing. Without it, these two fields are
+`null`. Neither query writes files, changes settings, or sends MIDI.
+
+The USB commands are `CNTRL STORAGE` and `CNTRL STORAGE SCAN`. The single-line
+response is `CNTRL STORAGE SECTORS TYPE CID_HEX FAT CLUSTER_BYTES CLUSTERS FREE`.
+Sectors are 512 bytes, CID is 16 bytes in register order, and FREE is a cluster
+count or `-` when not requested. FAT is 16, 32 or 64 (exFAT). Errors use
+`CNTRL ERROR storage-unavailable`, `storage-read` or `storage-scan`. Commands
+are handled only when no show/animation transfer or verification is active.
+
+Verified on the pedal, 2026-10-23:
+
+- Capacity: 31,914,983,424 bytes (nominal 32 GB), SDHC.
+- Manufacturer ID `0x03`, OEM `SD`, product `SP32G`, revision 8.0;
+  manufactured September 2024.
+- exFAT, 32,768-byte allocation units; usable 31,905,546,240 bytes.
+- Free 30,723,670,016 bytes; used allocation 1,181,876,224 bytes.
+
+Both default and opt-in scan commands succeeded over USB. The active show
+remained `CNTRL READY 4 22242 9afa8de1` before and after firmware upload and
+queries. The inspected/uploaded HEX SHA-256 was
+`1f7a4b75bdedd44d6b678b24041b0a796c9b1975a9fc762fb4860767254a30ae`.
+The uploader returned status 1 after reset/disappearance, as in earlier uploads;
+the new command's successful responses established that the new firmware booted.
+
 ## Adapter and storage boundaries
 
 Show format version 4 includes shared top-level `font_name`/`font_size`/`pad` and

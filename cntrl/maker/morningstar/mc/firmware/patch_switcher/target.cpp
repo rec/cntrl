@@ -172,7 +172,35 @@ cntrl::splash::Receiver splash_assets(splash_card, board);
 cntrl::splash::Panels splash_panels;
 cntrl::splash::Player splash_player(splash_assets, splash_panels);
 cntrl::splash::Session splash_session(splash_assets, splash_player);
-cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board);
+
+void storage_info(bool scan) {
+    if (!card.ready) { board.reply("CNTRL ERROR storage-unavailable"); return; }
+    auto *device = SD.sdfs.card();
+    cid_t cid;
+    uint32_t sectors = device->sectorCount();
+    if (!sectors || !device->readCID(&cid)) {
+        board.reply("CNTRL ERROR storage-read"); return;
+    }
+    char identity[33];
+    const uint8_t *bytes = reinterpret_cast<const uint8_t *>(&cid);
+    for (unsigned i = 0; i < 16; ++i) std::snprintf(identity + 2 * i, 3, "%02x", bytes[i]);
+    char free[12] = "-";
+    if (scan) {
+        // Explicit opt-in: this library call can scan the FAT/allocation bitmap.
+        uint32_t count = SD.sdfs.freeClusterCount();
+        if (count > SD.sdfs.clusterCount() || device->errorCode()) {
+            board.reply("CNTRL ERROR storage-scan"); return;
+        }
+        std::snprintf(free, sizeof(free), "%lu", (unsigned long)count);
+    }
+    char response[128];
+    std::snprintf(response, sizeof(response), "CNTRL STORAGE %lu %u %s %u %lu %lu %s",
+        (unsigned long)sectors, unsigned(device->type()), identity, unsigned(SD.sdfs.fatType()),
+        (unsigned long)SD.sdfs.bytesPerCluster(), (unsigned long)SD.sdfs.clusterCount(), free);
+    board.reply(response);
+}
+
+cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info);
 ButtonState buttons[6];
 uint32_t last_scan = 0;
 
