@@ -14,8 +14,37 @@ fades back to the show's brightness over 1,000 ms. The total is two seconds of
 fading plus the brief black repaint interval. Animation continues during fade-out;
 USB, button scanning and MIDI servicing continue throughout. After releasing the
 dismissing gesture, subsequent presses act normally even before the fade ends.
-Uploads cancel the transition and restore the configured brightness. The idle
-screensaver is not implemented.
+Uploads cancel the transition and restore the configured brightness.
+
+## Idle screensaver
+
+Set `screensaver_timeout = 3` in a TOML show, or `"screensaver_timeout": 3` in
+JSON, for a three-second physical-input idle timeout. The default is 0 (disabled).
+It uses the installed animation and does not require startup `splash` to be true.
+The pman test show enables both. Presses and releases reset the timer, and it
+never starts while a button remains held. Missing assets leave the normal UI up.
+
+Entry fades the UI out over four seconds, paints a complete first animation
+frame while dark, then fades the animation in over four seconds. Pressing any
+button, even during entry, switches to the fast wake transition: 200 ms out,
+complete UI repaint while dark, 200 ms in. Unlike startup dismissal, this press
+also performs its normal musical action immediately. Both transitions include a
+brief black repaint interval beyond the two ramp durations. Neither blocks USB,
+button scanning or MIDI queues. Incoming MIDI and USB status queries do not reset
+the physical-input timer. Show/asset transfers temporarily inhibit idle entry.
+
+The setting is encoded in show format 5. Recompile older shows before upload;
+there is no implicit conversion of saved binary shows.
+
+The screensaver build was inspected and uploaded on 2026-10-23. Its HEX SHA-256
+is `0aa952ade3ee6065339e7629c19ff5ee9a0a303031d2736101b39943d88b40cf`.
+The recompiled three-second pman show verified as
+`CNTRL READY 5 22246 bf83dc72`. All 151 Python tests, native controller,
+display/renderer and splash runtime tests passed. Runtime coverage includes
+held-button suppression, release activity, full slow entry, dark first-frame
+painting, interruption during entry, immediate MIDI on wake, fast wake ramps,
+timer wraparound, missing assets, disabled idle and transfer inhibition. Visual
+entry and wake-up behaviour still require the user's check.
 
 The fade build was inspected and uploaded on 2026-10-23. HEX/ELF comparison and
 stock flash-configuration checks passed; the HEX SHA-256 is

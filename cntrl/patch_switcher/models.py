@@ -106,6 +106,15 @@ class Show(BaseModel, frozen=True):
     chord_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] = 100
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     splash: Annotated[bool, Field(strict=True)] = False
+    screensaver_timeout: Annotated[
+        int,
+        Field(
+            strict=True,
+            ge=0,
+            le=2147483,
+            description='Idle seconds; 0 disables the screensaver.',
+        ),
+    ] = 0
     font_name: str | None = None
     font_size: Annotated[int, Field(strict=True, gt=0, le=255)] | None = None
     pad: Annotated[int, Field(strict=True, ge=0, le=255)] | None = 4

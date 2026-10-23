@@ -87,7 +87,7 @@ def upload_document(port: Path, data: bytes) -> str:
             raise ValueError(response)
         connection.write(b'CNTRL STATUS\n')
         response = connection.line()
-        if response != f'CNTRL READY 4 {len(data)} {checksum:08x}':
+        if response != f'CNTRL READY 5 {len(data)} {checksum:08x}':
             raise ValueError(f'upload verification failed: {response}')
     return response
 

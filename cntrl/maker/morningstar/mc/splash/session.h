@@ -2,70 +2,98 @@
 #include "receiver.h"
 
 namespace cntrl::splash {
-// Own splash lifetime independently of the normal renderer and patch history.
+// Own startup splash, idle animation and nonblocking backlight transitions.
 class Session {
 public:
     Session(Receiver &assets, Player &player) : assets_(assets), player_(player) {}
-    void configure(bool enabled) {
-        stop(); pending_ = enabled;
+    void configure(bool enabled, uint32_t idle_ms, uint32_t now) {
+        stop(); pending_ = enabled; idle_ms_ = idle_ms;
+        last_input_ = now; clock_started_ = true;
     }
     void stop() {
         player_.stop();
         if (running_ || fade_ != Fade::none) redraw_ = true;
-        running_ = pending_ = false;
-        fade_ = Fade::none;
+        running_ = pending_ = saver_ = false;
+        fade_ = Fade::none; clock_started_ = false;
     }
     bool controls(uint8_t pressed, uint32_t now) {
-        if (running_ || pending_) {
+        if (pressed || pressed != pressed_) last_input_ = now;
+        pressed_ = pressed;
+        if (pending_ || (running_ && !saver_ && fade_ == Fade::none)) {
             if (pressed) {
-                if (running_) {
-                    running_ = false;
-                    fade_ = Fade::out; started_ = now;
-                } else pending_ = false;
+                if (running_) wake(now, 1000);
+                else pending_ = false;
                 held_ = true;
             }
             return true;
         }
         if (held_) {
             if (!pressed) held_ = false;
-            return true; // Consume the entire dismissing gesture, including release.
+            return true; // Startup dismissal consumes the complete gesture.
         }
-        return false;
+        if (saver_ && pressed) wake(now, 200);
+        return false; // Screensaver wake also performs the normal action.
     }
-    bool poll(uint32_t now, bool ui_ready = false) {
+    bool poll(uint32_t now, bool ui_ready = false, bool transfer_busy = false) {
+        bool busy = transfer_busy || assets_.busy();
+        if (!clock_started_ || busy) {
+            last_input_ = now; clock_started_ = true;
+        }
         if (pending_ && !assets_.busy()) {
             pending_ = false;
             running_ = player_.start(now);
         }
-        if ((running_ || fade_ == Fade::out) && player_.poll(now, false) == Step::failed) stop();
-        if (fade_ == Fade::out && uint32_t(now - started_) >= fade_ms) {
-            player_.stop();
-            fade_ = Fade::painting; redraw_ = true;
-        } else if (fade_ == Fade::painting && ui_ready && !redraw_) {
+        if (!pending_ && !running_ && fade_ == Fade::none && idle_ms_
+            && !pressed_ && !busy && assets_.size()
+            && uint32_t(now - last_input_) >= idle_ms_) {
+            saver_ = to_animation_ = true;
+            fade_ = Fade::out; started_ = now; duration_ = 4000; from_ = 1000;
+        }
+        if (running_ && player_.poll(now, false) == Step::failed) stop();
+        if (fade_ == Fade::out && uint32_t(now - started_) >= duration_) {
+            if (to_animation_) {
+                running_ = player_.start(now);
+                if (running_) fade_ = Fade::painting;
+                else stop();
+            } else {
+                player_.stop(); running_ = false;
+                fade_ = Fade::painting; redraw_ = true;
+            }
+        } else if (fade_ == Fade::painting
+                   && (to_animation_ ? player_.frame_ready() : ui_ready && !redraw_)) {
             fade_ = Fade::in; started_ = now;
-        } else if (fade_ == Fade::in && uint32_t(now - started_) >= fade_ms) {
+        } else if (fade_ == Fade::in && uint32_t(now - started_) >= duration_) {
             fade_ = Fade::none;
         }
-        return running_ || pending_ || fade_ == Fade::out;
+        return running_ || pending_ || (fade_ == Fade::out && !to_animation_);
     }
     uint8_t brightness(uint8_t target, uint32_t now) const {
-        uint32_t elapsed = now - started_;
-        if (elapsed > fade_ms) elapsed = fade_ms;
-        if (fade_ == Fade::out) return target * (fade_ms - elapsed) / fade_ms;
-        if (fade_ == Fade::painting) return 0;
-        if (fade_ == Fade::in) return target * elapsed / fade_ms;
-        return target;
+        return uint32_t(target) * level(now) / 1000;
     }
     bool take_redraw() {
         bool redraw = redraw_; redraw_ = false; return redraw;
     }
 private:
     enum class Fade { none, out, painting, in };
-    static constexpr uint32_t fade_ms = 1000;
+    uint32_t level(uint32_t now) const {
+        uint32_t elapsed = now - started_;
+        if (elapsed > duration_) elapsed = duration_;
+        if (fade_ == Fade::out) return from_ * (duration_ - elapsed) / duration_;
+        if (fade_ == Fade::painting) return 0;
+        if (fade_ == Fade::in) return 1000 * elapsed / duration_;
+        return 1000;
+    }
+    void wake(uint32_t now, uint32_t duration) {
+        from_ = level(now); duration_ = duration; started_ = now;
+        to_animation_ = saver_ = false; fade_ = Fade::out;
+    }
     Receiver &assets_;
     Player &player_;
     bool running_ = false, pending_ = false, held_ = false, redraw_ = false;
+    bool saver_ = false, to_animation_ = false, clock_started_ = false;
+    uint8_t pressed_ = 0;
     Fade fade_ = Fade::none;
-    uint32_t started_ = 0;
+    uint32_t started_ = 0, duration_ = 1000, from_ = 1000;
+    uint32_t idle_ms_ = 0, last_input_ = 0;
 };
 } // namespace cntrl::splash

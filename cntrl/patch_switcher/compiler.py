@@ -243,7 +243,7 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            4,
+            5,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
@@ -251,6 +251,7 @@ def compile_show(
             len(patches),
             show.brightness | (int(show.splash) << 8),
             crc32(body),
+            show.screensaver_timeout * 1000,
         )
         + body
     )
@@ -312,4 +313,4 @@ def _optional(value: int | None) -> int:
     return 255 if value is None else value
 
 
-HEADER = struct.Struct('<4sHHIHHHHI')
+HEADER = struct.Struct('<4sHHIHHHHII')

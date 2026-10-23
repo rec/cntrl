@@ -127,7 +127,7 @@ private:
         uint8_t h[16], trailer[4];
         if (!storage_.read(slot, 0, h, 16) || std::memcmp(h, "CNST", 4)) return false;
         unsigned length = u32(h + 8);
-        if (length < 24 || length > max_document || storage_.size(slot) != length + 20
+        if (length < 28 || length > max_document || storage_.size(slot) != length + 20
             || !storage_.read(slot, 16, buffer, length)
             || !storage_.read(slot, 16 + length, trailer, 4)
             || std::memcmp(trailer, "DONE", 4) || checksum(buffer, length) != u32(h + 12)
@@ -138,7 +138,7 @@ private:
     void command() {
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             char response[80];
-            std::snprintf(response, sizeof(response), "CNTRL READY 4 %u %08lx", document_.length(),
+            std::snprintf(response, sizeof(response), "CNTRL READY 5 %u %08lx", document_.length(),
                           document_.valid() ? (unsigned long)checksum(active_, document_.length()) : 0ul);
             replies_.reply(response);
             return;
@@ -148,7 +148,7 @@ private:
         int end = 0;
         if (std::sscanf(line_, "CNTRL BEGIN %u %lx%n", &length, &crc, &end) == 2
             && end > 0 && !line_[end] && crc <= 0xfffffffful
-            && length >= 24 && length <= max_document) {
+            && length >= 28 && length <= max_document) {
             expected_ = length; expected_crc_ = uint32_t(crc); received_ = 0;
             receiving_ = true;
             replies_.reply("CNTRL SEND");

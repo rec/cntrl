@@ -103,9 +103,9 @@ def test_screens_share_font_size_and_padding_with_independent_colors(
     data = compiler.compile_show(
         show, compiler.read_document(FIXTURES / 'definitions.json'), [], target
     )
-    assert [data[25 + 16 * i] for i in range(3)] == [16, 16, 16]
-    assert [data[26 + 16 * i] for i in range(3)] == [10, 10, 10]
-    category = 72 + 2 * 68
+    assert [data[29 + 16 * i] for i in range(3)] == [16, 16, 16]
+    assert [data[30 + 16 * i] for i in range(3)] == [10, 10, 10]
+    category = 76 + 2 * 68
     patch = category + 2 * 74
     assert struct.unpack_from('<3H', data, category + 68)[0] == 4 + (152 - 4 * 12) // 2
     assert struct.unpack_from('<3H', data, patch + 76)[2] == 4 + (152 - 5 * 12) // 2
