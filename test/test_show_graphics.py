@@ -1,6 +1,7 @@
 """Show graphics resolution and saved placement, independent of a device."""
 
 import struct
+import warnings
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,7 @@ def test_defaults_and_explicit_null_settings_agree(target: models.Target) -> Non
                 next=models.ScreenGraphics(
                     foreground_color=None,
                     background_color=None,
+                    half=None,
                 )
             ),
         ),
@@ -40,6 +42,7 @@ def test_defaults_and_explicit_null_settings_agree(target: models.Target) -> Non
     fields = graphics.SCREEN.unpack(records[0])
     assert fields[:3] == (0, 40, 4)
     assert fields[4:8] == (0xFFFF, 0, 40, 0)
+    assert fields[8:] == (0x7BEF, 0)
     assert offsets == [[4 + (152 - 150) // 2, 4 + (152 - 120) // 2]] * 3
 
 
@@ -73,19 +76,53 @@ def test_one_color_chooses_complement_or_furthest_with_warning() -> None:
     assert graphics.colors(models.ScreenGraphics(foreground_color='red'), 0.6) == (
         0xF800,
         0x07FF,
+        0x7BEF,
     )
     assert graphics.colors(models.ScreenGraphics(background_color='red'), 0.6) == (
         0x07FF,
         0xF800,
+        0x7BEF,
     )
     with pytest.warns(UserWarning, match='contrast 0.600'):
         assert graphics.colors(models.ScreenGraphics(foreground_color='gray'), 0.6) == (
             graphics.rgb565((128, 128, 128)),
             0,
+            graphics.rgb565((64, 64, 64)),
         )
     chosen = graphics.color('0x909090')
-    fg, bg = graphics.colors(models.ScreenGraphics(foreground_color='0x909090'), 0.41)
+    fg, bg, _ = graphics.colors(
+        models.ScreenGraphics(foreground_color='0x909090'), 0.41
+    )
     assert fg == graphics.rgb565(chosen) and bg != graphics.rgb565((111, 111, 111))
+
+
+@pytest.mark.parametrize('half', [None, ''])
+def test_half_defaults_to_rgb_midpoint(half: str | None) -> None:
+    assert graphics.colors(
+        models.ScreenGraphics(
+            foreground_color='red', background_color='blue', half=half
+        ),
+        0.6,
+    )[2] == graphics.rgb565((127, 0, 127))
+
+
+@pytest.mark.parametrize('half', ['yellow', '0x112233'])
+def test_half_accepts_named_and_hex_colors_without_contrast_warning(half: str) -> None:
+    with warnings.catch_warnings(action='error'):
+        records, _ = graphics.compile_screens(
+            models.Show(
+                instruments={},
+                patches={},
+                screens=models.Screens(next=models.ScreenGraphics(half=half)),
+            ),
+            [],
+            models.Target.model_validate(
+                compiler.read_document(FIXTURES / 'target.json')
+            ),
+        )
+    assert graphics.SCREEN.unpack(records[2])[8] == graphics.rgb565(
+        graphics.color(half)
+    )
 
 
 def test_screens_share_font_size_and_padding_with_independent_colors(
@@ -116,7 +153,7 @@ def test_all_screen_errors_are_reported_together(target: models.Target) -> None:
     assert isinstance(show, dict)
     show['screens'] = {
         'undo': {'foreground_color': 'missing'},
-        'sent': {'foreground_color': 'missing'},
+        'sent': {'half': 'missing'},
         'next': {'background_color': 'missing'},
     }
     with pytest.raises(compiler.CompilationError) as error:

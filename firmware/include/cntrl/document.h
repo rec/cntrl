@@ -32,7 +32,7 @@ class Document {
 public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
-            || u16(bytes + 4) != 5 || u16(bytes + 6) < 1
+            || u16(bytes + 4) != 6 || u16(bytes + 6) < 1
             || u32(bytes + 8) != length || bytes[19] > 1 || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
@@ -40,7 +40,7 @@ public:
             || 76 + ni * 68 + nc * 74 + np * 82 != length) return false;
         for (unsigned s = 0; s < 3; ++s) {
             const uint8_t *p = bytes + 28 + s * 16;
-            if (!hardware.supports_font(p[0], p[1]) || p[0] != bytes[28] || p[1] != bytes[29] || p[2] != bytes[30] || p[3] || u32(p + 12)
+            if (!hardware.supports_font(p[0], p[1]) || p[0] != bytes[28] || p[1] != bytes[29] || p[2] != bytes[30] || p[3] || u16(p + 14)
                 || 2u * p[2] >= hardware.display_width()
                 || 2u * p[2] + 2u * u16(p + 8) + 2 > hardware.display_height()
                 || !u16(p + 8) || u16(p + 10) >= u16(p + 8)) return false;
@@ -89,7 +89,7 @@ public:
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + 28 + slot * 16;
-        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10)};
+        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u16(p + 12)};
     }
     const uint8_t *instrument(unsigned i) const { return data_ + 76 + i * 68; }
     const uint8_t *category(unsigned i) const { return data_ + 76 + instruments_ * 68 + i * 74; }

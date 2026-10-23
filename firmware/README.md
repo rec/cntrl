@@ -121,6 +121,7 @@ foreground_color = 'yellow'
 
 [screens.next]
 background_color = '0x002040'
+# half = 'gray'  # Omit to use the foreground/background midpoint.
 ```
 
 Omitting `screens`, any individual screen, or any field uses its default. JSON
@@ -143,6 +144,21 @@ The whole screen is filled with its background, including empty history panes.
 Text is clipped to the rectangle inset by `pad` on every side. Runtime errors
 retain the center screen's colors/padding and use its left inset.
 
+The rightmost patch name alone uses `half` when its instrument, program and
+bank-select address match the most recent successful send for that instrument.
+The category and the other two screens keep their normal foreground color.
+Names/categories are not part of this comparison; the same addressed patch can
+appear under different names. Sending to another instrument does not clear it.
+Undo updates it only when a restoration is actually sent. A failed send does
+not change it, and starting a new show clears known selections. Greyed-out names
+can still be sent normally; no MIDI messages or history entries are suppressed.
+
+Each screen accepts optional `half`, using the same named/hex color syntax.
+Omitted, `null` or empty `half` uses the component-wise RGB midpoint of the
+resolved foreground/background colors, rounded down before RGB565 conversion.
+It intentionally has lower contrast, so the contrast warning does not apply to
+`half`. This appearance is called "greyed out" even when the color is not grey.
+
 Colors accept `0xRRGGBB` or case-insensitive names: black, white, red, green,
 lime, blue, yellow, cyan/aqua, magenta/fuchsia, silver, gray/grey, maroon, olive,
 purple, teal, navy and orange. Green is 0x008000; lime is 0x00FF00.
@@ -155,14 +171,15 @@ clamping) reaching the threshold. If no such shift works, it uses the furthest
 RGB-cube corner, warning if that distance is still <= the threshold. Contrast is
 computed in input 8-bit RGB; encoded display colors are rounded down to RGB565.
 
-## Binary and transfer protocol, version 5
+## Binary and transfer protocol, version 6
 
-Version 5 adds top-level `screensaver_timeout`, an integer idle timeout in seconds.
+Version 6 adds the per-screen `half` color. `screensaver_timeout` remains an
+integer idle timeout in seconds.
 Zero (the default) disables the screensaver. Positive values enable the installed
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 5 firmware. No automatic
+version 6 firmware. No automatic
 conversion of stored documents is performed.
 
 All integers are little-endian; strings are NUL-terminated, zero-padded ASCII.
@@ -170,8 +187,8 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (5), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 splash (0 or 1), u32 body CRC32, u32 screensaver timeout in milliseconds |
-| Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
+| Header, 28 bytes | `CSW1`, u16 version (6), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 splash (0 or 1), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment, half RGB565; two zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
 | Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, name[64], three u16 screen cursor offsets |
@@ -186,7 +203,7 @@ indices and message values before activating a document.
 The USB serial request is `CNTRL BEGIN SIZE CRC32_HEX\n`. The receiver replies
 `CNTRL SEND\n`, then accepts exactly SIZE binary bytes. After validation,
 storage commit and read-back verification it replies `CNTRL DONE SIZE CRC\n`.
-`CNTRL STATUS\n` replies `CNTRL READY 5 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 6 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 

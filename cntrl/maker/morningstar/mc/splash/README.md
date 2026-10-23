@@ -39,7 +39,7 @@ brief black repaint interval beyond the two ramp durations. Neither blocks USB,
 button scanning or MIDI queues. Incoming MIDI and USB status queries do not reset
 the physical-input timer. Show/asset transfers temporarily inhibit idle entry.
 
-The setting is encoded in show format 5. Recompile older shows before upload;
+The setting is encoded in show format 6. Recompile older shows before upload;
 there is no implicit conversion of saved binary shows.
 
 The screensaver build was inspected and uploaded on 2026-10-23. Its HEX SHA-256

@@ -63,6 +63,66 @@ void upload(cntrl::Documents &docs, const std::vector<uint8_t> &data) {
     while (docs.busy()) docs.tick(1);
 }
 
+void test_greyed_names(const cntrl::Document &doc) {
+    Fake hw;
+    cntrl::Controller app(hw);
+    app.activate(doc);
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
+    app.action(2); // A:Flute is now known to be selected.
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
+    assert(hw.panes[1].patch_color == hw.panes[1].graphics.foreground);
+    app.action(0); // B:Strings has not been sent.
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
+    app.action(2);
+    app.action(1); // Back to A:Flute, although B was sent more recently.
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
+    app.action(1); // A:Sax is different from A's last send.
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
+    app.action(2);
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
+    hw.available = false;
+    app.action(5); // Failed undo leaves A:Sax selected.
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
+    hw.available = true;
+    app.action(5); // Restore A:Flute, leaving A:Sax as candidate.
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
+    app.action(0);
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
+    unsigned sent = unsigned(hw.sent.size());
+    app.action(5); app.action(5); // Unknown pre-show selections: no MIDI sent.
+    assert(hw.sent.size() == sent && app.depth() == 0);
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
+    app.action(1); // A:Sax
+    hw.available = false; app.action(2);
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
+    app.action(0);
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
+    app.activate(doc); // A new document starts with unknown instrument state.
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
+}
+
+void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
+    Fake hw;
+    cntrl::Controller app(hw);
+    auto aliased = bytes;
+    unsigned first = 76 + 2 * 68 + 2 * 74, second = first + 82;
+    aliased[second + 4] = aliased[first + 4]; // Same PC, but a different bank.
+    cntrl::put32(aliased.data() + 20, cntrl::checksum(aliased.data() + 28, unsigned(aliased.size()) - 28));
+    cntrl::Document doc;
+    assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
+    app.activate(doc); app.action(2); app.action(1);
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
+    std::memcpy(aliased.data() + second + 5, aliased.data() + first + 5, 2);
+    cntrl::put32(aliased.data() + 20, cntrl::checksum(aliased.data() + 28, unsigned(aliased.size()) - 28));
+    assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
+    app.activate(doc); app.action(2); app.action(1);
+    assert(!std::strcmp(hw.panes[2].patch, "Sax")); // Different name, same patch address.
+    assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
+    unsigned sent = unsigned(hw.sent.size());
+    app.action(2); // Grey is informational; it must not suppress repeated sends.
+    assert(hw.sent.size() == sent + 1);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     std::ifstream file(argv[1]);
@@ -74,6 +134,9 @@ int main(int argc, char **argv) {
     Fake hw;
     cntrl::Document doc;
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+    assert(doc.graphics(2).half == 0x7bef);
+    test_greyed_names(doc);
+    test_greyed_aliases(bytes);
     for (unsigned n = 0; n < bytes.size(); ++n) {
         cntrl::Document truncated;
         assert(!truncated.load(bytes.data(), n, hw));
@@ -82,7 +145,7 @@ int main(int argc, char **argv) {
     corrupt.back() ^= 1;
     cntrl::Document invalid;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
-    for (unsigned offset : {28u, 29u, 30u, 36u, 76u + 2 * 68 + 68}) {
+    for (unsigned offset : {28u, 29u, 30u, 36u, 42u, 76u + 2 * 68 + 68}) {
         corrupt = bytes; corrupt[offset] = 255;
         cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
         assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
@@ -185,7 +248,7 @@ int main(int argc, char **argv) {
     docs.boot(); assert(io.sent.empty());
     upload(docs, bytes); assert(io.replies.back().find("CNTRL DONE ") == 0);
     assert(io.sent.empty() && !std::strcmp(io.panes[2].patch, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 5 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 6 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     auto new_show = bytes;
