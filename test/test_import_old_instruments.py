@@ -73,20 +73,20 @@ def test_emits_valid_files_without_inventing_routing(
     output = tmp_path / 'output'
     importer.import_instruments(output)
     definitions = models.Definitions.model_validate(
-        compiler.read_document(output / 'definitions.json')
+        compiler.read_document(output / 'definitions.toml')
     )
     assert [(s.instrument, s.name) for s in definitions.setups] == [
         ('vl70', 'default'),
         ('pman', 'default'),
     ]
     assert definitions.setups[0].banks[0] == models.Bank(msb=33, lsb=0)
-    table = compiler.read_document(output / 'pman.json')
+    table = compiler.read_document(output / 'pman.toml')
     assert isinstance(table, dict)
     assert models.TablePatch.model_validate(table['patches'][0]).program == 128
     assert sorted(p.name for p in output.iterdir()) == [
-        'definitions.json',
-        'pman.json',
-        'vl70.json',
+        'definitions.toml',
+        'pman.toml',
+        'vl70.toml',
     ]
 
 

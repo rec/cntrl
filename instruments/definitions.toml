@@ -1,0 +1,25 @@
+[[setups]]
+instrument = "vl70"
+name = "default"
+sysex = []
+
+[setups.banks.0]
+msb = 33
+lsb = 0
+
+[setups.banks.1]
+msb = 33
+lsb = 1
+
+[[setups]]
+instrument = "pman"
+name = "default"
+sysex = []
+
+[setups.banks.0]
+msb = 33
+lsb = 0
+
+[setups.banks.1]
+msb = 33
+lsb = 1

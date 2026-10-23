@@ -9,10 +9,10 @@ The Patchman TURBO replaces those same two preset banks:
 https://www.patchmanmusic.com/turbovl.html
 """
 
-import json
 from pathlib import Path
 from typing import Annotated
 
+import tomlkit
 import tyro
 from pydantic import BaseModel, TypeAdapter
 
@@ -81,17 +81,17 @@ def import_instruments(output: Path) -> None:
             for i in tables
         ]
     )
-    documents: dict[str, object] = {
-        'definitions.json': definitions.model_dump(mode='json', exclude_none=True),
+    documents: dict[str, dict[str, object]] = {
+        'definitions.toml': definitions.model_dump(mode='json', exclude_none=True),
         **{
-            f'{i}.json': {'patches': [p.model_dump(exclude_none=True) for p in e]}
+            f'{i}.toml': {'patches': [p.model_dump(exclude_none=True) for p in e]}
             for i, e in tables.items()
         },
     }
     output.mkdir(parents=True, exist_ok=True)
     for name, document in documents.items():
         path = output / name
-        path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')
+        path.write_text(tomlkit.dumps(document))
         print(path)
 
 
