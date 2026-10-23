@@ -24,6 +24,11 @@ separately using the established recovery/upload workflow only when authorized.
 
 ## Adapter and storage boundaries
 
+Show format version 2 adds top-level `brightness` (0..255, default 64), applied
+to backlight PWM pin 6 on show activation, including startup. Older binary shows
+are rejected; recompile the original show and upload it after updating firmware.
+No firmware or show was uploaded as part of this configuration change.
+
 USB exposes Serial + MIDI, using the public core's development VID/PID and the
 existing `cntrl experimental` product string. The serial receiver accepts show
 documents, not HEX or firmware. There is no new application-flash writer and no

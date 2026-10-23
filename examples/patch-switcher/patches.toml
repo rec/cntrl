@@ -1,4 +1,5 @@
 take_first_match = false
+brightness = 64
 chord_ms = 100
 
 [instruments.keys]

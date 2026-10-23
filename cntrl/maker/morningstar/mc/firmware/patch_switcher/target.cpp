@@ -62,6 +62,9 @@ public:
     void show(unsigned pane, const cntrl::Pane &content) override {
         renderer_.show(pane, content);
     }
+    void set_brightness(uint8_t value) override {
+        analogWrite(6, value);
+    }
     void error(const char *message) override {
         cntrl::Pane view;
         std::snprintf(view.title, sizeof(view.title), "CNTRL");

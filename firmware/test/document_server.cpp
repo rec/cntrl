@@ -11,6 +11,7 @@ struct Peer : cntrl::Hardware, cntrl::Replies, cntrl::Storage {
         return !std::strcmp(name, "din") || !std::strcmp(name, "trs");
     }
     void show(unsigned, const cntrl::Pane &) override {}
+    void set_brightness(uint8_t) override {}
     void error(const char *) override {}
     void reply(const char *line) override {
         // Deliberately fragment replies to exercise host stream handling.
