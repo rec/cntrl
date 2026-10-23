@@ -2,17 +2,14 @@
 #include <Arduino.h>
 #include <FlexSerial.h>
 #include <SD.h>
-#include <glcdfont.c>
 #include <USBHost_t36.h>
 #include <cntrl/documents.h>
-#include <cntrl/layout.h>
 #include "buttons.h"
 #include "displays.h"
 #include "switches.h"
 #include "renderer.h"
 
-// Only the pinned public-core font data is included, not the display library's
-// driver or its DMA global constructors. Panel transactions are our shared code.
+// Library graphics draw into RAM; only our bounded driver touches panel pins.
 
 namespace {
 USBHost host;
@@ -111,7 +108,7 @@ public:
         }
     }
     void draw() {
-        renderer_.draw(glcdfont);
+        renderer_.draw();
     }
 private:
     struct Batch { uint8_t bytes[14]; unsigned length, route; };

@@ -27,7 +27,7 @@ separately using the established recovery/upload workflow only when authorized.
 Show format version 2 adds top-level `brightness` (0..255, default 64), applied
 to backlight PWM pin 6 on show activation, including startup. Older binary shows
 are rejected; recompile the original show and upload it after updating firmware.
-No firmware or show was uploaded as part of this configuration change.
+The first version 2 upload is recorded in the library-graphics verification below.
 
 USB exposes Serial + MIDI, using the public core's development VID/PID and the
 existing `cntrl experimental` product string. The serial receiver accepts show
@@ -66,20 +66,22 @@ USB disconnects or later transport failures cannot be acknowledged by a MIDI
 receiver and are not equivalent to a confirmed instrument state change.
 
 Display slots currently follow the traced CS order. Their left/center/right
-physical order still needs verification. The three 160x128 drivers render the
-portable layout using the pinned public-core ASCII font. Transfers use blocking
-hardware SPI at a requested 8 MHz, MSB first, mode 0. Initialization retains the
+physical order still needs verification. The three 160x128 drivers render
+through the pinned ST7735_t3 library's RAM framebuffer and classic font API.
+Transfers use blocking hardware SPI at a requested 8 MHz, MSB first, mode 0.
+Initialization retains the
 traced panel commands, reset sequence and waits. Each runtime call processes at
-most one row and sends only the span between its first and last changed pixels.
-Unchanged rows generate no SPI traffic. A 7,680-byte monochrome cache records the
-pixels sent to all three panels; the first pass clears unknown panel RAM.
+most one library glyph or one row and sends only the span between a row's first
+and last changed pixels. Unchanged rows generate no SPI traffic. One 40,960-byte
+RGB565 canvas is shared across panels, and a 122,880-byte cache records the pixels
+sent to all three panels; the first pass clears unknown panel RAM.
 Rendering snapshots the latest requested pane and coalesces further requests,
 including changes received during painting and erasure of shorter text.
 
 All panels are deselected before ending a transfer. Pin 13 is then restored to
 GPIO output LOW and pin 12 to GPIO input for the existing switch-register reader.
 The next transfer restores the SPI pin mux through `SPI.begin()`. No asynchronous
-transfer, interrupt masking or DMA ownership crosses a button scan. The largest
+display transfer or display interrupt masking crosses a button scan. The largest
 row transaction sends 331 bytes, approximately 0.34 ms of wire time at 8 MHz,
 excluding CPU/peripheral setup. Verify redraw speed and button latency on the
 pedal; SD and USB library calls can still introduce latency. The previous
@@ -87,8 +89,8 @@ software-clocked driver had an observed update time around 1,500 ms.
 
 ## Capacity measurements
 
-The hardware-SPI/dirty-row ARM link used 162,400 bytes for RAM1 variables, 65,536
-bytes for code plus ITCM padding, leaving 296,352 bytes for local variables.
+The library-graphics ARM link used 316,736 bytes for RAM1 variables, 98,304
+bytes for code plus ITCM padding, leaving 109,248 bytes for local variables.
 RAM2 static use was 17,568 bytes; no external RAM was allocated. Final link
 measurements are printed by `inspect-patch-switcher` and may vary as code changes.
 
@@ -143,3 +145,38 @@ error; that path is covered with fake storage but not yet physically tested.
   The first post-upload MIDI capture returned ten events almost simultaneously,
   not the requested timed sequence; buffered interface data cannot establish
   current button latency or confirm that sequence.
+
+## Library graphics and fonts: 2026-10-23
+
+`patch_switcher/graphics.h` wraps the pinned ST7735_t3 class as a 160x128 RAM-only
+canvas. It supplies its own RGB565 buffer, enables framebuffer mode and uses the
+library's `setFont`, `setTextSize`, `setCursor`, `write` and `fillScreen` APIs.
+The library now owns glyph decoding and rasterization. The old portable
+`layout.h` pixel-font engine has been removed. Existing field spacing, wrapping,
+classic font and patch-name size reduction are retained.
+
+Only the framebuffer graphics paths are used: no `initR`, hardware rotation,
+`updateScreen` or asynchronous flush is called. Drawing primitives and native/GFX
+font APIs are available on `Graphics`; selectable fonts are not yet show options.
+The library's static initialization reserves three inactive DMA channels, but no
+display DMA transfers are started. Our driver still owns panel initialization,
+chip selects, SPI timing, coordinate offsets and the shared GPIO/SPI pin handoff.
+
+Drawing is incremental: at most one glyph or one row per poll. Native tests use
+an explicit graphics test double to test scheduling, erasure, wrapping, change
+coalescing and per-loop bounds, not to claim verification of library font shapes.
+The real pinned library is compiled into the ARM image and checked on the pedal.
+Portable controller/persistence, target buttons, display transfer and renderer
+tests passed, including address/undefined-behavior sanitizer checks.
+
+The image SHA-256 is
+`d53f49bd5225846fec6629cf833140745c49946e3db3a12027ba69993772089e`.
+HEX/ELF bytes and stock flash configuration matched. Software bootloader entry
+and helper upload succeeded without PROGRAM. The updater again returned status 1
+after reset/disappearance; the application then replied `CNTRL READY 2 0 00000000`.
+The recompiled pman show uploaded and verified as
+`CNTRL READY 2 20568 c7d6e19f`, including default brightness 64.
+The user confirmed the text, update speed and button response looked unchanged.
+The CME input-1 capture ended with the expected channel-1 bank MSB 33/LSB 0,
+program 1, program 2, program 1 sequence for C/B/C/F. It also contained earlier
+buffered traffic, so it is not a latency measurement; no lost events were reported.
