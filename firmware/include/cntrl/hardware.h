@@ -21,6 +21,7 @@ struct Hardware {
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
     virtual bool supports(const char *output) const = 0;
     virtual void show(unsigned pane, const Pane &content) = 0;
+    virtual void set_brightness(uint8_t value) = 0;
     virtual void error(const char *message) = 0;
 };
 

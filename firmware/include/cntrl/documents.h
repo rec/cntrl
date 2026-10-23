@@ -138,7 +138,7 @@ private:
     void command() {
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             char response[80];
-            std::snprintf(response, sizeof(response), "CNTRL READY 1 %u %08lx", document_.length(),
+            std::snprintf(response, sizeof(response), "CNTRL READY 2 %u %08lx", document_.length(),
                           document_.valid() ? (unsigned long)checksum(active_, document_.length()) : 0ul);
             replies_.reply(response);
             return;

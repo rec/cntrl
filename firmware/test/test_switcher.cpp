@@ -12,6 +12,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     cntrl::Pane panes[3];
     bool available = true;
     unsigned errors = 0;
+    uint8_t brightness = 0;
     bool send(const char *route, const uint8_t *data, unsigned n) override {
         if (!available) return false;
         sent.emplace_back(data, data + n); routes.emplace_back(route); return true;
@@ -20,6 +21,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
         return !std::strcmp(route, "din") || !std::strcmp(route, "trs");
     }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
+    void set_brightness(uint8_t value) override { brightness = value; }
     void error(const char *) override { ++errors; }
     void reply(const char *s) override { replies.emplace_back(s); }
 };
@@ -82,7 +84,20 @@ int main(int argc, char **argv) {
     cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 24, unsigned(corrupt.size()) - 24));
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     cntrl::Controller app(hw);
+    for (unsigned value : {0u, 64u, 255u}) {
+        auto configured = bytes;
+        configured[18] = uint8_t(value);
+        cntrl::Document settings;
+        assert(settings.load(configured.data(), unsigned(configured.size()), hw));
+        app.activate(settings);
+        assert(hw.brightness == value && hw.sent.empty());
+    }
+    corrupt = bytes; corrupt[19] = 1;
+    assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    corrupt = bytes; corrupt[4] = 1;
+    assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     app.activate(doc);
+    assert(hw.brightness == 64);
     assert(hw.sent.empty() && !hw.panes[0].patch[0] && !hw.panes[1].patch[0]);
     assert(!hw.panes[0].title[0] && !hw.panes[1].title[0]);
     assert(!std::strcmp(hw.panes[2].patch, "Flute"));
@@ -161,10 +176,11 @@ int main(int argc, char **argv) {
     docs.boot(); assert(io.sent.empty());
     upload(docs, bytes); assert(io.replies.back().find("CNTRL DONE ") == 0);
     assert(io.sent.empty() && !std::strcmp(io.panes[2].patch, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 1 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 2 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     auto new_show = bytes;
+    new_show[18] = 128;
     unsigned first_patch = 24 + 2 * 68 + 2 * 68;
     std::memcpy(new_show.data() + first_patch + 12, "Oboe\0\0", 6);
     cntrl::put32(new_show.data() + 20,
@@ -182,8 +198,11 @@ int main(int argc, char **argv) {
     upload(reboot, new_show);
     assert(io.replies.back().find("CNTRL DONE ") == 0);
     assert(!std::strcmp(io.panes[2].patch, "Oboe"));
+    assert(io.brightness == 128);
+    io.brightness = 0;
     cntrl::Documents latest(memory, io, runner, io);
     latest.boot(); assert(!std::strcmp(io.panes[2].patch, "Oboe"));
+    assert(io.brightness == 128);
     upload(reboot, corrupt); assert(io.replies.back() == "CNTRL ERROR invalid-document");
     command(reboot, "CNTRL BEGIN 500 00000000");
     reboot.receive(0, 0); reboot.tick(10001);

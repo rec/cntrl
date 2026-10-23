@@ -225,13 +225,13 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            1,
+            2,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
             len(categories),
             len(patches),
-            0,
+            show.brightness,
             crc32(body),
         )
         + body

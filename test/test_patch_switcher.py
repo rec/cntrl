@@ -34,6 +34,29 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
+    assert compiler.HEADER.unpack_from(result)[1] == 2
+    assert compiler.HEADER.unpack_from(result)[7] == 64
+
+
+@pytest.mark.parametrize('brightness', [0, 32, 255])
+def test_brightness_is_encoded_in_show(
+    show: dict[str, object], definitions: object, target: models.Target, brightness: int
+) -> None:
+    show['brightness'] = brightness
+    result = compiler.compile_show(show, definitions, [], target)
+    assert compiler.HEADER.unpack_from(result)[7] == brightness
+
+
+@pytest.mark.parametrize('brightness', [-1, 256, True, 1.5, '64'])
+def test_invalid_brightness_is_rejected(
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    brightness: object,
+) -> None:
+    show['brightness'] = brightness
+    with pytest.raises(compiler.CompilationError, match='brightness'):
+        compiler.compile_show(show, definitions, [], target)
 
 
 def test_toml_json_and_expanded_shorthand_agree(

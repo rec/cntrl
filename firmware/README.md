@@ -41,6 +41,13 @@ port before uploading. A status response reports format version, active byte
 count and CRC32. Recheck status after a power cycle to verify persistence.
 
 Both TOML and JSON accept the same show, definition and table structures.
+User-adjustable controller settings belong in the show configuration whenever
+possible, rather than firmware build options.
+Set top-level `brightness = 64` in a TOML show, or `"brightness": 64` in JSON.
+It defaults to 64 and accepts integers from 0 (off) to 255 (maximum PWM).
+The controller applies it when the show is uploaded and whenever that show loads
+at startup. Changing it requires a show upload, not a firmware rebuild.
+
 Program numbers use 1..128 and channels 1..16. Definitions associate each
 instrument/setup pair with explicit bank mappings. Table entries identify
 `instrument`, `setup`, `program` and optional `bank`. Tables join in command-line
@@ -93,14 +100,18 @@ Recognized AB/AD/BE/DE pairs are reserved; all pairs currently do nothing. A pai
 blocks further A/B/D/E actions until all four are released. C/F remain immediate
 after electrical debounce. No hold, repeat or double-press actions are installed.
 
-## Binary and transfer protocol, version 1
+## Binary and transfer protocol, version 2
+
+Version 2 adds show brightness. Version 1 documents are rejected; recompile the
+source show and upload it after installing version 2 firmware. No automatic
+conversion of stored documents is performed.
 
 All integers are little-endian; strings are NUL-terminated, zero-padded ASCII.
 Records have fixed widths; no C++ memory layouts or host pointers are serialized.
 
 | Record | Layout |
 | --- | --- |
-| Header, 24 bytes | `CSW1`, u16 version, u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u16 zero, u32 body CRC32 |
+| Header, 24 bytes | `CSW1`, u16 version (2), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u16 brightness (0..255), u32 body CRC32 |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 76 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, name[64] |
@@ -114,7 +125,7 @@ indices and message values before activating a document.
 The USB serial request is `CNTRL BEGIN SIZE CRC32_HEX\n`. The receiver replies
 `CNTRL SEND\n`, then accepts exactly SIZE binary bytes. After validation,
 storage commit and read-back verification it replies `CNTRL DONE SIZE CRC\n`.
-`CNTRL STATUS\n` replies `CNTRL READY 1 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 2 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 
