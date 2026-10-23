@@ -16,6 +16,12 @@ USB, button scanning and MIDI servicing continue throughout. After releasing the
 dismissing gesture, subsequent presses act normally even before the fade ends.
 Uploads cancel the transition and restore the configured brightness.
 
+All fade ramps use quadratic PWM brightness: the target brightness multiplied
+by the square of the normalized level. Fade-out reverses that same curve.
+Halfway through an uninterrupted ramp, brightness 192 therefore produces PWM 48,
+not 96. Timings and final brightness are unchanged. Interrupting a fade retains
+its current normalized level, so the new curve does not introduce a brightness jump.
+
 ## Idle screensaver
 
 Set `screensaver_timeout = 3` in a TOML show, or `"screensaver_timeout": 3` in
