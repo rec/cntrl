@@ -19,8 +19,9 @@ Uploads cancel the transition and restore the configured brightness.
 All fade ramps use quadratic PWM brightness: the target brightness multiplied
 by the square of the normalized level. Fade-out reverses that same curve.
 Halfway through an uninterrupted ramp, brightness 192 therefore produces PWM 48,
-not 96. Timings and final brightness are unchanged. Interrupting a fade retains
-its current normalized level, so the new curve does not introduce a brightness jump.
+not 96. Normal wake fades start at the current normalized level, without a
+brightness jump. Cancelling idle entry instead bypasses the ramps and restores
+the configured brightness immediately.
 
 ## Idle screensaver
 
@@ -31,10 +32,17 @@ The pman test show enables both. Presses and releases reset the timer, and it
 never starts while a button remains held. Missing assets leave the normal UI up.
 
 Entry fades the UI out over four seconds, paints a complete first animation
-frame while dark, then fades the animation in over four seconds. Pressing any
-button, even during entry, switches to the fast wake transition: 200 ms out,
-complete UI repaint while dark, 200 ms in. Unlike startup dismissal, this press
-also performs its normal musical action immediately. Both transitions include a
+frame while dark, then fades the animation in over four seconds. Throughout
+these entry phases, any button cancels the transition immediately, stops the
+animation, restores the configured brightness and requests a full UI repaint.
+The cancelling press, other held buttons and the complete release are consumed:
+no MIDI message or navigation action is performed. Subsequent presses work
+normally, without waiting for another fade.
+
+Once entry has finished and the screensaver is fully running, pressing any button
+retains the fast wake transition: 200 ms out, complete UI repaint while dark,
+200 ms in. This press also performs its normal musical action immediately.
+The uninterrupted entry and normal wake transitions include a
 brief black repaint interval beyond the two ramp durations. Neither blocks USB,
 button scanning or MIDI queues. Incoming MIDI and USB status queries do not reset
 the physical-input timer. Show/asset transfers temporarily inhibit idle entry.
