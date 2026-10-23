@@ -6,8 +6,10 @@ namespace cntrl::splash {
 // Decide command ownership before handing a line to either binary receiver.
 class Router {
 public:
-    Router(cntrl::Documents &documents, Receiver &assets, Session &session, cntrl::Replies &replies)
-        : documents_(documents), assets_(assets), session_(session), replies_(replies) {}
+    Router(cntrl::Documents &documents, Receiver &assets, Session &session, cntrl::Replies &replies,
+           void (*storage_info)(bool))
+        : documents_(documents), assets_(assets), session_(session), replies_(replies),
+          storage_info_(storage_info) {}
     bool accepts_input() const { return assets_.accepts_input(); }
     void receive(uint8_t byte, uint32_t now) {
         if (assets_.busy()) { assets_.receive(byte, now); return; }
@@ -22,6 +24,11 @@ public:
         if (overflow_) replies_.reply("CNTRL ERROR command-too-long");
         else {
             line_[used_] = 0;
+            if (!std::strcmp(line_, "CNTRL STORAGE") || !std::strcmp(line_, "CNTRL STORAGE SCAN")) {
+                storage_info_(!std::strcmp(line_, "CNTRL STORAGE SCAN"));
+                used_ = 0; overflow_ = false;
+                return;
+            }
             bool splash = !std::strncmp(line_, "CNTRL SPLASH ", 13);
             if (!std::strncmp(line_, "CNTRL BEGIN ", 12)
                 || !std::strncmp(line_, "CNTRL SPLASH BEGIN ", 19)) session_.stop();
@@ -46,6 +53,7 @@ private:
     Receiver &assets_;
     Session &session_;
     cntrl::Replies &replies_;
+    void (*storage_info_)(bool);
     char line_[96];
     unsigned used_ = 0;
     uint32_t last_ = 0;
