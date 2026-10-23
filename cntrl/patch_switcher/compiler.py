@@ -9,7 +9,7 @@ from zlib import crc32
 import tomlkit
 from pydantic import ValidationError
 
-from . import models
+from . import graphics, models
 
 
 class CompilationError(ValueError):
@@ -214,7 +214,25 @@ def compile_show(
     ):
         if count > maximum:
             errors.append(f'{label}: {count} exceeds target capacity {maximum}')
-    body = b''.join(instrument_records + categories + patches)
+    category_names = [c[:64].split(b'\0')[0].decode('ascii') for c in categories]
+    patch_names = [p[12:76].split(b'\0')[0].decode('ascii') for p in patches]
+    names = category_names + patch_names
+    screen_records: list[bytes] = []
+    offsets: list[list[int]] = []
+    try:
+        screen_records, offsets = graphics.compile_screens(show, names, target)
+    except ValueError as error:
+        errors.append(str(error))
+    if len(offsets) == 3:
+        categories = [
+            c + struct.pack('<3H', *(o[i] for o in offsets))
+            for i, c in enumerate(categories)
+        ]
+        patches = [
+            p + struct.pack('<3H', *(o[len(categories) + i] for o in offsets))
+            for i, p in enumerate(patches)
+        ]
+    body = b''.join(screen_records + instrument_records + categories + patches)
     if len(body) + HEADER.size > target.max_document_bytes:
         errors.append(
             f'document: {len(body) + HEADER.size} bytes exceeds target capacity '
@@ -225,7 +243,7 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            2,
+            3,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),

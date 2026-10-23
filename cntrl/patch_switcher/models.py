@@ -1,5 +1,6 @@
 """Show and instrument-table formats, separate from hardware catalogues."""
 
+from functools import cached_property
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
@@ -66,6 +67,37 @@ class TablePatch(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class ScreenGraphics(BaseModel, frozen=True):
+    background_color: str | None = None
+    foreground_color: str | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class Screens(BaseModel, frozen=True):
+    undo: ScreenGraphics | None = None
+    sent: ScreenGraphics | None = None
+    next: ScreenGraphics | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class FontMetrics(BaseModel, frozen=True):
+    line_height: int
+    top: int = 0
+    glyphs: str
+
+    @cached_property
+    def data(self) -> bytes:
+        return bytes.fromhex(self.glyphs)
+
+
+class FontFace(BaseModel, frozen=True):
+    name: str
+    id: int
+    sizes: dict[int, FontMetrics]
+
+
 class Show(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object]
@@ -73,11 +105,19 @@ class Show(BaseModel, frozen=True):
     take_first_match: Annotated[bool, Field(strict=True)] = False
     chord_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] = 100
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 64
+    font_name: str | None = None
+    font_size: Annotated[int, Field(strict=True, gt=0, le=255)] | None = None
+    pad: Annotated[int, Field(strict=True, ge=0, le=255)] | None = 4
+    contrast: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] = 0.6
+    screens: Screens | None = None
 
     model_config = ConfigDict(extra='forbid')
 
 
 class Target(BaseModel, frozen=True):
+    display_width: int = Field(gt=0, le=65535)
+    display_height: int = Field(gt=0, le=65535)
+    fonts: list[FontFace]
     outputs: list[str]
     max_document_bytes: int = Field(gt=24, le=65536)
     max_instruments: int = Field(gt=0, le=32)

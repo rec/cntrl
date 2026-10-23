@@ -2,91 +2,75 @@
 #include <cassert>
 #include <cstring>
 
-static uint8_t screens[3][128][160];
+static uint16_t screens[3][128][160];
 static unsigned writes = 0, pixels_sent = 0;
 
 void write_display_segment(unsigned panel, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
     assert(panel < 3 && x + count <= 160 && y < 128 && count > 0);
-    ++writes;
-    pixels_sent += count;
-    for (unsigned i = 0; i < count; ++i) {
-        assert(pixels[2 * i] == pixels[2 * i + 1]);
-        screens[panel][y][x + i] = pixels[2 * i];
-    }
+    ++writes; pixels_sent += count;
+    for (unsigned i = 0; i < count; ++i)
+        screens[panel][y][x + i] = uint16_t(pixels[2 * i]) << 8 | pixels[2 * i + 1];
 }
 
 static void drain(DisplayRenderer &renderer) {
     for (unsigned i = 0; i < 3 * 512; ++i) {
-        unsigned before = writes;
-        unsigned glyphs = ST7735_t3::glyphs;
+        unsigned before = writes, glyphs = ST7735_t3::glyphs;
         renderer.draw();
-        assert(writes - before <= 1); // Bound work between switch scans.
-        assert(ST7735_t3::glyphs - glyphs <= 1);
+        assert(writes - before <= 1 && ST7735_t3::glyphs - glyphs <= 1);
         assert(writes == before || ST7735_t3::glyphs == glyphs);
     }
 }
 
-static void blank(unsigned panel) {
-    for (const auto &row : screens[panel]) for (uint8_t pixel : row) assert(pixel == 0);
+static void blank(unsigned panel, uint16_t background = 0) {
+    for (const auto &row : screens[panel]) for (uint16_t pixel : row) assert(pixel == background);
+}
+
+static void padding(unsigned panel, unsigned pad, uint16_t color) {
+    for (unsigned y = 0; y < 128; ++y) for (unsigned x = 0; x < 160; ++x)
+        if (x < pad || y < pad || x >= 160 - pad || y >= 128 - pad)
+            assert(screens[panel][y][x] == color);
 }
 
 int main() {
-    std::memset(screens, 123, sizeof(screens)); // Unknown power-on display RAM.
+    std::memset(screens, 123, sizeof(screens));
     DisplayRenderer renderer;
     cntrl::Pane empty;
     drain(renderer);
     assert(writes == 384 && pixels_sent == 3 * 160 * 128);
     for (unsigned i = 0; i < 3; ++i) blank(i);
     unsigned before = writes;
-    renderer.show(0, empty);
-    renderer.show(3, empty);
-    drain(renderer);
+    renderer.show(0, empty); renderer.show(3, empty); drain(renderer);
     assert(writes == before);
 
-    cntrl::Pane full;
-    std::strcpy(full.title, "NEXT");
-    std::strcpy(full.instrument, "pman");
-    std::strcpy(full.category, "trumpet");
-    std::strcpy(full.patch, "A very long patch name that wraps over multiple lines");
-    renderer.show(2, full);
-    pixels_sent = 0;
-    drain(renderer);
-    assert(pixels_sent > 0 && pixels_sent < 160 * 128);
-    assert(screens[2][0][0] == 255); // Title.
-    assert(screens[2][30][0] == 255); // Patch, enlarged to 12x16 cells.
-    assert(screens[2][46][0] == 255); // Wrapped second line.
+    cntrl::Pane view;
+    std::strcpy(view.category, "trumpet");
+    std::strcpy(view.patch, "A very long patch name that must be clipped");
+    view.category_x = 40; view.patch_x = 4;
+    view.graphics.foreground = 0xf800; view.graphics.background = 0x001f;
+    renderer.show(2, view); drain(renderer);
+    assert(screens[2][4][40] == 0xf800 && screens[2][14][4] == 0xf800);
+    assert(screens[2][3][40] == 0x001f);
+    padding(2, 4, 0x001f);
     before = writes;
-    renderer.show(2, full);
-    drain(renderer);
-    assert(writes == before);
+    renderer.show(2, view); drain(renderer); assert(writes == before);
 
-    cntrl::Pane shorter = full;
-    std::strcpy(shorter.patch, "Trumpet");
-    renderer.show(2, shorter);
-    drain(renderer);
-    assert(screens[2][30][0] == 255 && screens[2][46][0] == 0);
-    renderer.show(2, full);
-    renderer.draw();
-    // A newer request during painting must converge without a stale cache.
-    renderer.show(2, empty);
-    drain(renderer);
-    blank(2);
-    renderer.show(1, shorter);
-    drain(renderer);
-    assert(screens[1][30][0] == 255 && screens[1][46][0] == 0);
-    blank(0);
-    blank(2);
-    renderer.show(1, empty);
-    drain(renderer);
-    blank(1);
+    std::strcpy(view.patch, "Trumpet");
+    renderer.show(2, view); drain(renderer);
+    assert(screens[2][14][80] == 0x001f);
+    renderer.show(2, empty); renderer.draw();
+    view.graphics.pad = 20; view.graphics.size = 16; view.graphics.line_height = 16;
+    view.category_x = view.patch_x = 0;
+    renderer.show(2, view); drain(renderer);
+    padding(2, 20, 0x001f);
+    assert(screens[2][38][24] == 0xf800);
+    blank(0); blank(1);
+    renderer.show(2, empty); drain(renderer); blank(2);
 
-    cntrl::Pane crowded;
-    std::memset(crowded.title, 'T', sizeof(crowded.title) - 1);
-    std::memset(crowded.instrument, 'I', sizeof(crowded.instrument) - 1);
-    std::memset(crowded.category, 'C', sizeof(crowded.category) - 1);
-    std::memset(crowded.patch, 'P', sizeof(crowded.patch) - 1);
-    renderer.show(0, crowded);
-    drain(renderer);
-    assert(screens[0][70][0] == 255 && screens[0][70][5] == 0); // Reduced to 6x8.
-    assert(screens[0][78][0] == 255); // Wrap at the smaller size.
+    view = empty;
+    view.graphics.background = 0x07e0;
+    renderer.show(1, view); drain(renderer);
+    blank(1, 0x07e0);
+    assert(ShowGraphics::supports_font(0, 8) && ShowGraphics::supports_font(1, 13));
+    assert(ShowGraphics::supports_font(2, 96) && !ShowGraphics::supports_font(3, 8));
+    assert(!ShowGraphics::supports_font(0, 13) && !ShowGraphics::supports_font(1, 15));
 }

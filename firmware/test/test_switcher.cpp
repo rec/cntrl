@@ -19,6 +19,9 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     bool supports(const char *route) const override {
         return !std::strcmp(route, "din") || !std::strcmp(route, "trs");
     }
+    bool supports_font(unsigned font, unsigned size) const override { return font == 0 && size >= 8 && size <= 96 && size % 8 == 0; }
+    unsigned display_width() const override { return 160; }
+    unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
     void set_brightness(uint8_t value) override { brightness = value; }
     void error(const char *) override { ++errors; }
@@ -78,8 +81,18 @@ int main(int argc, char **argv) {
     corrupt.back() ^= 1;
     cntrl::Document invalid;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    for (unsigned offset : {24u, 25u, 26u, 32u, 72u + 2 * 68 + 68}) {
+        corrupt = bytes; corrupt[offset] = 255;
+        cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 24, unsigned(corrupt.size()) - 24));
+        assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    }
+    for (unsigned offset : {41u, 42u}) { // Valid size/padding, but not shared.
+        corrupt = bytes; corrupt[offset] = 8;
+        cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 24, unsigned(corrupt.size()) - 24));
+        assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    }
     // Structurally invalid but checksum-correct documents are rejected too.
-    corrupt = bytes; corrupt[24 + 64] = 16;
+    corrupt = bytes; corrupt[72 + 64] = 16;
     cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 24, unsigned(corrupt.size()) - 24));
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     cntrl::Controller app(hw);
@@ -98,7 +111,8 @@ int main(int argc, char **argv) {
     app.activate(doc);
     assert(hw.brightness == 64);
     assert(hw.sent.empty() && !hw.panes[0].patch[0] && !hw.panes[1].patch[0]);
-    assert(!hw.panes[0].title[0] && !hw.panes[1].title[0]);
+    assert(!hw.panes[0].category[0] && !hw.panes[1].category[0]);
+    assert(hw.panes[2].category_x >= 4 && hw.panes[2].patch_x >= 4);
     assert(!std::strcmp(hw.panes[2].patch, "Flute"));
     app.action(0); assert(!std::strcmp(hw.panes[2].patch, "Strings"));
     app.action(1); app.action(1); // Sax
@@ -168,12 +182,12 @@ int main(int argc, char **argv) {
     docs.boot(); assert(io.sent.empty());
     upload(docs, bytes); assert(io.replies.back().find("CNTRL DONE ") == 0);
     assert(io.sent.empty() && !std::strcmp(io.panes[2].patch, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 2 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 3 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     auto new_show = bytes;
     new_show[18] = 128;
-    unsigned first_patch = 24 + 2 * 68 + 2 * 68;
+    unsigned first_patch = 72 + 2 * 68 + 2 * 74;
     std::memcpy(new_show.data() + first_patch + 12, "Oboe\0\0", 6);
     cntrl::put32(new_show.data() + 20,
                  cntrl::checksum(new_show.data() + 24, unsigned(new_show.size()) - 24));

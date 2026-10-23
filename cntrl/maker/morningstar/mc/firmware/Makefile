@@ -17,6 +17,8 @@ export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 .PHONY: tools build inspect test patch-switcher inspect-patch-switcher
 
 patch-switcher: tools
+	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/fonts-in-flash.patch" > /dev/null 2>&1 || \
+		patch --force --fuzz=0 -d "$(CORE)" -p1 < "$(ROOT)/fonts-in-flash.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/no-external-ram.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/external-flash-config.patch"
 	"$(CLI)" compile --fqbn teensy:avr:teensy41:usb=serialmidi,speed=600,opt=osstd,keys=en-us --warnings all \
@@ -37,7 +39,7 @@ inspect-patch-switcher: patch-switcher
 	"$(ARM)-size" -A "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf"
 	"$(ARM)-nm" -n -C "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" > "$(ROOT)/build/patch-switcher/symbols.txt"
 
-test:
+test: tools
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
 	"$(ROOT)/build/test_buttons"
@@ -46,7 +48,9 @@ test:
 	"$(ROOT)/build/test_displays"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
 		-I"$(abspath $(ROOT)/../../../../..)/firmware/include" -I"$(ROOT)/usb_probe" -I"$(ROOT)/test_support" \
-		"$(ROOT)/test_renderer.cpp" -o "$(ROOT)/build/test_renderer"
+		-I"$(CORE)/libraries/ST7735_t3/src" -x c++ \
+		"$(ROOT)/test_renderer.cpp" "$(CORE)/libraries/ST7735_t3/src/st7735_t3_font_Arial.c" \
+		"$(CORE)/libraries/ST7735_t3/src/st7735_t3_font_ComicSansMS.c" -o "$(ROOT)/build/test_renderer"
 	"$(ROOT)/build/test_renderer"
 
 tools: $(ROOT)/.tools/flash-config-ready
