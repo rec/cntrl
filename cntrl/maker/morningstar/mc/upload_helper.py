@@ -6,6 +6,7 @@ import socket
 import struct
 import subprocess
 import sys
+import termios
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -27,6 +28,10 @@ class Upload(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class Bootloader(BaseModel, frozen=True):
+    """Enter HalfKay through the fixed pedal's USB serial port, without uploading."""
+
+
 class UploadResult(BaseModel, frozen=True):
     returncode: int
     output: str
@@ -38,6 +43,19 @@ class Board(BaseModel, frozen=True):
     description: str
     model: str
     capabilities: list[str]
+
+
+def request_bootloader() -> None:
+    """Select the Teensy USB core's special 134-baud bootloader request."""
+    descriptor = os.open(SERIAL_PATH, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        attributes = termios.tcgetattr(descriptor)
+        attributes[4] = attributes[5] = termios.B134
+        termios.tcsetattr(descriptor, termios.TCSANOW, attributes)
+    finally:
+        os.close(descriptor)
+    # Do not restore line coding: USB must receive the reboot request.
+    print('Bootloader requested; verify HalfKay enumeration before uploading.')
 
 
 def validate_firmware(image: FirmwareImage) -> None:
@@ -138,7 +156,7 @@ def serve() -> None:
         try:
             listener.listen(1)
             print(f'Upload-only helper listening on {SOCKET_PATH}', flush=True)
-            print('Press PROGRAM before requesting upload. Ctrl-C stops the helper.')
+            print('Enter HalfKay before requesting upload. Ctrl-C stops the helper.')
             while True:
                 connection, _ = listener.accept()
                 with connection:
@@ -165,10 +183,12 @@ def request_upload(request: Upload) -> UploadResult:
 
 
 def main() -> None:
-    options = tyro.cli(Serve | Upload)
+    options = tyro.cli(Serve | Upload | Bootloader)
     try:
         if isinstance(options, Serve):
             serve()
+        elif isinstance(options, Bootloader):
+            request_bootloader()
         else:
             result = request_upload(options)
             print(result.output, end='')
@@ -182,6 +202,7 @@ def main() -> None:
 ROOT = Path(__file__).resolve().parent
 IMAGE_PATH = ROOT / 'firmware/build/patch-switcher.hex'
 SOCKET_PATH = ROOT / 'firmware/.upload-helper.sock'
+SERIAL_PATH = Path('/dev/cu.usbmodem144682801')
 CACHE_DIRECTORY = Path.home() / 'Library/Caches/cntrl-upload'
 UPLOADER_PATH = (
     Path('/Applications/Morningstar Firmware Updater.app')

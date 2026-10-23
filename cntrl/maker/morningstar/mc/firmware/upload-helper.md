@@ -34,8 +34,26 @@ abnormal termination can leave a stale socket; diagnose that before removing it.
 
 ## Request an upload
 
-After building and inspecting the image, close any serial monitor, briefly
-press PROGRAM, and request the upload with the exact image digest:
+After building and inspecting the image, close any serial monitor and request
+bootloader entry from the running application:
+
+```bash
+uv run --frozen -m cntrl.maker.morningstar.mc.upload_helper bootloader
+```
+
+This local command opens only `/dev/cu.usbmodem144682801` and selects 134 baud.
+The bundled Teensy USB core treats that line-coding request as bootloader entry;
+it is not an application MIDI message or saved setting. No new firmware handler
+is needed. The command does not flash anything or claim that HalfKay has appeared.
+It runs directly, not through the helper socket, so an existing helper does not
+need restarting. Stop playback and finish document uploads before using it.
+
+Verify that the expected pedal enumerates as HalfKay before requesting upload.
+The upload helper independently checks its identity and mode. If application USB
+is unavailable, briefly press PROGRAM instead. Physical PROGRAM recovery remains
+necessary for broken firmware that cannot process the USB request.
+
+Request the upload with the exact image digest:
 
 ```bash
 uv run --frozen -m cntrl.maker.morningstar.mc.upload_helper upload --sha256 DIGEST
@@ -91,3 +109,22 @@ Focused tests use a fake uploader. They cover request rejection, boot-envelope
 checks, digest mismatch before device access, wrong-target rejection, immutable
 staging, fixed uploader arguments and propagation of its output and status.
 No helper service or hardware upload is started by the test suite.
+
+## Software bootloader verification: 2026-10-23
+
+The running SPI/dirty-row image responded with
+`CNTRL READY 1 20568 bb8baa89`. The local `bootloader` command then selected
+134 baud, and the official updater's read-only listing identified serial
+`14468280`, tag `14468280-Teensy`, description `HalfKay`, model `Teensy 4.1`,
+with upload capability. No PROGRAM press or firmware change was needed to enter
+the bootloader.
+
+The subsequent upload request could not connect because the previously launched
+helper had stopped. Its socket had no owner and refused connections, so it was
+moved to `.upload-helper.sock.stale-20261023` without deletion. The pedal remains
+in HalfKay awaiting helper startup and re-upload of the inspected image. This
+verifies software entry, not yet the complete button-free upload cycle.
+
+All 99 Python tests passed, including a real pseudo-terminal test checking that
+the command selects 134 baud without writing a serial payload or changing other
+terminal settings. Ruff, formatting, type checking and pyupgrade also passed.
