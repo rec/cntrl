@@ -1,5 +1,4 @@
 #include "patch_switcher/renderer.h"
-#include <array>
 #include <cassert>
 #include <cstring>
 
@@ -16,34 +15,32 @@ void write_display_segment(unsigned panel, unsigned x, unsigned y, const uint8_t
     }
 }
 
-static void drain(DisplayRenderer &renderer, const unsigned char *font) {
-    for (unsigned i = 0; i < 3 * 128; ++i) {
+static void drain(DisplayRenderer &renderer) {
+    for (unsigned i = 0; i < 3 * 512; ++i) {
         unsigned before = writes;
-        renderer.draw(font);
+        unsigned glyphs = ST7735_t3::glyphs;
+        renderer.draw();
         assert(writes - before <= 1); // Bound work between switch scans.
+        assert(ST7735_t3::glyphs - glyphs <= 1);
+        assert(writes == before || ST7735_t3::glyphs == glyphs);
     }
 }
 
-static void matches(unsigned panel, const cntrl::Pane &pane, const unsigned char *font) {
-    for (unsigned y = 0; y < 128; ++y)
-        for (unsigned x = 0; x < 160; ++x)
-            assert(screens[panel][y][x] == (cntrl::text_pixel(pane, 160, 128, x, y, font) ? 255 : 0));
+static void blank(unsigned panel) {
+    for (const auto &row : screens[panel]) for (uint8_t pixel : row) assert(pixel == 0);
 }
 
 int main() {
-    // Distinct fake glyphs exercise wrapping, erasure and changes of scale.
-    std::array<unsigned char, 1280> font;
-    for (unsigned i = 0; i < font.size(); ++i) font[i] = uint8_t((i * 37) & 127);
     std::memset(screens, 123, sizeof(screens)); // Unknown power-on display RAM.
     DisplayRenderer renderer;
     cntrl::Pane empty;
-    drain(renderer, font.data());
+    drain(renderer);
     assert(writes == 384 && pixels_sent == 3 * 160 * 128);
-    for (unsigned i = 0; i < 3; ++i) matches(i, empty, font.data());
+    for (unsigned i = 0; i < 3; ++i) blank(i);
     unsigned before = writes;
     renderer.show(0, empty);
     renderer.show(3, empty);
-    drain(renderer, font.data());
+    drain(renderer);
     assert(writes == before);
 
     cntrl::Pane full;
@@ -53,29 +50,43 @@ int main() {
     std::strcpy(full.patch, "A very long patch name that wraps over multiple lines");
     renderer.show(2, full);
     pixels_sent = 0;
-    drain(renderer, font.data());
+    drain(renderer);
     assert(pixels_sent > 0 && pixels_sent < 160 * 128);
-    matches(2, full, font.data());
+    assert(screens[2][0][0] == 255); // Title.
+    assert(screens[2][30][0] == 255); // Patch, enlarged to 12x16 cells.
+    assert(screens[2][46][0] == 255); // Wrapped second line.
     before = writes;
     renderer.show(2, full);
-    drain(renderer, font.data());
+    drain(renderer);
     assert(writes == before);
 
     cntrl::Pane shorter = full;
     std::strcpy(shorter.patch, "Trumpet");
     renderer.show(2, shorter);
-    renderer.draw(font.data());
+    drain(renderer);
+    assert(screens[2][30][0] == 255 && screens[2][46][0] == 0);
+    renderer.show(2, full);
+    renderer.draw();
     // A newer request during painting must converge without a stale cache.
     renderer.show(2, empty);
-    drain(renderer, font.data());
-    drain(renderer, font.data());
-    matches(2, empty, font.data());
+    drain(renderer);
+    blank(2);
     renderer.show(1, shorter);
-    drain(renderer, font.data());
-    matches(1, shorter, font.data());
-    matches(0, empty, font.data());
-    matches(2, empty, font.data());
+    drain(renderer);
+    assert(screens[1][30][0] == 255 && screens[1][46][0] == 0);
+    blank(0);
+    blank(2);
     renderer.show(1, empty);
-    drain(renderer, font.data());
-    matches(1, empty, font.data());
+    drain(renderer);
+    blank(1);
+
+    cntrl::Pane crowded;
+    std::memset(crowded.title, 'T', sizeof(crowded.title) - 1);
+    std::memset(crowded.instrument, 'I', sizeof(crowded.instrument) - 1);
+    std::memset(crowded.category, 'C', sizeof(crowded.category) - 1);
+    std::memset(crowded.patch, 'P', sizeof(crowded.patch) - 1);
+    renderer.show(0, crowded);
+    drain(renderer);
+    assert(screens[0][70][0] == 255 && screens[0][70][5] == 0); // Reduced to 6x8.
+    assert(screens[0][78][0] == 255); // Wrap at the smaller size.
 }

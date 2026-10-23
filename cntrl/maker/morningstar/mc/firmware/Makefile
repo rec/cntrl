@@ -22,7 +22,7 @@ patch-switcher: tools
 	"$(CLI)" compile --fqbn teensy:avr:teensy41:usb=serialmidi,speed=600,opt=osstd,keys=en-us --warnings all \
 		--build-path "$(ROOT)/build/patch-switcher" \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -I$(ROOT)/usb_probe' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe -I$(CORE)/libraries/ST7735_t3/src' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/patch_switcher"
@@ -45,7 +45,7 @@ test:
 		"$(ROOT)/test_displays.cpp" "$(ROOT)/usb_probe/displays.cpp" -o "$(ROOT)/build/test_displays"
 	"$(ROOT)/build/test_displays"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
-		-I"$(abspath $(ROOT)/../../../../..)/firmware/include" -I"$(ROOT)/usb_probe" \
+		-I"$(abspath $(ROOT)/../../../../..)/firmware/include" -I"$(ROOT)/usb_probe" -I"$(ROOT)/test_support" \
 		"$(ROOT)/test_renderer.cpp" -o "$(ROOT)/build/test_renderer"
 	"$(ROOT)/build/test_renderer"
 

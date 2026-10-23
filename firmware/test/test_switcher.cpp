@@ -1,5 +1,4 @@
 #include <cntrl/documents.h>
-#include <cntrl/layout.h>
 #include <cassert>
 #include <fstream>
 #include <string>
@@ -161,13 +160,6 @@ int main(int argc, char **argv) {
         app.tick(500);
         assert(!std::strcmp(hw.panes[2].patch, "Flute"));
     }
-    // Font rendering and wrapping are portable, independent of target GPIO.
-    unsigned char font[128 * 5] = {};
-    font['X' * 5] = 1;
-    cntrl::Pane view; std::strcpy(view.title, "X");
-    assert(cntrl::text_pixel(view, 160, 128, 0, 0, font));
-    assert(!cntrl::text_pixel(view, 160, 128, 1, 0, font));
-    assert(!cntrl::text_pixel(view, 160, 128, 160, 0, font));
     // Persistent upload, status, reboot, and interrupted inactive-slot writes.
     Memory memory;
     Fake io;
