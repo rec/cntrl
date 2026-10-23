@@ -11,9 +11,10 @@ release and other held buttons, is consumed without sending a patch. Dismissal
 invalidates all three renderer caches and restores the normal interface.
 
 The source GIF is preserved in `assets/spiral.gif`: 16 frames, 100 ms per frame,
-1,600 ms per loop. The Mac scales it to cover 160x128 and crops centrally, with
-no margins or letterboxing. This preserves proportions and crops the top and
-bottom of the square original. The centre screen is horizontally mirrored;
+1,600 ms per loop. The Mac scales it to cover a 192x154 area (120% of the
+160x128 display, rounded to whole pixels), then crops centrally to 160x128, with
+no margins or letterboxing. This preserves proportions while clipping the
+edges of the enlarged image. The centre screen is horizontally mirrored;
 both outer screens use the unmirrored image. Padding and show text colours do
 not apply to this full-bleed splash.
 
