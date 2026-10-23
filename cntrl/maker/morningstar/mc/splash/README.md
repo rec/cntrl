@@ -8,7 +8,22 @@ falls through to the normal interface.
 
 Any button dismisses playback. The complete dismissing gesture, including
 release and other held buttons, is consumed without sending a patch. Dismissal
-invalidates all three renderer caches and restores the normal interface.
+fades the animation to black over 1,000 ms, invalidates all three renderer caches
+and repaints the normal interface while dark. After every screen is ready, it
+fades back to the show's brightness over 1,000 ms. The total is two seconds of
+fading plus the brief black repaint interval. Animation continues during fade-out;
+USB, button scanning and MIDI servicing continue throughout. After releasing the
+dismissing gesture, subsequent presses act normally even before the fade ends.
+Uploads cancel the transition and restore the configured brightness. The idle
+screensaver is not implemented.
+
+The fade build was inspected and uploaded on 2026-10-23. HEX/ELF comparison and
+stock flash-configuration checks passed; the HEX SHA-256 is
+`490b742af1b173eee4e9908bdd52db99d8132960be08edf006524537329ed715`.
+USB confirmed the saved show as `CNTRL READY 4 22242 9afa8de1` after boot.
+Native controller, display, renderer and splash tests passed, including fade
+timing, millisecond wraparound, dark repaint gating and musical input during
+the fade. Visual smoothness still requires the user's check.
 
 The source GIF is preserved in `assets/spiral.gif`: 16 frames, 100 ms per frame,
 1,600 ms per loop. The Mac scales it to cover a 192x154 area (120% of the

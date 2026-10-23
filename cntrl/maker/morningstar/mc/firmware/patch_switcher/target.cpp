@@ -68,7 +68,7 @@ public:
         renderer_.show(pane, content);
     }
     void set_brightness(uint8_t value) override {
-        analogWrite(6, value);
+        brightness_ = value;
     }
     void set_splash(bool enabled) override {
         splash_session.configure(enabled);
@@ -119,7 +119,17 @@ public:
         if (splash_session.take_redraw()) renderer_.invalidate();
         renderer_.draw();
     }
+    void display(uint32_t now) {
+        bool splash = splash_session.poll(now, renderer_.ready());
+        uint8_t brightness = splash_session.brightness(brightness_, now);
+        if (brightness != applied_brightness_) {
+            analogWrite(6, brightness); applied_brightness_ = brightness;
+        }
+        if (!splash) draw();
+    }
 private:
+    uint8_t brightness_ = 192;
+    int applied_brightness_ = -1;
     struct Batch { uint8_t bytes[14]; unsigned length, route; };
     Batch queue_[32] = {};
     unsigned head_ = 0, queued_ = 0;
@@ -227,7 +237,7 @@ void poll_target() {
             events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now);
             if (buttons[i].pressed) pressed |= 1u << i;
         }
-        if (!splash_session.controls(pressed)) {
+        if (!splash_session.controls(pressed, now)) {
             for (unsigned i = 0; i < 6; ++i) {
                 if (events[i] & press_event) controller.button(i, true, now);
                 if (events[i] & release_event) controller.button(i, false, now);
@@ -241,5 +251,5 @@ void poll_target() {
         serial_router.receive(Serial.read(), now);
     serial_router.poll(now);
     board.poll();
-    if (!splash_session.poll(now)) board.draw();
+    board.display(now);
 }

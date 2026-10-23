@@ -19,6 +19,7 @@ static void drain(DisplayRenderer &renderer) {
         assert(writes - before <= 1 && ST7735_t3::glyphs - glyphs <= 1);
         assert(writes == before || ST7735_t3::glyphs == glyphs);
     }
+    assert(renderer.ready());
 }
 
 static void blank(unsigned panel, uint16_t background = 0) {
@@ -34,6 +35,7 @@ static void padding(unsigned panel, unsigned pad, uint16_t color) {
 int main() {
     std::memset(screens, 123, sizeof(screens));
     DisplayRenderer renderer;
+    assert(!renderer.ready());
     cntrl::Pane empty;
     drain(renderer);
     assert(writes == 384 && pixels_sent == 3 * 160 * 128);
@@ -54,7 +56,7 @@ int main() {
     before = writes;
     renderer.show(2, view); drain(renderer); assert(writes == before);
     std::memset(screens, 123, sizeof(screens)); // Splash bypassed the cached pixels.
-    renderer.invalidate(); drain(renderer);
+    renderer.invalidate(); assert(!renderer.ready()); drain(renderer);
     assert(writes == before + 384);
     padding(2, 4, 0x001f); blank(0); blank(1);
 

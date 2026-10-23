@@ -8,6 +8,9 @@
 // One library glyph or one changed row per loop, never a whole blocking redraw.
 class DisplayRenderer {
 public:
+    bool ready() const {
+        return drawing_ < 0 && !dirty_[0] && !dirty_[1] && !dirty_[2];
+    }
     void invalidate() {
         drawing_ = -1; rendering_ = false;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
