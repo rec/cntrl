@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
     assert(device.replies.back().find("CNTRL DONE ") == 0);
     assert(!session.poll(0)); // Enabled but absent asset: normal UI, no stuck splash.
     session.configure(false, 3000, 0);
-    assert(!session.poll(10000) && session.brightness(192, 10000) == 192);
+    assert(!session.poll(10000, true) && session.brightness(192, 10000) == 192);
 
     using namespace cntrl::splash;
     std::vector<uint8_t> animation(header_bytes + frame_bytes, 0);
@@ -100,6 +100,46 @@ int main(int argc, char **argv) {
     command(router, "CNTRL STATUS");
     assert(device.replies.back().find("CNTRL READY 5 ") == 0);
 
+    {
+        Player boot_player(assets, panels);
+        Session boot(assets, boot_player);
+        boot.configure(true, 0, 0);
+        assert(boot.brightness(192, 0) == 0);
+        for (unsigned i = 0; i < 255; ++i) {
+            assert(boot.poll(0));
+            assert(boot.brightness(192, 0) == 0);
+        }
+        assert(boot.poll(0) && boot.brightness(192, 0) == 192);
+        boot.stop();
+    }
+    {
+        Player boot_player(assets, panels);
+        Session boot(assets, boot_player);
+        boot.configure(false, 0, 0);
+        assert(!boot.poll(0) && boot.brightness(192, 0) == 0);
+        assert(!boot.poll(1, true) && boot.brightness(192, 1) == 192);
+    }
+    {
+        Player boot_player(assets, panels);
+        Session boot(assets, boot_player);
+        boot.configure(true, 0, 0);
+        assert(boot.controls(1, 0)); // Cancelling before the asset opens also stays dark.
+        assert(!boot.poll(0) && boot.brightness(192, 0) == 0);
+        assert(!boot.poll(1, true) && boot.brightness(192, 1) == 192);
+    }
+    {
+        Player boot_player(assets, panels);
+        Session boot(assets, boot_player);
+        boot.configure(true, 0, 0);
+        assert(boot.poll(0));
+        assert(boot.controls(1, 1)); // Dismiss a partially painted startup frame.
+        for (unsigned i = 0; i < 255; ++i) assert(boot.poll(1));
+        assert(boot.brightness(192, 1) == 0);
+        assert(!boot.poll(1001) && boot.take_redraw());
+        assert(!boot.poll(1010, true) && boot.brightness(192, 1010) == 0);
+        assert(!boot.poll(1510, true) && boot.brightness(192, 1510) == 96);
+    }
+    panels.rows = 0;
     device.set_splash(true);
     assert(session.poll(1) && panels.rows == 1);
     assert(session.controls(0, 1));

@@ -133,7 +133,7 @@ int main() {
     }
     initialize_displays();
     assert(transactions == 1 && clock_gpio && data_gpio && !spi_active);
-    assert((brightness == std::vector<int>{5, 192}));
+    assert((brightness == std::vector<int>{0, 192}));
     assert((waits == std::vector<unsigned long>{100, 100, 200,
         150, 500, 10, 100, 150, 500, 10, 100, 150, 500, 10, 100}));
     const uint8_t commands[] = {0x01, 0x11, 0xb1, 0xb2, 0xb3, 0xb4,
@@ -197,4 +197,8 @@ int main() {
     write_display_group(0, 0, 0, segment, 2);
     write_display_group(8, 0, 0, segment, 2);
     assert(transactions == 3);
+
+    brightness.clear();
+    initialize_displays(false);
+    assert((brightness == std::vector<int>{0})); // Application must reveal its own image.
 }
