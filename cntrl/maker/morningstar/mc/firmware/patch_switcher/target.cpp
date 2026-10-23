@@ -8,6 +8,7 @@
 #include "displays.h"
 #include "switches.h"
 #include "renderer.h"
+#include "storage_listing.h"
 #include "../../splash/board.h"
 #include "../../splash/router.h"
 
@@ -207,7 +208,16 @@ void storage_info(bool scan) {
     std::snprintf(response, sizeof(response), "CNTRL STORAGE %lu %u %s %u %lu %lu %s",
         (unsigned long)sectors, unsigned(device->type()), identity, unsigned(SD.sdfs.fatType()),
         (unsigned long)SD.sdfs.bytesPerCluster(), (unsigned long)SD.sdfs.clusterCount(), free);
-    board.reply(response);
+    if (!scan) { board.reply(response); return; }
+    // The full report is streamed directly: Board's single pending reply is
+    // deliberately not a queue and cannot hold a directory listing.
+    Serial.println(response);
+    auto root = SD.sdfs.open("/", O_RDONLY);
+    unsigned entries = 0;
+    if (!root || !list_storage(root, 0, entries) || device->errorCode()) {
+        board.reply("CNTRL ERROR storage-list"); return;
+    }
+    Serial.printf("CNTRL STORAGE END %u\n", entries);
 }
 
 cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info);
