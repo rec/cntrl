@@ -1,7 +1,10 @@
 import hashlib
 import json
+import os
+import pty
 import struct
 import subprocess
+import termios
 from pathlib import Path
 
 import pytest
@@ -61,7 +64,7 @@ def firmware_path(tmp_path: Path) -> Path:
     return path
 
 
-def test_cli_uses_explicit_serve_and_upload_commands() -> None:
+def test_cli_uses_explicit_commands() -> None:
     assert isinstance(
         tyro.cli(upload_helper.Serve | upload_helper.Upload, args=['serve']),
         upload_helper.Serve,
@@ -72,6 +75,33 @@ def test_cli_uses_explicit_serve_and_upload_commands() -> None:
     )
     assert isinstance(options, upload_helper.Upload)
     assert options.sha256 == 'a' * 64
+    assert isinstance(
+        tyro.cli(
+            upload_helper.Serve | upload_helper.Upload | upload_helper.Bootloader,
+            args=['bootloader'],
+        ),
+        upload_helper.Bootloader,
+    )
+
+
+def test_bootloader_selects_special_baud_without_serial_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    master, slave = pty.openpty()
+    try:
+        monkeypatch.setattr(upload_helper, 'SERIAL_PATH', Path(os.ttyname(slave)))
+        before = termios.tcgetattr(slave)
+        upload_helper.request_bootloader()
+        after = termios.tcgetattr(slave)
+        assert after[4:6] == [termios.B134, termios.B134]
+        assert after[:4] == before[:4]
+        assert after[6] == before[6]
+        os.set_blocking(master, False)
+        with pytest.raises(BlockingIOError):
+            os.read(master, 1)
+    finally:
+        os.close(master)
+        os.close(slave)
 
 
 @pytest.mark.parametrize(
