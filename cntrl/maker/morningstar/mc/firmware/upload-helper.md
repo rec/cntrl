@@ -102,8 +102,8 @@ This helper limits the host operation and target, not firmware behavior.
 The staging path is safe from the agent only while it remains outside its
 writable roots. Do not add `~/Library/Caches/cntrl-upload/`, its parents, or
 the uploader application to those roots. No configuration change is needed
-for this helper. Actual Unix-socket access from this desktop execution route
-and HID access from the manually launched helper still need a live test.
+for this helper. Unix-socket access from this desktop execution route and HID
+access from the manually launched helper have both been verified on the pedal.
 
 Focused tests use a fake uploader. They cover request rejection, boot-envelope
 checks, digest mismatch before device access, wrong-target rejection, immutable
@@ -121,9 +121,13 @@ the bootloader.
 
 The subsequent upload request could not connect because the previously launched
 helper had stopped. Its socket had no owner and refused connections, so it was
-moved to `.upload-helper.sock.stale-20261023` without deletion. The pedal remains
-in HalfKay awaiting helper startup and re-upload of the inspected image. This
-verifies software entry, not yet the complete button-free upload cycle.
+moved to `.upload-helper.sock.stale-20261023` without deletion. After the user
+restarted the helper, the same inspected SPI/dirty-row image was uploaded:
+SHA-256 `13e18a18f090880a3455464c56785aecf6fc3974ab82e88c2b3a536c14a82fa7`.
+The uploader returned status 1 after reset/disappearance, as on previous working
+uploads. The application then responded with `CNTRL READY 1 20568 bb8baa89`,
+confirming reboot and reload of the saved pman show. This completes the live
+software-entry/upload/reboot verification without a PROGRAM press.
 
 All 99 Python tests passed, including a real pseudo-terminal test checking that
 the command selects 134 baud without writing a serial payload or changing other
