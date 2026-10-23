@@ -171,7 +171,7 @@ void initialize_displays(bool greeting) {
         initialize(panels[i], char('1' + i), greeting);
     }
     end_transfer();
-    analogWrite(6, 64); // Startup default; a loaded show applies its brightness.
+    analogWrite(6, 192); // Startup default; a loaded show applies its brightness.
 }
 
 void write_display_segment(unsigned index, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {

@@ -104,7 +104,7 @@ class Show(BaseModel, frozen=True):
     patches: dict[str, object]
     take_first_match: Annotated[bool, Field(strict=True)] = False
     chord_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] = 100
-    brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 64
+    brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     splash: Annotated[bool, Field(strict=True)] = False
     font_name: str | None = None
     font_size: Annotated[int, Field(strict=True, gt=0, le=255)] | None = None
