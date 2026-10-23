@@ -24,6 +24,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
     void set_brightness(uint8_t value) override { brightness = value; }
+    void set_splash(bool) override {}
     void error(const char *) override { ++errors; }
     void reply(const char *s) override { replies.emplace_back(s); }
 };
@@ -104,7 +105,7 @@ int main(int argc, char **argv) {
         app.activate(settings);
         assert(hw.brightness == value && hw.sent.empty());
     }
-    corrupt = bytes; corrupt[19] = 1;
+    corrupt = bytes; corrupt[19] = 2;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     corrupt = bytes; corrupt[4] = 1;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
@@ -182,7 +183,7 @@ int main(int argc, char **argv) {
     docs.boot(); assert(io.sent.empty());
     upload(docs, bytes); assert(io.replies.back().find("CNTRL DONE ") == 0);
     assert(io.sent.empty() && !std::strcmp(io.panes[2].patch, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 3 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 4 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     auto new_show = bytes;

@@ -1,4 +1,5 @@
 {
+  "splash": true,
   "instruments": {
     "pman": {
       "instrument": "pman",

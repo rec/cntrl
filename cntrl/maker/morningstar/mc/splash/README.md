@@ -1,8 +1,14 @@
-# Isolated MC6 Pro splash animation
+# MC6 Pro splash animation
 
-Everything in this directory is additive. No existing graphics, show-format,
-firmware target, CLI or build file is changed. Nothing here has been uploaded to
-the pedal. The running firmware does **not** recognize the splash protocol yet.
+The patch-switcher target integrates this player and upload protocol. Set
+`splash = true` in the show (`"splash": true` in JSON) to play the installed
+animation on boot or show activation. The default is false. Upload the prepared
+asset before uploading the show that enables it. A missing or invalid asset
+falls through to the normal interface.
+
+Any button dismisses playback. The complete dismissing gesture, including
+release and other held buttons, is consumed without sending a patch. Dismissal
+invalidates all three renderer caches and restores the normal interface.
 
 The source GIF is preserved in `assets/spiral.gif`: 16 frames, 100 ms per frame,
 1,600 ms per loop. The Mac scales it to cover 160x128 and crops centrally, with
@@ -30,7 +36,7 @@ stay under ignored `build/`; the source GIF is committed. There is no on-pedal
 GIF decoder, decompression, RGB conversion, resizing or image mirroring. Rows
 are stored in the exact RGB565 byte order needed by the display bus.
 
-## Components ready for integration
+## Components
 
 - `animation.h`: bounded row-streaming player. It loops while active, honours
   frame durations with a wrap-safe millisecond clock, and returns `dismissed`
@@ -43,53 +49,27 @@ are stored in the exact RGB565 byte order needed by the display bus.
   then activates it. Boot validation and commit readback are incremental, with
   at most 512 bytes per CRC read. Individual SD calls may still block.
 - `board.h`: SD/SdFat slot backend, with persistent reader handles, and an output
-  adapter that reuses the existing `write_display_segment` driver. Reserved files
+  adapter that reuses the existing grouped SPI display driver. Reserved files
   are `/cntrl-splash-0.bin` and `/cntrl-splash-1.bin`, separate from show files.
   The application still initializes SD and sets `SdSlots.ready`.
 - `cli.py`: Pydantic/Tyro preparation and chunked serial-upload commands. The
   uploader reuses the existing serial connection class without modifying it.
 
-The adapter treats panel indices 0/2 as outer and 1 as centre. Confirm physical
-ordering when wiring it into the target.
+The adapter treats panel indices 0/2 as outer and 1 as centre. It broadcasts
+identical rows to both outer panels simultaneously. All panels are deselected
+before button scanning. `session.h` handles playback lifetime and dismissal;
+`router.h` routes complete commands and exclusive binary payloads to the asset
+or show receiver. Upload BEGIN stops playback before storage changes. Status
+queries leave playback running. USB, button scanning and MIDI queue servicing
+continue while the splash owns the screens.
 
-### Work deliberately deferred until the other agent finishes
-
-1. Add the splash asset selection/enabling to the show configuration, using the
-   other agent's final schema. Do not add parallel firmware build settings.
-2. Instantiate `SdSlots`, `Receiver`, `Panels` and `Player` in the target, and
-   connect replies to the existing nonblocking USB reply mechanism.
-3. After SD initialization, call `Receiver.boot()` and poll until validation
-   finishes. Start the player if the selected splash is available; otherwise
-   enter the normal interface. Boot validation is incremental so scans/USB can
-   continue while SD reads are serviced.
-4. Dispatch complete `CNTRL SPLASH` command lines to this receiver, and route
-   its binary payload exclusively while receiving. Do not feed splash bytes to
-   the show receiver or vice versa. Keep calling `poll(now)` during CRC readback
-   and boot; `accepts_input()` distinguishes those phases from receiving data.
-5. Pause normal rendering while the splash owns the panels. Continue scanning
-   buttons, servicing USB and polling the player. On dismissal consume the
-   triggering press, stop playback, **invalidate all three normal-renderer pixel
-   caches**, then redraw the interface. Merely calling `show()` is insufficient
-   because the splash overwrote pixels outside those caches. Stop playback before
-   replacing an asset, so it cannot read across active-slot changes.
-6. To preserve 10 fps, extend the shared SPI driver to broadcast the identical
-   outer-screen rows with both outer chip selects asserted together. This was
-   not added here because that would edit existing code. Our output mask already
-   expresses that operation. Keep all panels deselected before button scanning.
-7. Build/inspect the actual target, upload it and verify on the pedal. Do **not**
-   upload the compile-check sketch in this directory.
-
-At 8 MHz, three separate full-panel transfers need at least 122.88 ms of wire
-time per animation frame, before commands and SD access. The existing-driver
-adapter is therefore limited to less than 8.14 fps for full redraws. Broadcasting
-the two outer panels reduces this to 81.92 ms, making the original 10 fps a
-plausible target that still needs physical qualification. If a transfer exceeds
+At 8 MHz, broadcasting the two outer panels and separately writing the centre
+requires at least 81.92 ms of pixel wire time per frame, before commands and SD
+access. The original 10 fps remains a physical qualification target. If a transfer exceeds
 a frame's duration, the player finishes that frame and starts the next without
 an extra delay; it does not skip frames or issue catch-up bursts.
 
-## Upload protocol, pending firmware integration
-
-Do not run this command against the current pedal firmware:
+## Upload protocol
 
 ```bash
 uv run --frozen -m cntrl.maker.morningstar.mc.splash.cli upload \
@@ -137,7 +117,9 @@ Python tests exercise the byte-accurate mirrored orientation, frame timing,
 invalid assets and actual Python-to-C++ uploads through a pseudo-terminal,
 including a 16-frame asset. Native C++ tests cover row bounds, timer wraparound,
 looping, dismissal, read failures, CRC rejection, interrupted writes, reboot
-selection and timeouts under address/undefined-behaviour sanitizers.
+selection and timeouts under address/undefined-behaviour sanitizers. Runtime
+tests exercise mixed show/asset commands, binary newlines, missing assets,
+upload interruption of playback and consuming the dismissing gesture without MIDI.
 `check-board` compiles the adapters against the installed Teensy/SD interfaces in
 a separate build directory. It is an API check only, not executable firmware
 for this pedal. No hardware access occurs in these tests.

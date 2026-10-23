@@ -76,18 +76,17 @@ void digitalWrite(uint8_t pin, uint8_t value) {
         }
     }
     if (pin == 13 && value && !levels[13]) {
-        int selected = -1;
+        unsigned selected = 0;
         for (unsigned i = 0; i < 3; ++i) {
-            if (!levels[chip_selects[i]]) {
-                assert(selected == -1); // Never address two displays together.
-                selected = i;
-            }
+            if (!levels[chip_selects[i]]) selected |= 1u << i;
         }
-        assert(selected >= 0);
+        assert(selected);
         byte = uint8_t((byte << 1) | levels[11]);
         if (++bits == 8) {
-            transfers[selected].back().bytes.push_back(byte);
-            transfers[selected].back().data.push_back(levels[data_commands[selected]]);
+            for (unsigned i = 0; i < 3; ++i) if (selected & (1u << i)) {
+                transfers[i].back().bytes.push_back(byte);
+                transfers[i].back().data.push_back(levels[data_commands[i]]);
+            }
             bits = 0;
             byte = 0;
         }
@@ -185,4 +184,17 @@ int main() {
     write_display_segment(3, 0, 0, segment, 2);
     assert(transfers[0].size() == before + 3);
     assert(transactions == 2); // Invalid requests must not take over the clock.
+    unsigned left = unsigned(transfers[0].size()), centre = unsigned(transfers[1].size());
+    unsigned right = unsigned(transfers[2].size());
+    write_display_group(0b101, 0, 127, segment, 2);
+    assert(transactions == 3 && clock_gpio && data_gpio && !spi_active);
+    assert(transfers[0].size() == left + 3 && transfers[2].size() == right + 3);
+    assert(transfers[1].size() == centre);
+    for (unsigned i = 0; i < 3; ++i) {
+        assert(transfers[0][left + i].bytes == transfers[2][right + i].bytes);
+        assert(transfers[0][left + i].data == transfers[2][right + i].data);
+    }
+    write_display_group(0, 0, 0, segment, 2);
+    write_display_group(8, 0, 0, segment, 2);
+    assert(transactions == 3);
 }

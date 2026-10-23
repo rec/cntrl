@@ -32,8 +32,8 @@ class Document {
 public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 72 || length > max_document || std::memcmp(bytes, "CSW1", 4)
-            || u16(bytes + 4) != 3 || u16(bytes + 6) < 1
-            || u32(bytes + 8) != length || u16(bytes + 18) > 255
+            || u16(bytes + 4) != 4 || u16(bytes + 6) < 1
+            || u32(bytes + 8) != length || bytes[19] > 1
             || checksum(bytes + 24, length - 24) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         if (!ni || ni > max_instruments || !nc || nc > max_categories || !np
@@ -85,6 +85,7 @@ public:
     unsigned patches() const { return patches_; }
     unsigned chord_ms() const { return u16(data_ + 6); }
     uint8_t brightness() const { return data_[18]; }
+    bool splash() const { return data_[19] != 0; }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + 24 + slot * 16;
         return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10)};

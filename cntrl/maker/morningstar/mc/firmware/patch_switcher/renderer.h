@@ -8,6 +8,10 @@
 // One library glyph or one changed row per loop, never a whole blocking redraw.
 class DisplayRenderer {
 public:
+    void invalidate() {
+        drawing_ = -1; rendering_ = false;
+        for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
+    }
     void show(unsigned pane, const cntrl::Pane &content) {
         if (pane >= 3 || !std::memcmp(&requested_[pane], &content, sizeof(content))) return;
         requested_[pane] = content;

@@ -8,10 +8,13 @@
 #include "displays.h"
 #include "switches.h"
 #include "renderer.h"
+#include "../../splash/board.h"
+#include "../../splash/router.h"
 
 // Library graphics draw into RAM; only our bounded driver touches panel pins.
 
 namespace {
+extern cntrl::splash::Session splash_session;
 USBHost host;
 MIDIDevice host_midi(host);
 FlexSerial port1(-1, 26), port2(-1, 38), port3(-1, 39), port4(-1, 14);
@@ -20,7 +23,7 @@ constexpr uint8_t ring_pins[] = {32, 9, 37, 36};
 const char *outputs[] = {"din", "trs", "configurable-1", "configurable-2",
                          "configurable-3", "configurable-4", "usb-device", "usb-host"};
 
-class Board : public cntrl::Hardware, public cntrl::Replies {
+class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies {
 public:
     void begin() {
         Serial1.begin(31250);
@@ -67,6 +70,9 @@ public:
     void set_brightness(uint8_t value) override {
         analogWrite(6, value);
     }
+    void set_splash(bool enabled) override {
+        splash_session.configure(enabled);
+    }
     void error(const char *message) override {
         renderer_.error(message);
     }
@@ -110,6 +116,7 @@ public:
         }
     }
     void draw() {
+        if (splash_session.take_redraw()) renderer_.invalidate();
         renderer_.draw();
     }
 private:
@@ -160,6 +167,12 @@ Board board;
 Card card;
 cntrl::Controller controller(board);
 cntrl::Documents documents(card, board, controller, board);
+cntrl::splash::SdSlots splash_card;
+cntrl::splash::Receiver splash_assets(splash_card, board);
+cntrl::splash::Panels splash_panels;
+cntrl::splash::Player splash_player(splash_assets, splash_panels);
+cntrl::splash::Session splash_session(splash_assets, splash_player);
+cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board);
 ButtonState buttons[6];
 uint32_t last_scan = 0;
 
@@ -170,6 +183,8 @@ void initialize_target() {
     initialize_displays(false);
     board.begin();
     card.ready = SD.begin(BUILTIN_SDCARD);
+    splash_card.ready = card.ready;
+    splash_assets.boot();
     documents.boot();
     if (!card.ready) board.error("SD unavailable: no show");
 }
@@ -179,17 +194,24 @@ void poll_target() {
     if (uint32_t(now - last_scan) >= 3) {
         last_scan = now;
         uint8_t raw = read_buttons();
+        uint8_t events[6], pressed = 0;
         for (unsigned i = 0; i < 6; ++i) {
-            uint8_t events = buttons[i].update(!(raw & (1u << button_bits[i])), now);
-            if (events & press_event) controller.button(i, true, now);
-            if (events & release_event) controller.button(i, false, now);
+            events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now);
+            if (buttons[i].pressed) pressed |= 1u << i;
         }
-        controller.tick(now);
+        if (!splash_session.controls(pressed)) {
+            for (unsigned i = 0; i < 6; ++i) {
+                if (events[i] & press_event) controller.button(i, true, now);
+                if (events[i] & release_event) controller.button(i, false, now);
+            }
+            controller.tick(now);
+        }
     }
     // A bounded amount of work per iteration; SD-card latency itself depends
     // on the card and must be measured on the pedal before release.
-    for (unsigned i = 0; i < 256 && Serial.available(); ++i) documents.receive(Serial.read(), now);
-    documents.tick(now);
+    for (unsigned i = 0; i < 256 && Serial.available() && serial_router.accepts_input(); ++i)
+        serial_router.receive(Serial.read(), now);
+    serial_router.poll(now);
     board.poll();
-    board.draw();
+    if (!splash_session.poll(now)) board.draw();
 }
