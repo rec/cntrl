@@ -64,7 +64,7 @@ the new command's successful responses established that the new firmware booted.
 
 ## Adapter and storage boundaries
 
-Show format version 4 includes shared top-level `font_name`/`font_size`/`pad` and
+Show format version 5 includes shared top-level `font_name`/`font_size`/`pad` and
 `screens.undo`, `screens.sent`, `screens.next` colors. Brightness
 (0..255, default 192) applies to backlight PWM pin 6 on show activation, including
 startup. Older binary shows are rejected; recompile the original show and upload
@@ -73,6 +73,14 @@ installed animation plays until any button is pressed. See the
 [splash instructions](../splash/README.md) for preparation and upload. Splash
 images fill the panels without text padding. The dismissing gesture sends no
 MIDI, and all normal UI pixels are redrawn afterward.
+
+`screensaver_timeout` sets idle seconds (0 disables, the default). The pman test
+show uses 3 seconds. Entry fades through black with 4,000 ms per half; waking
+uses 200 ms per half and performs the waking button's normal action immediately.
+Both transitions wait in black for a complete repaint. Held buttons prevent
+entry; presses and releases restart the timer. Only startup dismissal consumes
+its triggering gesture. Show or asset transfers cancel playback and inhibit
+idle entry until they finish; ordinary USB queries do not count as physical input.
 
 USB exposes Serial + MIDI, using the public core's development VID/PID and the
 existing `cntrl experimental` product string. The serial receiver accepts show

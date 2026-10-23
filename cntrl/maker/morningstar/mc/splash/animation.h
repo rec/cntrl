@@ -46,6 +46,7 @@ public:
         return active_;
     }
     void stop() { active_ = false; }
+    bool frame_ready() const { return packet_ == height * 2; }
     Step poll(uint32_t now, bool pressed) {
         if (!active_) return Step::inactive;
         if (pressed) { active_ = false; return Step::dismissed; }

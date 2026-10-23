@@ -34,7 +34,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 4
+    assert compiler.HEADER.unpack_from(result)[1] == 5
     assert compiler.HEADER.unpack_from(result)[7] == 192
 
 
@@ -54,6 +54,25 @@ def test_splash_is_optional_and_encoded_in_show(
     show['splash'] = True
     result = compiler.compile_show(show, definitions, [], target)
     assert result[18:20] == bytes([192, 1])
+
+
+@pytest.mark.parametrize('seconds', [0, 3, 2147483])
+def test_screensaver_timeout_is_encoded_in_milliseconds(
+    show: dict[str, object], definitions: object, target: models.Target, seconds: int
+) -> None:
+    assert models.Show.model_validate(show).screensaver_timeout == 0
+    show['screensaver_timeout'] = seconds
+    result = compiler.compile_show(show, definitions, [], target)
+    assert compiler.HEADER.unpack_from(result)[9] == seconds * 1000
+
+
+@pytest.mark.parametrize('seconds', [-1, 2147484, True, 0.5, '3'])
+def test_invalid_screensaver_timeout_is_rejected(
+    show: dict[str, object], definitions: object, target: models.Target, seconds: object
+) -> None:
+    show['screensaver_timeout'] = seconds
+    with pytest.raises(compiler.CompilationError, match='screensaver_timeout'):
+        compiler.compile_show(show, definitions, [], target)
 
 
 @pytest.mark.parametrize('brightness', [-1, 256, True, 1.5, '64'])
@@ -160,7 +179,7 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
         compiler.compile_show(show, definitions, [table], target)
     show['take_first_match'] = True
     data = compiler.compile_show(show, definitions, [table], target)
-    patch_offset = 72 + 2 * 68 + 74
+    patch_offset = 76 + 2 * 68 + 74
     assert data[patch_offset + 4 : patch_offset + 7] == bytes([8, 1, 2])
     show['take_first_match'] = False
     show['patches'] = {'wind': [{'patch': ':a:Flute', 'bank': 0}]}
@@ -191,7 +210,7 @@ def test_bankless_pc_is_not_bank_zero_and_omission_sends_no_bank(
 ) -> None:
     show['patches'] = {'wind': [{'patch': ':a:12'}]}
     data = compiler.compile_show(show, definitions, [], target)
-    offset = 72 + 2 * 68 + 74
+    offset = 76 + 2 * 68 + 74
     assert data[offset + 4 : offset + 9] == bytes([11, 255, 255, 255, 255])
     assert data[offset + 12 : offset + 17] == b'PC 12'
     show['patches'] = {'wind': [{'patch': ':a:12:::0'}]}

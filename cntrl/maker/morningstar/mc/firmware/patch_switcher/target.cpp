@@ -70,8 +70,8 @@ public:
     void set_brightness(uint8_t value) override {
         brightness_ = value;
     }
-    void set_splash(bool enabled) override {
-        splash_session.configure(enabled);
+    void set_splash(bool enabled, uint32_t idle_ms) override {
+        splash_session.configure(enabled, idle_ms, millis());
     }
     void error(const char *message) override {
         renderer_.error(message);
@@ -119,8 +119,8 @@ public:
         if (splash_session.take_redraw()) renderer_.invalidate();
         renderer_.draw();
     }
-    void display(uint32_t now) {
-        bool splash = splash_session.poll(now, renderer_.ready());
+    void display(uint32_t now, bool transfer_busy) {
+        bool splash = splash_session.poll(now, renderer_.ready(), transfer_busy);
         uint8_t brightness = splash_session.brightness(brightness_, now);
         if (brightness != applied_brightness_) {
             analogWrite(6, brightness); applied_brightness_ = brightness;
@@ -251,5 +251,5 @@ void poll_target() {
         serial_router.receive(Serial.read(), now);
     serial_router.poll(now);
     board.poll();
-    board.display(now);
+    board.display(now, documents.busy());
 }

@@ -37,9 +37,9 @@ def test_upload_verifies_cpp_receiver_status(peer: Path) -> None:
     process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
     try:
         port = Path(os.ttyname(slave))
-        assert transport.device_status(port) == 'CNTRL READY 4 0 00000000'
+        assert transport.device_status(port) == 'CNTRL READY 5 0 00000000'
         result = transport.upload_document(port, data)
-        assert result == f'CNTRL READY 4 {len(data)} {crc32(data):08x}'
+        assert result == f'CNTRL READY 5 {len(data)} {crc32(data):08x}'
         assert transport.device_status(port) == result
     finally:
         process.terminate()
@@ -57,7 +57,7 @@ def test_cpp_receiver_rejects_corrupt_document(peer: Path) -> None:
         port = Path(os.ttyname(slave))
         with pytest.raises(ValueError, match='invalid-document'):
             transport.upload_document(port, bytes(data))
-        assert transport.device_status(port) == 'CNTRL READY 4 0 00000000'
+        assert transport.device_status(port) == 'CNTRL READY 5 0 00000000'
     finally:
         process.terminate()
         process.wait(timeout=5)

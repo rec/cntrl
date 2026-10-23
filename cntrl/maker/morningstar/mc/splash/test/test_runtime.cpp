@@ -16,7 +16,7 @@ struct Device : cntrl::Hardware, cntrl::Replies, cntrl::splash::Replies {
     unsigned display_height() const override { return 128; }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t) override {}
-    void set_splash(bool enabled) override { session->configure(enabled); }
+    void set_splash(bool enabled, uint32_t idle_ms = 0) override { session->configure(enabled, idle_ms, 0); }
     void error(const char *) override {}
     void reply(const char *line) override { replies.emplace_back(line); }
 };
@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
     assets.boot();
     while (!router.accepts_input()) router.poll(0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back() == "CNTRL READY 4 0 00000000");
+    assert(device.replies.back() == "CNTRL READY 5 0 00000000");
     command(router, "CNTRL STORAGE");
     assert(storage_queries == 1 && storage_scans == 0);
     command(router, "CNTRL STORAGE SCAN");
@@ -73,6 +73,8 @@ int main(int argc, char **argv) {
     while (documents.busy()) router.poll(0);
     assert(device.replies.back().find("CNTRL DONE ") == 0);
     assert(!session.poll(0)); // Enabled but absent asset: normal UI, no stuck splash.
+    session.configure(false, 3000, 0);
+    assert(!session.poll(10000) && session.brightness(192, 10000) == 192);
 
     using namespace cntrl::splash;
     std::vector<uint8_t> animation(header_bytes + frame_bytes, 0);
@@ -96,7 +98,7 @@ int main(int argc, char **argv) {
     command(router, "CNTRL SPLASH STATUS");
     assert(device.replies.back().find("CNTRL SPLASH READY ") == 0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 4 ") == 0);
+    assert(device.replies.back().find("CNTRL READY 5 ") == 0);
 
     device.set_splash(true);
     assert(session.poll(1) && panels.rows == 1);
@@ -127,7 +129,7 @@ int main(int argc, char **argv) {
 
     // Millisecond wraparound preserves each one-second ramp.
     uint32_t start = 0xffffff00u;
-    session.configure(true); assert(session.poll(start));
+    session.configure(true, 0, start); assert(session.poll(start));
     assert(session.controls(1, start)); session.controls(0, start);
     assert(session.poll(start + 500) && session.brightness(192, start + 500) == 96);
     assert(!session.poll(start + 1000) && session.take_redraw());
@@ -142,13 +144,65 @@ int main(int argc, char **argv) {
     router.poll(10001); // Finish timed-out asset upload, leaving old slot available.
     assert(!assets.busy());
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 4 ") == 0);
+    assert(device.replies.back().find("CNTRL READY 5 ") == 0);
 
-    session.configure(true);
+    session.configure(true, 0, 10002);
     assert(session.controls(1, 10002)); // A press during pending startup also cancels.
     assert(!session.poll(10002));
     session.controls(0, 10002);
-    session.configure(false); assert(!session.poll(10003));
+    session.configure(false, 0, 10003); assert(!session.poll(10003));
+
+    // Held buttons and releases count as physical activity; no saver while held.
+    session.configure(false, 3000, 30000);
+    assert(!session.poll(32999));
+    assert(!session.controls(1, 32999));
+    assert(!session.poll(40000) && session.brightness(192, 40000) == 192);
+    assert(!session.controls(0, 40001));
+    assert(!session.poll(43000) && session.brightness(192, 43000) == 192);
+    assert(!session.poll(43001)); // UI fades out, but remains the rendering owner.
+    assert(!session.poll(45001) && session.brightness(192, 45001) == 96);
+    assert(!session.controls(1u << 2, 45001)); // Interrupt entry without a brightness jump.
+    assert(session.brightness(192, 45001) == 96);
+    assert(session.poll(45101) && session.brightness(192, 45101) == 48);
+    assert(!session.poll(45201) && session.take_redraw());
+    assert(!session.controls(0, 45202));
+    assert(!session.poll(45300, true));
+    assert(!session.poll(45400, true) && session.brightness(192, 45400) == 96);
+    assert(!session.poll(45500, true) && session.brightness(192, 45500) == 192);
+
+    session.configure(false, 3000, 50000);
+    assert(!session.poll(53000));
+    assert(!session.poll(55000) && session.brightness(192, 55000) == 96);
+    assert(session.poll(57000) && session.brightness(192, 57000) == 0);
+    for (unsigned i = 0; i < 255; ++i) assert(session.poll(57001));
+    assert(session.brightness(192, 58000) == 0); // Never reveal a partially drawn frame.
+    assert(session.poll(58000)); // Last row completes the first frame; fade-in begins.
+    assert(session.poll(60000) && session.brightness(192, 60000) == 96);
+    assert(session.poll(62000) && session.brightness(192, 62000) == 192);
+    unsigned sent_before_wake = device.sent;
+    if (!session.controls(1u << 2, 62001)) controller.button(2, true, 62001);
+    assert(device.sent == sent_before_wake + 1); // Wake sends now, not after the fade.
+    assert(!session.controls(0, 62002));
+    assert(session.poll(62101) && session.brightness(192, 62101) == 96);
+    assert(!session.poll(62201) && session.take_redraw());
+    assert(!session.poll(62300, true));
+    assert(!session.poll(62400, true) && session.brightness(192, 62400) == 96);
+    assert(!session.poll(62500, true) && session.brightness(192, 62500) == 192);
+
+    session.configure(false, 3000, start);
+    assert(!session.poll(start + 3000));
+    assert(!session.poll(start + 5000) && session.brightness(192, start + 5000) == 96);
+    session.stop(); session.take_redraw();
+    // Show transfers inhibit idle entry, but ordinary status queries do not.
+    session.configure(false, 3000, 70000);
+    assert(!session.poll(80000, true, true));
+    assert(!session.poll(82999) && session.brightness(192, 82999) == 192);
+    command(router, "CNTRL STATUS");
+    assert(!session.poll(83000));
+    assert(!session.poll(85000) && session.brightness(192, 85000) == 96);
+    session.configure(false, 0, 85000);
+    assert(!session.poll(100000) && session.brightness(192, 100000) == 192);
+
     for (unsigned i = 0; i < 120; ++i) router.receive('x', 10003);
     router.receive('\n', 10003);
     assert(device.replies.back() == "CNTRL ERROR command-too-long");

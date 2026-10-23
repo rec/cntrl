@@ -155,13 +155,14 @@ clamping) reaching the threshold. If no such shift works, it uses the furthest
 RGB-cube corner, warning if that distance is still <= the threshold. Contrast is
 computed in input 8-bit RGB; encoded display colors are rounded down to RGB565.
 
-## Binary and transfer protocol, version 4
+## Binary and transfer protocol, version 5
 
-Version 4 adds the top-level `splash` boolean, default false, alongside screen
-graphics and precomputed text offsets. It enables the installed splash asset;
-the asset is transferred separately using the target's upload tooling. Older
+Version 5 adds top-level `screensaver_timeout`, an integer idle timeout in seconds.
+Zero (the default) disables the screensaver. Positive values enable the installed
+animation after no physical input for that interval, independently of startup
+`splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 4 firmware. No automatic
+version 5 firmware. No automatic
 conversion of stored documents is performed.
 
 All integers are little-endian; strings are NUL-terminated, zero-padded ASCII.
@@ -169,7 +170,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 24 bytes | `CSW1`, u16 version (4), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 splash (0 or 1), u32 body CRC32 |
+| Header, 28 bytes | `CSW1`, u16 version (5), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 splash (0 or 1), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
@@ -185,7 +186,7 @@ indices and message values before activating a document.
 The USB serial request is `CNTRL BEGIN SIZE CRC32_HEX\n`. The receiver replies
 `CNTRL SEND\n`, then accepts exactly SIZE binary bytes. After validation,
 storage commit and read-back verification it replies `CNTRL DONE SIZE CRC\n`.
-`CNTRL STATUS\n` replies `CNTRL READY 4 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 5 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 

@@ -1,5 +1,6 @@
 {
   "splash": true,
+  "screensaver_timeout": 3,
   "instruments": {
     "pman": {
       "instrument": "pman",

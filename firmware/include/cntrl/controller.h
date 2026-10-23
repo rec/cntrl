@@ -11,7 +11,7 @@ public:
     void activate(const Document &document) {
         document_ = document;
         hardware_.set_brightness(document.brightness());
-        hardware_.set_splash(document.splash());
+        hardware_.set_splash(document.splash(), document.screensaver_timeout());
         selected_ = depth_ = 0;
         for (auto &c : cursors_) c = 0;
         for (auto &p : current_) p = -1;
