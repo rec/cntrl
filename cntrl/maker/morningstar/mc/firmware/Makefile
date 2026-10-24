@@ -8,6 +8,7 @@ ARM := $(ROOT)/.tools/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin/a
 INDEX := https://www.pjrc.com/teensy/package_teensy_index.json
 FQBN := teensy:avr:teensy41:usb=serial,speed=600,opt=osstd,keys=en-us
 IMAGE := $(ROOT)/build/usb-probe/usb_probe.ino
+SCROLL_GAP ?= 64
 
 export ARDUINO_DIRECTORIES_DATA := $(ROOT)/.tools/data
 export ARDUINO_DIRECTORIES_DOWNLOADS := $(ROOT)/.tools/downloads
@@ -22,7 +23,7 @@ scroll-probe: tools
 	"$(CLI)" compile --fqbn teensy:avr:teensy41:usb=serialmidi,speed=600,opt=osstd,keys=en-us --warnings all \
 		--build-path "$(ROOT)/build/scroll-probe" \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -I$(ROOT)/usb_probe' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_SCROLL_GAP=$(SCROLL_GAP) -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/scroll_probe"
@@ -39,7 +40,7 @@ inspect-scroll-probe: scroll-probe
 test-scroll-probe: tools
 	mkdir -p "$(ROOT)/build"
 	$(CC) -c "$(CORE)/libraries/ST7735_t3/src/glcdfont.c" -o "$(ROOT)/build/scroll-font.o"
-	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -DCNTRL_SCROLL_GAP=$(SCROLL_GAP) \
 		"$(ROOT)/test_scroll_probe.cpp" "$(ROOT)/build/scroll-font.o" -o "$(ROOT)/build/test_scroll_probe"
 	"$(ROOT)/build/test_scroll_probe"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -DCNTRL_SCROLL_PROBE -I"$(ROOT)/test_support" -I"$(ROOT)/usb_probe" \
