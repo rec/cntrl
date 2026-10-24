@@ -155,7 +155,11 @@ int main(int argc, char **argv) {
             assert(boot.poll(0));
             assert(boot.brightness(192, 0) == 0);
         }
-        assert(boot.poll(0) && boot.brightness(192, 0) == 192);
+        assert(boot.poll(0) && boot.brightness(192, 0) == 0);
+        assert(boot.poll(500) && boot.brightness(192, 500) == 12);
+        assert(boot.poll(1000) && boot.brightness(192, 1000) == 48);
+        assert(boot.poll(1500) && boot.brightness(192, 1500) == 108);
+        assert(boot.poll(2000) && boot.brightness(192, 2000) == 192);
         boot.stop();
     }
     {
@@ -185,62 +189,81 @@ int main(int argc, char **argv) {
         assert(!boot.poll(1010, true) && boot.brightness(192, 1010) == 0);
         assert(!boot.poll(1510, true) && boot.brightness(192, 1510) == 48);
     }
+    {
+        Player boot_player(assets, panels);
+        Session boot(assets, boot_player);
+        boot.configure(true, 0, 0);
+        for (unsigned i = 0; i < 256; ++i) assert(boot.poll(0));
+        assert(boot.poll(1000) && boot.brightness(192, 1000) == 48);
+        assert(boot.controls(1, 1000)); // Startup fade-in remains dismissible.
+        assert(boot.brightness(192, 1000) == 48);
+        assert(boot.controls(0, 1001));
+        assert(boot.poll(1500) && boot.brightness(192, 1500) == 12);
+        assert(!boot.poll(2000) && boot.take_redraw());
+    }
     panels.rows = 0;
     device.set_splash(true);
+    assert(session.brightness(192, 0) == 0); // Reloading a show also blanks immediately.
     assert(session.poll(1) && panels.rows == 1);
-    assert(session.controls(0, 1));
-    if (!session.controls(1u << 2, 2)) controller.button(2, true, 2);
+    assert(session.brightness(192, 1) == 0);
+    for (unsigned i = 0; i < 255; ++i) assert(session.poll(1));
+    assert(session.poll(2001) && session.brightness(192, 2001) == 192);
+    assert(session.controls(0, 2001));
+    if (!session.controls(1u << 2, 2002)) controller.button(2, true, 2002);
     assert(device.sent == 0 && !session.take_redraw());
-    assert(session.brightness(192, 2) == 192);
-    assert(session.brightness(192, 252) == 108);
-    assert(session.brightness(192, 752) == 12);
+    assert(session.brightness(192, 2002) == 192);
+    assert(session.brightness(192, 2252) == 108);
+    assert(session.brightness(192, 2752) == 12);
     unsigned previous = 255;
     for (unsigned elapsed = 0; elapsed <= 1000; ++elapsed) {
-        unsigned brightness = session.brightness(255, 2 + elapsed);
+        unsigned brightness = session.brightness(255, 2002 + elapsed);
         assert(brightness <= previous);
         assert(brightness == 255u * (1000 - elapsed) * (1000 - elapsed) / 1000000);
         previous = brightness;
     }
-    assert(session.controls((1u << 2) | (1u << 5), 3));
-    assert(session.controls(1u << 5, 4));
-    assert(session.controls(0, 5));
-    assert(!session.controls(0, 6));
+    assert(session.controls((1u << 2) | (1u << 5), 2003));
+    assert(session.controls(1u << 5, 2004));
+    assert(session.controls(0, 2005));
+    assert(!session.controls(0, 2006));
     unsigned before_fade = panels.rows;
-    assert(session.poll(502) && panels.rows > before_fade);
+    assert(session.poll(2502) && panels.rows > before_fade);
     for (unsigned target : {0u, 64u, 192u, 255u})
-        assert(session.brightness(target, 502) == target / 4);
+        assert(session.brightness(target, 2502) == target / 4);
     // Normal musical actions resume after dismissal, not after the fade.
-    if (!session.controls(1u << 2, 503)) controller.button(2, true, 503);
+    if (!session.controls(1u << 2, 2503)) controller.button(2, true, 2503);
     assert(device.sent == 1);
 
-    assert(!session.poll(1002, true));
-    assert(session.brightness(192, 1002) == 0);
+    assert(!session.poll(3002, true));
+    assert(session.brightness(192, 3002) == 0);
     assert(session.take_redraw() && !session.take_redraw());
-    assert(!session.poll(1100) && session.brightness(192, 1100) == 0);
-    assert(!session.poll(1150, true));
-    assert(session.brightness(192, 1150) == 0);
-    assert(session.brightness(192, 1400) == 12);
-    assert(session.brightness(192, 1900) == 108);
+    assert(!session.poll(3100) && session.brightness(192, 3100) == 0);
+    assert(!session.poll(3150, true));
+    assert(session.brightness(192, 3150) == 0);
+    assert(session.brightness(192, 3400) == 12);
+    assert(session.brightness(192, 3900) == 108);
     previous = 0;
     for (unsigned elapsed = 0; elapsed <= 1000; ++elapsed) {
-        unsigned brightness = session.brightness(255, 1150 + elapsed);
+        unsigned brightness = session.brightness(255, 3150 + elapsed);
         assert(brightness >= previous);
         assert(brightness == 255u * elapsed * elapsed / 1000000);
         previous = brightness;
     }
-    assert(!session.poll(1650, true) && session.brightness(192, 1650) == 48);
-    assert(!session.poll(2150, true) && session.brightness(192, 2150) == 192);
+    assert(!session.poll(3650, true) && session.brightness(192, 3650) == 48);
+    assert(!session.poll(4150, true) && session.brightness(192, 4150) == 192);
 
-    // Millisecond wraparound preserves each one-second ramp.
+    // Millisecond wraparound preserves startup and dismissal ramp timings.
     uint32_t start = 0xffffff00u;
-    session.configure(true, 0, start); assert(session.poll(start));
-    assert(session.controls(1, start)); session.controls(0, start);
-    assert(session.poll(start + 500) && session.brightness(192, start + 500) == 48);
-    assert(!session.poll(start + 1000) && session.take_redraw());
-    assert(!session.poll(start + 1100, true));
-    assert(session.brightness(192, start + 1600) == 48);
+    session.configure(true, 0, start);
+    for (unsigned i = 0; i < 256; ++i) assert(session.poll(start));
+    assert(session.poll(start + 1000) && session.brightness(192, start + 1000) == 48);
+    assert(session.poll(start + 2000) && session.brightness(192, start + 2000) == 192);
+    assert(session.controls(1, start + 2000)); session.controls(0, start + 2000);
+    assert(session.poll(start + 2500) && session.brightness(192, start + 2500) == 48);
+    assert(!session.poll(start + 3000) && session.take_redraw());
+    assert(!session.poll(start + 3100, true));
+    assert(session.brightness(192, start + 3600) == 48);
     session.stop(); // Upload cancellation restores the configured brightness.
-    assert(session.brightness(192, start + 1600) == 192 && session.take_redraw());
+    assert(session.brightness(192, start + 3600) == 192 && session.take_redraw());
 
     device.set_splash(true); assert(session.poll(5));
     command(router, "CNTRL SPLASH STATUS"); assert(session.poll(6)); // Queries do not dismiss.
