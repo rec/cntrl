@@ -2,7 +2,7 @@
 #include <cstdint>
 
 #ifndef CNTRL_SCROLL_GAP
-#define CNTRL_SCROLL_GAP 64
+#define CNTRL_SCROLL_GAP 72
 #endif
 
 extern "C" const unsigned char glcdfont[];

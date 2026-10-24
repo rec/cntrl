@@ -16,11 +16,11 @@ Unexpected orientation or edge lines must be distinguished from absent scrolling
 Initial painting happens while dark. Tiles are 32 pixels wide, numbered 00..39,
 with a shared grid/diagonal pattern in a repeating 1280x128 image. It reuses the
 installed ST7735 library's classic font data. Each panel initially shows 160
-consecutive columns. With the default 64-pixel gap the windows are left 0..159,
-centre 224..383 and right 448..607. Columns 160..223 and 384..447 are hidden
+consecutive columns. With the default 72-pixel gap the windows are left 0..159,
+centre 232..391 and right 464..623. Columns 160..231 and 392..463 are hidden
 behind the two physical gaps, rather than squeezed out of the image.
 
-All three panels show windows at world positions `x`, `x+224` and `x+448`,
+All three panels show windows at world positions `x`, `x+232` and `x+464`,
 modulo 1280. The artwork keeps the same pixel scale; it continues behind the
 estimated gaps. Updates initially target 16,667 microseconds, approximately 60 Hz.
 Each update fills the entering circular-buffer columns per panel, then changes
@@ -39,7 +39,7 @@ The image's position, direction, speed and physical window assignments do not
 change, and toggling B does not blank or repaint the screens.
 
 Press and release A to cycle the target update rate through 60, 50, 40 and 30 Hz,
-then back to 60. The gaps stay fixed at the configured width, default 64 pixels.
+then back to 60. The gaps stay fixed at the configured width, default 72 pixels.
 A does not blank, repaint or reset position. Keep C at one pixel per update
 initially to compare cadence; movement speed in pixels/second will also decrease
 with update rate. D, E and F do nothing. Panel refresh registers are unchanged.
@@ -79,7 +79,7 @@ make -C cntrl/maker/morningstar/mc/firmware test
 ```
 
 `SCROLL_GAP` configures both equal gaps in equivalent display pixels at build
-time, default 64. For example, to test and build a 48-pixel estimate:
+time, default 72. For example, to test and build a 48-pixel estimate:
 
 ```bash
 make -C cntrl/maker/morningstar/mc/firmware SCROLL_GAP=48 test-scroll-probe inspect-scroll-probe
