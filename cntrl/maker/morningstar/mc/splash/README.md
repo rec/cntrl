@@ -6,6 +6,11 @@ animation on boot or show activation. The default is false. Upload the prepared
 asset before uploading the show that enables it. A missing or invalid asset
 falls through to the normal interface.
 
+Startup playback turns the backlight off immediately, paints the first complete
+animation frame while dark, then fades up to the show's brightness over 2,000 ms
+using the quadratic curve. A button can dismiss the animation during this fade
+without sending a patch. Idle-entry and wake-up timings are unchanged.
+
 Any button dismisses playback. The complete dismissing gesture, including
 release and other held buttons, is consumed without sending a patch. Dismissal
 fades the animation to black over 1,000 ms, invalidates all three renderer caches

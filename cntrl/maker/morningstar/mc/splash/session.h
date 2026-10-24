@@ -19,7 +19,7 @@ public:
     bool controls(uint8_t pressed, uint32_t now) {
         if (pressed || pressed != pressed_) last_input_ = now;
         pressed_ = pressed;
-        if (pending_ || (running_ && !saver_ && fade_ == Fade::none)) {
+        if (pending_ || (running_ && !saver_ && (fade_ == Fade::none || to_animation_))) {
             if (pressed) {
                 if (running_) wake(now, 1000);
                 else pending_ = false;
@@ -47,6 +47,9 @@ public:
         if (pending_ && !assets_.busy()) {
             pending_ = false;
             running_ = player_.start(now);
+            if (running_) {
+                to_animation_ = true; fade_ = Fade::painting; duration_ = 2000;
+            }
         }
         if (!pending_ && !running_ && fade_ == Fade::none && idle_ms_
             && !pressed_ && !busy && assets_.size()
@@ -76,7 +79,7 @@ public:
         return running_ || pending_ || (fade_ == Fade::out && !to_animation_);
     }
     uint8_t brightness(uint8_t target, uint32_t now) const {
-        if (!first_image_) return 0;
+        if (!first_image_ || pending_) return 0;
         uint32_t value = level(now);
         return uint32_t(target) * value * value / 1000000;
     }
