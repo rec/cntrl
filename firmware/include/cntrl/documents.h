@@ -75,12 +75,13 @@ public:
         case 3: return p[7] == 255 ? -1 : p[7];
         case 4: return p[8] == 255 ? -65 : int(p[8]) - 64;
         case 5: return d.brightness();
+        case 7: return d.usb_midi_interface();
         default: return int(d.screensaver_timeout() / 1000);
         }
     }
     bool edit_adjust(unsigned patch, unsigned field, int delta) {
         Document d;
-        if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || patch >= d.patches() || field > 6) return false;
+        if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || patch >= d.patches() || field > 7) return false;
         uint8_t *p = staging_ + (d.patch(patch) - staging_);
         int64_t old = edit_value(patch, field), value = old + delta;
         if (field == 0 && value >= 1 && value <= 128) p[4] = uint8_t(value - 1);
@@ -100,6 +101,7 @@ public:
         else if (field == 4 && value >= -65 && value <= 63) p[8] = value == -65 ? 255 : uint8_t(value + 64);
         else if (field == 5 && value >= 0 && value <= 255) staging_[18] = uint8_t(value);
         else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_ + 24, unsigned(value) * 1000);
+        else if (field == 7 && value >= 0 && value <= 1) staging_[19] = (staging_[19] & 1) | (uint8_t(value) << 1);
         else return false;
         put32(staging_ + 20, checksum(staging_ + 28, document_.length() - 28)); return true;
     }
@@ -175,6 +177,7 @@ private:
     void empty(bool startup = false) {
         document_ = Document(); controller_.deactivate();
         hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
+        hardware_.set_usb_midi_interface(false);
         Pane view; view.centered = true; view.graphics.size = 16; view.graphics.line_height = 16;
         std::snprintf(view.patch, sizeof(view.patch), "No setups");
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, view);
@@ -316,7 +319,7 @@ private:
         char hex[127] = {}, name[64] = {}; unsigned length = 0, overwrite = 0; unsigned long crc = 0, epoch = 0; int end = 0;
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
-            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY 7 %u %08lx", document_.length(),
+            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY 8 %u %08lx", document_.length(),
                 document_.valid() ? (unsigned long)checksum(active_, document_.length()) : 0ul);
             replies_.reply(response); return;
         }

@@ -109,6 +109,7 @@ class Show(BaseModel, frozen=True):
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     transition_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] = 1000
     splash: Annotated[bool, Field(strict=True)] = True
+    usb_midi_interface: Annotated[bool, Field(strict=True)] = False
     screensaver_timeout: Annotated[
         int,
         Field(

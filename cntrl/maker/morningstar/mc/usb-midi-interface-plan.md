@@ -1,7 +1,10 @@
 # Standard USB MIDI interface
 
-Status: proposed. Documentation only; implementation and flashing are not part
-of this change.
+Status: implementation built and flashed, 2026-10-24. Automated tests and target
+image checks pass. Firmware boots and setup copy/read-back works. Hardware
+qualification is in progress: macOS currently retains the old single-port MIDI
+layout, and the second interface has not appeared in USB/CoreMIDI discovery.
+Do not treat enumeration or any physical MIDI path as qualified yet.
 
 ## Goal
 
@@ -223,3 +226,92 @@ No implementation, runtime experiments or flashing in this planning change.
 ## Additional work beyond the prompt
 
 None.
+
+## Implementation notes and qualification record
+
+The setup field is `usb_midi_interface`, strict Boolean, default false. The
+compiled document is version 8: byte 19 bit 0 remains splash, bit 1 enables the
+bridge, and other bits are rejected. Version 7 documents must be recompiled.
+Before updating this pedal, its only named setup, `pman`, was downloaded to
+`firmware/build/usb-midi-backup/pman.toml`. It was recompiled and copied back as
+version 8 with byte-for-byte read-back verification. The backup and test outputs
+are local ignored artifacts, not committed personal setup data.
+
+Portable implementation: `firmware/include/cntrl/midi_bridge.h`. MC pin and USB
+adaptation: `firmware/patch_switcher/target.cpp` in this directory. The target
+build applies `firmware/usb-midi-interface.patch` to pinned Teensy 1.62.0. Both
+USB speeds declare two computer inputs and six outputs with jack names. CDC is
+retained. The USB device revision is increased to 0x0282 for the changed layout;
+neither revision changes nor software-triggered reenumeration have refreshed
+the MIDI layout observed on this Mac. Two bidirectional jack groups precede
+the four output-only groups. A physical reconnect and host discovery check
+remain pending; a cached host setup is a hypothesis, not an established cause.
+
+Each scheduler destination has 256 four-byte forwarding packets and eight
+reserved pedal batches, up to 14 bytes per batch. Total bridge storage is
+11,168 bytes on the native build; verify the target's linker totals separately.
+Pedal USB-host output is scheduler destination 8; it is not a bridged port.
+Normal pedal USB-device output uses destination 6, computer input cable zero.
+Bridge queues do not participate in `output_idle()`, so a stalled computer
+cannot indefinitely prevent a setup change. Accepted pedal batches do.
+
+Serial diagnostics, on request only:
+
+```text
+CNTRL MIDI STATUS N
+CNTRL MIDI RESET
+```
+
+`N` is 0..8. One response contains:
+
+```text
+CNTRL MIDI enabled route received transmitted dropped aborted high_water max_midi_us max_scan_gap_ms scan_count display_count init_errors
+```
+
+Traffic counters count packets, not bytes; a dropped pedal batch on USB
+disconnect counts as one dropped item. `display_count` counts display-service
+calls, not completed frames. `init_errors` is a bitmask of failed configurable
+port initializations. RESET clears the two timing maxima, not traffic counters
+or queues. Measure after setup/SD operations to distinguish MIDI-induced waits
+from existing SD stalls. Idle status reads show ongoing scans and display
+service, but are not physical button/visible-rendering qualification.
+
+The explicit macOS qualification tool is:
+
+```bash
+uv run --frozen -m cntrl.maker.morningstar.mc.qualify_usb_midi
+```
+
+It lists actual CoreMIDI endpoints. `--run --destination NAME --source NAME`
+opens exactly those endpoints, checks short messages and a paced 4,099-byte
+non-commercial SysEx, and prints per-route diagnostics. `--expect-enabled`
+expects forwarding; without it the same messages must not arrive. Optional
+`--stress-seconds N` floods only discovered cntrl outputs after the checked
+messages, then reads diagnostics. During stress, dropped traffic is expected.
+Do not equate an IAC-only validation of this tool with physical MIDI validation.
+
+Automated results: 204 Python tests pass; portable MIDI/controller/persistence,
+MC button/display/renderer and splash runtime tests pass. The MIDI tests include
+all channel message types, running status, system common, realtime interleaving,
+10 KB streamed SysEx, stalled destinations, queue reservation/overload, SysEx
+timeout/abort/resynchronization, disconnect and default-off behavior. Target
+build and stock flash-configuration hash verification pass. Physical input and
+TRS/configurable output tests still require the corresponding loopback wiring.
+
+Live results on the final bridge implementation before the descriptor-order
+adjustment: an IAC-only check verified the qualification tool's 304 short-message
+bytes and 4,099 SysEx bytes. This bypassed the pedal and is not a DIN result.
+A separate five-second flood to the pedal's currently exposed USB output
+received 511,056 new packets, transmitted 7,194 and dropped 503,862 under deliberate
+overload. Queue occupancy stayed bounded at 256. After resetting timing maxima,
+the maximum MIDI-service duration was 47 microseconds and button-scan gap was
+3 ms; display-service calls continued. These counters establish scheduler
+progress, not visible redraw quality or wire-level MIDI correctness.
+
+The latest inspected/flashed image SHA-256 is
+`0e9dd09363307bfdba2b5bb1bd78b93e11eb0c814be340f3b354df1fdd5726ad`.
+After reset it reported `CNTRL READY 8 23390 e12bd7da`. The restored `pman` setup
+has the bridge disabled, matching its original/default setting. Linker budgets:
+RAM1 variables 324,352 bytes, code/padding 98,304, stack budget 101,632;
+RAM2 fixed 215,072 bytes, heap budget 309,216; flash tool usage 395,260 bytes.
+These are build budgets, not measured runtime stack/heap high-water marks.

@@ -35,6 +35,7 @@ struct Hardware {
     virtual void show(unsigned pane, const Pane &content) = 0;
     virtual void transition(bool undo, unsigned duration_ms) { (void)undo; (void)duration_ms; }
     virtual void set_brightness(uint8_t value) = 0;
+    virtual void set_usb_midi_interface(bool) {}
     virtual void set_splash(bool enabled, uint32_t idle_ms) = 0;
     virtual void error(const char *message) = 0;
 };

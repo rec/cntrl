@@ -47,7 +47,7 @@ public:
             else if (button == 2) { mode_ = Mode::field; field_ = 0; }
             else if (button == 5) { mode_ = Mode::decision; item_ = 2; }
         } else if (mode_ == Mode::field) {
-            if (button < 2) field_ = (field_ + 7 + (button == 0 ? -1 : 1)) % 7;
+            if (button < 2) field_ = (field_ + 8 + (button == 0 ? -1 : 1)) % 8;
             else if (button == 2) mode_ = Mode::value;
             else if (button == 5) mode_ = Mode::patch;
         } else if (mode_ == Mode::value) {
@@ -94,10 +94,11 @@ private:
             value_label = "Patch";
         }
         else if (mode_ == Mode::field || mode_ == Mode::value) {
-            static const char *fields[] = {"Program", "Bank", "Channel", "Volume", "Pan", "Brightness", "Idle seconds"};
+            static const char *fields[] = {"Program", "Bank", "Channel", "Volume", "Pan", "Brightness", "Idle seconds", "USB MIDI"};
             title = fields[field_];
             int64_t v = docs_.edit_value(patch_, field_);
             if ((field_ == 1 && v == -1) || (field_ == 3 && v == -1) || (field_ == 4 && v == -65)) std::snprintf(number, sizeof(number), "None");
+            else if (field_ == 7) std::snprintf(number, sizeof(number), "%s", v ? "On" : "Off");
             else if (v >= 0) std::snprintf(number, sizeof(number), "%lu", (unsigned long)v);
             else std::snprintf(number, sizeof(number), "%ld", (long)v);
             value = number;

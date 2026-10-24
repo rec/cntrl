@@ -35,7 +35,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 7
+    assert compiler.HEADER.unpack_from(result)[1] == 8
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
@@ -60,6 +60,32 @@ def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) 
     table = compiler.read_document(path)
     assert isinstance(table, dict)
     assert [p['instrument'] for p in table['patches']] == ['pman', 'vl70', '']
+
+
+@pytest.mark.parametrize('enabled', [None, False, True])
+def test_usb_midi_switch_round_trips(
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    enabled: bool | None,
+) -> None:
+    assert models.Show.model_validate(show).usb_midi_interface is False
+    if enabled is not None:
+        show['usb_midi_interface'] = enabled
+    data = compiler.compile_show(show, definitions, [], target)
+    assert bool(data[19] & 2) is (enabled is True)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['usb_midi_interface'] is (enabled is True)
+    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+
+
+@pytest.mark.parametrize('value', [1, 'true', None])
+def test_usb_midi_switch_rejects_non_booleans(
+    show: dict[str, object], definitions: object, target: models.Target, value: object
+) -> None:
+    show['usb_midi_interface'] = value
+    with pytest.raises(compiler.CompilationError, match='usb_midi_interface'):
+        compiler.compile_show(show, definitions, [], target)
 
 
 @pytest.mark.parametrize('brightness', [0, 32, 255])

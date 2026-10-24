@@ -16,7 +16,8 @@ def export(data: bytes) -> str:
     )
     if (
         magic != b'CSW1'
-        or version != 7
+        or version != 8
+        or flags >> 10
         or length != len(data)
         or crc32(data[28:]) != crc
     ):
@@ -40,7 +41,8 @@ def export(data: bytes) -> str:
         'chord_ms': chord,
         'brightness': flags & 255,
         'transition_ms': struct.unpack_from('<H', data, meta + 6)[0] or 1000,
-        'splash': bool(flags >> 8),
+        'splash': bool(flags & 256),
+        'usb_midi_interface': bool(flags & 512),
         'screensaver_timeout': timeout // 1000,
         'font_name': text(meta + 8, 32),
         'font_size': data[29],

@@ -163,13 +163,15 @@ The complete generated report is saved locally as
 
 ## Adapter and storage boundaries
 
-Show format version 7 includes shared top-level `font_name`/`font_size`/`pad` and
+Show format version 8 includes shared top-level `font_name`/`font_size`/`pad` and
 `screens.undo`, `screens.sent`, `screens.next` colors, including optional `half`.
 Only the rightmost patch name uses `half` when it matches the last successful
 send for its instrument (program and bank select, not label/category). Without
 an explicit `half`, the Mac computes the RGB midpoint of foreground/background.
-Version 7 also retains instrument identities, logical banks and bank mappings
-for self-contained editable downloads. Existing shows need recompiling.
+It also retains instrument identities, logical banks and bank mappings for
+self-contained editable downloads. Version 8 adds the default-off per-setup
+`usb_midi_interface` switch. See the [USB MIDI interface plan and qualification
+record](../usb-midi-interface-plan.md). Existing shows need recompiling.
 Brightness
 (0..255, default 192) applies to backlight PWM pin 6 on show activation, including
 startup. Older binary shows are rejected; recompile the original show and upload
