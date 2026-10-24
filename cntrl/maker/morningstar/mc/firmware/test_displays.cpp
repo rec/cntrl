@@ -9,6 +9,9 @@
 #ifdef CNTRL_SCROLL_PROBE
 #include "scroll_probe/io.h"
 #endif
+#ifdef CNTRL_PANORAMA
+#include "patch_switcher/panorama.h"
+#endif
 
 struct Transfer {
     std::vector<uint8_t> bytes;
@@ -262,5 +265,29 @@ int main() {
             assert(batch[first + 2].bytes[i + 1] == stripe[x * 256 + i]);
     }
     assert(clock_gpio && data_gpio && !spi_active && !levels[13]);
+#endif
+#ifdef CNTRL_PANORAMA
+    for (auto &panel : transfers) panel.clear();
+    initialize_display_panorama();
+    for (const auto &panel : transfers) {
+        assert((panel[0].bytes == std::vector<uint8_t>{0x36, 0x88}));
+        assert((panel[1].bytes == std::vector<uint8_t>{0x33, 0, 1, 0, 160, 0, 1}));
+    }
+    uint8_t column[256];
+    for (unsigned i = 0; i < 256; ++i) column[i] = uint8_t(i);
+    write_display_column(2, 159, column);
+    assert((transfers[2][4].bytes == std::vector<uint8_t>{0x2b, 0, 160, 0, 160}));
+    for (unsigned i = 0; i < 256; ++i) assert(transfers[2].back().bytes[i + 1] == column[i]);
+    scroll_display_panorama(72);
+    for (const auto &panel : transfers)
+        assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 89}));
+    // Splash output must restore landscape addressing and remove scroll offset.
+    write_display_group(7, 0, 0, column, 1);
+    for (const auto &panel : transfers) {
+        unsigned n = panel.size();
+        assert((panel[n - 5].bytes == std::vector<uint8_t>{0x37, 0, 1}));
+        assert((panel[n - 4].bytes == std::vector<uint8_t>{0x36, 0xa8}));
+    }
+    assert(clock_gpio && data_gpio && !spi_active);
 #endif
 }

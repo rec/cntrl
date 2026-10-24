@@ -77,6 +77,9 @@ test: tools
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/test_support" \
 		"$(ROOT)/test_displays.cpp" "$(ROOT)/usb_probe/displays.cpp" -o "$(ROOT)/build/test_displays"
 	"$(ROOT)/build/test_displays"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -DCNTRL_PANORAMA -I"$(ROOT)/test_support" -I"$(ROOT)/usb_probe" \
+		"$(ROOT)/test_displays.cpp" "$(ROOT)/patch_switcher/displays.cpp" -o "$(ROOT)/build/test_panorama_displays"
+	"$(ROOT)/build/test_panorama_displays"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
 		-I"$(abspath $(ROOT)/../../../../..)/firmware/include" -I"$(ROOT)/usb_probe" -I"$(ROOT)/test_support" \
 		-I"$(CORE)/libraries/ST7735_t3/src" -x c++ \

@@ -10,6 +10,8 @@
 struct Fake : cntrl::Hardware, cntrl::Replies {
     std::vector<std::vector<uint8_t>> sent;
     std::vector<std::string> routes, replies;
+    std::vector<bool> transitions;
+    std::vector<unsigned> durations;
     cntrl::Pane panes[3];
     bool available = true;
     unsigned errors = 0;
@@ -26,6 +28,9 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
+    void transition(bool undo, unsigned duration_ms) override {
+        transitions.push_back(undo); durations.push_back(duration_ms);
+    }
     void set_brightness(uint8_t value) override { brightness = value; }
     void set_splash(bool enabled, uint32_t) override { splash = enabled; }
     void error(const char *) override { ++errors; }
@@ -80,6 +85,33 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert(hw.panes[2].patch_color == hw.panes[2].graphics.half);
     app.activate(doc); // A new document starts with unknown instrument state.
     assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
+}
+
+void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
+    Fake hw;
+    cntrl::Controller app(hw); app.activate(doc);
+    app.action(5); assert(hw.transitions.empty());
+    hw.available = false; app.action(2); assert(hw.transitions.empty());
+    hw.available = true; app.action(2); // Flute.
+    app.action(0); app.action(2); // Strings.
+    app.action(0); // Browse away to Sax before undoing Strings.
+    unsigned sent = hw.sent.size();
+    app.action(5);
+    assert(hw.sent.size() == sent); // No previous selection for Strings' instrument.
+    assert(!std::strcmp(hw.panes[2].patch, "Strings"));
+    assert((hw.transitions == std::vector<bool>{false, false, true}));
+    assert((hw.durations == std::vector<unsigned>{1000, 1000, 1000}));
+    app.action(5);
+    assert(!std::strcmp(hw.panes[2].patch, "Flute"));
+    assert(!hw.panes[0].patch[0] && !hw.panes[1].patch[0]);
+    std::vector<uint8_t> configured(doc.data(), doc.data() + doc.length());
+    configured[doc.metadata() + 6] = 0x4d;
+    configured[doc.metadata() + 7] = 1; // 333 milliseconds.
+    cntrl::put32(configured.data() + 20, cntrl::checksum(configured.data() + 28, configured.size() - 28));
+    cntrl::Document custom; assert(custom.load(configured.data(), configured.size(), hw));
+    app.activate(custom); hw.durations.clear();
+    app.action(2); app.action(5);
+    assert((hw.durations == std::vector<unsigned>{333, 333}));
 }
 
 void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
@@ -210,6 +242,7 @@ int main(int argc, char **argv) {
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
     assert(doc.graphics(2).half == 0x7bef);
     test_greyed_names(doc);
+    test_undo_restores_undone_candidate(doc);
     test_greyed_aliases(bytes);
     test_setup_editing_and_empty_ui(bytes);
     test_deletion_and_selection_power_loss(bytes);
@@ -284,10 +317,10 @@ int main(int argc, char **argv) {
     assert(!std::strcmp(hw.panes[1].patch, "Flute"));
     app.action(5); assert(hw.sent.size() == count && app.depth() == 0);
     assert(!hw.panes[0].patch[0] && !hw.panes[1].patch[0]);
-    assert(!std::strcmp(hw.panes[2].patch, "Sax"));
+    assert(!std::strcmp(hw.panes[2].patch, "Flute"));
     app.action(5); assert(hw.sent.size() == count);
     hw.available = false; app.action(2); assert(app.depth() == 0 && hw.errors);
-    hw.available = true; app.action(2); app.action(0); app.action(2);
+    hw.available = true; app.action(2); app.action(1); app.action(2);
     hw.available = false; app.action(5); assert(app.depth() == 2);
     hw.available = true;
     app.activate(doc);
