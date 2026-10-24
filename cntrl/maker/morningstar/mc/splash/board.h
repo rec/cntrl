@@ -47,7 +47,7 @@ class Panels : public Output {
 public:
     void row(uint8_t panels, unsigned y, const uint8_t *pixels) override {
         // Hold one tint for the complete frame, including its mirrored centre.
-        if (panels == 0b101 && y == 0) tint_ = cycle_tint(millis());
+        if (panels == 0b101 && y == 0) tint_ = walk_.at(millis());
         uint8_t colored[row_bytes];
         for (unsigned x = 0; x < width; ++x) {
             uint16_t pixel = uint16_t(pixels[2 * x]) << 8 | pixels[2 * x + 1];
@@ -59,5 +59,6 @@ public:
     }
 private:
     Tint tint_ = {63, 63, 63};
+    ColorWalk walk_;
 };
 } // namespace cntrl::splash

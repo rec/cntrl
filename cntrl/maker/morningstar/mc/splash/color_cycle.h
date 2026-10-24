@@ -6,18 +6,40 @@ struct Tint {
     unsigned red, green, blue; // Six-bit channels, 0..63.
 };
 
-inline Tint cycle_tint(uint32_t now) {
-    unsigned phase = (now % 20000) * (6 * 63) / 20000;
-    unsigned ramp = phase % 63;
-    switch (phase / 63) {
-    case 0: return {63, ramp, 0};
-    case 1: return {63 - ramp, 63, 0};
-    case 2: return {0, 63, ramp};
-    case 3: return {0, 63 - ramp, 63};
-    case 4: return {ramp, 0, 63};
-    default: return {63, 0, 63 - ramp};
+class ColorWalk {
+public:
+    Tint at(uint32_t now) {
+        if (!started_) {
+            state_ ^= now; state_ |= 1;
+            started_ = true; since_ = now; choose_target();
+        }
+        uint32_t elapsed = now - since_;
+        if (elapsed >= 1000) {
+            from_ = target_; choose_target(); since_ = now; elapsed = 0;
+        }
+        return {blend(from_.red, target_.red, elapsed),
+                blend(from_.green, target_.green, elapsed),
+                blend(from_.blue, target_.blue, elapsed)};
     }
-}
+private:
+    static unsigned blend(unsigned from, unsigned to, unsigned elapsed) {
+        return (from * (1000 - elapsed) + to * elapsed + 500) / 1000;
+    }
+    unsigned step(unsigned value) {
+        state_ ^= state_ << 13; state_ ^= state_ >> 17; state_ ^= state_ << 5;
+        int next = int(value) + int(state_ % 41) - 20;
+        // Reflect at the RGB cube walls instead of sticking/clipping there.
+        if (next < 0) next = -next;
+        if (next > 63) next = 126 - next;
+        return unsigned(next);
+    }
+    void choose_target() {
+        target_ = {step(from_.red), step(from_.green), step(from_.blue)};
+    }
+    Tint from_ = {63, 0, 0}, target_ = {63, 0, 0};
+    uint32_t state_ = 0x9e3779b9, since_ = 0;
+    bool started_ = false;
+};
 
 inline uint16_t tint_white(uint16_t pixel, Tint tint) {
     unsigned red = pixel >> 11, green = (pixel >> 5) & 63, blue = pixel & 31;
