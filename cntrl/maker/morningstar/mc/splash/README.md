@@ -138,9 +138,15 @@ The uploader returned its usual reset/disappearance status 1; USB then confirmed
 `CNTRL READY 7 23390 0718301d`, with pman still selected. Visual colour and
 playback-speed confirmation remains a physical check.
 
-The random-walk change passed the isolated sanitizer-enabled splash test.
-Combined firmware build/upload is pending the concurrent USB/MIDI work's
-buildable handoff; this record does not claim that the walk is flashed yet.
+After the USB/MIDI handoff, the combined random-walk firmware passed all 204
+Python tests and native splash/runtime, controller/MIDI-bridge and display/
+renderer tests. Stock flash-configuration and HEX/ELF checks passed. The image
+was uploaded on 2026-10-24, SHA-256:
+`0e9dd09363307bfdba2b5bb1bd78b93e11eb0c814be340f3b354df1fdd5726ad`.
+After the updater's usual reset/disappearance status 1, USB confirmed
+`CNTRL READY 8 23390 e12bd7da` with pman selected, matching the pre-upload show
+length/checksum. No setup or animation assets were rewritten. Visual evaluation
+of the walk remains a physical check; the screensaver loops until button input.
 
 ## Components
 
