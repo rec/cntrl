@@ -27,18 +27,20 @@ void scroll_panels(uint8_t selected, unsigned offset) {
     end_transfer();
 }
 
-void write_scroll_column(unsigned index, unsigned column, const uint8_t *pixels) {
-    if (index >= 3 || column >= 160) return;
+void write_scroll_columns(unsigned index, unsigned column, const uint8_t *pixels, unsigned count) {
+    if (index >= 3 || column >= 160 || !count || count > 160 - column) return;
     const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
     const Panel &panel = panels[index];
     const uint8_t columns[] = {0, 2, 0, 129};
-    const uint8_t rows[] = {0, uint8_t(column + 1), 0, uint8_t(column + 1)};
-    begin_transfer();
-    command(panel, 0x2a, columns, sizeof(columns));
-    command(panel, 0x2b, rows, sizeof(rows));
-    digitalWrite(panel.dc, LOW); digitalWrite(panel.cs, LOW);
-    send_byte(0x2c); digitalWrite(panel.dc, HIGH);
-    for (unsigned i = 0; i < 256; ++i) send_byte(pixels[i]);
-    digitalWrite(panel.cs, HIGH);
-    end_transfer();
+    for (unsigned x = 0; x < count; ++x) {
+        const uint8_t rows[] = {0, uint8_t(column + x + 1), 0, uint8_t(column + x + 1)};
+        begin_transfer();
+        command(panel, 0x2a, columns, sizeof(columns));
+        command(panel, 0x2b, rows, sizeof(rows));
+        digitalWrite(panel.dc, LOW); digitalWrite(panel.cs, LOW);
+        send_byte(0x2c); digitalWrite(panel.dc, HIGH);
+        for (unsigned i = 0; i < 256; ++i) send_byte(pixels[x * 256 + i]);
+        digitalWrite(panel.cs, HIGH);
+        end_transfer();
+    }
 }

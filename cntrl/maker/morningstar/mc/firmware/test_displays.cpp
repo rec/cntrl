@@ -40,7 +40,8 @@ void SPIClass::begin() {
 
 void SPIClass::beginTransaction(SPISettings settings) {
     assert(spi_started && !spi_active);
-    assert(settings.clock == 8000000 && settings.order == MSBFIRST && settings.mode == SPI_MODE0);
+    assert(settings.order == MSBFIRST && settings.mode == SPI_MODE0);
+    assert(settings.clock == 8000000);
     spi_active = true;
     ++transactions;
 }
@@ -220,15 +221,32 @@ int main() {
     for (const auto &panel : transfers)
         assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 1}));
     uint8_t column[256] = {};
-    write_scroll_column(2, 159, column);
+    write_scroll_columns(2, 159, column, 1);
     auto &panel = transfers[2];
     assert((panel[panel.size() - 3].bytes == std::vector<uint8_t>{0x2a, 0, 2, 0, 129}));
     assert((panel[panel.size() - 2].bytes == std::vector<uint8_t>{0x2b, 0, 160, 0, 160}));
     assert(panel.back().bytes.size() == 257 && panel.back().bytes[0] == 0x2c);
     assert(clock_gpio && data_gpio && !spi_active && !levels[13]);
     before = transactions;
-    write_scroll_column(3, 0, column); write_scroll_column(0, 160, column);
+    write_scroll_columns(3, 0, column, 1); write_scroll_columns(0, 160, column, 1);
+    write_scroll_columns(0, 159, column, 2); write_scroll_columns(0, 0, column, 0);
     scroll_panels(0, 0); scroll_panels(8, 0);
     assert(transactions == before);
+    uint8_t stripe[32 * 256];
+    for (unsigned i = 0; i < sizeof(stripe); ++i) stripe[i] = uint8_t(i);
+    unsigned previous = transfers[1].size();
+    before = transactions;
+    write_scroll_columns(1, 128, stripe, 32);
+    const auto &batch = transfers[1];
+    assert(transactions == before + 32 && batch.size() == previous + 32 * 3);
+    for (unsigned x = 0; x < 32; ++x) {
+        unsigned first = previous + x * 3;
+        assert((batch[first].bytes == std::vector<uint8_t>{0x2a, 0, 2, 0, 129}));
+        assert((batch[first + 1].bytes == std::vector<uint8_t>{0x2b, 0, uint8_t(129 + x), 0, uint8_t(129 + x)}));
+        assert(batch[first + 2].bytes.size() == 257 && batch[first + 2].bytes[0] == 0x2c);
+        for (unsigned i = 0; i < 256; ++i)
+            assert(batch[first + 2].bytes[i + 1] == stripe[x * 256 + i]);
+    }
+    assert(clock_gpio && data_gpio && !spi_active && !levels[13]);
 #endif
 }
