@@ -103,9 +103,9 @@ implementation measurement task, not an open user preference.
    Changing patch updates only R's patch within the selected category. L and C
    remain unchanged during either navigation action; navigation sends no MIDI.
 7. **Undo display semantics (resolved).** Popping the only history
-   entry blanks L and C, leaves R unchanged and sends no MIDI. The instrument
+   entry blanks L and C, shows the undone patch in R and sends no MIDI. The instrument
    retains its last patch even though the history displays are blank. Undo
-   always leaves R unchanged. When Undo restores a patch, C shows that patch
+   selects the undone patch's category and cursor for R. When Undo restores a patch, C shows that patch
    with its instrument name, for example A:Flute, even if another instrument
    still has a more recent remaining history entry. L shows the patch that the
    next Undo would restore, including its instrument name. L is blank when the
@@ -244,7 +244,7 @@ instrument. Runtime cursors and history live in RAM, not in persistent storage.
 | D / E | Previous/next category, wrapping; restore its remembered cursor |
 | A / B | Previous/next patch in current category, wrapping |
 | C | Send candidate; push it to history; update L/C; leave R unchanged |
-| F | Empty history: no-op; otherwise pop latest action and restore that instrument's preceding patch, if known |
+| F | Empty history: no-op; otherwise pop latest action, restore that instrument's preceding patch if known, and select the undone patch in R |
 
 Navigation never sends MIDI. Undo pops the latest action and sends its recorded
 previous patch to the same instrument, if one is known, without pushing an entry.
@@ -254,7 +254,8 @@ nothing. Repeated C presses still push repeated entries. After a restoration,
 C shows the restored patch and its instrument name. After every send or Undo,
 derive L from the previous patch recorded by the top remaining action, or blank
 it if no restoration target exists. If Undo sends nothing, C stays unchanged
-while history remains; an empty history blanks C.
+while history remains; an empty history blanks C. R shows the undone patch even
+if browsing had moved to a different category or patch before Undo.
 
 Keep each patch's bank-select, PC and optional control messages in order on its
 route. Do not deduplicate sends or suppress repeated bank changes without a

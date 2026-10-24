@@ -70,6 +70,7 @@ public:
     void show(unsigned pane, const cntrl::Pane &content) override {
         renderer_.show(pane, content);
     }
+    void transition(bool undo) override { renderer_.transition(undo); }
     void set_brightness(uint8_t value) override {
         brightness_ = value;
     }
@@ -120,7 +121,7 @@ public:
     }
     void draw() {
         if (splash_session.take_redraw()) renderer_.invalidate();
-        renderer_.draw();
+        renderer_.draw(millis());
     }
     void display(uint32_t now, bool transfer_busy) {
         bool splash = splash_session.poll(now, renderer_.ready(), transfer_busy);

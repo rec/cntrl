@@ -4,6 +4,57 @@ This is the first complete application build, not a hardware-qualified release.
 The first patch-switcher firmware and pman show were uploaded on 2026-10-22.
 See the live verification record below for confirmed results and remaining checks.
 
+## Sliding send/undo panes, 2026-10-24
+
+C sends MIDI and pushes history before requesting a leftward transition. F
+performs the existing per-instrument undo, selects the undone patch as R's
+browsing candidate, and requests the reverse transition. Failed sends and an
+empty undo stack do not request animation. There is no MIDI delay waiting for
+graphics, and no persistent history or graphics-format change.
+
+The screen pitch is 232 pixels: 160 visible plus a 72-pixel physical-gap
+estimate. Over 24 frame targets at 60 Hz (about 400 ms after preparation), the
+old panes move left on C and right on F. The new R candidate is rendered using
+the existing grey-name rule before entering from the right. On F, the next
+undo target, or a blank pane, enters from the left. Virtual gaps are black.
+
+The RAM-only library still renders fonts. Preparing destination bitmaps is
+incremental and leaves the old screen contents visible. Native ST7735 column
+writes use the tested 8 MHz byte-wise protocol and `MADCTL=0x88`; each animation
+poll advances at most one pixel and writes one column per panel. Button scans,
+USB and queued MIDI output run between these polls. Scroll commands are issued
+at frame targets. Destination screen-specific styling is reconciled afterward.
+The target duration is not a hard real-time guarantee under SD/USB stalls.
+
+Ordinary UI repainting also uses native columns and retains the current ring
+offset. Splash output switches back to landscape row addressing and resets the
+scroll offset. On return, renderer invalidation restores native mode and
+repaints behind the existing first-image/blackout gate. New actions during an
+animation retain their MIDI/history effects and coalesce into the latest pending
+view; they do not build an unbounded animation queue.
+
+Verification: 194 Python tests, the sanitizer-enabled portable controller suite,
+and native button/display/renderer tests passed. New tests cover forward/reverse
+pane mapping, nonzero ring offsets, the native-column protocol and return to
+splash addressing. Controller tests cover browsing away before undo and exclude
+failed sends/empty undo from transition events. HEX/ELF comparison and the stock
+flash-configuration digest passed. RAM1 has 111,680 bytes free, RAM2 309,312,
+with no external RAM linked.
+
+Uploaded main-image SHA-256:
+`6baf5b03d9ff0de30d854c5fce4547f1e4c585084a8a388dd5dc2cce4cc05872`.
+After the uploader's usual reset/disappearance status 1, USB confirmed format 7.
+The setup catalogue was empty. The existing pman example was recompiled,
+copied with readback verification and selected; status then reported
+`CNTRL READY 7 23390 0718301d`.
+
+The repository's `instruments/pman.toml` currently mixes an initial
+`[[patches.pman.0]]` header with `[[patches]]` entries and lacks explicit setup
+fields. It was not edited for this task. Upload used a temporary copy with the
+flat initial header and `setup = "default"` on each entry, matching the example's
+existing default-setup routing. No factory EEPROM or vendor backups were changed.
+Physical transition/splash/text verification remains pending user observation.
+
 ```bash
 make -C firmware test
 uv run --frozen pytest
@@ -165,16 +216,17 @@ patch sequence is admitted to a 32-entry output queue before history changes.
 USB disconnects or later transport failures cannot be acknowledged by a MIDI
 receiver and are not equivalent to a confirmed instrument state change.
 
-Display slots currently follow the traced CS order. Their left/center/right
-physical order still needs verification. The three 160x128 drivers render
+Display slots follow the physically tested left/centre/right CS order.
+The three 160x128 drivers render
 through the pinned ST7735_t3 library's RAM framebuffer and font API.
 Transfers use blocking hardware SPI at a requested 8 MHz, MSB first, mode 0.
 Initialization retains the
 traced panel commands, reset sequence and waits. Each runtime call processes at
-most one library glyph or one row and sends only the span between a row's first
-and last changed pixels. Unchanged rows generate no SPI traffic. One 40,960-byte
-RGB565 canvas is shared across panels, and a 122,880-byte cache records the pixels
-sent to all three panels; the first pass clears unknown panel RAM.
+most one library glyph or one column during ordinary repainting. Unchanged
+columns generate no SPI traffic. One 40,960-byte RGB565 canvas is shared across
+panels, and a 122,880-byte cache records display content. A second 122,880-byte
+snapshot retains the pre-transition panes while destination panes are rendered.
+The first pass clears unknown panel RAM.
 Rendering snapshots the latest requested pane and coalesces further requests,
 including changes received during painting and erasure of shorter text.
 
@@ -182,7 +234,7 @@ All panels are deselected before ending a transfer. Pin 13 is then restored to
 GPIO output LOW and pin 12 to GPIO input for the existing switch-register reader.
 The next transfer restores the SPI pin mux through `SPI.begin()`. No asynchronous
 display transfer or display interrupt masking crosses a button scan. The largest
-row transaction sends 331 bytes, approximately 0.34 ms of wire time at 8 MHz,
+column transaction sends 267 bytes, approximately 0.27 ms of wire time at 8 MHz,
 excluding CPU/peripheral setup. Verify redraw speed and button latency on the
 pedal; SD and USB library calls can still introduce latency. The previous
 software-clocked driver had an observed update time around 1,500 ms.

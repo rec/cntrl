@@ -4,16 +4,24 @@
 #include <cstdio>
 #include "displays.h"
 #include "show_graphics.h"
+#include "panorama.h"
 
-// One library glyph or one changed row per loop, never a whole blocking redraw.
+// One glyph/column per repaint poll; one three-panel column step per animation poll.
 class DisplayRenderer {
 public:
     bool ready() const {
-        return drawing_ < 0 && !dirty_[0] && !dirty_[1] && !dirty_[2];
+        return !preparing_ && !animating_ && drawing_ < 0 && !dirty_[0] && !dirty_[1] && !dirty_[2];
     }
     void invalidate() {
         drawing_ = -1; rendering_ = false;
+        preparing_ = animating_ = native_ready_ = false; ring_ = 0;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
+    }
+    void transition(bool undo) {
+        if (!ready() || !valid_[0] || !valid_[1] || !valid_[2]) return;
+        std::memcpy(previous_, cache_, sizeof(cache_));
+        undo_ = undo; preparing_ = true;
+        for (auto &dirty : dirty_) dirty = true;
     }
     void show(unsigned pane, const cntrl::Pane &content) {
         if (pane >= 3 || !std::memcmp(&requested_[pane], &content, sizeof(content))) return;
@@ -28,7 +36,9 @@ public:
         view.patch_color = view.graphics.foreground;
         show(1, view);
     }
-    void draw() {
+    void draw(uint32_t now = 0) {
+        if (!native_ready_) { initialize_display_panorama(); native_ready_ = true; }
+        if (animating_) { animate(now); return; }
         if (drawing_ < 0) {
             for (unsigned i = 0; i < 3; ++i) if (dirty_[i]) {
                 drawing_ = int(i); dirty_[i] = false;
@@ -36,7 +46,13 @@ public:
                 graphics_.configure(painting_.graphics); rendering_ = true; break;
             }
         }
-        if (drawing_ < 0) return;
+        if (drawing_ < 0) {
+            if (preparing_) {
+                preparing_ = false; animating_ = true;
+                progress_ = 0; started_ = now;
+            }
+            return;
+        }
         if (rendering_) {
             const char *fields[] = {painting_.category, painting_.patch};
             const char *text = fields[field_];
@@ -65,31 +81,64 @@ public:
             }
             return;
         }
-        uint8_t pixels[320];
-        const uint16_t *row = graphics_.getFrameBuffer() + y_ * 160;
-        uint16_t *previous = cache_[drawing_] + y_ * 160;
-        unsigned first = 160, last = 0;
-        for (unsigned x = 0; x < 160; ++x) {
-            pixels[2 * x] = uint8_t(row[x] >> 8);
-            pixels[2 * x + 1] = uint8_t(row[x]);
-            if (!valid_[drawing_] || row[x] != previous[x]) {
-                if (first == 160) first = x;
-                last = x;
-            }
+        uint8_t pixels[256];
+        bool changed = !valid_[drawing_];
+        for (unsigned y = 0; y < 128; ++y) {
+            unsigned index = y * 160 + y_;
+            uint16_t pixel = graphics_.getFrameBuffer()[index];
+            pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
+            if (pixel != cache_[drawing_][index]) changed = true;
+            cache_[drawing_][index] = pixel;
         }
-        if (first != 160) {
-            write_display_segment(unsigned(drawing_), first, y_, pixels + 2 * first, last - first + 1);
-            std::memcpy(previous, row, 160 * sizeof(uint16_t));
-        }
-        if (++y_ == 128) {
+        if (changed && !preparing_)
+            write_display_column(unsigned(drawing_), (ring_ + y_) % 160, pixels);
+        if (++y_ == 160) {
             valid_[drawing_] = true;
             drawing_ = -1;
         }
     }
 private:
+    uint16_t moving_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
+        auto sample = panorama_sample(panel, x, progress, undo_);
+        if (sample.x >= 160) return 0; // Empty virtual space between displays.
+        if (sample.pane == -1) return cache_[0][y * 160 + sample.x];
+        if (sample.pane == 3) return cache_[2][y * 160 + sample.x];
+        return previous_[sample.pane][y * 160 + sample.x];
+    }
+    void animate(uint32_t now) {
+        unsigned frame = uint32_t(now - started_) * 60 / 1000;
+        if (frame > transition_frames) frame = transition_frames;
+        unsigned goal = frame * display_pitch / transition_frames;
+        if (progress_ >= goal) return;
+        ++progress_;
+        ring_ = (ring_ + (undo_ ? 159 : 1)) % 160;
+        unsigned x = undo_ ? 0 : 159;
+        uint8_t pixels[256];
+        for (unsigned panel = 0; panel < 3; ++panel) {
+            for (unsigned y = 0; y < 128; ++y) {
+                uint16_t pixel = moving_pixel(panel, x, y, progress_);
+                pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
+            }
+            write_display_column(panel, (ring_ + x) % 160, pixels);
+        }
+        if (progress_ == goal) scroll_display_panorama(ring_);
+        if (progress_ != display_pitch) return;
+        // The moved bitmaps may use a different pane's font/colors. Record what
+        // is actually visible before normal rendering applies destination styles.
+        for (unsigned panel = 0; panel < 3; ++panel)
+            for (unsigned y = 0; y < 128; ++y)
+                for (unsigned x = 0; x < 160; ++x)
+                    cache_[panel][y * 160 + x] = moving_pixel(panel, x, y, display_pitch);
+        animating_ = false;
+        for (auto &dirty : dirty_) dirty = true;
+    }
     cntrl::Pane requested_[3], painting_;
     ShowGraphics graphics_;
     uint16_t cache_[3][160 * 128] = {};
+    uint16_t previous_[3][160 * 128] = {};
+    bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
+    unsigned ring_ = 0, progress_ = 0;
+    uint32_t started_ = 0;
     bool dirty_[3] = {true, true, true};
     bool valid_[3] = {};
     int drawing_ = -1;

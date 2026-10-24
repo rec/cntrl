@@ -87,13 +87,17 @@ public:
             history_[depth_++] = {uint16_t(p), current_[instrument]};
             current_[instrument] = int(p);
             center_ = int(p);
+            hardware_.transition(false);
         } else if (button == 5) {
             if (!depth_) return;
             const Action &a = history_[depth_ - 1];
             if (a.previous >= 0 && !send(unsigned(a.previous))) return;
             current_[u16(document_.patch(a.patch))] = a.previous;
             if (a.previous >= 0) center_ = a.previous;
+            selected_ = u16(document_.patch(a.patch) + 2);
+            cursors_[selected_] = a.patch - u16(document_.category(selected_) + 64);
             if (!--depth_) center_ = -1;
+            hardware_.transition(true);
         }
         render();
     }
