@@ -300,13 +300,15 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            7,
+            8,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
             len(categories),
             len(patches),
-            show.brightness | (int(show.splash) << 8),
+            show.brightness
+            | (int(show.splash) << 8)
+            | (int(show.usb_midi_interface) << 9),
             crc32(body),
             show.screensaver_timeout * 1000,
         )

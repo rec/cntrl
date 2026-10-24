@@ -5,6 +5,7 @@
 #include <USBHost_t36.h>
 #include <cntrl/documents.h>
 #include <cntrl/setup_ui.h>
+#include <cntrl/midi_bridge.h>
 #include "buttons.h"
 #include "displays.h"
 #include "switches.h"
@@ -25,7 +26,7 @@ constexpr uint8_t ring_pins[] = {32, 9, 37, 36};
 const char *outputs[] = {"din", "trs", "configurable-1", "configurable-2",
                          "configurable-3", "configurable-4", "usb-device", "usb-host"};
 
-class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies {
+class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink {
 public:
     void begin() {
         Serial1.begin(31250);
@@ -39,33 +40,52 @@ public:
     bool supports_font(unsigned font, unsigned size) const override {
         return ShowGraphics::supports_font(font, size);
     }
-    bool output_idle() const override { return queued_ == 0; }
+    bool output_idle() const override { return bridge_.idle(); }
+    void set_usb_midi_interface(bool enabled) override {
+        bridge_.configure(enabled);
+        if (enabled) for (unsigned i = 0; i < 4; ++i) enable_port(i);
+    }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     bool send(const char *output, const uint8_t *data, unsigned length) override {
         unsigned route = 0;
         while (route < 8 && std::strcmp(outputs[route], output)) ++route;
-        if (route == 8 || length > 14 || queued_ == 32
+        if (route == 8 || length > 14
             || (route == 6 && !usb_configuration) || (route == 7 && !host_midi)) return false;
-        if (route >= 2 && route < 6 && !enabled_[route - 2]) {
-            unsigned port = route - 2;
-            // Preload the latch before enabling the current-loop reference.
-            switch (port) {
-                case 0: digitalWriteFast(32, HIGH); break;
-                case 1: digitalWriteFast(9, HIGH); break;
-                case 2: digitalWriteFast(37, HIGH); break;
-                case 3: digitalWriteFast(36, HIGH); break;
-            }
-            pinMode(ring_pins[port], OUTPUT);
-            ports[port]->begin(31250);
-            enabled_[port] = bool(*ports[port]);
-            if (!enabled_[port]) return false;
+        if (route >= 2 && route < 6 && !enable_port(route - 2)) return false;
+        return bridge_.pedal(route == 7 ? 8 : route, data, length);
+    }
+    bool submit(unsigned route, const cntrl::midi::Packet &p) override {
+        if (route >= 6 && route < 8) return usb_midi_try_write_packed(p.packed(route - 6));
+        if (route == 8) return host_midi.try_write_packed(p.packed());
+        unsigned n = p.size();
+        if (route < 2) {
+            HardwareSerial &serial = route == 0 ? Serial1 : Serial2;
+            if (unsigned(serial.availableForWrite()) < n) return false;
+            return serial.write(p.bytes, n) == n;
         }
-        Batch &batch = queue_[(head_ + queued_) % 32];
-        batch.route = route; batch.length = length;
-        std::memcpy(batch.bytes, data, length);
-        ++queued_;
-        return true;
+        unsigned port = route - 2;
+        if (!enabled_[port] || unsigned(ports[port]->availableForWrite()) < n) return false;
+        return ports[port]->write(p.bytes, n) == n;
+    }
+    void midi_status(unsigned route) {
+        if (route == cntrl::midi::Bridge::destinations) {
+            max_midi_us_ = max_scan_gap_ = 0; reply("CNTRL OK"); return;
+        }
+        if (route >= cntrl::midi::Bridge::destinations) { reply("CNTRL ERROR midi-route"); return; }
+        const auto &c = bridge_.counters(route);
+        char response[400];
+        std::snprintf(response, sizeof(response),
+            "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u",
+            unsigned(bridge_.enabled()), route, (unsigned long)c.received,
+            (unsigned long)c.transmitted, (unsigned long)c.dropped, (unsigned long)c.aborted,
+            c.high_water, (unsigned long)max_midi_us_, (unsigned long)max_scan_gap_,
+            (unsigned long)scan_count_, (unsigned long)display_count_, init_errors_);
+        reply(response);
+    }
+    void scanned(uint32_t gap) {
+        if (gap > max_scan_gap_) max_scan_gap_ = gap;
+        ++scan_count_;
     }
     void show(unsigned pane, const cntrl::Pane &content) override {
         renderer_.show(pane, content);
@@ -87,36 +107,37 @@ public:
     }
     void poll() {
         host.Task();
-        // No input forwarding. Drain MIDI RX so host enumeration remains serviced.
-        usbMIDI.read(); host_midi.read();
+        uint32_t begin = micros(), now = millis();
+        bridge_.connected(usb_configuration != 0);
+        // Separate source limits plus an aggregate time budget. Rotate the
+        // first source, so a saturated cable cannot starve later sources.
+        for (unsigned i = 0; i < 3 && uint32_t(micros() - begin) < 180; ++i) {
+            unsigned source = (source_cursor_ + i) % 3;
+            for (unsigned n = 0; n < 64 && uint32_t(micros() - begin) < 180; ++n) {
+                if (source == 0) {
+                    uint32_t packet = usb_midi_read_message();
+                    if (!packet) break;
+                    bridge_.usb(packet, now);
+                } else {
+                    HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
+                    int byte = serial.read(); if (byte < 0) break;
+                    bridge_.receive(source + 5, uint8_t(byte), now);
+                }
+            }
+        }
+        source_cursor_ = (source_cursor_ + 1) % 3;
+        // Existing USB-host input is deliberately not bridged.
+        host_midi.read();
+        bridge_.service(*this, now);
+        // Flush only already-buffered packets; this operation never waits.
+        usb_midi_flush_output();
+        uint32_t elapsed = micros() - begin;
+        if (elapsed > max_midi_us_) max_midi_us_ = elapsed;
         if (response_[response_offset_] && Serial.availableForWrite() > 0) {
             unsigned n = std::strlen(response_ + response_offset_);
             unsigned room = Serial.availableForWrite();
             if (n > room) n = room;
             response_offset_ += Serial.write(response_ + response_offset_, n);
-        }
-        if (queued_) {
-            Batch &batch = queue_[head_];
-            if (batch.route < 6) {
-                if (batch.route < 2) {
-                    HardwareSerial &serial = batch.route == 0 ? Serial1 : Serial2;
-                    if (unsigned(serial.availableForWrite()) < batch.length) return;
-                    serial.write(batch.bytes, batch.length);
-                } else {
-                    unsigned port = batch.route - 2;
-                    if (unsigned(ports[port]->availableForWrite()) < batch.length) return;
-                    ports[port]->write(batch.bytes, batch.length);
-                }
-            } else {
-                // One complete patch sequence per queue item, maintaining order.
-                for (unsigned i = 0; i < batch.length;) {
-                    uint8_t status = batch.bytes[i++], value = batch.bytes[i++];
-                    uint8_t extra = (status & 0xf0) == 0xb0 ? batch.bytes[i++] : 0;
-                    if (batch.route == 6) usbMIDI.send(status & 0xf0, value, extra, (status & 15) + 1, 0);
-                    else host_midi.send(status & 0xf0, value, extra, (status & 15) + 1);
-                }
-            }
-            head_ = (head_ + 1) % 32; --queued_;
         }
     }
     void draw() {
@@ -124,6 +145,7 @@ public:
         renderer_.draw(millis());
     }
     void display(uint32_t now, bool transfer_busy) {
+        ++display_count_;
         bool splash = splash_session.poll(now, renderer_.ready(), transfer_busy);
         uint8_t brightness = splash_session.brightness(brightness_, now);
         if (brightness != applied_brightness_) {
@@ -134,13 +156,28 @@ public:
 private:
     uint8_t brightness_ = 192;
     int applied_brightness_ = -1;
-    struct Batch { uint8_t bytes[14]; unsigned length, route; };
-    Batch queue_[32] = {};
-    unsigned head_ = 0, queued_ = 0;
+    cntrl::midi::Bridge bridge_;
+    unsigned source_cursor_ = 0, init_errors_ = 0;
+    uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
     bool enabled_[4] = {};
     DisplayRenderer renderer_;
     unsigned response_offset_ = 0;
     char response_[600] = {};
+    bool enable_port(unsigned port) {
+        if (enabled_[port]) return true;
+        // Preload the reference before enabling the current loop.
+        switch (port) {
+            case 0: digitalWriteFast(32, HIGH); break;
+            case 1: digitalWriteFast(9, HIGH); break;
+            case 2: digitalWriteFast(37, HIGH); break;
+            case 3: digitalWriteFast(36, HIGH); break;
+        }
+        pinMode(ring_pins[port], OUTPUT);
+        ports[port]->begin(31250);
+        enabled_[port] = bool(*ports[port]);
+        if (!enabled_[port]) init_errors_ |= 1u << port;
+        return enabled_[port];
+    }
 };
 
 class Card : public cntrl::SetupStorage {
@@ -248,7 +285,8 @@ void storage_info(bool scan) {
     Serial.printf("CNTRL STORAGE END %u\n", entries);
 }
 
-cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info);
+void midi_status(unsigned route) { board.midi_status(route); }
+cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status);
 ButtonState buttons[6];
 uint32_t last_scan = 0;
 
@@ -267,6 +305,7 @@ void initialize_target() {
 void poll_target() {
     uint32_t now = millis();
     if (uint32_t(now - last_scan) >= 3) {
+        if (last_scan) board.scanned(now - last_scan);
         last_scan = now;
         uint8_t raw = read_buttons();
         uint8_t events[6], pressed = 0;

@@ -235,10 +235,12 @@ clamping) reaching the threshold. If no such shift works, it uses the furthest
 RGB-cube corner, warning if that distance is still <= the threshold. Contrast is
 computed in input 8-bit RGB; encoded display colors are rounded down to RGB565.
 
-## Binary and transfer protocol, version 7
+## Binary and transfer protocol, version 8
 
-Version 7 retains the rendering/MIDI records and adds immutable instrument and
-bank metadata for resolved exports. `screensaver_timeout` remains an integer
+Version 8 retains the rendering/MIDI records and immutable instrument and
+bank metadata, and adds the default-off `usb_midi_interface` Boolean. It is a
+performance-setup setting, including in resolved exports and the pedal editor.
+`screensaver_timeout` remains an integer
 idle timeout in seconds.
 `transition_ms` controls send/undo slide duration in milliseconds, default 1000,
 with an allowed range of 1..65535. The target frame cadence remains 60 Hz;
@@ -247,7 +249,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 7 firmware. No automatic
+version 8 firmware. No automatic
 conversion of stored documents is performed.
 
 Startup `splash` defaults to true: an omitted setting uses the currently installed
@@ -262,7 +264,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (7), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 splash (0 or 1), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (8), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment, half RGB565; two zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
@@ -280,7 +282,7 @@ nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 7 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 8 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 Names in commands are hex-encoded ASCII, never paths. Requests are:

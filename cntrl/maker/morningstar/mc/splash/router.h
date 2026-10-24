@@ -7,9 +7,9 @@ namespace cntrl::splash {
 class Router {
 public:
     Router(cntrl::Documents &documents, Receiver &assets, Session &session, cntrl::Replies &replies,
-           void (*storage_info)(bool))
+           void (*storage_info)(bool), void (*midi_status)(unsigned) = nullptr)
         : documents_(documents), assets_(assets), session_(session), replies_(replies),
-          storage_info_(storage_info) {}
+          storage_info_(storage_info), midi_status_(midi_status) {}
     bool accepts_input() const { return assets_.accepts_input(); }
     void receive(uint8_t byte, uint32_t now) {
         if (assets_.busy()) { assets_.receive(byte, now); return; }
@@ -24,6 +24,14 @@ public:
         if (overflow_) replies_.reply("CNTRL ERROR command-too-long");
         else {
             line_[used_] = 0;
+            if (midi_status_ && !std::strcmp(line_, "CNTRL MIDI RESET")) {
+                midi_status_(9); used_ = 0; overflow_ = false; return;
+            }
+            unsigned route = 0; int end = 0;
+            if (midi_status_ && std::sscanf(line_, "CNTRL MIDI STATUS %u%n", &route, &end) == 1
+                && end && !line_[end]) {
+                midi_status_(route); used_ = 0; overflow_ = false; return;
+            }
             if (!std::strcmp(line_, "CNTRL STORAGE") || !std::strcmp(line_, "CNTRL STORAGE SCAN")) {
                 storage_info_(!std::strcmp(line_, "CNTRL STORAGE SCAN"));
                 used_ = 0; overflow_ = false;
@@ -60,6 +68,7 @@ private:
     Session &session_;
     cntrl::Replies &replies_;
     void (*storage_info_)(bool);
+    void (*midi_status_)(unsigned);
     char line_[256];
     unsigned used_ = 0;
     uint32_t last_ = 0;

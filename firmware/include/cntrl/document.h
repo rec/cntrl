@@ -32,8 +32,8 @@ class Document {
 public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
-            || u16(bytes + 4) != 7 || u16(bytes + 6) < 1
-            || u32(bytes + 8) != length || bytes[19] > 1 || u32(bytes + 24) > 2147483000u
+            || u16(bytes + 4) != 8 || u16(bytes + 6) < 1
+            || u32(bytes + 8) != length || bytes[19] > 3 || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 74 + np * 82;
@@ -110,7 +110,8 @@ public:
     unsigned patches() const { return patches_; }
     unsigned chord_ms() const { return u16(data_ + 6); }
     uint8_t brightness() const { return data_[18]; }
-    bool splash() const { return data_[19] != 0; }
+    bool splash() const { return data_[19] & 1; }
+    bool usb_midi_interface() const { return data_[19] & 2; }
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
     unsigned transition_ms() const {
         unsigned value = u16(data_ + metadata() + 6);

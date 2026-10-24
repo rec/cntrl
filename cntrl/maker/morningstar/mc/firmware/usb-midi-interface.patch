@@ -1,0 +1,175 @@
+--- a/cores/teensy4/usb_desc.c
++++ b/cores/teensy4/usb_desc.c
+@@ -581,0 +582,3 @@
++#ifdef CNTRL_USB_INTERFACE
++#define MIDI_INTERFACE_DESC_SIZE 170
++#else
+@@ -582,0 +586 @@
++#endif
+@@ -927,0 +932,25 @@
++#ifdef CNTRL_USB_INTERFACE
++        // Two bidirectional jack pairs, then four output-only jack pairs.
++        9, 4, MIDI_INTERFACE, 0, 2, 1, 3, 0, 0,
++        7, 0x24, 1, 0, 1, 127, 0,
++        6, 0x24, 2, 1, 1, 5,
++        6, 0x24, 2, 2, 2, 5,
++        9, 0x24, 3, 1, 3, 1, 2, 1, 5,
++        9, 0x24, 3, 2, 4, 1, 1, 1, 5,
++        6, 0x24, 2, 1, 5, 6,
++        6, 0x24, 2, 2, 6, 6,
++        9, 0x24, 3, 1, 7, 1, 6, 1, 6,
++        9, 0x24, 3, 2, 8, 1, 5, 1, 6,
++        6, 0x24, 2, 1, 9, 7,
++        9, 0x24, 3, 2, 10, 1, 9, 1, 7,
++        6, 0x24, 2, 1, 11, 8,
++        9, 0x24, 3, 2, 12, 1, 11, 1, 8,
++        6, 0x24, 2, 1, 13, 9,
++        9, 0x24, 3, 2, 14, 1, 13, 1, 9,
++        6, 0x24, 2, 1, 15, 10,
++        9, 0x24, 3, 2, 16, 1, 15, 1, 10,
++        9, 5, MIDI_RX_ENDPOINT, 2, LSB(MIDI_RX_SIZE_480), MSB(MIDI_RX_SIZE_480), 0, 0, 0,
++        10, 0x25, 1, 6, 1, 5, 9, 11, 13, 15,
++        9, 5, MIDI_TX_ENDPOINT | 0x80, 2, LSB(MIDI_TX_SIZE_480), MSB(MIDI_TX_SIZE_480), 0, 0, 0,
++        6, 0x25, 1, 2, 3, 7,
++#else
+@@ -1149,0 +1179 @@
++#endif
+@@ -1941,0 +1972,25 @@
++#ifdef CNTRL_USB_INTERFACE
++        // Two bidirectional jack pairs, then four output-only jack pairs.
++        9, 4, MIDI_INTERFACE, 0, 2, 1, 3, 0, 0,
++        7, 0x24, 1, 0, 1, 127, 0,
++        6, 0x24, 2, 1, 1, 5,
++        6, 0x24, 2, 2, 2, 5,
++        9, 0x24, 3, 1, 3, 1, 2, 1, 5,
++        9, 0x24, 3, 2, 4, 1, 1, 1, 5,
++        6, 0x24, 2, 1, 5, 6,
++        6, 0x24, 2, 2, 6, 6,
++        9, 0x24, 3, 1, 7, 1, 6, 1, 6,
++        9, 0x24, 3, 2, 8, 1, 5, 1, 6,
++        6, 0x24, 2, 1, 9, 7,
++        9, 0x24, 3, 2, 10, 1, 9, 1, 7,
++        6, 0x24, 2, 1, 11, 8,
++        9, 0x24, 3, 2, 12, 1, 11, 1, 8,
++        6, 0x24, 2, 1, 13, 9,
++        9, 0x24, 3, 2, 14, 1, 13, 1, 9,
++        6, 0x24, 2, 1, 15, 10,
++        9, 0x24, 3, 2, 16, 1, 15, 1, 10,
++        9, 5, MIDI_RX_ENDPOINT, 2, LSB(MIDI_RX_SIZE_12), MSB(MIDI_RX_SIZE_12), 0, 0, 0,
++        10, 0x25, 1, 6, 1, 5, 9, 11, 13, 15,
++        9, 5, MIDI_TX_ENDPOINT | 0x80, 2, LSB(MIDI_TX_SIZE_12), MSB(MIDI_TX_SIZE_12), 0, 0, 0,
++        6, 0x25, 1, 2, 3, 7,
++#else
+@@ -2163,0 +2219 @@
++#endif
+@@ -2767,0 +2824,9 @@
++};
++#endif
++
++#ifdef CNTRL_USB_INTERFACE
++PROGMEM const struct usb_string_descriptor_struct cntrl_port_0 = {
++    8, 3, {'D','I','N'}
++};
++PROGMEM const struct usb_string_descriptor_struct cntrl_port_1 = {
++    8, 3, {'T','R','S'}
+@@ -2768,0 +2834,12 @@
++PROGMEM const struct usb_string_descriptor_struct cntrl_port_2 = {
++    30, 3, {'C','o','n','f','i','g','u','r','a','b','l','e',' ','1'}
++};
++PROGMEM const struct usb_string_descriptor_struct cntrl_port_3 = {
++    30, 3, {'C','o','n','f','i','g','u','r','a','b','l','e',' ','2'}
++};
++PROGMEM const struct usb_string_descriptor_struct cntrl_port_4 = {
++    30, 3, {'C','o','n','f','i','g','u','r','a','b','l','e',' ','3'}
++};
++PROGMEM const struct usb_string_descriptor_struct cntrl_port_5 = {
++    30, 3, {'C','o','n','f','i','g','u','r','a','b','l','e',' ','4'}
++};
+@@ -2795,0 +2873,8 @@
++#ifdef CNTRL_USB_INTERFACE
++        {0x0305, 0x0409, (const uint8_t *)&cntrl_port_0, 0},
++        {0x0306, 0x0409, (const uint8_t *)&cntrl_port_1, 0},
++        {0x0307, 0x0409, (const uint8_t *)&cntrl_port_2, 0},
++        {0x0308, 0x0409, (const uint8_t *)&cntrl_port_3, 0},
++        {0x0309, 0x0409, (const uint8_t *)&cntrl_port_4, 0},
++        {0x030A, 0x0409, (const uint8_t *)&cntrl_port_5, 0},
++#endif
+--- a/cores/teensy4/usb_desc.h
++++ b/cores/teensy4/usb_desc.h
+@@ -953,0 +954,7 @@
++#ifdef CNTRL_USB_INTERFACE
++#undef MIDI_NUM_CABLES
++#define MIDI_NUM_CABLES 6
++#undef BCD_DEVICE
++#define BCD_DEVICE 0x0282
++#endif
++
+--- a/cores/teensy4/usb_midi.c
++++ b/cores/teensy4/usb_midi.c
+@@ -142,2 +142,10 @@
+-	printf("usb_midi_write_packed\n");
+-	if (!usb_configuration) return;
++	uint32_t started = systick_millis_count;
++	while (!usb_midi_try_write_packed(n)) {
++		if (!usb_configuration || systick_millis_count - started >= TX_TIMEOUT_MSEC) return;
++		yield();
++	}
++}
++
++int usb_midi_try_write_packed(uint32_t n)
++{
++	if (!usb_configuration) return 0;
+@@ -147,2 +155 @@
+-	uint32_t wait_begin_at = systick_millis_count;
+-	while (!tx_available) {
++	if (!tx_available) {
+@@ -150,14 +157,2 @@
+-		if (!(status & 0x80)) {
+-			if (status & 0x68) {
+-				// TODO: what if status has errors???
+-			}
+-			tx_available = tx_packet_size;
+-			transmit_previous_timeout = 0;
+-			break;
+-		}
+-		if (systick_millis_count - wait_begin_at > TX_TIMEOUT_MSEC) {
+-			transmit_previous_timeout = 1;
+-		}
+-		if (transmit_previous_timeout) return;
+-		if (!usb_configuration) return;
+-		yield();
++		if (status & 0x80) { tx_noautoflush = 0; return 0; }
++		tx_available = tx_packet_size;
+@@ -179,0 +175 @@
++	return 1;
+--- a/cores/teensy4/usb_midi.h
++++ b/cores/teensy4/usb_midi.h
+@@ -48,0 +49 @@
++int usb_midi_try_write_packed(uint32_t n);
+--- a/libraries/USBHost_t36/midi.cpp
++++ b/libraries/USBHost_t36/midi.cpp
+@@ -294 +294,6 @@
+-	if (!txpipe) return;
++	while (txpipe && !try_write_packed(data)) {}
++}
++
++bool MIDIDeviceBase::try_write_packed(uint32_t data)
++{
++	if (!txpipe) return false;
+@@ -296 +301 @@
+-	while (1) {
++	{
+@@ -311 +316 @@
+-			return;
++			return true;
+@@ -324 +329 @@
+-			return;
++			return true;
+@@ -327 +332 @@
+-		// TODO: call yield() ??
++		return false;
+--- a/libraries/USBHost_t36/USBHost_t36.h
++++ b/libraries/USBHost_t36/USBHost_t36.h
+@@ -1447,0 +1448,2 @@
++public:
++    bool try_write_packed(uint32_t data);

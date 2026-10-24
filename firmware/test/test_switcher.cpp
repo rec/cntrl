@@ -17,6 +17,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     unsigned errors = 0;
     uint8_t brightness = 0;
     bool splash = false;
+    bool usb_midi_interface = false;
     bool send(const char *route, const uint8_t *data, unsigned n) override {
         if (!available) return false;
         sent.emplace_back(data, data + n); routes.emplace_back(route); return true;
@@ -32,6 +33,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
     void set_brightness(uint8_t value) override { brightness = value; }
+    void set_usb_midi_interface(bool value) override { usb_midi_interface = value; }
     void set_splash(bool enabled, uint32_t) override { splash = enabled; }
     void error(const char *) override { ++errors; }
     void reply(const char *s) override { replies.emplace_back(s); }
@@ -173,6 +175,9 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     assert(docs.edit_adjust(0, 4, 1) && docs.edit_value(0, 4) == -63);
     assert(docs.edit_adjust(0, 5, -1) && docs.edit_value(0, 5) == 191);
     assert(docs.edit_adjust(0, 6, 1) && docs.edit_value(0, 6) == 1);
+    assert(docs.edit_value(0, 7) == 0);
+    assert(docs.edit_adjust(0, 7, 1) && docs.edit_value(0, 7) == 1);
+    assert(!docs.edit_adjust(0, 7, 1));
     docs.edit_cancel();
     assert(docs.document().brightness() == 192 && hw.sent.empty());
     // An interrupted inactive slot with a valid newer HEADER must not cause
@@ -277,7 +282,7 @@ int main(int argc, char **argv) {
         app.activate(settings);
         assert(hw.brightness == value && hw.sent.empty());
     }
-    corrupt = bytes; corrupt[19] = 2;
+    corrupt = bytes; corrupt[19] = 4;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     corrupt = bytes; cntrl::put32(corrupt.data() + 24, 0x80000000u);
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
@@ -366,7 +371,7 @@ int main(int argc, char **argv) {
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].patch, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 7 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 8 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     auto new_show = bytes;
