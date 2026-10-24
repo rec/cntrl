@@ -2,7 +2,8 @@
 
 The portable C++ implementation is under `include/cntrl/`. It contains no
 Arduino headers or target pin numbers. `Hardware` accepts complete MIDI message
-sequences and semantic panes; `Storage` provides two independent document slots.
+sequences and semantic panes; `SetupStorage` provides named pairs of document
+slots and an application-owned persistent selection record.
 The controller owns navigation, gestures, Undo and layout. A board adapter owns
 scanning, electrical debounce, pixels, output queues and storage access.
 
@@ -31,14 +32,57 @@ cntrl compile examples/patch-switcher/patches.toml \
   --table examples/patch-switcher/tags.toml \
   --target TARGET.json --output patches.bin
 
-cntrl upload patches.bin --port /dev/YOUR_SERIAL_PORT
+cntrl setup copy Evening=examples/patch-switcher/patches.toml \
+  --definitions examples/patch-switcher/definitions.toml \
+  --table examples/patch-switcher/table.toml \
+  --target TARGET.json --port /dev/YOUR_SERIAL_PORT
+cntrl setup list --port /dev/YOUR_SERIAL_PORT
+cntrl setup set Evening --port /dev/YOUR_SERIAL_PORT
+cntrl setup rotate -b --port /dev/YOUR_SERIAL_PORT
+cntrl setup download Evening --port /dev/YOUR_SERIAL_PORT
+cntrl setup del Evening --port /dev/YOUR_SERIAL_PORT
 cntrl status --port /dev/YOUR_SERIAL_PORT
 ```
 
-Compilation never opens a device. Upload sends a show document to the running
-application; it cannot flash firmware. Close other programs using the serial
-port before uploading. A status response reports format version, active byte
+Compilation never opens a device. `setup copy` compiles and copies data to the
+running application; it cannot flash firmware. The old single-show `upload`
+command is replaced by named setup management. Close other serial users before
+transferring data. A status response reports format version, active byte
 count and CRC32. Recheck status after a power cycle to verify persistence.
+
+Data files can be combined using a standalone ` + ` argument wherever the CLI
+accepts them. Put positional expressions before options, for example
+`cntrl setup copy Evening=jazz.toml + classical.toml ...`. Separate expressions
+create separate setups. Default names join file stems with `+`. `NAME=` names
+the whole expression and is allowed only before its first operand. Escape an
+equals sign within a name as `==` or `\=`; quote backslashes for the shell.
+The host setting `avoid_confict` defaults to true: recursively merge dictionaries,
+concatenate lists and let later scalars overwrite earlier values. With
+`--no-avoid-confict`, differing lists/scalars are errors; equal values are retained
+once. Incompatible types are errors in both modes. Diagnostics accumulate before
+any uploads. `--table` remains repeatable and each occurrence accepts expressions.
+
+Names are 1..63 filename-safe printable ASCII characters, ordered and matched
+case-insensitively, with display capitalization retained. Case-only duplicates
+are rejected. Copy and download refuse collisions unless `--overwrite/-o` is
+given. Downloads default to the current directory and produce `NAME.toml`.
+Each export contains resolved patch names, instrument identities and bank
+definitions, so it recompiles without the original definitions or tables.
+It does not reconstruct source regexes, comments, paths or original formatting.
+
+`setup set` without a name only prints the persistent selection. `rotate` wraps
+alphabetically, with `--backward/-b` reversing direction; fewer than two valid
+setups is an error. Selection never sends MIDI. Delete confirms once for the
+whole batch unless `--yes/-y` is supplied. Deleting the active setup selects the
+earliest valid survivor outside the batch. Deleting the final setup is legal:
+all three screens say `No setups`, normal controls are silent and management
+remains available. Invalid catalogue entries are reported rather than silently
+treated as an empty card. No automatic migration of old single-show files occurs.
+
+Listings show commit dates as local `YYYY-MM-DD HH:MM:SS`, or `unknown`. Copy
+syncs the pedal's clock from the Mac. Without a persistent clock, on-pedal edits
+after an offline reboot have unknown dates. Each copy is individually durable;
+multi-setup batches can partially succeed and report those results.
 
 Both TOML and JSON accept the same show, definition and table structures.
 User-adjustable controller settings belong in the show configuration whenever
@@ -99,9 +143,23 @@ startup both clear history and select the first candidate without sending MIDI.
 
 A/B/D/E singles wait up to `chord_ms` (default 100). Early release fires a single
 immediately. A second press at or before the deadline consumes both singles.
-Recognized AB/AD/BE/DE pairs are reserved; all pairs currently do nothing. A pair
+Recognized AB/BE/DE pairs are reserved. A+D opens setup management. A pair
 blocks further A/B/D/E actions until all four are released. C/F remain immediate
 after electrical debounce. No hold, repeat or double-press actions are installed.
+
+In management, A/B browse, C confirms and F goes back. Choose a setup, then
+Select or Edit. The numeric editor chooses a patch, a field and its value.
+Program, bank, volume and pan belong to that patch; channel belongs to its
+instrument alias; brightness and idle timeout belong to the whole setup. Bank
+cycles through that instrument's declared mappings and None. Volume and pan
+can also be None. F from patch selection offers Save/Discard/Cancel. No edit
+auditions or sends MIDI; only Save updates storage. USB operations that could
+displace unsaved edits return `unsaved-edits`. Text/font/routing edits are not
+included. Management uses built-in readable typography even without a setup.
+
+A+D used to wake the pedal does not open management. Release the complete wake
+gesture, then press A+D again. During screensaver entry, every button consumes
+the complete wake gesture and cancels the fade without a musical action.
 
 ## Screen graphics
 
@@ -173,15 +231,16 @@ clamping) reaching the threshold. If no such shift works, it uses the furthest
 RGB-cube corner, warning if that distance is still <= the threshold. Contrast is
 computed in input 8-bit RGB; encoded display colors are rounded down to RGB565.
 
-## Binary and transfer protocol, version 6
+## Binary and transfer protocol, version 7
 
-Version 6 adds the per-screen `half` color. `screensaver_timeout` remains an
-integer idle timeout in seconds.
+Version 7 retains the rendering/MIDI records and adds immutable instrument and
+bank metadata for resolved exports. `screensaver_timeout` remains an integer
+idle timeout in seconds.
 Zero (the default) disables the screensaver. Positive values enable the installed
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 6 firmware. No automatic
+version 7 firmware. No automatic
 conversion of stored documents is performed.
 
 All integers are little-endian; strings are NUL-terminated, zero-padded ASCII.
@@ -189,29 +248,61 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (6), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 splash (0 or 1), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (7), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 splash (0 or 1), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment, half RGB565; two zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
 | Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, name[64], three u16 screen cursor offsets |
+| Metadata header, 40 bytes | `CMTA`, u16 bank mapping count, two zero bytes, font name[32] |
+| Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
+| Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
+| Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
 
 Records occur in the order header, screens (undo/sent/next), instruments,
-categories, patches. MIDI values
+categories, patches, metadata header, identities, bank mappings and logical banks.
+MIDI values
 are 0..127; optional values use 255 for omission. Categories contain contiguous,
 nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-The USB serial request is `CNTRL BEGIN SIZE CRC32_HEX\n`. The receiver replies
-`CNTRL SEND\n`, then accepts exactly SIZE binary bytes. After validation,
-storage commit and read-back verification it replies `CNTRL DONE SIZE CRC\n`.
-`CNTRL STATUS\n` replies `CNTRL READY 6 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 7 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
+Names in commands are hex-encoded ASCII, never paths. Requests are:
 
-Each storage slot has `CNST`, u32 generation, u32 length and u32 whole-document
-CRC, followed by the document and a final `DONE` commit trailer. Only the
-inactive slot is replaced. Boot chooses the newest valid committed slot.
+- `CNTRL TIME EPOCH_SECONDS`: synchronize commit timestamps, reply `CNTRL OK`.
+- `CNTRL SETUP CURRENT`: reply `CNTRL CURRENT NAME_HEX` (empty name allowed).
+- `CNTRL SETUP LIST`: first `CNTRL ENTRY NAME_HEX EPOCH SIZE CRC`, or
+  `CNTRL INVALID NAME_HEX`; subsequent `CNTRL NEXT` requests advance until
+  `CNTRL END`. Invalid records have no valid committed generation; tombstones
+  are deliberately omitted.
+- `CNTRL SETUP PUT NAME_HEX SIZE CRC OVERWRITE`: reply `CNTRL SEND`, receive
+  exactly SIZE binary bytes, validate, commit and verify, then `CNTRL OK`.
+  `OVERWRITE` is 0 or 1. The host reads back all bytes for verification.
+- `CNTRL SETUP FINISH`: select the earliest setup if selection is empty after
+  a copy batch; otherwise retain the selection, reply `CNTRL OK`.
+- `CNTRL SETUP GET NAME_HEX`: reply `CNTRL FILE SIZE CRC`. Each `CNTRL NEXT`
+  returns `CNTRL DATA HEX_BYTES` with up to 128 bytes, until SIZE is complete.
+- `CNTRL SETUP SET NAME_HEX`, `CNTRL SETUP FORWARD` and
+  `CNTRL SETUP BACKWARD`: persist selection and restart the GUI, reply `CNTRL OK`.
+- `CNTRL SETUP DELETE SIZE CRC`: receive a checksummed binary list of
+  NUL-terminated names after `CNTRL SEND`; validate the whole list, safely change
+  selection and commit deletions; reply `CNTRL OK` or report failure. Query the
+  catalogue after a failure to determine which individual deletions completed.
+
+Each setup has `/cntrl/setups/NAME/0.bin` and `1.bin`. Its 96-byte header contains
+`CNST`, u32 generation, length, payload CRC, epoch timestamp, name[64], eight zero
+bytes and a CRC of the preceding 92 header bytes. The document follows, then
+`DONE`. A zero-length committed generation is a deletion tombstone: it suppresses
+older content even after restart. Previous payload generations are retained
+until the name is reused; deletion is logical, not SD garbage collection.
+Selection uses two 84-byte records under `/cntrl/selection/`: `CSEL`, generation,
+name[64], four zero bytes, CRC of the first 76 bytes, then `DONE`. An explicit
+empty selection prevents interrupted final deletion from reactivating a setup
+that was still awaiting deletion. Corrupt selection records are errors, not
+equivalent to an unset selection. All metadata and payloads are checked on read.
+Only the inactive slot is replaced. Boot chooses the newest valid committed slot.
 Interrupted and short writes are covered by host tests; filesystem and physical
 power-loss guarantees depend on the board's storage implementation and require
 separate qualification.

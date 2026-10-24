@@ -42,6 +42,12 @@ int main() {
     drain(renderer);
     assert(writes == 384 && pixels_sent == 3 * 160 * 128);
     for (unsigned i = 0; i < 3; ++i) blank(i);
+    cntrl::Pane no_setups;
+    no_setups.centered = true; no_setups.graphics.size = no_setups.graphics.line_height = 16;
+    std::strcpy(no_setups.patch, "No setups");
+    renderer.show(0, no_setups); drain(renderer);
+    assert(screens[0][56][26] == 0xffff && screens[0][55][26] == 0);
+    renderer.show(0, empty); drain(renderer);
     unsigned before = writes;
     renderer.show(0, empty); renderer.show(3, empty); drain(renderer);
     assert(writes == before);

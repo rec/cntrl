@@ -103,6 +103,7 @@ class Show(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object]
     patches: dict[str, object]
+    definitions: Definitions | None = None
     take_first_match: Annotated[bool, Field(strict=True)] = False
     chord_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] = 100
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192

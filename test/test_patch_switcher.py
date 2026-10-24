@@ -34,7 +34,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 6
+    assert compiler.HEADER.unpack_from(result)[1] == 7
     assert compiler.HEADER.unpack_from(result)[7] == 192
 
 
@@ -316,6 +316,34 @@ def test_cli_does_not_write_binary_when_patches_have_errors(
         cli.main()
     assert 'wind[1]' in str(failure.value) and 'wind[2]' in str(failure.value)
     assert not output.exists()
+
+
+def test_cli_preserves_repeated_table_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = FIXTURES.parents[1] / 'examples/patch-switcher'
+    output = tmp_path / 'show.bin'
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'cntrl',
+            'compile',
+            str(root / 'patches.toml'),
+            '--definitions',
+            str(root / 'definitions.toml'),
+            '--table',
+            str(root / 'table.toml'),
+            '--table',
+            str(root / 'tags.toml'),
+            '--target',
+            str(FIXTURES / 'target.json'),
+            '--output',
+            str(output),
+        ],
+    )
+    cli.main()
+    assert compiler.HEADER.unpack_from(output.read_bytes())[4:7] == (1, 2, 3)
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'firmware' / 'test'

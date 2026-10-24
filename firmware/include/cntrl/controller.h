@@ -8,6 +8,9 @@ enum class Chord { none, ab, ad, be, de };
 class Controller {
 public:
     explicit Controller(Hardware &hardware) : hardware_(hardware) {}
+    void deactivate() { document_ = Document(); held_ = 0; pending_ = -1; locked_ = false; }
+    void cancel_gesture() { held_ = 0; pending_ = -1; locked_ = false; }
+    void refresh() { cancel_gesture(); if (document_.valid()) render(); }
     void activate(const Document &document) {
         document_ = document;
         hardware_.set_brightness(document.brightness());
@@ -22,7 +25,7 @@ public:
     }
     // A..F use indices 0..5; timestamps belong to debounced edges.
     Chord button(unsigned button, bool pressed, uint32_t now) {
-        if (button >= 6 || !document_.valid()) return Chord::none;
+        if (button >= 6) return Chord::none;
         tick(now);
         if (button == 2 || button == 5) {
             if (pressed) action(button);
@@ -60,7 +63,7 @@ public:
         return Chord::none;
     }
     void tick(uint32_t now) {
-        if (pending_ >= 0 && uint32_t(now - since_) > document_.chord_ms()) {
+        if (pending_ >= 0 && uint32_t(now - since_) > (document_.valid() ? document_.chord_ms() : 100)) {
             unsigned button = unsigned(pending_);
             pending_ = -1;
             action(button);

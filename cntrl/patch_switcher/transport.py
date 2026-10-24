@@ -7,6 +7,10 @@ import time
 from pathlib import Path
 from zlib import crc32
 
+from pydantic import BaseModel
+
+from .data_files import validate_name
+
 
 class SerialConnection:
     def __init__(self, port: Path, timeout: float = 30) -> None:
@@ -74,25 +78,123 @@ class SerialConnection:
         raise ValueError(f'USB serial response exceeds {limit - 1} bytes')
 
 
-def upload_document(port: Path, data: bytes) -> str:
-    checksum = crc32(data)
-    with SerialConnection(port) as connection:
-        connection.write(f'CNTRL BEGIN {len(data)} {checksum:08x}\n'.encode())
-        response = connection.line()
+class SetupEntry(BaseModel, frozen=True):
+    name: str
+    modified: int
+    length: int
+    checksum: int
+    valid: bool = True
+
+
+class SetupClient:
+    def __init__(self, connection: SerialConnection) -> None:
+        self.connection = connection
+
+    def request(self, command: str) -> str:
+        self.connection.write((command + '\n').encode('ascii'))
+        response = self.connection.line(limit=600)
+        if response.startswith('CNTRL ERROR'):
+            raise ValueError(response)
+        return response
+
+    def ok(self, command: str) -> None:
+        if (response := self.request(command)) != 'CNTRL OK':
+            raise ValueError(f'unexpected response: {response}')
+
+    def catalogue(self) -> list[SetupEntry]:
+        result: list[SetupEntry] = []
+        response = self.request('CNTRL SETUP LIST')
+        while response != 'CNTRL END':
+            parts = response.split()
+            if len(parts) == 3 and parts[:2] == ['CNTRL', 'INVALID']:
+                result.append(
+                    SetupEntry(
+                        name=validate_name(bytes.fromhex(parts[2]).decode('ascii')),
+                        modified=0,
+                        length=0,
+                        checksum=0,
+                        valid=False,
+                    )
+                )
+                response = self.request('CNTRL NEXT')
+                continue
+            if len(parts) != 6 or parts[:2] != ['CNTRL', 'ENTRY']:
+                raise ValueError(f'invalid catalogue entry: {response}')
+            result.append(
+                SetupEntry(
+                    name=validate_name(bytes.fromhex(parts[2]).decode('ascii')),
+                    modified=int(parts[3]),
+                    length=int(parts[4]),
+                    checksum=int(parts[5], 16),
+                )
+            )
+            response = self.request('CNTRL NEXT')
+        return result
+
+    def current(self) -> str:
+        response = self.request('CNTRL SETUP CURRENT')
+        if not response.startswith('CNTRL CURRENT '):
+            raise ValueError(f'invalid selection response: {response}')
+        return bytes.fromhex(response[14:]).decode('ascii')
+
+    def select(self, name: str) -> None:
+        self.ok('CNTRL SETUP SET ' + validate_name(name).encode('ascii').hex())
+
+    def copy(self, name: str, data: bytes, overwrite: bool) -> None:
+        hex_name = validate_name(name).encode('ascii').hex()
+        command = (
+            f'CNTRL SETUP PUT {hex_name} {len(data)} {crc32(data):08x} {int(overwrite)}'
+        )
+        if (response := self.request(command)) != 'CNTRL SEND':
+            raise ValueError(response)
+        self.connection.write(data)
+        if (response := self.connection.line()) != 'CNTRL OK':
+            raise ValueError(response)
+        # Read back the committed bytes, not merely the acknowledged checksum.
+        if self.download(name) != data:
+            raise ValueError(f'{name}: read-back verification failed')
+
+    def download(self, name: str) -> bytes:
+        response = self.request(
+            'CNTRL SETUP GET ' + validate_name(name).encode('ascii').hex()
+        )
+        parts = response.split()
+        if len(parts) != 4 or parts[:2] != ['CNTRL', 'FILE']:
+            raise ValueError(f'invalid download response: {response}')
+        length, checksum = int(parts[2]), int(parts[3], 16)
+        if not 116 <= length <= 65536:
+            raise ValueError('invalid download length')
+        result = bytearray()
+        while len(result) < length:
+            response = self.request('CNTRL NEXT')
+            if not response.startswith('CNTRL DATA '):
+                raise ValueError(response)
+            chunk = bytes.fromhex(response[11:])
+            if not 1 <= len(chunk) <= 128:
+                raise ValueError('invalid download chunk')
+            result.extend(chunk)
+        if len(result) != length or crc32(result) != checksum:
+            raise ValueError('download checksum/length mismatch')
+        return bytes(result)
+
+    def delete(self, names: list[str]) -> None:
+        payload = b''.join(validate_name(n).encode('ascii') + b'\0' for n in names)
+        if not payload or len(payload) > 65536:
+            raise ValueError('deletion batch must contain 1..65536 bytes of names')
+        response = self.request(
+            f'CNTRL SETUP DELETE {len(payload)} {crc32(payload):08x}'
+        )
         if response != 'CNTRL SEND':
             raise ValueError(response)
-        connection.write(data)
-        response = connection.line()
-        if response != f'CNTRL DONE {len(data)} {checksum:08x}':
+        self.connection.write(payload)
+        if (response := self.connection.line()) != 'CNTRL OK':
             raise ValueError(response)
-        connection.write(b'CNTRL STATUS\n')
-        response = connection.line()
-        if response != f'CNTRL READY 6 {len(data)} {checksum:08x}':
-            raise ValueError(f'upload verification failed: {response}')
-    return response
 
 
 def device_status(port: Path) -> str:
     with SerialConnection(port) as connection:
         connection.write(b'CNTRL STATUS\n')
-        return connection.line()
+        response = connection.line()
+        if response.startswith('CNTRL ERROR'):
+            raise ValueError(response)
+        return response

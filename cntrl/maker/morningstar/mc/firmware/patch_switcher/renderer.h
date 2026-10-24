@@ -45,7 +45,11 @@ public:
             if (letter_ < length) {
                 if (!letter_) {
                     graphics_.setTextColor(field_ ? painting_.patch_color : settings.foreground, settings.background);
-                    graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
+                    if (painting_.centered) {
+                        int16_t x, y; uint16_t w, h;
+                        graphics_.getTextBounds(text, 0, 0, &x, &y, &w, &h);
+                        graphics_.setCursor((160 - int(w)) / 2 - x, (128 - int(h)) / 2 - y);
+                    } else graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
                         settings.pad + settings.top + field_ * (settings.line_height + 2));
                 }
                 graphics_.write(uint8_t(text[letter_++]));

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include "storage.h"
+#include <cntrl/setup_ui.h>
 
 struct Fake : cntrl::Hardware, cntrl::Replies {
     std::vector<std::vector<uint8_t>> sent;
@@ -29,34 +31,12 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     void reply(const char *s) override { replies.emplace_back(s); }
 };
 
-struct Memory : cntrl::Storage {
-    std::vector<uint8_t> slots[2];
-    unsigned slot = 0;
-    int remaining = -1;
-    unsigned size(unsigned s) override { return unsigned(slots[s].size()); }
-    bool read(unsigned s, unsigned offset, uint8_t *data, unsigned n) override {
-        if (offset + n > slots[s].size()) return false;
-        std::memcpy(data, slots[s].data() + offset, n); return true;
-    }
-    bool begin(unsigned s) override { slot = s; slots[s].clear(); return true; }
-    bool write(const uint8_t *data, unsigned n) override {
-        if (remaining >= 0) {
-            unsigned amount = std::min(n, unsigned(remaining));
-            slots[slot].insert(slots[slot].end(), data, data + amount);
-            remaining -= int(amount);
-            return amount == n;
-        }
-        slots[slot].insert(slots[slot].end(), data, data + n); return true;
-    }
-    bool finish() override { return true; }
-};
-
 void command(cntrl::Documents &docs, const std::string &line, uint32_t now = 0) {
     for (unsigned char c : line + "\n") docs.receive(c, now);
 }
-void upload(cntrl::Documents &docs, const std::vector<uint8_t> &data) {
-    char line[96];
-    std::snprintf(line, sizeof(line), "CNTRL BEGIN %u %08lx", unsigned(data.size()),
+void upload(cntrl::Documents &docs, const std::vector<uint8_t> &data, const char *name = "Test") {
+    char line[220], hex[127]; cntrl::hex_text(name, hex);
+    std::snprintf(line, sizeof(line), "CNTRL SETUP PUT %s %u %08lx 1", hex, unsigned(data.size()),
                   (unsigned long)cntrl::checksum(data.data(), unsigned(data.size())));
     command(docs, line);
     for (uint8_t b : data) docs.receive(b, 0);
@@ -113,6 +93,7 @@ void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
     app.activate(doc); app.action(2); app.action(1);
     assert(hw.panes[2].patch_color == hw.panes[2].graphics.foreground);
     std::memcpy(aliased.data() + second + 5, aliased.data() + first + 5, 2);
+    cntrl::put32(aliased.data() + (doc.bank(1) - aliased.data()), cntrl::u32(doc.bank(0)));
     cntrl::put32(aliased.data() + 20, cntrl::checksum(aliased.data() + 28, unsigned(aliased.size()) - 28));
     assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
     app.activate(doc); app.action(2); app.action(1);
@@ -121,6 +102,96 @@ void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
     unsigned sent = unsigned(hw.sent.size());
     app.action(2); // Grey is informational; it must not suppress repeated sends.
     assert(hw.sent.size() == sent + 1);
+}
+
+void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
+    TestStorage card; Fake hw; cntrl::Controller controller(hw);
+    cntrl::Documents docs(card, hw, controller, hw);
+    docs.boot();
+    for (const auto &pane : hw.panes) assert(pane.centered && !std::strcmp(pane.patch, "No setups"));
+    controller.button(0, true, 0);
+    assert(controller.button(3, true, 50) == cntrl::Chord::ad); // No document needed.
+    controller.button(0, false, 60); controller.button(3, false, 61);
+    upload(docs, bytes); command(docs, "CNTRL SETUP FINISH");
+    cntrl::SetupUi ui(docs, hw);
+    ui.enter(); ui.poll(0);
+    ui.button(2, true, 1); // Select/Edit menu.
+    ui.button(1, true, 2); ui.button(2, true, 3); // Edit selected setup.
+    assert(docs.dirty() && hw.sent.empty());
+    ui.button(2, true, 4); ui.button(2, true, 5); // PC value of first patch.
+    ui.button(1, true, 6);
+    assert(docs.edit_value(0, 0) == 2 && hw.sent.empty());
+    command(docs, "CNTRL SETUP SET 54657374");
+    assert(hw.replies.back() == "CNTRL ERROR unsaved-edits");
+    assert(docs.edit_value(0, 0) == 2);
+    ui.button(2, true, 7); ui.button(5, true, 8); ui.button(5, true, 9);
+    ui.button(0, true, 10); ui.button(0, true, 11); ui.button(2, true, 12); // Save.
+    while (docs.busy()) docs.tick(13);
+    ui.poll(0);
+    assert(!ui.open() && !docs.dirty() && docs.document().patch(0)[4] == 1);
+    assert(hw.sent.empty());
+    // Each numeric field is edited in its existing ownership scope.
+    assert(docs.edit_begin());
+    assert(docs.edit_adjust(0, 1, -1) && docs.edit_value(0, 1) == -1);
+    assert(docs.edit_adjust(0, 2, 1) && docs.edit_value(0, 2) == 2);
+    assert(docs.edit_adjust(0, 3, -1) && docs.edit_value(0, 3) == 99);
+    assert(docs.edit_adjust(0, 4, 1) && docs.edit_value(0, 4) == -63);
+    assert(docs.edit_adjust(0, 5, -1) && docs.edit_value(0, 5) == 191);
+    assert(docs.edit_adjust(0, 6, 1) && docs.edit_value(0, 6) == 1);
+    docs.edit_cancel();
+    assert(docs.document().brightness() == 192 && hw.sent.empty());
+    // An interrupted inactive slot with a valid newer HEADER must not cause
+    // an editor save to overwrite the only fully committed generation.
+    TestStorage interrupted = card;
+    interrupted.remaining = 96;
+    cntrl::Documents broken(interrupted, hw, controller, hw); broken.boot(); upload(broken, bytes);
+    interrupted.remaining = -1;
+    cntrl::Documents recovered(interrupted, hw, controller, hw); recovered.boot();
+    assert(recovered.edit_begin() && recovered.edit_adjust(0, 0, 1));
+    interrupted.remaining = 120;
+    assert(recovered.edit_save(0));
+    while (recovered.busy()) recovered.tick(1);
+    interrupted.remaining = -1;
+    cntrl::Documents reboot(interrupted, hw, controller, hw); reboot.boot();
+    assert(reboot.document().valid() && reboot.document().patch(0)[4] == 1);
+    // Corrupt selection records are not treated as an unset selection.
+    card.files[""][0][0] ^= 1;
+    cntrl::Documents bad_selection(card, hw, controller, hw); bad_selection.boot();
+    assert(!bad_selection.document().valid());
+}
+
+void test_deletion_and_selection_power_loss(const std::vector<uint8_t> &bytes) {
+    TestStorage card; Fake hw; cntrl::Controller controller(hw);
+    cntrl::Documents docs(card, hw, controller, hw); docs.boot();
+    upload(docs, bytes, "Alpha"); upload(docs, bytes, "Zulu");
+    command(docs, "CNTRL SETUP FINISH"); assert(!std::strcmp(docs.selected(), "Alpha"));
+    // Every byte boundary of a selection update preserves the old selection.
+    for (unsigned limit = 0; limit < 84; ++limit) {
+        TestStorage interrupted = card; interrupted.remaining = int(limit);
+        cntrl::Documents candidate(interrupted, hw, controller, hw); candidate.boot();
+        assert(!candidate.select("Zulu")); interrupted.remaining = -1;
+        cntrl::Documents reboot(interrupted, hw, controller, hw); reboot.boot();
+        assert(!std::strcmp(reboot.selected(), "Alpha"));
+    }
+    const uint8_t names[] = {'A','l','p','h','a',0,'Z','u','l','u',0};
+    char line[80]; std::snprintf(line, sizeof(line), "CNTRL SETUP DELETE %u %08lx", unsigned(sizeof(names)), (unsigned long)cntrl::checksum(names, sizeof(names)));
+    // Selection clear + two 100-byte tombstones. Successful tombstones must
+    // never expose their older payload when the next deletion is interrupted.
+    for (unsigned limit = 0; limit <= 284; ++limit) {
+        TestStorage interrupted = card; interrupted.remaining = int(limit);
+        cntrl::Documents candidate(interrupted, hw, controller, hw); candidate.boot();
+        command(candidate, line);
+        for (uint8_t c : names) candidate.receive(c, 0);
+        while (candidate.busy()) candidate.tick(1);
+        interrupted.remaining = -1;
+        cntrl::Documents reboot(interrupted, hw, controller, hw); reboot.boot();
+        char name[64];
+        if (limit >= 184) assert(!reboot.next_valid("", name) || !std::strcmp(name, "Zulu"));
+        if (limit == 284) {
+            assert(!reboot.document().valid() && !reboot.next_valid("", name));
+            for (const auto &pane : hw.panes) assert(!std::strcmp(pane.patch, "No setups"));
+        }
+    }
 }
 
 int main(int argc, char **argv) {
@@ -137,6 +208,8 @@ int main(int argc, char **argv) {
     assert(doc.graphics(2).half == 0x7bef);
     test_greyed_names(doc);
     test_greyed_aliases(bytes);
+    test_setup_editing_and_empty_ui(bytes);
+    test_deletion_and_selection_power_loss(bytes);
     for (unsigned n = 0; n < bytes.size(); ++n) {
         cntrl::Document truncated;
         assert(!truncated.load(bytes.data(), n, hw));
@@ -241,14 +314,15 @@ int main(int argc, char **argv) {
         assert(!std::strcmp(hw.panes[2].patch, "Flute"));
     }
     // Persistent upload, status, reboot, and interrupted inactive-slot writes.
-    Memory memory;
+    TestStorage memory;
     Fake io;
     cntrl::Controller runner(io);
     cntrl::Documents docs(memory, io, runner, io);
     docs.boot(); assert(io.sent.empty());
-    upload(docs, bytes); assert(io.replies.back().find("CNTRL DONE ") == 0);
+    upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
+    command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].patch, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 6 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 7 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     auto new_show = bytes;
@@ -258,8 +332,8 @@ int main(int argc, char **argv) {
     cntrl::put32(new_show.data() + 20,
                  cntrl::checksum(new_show.data() + 28, unsigned(new_show.size()) - 28));
     // Every byte boundary in the new slot must leave the previous slot bootable.
-    for (unsigned limit = 0; limit < bytes.size() + 20; ++limit) {
-        Memory interrupted = memory;
+    for (unsigned limit = 0; limit < bytes.size() + 100; ++limit) {
+        TestStorage interrupted = memory;
         interrupted.remaining = int(limit);
         cntrl::Documents replacement(interrupted, io, runner, io);
         replacement.boot(); upload(replacement, new_show);
@@ -268,7 +342,7 @@ int main(int argc, char **argv) {
         recovery.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     }
     upload(reboot, new_show);
-    assert(io.replies.back().find("CNTRL DONE ") == 0);
+    assert(io.replies.back() == "CNTRL OK");
     assert(!std::strcmp(io.panes[2].patch, "Oboe"));
     assert(io.brightness == 128);
     io.brightness = 0;
@@ -276,10 +350,10 @@ int main(int argc, char **argv) {
     latest.boot(); assert(!std::strcmp(io.panes[2].patch, "Oboe"));
     assert(io.brightness == 128);
     upload(reboot, corrupt); assert(io.replies.back() == "CNTRL ERROR invalid-document");
-    command(reboot, "CNTRL BEGIN 500 00000000");
+    command(reboot, "CNTRL SETUP PUT 54657374 500 00000000 1");
     reboot.receive(0, 0); reboot.tick(10001);
     assert(io.replies.back() == "CNTRL ERROR transfer-timeout");
-    command(reboot, std::string(120, 'x'));
+    command(reboot, std::string(300, 'x'));
     assert(io.replies.back() == "CNTRL ERROR command-too-long");
     std::cout << "portable controller, decoder, gestures and persistence passed\n";
 }

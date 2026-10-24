@@ -19,12 +19,14 @@ struct Pane {
     char patch[64] = {};
     ScreenGraphics graphics;
     uint16_t category_x = 4, patch_x = 4, patch_color = 0xffff;
+    bool centered = false;
 };
 
 struct Hardware {
     virtual ~Hardware() = default;
     // Accept the complete message sequence, or accept none of it.
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
+    virtual bool output_idle() const { return true; }
     virtual bool supports(const char *output) const = 0;
     virtual bool supports_font(unsigned font, unsigned size) const = 0;
     virtual unsigned display_width() const = 0;
@@ -43,5 +45,10 @@ struct Storage {
     virtual bool begin(unsigned slot) = 0;
     virtual bool write(const uint8_t *data, unsigned length) = 0;
     virtual bool finish() = 0;
+};
+struct SetupStorage : Storage {
+    virtual bool available() const = 0;
+    virtual void choose(const char *name) = 0;
+    virtual bool next(const char *after, char *name) = 0;
 };
 } // namespace cntrl

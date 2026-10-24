@@ -74,7 +74,7 @@ def compile_show(
         raise CompilationError(_validation_errors('show', error)) from error
     setups: dict[tuple[str, str], models.Setup] = {}
     try:
-        parsed = models.Definitions.model_validate(definitions)
+        parsed = show.definitions or models.Definitions.model_validate(definitions)
         for s in parsed.setups:
             key = (s.instrument, s.name)
             if key in setups:
@@ -116,6 +116,7 @@ def compile_show(
         errors.append('patches: at least one category is required')
     categories: list[bytes] = []
     patches: list[bytes] = []
+    logical_banks: list[int] = []
     for category, values in show.patches.items():
         category_text = _text(category, 64, target, f'patches.{category}', errors)
         if not isinstance(values, list):
@@ -210,6 +211,9 @@ def compile_show(
                     _text(name, 64, target, context + '.name', errors),
                 )
             )
+            logical_banks.append(0xFFFFFFFF if bank is None else bank)
+            if bank is not None and bank >= 0xFFFFFFFF:
+                errors.append(f'{context}: bank exceeds storage capacity')
         count = len(patches) - start
         # Report over-capacity documents rather than overflowing packed fields.
         categories.append(
@@ -240,7 +244,51 @@ def compile_show(
             p + struct.pack('<3H', *(o[len(categories) + i] for o in offsets))
             for i, p in enumerate(patches)
         ]
+    # Immutable identity/mapping metadata enables resolved, editable exports.
+    # Runtime bytes remain the single authoritative copy of editable values.
+    mappings: list[bytes] = []
+    identities: list[bytes] = []
+    for index, (alias, instrument) in enumerate(instruments.items()):
+        identities.append(
+            struct.pack(
+                '<32s32s',
+                _text(
+                    instrument.instrument,
+                    32,
+                    target,
+                    f'instruments.{alias}.instrument',
+                    errors,
+                ),
+                _text(
+                    instrument.setup, 32, target, f'instruments.{alias}.setup', errors
+                ),
+            )
+        )
+        if setup := setups.get((instrument.instrument, instrument.setup)):
+            for bank, mapping in setup.banks.items():
+                if not 0 <= bank < 0xFFFFFFFF:
+                    errors.append(f'instruments.{alias}: bank exceeds storage capacity')
+                    continue
+                mappings.append(
+                    struct.pack(
+                        '<HIBB',
+                        index,
+                        bank,
+                        _optional(mapping.msb),
+                        _optional(mapping.lsb),
+                    )
+                )
+    if len(mappings) > 65535:
+        errors.append('too many bank mappings')
+    metadata = struct.pack(
+        '<4sH2x32s',
+        b'CMTA',
+        min(len(mappings), 65535),
+        _text(show.font_name or 'classic', 32, target, 'font_name', errors),
+    )
     body = b''.join(screen_records + instrument_records + categories + patches)
+    body += metadata + b''.join(identities + mappings)
+    body += b''.join(struct.pack('<I', min(b, 0xFFFFFFFF)) for b in logical_banks)
     if len(body) + HEADER.size > target.max_document_bytes:
         errors.append(
             f'document: {len(body) + HEADER.size} bytes exceeds target capacity '
@@ -251,7 +299,7 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            6,
+            7,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),

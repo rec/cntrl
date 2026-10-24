@@ -32,12 +32,30 @@ class Document {
 public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
-            || u16(bytes + 4) != 6 || u16(bytes + 6) < 1
+            || u16(bytes + 4) != 7 || u16(bytes + 6) < 1
             || u32(bytes + 8) != length || bytes[19] > 1 || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
+        unsigned meta = 76 + ni * 68 + nc * 74 + np * 82;
         if (!ni || ni > max_instruments || !nc || nc > max_categories || !np
-            || 76 + ni * 68 + nc * 74 + np * 82 != length) return false;
+            || meta + 40 + ni * 64 + np * 4 > length
+            || std::memcmp(bytes + meta, "CMTA", 4) || u16(bytes + meta + 6)
+            || !text_valid(bytes + meta + 8, 32)) return false;
+        unsigned nb = u16(bytes + meta + 4);
+        if (meta + 40 + ni * 64 + nb * 8 + np * 4 != length) return false;
+        for (unsigned i = 0; i < ni; ++i)
+            if (!text_valid(bytes + meta + 40 + i * 64, 32)
+                || !text_valid(bytes + meta + 72 + i * 64, 32)) return false;
+        for (unsigned b = 0; b < nb; ++b) {
+            const uint8_t *m = bytes + meta + 40 + ni * 64 + b * 8;
+            if (u16(m) >= ni || u32(m + 2) == 0xffffffffu
+                || (m[6] > 127 && m[6] != 255) || (m[7] > 127 && m[7] != 255)
+                || (m[6] == 255 && m[7] == 255)) return false;
+            for (unsigned j = 0; j < b; ++j) {
+                const uint8_t *other = bytes + meta + 40 + ni * 64 + j * 8;
+                if (u16(m) == u16(other) && u32(m + 2) == u32(other + 2)) return false;
+            }
+        }
         for (unsigned s = 0; s < 3; ++s) {
             const uint8_t *p = bytes + 28 + s * 16;
             if (!hardware.supports_font(p[0], p[1]) || p[0] != bytes[28] || p[1] != bytes[29] || p[2] != bytes[30] || p[3] || u16(p + 14)
@@ -67,6 +85,13 @@ public:
                 if (u16(q) >= ni || u16(q + 2) != c || q[4] > 127
                     || q[9] || q[10] || q[11] || !text_valid(q + 12, 64)) return false;
                 for (unsigned k = 5; k < 9; ++k) if (q[k] > 127 && q[k] != 255) return false;
+                uint32_t bank = u32(bytes + meta + 40 + ni * 64 + nb * 8 + j * 4);
+                bool mapped = bank == 0xffffffffu && q[5] == 255 && q[6] == 255;
+                for (unsigned b = 0; b < nb; ++b) {
+                    const uint8_t *m = bytes + meta + 40 + ni * 64 + b * 8;
+                    if (u16(m) == u16(q) && u32(m + 2) == bank && m[6] == q[5] && m[7] == q[6]) mapped = true;
+                }
+                if (!mapped) return false;
                 for (unsigned s = 0; s < 3; ++s)
                     if (u16(q + 76 + s * 2) < bytes[30 + s * 16]
                         || u16(q + 76 + s * 2) >= hardware.display_width() - bytes[30 + s * 16]) return false;
@@ -94,6 +119,10 @@ public:
     const uint8_t *instrument(unsigned i) const { return data_ + 76 + i * 68; }
     const uint8_t *category(unsigned i) const { return data_ + 76 + instruments_ * 68 + i * 74; }
     const uint8_t *patch(unsigned i) const { return data_ + 76 + instruments_ * 68 + categories_ * 74 + i * 82; }
+    unsigned metadata() const { return 76 + instruments_ * 68 + categories_ * 74 + patches_ * 82; }
+    unsigned mappings() const { return u16(data_ + metadata() + 4); }
+    const uint8_t *mapping(unsigned i) const { return data_ + metadata() + 40 + instruments_ * 64 + i * 8; }
+    const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
     const uint8_t *data_ = nullptr;
     unsigned length_ = 0, instruments_ = 0, categories_ = 0, patches_ = 0;
