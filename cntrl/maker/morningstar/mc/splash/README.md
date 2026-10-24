@@ -101,10 +101,14 @@ GIF decoder, decompression, resizing or image mirroring. Base RGB conversion
 happens on the Mac. Rows
 are stored in the exact RGB565 byte order needed by the display bus.
 
-## White-band colour cycle
+## White-band colour walk
 
 The board output adapter now recolours the white component at playback time,
-using a 20-second red/yellow/green/cyan/blue/magenta hue cycle. Each pixel's
+using a smooth pseudorandom walk through RGB colour space. Every second it
+chooses a nearby target, with each six-bit channel moving by up to 20 levels,
+and interpolates toward it. Boundary reflections keep channels in 0..63 without
+clipping them against the cube walls. The pace is comparable to the former
+20-second hue cycle, but there is no fixed colour loop. Each pixel's
 common RGB component is replaced by the tinted equivalent; its remaining
 colour is retained. Thus black and pure green are unchanged, grey antialiasing
 keeps its coverage, and white-to-green edge blends retain their green residue.
@@ -117,16 +121,26 @@ broadcast transfer. One 320-byte temporary row is transformed before sending;
 stored assets, checksums, geometry, frame timing and backlight fades are unchanged.
 The effect is limited to splash/screensaver output, not the main UI.
 
-`color_cycle.h` implements the pure integer RGB565 transform. Native tests check
-the cycle endpoints, black and green invariance, grey shading, green edge blends
-and identity under a neutral tint for all 65,536 RGB565 values.
+`color_cycle.h` implements the walk and pure integer RGB565 transform. The walk
+is seeded from the first frame's uptime, continues between animation loops and
+does not replay a long backlog after an idle pause. This is visual randomness,
+not a cryptographic generator. Native tests check channel bounds and smoothness
+over a minute, clock wraparound, black and green invariance, grey shading, green
+edge blends and identity under a neutral tint for all 65,536 RGB565 values.
 
-Built and flashed on 2026-10-24 after splash/runtime, display/renderer native
+Screensaver playback still loops without a time limit until physical input;
+normal wake/dismiss behaviour is unchanged.
+
+The preceding fixed-hue-cycle build was flashed on 2026-10-24 after splash/runtime, display/renderer native
 tests and stock flash-configuration/HEX-ELF checks passed. Image SHA-256:
 `f847942f295e055f4454434c364802f45e74b031d5dc0cf2eee87ca7bd0f7c05`.
 The uploader returned its usual reset/disappearance status 1; USB then confirmed
 `CNTRL READY 7 23390 0718301d`, with pman still selected. Visual colour and
 playback-speed confirmation remains a physical check.
+
+The random-walk change passed the isolated sanitizer-enabled splash test.
+Combined firmware build/upload is pending the concurrent USB/MIDI work's
+buildable handoff; this record does not claim that the walk is flashed yet.
 
 ## Components
 
