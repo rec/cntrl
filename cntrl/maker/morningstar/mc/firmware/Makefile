@@ -14,7 +14,37 @@ export ARDUINO_DIRECTORIES_DOWNLOADS := $(ROOT)/.tools/downloads
 export ARDUINO_DIRECTORIES_USER := $(ROOT)/.tools/user
 export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
-.PHONY: tools build inspect test patch-switcher inspect-patch-switcher
+.PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe
+
+scroll-probe: tools
+	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/no-external-ram.patch"
+	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/external-flash-config.patch"
+	"$(CLI)" compile --fqbn teensy:avr:teensy41:usb=serialmidi,speed=600,opt=osstd,keys=en-us --warnings all \
+		--build-path "$(ROOT)/build/scroll-probe" \
+		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -I$(ROOT)/usb_probe' \
+		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
+		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
+		"$(ROOT)/scroll_probe"
+	cp "$(ROOT)/build/scroll-probe/scroll_probe.ino.hex" "$(ROOT)/build/scroll-probe.hex"
+
+inspect-scroll-probe: scroll-probe
+	"$(ARM)-objcopy" -O binary "$(ROOT)/build/scroll-probe/scroll_probe.ino.elf" "$(ROOT)/build/scroll-probe/image.bin"
+	"$(ARM)-objcopy" -I ihex -O binary "$(ROOT)/build/scroll-probe.hex" "$(ROOT)/build/scroll-probe/from-hex.bin"
+	cmp "$(ROOT)/build/scroll-probe/image.bin" "$(ROOT)/build/scroll-probe/from-hex.bin"
+	dd if="$(ROOT)/build/scroll-probe/image.bin" bs=512 count=1 2>/dev/null | shasum -a 256 -c "$(ROOT)/stock-flash-config.sha256"
+	shasum -a 256 "$(ROOT)/build/scroll-probe.hex"
+	"$(ARM)-size" -A "$(ROOT)/build/scroll-probe/scroll_probe.ino.elf"
+
+test-scroll-probe: tools
+	mkdir -p "$(ROOT)/build"
+	$(CC) -c "$(CORE)/libraries/ST7735_t3/src/glcdfont.c" -o "$(ROOT)/build/scroll-font.o"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+		"$(ROOT)/test_scroll_probe.cpp" "$(ROOT)/build/scroll-font.o" -o "$(ROOT)/build/test_scroll_probe"
+	"$(ROOT)/build/test_scroll_probe"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -DCNTRL_SCROLL_PROBE -I"$(ROOT)/test_support" -I"$(ROOT)/usb_probe" \
+		"$(ROOT)/test_displays.cpp" "$(ROOT)/scroll_probe/displays.cpp" -o "$(ROOT)/build/test_scroll_displays"
+	"$(ROOT)/build/test_scroll_displays"
 
 patch-switcher: tools
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/fonts-in-flash.patch" > /dev/null 2>&1 || \

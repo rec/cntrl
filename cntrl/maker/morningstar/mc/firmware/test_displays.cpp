@@ -6,6 +6,9 @@
 #include <cassert>
 #include <cstdint>
 #include <vector>
+#ifdef CNTRL_SCROLL_PROBE
+#include "scroll_probe/io.h"
+#endif
 
 struct Transfer {
     std::vector<uint8_t> bytes;
@@ -201,4 +204,31 @@ int main() {
     brightness.clear();
     initialize_displays(false);
     assert((brightness == std::vector<int>{0})); // Application must reveal its own image.
+#ifdef CNTRL_SCROLL_PROBE
+    for (auto &panel : transfers) panel.clear();
+    initialize_scroll();
+    for (const auto &panel : transfers) {
+        assert(panel.size() == 3);
+        assert((panel[0].bytes == std::vector<uint8_t>{0x36, 0x88}));
+        assert((panel[1].bytes == std::vector<uint8_t>{0x33, 0, 1, 0, 160, 0, 1}));
+        assert((panel[2].bytes == std::vector<uint8_t>{0x37, 0, 1}));
+    }
+    scroll_panels(1, 1);
+    assert((transfers[0].back().bytes == std::vector<uint8_t>{0x37, 0, 160}));
+    assert(transfers[1].size() == 3 && transfers[2].size() == 3);
+    scroll_panels(7, 160);
+    for (const auto &panel : transfers)
+        assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 1}));
+    uint8_t column[256] = {};
+    write_scroll_column(2, 159, column);
+    auto &panel = transfers[2];
+    assert((panel[panel.size() - 3].bytes == std::vector<uint8_t>{0x2a, 0, 2, 0, 129}));
+    assert((panel[panel.size() - 2].bytes == std::vector<uint8_t>{0x2b, 0, 160, 0, 160}));
+    assert(panel.back().bytes.size() == 257 && panel.back().bytes[0] == 0x2c);
+    assert(clock_gpio && data_gpio && !spi_active && !levels[13]);
+    before = transactions;
+    write_scroll_column(3, 0, column); write_scroll_column(0, 160, column);
+    scroll_panels(0, 0); scroll_panels(8, 0);
+    assert(transactions == before);
+#endif
 }
