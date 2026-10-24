@@ -5,8 +5,9 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+import tomlkit
 
-from cntrl.patch_switcher import cli, compiler, models
+from cntrl.patch_switcher import cli, compiler, models, resolved
 
 
 @pytest.fixture
@@ -36,6 +37,17 @@ def test_compiler_matches_shared_cpp_fixture(
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
     assert compiler.HEADER.unpack_from(result)[1] == 7
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
+
+
+@pytest.mark.parametrize('duration', [2000, 750, 65535])
+def test_transition_duration_survives_resolved_export(
+    show: dict[str, object], definitions: object, target: models.Target, duration: int
+) -> None:
+    show['transition_ms'] = duration
+    data = compiler.compile_show(show, definitions, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['transition_ms'] == duration
+    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
 
 
 def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) -> None:

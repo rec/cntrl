@@ -87,7 +87,7 @@ public:
             history_[depth_++] = {uint16_t(p), current_[instrument]};
             current_[instrument] = int(p);
             center_ = int(p);
-            hardware_.transition(false);
+            hardware_.transition(false, document_.transition_ms());
         } else if (button == 5) {
             if (!depth_) return;
             const Action &a = history_[depth_ - 1];
@@ -97,7 +97,7 @@ public:
             selected_ = u16(document_.patch(a.patch) + 2);
             cursors_[selected_] = a.patch - u16(document_.category(selected_) + 64);
             if (!--depth_) center_ = -1;
-            hardware_.transition(true);
+            hardware_.transition(true, document_.transition_ms());
         }
         render();
     }

@@ -107,6 +107,7 @@ class Show(BaseModel, frozen=True):
     take_first_match: Annotated[bool, Field(strict=True)] = False
     chord_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] = 100
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
+    transition_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] = 2000
     splash: Annotated[bool, Field(strict=True)] = True
     screensaver_timeout: Annotated[
         int,

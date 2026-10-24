@@ -39,7 +39,7 @@ public:
         unsigned meta = 76 + ni * 68 + nc * 74 + np * 82;
         if (!ni || ni > max_instruments || !nc || nc > max_categories || !np
             || meta + 40 + ni * 64 + np * 4 > length
-            || std::memcmp(bytes + meta, "CMTA", 4) || u16(bytes + meta + 6)
+            || std::memcmp(bytes + meta, "CMTA", 4)
             || !text_valid(bytes + meta + 8, 32)) return false;
         unsigned nb = u16(bytes + meta + 4);
         if (meta + 40 + ni * 64 + nb * 8 + np * 4 != length) return false;
@@ -112,6 +112,10 @@ public:
     uint8_t brightness() const { return data_[18]; }
     bool splash() const { return data_[19] != 0; }
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
+    unsigned transition_ms() const {
+        unsigned value = u16(data_ + metadata() + 6);
+        return value ? value : 2000;
+    }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + 28 + slot * 16;
         return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u16(p + 12)};

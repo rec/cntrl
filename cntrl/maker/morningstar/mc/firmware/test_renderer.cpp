@@ -142,7 +142,7 @@ int main() {
         renderer.show(i, pane);
     }
     drain(renderer);
-    renderer.transition(false);
+    renderer.transition(false, 2000);
     check_motion = true; checked_progress = 0;
     for (unsigned i = 0; i < 3; ++i) {
         cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 2));
@@ -150,21 +150,28 @@ int main() {
     }
     for (unsigned now = 0; now < 1000; ++now)
         for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    assert(!renderer.ready() && checked_progress < display_pitch);
+    for (unsigned now = 1000; now < 3000; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
     assert(renderer.ready());
     check_motion = false; assert(checked_progress == display_pitch);
     for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 2)));
     assert(ring == display_pitch % 160);
-    renderer.transition(true);
+    renderer.transition(true, 500);
     check_motion = check_undo = true; checked_progress = 0;
     for (unsigned i = 0; i < 3; ++i) {
         cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
         renderer.show(i, pane);
     }
-    for (unsigned now = 1000; now < 2000; ++now)
+    for (unsigned now = 3000; now < 4500; ++now)
         for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
     assert(renderer.ready() && ring == 0);
     check_motion = false; assert(checked_progress == display_pitch);
     for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 1)));
+    assert(transition_progress(1000, 2000) == display_pitch / 2);
+    assert(transition_progress(1999, 2000) < display_pitch);
+    assert(transition_progress(2000, 2000) == display_pitch);
+    assert(transition_progress(500, 500) == display_pitch);
     for (unsigned panel = 0; panel < 3; ++panel) for (unsigned x = 0; x < 160; ++x) {
         auto left = panorama_sample(panel, x, display_pitch, false);
         assert(left.pane == int(panel) + 1 && left.x == x);

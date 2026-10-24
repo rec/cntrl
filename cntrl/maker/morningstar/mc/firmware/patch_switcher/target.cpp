@@ -70,7 +70,7 @@ public:
     void show(unsigned pane, const cntrl::Pane &content) override {
         renderer_.show(pane, content);
     }
-    void transition(bool undo) override { renderer_.transition(undo); }
+    void transition(bool undo, unsigned duration_ms) override { renderer_.transition(undo, duration_ms); }
     void set_brightness(uint8_t value) override {
         brightness_ = value;
     }

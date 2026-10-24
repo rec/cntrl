@@ -17,10 +17,10 @@ public:
         preparing_ = animating_ = native_ready_ = false; ring_ = 0;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
     }
-    void transition(bool undo) {
+    void transition(bool undo, unsigned duration_ms) {
         if (!ready() || !valid_[0] || !valid_[1] || !valid_[2]) return;
         std::memcpy(previous_, cache_, sizeof(cache_));
-        undo_ = undo; preparing_ = true;
+        undo_ = undo; duration_ms_ = duration_ms; preparing_ = true;
         for (auto &dirty : dirty_) dirty = true;
     }
     void show(unsigned pane, const cntrl::Pane &content) {
@@ -106,9 +106,7 @@ private:
         return previous_[sample.pane][y * 160 + sample.x];
     }
     void animate(uint32_t now) {
-        unsigned frame = uint32_t(now - started_) * 60 / 1000;
-        if (frame > transition_frames) frame = transition_frames;
-        unsigned goal = frame * display_pitch / transition_frames;
+        unsigned goal = transition_progress(uint32_t(now - started_), duration_ms_);
         if (progress_ >= goal) return;
         ++progress_;
         ring_ = (ring_ + (undo_ ? 159 : 1)) % 160;
@@ -138,6 +136,7 @@ private:
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
     unsigned ring_ = 0, progress_ = 0;
+    unsigned duration_ms_ = 2000;
     uint32_t started_ = 0;
     bool dirty_[3] = {true, true, true};
     bool valid_[3] = {};

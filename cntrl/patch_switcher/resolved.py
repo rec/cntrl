@@ -39,6 +39,7 @@ def export(data: bytes) -> str:
     result: dict[str, object] = {
         'chord_ms': chord,
         'brightness': flags & 255,
+        'transition_ms': struct.unpack_from('<H', data, meta + 6)[0] or 2000,
         'splash': bool(flags >> 8),
         'screensaver_timeout': timeout // 1000,
         'font_name': text(meta + 8, 32),
