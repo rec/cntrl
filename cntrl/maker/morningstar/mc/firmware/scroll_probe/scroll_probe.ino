@@ -9,7 +9,7 @@
 
 namespace {
 ButtonState buttons[6];
-bool painting = true;
+bool painting = true, reverse_order = false;
 unsigned pixels_per_update = 1, next_column = 0, offset = 0;
 uint32_t last_scan = 0, last_step = 0, steps = 0, streamed = 0, step_us = 0;
 uint32_t period_us = 0, max_us = 0, overruns = 0;
@@ -18,9 +18,10 @@ char line[64];
 unsigned used = 0;
 
 void report() {
-    char text[224];
-    snprintf(text, sizeof(text), "CNTRL SCROLL %s spi=8 gap=%u rate=60 stride=%u x=%u ssa=%u steps=%lu pixels=%lu us=%lu period=%lu max_us=%lu overruns=%lu\n",
-        painting ? "PAINTING" : "READY", scroll_probe::gap_width, pixels_per_update, offset,
+    char text[256];
+    snprintf(text, sizeof(text), "CNTRL SCROLL %s order=%s spi=8 gap=%u rate=60 stride=%u x=%u ssa=%u steps=%lu pixels=%lu us=%lu period=%lu max_us=%lu overruns=%lu\n",
+        painting ? "PAINTING" : "READY", reverse_order ? "RTL" : "LTR",
+        scroll_probe::gap_width, pixels_per_update, offset,
         scroll_probe::start_line(offset), (unsigned long)steps,
         (unsigned long)streamed, (unsigned long)step_us, (unsigned long)period_us,
         (unsigned long)max_us, (unsigned long)overruns);
@@ -49,6 +50,10 @@ void loop() {
         uint8_t raw = read_buttons();
         for (unsigned i = 0; i < 6; ++i) {
             uint8_t event = buttons[i].update(!(raw & (1u << button_bits[i])), now);
+            if (i == 1 && (event & press_event)) {
+                reverse_order = !reverse_order;
+                max_us = overruns = 0;
+            }
             if (i == 2 && (event & press_event)) next_speed();
         }
     }
@@ -74,13 +79,14 @@ void loop() {
         last_step = start;
         for (unsigned pixel = 0; pixel < pixels_per_update; ++pixel) {
             offset = (offset + 1) % scroll_probe::image_width;
-            for (unsigned panel = 0; panel < 3; ++panel) {
+            for (unsigned slot = 0; slot < 3; ++slot) {
+                unsigned panel = scroll_probe::panel_index(slot, reverse_order);
                 unsigned world_x = scroll_probe::entering_world_x(panel, offset);
                 write_scroll_columns(panel, (offset + 159) % 160, image[world_x], 1);
                 streamed += 256;
             }
         }
-        scroll_panels(7, offset);
+        scroll_panels(7, offset, reverse_order);
         step_us = micros() - start;
         if (step_us > max_us) max_us = step_us;
         if (step_us > 16667) ++overruns;

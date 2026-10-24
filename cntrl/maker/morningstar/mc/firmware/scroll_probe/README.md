@@ -32,7 +32,12 @@ C to cycle through 1, 2, 4, 8, 16 and 32 pixels per update, then back to 1, with
 blanking, repainting or resetting position. These correspond to 60, 120, 240,
 480, 960 and 1,920 pixels/second if the update fits within its time budget.
 The current isolation baseline cannot maintain 60 Hz at the highest strides.
-Other buttons do nothing.
+Press and release B to toggle the panel update order. The initial order is
+left, centre, right (`LTR`); the alternate is right, centre, left (`RTL`). Both
+the entering-pixel writes and the subsequent scroll commands use that order.
+The image's position, direction, speed and physical window assignments do not
+change, and toggling does not blank or repaint the screens. Other buttons do
+nothing.
 All SPI calls finish and restore GPIO 13/12 before the next button scan.
 
 The complete source pattern is cached once at startup in 327,680 bytes of RAM.
@@ -46,14 +51,15 @@ Initialization uses the shared driver; the normal application's driver is unchan
 `CNTRL STATUS` returns fields such as:
 
 ```text
-CNTRL SCROLL READY spi=8 gap=64 rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_us=... overruns=...
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_us=... overruns=...
 ```
 
 `pixels` counts streamed pixel bytes after the baseline, not baseline painting or
 command bytes. `us` measures the most recent step's SPI writes and scroll
 commands. `period` is the interval between the latest two update starts, in
 microseconds. `max_us` is the worst step duration and `overruns` counts steps
-exceeding the 16,667-microsecond budget; both reset on speed changes. These are
+exceeding the 16,667-microsecond budget; both reset on speed or order changes.
+These are
 elapsed times, not sampled CPU load. `rate=60` is the target, not a measurement.
 `CNTRL SCROLL NEXT` toggles speed from the host. The usual `cntrl status --port
 /dev/cu.usbmodem144682801` command can read status without new host tooling.
@@ -76,7 +82,8 @@ The firmware status reports the compiled gap. This standalone diagnostic does
 not load show configuration or modify saved settings.
 
 Native tests cover all six strides, including unaligned starts and source-image
-wraps, pixel byte order, per-column register payloads, selected-panel isolation,
+wraps, pixel byte order, per-column register payloads, both panel command orders,
+selected-panel isolation,
 coordinate bounds and SPI/GPIO handoff. These establish software behaviour, not
 whether the physical controller implements scrolling. Inspection compares HEX
 with ELF bytes and checks the stock flash-configuration digest. No build target
@@ -189,3 +196,25 @@ CNTRL SCROLL READY spi=8 gap=64 rate=60 stride=1 x=500 ssa=141 steps=500 pixels=
 
 The physical continuity illusion at the estimated gap width awaits visual
 confirmation. The diagnostic still does not open the SD card or send MIDI.
+
+## Panel update-order comparison, 2026-10-24
+
+B toggles both pixel-write and scroll-command order; C retains its six speeds.
+This tests whether the observed left/centre motion hitch follows transaction
+order. It does not synchronize the three independent panel refresh cycles or
+establish the cause of the hitch by itself.
+
+Native tests verify both panel-index sequences and actual chip-select order for
+forward/reverse scroll commands, including a selected-panel subset. Diagnostic,
+button/display/renderer tests and stock flash-config/HEX-ELF checks passed.
+Uploaded HEX SHA-256:
+`5bea12f8816fd8576788914d78735fd9c9b0fe00e49e48539b78f9428ab8df91`.
+The uploader returned its usual status 1 on reset/disappearance; USB then
+confirmed the new build running in the original left-to-right order:
+
+```text
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=449 ssa=32 steps=449 pixels=344832 us=964 period=16667 max_us=965 overruns=0
+```
+
+The effect of B on visible motion awaits physical observation. Saved card data
+remains untouched.

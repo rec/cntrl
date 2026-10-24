@@ -11,6 +11,10 @@ namespace scroll_probe {
 constexpr unsigned panel_width = 160, height = 128, image_width = 1280;
 constexpr unsigned gap_width = CNTRL_SCROLL_GAP;
 
+constexpr unsigned panel_index(unsigned slot, bool reverse) {
+    return reverse ? 2 - slot : slot;
+}
+
 constexpr unsigned panel_origin(unsigned panel) {
     return panel * (panel_width + gap_width);
 }

@@ -17,13 +17,15 @@ void initialize_scroll() {
     end_transfer();
 }
 
-void scroll_panels(uint8_t selected, unsigned offset) {
+void scroll_panels(uint8_t selected, unsigned offset, bool reverse) {
     if (!selected || selected > 7) return;
     const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
     const uint8_t start[] = {0, uint8_t(scroll_probe::start_line(offset))};
     begin_transfer();
-    for (unsigned i = 0; i < 3; ++i)
+    for (unsigned slot = 0; slot < 3; ++slot) {
+        unsigned i = scroll_probe::panel_index(slot, reverse);
         if (selected & (1u << i)) command(panels[i], 0x37, start, sizeof(start));
+    }
     end_transfer();
 }
 
