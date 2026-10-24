@@ -19,7 +19,7 @@ installed ST7735 library's classic font data. Each panel initially shows 160
 consecutive columns: left 0..159, centre 160..319, right 320..479.
 
 All three panels show adjacent windows at world positions `x`, `x+160` and
-`x+320`, modulo 960. Updates run every 16,667 microseconds, approximately 60 Hz.
+`x+320`, modulo 960. Updates target 16,667 microseconds, approximately 60 Hz.
 Each update fills the entering circular-buffer columns per panel, then changes
 all three scroll offsets once. Pixel traffic is 768 bytes times the stride per
 update, plus command traffic. Tiles should continue across panel boundaries.
@@ -27,18 +27,23 @@ update, plus command traffic. Tiles should continue across panel boundaries.
 Initially the speed is one pixel per update (60 pixels/second). Press and release
 C to cycle through 1, 2, 4, 8, 16 and 32 pixels per update, then back to 1, without
 blanking, repainting or resetting position. These correspond to 60, 120, 240,
-480, 960 and 1,920 pixels/second. Other buttons do nothing.
+480, 960 and 1,920 pixels/second if the update fits within its time budget.
+The current isolation baseline cannot maintain 60 Hz at the highest strides.
+Other buttons do nothing.
 All SPI calls finish and restore GPIO 13/12 before the next button scan.
 
 The complete source pattern is cached once at startup in 245,760 bytes of RAM.
-Contiguous columns use blocking 16-bit SPI transfers at 16 MHz, the installed
-ST7735 library's default clock. Batches split at the circular-buffer boundary.
+The isolation baseline restores 8 MHz byte transfers and addresses each column
+separately, even when the caller supplies several columns. This removes the
+faster clock, 16-bit transfers and controller multi-column addressing from the
+rendering path while keeping the cache and six speeds. Source spans still split
+at the circular-buffer boundary.
 Initialization uses the shared driver; the normal application's driver is unchanged.
 
 `CNTRL STATUS` returns fields such as:
 
 ```text
-CNTRL SCROLL READY rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_us=... overruns=...
+CNTRL SCROLL READY spi=8 rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_us=... overruns=...
 ```
 
 `pixels` counts streamed pixel bytes after the baseline, not baseline painting or
@@ -58,7 +63,7 @@ make -C cntrl/maker/morningstar/mc/firmware test
 ```
 
 Native tests cover all six strides, including unaligned starts and source-image
-wraps, pixel byte order, batched register payloads, selected-panel isolation,
+wraps, pixel byte order, per-column register payloads, selected-panel isolation,
 coordinate bounds and SPI/GPIO handoff. These establish software behaviour, not
 whether the physical controller implements scrolling. Inspection compares HEX
 with ELF bytes and checks the stock flash-configuration digest. No build target
@@ -124,3 +129,29 @@ Pixel transfer throughput is confirmed; visual quality at the increased clock
 and higher strides still needs the user's observation. Saved card data was not
 touched. At the highest stride, button scanning can be delayed by a whole update
 (about 14 ms); the diagnostic does not claim a 3 ms worst-case scan interval.
+
+The user subsequently reported intermittent glitches on the left panel and
+stable rendering garbage on the other two. The timing results did not establish
+correct rendering. The exact cause has not been isolated.
+
+## Rendering isolation baseline
+
+Restore the previously working 8 MHz byte-wise, single-column write protocol,
+keeping the cached image and six-speed controls. At high strides, frame timing
+will exceed the 60 Hz budget and button scanning can be delayed by that longer
+update. This test prioritizes rendering correctness over speed. A clean result
+would narrow the fault to the removed transfer/addressing changes, not identify
+which one caused it. Saved card files remain untouched.
+
+Built and uploaded with HEX SHA-256
+`3c79bbc0f3a017aa98782f98c210bb0e9108af4da41bc2b1e2ce4387a284b7f2`.
+Diagnostic and button/display/renderer native tests passed, as did the stock
+flash-configuration and HEX/ELF checks. The uploader returned its usual status 1
+on reset/disappearance; USB then confirmed this baseline running at stride 1:
+
+```text
+CNTRL SCROLL READY spi=8 rate=60 stride=1 x=333 ssa=148 steps=333 pixels=255744 us=965 period=16667 max_us=965 overruns=0
+```
+
+Physical rendering confirmation is pending. Do not infer a visual fix from USB
+status or native protocol tests alone.

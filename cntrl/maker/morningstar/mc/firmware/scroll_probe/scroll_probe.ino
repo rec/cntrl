@@ -19,7 +19,7 @@ unsigned used = 0;
 
 void report() {
     char text[224];
-    snprintf(text, sizeof(text), "CNTRL SCROLL %s rate=60 stride=%u x=%u ssa=%u steps=%lu pixels=%lu us=%lu period=%lu max_us=%lu overruns=%lu\n",
+    snprintf(text, sizeof(text), "CNTRL SCROLL %s spi=8 rate=60 stride=%u x=%u ssa=%u steps=%lu pixels=%lu us=%lu period=%lu max_us=%lu overruns=%lu\n",
         painting ? "PAINTING" : "READY", pixels_per_update, offset,
         scroll_probe::start_line(offset), (unsigned long)steps,
         (unsigned long)streamed, (unsigned long)step_us, (unsigned long)period_us,

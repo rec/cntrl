@@ -41,11 +41,7 @@ void SPIClass::begin() {
 void SPIClass::beginTransaction(SPISettings settings) {
     assert(spi_started && !spi_active);
     assert(settings.order == MSBFIRST && settings.mode == SPI_MODE0);
-#ifdef CNTRL_SCROLL_PROBE
-    assert(settings.clock == 8000000 || settings.clock == 16000000);
-#else
     assert(settings.clock == 8000000);
-#endif
     spi_active = true;
     ++transactions;
 }
@@ -57,12 +53,6 @@ uint8_t SPIClass::transfer(uint8_t value) {
         digitalWrite(13, HIGH);
         digitalWrite(13, LOW);
     }
-    return 0;
-}
-
-uint16_t SPIClass::transfer16(uint16_t value) {
-    transfer(uint8_t(value >> 8));
-    transfer(uint8_t(value));
     return 0;
 }
 
@@ -244,11 +234,19 @@ int main() {
     assert(transactions == before);
     uint8_t stripe[32 * 256];
     for (unsigned i = 0; i < sizeof(stripe); ++i) stripe[i] = uint8_t(i);
+    unsigned previous = transfers[1].size();
+    before = transactions;
     write_scroll_columns(1, 128, stripe, 32);
     const auto &batch = transfers[1];
-    assert((batch[batch.size() - 2].bytes == std::vector<uint8_t>{0x2b, 0, 129, 0, 160}));
-    assert(batch.back().bytes.size() == 1 + sizeof(stripe));
-    for (unsigned i = 0; i < sizeof(stripe); ++i) assert(batch.back().bytes[i + 1] == stripe[i]);
+    assert(transactions == before + 32 && batch.size() == previous + 32 * 3);
+    for (unsigned x = 0; x < 32; ++x) {
+        unsigned first = previous + x * 3;
+        assert((batch[first].bytes == std::vector<uint8_t>{0x2a, 0, 2, 0, 129}));
+        assert((batch[first + 1].bytes == std::vector<uint8_t>{0x2b, 0, uint8_t(129 + x), 0, uint8_t(129 + x)}));
+        assert(batch[first + 2].bytes.size() == 257 && batch[first + 2].bytes[0] == 0x2c);
+        for (unsigned i = 0; i < 256; ++i)
+            assert(batch[first + 2].bytes[i + 1] == stripe[x * 256 + i]);
+    }
     assert(clock_gpio && data_gpio && !spi_active && !levels[13]);
 #endif
 }

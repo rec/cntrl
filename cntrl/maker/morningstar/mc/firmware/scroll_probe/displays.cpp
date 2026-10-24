@@ -3,19 +3,12 @@
 #include "io.h"
 #include "pattern.h"
 
-namespace {
-void begin_scroll_transfer() {
-    SPI.begin();
-    SPI.beginTransaction(SPISettings(16000000, MSBFIRST, SPI_MODE0));
-}
-}
-
 void initialize_scroll() {
     const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
     const uint8_t native[] = {0x88}; // Preserve MY/BGR, disable row/column exchange.
     const uint8_t area[] = {0, 1, 0, 160, 0, 1}; // Account for both hidden gate lines.
     const uint8_t start[] = {0, 1};
-    begin_scroll_transfer();
+    begin_transfer();
     for (const Panel &panel : panels) {
         command(panel, 0x36, native, sizeof(native));
         command(panel, 0x33, area, sizeof(area));
@@ -39,14 +32,15 @@ void write_scroll_columns(unsigned index, unsigned column, const uint8_t *pixels
     const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
     const Panel &panel = panels[index];
     const uint8_t columns[] = {0, 2, 0, 129};
-    const uint8_t rows[] = {0, uint8_t(column + 1), 0, uint8_t(column + count)};
-    begin_scroll_transfer();
-    command(panel, 0x2a, columns, sizeof(columns));
-    command(panel, 0x2b, rows, sizeof(rows));
-    digitalWrite(panel.dc, LOW); digitalWrite(panel.cs, LOW);
-    send_byte(0x2c); digitalWrite(panel.dc, HIGH);
-    for (unsigned i = 0; i < count * 256; i += 2)
-        SPI.transfer16(uint16_t(pixels[i]) << 8 | pixels[i + 1]);
-    digitalWrite(panel.cs, HIGH);
-    end_transfer();
+    for (unsigned x = 0; x < count; ++x) {
+        const uint8_t rows[] = {0, uint8_t(column + x + 1), 0, uint8_t(column + x + 1)};
+        begin_transfer();
+        command(panel, 0x2a, columns, sizeof(columns));
+        command(panel, 0x2b, rows, sizeof(rows));
+        digitalWrite(panel.dc, LOW); digitalWrite(panel.cs, LOW);
+        send_byte(0x2c); digitalWrite(panel.dc, HIGH);
+        for (unsigned i = 0; i < 256; ++i) send_byte(pixels[x * 256 + i]);
+        digitalWrite(panel.cs, HIGH);
+        end_transfer();
+    }
 }
