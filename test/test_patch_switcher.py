@@ -34,8 +34,8 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 6
-    assert compiler.HEADER.unpack_from(result)[7] == 192
+    assert compiler.HEADER.unpack_from(result)[1] == 7
+    assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
 def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) -> None:
@@ -56,16 +56,21 @@ def test_brightness_is_encoded_in_show(
 ) -> None:
     show['brightness'] = brightness
     result = compiler.compile_show(show, definitions, [], target)
-    assert compiler.HEADER.unpack_from(result)[7] == brightness
+    assert compiler.HEADER.unpack_from(result)[7] == brightness | 256
 
 
-def test_splash_is_optional_and_encoded_in_show(
-    show: dict[str, object], definitions: object, target: models.Target
+@pytest.mark.parametrize('splash', [None, True, False])
+def test_splash_defaults_to_enabled_unless_explicitly_disabled(
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    splash: bool | None,
 ) -> None:
-    assert not models.Show.model_validate(show).splash
-    show['splash'] = True
+    assert models.Show.model_validate(show).splash
+    if splash is not None:
+        show['splash'] = splash
     result = compiler.compile_show(show, definitions, [], target)
-    assert result[18:20] == bytes([192, 1])
+    assert result[18:20] == bytes([192, int(splash is not False)])
 
 
 @pytest.mark.parametrize('seconds', [0, 3, 2147483])
@@ -316,6 +321,34 @@ def test_cli_does_not_write_binary_when_patches_have_errors(
         cli.main()
     assert 'wind[1]' in str(failure.value) and 'wind[2]' in str(failure.value)
     assert not output.exists()
+
+
+def test_cli_preserves_repeated_table_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = FIXTURES.parents[1] / 'examples/patch-switcher'
+    output = tmp_path / 'show.bin'
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'cntrl',
+            'compile',
+            str(root / 'patches.toml'),
+            '--definitions',
+            str(root / 'definitions.toml'),
+            '--table',
+            str(root / 'table.toml'),
+            '--table',
+            str(root / 'tags.toml'),
+            '--target',
+            str(FIXTURES / 'target.json'),
+            '--output',
+            str(output),
+        ],
+    )
+    cli.main()
+    assert compiler.HEADER.unpack_from(output.read_bytes())[4:7] == (1, 2, 3)
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'firmware' / 'test'

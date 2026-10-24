@@ -4,6 +4,7 @@
 #include <SD.h>
 #include <USBHost_t36.h>
 #include <cntrl/documents.h>
+#include <cntrl/setup_ui.h>
 #include "buttons.h"
 #include "displays.h"
 #include "switches.h"
@@ -38,6 +39,7 @@ public:
     bool supports_font(unsigned font, unsigned size) const override {
         return ShowGraphics::supports_font(font, size);
     }
+    bool output_idle() const override { return queued_ == 0; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     bool send(const char *output, const uint8_t *data, unsigned length) override {
@@ -137,25 +139,47 @@ private:
     bool enabled_[4] = {};
     DisplayRenderer renderer_;
     unsigned response_offset_ = 0;
-    char response_[128] = {};
+    char response_[600] = {};
 };
 
-class Card : public cntrl::Storage {
+class Card : public cntrl::SetupStorage {
 public:
     bool ready = false;
+    bool available() const override { return ready && !SD.sdfs.card()->errorCode(); }
+    void choose(const char *name) override {
+        std::snprintf(directory_, sizeof(directory_), name[0] ? "/cntrl/setups/%s" : "/cntrl/selection", name);
+    }
+    bool next(const char *after, char *name) override {
+        if (!ready) return false;
+        auto root = SD.sdfs.open("/cntrl/setups", O_RDONLY);
+        if (!root) return false;
+        char best[64] = {}, candidate[128]; FsFile entry;
+        while (entry.openNext(&root, O_RDONLY)) {
+            if (entry.isDirectory() && entry.getName(candidate, sizeof(candidate))
+                && cntrl::setup_name(candidate) && cntrl::name_compare(candidate, after) > 0
+                && (!best[0] || cntrl::name_compare(candidate, best) < 0))
+                std::snprintf(best, sizeof(best), "%.63s", candidate);
+            entry.close();
+        }
+        std::snprintf(name, 64, "%s", best); return best[0];
+    }
     unsigned size(unsigned slot) override {
         if (!ready) return 0;
-        auto file = SD.sdfs.open(names_[slot], O_RDONLY);
+        char path[112]; filename(slot, path);
+        auto file = SD.sdfs.open(path, O_RDONLY);
         return file ? unsigned(file.size()) : 0;
     }
     bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned length) override {
         if (!ready) return false;
-        auto file = SD.sdfs.open(names_[slot], O_RDONLY);
+        char path[112]; filename(slot, path);
+        auto file = SD.sdfs.open(path, O_RDONLY);
         return file && file.seekSet(offset) && file.read(data, length) == int(length);
     }
     bool begin(unsigned slot) override {
         if (!ready) return false;
-        file_ = SD.sdfs.open(names_[slot], O_RDWR | O_CREAT | O_TRUNC);
+        if (!SD.sdfs.exists(directory_) && !SD.sdfs.mkdir(directory_, true)) return false;
+        char path[112]; filename(slot, path);
+        file_ = SD.sdfs.open(path, O_RDWR | O_CREAT | O_TRUNC);
         if (file_) return true;
         file_.close();
         return false;
@@ -171,13 +195,16 @@ public:
     }
 private:
     FsFile file_;
-    const char *names_[2] = {"/cntrl-show-0.bin", "/cntrl-show-1.bin"};
+    char directory_[96] = {};
+    void filename(unsigned slot, char *path) const { std::snprintf(path, 112, "%s/%u.bin", directory_, slot); }
 };
 
 Board board;
 Card card;
 cntrl::Controller controller(board);
-cntrl::Documents documents(card, board, controller, board);
+// Keep document/transfer buffers out of RAM1's code and stack budget.
+DMAMEM cntrl::Documents documents(card, board, controller, board);
+cntrl::SetupUi setup_ui(documents, board);
 cntrl::splash::SdSlots splash_card;
 cntrl::splash::Receiver splash_assets(splash_card, board);
 cntrl::splash::Panels splash_panels;
@@ -234,7 +261,6 @@ void initialize_target() {
     splash_card.ready = card.ready;
     splash_assets.boot();
     documents.boot();
-    if (!card.ready) board.error("SD unavailable: no show");
 }
 
 void poll_target() {
@@ -247,12 +273,22 @@ void poll_target() {
             events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now);
             if (buttons[i].pressed) pressed |= 1u << i;
         }
-        if (!splash_session.controls(pressed, now)) {
+        bool consumed = splash_session.controls(pressed, now);
+        if (consumed) controller.cancel_gesture();
+        setup_ui.poll(pressed);
+        if (!consumed) {
             for (unsigned i = 0; i < 6; ++i) {
-                if (events[i] & press_event) controller.button(i, true, now);
-                if (events[i] & release_event) controller.button(i, false, now);
+                if (setup_ui.open()) {
+                    if (!documents.busy()) {
+                        if (events[i] & press_event) setup_ui.button(i, true, now);
+                        if (events[i] & release_event) setup_ui.button(i, false, now);
+                    }
+                } else {
+                    if ((events[i] & press_event) && controller.button(i, true, now) == cntrl::Chord::ad && splash_session.management_allowed()) setup_ui.enter();
+                    if (events[i] & release_event) controller.button(i, false, now);
+                }
             }
-            controller.tick(now);
+            if (!setup_ui.open()) controller.tick(now);
         }
     }
     // A bounded amount of work per iteration; SD-card latency itself depends
@@ -261,5 +297,5 @@ void poll_target() {
         serial_router.receive(Serial.read(), now);
     serial_router.poll(now);
     board.poll();
-    board.display(now, documents.busy());
+    board.display(now, documents.busy() || setup_ui.open());
 }

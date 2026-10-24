@@ -1,5 +1,6 @@
 #include "../router.h"
 #include "storage.h"
+#include "../../../../../../firmware/test/storage.h"
 #include <cassert>
 #include <fstream>
 #include <string>
@@ -81,7 +82,8 @@ void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<u
 
 int main(int argc, char **argv) {
     assert(argc == 2);
-    Memory show_card, asset_card;
+    TestStorage show_card;
+    Memory asset_card;
     Device device;
     Panels panels;
     cntrl::Controller controller(device);
@@ -94,7 +96,7 @@ int main(int argc, char **argv) {
     assets.boot();
     while (!router.accepts_input()) router.poll(0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back() == "CNTRL READY 6 0 00000000");
+    assert(device.replies.back() == "CNTRL READY 7 0 00000000");
     command(router, "CNTRL STORAGE");
     assert(storage_queries == 1 && storage_scans == 0);
     command(router, "CNTRL STORAGE SCAN");
@@ -109,14 +111,15 @@ int main(int argc, char **argv) {
         show.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     show[19] = 1;
     char begin[96];
-    std::snprintf(begin, sizeof(begin), "CNTRL BEGIN %u %08lx", unsigned(show.size()),
+    std::snprintf(begin, sizeof(begin), "CNTRL SETUP PUT 54657374 %u %08lx 0", unsigned(show.size()),
         (unsigned long)cntrl::checksum(show.data(), unsigned(show.size())));
     command(router, begin);
     assert(device.replies.back() == "CNTRL SEND");
     assert(storage_queries == 2);
     for (uint8_t c : show) router.receive(c, 0);
     while (documents.busy()) router.poll(0);
-    assert(device.replies.back().find("CNTRL DONE ") == 0);
+    assert(device.replies.back() == "CNTRL OK");
+    command(router, "CNTRL SETUP FINISH");
     assert(!session.poll(0)); // Enabled but absent asset: normal UI, no stuck splash.
     session.configure(false, 3000, 0);
     assert(!session.poll(10000, true) && session.brightness(192, 10000) == 192);
@@ -144,7 +147,7 @@ int main(int argc, char **argv) {
     command(router, "CNTRL SPLASH STATUS");
     assert(device.replies.back().find("CNTRL SPLASH READY ") == 0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 6 ") == 0);
+    assert(device.replies.back().find("CNTRL READY 7 ") == 0);
 
     {
         Player boot_player(assets, panels);
@@ -271,7 +274,7 @@ int main(int argc, char **argv) {
     router.poll(10001); // Finish timed-out asset upload, leaving old slot available.
     assert(!assets.busy());
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 6 ") == 0);
+    assert(device.replies.back().find("CNTRL READY 7 ") == 0);
 
     session.configure(true, 0, 10002);
     assert(session.controls(1, 10002)); // A press during pending startup also cancels.
@@ -307,7 +310,13 @@ int main(int argc, char **argv) {
     unsigned sent_before_wake = device.sent;
     if (!session.controls(1u << 2, 62001)) controller.button(2, true, 62001);
     assert(device.sent == sent_before_wake + 1); // Wake sends now, not after the fade.
+    assert(!session.management_allowed());
+    assert(!session.controls(9, 62001) && !session.management_allowed());
+    assert(!session.controls(8, 62002) && !session.management_allowed());
     assert(!session.controls(0, 62002));
+    assert(session.management_allowed());
+    assert(!session.controls(9, 62003) && session.management_allowed()); // Second A+D.
+    session.controls(0, 62004);
     assert(session.poll(62101) && session.brightness(192, 62101) == 48);
     assert(!session.poll(62201) && session.take_redraw());
     assert(!session.poll(62300, true));
@@ -328,7 +337,7 @@ int main(int argc, char **argv) {
     session.configure(false, 0, 85000);
     assert(!session.poll(100000) && session.brightness(192, 100000) == 192);
 
-    for (unsigned i = 0; i < 120; ++i) router.receive('x', 10003);
+    for (unsigned i = 0; i < 300; ++i) router.receive('x', 10003);
     router.receive('\n', 10003);
     assert(device.replies.back() == "CNTRL ERROR command-too-long");
     router.receive('x', 10003); router.poll(20004);

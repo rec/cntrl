@@ -45,8 +45,18 @@ public:
             if (letter_ < length) {
                 if (!letter_) {
                     graphics_.setTextColor(field_ ? painting_.patch_color : settings.foreground, settings.background);
-                    graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
+                    if (painting_.centered) {
+                        int16_t x, y; uint16_t w, h;
+                        graphics_.getTextBounds(text, 0, 0, &x, &y, &w, &h);
+                        graphics_.setCursor((160 - int(w)) / 2 - x, (128 - int(h)) / 2 - y);
+                    } else graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
                         settings.pad + settings.top + field_ * (settings.line_height + 2));
+                }
+                if (field_ && painting_.wrap_patch && settings.font == 0) {
+                    unsigned columns = (160 - 2 * settings.pad) / (6 * (settings.size / 8));
+                    if (columns && letter_ % columns == 0)
+                        graphics_.setCursor(painting_.patch_x, settings.pad + settings.top
+                            + settings.line_height + 2 + (letter_ / columns) * settings.line_height);
                 }
                 graphics_.write(uint8_t(text[letter_++]));
             } else {

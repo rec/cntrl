@@ -32,6 +32,9 @@ public:
     }
     void setTextSize(unsigned scale) { scale_ = scale; }
     void setCursor(unsigned x, unsigned y) { x_ = x; y_ = y; }
+    void getTextBounds(const char *text, int16_t x, int16_t y, int16_t *left, int16_t *top, uint16_t *width, uint16_t *height) {
+        *left = x; *top = y; *width = std::strlen(text) * 6 * scale_; *height = 8 * scale_;
+    }
     void write(uint8_t character) {
         ++glyphs;
         for (unsigned y = 0; y < 8 * scale_ && y_ + y < unsigned(_height); ++y)

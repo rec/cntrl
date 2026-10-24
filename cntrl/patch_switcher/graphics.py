@@ -26,7 +26,7 @@ def distance(first: tuple[int, int, int], second: tuple[int, int, int]) -> float
 def colors(screen: models.ScreenGraphics, contrast: float) -> tuple[int, int, int]:
     foreground, background = screen.foreground_color, screen.background_color
     if foreground is None and background is None:
-        foreground, background = 'white', 'black'
+        foreground, background = 'black', 'white'
     if foreground is None or background is None:
         chosen = color(foreground if foreground is not None else str(background))
         complement = [255 - c for c in chosen]

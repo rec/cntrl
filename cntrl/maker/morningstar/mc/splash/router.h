@@ -30,7 +30,13 @@ public:
                 return;
             }
             bool splash = !std::strncmp(line_, "CNTRL SPLASH ", 13);
-            if (!std::strncmp(line_, "CNTRL BEGIN ", 12)
+            if (!std::strncmp(line_, "CNTRL SETUP PUT ", 16)
+                || !std::strncmp(line_, "CNTRL SETUP GET ", 16)
+                || !std::strncmp(line_, "CNTRL SETUP SET ", 16)
+                || !std::strncmp(line_, "CNTRL SETUP DELETE ", 19)
+                || !std::strcmp(line_, "CNTRL SETUP FORWARD")
+                || !std::strcmp(line_, "CNTRL SETUP BACKWARD")
+                || !std::strcmp(line_, "CNTRL SETUP FINISH")
                 || !std::strncmp(line_, "CNTRL SPLASH BEGIN ", 19)) session_.stop();
             for (unsigned i = 0; i <= used_; ++i) {
                 uint8_t c = i == used_ ? '\n' : uint8_t(line_[i]);
@@ -54,7 +60,7 @@ private:
     Session &session_;
     cntrl::Replies &replies_;
     void (*storage_info_)(bool);
-    char line_[96];
+    char line_[256];
     unsigned used_ = 0;
     uint32_t last_ = 0;
     bool overflow_ = false;

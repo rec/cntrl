@@ -16,7 +16,10 @@ public:
         running_ = pending_ = saver_ = false;
         fade_ = Fade::none; clock_started_ = false;
     }
+    bool management_allowed() const { return !waking_gesture_ && !held_; }
     bool controls(uint8_t pressed, uint32_t now) {
+        if (pressed && saver_) waking_gesture_ = true;
+        if (!pressed) waking_gesture_ = false;
         if (pressed || pressed != pressed_) last_input_ = now;
         pressed_ = pressed;
         if (pending_ || (running_ && !saver_ && (fade_ == Fade::none || to_animation_))) {
@@ -105,6 +108,7 @@ private:
     bool running_ = false, pending_ = false, held_ = false, redraw_ = false;
     bool saver_ = false, to_animation_ = false, clock_started_ = false;
     bool first_image_ = false;
+    bool waking_gesture_ = false;
     uint8_t pressed_ = 0;
     Fade fade_ = Fade::none;
     uint32_t started_ = 0, duration_ = 1000, from_ = 1000;

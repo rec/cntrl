@@ -99,16 +99,19 @@ The complete generated report is saved locally as
 
 ## Adapter and storage boundaries
 
-Show format version 6 includes shared top-level `font_name`/`font_size`/`pad` and
+Show format version 7 includes shared top-level `font_name`/`font_size`/`pad` and
 `screens.undo`, `screens.sent`, `screens.next` colors, including optional `half`.
 Only the rightmost patch name uses `half` when it matches the last successful
 send for its instrument (program and bank select, not label/category). Without
 an explicit `half`, the Mac computes the RGB midpoint of foreground/background.
-Version 6 has been built and tested, not flashed. Existing shows need recompiling.
+Version 7 also retains instrument identities, logical banks and bank mappings
+for self-contained editable downloads. Existing shows need recompiling.
 Brightness
 (0..255, default 192) applies to backlight PWM pin 6 on show activation, including
 startup. Older binary shows are rejected; recompile the original show and upload
-it after updating firmware. Top-level `splash` defaults to false; when true, the
+it after updating firmware. Top-level `splash` defaults to true; explicit false
+disables startup playback. With no selected setup, boot also uses the installed
+animation. When enabled, the
 installed animation plays until any button is pressed. See the
 [splash instructions](../splash/README.md) for preparation and upload. Splash
 images fill the panels without text padding. The dismissing gesture sends no
@@ -118,8 +121,9 @@ MIDI, and all normal UI pixels are redrawn afterward.
 show uses 3 seconds. Entry fades through black with 4,000 ms per half; waking
 uses 200 ms per half and performs the waking button's normal action immediately.
 Both transitions wait in black for a complete repaint. Held buttons prevent
-entry; presses and releases restart the timer. Only startup dismissal consumes
-its triggering gesture. Show or asset transfers cancel playback and inhibit
+entry; presses and releases restart the timer. Startup dismissal and entry-fade
+cancellation consume their whole triggering gesture. A+D used for waking never
+opens management; release it and press A+D a second time. Setup or asset transfers cancel playback and inhibit
 idle entry until they finish; ordinary USB queries do not count as physical input.
 
 USB exposes Serial + MIDI, using the public core's development VID/PID and the
@@ -131,9 +135,10 @@ boot and recovery check after its first authorized upload.
 
 The adapter uses the traced native SD interface with the pinned SD/SdFat
 libraries. It requires an existing readable FAT/exFAT card. It does not format a
-card, migrate vendor data or probe the EEPROM. Show storage owns two filenames at
-the card root: `cntrl-show-0.bin` and `cntrl-show-1.bin`. Those names must be
-reserved for cntrl. Upload replaces only the inactive cntrl file, writes a commit
+card, migrate vendor data or probe the EEPROM. Named setup storage owns
+`/cntrl/setups/NAME/0.bin` and `1.bin`, plus the two selection records under
+`/cntrl/selection/`. Old `cntrl-show-0.bin` and `cntrl-show-1.bin` files are left
+untouched and are not automatically activated. Copy replaces only the inactive cntrl file, writes a commit
 trailer last, flushes/closes it and reads it back before activation. Boot ignores
 partial or corrupt slots and selects the newest valid generation. Splash assets
 use separate `cntrl-splash-0.bin` and `cntrl-splash-1.bin` slots with their own
@@ -184,15 +189,15 @@ software-clocked driver had an observed update time around 1,500 ms.
 
 ## Capacity measurements
 
-The configurable-graphics ARM link used approximately 309 KiB for RAM1 variables
-and 96 KiB for code plus ITCM padding, leaving approximately 107 KiB for local
-variables. Exact link measurements are printed by `inspect-patch-switcher`.
-RAM2 static use was 17,568 bytes; no external RAM was allocated. Final link
+Named-setup document and transfer buffers are placed in RAM2, leaving RAM1 for
+code, display buffers and stack. Exact link measurements are printed by
+`inspect-patch-switcher`. No external RAM is allocated. Final link
 measurements are printed by `inspect-patch-switcher` and may vary as code changes.
 
 The current allocation supports two 65,536-byte document buffers, 32 routed
-instruments, 128 categories and 128 Undo entries. Record sizes impose an upper
-bound of 796 patches for the smallest possible instrument/category tables;
+instruments, 128 categories and 128 Undo entries, plus a 65,536-byte scratch
+buffer shared by deletion names and editor-save verification. Record sizes impose an upper
+bound of 758 patches for the smallest possible instrument/category tables and no bank mappings;
 larger tables reduce this through the document byte-size check. Instrument and
 output IDs occupy at most 31 printable ASCII characters; category/patch names
 occupy at most 63. The compiler chooses one shared fitting font size; category
@@ -201,8 +206,8 @@ without runtime width measurement, wrapping or font-size changes. These are the
 implemented build's limits, not claims about maximum
 hardware capacity. The target JSON records them for the compiler.
 
-The two slots consume at most 131,112 file bytes, excluding filesystem overhead.
-The installed card's free space is unknown until hardware qualification. A full
+Each setup's two slots consume at most 131,272 file bytes, excluding filesystem
+overhead. There is no separate document buffer per stored setup. A full
 or failing card must leave the old committed slot usable and produce an upload
 error; that path is covered with fake storage but not yet physically tested.
 
@@ -340,3 +345,72 @@ running. The animation upload verified as
 `CNTRL READY 4 22242 e39424b7`. Visible orientation, frame rate, clean dismissal
 and cold-boot persistence still require physical confirmation. No physical
 power-loss or interrupted-write qualification is claimed.
+
+## Named performance setups: 2026-10-24
+
+Implemented the portable [multiple-setups plan](../../../../../plan/multiple-setups.md).
+The image was built and inspected, then uploaded through software HalfKay entry
+and the existing upload-only helper. SHA-256:
+`b77c697957e1ebcc6a73b64dad9bbd67ae9933e2c4147801255cf2b112f60ac5`.
+The helper independently identified the expected Teensy/HalfKay target. The
+updater returned status 1 on reset/disappearance, as previously; the application
+then replied `CNTRL READY 7 0 00000000`, establishing boot of the new format.
+
+All 192 Python tests, portable controller/storage/editor tests, target button,
+display and renderer tests, and splash tests passed. Native tests use address
+and undefined-behavior sanitizers. Ruff, formatting, ty, pyupgrade and diff checks
+passed. HEX/ELF bytes and the complete stock flash configuration matched.
+
+Live USB qualification used only two new application-owned temporary setups,
+`cntrl-test-a` and `cntrl-test-b`, compiled from the generic example. Each was
+662 bytes. Verified:
+
+- Both copies, full byte-for-byte readback and sorted commit-date listing.
+- Automatic first selection, forward and backward rotation, and selection query.
+- Replacement of the active setup using `--overwrite/-o`.
+- Download to TOML and recompilation without definitions/tables, producing
+  exactly the original compiled bytes.
+- Deletion of the active setup selecting the remaining setup.
+- Final deletion returning an empty catalogue and `CNTRL READY 7 0 00000000`.
+
+The temporary setups are logically deleted; their old generations/tombstones
+remain recoverable on SD. Qualification output is ignored under
+`build/setup-qualification.ULIwVj/`. Manufacturer files, animations and old
+single-show slots were not read for migration, modified or removed. No MIDI
+messages were requested by these tests. The final state intentionally has no
+active setup, following the agreed no-automatic-migration policy.
+
+A+D opens management even without a valid setup. A/B browse, C confirms, F
+goes back. A+D used to wake the screen is consumed; a second A+D after release
+opens management. The numeric editor and this wake gate have native test
+coverage. Physical display centering, pedal-operated editing and cold-power
+persistence still need user confirmation; no physical interrupted-SD-write
+guarantee is claimed.
+
+This link uses 391,164 bytes of program flash. RAM1 has 191,392 bytes of static
+variables plus 98,304 bytes of code/padding, leaving 234,592 for the stack.
+RAM2 has 214,976 bytes of static allocations, leaving 309,312 for the heap.
+The document manager is in RAM2; external RAM remains unused. These are linker
+budgets, not measurements of peak runtime stack/heap usage.
+
+### Startup-animation and editor-font fixup
+
+An omitted `splash` now defaults to true, using the installed animation; explicit
+false remains authoritative. A no-setup boot also starts the installed animation,
+but returning to the empty screen from management or deletion does not replay it.
+Existing compiled setups retain their encoded setting until recompiled.
+
+Management text is doubled from classic size 8 to 16. Labels and values occupy
+separate screens; long values/names wrap within padding at 12 characters per
+line. All 63 characters fit in six lines. Performance text/offsets are unchanged.
+Tests cover the default/explicit-false cases, no-setup boot, editor font settings
+and padded rendering of a complete 63-character name.
+
+All 194 Python tests and the portable, display, renderer and splash native tests
+passed, along with Ruff, formatting, ty, pyupgrade and diff checks. The ARM build
+and flash-configuration/HEX checks passed. The inspected image was uploaded via
+software bootloader entry and the existing helper, SHA-256
+`259673c606ce6214380408afb79e96a35a35f33c8ee1718fc3b73efad7c76606`.
+The updater returned its usual status 1 after reset/disappearance; the application
+subsequently replied `CNTRL READY 7 0 00000000`. Visible animation and enlarged
+editor text await user confirmation. No setup or animation data was uploaded.

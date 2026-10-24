@@ -2,10 +2,9 @@
 #include <cntrl/documents.h>
 #include <unistd.h>
 #include <vector>
+#include "storage.h"
 
-struct Peer : cntrl::Hardware, cntrl::Replies, cntrl::Storage {
-    std::vector<uint8_t> slots[2];
-    unsigned slot = 0;
+struct Peer : cntrl::Hardware, cntrl::Replies, TestStorage {
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *name) const override {
         return !std::strcmp(name, "din") || !std::strcmp(name, "trs");
@@ -22,16 +21,6 @@ struct Peer : cntrl::Hardware, cntrl::Replies, cntrl::Storage {
         for (const char *p = line; *p; ++p) if (::write(1, p, 1) != 1) return;
         ::write(1, "\n", 1);
     }
-    unsigned size(unsigned s) override { return unsigned(slots[s].size()); }
-    bool read(unsigned s, unsigned offset, uint8_t *data, unsigned n) override {
-        if (offset + n > slots[s].size()) return false;
-        std::memcpy(data, slots[s].data() + offset, n); return true;
-    }
-    bool begin(unsigned s) override { slot = s; slots[s].clear(); return true; }
-    bool write(const uint8_t *p, unsigned n) override {
-        slots[slot].insert(slots[slot].end(), p, p + n); return true;
-    }
-    bool finish() override { return true; }
 };
 
 int main() {

@@ -24,7 +24,7 @@ static void drain(DisplayRenderer &renderer) {
     assert(renderer.ready());
 }
 
-static void blank(unsigned panel, uint16_t background = 0) {
+static void blank(unsigned panel, uint16_t background = 0xffff) {
     for (const auto &row : screens[panel]) for (uint16_t pixel : row) assert(pixel == background);
 }
 
@@ -42,6 +42,22 @@ int main() {
     drain(renderer);
     assert(writes == 384 && pixels_sent == 3 * 160 * 128);
     for (unsigned i = 0; i < 3; ++i) blank(i);
+    cntrl::Pane no_setups;
+    no_setups.centered = true; no_setups.graphics.size = no_setups.graphics.line_height = 16;
+    std::strcpy(no_setups.patch, "No setups");
+    renderer.show(0, no_setups); drain(renderer);
+    assert(screens[0][56][26] == 0 && screens[0][55][26] == 0xffff);
+    renderer.show(0, empty); drain(renderer);
+    cntrl::Pane editor;
+    editor.graphics.size = editor.graphics.line_height = 16;
+    editor.wrap_patch = true;
+    std::strcpy(editor.category, "Patch");
+    std::memset(editor.patch, 'X', 63); editor.patch[63] = 0;
+    renderer.show(0, editor); drain(renderer);
+    for (unsigned row = 0; row < 6; ++row) assert(screens[0][22 + 16 * row][4] == 0);
+    assert(screens[0][102][40] == 0xffff); // Last row has only three characters.
+    padding(0, 4, 0xffff);
+    renderer.show(0, empty); drain(renderer);
     unsigned before = writes;
     renderer.show(0, empty); renderer.show(3, empty); drain(renderer);
     assert(writes == before);
