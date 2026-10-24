@@ -22,7 +22,7 @@ behind the two physical gaps, rather than squeezed out of the image.
 
 All three panels show windows at world positions `x`, `x+224` and `x+448`,
 modulo 1280. The artwork keeps the same pixel scale; it continues behind the
-estimated gaps. Updates target 16,667 microseconds, approximately 60 Hz.
+estimated gaps. Updates initially target 16,667 microseconds, approximately 60 Hz.
 Each update fills the entering circular-buffer columns per panel, then changes
 all three scroll offsets once. Pixel traffic is 768 bytes times the stride per
 update, plus command traffic. Tiles should continue across panel boundaries.
@@ -38,11 +38,11 @@ the entering-pixel writes and the subsequent scroll commands use that order.
 The image's position, direction, speed and physical window assignments do not
 change, and toggling B does not blank or repaint the screens.
 
-Press and release A to toggle between the configured gap (64 pixels by default)
-and no gap. This starts with the gap enabled. A briefly darkens and repaints all
-three screens at the current scroll position, then resumes. The same 1,280-pixel
-image, speed, panel order and timing target are used in both cases. With no gap,
-the source windows begin at `x`, `x+160` and `x+320`. D, E and F do nothing.
+Press and release A to cycle the target update rate through 60, 50, 40 and 30 Hz,
+then back to 60. The gaps stay fixed at the configured width, default 64 pixels.
+A does not blank, repaint or reset position. Keep C at one pixel per update
+initially to compare cadence; movement speed in pixels/second will also decrease
+with update rate. D, E and F do nothing. Panel refresh registers are unchanged.
 All SPI calls finish and restore GPIO 13/12 before the next button scan.
 
 The complete source pattern is cached once at startup in 327,680 bytes of RAM.
@@ -56,16 +56,18 @@ Initialization uses the shared driver; the normal application's driver is unchan
 `CNTRL STATUS` returns fields such as:
 
 ```text
-CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_us=... overruns=...
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_period=... max_us=... overruns=...
 ```
 
 `pixels` counts streamed pixel bytes after the baseline, not baseline painting or
 command bytes. `us` measures the most recent step's SPI writes and scroll
 commands. `period` is the interval between the latest two update starts, in
-microseconds. `max_us` is the worst step duration and `overruns` counts steps
-exceeding the 16,667-microsecond budget; both reset on speed, order or gap changes.
-These are elapsed times, not sampled CPU load. `rate=60` is the target, not a
-measurement. `gap` reports the active gap, either zero or the configured value.
+microseconds. `max_period` is the longest start-to-start interval. `max_us` is
+the worst step duration and `overruns` counts steps exceeding the selected rate's
+time budget. Measurements reset on A, B or C; the first start-to-start interval
+after a setting change is excluded from the maximum because it spans settings.
+These are elapsed times, not sampled CPU load. `rate` is the target, not a
+measurement. `gap` reports the configured fixed gap.
 `CNTRL SCROLL NEXT` toggles speed from the host. The usual `cntrl status --port
 /dev/cu.usbmodem144682801` command can read status without new host tooling.
 
@@ -86,8 +88,8 @@ make -C cntrl/maker/morningstar/mc/firmware SCROLL_GAP=48 test-scroll-probe insp
 The firmware status reports the compiled gap. This standalone diagnostic does
 not load show configuration or modify saved settings.
 
-Native tests cover all six strides, including unaligned starts, source-image
-wraps and repeated gap toggles/repaints at nonzero positions, pixel byte order,
+Native tests cover all six strides, including unaligned starts and source-image
+wraps, the update-rate cycle and interval calculations, pixel byte order,
 per-column register payloads, both panel command orders, selected-panel isolation,
 coordinate bounds and SPI/GPIO handoff. These establish software behaviour, not
 whether the physical controller implements scrolling. Inspection compares HEX
@@ -248,3 +250,29 @@ CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=497 ssa=144 steps=4
 
 The effect of gap toggling on the observed jumps awaits physical comparison.
 Saved card data remains untouched.
+
+The user subsequently reported identical behaviour with and without gaps: the
+rightmost display was steady and the other two retained subtle motion jumps.
+
+## Update-rate comparison, 2026-10-24
+
+The gap is fixed again at the configured width. A replaces its gap toggle with
+a 60/50/40/30 Hz cycle; B and C are unchanged. The new `max_period` records the
+longest interval between update starts, rather than only timing the drawing
+work. Setting changes reset measurements and exclude the transitional interval
+from that maximum. No panel refresh-register changes are made.
+
+Native tests cover the rate cycle and integer interval calculations alongside
+the existing window, pixel and protocol tests. Diagnostic and button/display/
+renderer tests and stock flash-config/HEX-ELF checks passed. Uploaded HEX SHA-256:
+`09ff20326659f304201912d1eea153ed545c7bd4491bffe199f492b3d889ee1e`.
+After the uploader's usual reset/disappearance status 1, USB confirmed:
+
+```text
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=629 ssa=12 steps=629 pixels=483072 us=965 period=16667 max_period=16720 max_us=965 overruns=0
+```
+
+In this initial observation the longest period exceeded the 16,667-microsecond
+target by 53 microseconds, not a full update interval. This is not a correlation
+with a visibly observed jump. The effect of changing rates awaits physical
+comparison. Saved card data remains untouched.

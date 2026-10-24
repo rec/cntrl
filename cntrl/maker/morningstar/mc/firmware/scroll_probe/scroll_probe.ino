@@ -10,28 +10,34 @@
 namespace {
 ButtonState buttons[6];
 bool painting = true, reverse_order = false;
-unsigned pixels_per_update = 1, next_column = 0, offset = 0;
-unsigned gap = scroll_probe::gap_width;
+bool measure_period = false;
+unsigned pixels_per_update = 1, next_column = 0, offset = 0, update_rate = 60;
+constexpr unsigned gap = scroll_probe::gap_width;
 uint32_t last_scan = 0, last_step = 0, steps = 0, streamed = 0, step_us = 0;
-uint32_t period_us = 0, max_us = 0, overruns = 0;
+uint32_t period_us = 0, max_period_us = 0, max_us = 0, overruns = 0;
 uint8_t image[scroll_probe::image_width][256];
 char line[64];
 unsigned used = 0;
 
 void report() {
     char text[256];
-    snprintf(text, sizeof(text), "CNTRL SCROLL %s order=%s spi=8 gap=%u rate=60 stride=%u x=%u ssa=%u steps=%lu pixels=%lu us=%lu period=%lu max_us=%lu overruns=%lu\n",
+    snprintf(text, sizeof(text), "CNTRL SCROLL %s order=%s spi=8 gap=%u rate=%u stride=%u x=%u ssa=%u steps=%lu pixels=%lu us=%lu period=%lu max_period=%lu max_us=%lu overruns=%lu\n",
         painting ? "PAINTING" : "READY", reverse_order ? "RTL" : "LTR",
-        gap, pixels_per_update, offset,
+        gap, update_rate, pixels_per_update, offset,
         scroll_probe::start_line(offset), (unsigned long)steps,
         (unsigned long)streamed, (unsigned long)step_us, (unsigned long)period_us,
-        (unsigned long)max_us, (unsigned long)overruns);
+        (unsigned long)max_period_us, (unsigned long)max_us, (unsigned long)overruns);
     Serial.write(text);
+}
+
+void reset_measurements() {
+    step_us = period_us = max_period_us = max_us = overruns = 0;
+    measure_period = false; // Exclude the interval spanning a setting change.
 }
 
 void next_speed() {
     pixels_per_update = scroll_probe::next_stride(pixels_per_update);
-    max_us = overruns = 0;
+    reset_measurements();
 }
 } // namespace
 
@@ -52,14 +58,12 @@ void loop() {
         for (unsigned i = 0; i < 6; ++i) {
             uint8_t event = buttons[i].update(!(raw & (1u << button_bits[i])), now);
             if (i == 0 && (event & press_event)) {
-                gap = gap ? 0 : scroll_probe::gap_width;
-                analogWrite(6, 0);
-                painting = true; next_column = 0;
-                max_us = overruns = 0;
+                update_rate = scroll_probe::next_rate(update_rate);
+                reset_measurements();
             }
             if (i == 1 && (event & press_event)) {
                 reverse_order = !reverse_order;
-                max_us = overruns = 0;
+                reset_measurements();
             }
             if (i == 2 && (event & press_event)) next_speed();
         }
@@ -81,9 +85,11 @@ void loop() {
             scroll_panels(7, offset, reverse_order);
             painting = false; last_step = micros(); analogWrite(6, 192);
         }
-    } else if (uint32_t(micros() - last_step) >= 16667) {
+    } else if (uint32_t(micros() - last_step) >= scroll_probe::update_interval(update_rate)) {
         uint32_t start = micros();
         period_us = start - last_step;
+        if (measure_period && period_us > max_period_us) max_period_us = period_us;
+        measure_period = true;
         last_step = start;
         for (unsigned pixel = 0; pixel < pixels_per_update; ++pixel) {
             offset = (offset + 1) % scroll_probe::image_width;
@@ -97,7 +103,7 @@ void loop() {
         scroll_panels(7, offset, reverse_order);
         step_us = micros() - start;
         if (step_us > max_us) max_us = step_us;
-        if (step_us > 16667) ++overruns;
+        if (step_us > scroll_probe::update_interval(update_rate)) ++overruns;
         ++steps;
     }
 }

@@ -23,6 +23,14 @@ constexpr unsigned next_stride(unsigned stride) {
     return stride == 32 ? 1 : stride * 2;
 }
 
+constexpr unsigned next_rate(unsigned rate) {
+    return rate == 30 ? 60 : rate - 10;
+}
+
+constexpr unsigned update_interval(unsigned rate) {
+    return (1000000 + rate - 1) / rate;
+}
+
 constexpr unsigned start_line(unsigned offset) {
     return 1 + (panel_width - offset % panel_width) % panel_width;
 }

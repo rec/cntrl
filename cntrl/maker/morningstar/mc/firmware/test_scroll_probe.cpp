@@ -16,13 +16,6 @@ void verify_windows(unsigned gap) {
             for (unsigned x = 0; x < 160; ++x)
                 ram[panel][(offset + x) % 160] = (panel_origin(panel, gap) + offset + x) % image_width;
         for (unsigned frame = 0; frame < 2 * image_width; ++frame) {
-            if (frame % 97 == 0) {
-                gap = gap ? 0 : gap_width;
-                // Repaint at the current ring position, as A does on the pedal.
-                for (unsigned panel = 0; panel < 3; ++panel)
-                    for (unsigned x = 0; x < 160; ++x)
-                        ram[panel][(offset + x) % 160] = (panel_origin(panel, gap) + offset + x) % image_width;
-            }
             for (unsigned step = 0; step < stride; ++step) {
                 offset = (offset + 1) % image_width;
                 for (unsigned panel = 0; panel < 3; ++panel) {
@@ -47,8 +40,15 @@ int main() {
         assert(panel_index(slot, false) == slot);
         assert(panel_index(slot, true) == 2 - slot);
     }
-    verify_windows(0);
     verify_windows(gap_width);
+    unsigned rate = 60;
+    for (unsigned expected : {60u, 50u, 40u, 30u}) {
+        assert(rate == expected);
+        unsigned interval = update_interval(rate);
+        assert(interval * rate >= 1000000 && (interval - 1) * rate < 1000000);
+        rate = next_rate(rate);
+    }
+    assert(rate == 60 && update_interval(60) == 16667);
     uint8_t pixels[256];
     column(63, pixels);
     for (unsigned y = 0; y < height; ++y)
