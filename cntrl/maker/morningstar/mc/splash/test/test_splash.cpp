@@ -1,4 +1,5 @@
 #include "../receiver.h"
+#include "../color_cycle.h"
 #include "storage.h"
 #include <algorithm>
 #include <cassert>
@@ -46,6 +47,24 @@ void upload(Receiver &receiver, const std::vector<uint8_t> &asset, uint32_t crc)
 }
 
 int main() {
+    assert(tint_white(0xffff, cycle_tint(0)) == 0xf800);
+    assert(tint_white(0xffff, cycle_tint(10000)) == 0x07ff);
+    assert(tint_white(0xffff, cycle_tint(20000)) == 0xf800);
+    for (unsigned pixel = 0; pixel < 65536; ++pixel)
+        assert(tint_white(uint16_t(pixel), {63, 63, 63}) == pixel);
+    for (unsigned now = 0; now < 20000; now += 100) {
+        Tint tint = cycle_tint(now);
+        assert(tint_white(0, tint) == 0);
+        for (unsigned green = 0; green < 64; ++green)
+            assert(tint_white(uint16_t(green << 5), tint) == green << 5);
+    }
+    for (unsigned shade = 0; shade < 32; ++shade) {
+        unsigned green = (shade << 1) | (shade >> 4);
+        uint16_t grey = uint16_t(shade << 11 | green << 5 | shade);
+        assert(tint_white(grey, cycle_tint(0)) == shade << 11);
+    }
+    uint16_t green_edge = uint16_t(16 << 11 | 47 << 5 | 16);
+    assert(tint_white(green_edge, cycle_tint(0)) == (16 << 11 | 14 << 5));
     std::vector<uint8_t> asset(header_bytes + frame_bytes, 0);
     std::memcpy(asset.data(), "CNSA", 4);
     asset[4] = 1; asset[6] = 160; asset[8] = 128; asset[10] = 1;
