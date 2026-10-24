@@ -104,9 +104,14 @@ are stored in the exact RGB565 byte order needed by the display bus.
 ## White-band colour walk
 
 The board output adapter now recolours the white component at playback time,
-using a smooth pseudorandom walk through RGB colour space. Every second it
-chooses a nearby target, with each six-bit channel moving by up to 20 levels,
-and interpolates toward it. Boundary reflections keep channels in 0..63 without
+using two smooth pseudorandom walks through RGB colour space: one for L/R and
+one for the mirrored centre. Each walk chooses nearby targets, with each six-bit
+channel moving by up to 20 levels per nominal colour segment, and interpolates
+toward them. Each walk also has its own independent speed walk: a new speed
+target is chosen every five seconds and approached smoothly, bounded to 0.5..2
+times the original pace. The speed target moves by at most 0.25 times base speed
+per segment, reflecting at its limits. Boundary reflections keep RGB channels
+in 0..63 without
 clipping them against the cube walls. The pace is comparable to the former
 20-second hue cycle, but there is no fixed colour loop. Each pixel's
 common RGB component is replaced by the tinted equivalent; its remaining
@@ -115,17 +120,18 @@ keeps its coverage, and white-to-green edge blends retain their green residue.
 Other coloured pixels with a white component are also affected; this is not an
 exact-white-only replacement.
 
-The tint is sampled at the first outer-screen row and held for the complete
-frame, including the mirrored centre. The outer screens still share a single
+Both tints are sampled together at the first outer-screen row and held for the
+complete frame. The outer screens still share a single
 broadcast transfer. One 320-byte temporary row is transformed before sending;
 stored assets, checksums, geometry, frame timing and backlight fades are unchanged.
 The effect is limited to splash/screensaver output, not the main UI.
 
 `color_cycle.h` implements the walk and pure integer RGB565 transform. The walk
-is seeded from the first frame's uptime, continues between animation loops and
+uses distinct seeds mixed with the first frame's uptime, continues between animation loops and
 does not replay a long backlog after an idle pause. This is visual randomness,
 not a cryptographic generator. Native tests check channel bounds and smoothness
-over a minute, clock wraparound, black and green invariance, grey shading, green
+over ten minutes for both walks, reproducibility without shared state, distinct
+centre/outer paths, clock wraparound, black and green invariance, grey shading, green
 edge blends and identity under a neutral tint for all 65,536 RGB565 values.
 
 Screensaver playback still loops without a time limit until physical input;
@@ -147,6 +153,14 @@ After the updater's usual reset/disappearance status 1, USB confirmed
 `CNTRL READY 8 23390 e12bd7da` with pman selected, matching the pre-upload show
 length/checksum. No setup or animation assets were rewritten. Visual evaluation
 of the walk remains a physical check; the screensaver loops until button input.
+
+The independent centre/outer colour and speed walks were built, inspected and
+flashed on 2026-10-24 after native splash/runtime and display/renderer tests
+passed. HEX/ELF and stock flash-configuration checks passed. Image SHA-256:
+`e07b74d4145f70d47e1a5238ab1bfa25134b3e027ceaeb216f4c3599d320e3f2`.
+After the updater's usual reset/disappearance status 1, USB confirmed
+`CNTRL READY 8 23390 e12bd7da`, with pman still selected. Assets and show data
+were not rewritten. The actual colour/speed effect still requires observation.
 
 ## Components
 

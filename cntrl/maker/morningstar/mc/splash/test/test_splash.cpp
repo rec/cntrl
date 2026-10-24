@@ -52,23 +52,34 @@ int main() {
     for (unsigned pixel = 0; pixel < 65536; ++pixel)
         assert(tint_white(uint16_t(pixel), {63, 63, 63}) == pixel);
     ColorWalk walk;
+    ColorWalk centre(0x243f6a89);
+    ColorWalk repeat;
     Tint previous = walk.at(0);
+    Tint previous_centre = centre.at(0);
     bool changed = false;
-    for (unsigned now = 0; now < 60000; now += 100) {
+    bool independent = false;
+    for (unsigned now = 0; now < 600000; now += 100) {
         Tint tint = walk.at(now);
+        Tint other = centre.at(now);
+        Tint matching = repeat.at(now);
+        assert(matching.red == tint.red && matching.green == tint.green && matching.blue == tint.blue);
+        assert(other.red <= 63 && other.green <= 63 && other.blue <= 63);
+        independent |= other.red != tint.red || other.green != tint.green || other.blue != tint.blue;
         assert(tint.red <= 63 && tint.green <= 63 && tint.blue <= 63);
-        const unsigned before[] = {previous.red, previous.green, previous.blue};
-        const unsigned after[] = {tint.red, tint.green, tint.blue};
-        for (unsigned i = 0; i < 3; ++i) {
-            assert(after[i] <= before[i] + 3 && before[i] <= after[i] + 3);
+        const unsigned before[] = {previous.red, previous.green, previous.blue,
+            previous_centre.red, previous_centre.green, previous_centre.blue};
+        const unsigned after[] = {tint.red, tint.green, tint.blue, other.red, other.green, other.blue};
+        for (unsigned i = 0; i < 6; ++i) {
+            assert(after[i] <= before[i] + 5 && before[i] <= after[i] + 5);
             changed |= before[i] != after[i];
         }
         previous = tint;
+        previous_centre = other;
         assert(tint_white(0, tint) == 0);
         for (unsigned green = 0; green < 64; ++green)
             assert(tint_white(uint16_t(green << 5), tint) == green << 5);
     }
-    assert(changed);
+    assert(changed && independent);
     ColorWalk wrapping;
     wrapping.at(0xffffff00);
     Tint wrapped = wrapping.at(0x54);

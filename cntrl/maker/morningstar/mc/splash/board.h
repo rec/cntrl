@@ -46,19 +46,23 @@ private:
 class Panels : public Output {
 public:
     void row(uint8_t panels, unsigned y, const uint8_t *pixels) override {
-        // Hold one tint for the complete frame, including its mirrored centre.
-        if (panels == 0b101 && y == 0) tint_ = walk_.at(millis());
+        // Sample both walks at the same frame boundary; hold them across rows.
+        if (panels == 0b101 && y == 0) {
+            uint32_t now = millis();
+            for (unsigned i = 0; i < 2; ++i) tints_[i] = walks_[i].at(now);
+        }
+        Tint tint = tints_[panels == 0b010 ? 1 : 0];
         uint8_t colored[row_bytes];
         for (unsigned x = 0; x < width; ++x) {
             uint16_t pixel = uint16_t(pixels[2 * x]) << 8 | pixels[2 * x + 1];
-            pixel = tint_white(pixel, tint_);
+            pixel = tint_white(pixel, tint);
             colored[2 * x] = uint8_t(pixel >> 8);
             colored[2 * x + 1] = uint8_t(pixel);
         }
         write_display_group(panels, 0, y, colored, width);
     }
 private:
-    Tint tint_ = {63, 63, 63};
-    ColorWalk walk_;
+    Tint tints_[2] = {{63, 63, 63}, {63, 63, 63}};
+    ColorWalk walks_[2] = {ColorWalk(0x9e3779b9), ColorWalk(0x243f6a89)};
 };
 } // namespace cntrl::splash
