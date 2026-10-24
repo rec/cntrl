@@ -15,8 +15,8 @@ constexpr unsigned panel_index(unsigned slot, bool reverse) {
     return reverse ? 2 - slot : slot;
 }
 
-constexpr unsigned panel_origin(unsigned panel) {
-    return panel * (panel_width + gap_width);
+constexpr unsigned panel_origin(unsigned panel, unsigned gap) {
+    return panel * (panel_width + gap);
 }
 
 constexpr unsigned next_stride(unsigned stride) {
@@ -26,8 +26,8 @@ constexpr unsigned next_stride(unsigned stride) {
 constexpr unsigned start_line(unsigned offset) {
     return 1 + (panel_width - offset % panel_width) % panel_width;
 }
-constexpr unsigned entering_world_x(unsigned panel, unsigned offset) {
-    return (panel_origin(panel) + offset + panel_width - 1) % image_width;
+constexpr unsigned entering_world_x(unsigned panel, unsigned offset, unsigned gap) {
+    return (panel_origin(panel, gap) + offset + panel_width - 1) % image_width;
 }
 
 inline uint16_t pixel(unsigned world_x, unsigned y) {

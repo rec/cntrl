@@ -36,8 +36,13 @@ Press and release B to toggle the panel update order. The initial order is
 left, centre, right (`LTR`); the alternate is right, centre, left (`RTL`). Both
 the entering-pixel writes and the subsequent scroll commands use that order.
 The image's position, direction, speed and physical window assignments do not
-change, and toggling does not blank or repaint the screens. Other buttons do
-nothing.
+change, and toggling B does not blank or repaint the screens.
+
+Press and release A to toggle between the configured gap (64 pixels by default)
+and no gap. This starts with the gap enabled. A briefly darkens and repaints all
+three screens at the current scroll position, then resumes. The same 1,280-pixel
+image, speed, panel order and timing target are used in both cases. With no gap,
+the source windows begin at `x`, `x+160` and `x+320`. D, E and F do nothing.
 All SPI calls finish and restore GPIO 13/12 before the next button scan.
 
 The complete source pattern is cached once at startup in 327,680 bytes of RAM.
@@ -58,9 +63,9 @@ CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=110 ssa=51 steps=11
 command bytes. `us` measures the most recent step's SPI writes and scroll
 commands. `period` is the interval between the latest two update starts, in
 microseconds. `max_us` is the worst step duration and `overruns` counts steps
-exceeding the 16,667-microsecond budget; both reset on speed or order changes.
-These are
-elapsed times, not sampled CPU load. `rate=60` is the target, not a measurement.
+exceeding the 16,667-microsecond budget; both reset on speed, order or gap changes.
+These are elapsed times, not sampled CPU load. `rate=60` is the target, not a
+measurement. `gap` reports the active gap, either zero or the configured value.
 `CNTRL SCROLL NEXT` toggles speed from the host. The usual `cntrl status --port
 /dev/cu.usbmodem144682801` command can read status without new host tooling.
 
@@ -81,9 +86,9 @@ make -C cntrl/maker/morningstar/mc/firmware SCROLL_GAP=48 test-scroll-probe insp
 The firmware status reports the compiled gap. This standalone diagnostic does
 not load show configuration or modify saved settings.
 
-Native tests cover all six strides, including unaligned starts and source-image
-wraps, pixel byte order, per-column register payloads, both panel command orders,
-selected-panel isolation,
+Native tests cover all six strides, including unaligned starts, source-image
+wraps and repeated gap toggles/repaints at nonzero positions, pixel byte order,
+per-column register payloads, both panel command orders, selected-panel isolation,
 coordinate bounds and SPI/GPIO handoff. These establish software behaviour, not
 whether the physical controller implements scrolling. Inspection compares HEX
 with ELF bytes and checks the stock flash-configuration digest. No build target
@@ -218,3 +223,28 @@ CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=449 ssa=32 steps=44
 
 The effect of B on visible motion awaits physical observation. Saved card data
 remains untouched.
+
+The user subsequently reported no visible difference from B: the rightmost
+panel remained smooth and the left/centre panels retained small motion jumps.
+This does not establish a cause. The gap change is the next comparison target.
+
+## Runtime gap comparison, 2026-10-24
+
+A now toggles between the configured gap and zero. B and C retain their existing
+functions. Both cases use the same cached image and update target. Repainting
+preserves the current world offset and writes each visible source column into
+the corresponding circular-buffer position, with the backlight off until done.
+
+Native tests cover repeated gap changes/repaints at nonzero ring positions and
+continued scrolling at all six strides, including source-image wraparound.
+Diagnostic, button/display/renderer tests and stock flash-config/HEX-ELF checks
+passed. Uploaded HEX SHA-256:
+`38ae0a74fd860c107319fa7d712a2363b7bb33557185da8e30bc7c42dcf30061`.
+Following the uploader's usual reset/disappearance status 1, USB confirmed:
+
+```text
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=497 ssa=144 steps=497 pixels=381696 us=965 period=16667 max_us=965 overruns=0
+```
+
+The effect of gap toggling on the observed jumps awaits physical comparison.
+Saved card data remains untouched.
