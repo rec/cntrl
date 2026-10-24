@@ -70,13 +70,33 @@ leading, trailing or repeated composition operators with useful diagnostics.
 Use the same mechanism for definitions, tables and other data-file inputs, not
 a separate parser or alternate naming syntax for each command.
 
-Composition combines dictionaries, but its collision rules have not yet been
-specified. Resolve shallow versus recursive combination, duplicate keys, list
-values, incompatible types and conflicting scalar values before implementation.
-Do not silently choose last-file-wins or list concatenation. Also resolve the
-scope of an explicit name when it appears alongside `+`; the single-file named
-example and the unnamed combined example above are agreed, not a definition of
-every mixed naming/composition case.
+### Combination policy (resolved)
+
+Add `avoid_confict: bool = True`, preserving that spelling. Dictionaries merge
+recursively in operand order in both modes. Keys present in only one dictionary
+are retained.
+
+| Overlapping values | `avoid_confict = True` (default) | `avoid_confict = False` |
+| --- | --- | --- |
+| Dictionaries | Merge recursively | Merge recursively |
+| Lists | Concatenate in operand order, including repeated entries | Retain one copy if equal; otherwise report an error |
+| Scalars | Use the later value | Retain the value if equal; otherwise report an error |
+
+Incompatible value types remain errors. Do not stop at the first conflict:
+inspect all keys, nested dictionaries and remaining operands, accumulate all
+errors across all expressions, then report them together and terminate without
+uploading anything. Diagnostics must identify the source data files and the
+conflicting key paths. Lists in strict mode are compared as complete ordered
+values, not concatenated or deduplicated.
+
+The setting's location still needs deciding before implementation: one
+host-side option for the invocation, or configuration supplied elsewhere. Do
+not implicitly select a policy from the dictionaries while merging those same
+dictionaries.
+
+Also resolve the scope of an explicit name when it appears alongside `+`; the
+single-file named example and the unnamed combined example above are agreed,
+not a definition of every mixed naming/composition case.
 
 Keep each constituent file's origin while loading. In particular, a patch-table
 record's missing `instrument` still defaults to its own containing file's stem,
@@ -262,7 +282,7 @@ fabricate timestamps from build time or 1970 defaults.
 
 ## Implementation sequence
 
-1. Resolve CLI spelling, dictionary combination rules, explicit-name scope in
+1. Resolve CLI spelling, placement of `avoid_confict`, explicit-name scope in
    combined expressions, naming/order rules, replacement and deletion policies,
    NV ownership and boot failure behavior. Decide download representation,
    editing scope and timestamps before designing their formats.
@@ -293,8 +313,12 @@ fabricate timestamps from build time or 1970 defaults.
 - `NAME=FILE` naming; `==` and `\=` inside names; shell-preserved backslashes;
   quoted filenames with spaces; literal plus signs inside filenames; malformed
   composition operators and the agreed explicit-name scoping rules.
-- Agreed dictionary/list/scalar collision rules, partial inputs and shared
-  behavior at every data-file input. Filename-derived instrument defaults must
+- Recursive dictionary merging in both `avoid_confict` modes; default list
+  concatenation and later-scalar precedence; strict equal lists/scalars retained
+  once; strict differing values and incompatible types reported together across
+  nested paths, later operands and separate expressions. No upload on errors.
+- Partial inputs and shared behavior at every data-file input.
+  Filename-derived instrument defaults must
   retain their original file context rather than using a composite/setup name.
 - Duplicate/case-colliding/unsafe destination names; errors accumulated across
   all constituent files and resulting setups before upload.
