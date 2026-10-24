@@ -41,7 +41,7 @@ def test_defaults_and_explicit_null_settings_agree(target: models.Target) -> Non
     records, offsets = default
     fields = graphics.SCREEN.unpack(records[0])
     assert fields[:3] == (0, 40, 4)
-    assert fields[4:8] == (0xFFFF, 0, 40, 0)
+    assert fields[4:8] == (0, 0xFFFF, 40, 0)
     assert fields[8:] == (0x7BEF, 0)
     assert offsets == [[4 + (152 - 150) // 2, 4 + (152 - 120) // 2]] * 3
 

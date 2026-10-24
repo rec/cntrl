@@ -14,7 +14,7 @@ public:
         useFrameBuffer(true); // Supplied buffer: no dynamic allocation.
         setFont();
         setTextWrap(false);
-        setTextColor(0xffff, 0);
+        setTextColor(0, 0xffff);
         clearChangedRange();
     }
 private:

@@ -176,8 +176,8 @@ font_name = 'Arial'
 pad = 4
 
 [screens.undo]
-foreground_color = 'white'
-background_color = 'black'
+foreground_color = 'black'
+background_color = 'white'
 
 [screens.sent]
 foreground_color = 'yellow'
@@ -189,7 +189,8 @@ background_color = '0x002040'
 
 Omitting `screens`, any individual screen, or any field uses its default. JSON
 `null` has the same meaning. The default font is `classic`, padding is 4, and
-both omitted colors mean white on black. Font size is automatic when omitted.
+both omitted colors mean black on white, also used by management and the
+no-setups screen. Explicit colors are preserved. Font size is automatic when omitted.
 Available font names and discrete sizes come from the target's font metrics.
 `font_name`, `font_size` and `pad` are top-level settings, never per-screen settings.
 
