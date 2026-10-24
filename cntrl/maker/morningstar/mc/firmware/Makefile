@@ -8,7 +8,7 @@ ARM := $(ROOT)/.tools/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin/a
 INDEX := https://www.pjrc.com/teensy/package_teensy_index.json
 FQBN := teensy:avr:teensy41:usb=serial,speed=600,opt=osstd,keys=en-us
 IMAGE := $(ROOT)/build/usb-probe/usb_probe.ino
-SCROLL_GAP ?= 64
+SCROLL_GAP ?= 72
 
 export ARDUINO_DIRECTORIES_DATA := $(ROOT)/.tools/data
 export ARDUINO_DIRECTORIES_DOWNLOADS := $(ROOT)/.tools/downloads
