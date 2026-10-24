@@ -16,10 +16,74 @@ instrument routes, categories, patches and display/behavior settings. It is not
 the existing instrument-level `setup` field, which identifies instrument bank
 addressing rules. Do not rename or conflate that field as part of this feature.
 
-The development machine continues to read TOML or JSON setup files, instrument
-definitions and patch tables. A performance setup's default name is its source
-file's stem; the user can override the name for each supplied file. This naming
-rule is independent of the filename-based instrument default in patch tables.
+TOML and JSON inputs are henceforth called **data files**. The development
+machine reads setup data files, instrument definitions, patch tables and target
+descriptions using the common composition/naming mechanism below.
+
+## Data file expressions and names
+
+Anywhere a data file is accepted, two or more data files can be combined with
+` + `: a plus symbol surrounded by spaces. Load their dictionaries and combine
+them into one input before compiling or validating the complete setup. Preserve
+the specified operand order; do not sort the files before combining them. TOML
+and JSON files can participate in the same expression.
+
+Separate positional expressions still produce separate setups. For example:
+
+```bash
+ctrl setup copy jazz.toml Evening=theatre.toml
+```
+
+This copies two setups: `jazz`, from `jazz.toml`, and `Evening`, from
+`theatre.toml`. A name is introduced by `NAME=`, not by a `--name` option.
+Names are destination metadata, not new keys inserted into the data dictionaries.
+
+Without an explicit name, use the source file's stem. For a combined expression,
+join its source stems with `+`, in operand order:
+
+```bash
+ctrl setup copy jazz.toml + classical.toml
+```
+
+This combines the two dictionaries and copies **one** setup named
+`jazz+classical`. The generated name contains no spaces around its `+`.
+Three or more operands work the same way. A mixed-extension expression such as
+`jazz.toml + classical.json` has the same default name.
+
+An equals sign inside a name can be escaped in either of the two requested ways:
+`==` or `\=`. For example, both commands name the setup `A=B`:
+
+```bash
+ctrl setup copy 'A==B=theatre.toml'
+ctrl setup copy 'A\=B=theatre.toml'
+```
+
+Recognize escaped equals signs while locating the name separator; do not split
+blindly at the first `=`. Shell quoting must preserve the intended argument and,
+for `\=`, pass the backslash through to the application. Quoting alone does not
+make an unescaped equals sign literal to the application's parser.
+
+On the CLI, recognize the standalone `+` argument as the composition operator.
+Do not split filenames at an embedded plus: `jazz+classical.toml` names one file.
+Preserve quoted filenames containing spaces as individual operands. Reject
+leading, trailing or repeated composition operators with useful diagnostics.
+Use the same mechanism for definitions, tables and other data-file inputs, not
+a separate parser or alternate naming syntax for each command.
+
+Composition combines dictionaries, but its collision rules have not yet been
+specified. Resolve shallow versus recursive combination, duplicate keys, list
+values, incompatible types and conflicting scalar values before implementation.
+Do not silently choose last-file-wins or list concatenation. Also resolve the
+scope of an explicit name when it appears alongside `+`; the single-file named
+example and the unnamed combined example above are agreed, not a definition of
+every mixed naming/composition case.
+
+Keep each constituent file's origin while loading. In particular, a patch-table
+record's missing `instrument` still defaults to its own containing file's stem,
+not the generated combined name or an explicit destination setup name. Resolve
+that filename-based value before combining records. Do not apply ordinary model
+defaults independently to partial data files before merging, since those
+defaults could replace explicitly supplied values from another operand.
 
 ## Required command behavior
 
@@ -29,23 +93,20 @@ not silently rename it or introduce a second alias.
 
 ### `ctrl setup copy`
 
-- Accept one or more positional setup source paths, with an optional explicit
-  name for each. Otherwise use that path's stem.
+- Accept one or more positional data-file expressions using the shared ` + `
+  composition and `NAME=` naming syntax above.
 - Reuse the existing definitions, target and repeatable table inputs to resolve
   instruments and compile each setup on the development machine.
-- Parse and validate every supplied setup, collecting errors across files and
-  records. Report all errors before starting any upload.
+- Parse every constituent data file, combine each expression using the agreed
+  dictionary rules, then validate the resulting setups. Collect errors across
+  files and records and report all errors before starting any upload. A partial
+  constituent is not required to be a complete setup on its own.
 - Reject duplicate destination names in the batch before writing anything.
 - Copy the compiled results into the pedal's setup directory over the existing
   USB connection. This is a data transfer, not a firmware update.
 - Report a durable, read-back-verified result for each setup. If storage or USB
   fails after earlier setups were committed, report the successes and failure
   accurately. Do not claim the whole batch is atomic.
-
-Proposed name-override syntax, to confirm: a repeatable
-`--name SOURCE_PATH=SETUP_NAME` argument associated with the positional sources.
-For example, `ctrl setup copy jazz.toml theatre.toml --name theatre.toml=Evening`.
-Keep one canonical syntax rather than adding shorthand alternatives.
 
 Existing-name replacement, including replacing the active setup, needs an
 explicit policy before implementation. Proposed default: report a collision
@@ -201,12 +262,14 @@ fabricate timestamps from build time or 1970 defaults.
 
 ## Implementation sequence
 
-1. Resolve CLI spelling/name overrides, naming/order rules, replacement and
-   deletion policies, NV ownership and boot failure behavior. Decide download
-   representation, editing scope and timestamps before designing their formats.
+1. Resolve CLI spelling, dictionary combination rules, explicit-name scope in
+   combined expressions, naming/order rules, replacement and deletion policies,
+   NV ownership and boot failure behavior. Decide download representation,
+   editing scope and timestamps before designing their formats.
 2. Define the self-contained final format and integrity-protected selection
    record. Reuse existing Pydantic validation and compiler rules; keep TOML/JSON
-   parsing and instrument-table resolution on the development machine.
+   parsing, shared data-file expression handling and instrument-table resolution
+   on the development machine.
 3. Replace single-document storage/activation with named setup operations in
    the portable firmware. Keep hardware-specific SD/NV/USB bindings and tests
    under `cntrl/maker/morningstar/mc/`.
@@ -225,8 +288,16 @@ fabricate timestamps from build time or 1970 defaults.
 
 ## Verification and acceptance
 
-- Filename-derived and explicit names; duplicate/case-colliding/unsafe names;
-  preserved existing instrument defaults; errors accumulated across inputs.
+- Separate inputs versus ` + ` groups; two, three or more operands; mixed TOML
+  and JSON; combined default names preserving operand order.
+- `NAME=FILE` naming; `==` and `\=` inside names; shell-preserved backslashes;
+  quoted filenames with spaces; literal plus signs inside filenames; malformed
+  composition operators and the agreed explicit-name scoping rules.
+- Agreed dictionary/list/scalar collision rules, partial inputs and shared
+  behavior at every data-file input. Filename-derived instrument defaults must
+  retain their original file context rather than using a composite/setup name.
+- Duplicate/case-colliding/unsafe destination names; errors accumulated across
+  all constituent files and resulting setups before upload.
 - Unset NV selects alphabetical first, persists and survives restart; existing
   NV is honored; failed selection writes preserve the old active setup.
 - `set` query has no writes or GUI side effects; absent/invalid targets fail.
