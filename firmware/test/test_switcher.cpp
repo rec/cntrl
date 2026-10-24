@@ -100,7 +100,7 @@ void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     assert(hw.sent.size() == sent); // No previous selection for Strings' instrument.
     assert(!std::strcmp(hw.panes[2].patch, "Strings"));
     assert((hw.transitions == std::vector<bool>{false, false, true}));
-    assert((hw.durations == std::vector<unsigned>{2000, 2000, 2000}));
+    assert((hw.durations == std::vector<unsigned>{1000, 1000, 1000}));
     app.action(5);
     assert(!std::strcmp(hw.panes[2].patch, "Flute"));
     assert(!hw.panes[0].patch[0] && !hw.panes[1].patch[0]);

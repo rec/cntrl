@@ -136,7 +136,7 @@ private:
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
     unsigned ring_ = 0, progress_ = 0;
-    unsigned duration_ms_ = 2000;
+    unsigned duration_ms_ = 1000;
     uint32_t started_ = 0;
     bool dirty_[3] = {true, true, true};
     bool valid_[3] = {};

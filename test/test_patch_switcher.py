@@ -39,7 +39,7 @@ def test_compiler_matches_shared_cpp_fixture(
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
-@pytest.mark.parametrize('duration', [2000, 750, 65535])
+@pytest.mark.parametrize('duration', [1000, 2000, 750, 65535])
 def test_transition_duration_survives_resolved_export(
     show: dict[str, object], definitions: object, target: models.Target, duration: int
 ) -> None:

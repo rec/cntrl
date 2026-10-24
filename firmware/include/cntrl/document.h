@@ -114,7 +114,7 @@ public:
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
     unsigned transition_ms() const {
         unsigned value = u16(data_ + metadata() + 6);
-        return value ? value : 2000;
+        return value ? value : 1000;
     }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + 28 + slot * 16;

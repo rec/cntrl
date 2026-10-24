@@ -284,7 +284,7 @@ def compile_show(
         '<4sHH32s',
         b'CMTA',
         min(len(mappings), 65535),
-        0 if show.transition_ms == 2000 else show.transition_ms,
+        0 if show.transition_ms == 1000 else show.transition_ms,
         _text(show.font_name or 'classic', 32, target, 'font_name', errors),
     )
     body = b''.join(screen_records + instrument_records + categories + patches)

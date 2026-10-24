@@ -13,7 +13,7 @@ empty undo stack do not request animation. There is no MIDI delay waiting for
 graphics, and no persistent history or graphics-format change.
 
 The screen pitch is 232 pixels: 160 visible plus a 72-pixel physical-gap
-estimate. Over a show-configured duration at 60 Hz (default 2 seconds after preparation), the
+estimate. Over a show-configured duration at 60 Hz (default 1 second after preparation), the
 old panes move left on C and right on F. The new R candidate is rendered using
 the existing grey-name rule before entering from the right. On F, the next
 undo target, or a blank pane, enters from the left. Virtual gaps are black.
@@ -60,9 +60,13 @@ correct. A timing fixup changes the default from 400 ms to 2 seconds. Set
 `transition_ms = 2000` at the top level of a show to specify it explicitly, or
 choose another integer duration in 1..65535 milliseconds. The compiler stores
 the setting in the metadata header's previously reserved u16; zero denotes the
-2-second default and preserves existing compiled shows and their checksums.
+firmware default and preserves existing compiled shows and their checksums.
 Resolved TOML exports retain this setting. Both send and undo receive the same
-duration, without changing MIDI timing. The slower fixup has not been uploaded.
+duration, without changing MIDI timing. The two-second fixup was uploaded and
+boot-verified. A subsequent fixup sets the default to 1000 ms (one second);
+explicit `transition_ms` values still take precedence.
+The one-second image was flashed and boot-verified with pman and its checksum
+unchanged. SHA-256: `b2c97ed563419a8a308193f7c104ad0150ea6af69ecfd1e3fadf423c42f03b2e`.
 
 ```bash
 make -C firmware test
