@@ -8,6 +8,10 @@ int main() {
     assert(panel_origin(0) == 0);
     assert(panel_origin(1) - panel_width == gap_width);
     assert(panel_origin(2) - (panel_origin(1) + panel_width) == gap_width);
+    for (unsigned slot = 0; slot < 3; ++slot) {
+        assert(panel_index(slot, false) == slot);
+        assert(panel_index(slot, true) == 2 - slot);
+    }
     unsigned stride = 1;
     for (unsigned mode = 0; mode < 6; ++mode) {
         assert(stride == 1u << mode);

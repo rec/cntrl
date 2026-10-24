@@ -2,5 +2,5 @@
 #include <cstdint>
 
 void initialize_scroll();
-void scroll_panels(uint8_t selected, unsigned offset);
+void scroll_panels(uint8_t selected, unsigned offset, bool reverse);
 void write_scroll_columns(unsigned panel, unsigned column, const uint8_t *pixels, unsigned count);

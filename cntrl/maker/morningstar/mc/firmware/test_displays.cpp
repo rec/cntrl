@@ -29,6 +29,7 @@ SPIClass SPI;
 static bool spi_started = false, spi_active = false;
 static bool clock_gpio = true, data_gpio = true;
 static unsigned transactions = 0;
+static std::vector<unsigned> selections;
 
 void SPIClass::begin() {
     assert(!spi_active);
@@ -76,6 +77,7 @@ void digitalWrite(uint8_t pin, uint8_t value) {
             assert(bits == 0);
             if (!value) {
                 transfers[i].emplace_back();
+                selections.push_back(i);
             }
         }
     }
@@ -214,12 +216,24 @@ int main() {
         assert((panel[1].bytes == std::vector<uint8_t>{0x33, 0, 1, 0, 160, 0, 1}));
         assert((panel[2].bytes == std::vector<uint8_t>{0x37, 0, 1}));
     }
-    scroll_panels(1, 1);
+    selections.clear();
+    scroll_panels(1, 1, false);
+    assert((selections == std::vector<unsigned>{0}));
     assert((transfers[0].back().bytes == std::vector<uint8_t>{0x37, 0, 160}));
     assert(transfers[1].size() == 3 && transfers[2].size() == 3);
-    scroll_panels(7, 160);
+    selections.clear();
+    scroll_panels(7, 160, false);
+    assert((selections == std::vector<unsigned>{0, 1, 2}));
     for (const auto &panel : transfers)
         assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 1}));
+    selections.clear();
+    scroll_panels(7, 1, true);
+    assert((selections == std::vector<unsigned>{2, 1, 0}));
+    for (const auto &panel : transfers)
+        assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 160}));
+    selections.clear();
+    scroll_panels(5, 1, true);
+    assert((selections == std::vector<unsigned>{2, 0}));
     uint8_t column[256] = {};
     write_scroll_columns(2, 159, column, 1);
     auto &panel = transfers[2];
@@ -230,7 +244,7 @@ int main() {
     before = transactions;
     write_scroll_columns(3, 0, column, 1); write_scroll_columns(0, 160, column, 1);
     write_scroll_columns(0, 159, column, 2); write_scroll_columns(0, 0, column, 0);
-    scroll_panels(0, 0); scroll_panels(8, 0);
+    scroll_panels(0, 0, false); scroll_panels(8, 0, true);
     assert(transactions == before);
     uint8_t stripe[32 * 256];
     for (unsigned i = 0; i < sizeof(stripe); ++i) stripe[i] = uint8_t(i);
