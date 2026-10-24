@@ -1,8 +1,8 @@
 # Multiple named performance setups
 
-Status: proposed implementation plan, 2026-10-24. No implementation or hardware
-changes are part of this document. Resolve the decisions identified below before
-implementing the affected behavior.
+Status: implementation plan with agreed decisions, 2026-10-24. No implementation
+or hardware changes are part of this document. The final review section records
+remaining implementation risks and one unresolved interaction decision.
 
 ## Goal and terminology
 
@@ -31,7 +31,7 @@ and JSON files can participate in the same expression.
 Separate positional expressions still produce separate setups. For example:
 
 ```bash
-ctrl setup copy jazz.toml Evening=theatre.toml
+cntrl setup copy jazz.toml Evening=theatre.toml
 ```
 
 This copies two setups: `jazz`, from `jazz.toml`, and `Evening`, from
@@ -42,7 +42,7 @@ Without an explicit name, use the source file's stem. For a combined expression,
 join its source stems with `+`, in operand order:
 
 ```bash
-ctrl setup copy jazz.toml + classical.toml
+cntrl setup copy jazz.toml + classical.toml
 ```
 
 This combines the two dictionaries and copies **one** setup named
@@ -54,8 +54,8 @@ An equals sign inside a name can be escaped in either of the two requested ways:
 `==` or `\=`. For example, both commands name the setup `A=B`:
 
 ```bash
-ctrl setup copy 'A==B=theatre.toml'
-ctrl setup copy 'A\=B=theatre.toml'
+cntrl setup copy 'A==B=theatre.toml'
+cntrl setup copy 'A\=B=theatre.toml'
 ```
 
 Recognize escaped equals signs while locating the name separator; do not split
@@ -89,14 +89,12 @@ uploading anything. Diagnostics must identify the source data files and the
 conflicting key paths. Lists in strict mode are compared as complete ordered
 values, not concatenated or deduplicated.
 
-The setting's location still needs deciding before implementation: one
-host-side option for the invocation, or configuration supplied elsewhere. Do
-not implicitly select a policy from the dictionaries while merging those same
-dictionaries.
+Expose `avoid_confict` as one host-side CLI setting applying to every merge in
+the invocation. Do not select the policy from the data files being merged.
 
-Also resolve the scope of an explicit name when it appears alongside `+`; the
-single-file named example and the unnamed combined example above are agreed,
-not a definition of every mixed naming/composition case.
+An explicit name at the start names the entire expression:
+`cntrl setup copy Evening=jazz.toml + classical.toml` creates `Evening`.
+A name after `+` is an error, not a name for an individual operand.
 
 Keep each constituent file's origin while loading. In particular, a patch-table
 record's missing `instrument` still defaults to its own containing file's stem,
@@ -107,11 +105,10 @@ defaults could replace explicitly supplied values from another operand.
 
 ## Required command behavior
 
-The requested spelling below is `ctrl setup`. The installed executable is
-currently `cntrl`. Settle the spelling before changing the CLI entry point; do
-not silently rename it or introduce a second alias.
+The executable is `cntrl`. References to `ctrl` in requests are spelling errors,
+not a request to rename the executable or introduce an alias.
 
-### `ctrl setup copy`
+### `cntrl setup copy`
 
 - Accept one or more positional data-file expressions using the shared ` + `
   composition and `NAME=` naming syntax above.
@@ -122,19 +119,22 @@ not silently rename it or introduce a second alias.
   files and records and report all errors before starting any upload. A partial
   constituent is not required to be a complete setup on its own.
 - Reject duplicate destination names in the batch before writing anything.
+- Existing destination names are errors unless `--overwrite` / `-o` is set.
+  That flag permits replacement, not duplicate names within the same batch.
 - Copy the compiled results into the pedal's setup directory over the existing
   USB connection. This is a data transfer, not a firmware update.
 - Report a durable, read-back-verified result for each setup. If storage or USB
   fails after earlier setups were committed, report the successes and failure
   accurately. Do not claim the whole batch is atomic.
 
-Existing-name replacement, including replacing the active setup, needs an
-explicit policy before implementation. Proposed default: report a collision
-instead of silently overwriting. Also confirm whether copying the first setup
-to an empty pedal should activate it; copying other setups should not implicitly
-change the active selection.
+Validate replacement data before touching the existing committed generation.
+After a verified replacement of the active setup, reload its GUI immediately,
+without sending MIDI. On an initially empty pedal, activate the alphabetically
+earliest successfully copied setup after the batch finishes, including a batch
+that finishes with a reported partial failure. Otherwise copying does not change
+the selected setup, except to reload an explicitly overwritten active setup.
 
-### `ctrl setup set [NAME]`
+### `cntrl setup set [NAME]`
 
 - With no argument, print only the current `setup_name` stored in NV. This query
   must not restart the GUI or modify storage.
@@ -150,7 +150,7 @@ change the active selection.
 - On a persistence failure, leave the previous selection and GUI intact. Once
   the selection is durable, a reset before activation should boot the new setup.
 
-### `ctrl setup list`
+### `cntrl setup list`
 
 List all stored setups, one per line, with their last-modified dates. Use the
 same alphabetical order as boot selection and rotation. Display dates in the
@@ -158,7 +158,7 @@ development machine's local time as `YYYY-MM-DD HH:MM:SS`, without milliseconds
 or a timezone suffix. Obtain the catalogue and dates from the pedal, not local
 source-file mtimes.
 
-### `ctrl setup del NAME...`
+### `cntrl setup del NAME...`
 
 - Accept one or more names and validate the entire request before deleting any.
 - Show the names and ask `Are you sure?` once for the batch.
@@ -169,11 +169,14 @@ source-file mtimes.
   SD files, manufacturer data, animations or the containing storage root.
 - Report partial deletion failures accurately.
 
-Deleting the active setup, deleting the final setup, and handling the selection
-record during deletion are unresolved. Do not implement an implicit fallback or
-delete a selected setup until this policy is agreed.
+Allow deletion of the active setup after confirmation. Select and persist the
+alphabetically earliest valid setup outside the entire deletion batch before
+removing the active setup. If none remains, clear the selection safely and enter
+the no-setups state. A failed selection change must not remove the active setup.
+Deleting the last setup is allowed. An empty catalogue is a supported state
+throughout the system, not a special case that assumes a setup still exists.
 
-### `ctrl setup rotate`
+### `cntrl setup rotate`
 
 Move to the next setup in alphabetical order, wrapping at the end. With
 `--backward` / `-b`, move to the previous setup, also wrapping. Return an error
@@ -182,16 +185,18 @@ and GUI restart operation as `set`; do not maintain a separate rotation index.
 
 ### Downloading
 
-Download is required by the overall request but has no specified subcommand.
-Proposed interface: `ctrl setup download NAME... --directory PATH`.
-Confirm the verb and downloaded representation before implementing it.
+Use `cntrl setup download NAME... --directory PATH`, with `--directory` defaulting
+to `.`. Export editable, self-contained resolved TOML, including on-pedal edits,
+not the original source expressions or machine-specific paths.
 Downloads must reflect the latest committed setup, including on-pedal edits,
-and be verified for completeness and checksum. Existing local files must not
-be overwritten silently.
+and be verified for completeness and checksum. Write one `NAME.toml` per setup.
+Existing local files are errors unless `--overwrite` / `-o` is set. Validate
+names and destination collisions for the entire request before writing files;
+do not leave a truncated existing file after a failed transfer.
 
 ## SD catalogue and durable selection
 
-Use one application-owned directory, proposed as `/cntrl/setups/`, with one
+Use one application-owned directory, `/cntrl/setups/`, with one
 directory per named setup. Extend the existing storage boundary to address
 named setups rather than hard-coding a single pair of root filenames.
 
@@ -208,11 +213,12 @@ than introducing an independently mutable index file.
 
 Treat names as logical identifiers, never arbitrary paths. Enforce uniqueness
 and reject traversal, separators and unsupported names before any filesystem
-operation. Decide maximum name length and alphabetical comparison rules before
-implementation. In particular, filesystem case behavior must not let `Jazz`
-and `jazz` overwrite one another. Proposed ordering is case-insensitive ASCII,
-with case-only duplicate names rejected; confirm this rather than silently
-choosing a collation.
+operation. Names are 1 to 63 printable ASCII characters, including spaces, `+`
+and `=`, but excluding SD-invalid filename characters (`<>:"/\\|?*`), `.` and
+`..`, and trailing spaces or periods that cannot be represented reliably on the
+SD filesystem. Preserve capitalization for display; sort and compare identities
+case-insensitively using ASCII. Reject case-only duplicates such as `Jazz` and
+`jazz`, including names generated from combined file stems.
 
 `setup_name` must survive power loss in the chosen nonvolatile backend:
 
@@ -221,21 +227,21 @@ choosing a collation.
    setup, persist that name, then activate it.
 3. If a name is stored, load that setup rather than guessing from SD order.
 
-The request does not specify an empty card, a stored name whose setup has gone
-missing, or a corrupt selected setup. Define those outcomes explicitly. Do not
-silently equate a missing/corrupt selection with an unset selection.
+When zero valid setups exist, show `No setups` in a large font, centered in
+each of the three displays. Keep USB setup management and the pedal management
+entry gesture available; normal performance controls send no MIDI. This must
+work at boot, after final deletion, and after discovering that all stored
+records are unusable. A missing/corrupt selected setup with other valid setups
+available reports an error and preserves the stored name until explicit
+selection; do not silently activate another performance setup.
 
-**NV backend decision:** the current application persists documents on SD and
-has no selection-name NV implementation. Confirm whether NV means a separate
-EEPROM/flash-backed record or any persistent storage. An application-owned SD
-selection record is the least invasive option if acceptable. If separate NV is
-required, establish a safe, owned location first. Do not guess unused EEPROM
-addresses, assume flash emulation is harmless, or overwrite vendor settings.
+Use an application-owned SD selection record as NV, not a separate EEPROM or
+flash allocation. Do not guess unused EEPROM addresses or overwrite vendor settings.
 Write selection changes only when necessary, with integrity checking and
 recovery from an interrupted update.
 
-Keep existing single-show files untouched. Any import/migration of those files
-needs a specific policy; do not delete or silently relabel them.
+Keep existing single-show files untouched. Do not migrate or activate them
+automatically. Users copy their original source data files through the new CLI.
 
 ## Editable representation and on-pedal operation
 
@@ -244,48 +250,39 @@ source files. It resolves regexes and table joins, stores MIDI addressing bytes,
 and omits some original instrument/setup metadata. Downloading that binary alone
 cannot recover the source TOML/JSON or the original expressions.
 
-Before defining the new final format, decide whether downloads must provide:
-
-- A compiled setup for exact backup/reinstallation; or
-- An editable, self-contained setup representing the current resolved state.
-
-The recommended editable representation is the resolved state, not a promise to
-reconstruct original regexes or private development-machine file paths. Retain
+Downloads provide an editable, self-contained setup representing resolved state,
+not a promise to reconstruct original regexes or private development-machine
+file paths. Retain
 the identities and addressing metadata it needs in the new final format.
 Have one authoritative committed setup state; avoid separately editable source
 and binary copies that can disagree after an on-pedal edit.
 
 On the pedal, setup management must use the same catalogue, selection and save
-operations as USB commands. Define a reachable selection/editing UI without
-silently repurposing existing musical buttons or reserved chords. Selecting a
-setup or editing it must not emit accidental MIDI through the management
+operations as USB commands. Open management with the A+D chord; use A/B to
+browse, C to confirm, and F to go back. Selecting a setup or editing it must
+not emit accidental MIDI through the management
 gesture. Finish already accepted output batches before switching routes, and
 consume management-button releases before normal controls resume.
 
-Define the editable fields and Save/Cancel behavior before implementing the
-editor. A save validates the complete result, commits a new generation and
-updates modification metadata. Cancel leaves the stored generation unchanged.
-Switching away with unsaved edits needs an explicit discard/save policy.
+The first editor supports numeric program, bank, channel, volume, pan,
+brightness and timeout values. Exclude text editing, renaming, reordering,
+routing, colors and fonts from this release. Use explicit Save/Cancel. A save
+validates the complete result, commits a new generation and updates modification
+metadata. Cancel leaves the stored generation unchanged.
+Switching away with unsaved edits offers Save/Discard/Cancel. Do not introduce
+target-side text layout changes for this numeric-only editor.
 
-Text/font edits need particular care: font size and name offsets are currently
-computed on the development machine. On-pedal changes that affect layout must
-recompute and validate those derived values with the available font metrics,
-including the shared font size, before committing. Do not save stale offsets
-or silently clip names. The edit-field decision determines how much target-side
-layout work is actually required.
-
-Copy operations can supply modification timestamps from the development
-machine. On-pedal saves need a valid wall clock; uptime alone cannot produce
-an honest calendar date after a power cycle. Decide clock synchronization and
-the display of unknown dates before promising dates for offline edits. Do not
-fabricate timestamps from build time or 1970 defaults.
+Modification dates mean successful setup commit time, not source-file mtimes.
+Synchronize wall time from the Mac when connected. Without a verified persistent
+clock, offline edits after a reboot have an unknown date until time is synced;
+print `unknown` rather than fabricating a calendar timestamp from uptime, build
+time or 1970. Do not invent dates retroactively for edits made without a clock.
 
 ## Implementation sequence
 
-1. Resolve CLI spelling, placement of `avoid_confict`, explicit-name scope in
-   combined expressions, naming/order rules, replacement and deletion policies,
-   NV ownership and boot failure behavior. Decide download representation,
-   editing scope and timestamps before designing their formats.
+1. Resolve the management-chord interaction identified in the final review.
+   Specify resolved export metadata and edit ownership using existing models
+   before designing the final format.
 2. Define the self-contained final format and integrity-protected selection
    record. Reuse existing Pydantic validation and compiler rules; keep TOML/JSON
    parsing, shared data-file expression handling and instrument-table resolution
@@ -334,10 +331,50 @@ fabricate timestamps from build time or 1970 defaults.
 - Downloads match committed state and reflect on-pedal edits; any editable
   export can be recompiled according to its agreed round-trip contract.
 - Pedal Save/Cancel, management gesture suppression, no MIDI on activation,
-  clean history/UI reset, and valid text layout after editable-field changes.
+  clean history/UI reset, and numeric edits preserving text layout.
+- Copy/download collisions with and without `--overwrite` / `-o`; failed
+  replacement preserves the previous committed setup or local file.
+- Zero valid setups at boot and after deletion/corruption; centered `No setups`
+  on all three screens; silent performance controls and usable USB/management.
+- Active deletion in a batch never selects another setup scheduled for deletion.
+- Unknown dates before time sync, and commit-time dates after synchronization.
 
 Do not mark the feature complete after CLI uploads alone: persistent selection,
 downloads and the agreed on-pedal editing workflow are part of the goal.
+
+## Final review: essential risks and remaining decision
+
+- **A+D versus existing gestures:** opening management must not first execute
+  either button's ordinary action. Reserve the chord in the existing chord
+  recognition path and test press ordering, holds and releases. During the
+  screensaver-entry fade, the existing rule consumes the whole wake gesture.
+  One decision remains: require a second A+D after waking (preserves that rule),
+  or let A+D both wake and open management? Recommendation: require a second
+  press, consistent with the agreed wake behavior.
+- **Deletion interruption:** clearing selection before deleting the final setup
+  is insufficient by itself: a reset could reselect the still-present record.
+  Define a recoverable deletion commit/order so a completed deletion stays
+  deleted and interrupted operations never leave a selection pointing to a
+  removed record. Cover power loss at each storage boundary.
+- **Round-trip and edit ownership:** a resolved TOML export must recompile
+  without the original definitions/tables and reproduce the same effective
+  routes, patches and settings. Specify whether each numeric editor field
+  belongs to a patch, an instrument or the setup, following existing model
+  ownership. In particular, an absent bank must remain representable, and
+  volume/pan edits must not silently inject live MIDI.
+- **Concurrent USB and pedal edits:** do not overwrite an unsaved pedal edit
+  through a host copy, delete or selection command. Use the same dirty-state
+  gate for both entry points; a host operation that cannot present the pedal's
+  Save/Discard/Cancel choice should report the busy/unsaved-edit condition.
+- **No-setup display independence:** the empty/error-state UI needs a built-in
+  readable font and colors because there is no active setup from which to load
+  them. Do not dereference setup settings when booting an empty catalogue.
+  Recognize A+D without requiring a valid active document; the current
+  performance controller ignores button events when its document is invalid.
+- **Usable versus merely present records:** distinguish an empty usable
+  catalogue from card access failure, invalid records and an unsupported format.
+  Report those errors over USB even when the displays must say `No setups`;
+  never delete or silently overwrite damaged records as automatic recovery.
 
 ## Additional work beyond the prompt
 
