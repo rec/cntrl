@@ -2,9 +2,10 @@
 
 Status: implementation built and flashed, 2026-10-24. Automated tests and target
 image checks pass. Firmware boots and setup copy/read-back works. Hardware
-qualification is in progress: macOS currently retains the old single-port MIDI
-layout, and the second interface has not appeared in USB/CoreMIDI discovery.
-Do not treat enumeration or any physical MIDI path as qualified yet.
+qualification is in progress: USB-to-DIN output has passed byte-for-byte
+qualification through a CME U6MIDI Pro, including default-off behavior. macOS
+still exposes the old single-port MIDI layout. Do not treat the full two-input,
+six-output enumeration or the remaining physical paths as qualified yet.
 
 ## Goal
 
@@ -244,8 +245,9 @@ USB speeds declare two computer inputs and six outputs with jack names. CDC is
 retained. The USB device revision is increased to 0x0282 for the changed layout;
 neither revision changes nor software-triggered reenumeration have refreshed
 the MIDI layout observed on this Mac. Two bidirectional jack groups precede
-the four output-only groups. A physical reconnect and host discovery check
-remain pending; a cached host setup is a hypothesis, not an established cause.
+the four output-only groups. A subsequent physical USB reconnect also left
+the MIDI port count unchanged; a cached host setup remains a hypothesis, not
+an established cause.
 
 Each scheduler destination has 256 four-byte forwarding packets and eight
 reserved pedal batches, up to 14 bytes per batch. Total bridge storage is
@@ -315,3 +317,34 @@ has the bridge disabled, matching its original/default setting. Linker budgets:
 RAM1 variables 324,352 bytes, code/padding 98,304, stack budget 101,632;
 RAM2 fixed 215,072 bytes, heap budget 309,216; flash tool usage 395,260 bytes.
 These are build budgets, not measured runtime stack/heap high-water marks.
+
+### Physical DIN output qualification, 2026-10-24
+
+Moving the CME U6MIDI Pro to a different port on the same USB hub restored its
+three inputs and outputs in CoreMIDI. Test wiring was pedal DIN OUT to U6MIDI
+Pro IN 1. The Mac sent to `cntrl experimental` and captured only `U6MIDI Pro
+Port 1`, not IAC or the pedal's own USB input.
+
+Downloaded the current `pman` setup before testing. With its bridge disabled,
+neither the 304-byte short-message sequence nor the paced 4,099-byte SysEx
+appeared on the physical receiver. Temporarily enabled only
+`usb_midi_interface`, copied/read back the setup, and repeated the test:
+
+- All 304 short-message bytes matched exactly, covering 128 Program Changes
+  across all sixteen channels and sixteen modulation Control Changes.
+- The complete 4,099-byte non-commercial SysEx matched exactly across callbacks.
+- A five-second overload sent 3,348 bursts to the exposed pedal output. Route 0
+  counters after the checked messages and flood were 483,623 packets received,
+  8,701 submitted for transmission and 474,922 dropped. High-water occupancy
+  remained 256 packets, with zero SysEx aborts or port-initialization errors.
+- After resetting timing maxima before the test, the maximum MIDI-service time
+  was 48 microseconds and maximum button-scan interval was 3 ms. Display-service
+  counters continued advancing. This is scheduling evidence, not a visual or
+  physical footswitch-response assessment. Overload capture was not compared
+  byte-for-byte because dropping traffic was deliberate.
+
+Restored the downloaded setup, including its original disabled bridge setting,
+with read-back verification. Repeated the disabled test after the overload;
+neither test sequence arrived. Final status was
+`CNTRL READY 8 23390 e12bd7da`, the same setup length/checksum as before testing.
+No firmware changes or additional flashes were needed for this qualification.
