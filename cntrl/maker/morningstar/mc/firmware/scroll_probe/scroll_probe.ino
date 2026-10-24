@@ -19,8 +19,8 @@ unsigned used = 0;
 
 void report() {
     char text[224];
-    snprintf(text, sizeof(text), "CNTRL SCROLL %s spi=8 rate=60 stride=%u x=%u ssa=%u steps=%lu pixels=%lu us=%lu period=%lu max_us=%lu overruns=%lu\n",
-        painting ? "PAINTING" : "READY", pixels_per_update, offset,
+    snprintf(text, sizeof(text), "CNTRL SCROLL %s spi=8 gap=%u rate=60 stride=%u x=%u ssa=%u steps=%lu pixels=%lu us=%lu period=%lu max_us=%lu overruns=%lu\n",
+        painting ? "PAINTING" : "READY", scroll_probe::gap_width, pixels_per_update, offset,
         scroll_probe::start_line(offset), (unsigned long)steps,
         (unsigned long)streamed, (unsigned long)step_us, (unsigned long)period_us,
         (unsigned long)max_us, (unsigned long)overruns);
@@ -63,7 +63,8 @@ void loop() {
     }
     if (painting) {
         unsigned panel = next_column / 160, x = next_column % 160;
-        write_scroll_columns(panel, x, image[next_column], 1);
+        unsigned world_x = (scroll_probe::panel_origin(panel) + x) % scroll_probe::image_width;
+        write_scroll_columns(panel, x, image[world_x], 1);
         if (++next_column == 480) {
             painting = false; last_step = micros(); analogWrite(6, 192);
         }
@@ -71,15 +72,13 @@ void loop() {
         uint32_t start = micros();
         period_us = start - last_step;
         last_step = start;
-        for (unsigned remaining = pixels_per_update; remaining;) {
-            unsigned count = scroll_probe::batch_width(offset, remaining);
+        for (unsigned pixel = 0; pixel < pixels_per_update; ++pixel) {
+            offset = (offset + 1) % scroll_probe::image_width;
             for (unsigned panel = 0; panel < 3; ++panel) {
-                unsigned world_x = scroll_probe::entering_world_x(panel, offset + 1);
-                write_scroll_columns(panel, offset % 160, image[world_x], count);
-                streamed += count * 256;
+                unsigned world_x = scroll_probe::entering_world_x(panel, offset);
+                write_scroll_columns(panel, (offset + 159) % 160, image[world_x], 1);
+                streamed += 256;
             }
-            offset = (offset + count) % scroll_probe::image_width;
-            remaining -= count;
         }
         scroll_panels(7, offset);
         step_us = micros() - start;

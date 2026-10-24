@@ -13,13 +13,16 @@ Unexpected orientation or edge lines must be distinguished from absent scrolling
 
 ## Speed comparison
 
-Initial painting happens while dark. Tiles are 32 pixels wide, numbered 00..29,
-with a shared grid/diagonal pattern in a repeating 960x128 image. It reuses the
+Initial painting happens while dark. Tiles are 32 pixels wide, numbered 00..39,
+with a shared grid/diagonal pattern in a repeating 1280x128 image. It reuses the
 installed ST7735 library's classic font data. Each panel initially shows 160
-consecutive columns: left 0..159, centre 160..319, right 320..479.
+consecutive columns. With the default 64-pixel gap the windows are left 0..159,
+centre 224..383 and right 448..607. Columns 160..223 and 384..447 are hidden
+behind the two physical gaps, rather than squeezed out of the image.
 
-All three panels show adjacent windows at world positions `x`, `x+160` and
-`x+320`, modulo 960. Updates target 16,667 microseconds, approximately 60 Hz.
+All three panels show windows at world positions `x`, `x+224` and `x+448`,
+modulo 1280. The artwork keeps the same pixel scale; it continues behind the
+estimated gaps. Updates target 16,667 microseconds, approximately 60 Hz.
 Each update fills the entering circular-buffer columns per panel, then changes
 all three scroll offsets once. Pixel traffic is 768 bytes times the stride per
 update, plus command traffic. Tiles should continue across panel boundaries.
@@ -32,18 +35,18 @@ The current isolation baseline cannot maintain 60 Hz at the highest strides.
 Other buttons do nothing.
 All SPI calls finish and restore GPIO 13/12 before the next button scan.
 
-The complete source pattern is cached once at startup in 245,760 bytes of RAM.
+The complete source pattern is cached once at startup in 327,680 bytes of RAM.
 The isolation baseline restores 8 MHz byte transfers and addresses each column
 separately, even when the caller supplies several columns. This removes the
 faster clock, 16-bit transfers and controller multi-column addressing from the
-rendering path while keeping the cache and six speeds. Source spans still split
-at the circular-buffer boundary.
+rendering path while keeping the cache and six speeds. Each source column wraps
+independently, so gaps need not be multiples of a tile or controller width.
 Initialization uses the shared driver; the normal application's driver is unchanged.
 
 `CNTRL STATUS` returns fields such as:
 
 ```text
-CNTRL SCROLL READY spi=8 rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_us=... overruns=...
+CNTRL SCROLL READY spi=8 gap=64 rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_us=... overruns=...
 ```
 
 `pixels` counts streamed pixel bytes after the baseline, not baseline painting or
@@ -61,6 +64,16 @@ elapsed times, not sampled CPU load. `rate=60` is the target, not a measurement.
 make -C cntrl/maker/morningstar/mc/firmware test-scroll-probe inspect-scroll-probe
 make -C cntrl/maker/morningstar/mc/firmware test
 ```
+
+`SCROLL_GAP` configures both equal gaps in equivalent display pixels at build
+time, default 64. For example, to test and build a 48-pixel estimate:
+
+```bash
+make -C cntrl/maker/morningstar/mc/firmware SCROLL_GAP=48 test-scroll-probe inspect-scroll-probe
+```
+
+The firmware status reports the compiled gap. This standalone diagnostic does
+not load show configuration or modify saved settings.
 
 Native tests cover all six strides, including unaligned starts and source-image
 wraps, pixel byte order, per-column register payloads, selected-panel isolation,
@@ -153,5 +166,26 @@ on reset/disappearance; USB then confirmed this baseline running at stride 1:
 CNTRL SCROLL READY spi=8 rate=60 stride=1 x=333 ssa=148 steps=333 pixels=255744 us=965 period=16667 max_us=965 overruns=0
 ```
 
-Physical rendering confirmation is pending. Do not infer a visual fix from USB
-status or native protocol tests alone.
+The user subsequently confirmed that rendering was clean again. This restores
+a visually confirmed baseline, without identifying which removed optimization
+caused the earlier corruption.
+
+## Gap-aware panorama, 2026-10-24
+
+The image now contains 40 numbered tiles over 1,280 columns, with a configurable
+equal gap between the three windows. The uploaded build uses `SCROLL_GAP=64`.
+The known-working 8 MHz single-column transfer path is unchanged. The cache
+grows to 327,680 bytes, leaving 156,704 bytes free in RAM1 according to the build.
+
+Native tests passed for gaps of 64 and 17 pixels, including all six strides and
+source-image wraparound. Button/display/renderer tests and stock flash-config
+and HEX/ELF checks passed. Uploaded HEX SHA-256:
+`f60225f7b146f561994525c3c85d8812313415cbf0a67129c62dea9026c538dd`.
+After the uploader's usual reset/disappearance status 1, USB confirmed:
+
+```text
+CNTRL SCROLL READY spi=8 gap=64 rate=60 stride=1 x=500 ssa=141 steps=500 pixels=384000 us=965 period=16667 max_us=965 overruns=0
+```
+
+The physical continuity illusion at the estimated gap width awaits visual
+confirmation. The diagnostic still does not open the SD card or send MIDI.

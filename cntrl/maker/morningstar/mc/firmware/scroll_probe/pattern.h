@@ -1,32 +1,36 @@
 #pragma once
 #include <cstdint>
 
+#ifndef CNTRL_SCROLL_GAP
+#define CNTRL_SCROLL_GAP 64
+#endif
+
 extern "C" const unsigned char glcdfont[];
 
 namespace scroll_probe {
-constexpr unsigned panel_width = 160, height = 128, image_width = 960;
+constexpr unsigned panel_width = 160, height = 128, image_width = 1280;
+constexpr unsigned gap_width = CNTRL_SCROLL_GAP;
+
+constexpr unsigned panel_origin(unsigned panel) {
+    return panel * (panel_width + gap_width);
+}
 
 constexpr unsigned next_stride(unsigned stride) {
     return stride == 32 ? 1 : stride * 2;
-}
-
-constexpr unsigned batch_width(unsigned offset, unsigned count) {
-    unsigned available = panel_width - offset % panel_width;
-    return count < available ? count : available;
 }
 
 constexpr unsigned start_line(unsigned offset) {
     return 1 + (panel_width - offset % panel_width) % panel_width;
 }
 constexpr unsigned entering_world_x(unsigned panel, unsigned offset) {
-    return (panel * panel_width + offset + panel_width - 1) % image_width;
+    return (panel_origin(panel) + offset + panel_width - 1) % image_width;
 }
 
 inline uint16_t pixel(unsigned world_x, unsigned y) {
     world_x %= image_width;
     unsigned tile = world_x / 32, x = world_x % 32;
     if (x == 0 || y % 32 == 0) return 0xffff;
-    // Use the installed library's classic font, enlarged twofold: tiles 00..29.
+    // Use the installed library's classic font, enlarged twofold: tiles 00..39.
     if (x >= 4 && x < 28 && y % 64 >= 24 && y % 64 < 40) {
         unsigned character = (x - 4) / 12;
         unsigned column = ((x - 4) % 12) / 2;
