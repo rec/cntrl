@@ -6,11 +6,17 @@ extern "C" const unsigned char glcdfont[];
 namespace scroll_probe {
 constexpr unsigned panel_width = 160, height = 128, image_width = 960;
 
+constexpr unsigned next_stride(unsigned stride) {
+    return stride == 32 ? 1 : stride * 2;
+}
+
+constexpr unsigned batch_width(unsigned offset, unsigned count) {
+    unsigned available = panel_width - offset % panel_width;
+    return count < available ? count : available;
+}
+
 constexpr unsigned start_line(unsigned offset) {
     return 1 + (panel_width - offset % panel_width) % panel_width;
-}
-constexpr unsigned entering_column(unsigned offset) {
-    return (offset + panel_width - 1) % panel_width;
 }
 constexpr unsigned entering_world_x(unsigned panel, unsigned offset) {
     return (panel * panel_width + offset + panel_width - 1) % image_width;
