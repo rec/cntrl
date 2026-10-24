@@ -2,7 +2,7 @@
 
 Status: implementation plan with agreed decisions, 2026-10-24. No implementation
 or hardware changes are part of this document. The final review section records
-remaining implementation risks and one unresolved interaction decision.
+implementation risks; the interaction decisions are resolved.
 
 ## Goal and terminology
 
@@ -280,7 +280,7 @@ time or 1970. Do not invent dates retroactively for edits made without a clock.
 
 ## Implementation sequence
 
-1. Resolve the management-chord interaction identified in the final review.
+1. Preserve the second-press management-chord rule recorded below.
    Specify resolved export metadata and edit ownership using existing models
    before designing the final format.
 2. Define the self-contained final format and integrity-protected selection
@@ -342,15 +342,14 @@ time or 1970. Do not invent dates retroactively for edits made without a clock.
 Do not mark the feature complete after CLI uploads alone: persistent selection,
 downloads and the agreed on-pedal editing workflow are part of the goal.
 
-## Final review: essential risks and remaining decision
+## Final review: essential implementation risks
 
 - **A+D versus existing gestures:** opening management must not first execute
   either button's ordinary action. Reserve the chord in the existing chord
   recognition path and test press ordering, holds and releases. During the
   screensaver-entry fade, the existing rule consumes the whole wake gesture.
-  One decision remains: require a second A+D after waking (preserves that rule),
-  or let A+D both wake and open management? Recommendation: require a second
-  press, consistent with the agreed wake behavior.
+  A+D used to wake the pedal does not open management. Consume that complete
+  wake gesture, including releases, and require a second A+D after waking.
 - **Deletion interruption:** clearing selection before deleting the final setup
   is insufficient by itself: a reset could reselect the still-present record.
   Define a recoverable deletion commit/order so a completed deletion stays
