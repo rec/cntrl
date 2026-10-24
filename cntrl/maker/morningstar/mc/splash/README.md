@@ -97,8 +97,36 @@ uv run --frozen -m cntrl.maker.morningstar.mc.splash.cli prepare \
 
 The supplied animation produces 1,310,800 bytes. Generated assets and binaries
 stay under ignored `build/`; the source GIF is committed. There is no on-pedal
-GIF decoder, decompression, RGB conversion, resizing or image mirroring. Rows
+GIF decoder, decompression, resizing or image mirroring. Base RGB conversion
+happens on the Mac. Rows
 are stored in the exact RGB565 byte order needed by the display bus.
+
+## White-band colour cycle
+
+The board output adapter now recolours the white component at playback time,
+using a 20-second red/yellow/green/cyan/blue/magenta hue cycle. Each pixel's
+common RGB component is replaced by the tinted equivalent; its remaining
+colour is retained. Thus black and pure green are unchanged, grey antialiasing
+keeps its coverage, and white-to-green edge blends retain their green residue.
+Other coloured pixels with a white component are also affected; this is not an
+exact-white-only replacement.
+
+The tint is sampled at the first outer-screen row and held for the complete
+frame, including the mirrored centre. The outer screens still share a single
+broadcast transfer. One 320-byte temporary row is transformed before sending;
+stored assets, checksums, geometry, frame timing and backlight fades are unchanged.
+The effect is limited to splash/screensaver output, not the main UI.
+
+`color_cycle.h` implements the pure integer RGB565 transform. Native tests check
+the cycle endpoints, black and green invariance, grey shading, green edge blends
+and identity under a neutral tint for all 65,536 RGB565 values.
+
+Built and flashed on 2026-10-24 after splash/runtime, display/renderer native
+tests and stock flash-configuration/HEX-ELF checks passed. Image SHA-256:
+`f847942f295e055f4454434c364802f45e74b031d5dc0cf2eee87ca7bd0f7c05`.
+The uploader returned its usual reset/disappearance status 1; USB then confirmed
+`CNTRL READY 7 23390 0718301d`, with pman still selected. Visual colour and
+playback-speed confirmation remains a physical check.
 
 ## Components
 
