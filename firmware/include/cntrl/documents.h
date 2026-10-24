@@ -14,7 +14,7 @@ public:
     Documents(SetupStorage &storage, Hardware &hardware, Controller &controller, Replies &replies)
         : storage_(storage), hardware_(hardware), controller_(controller), replies_(replies) {}
     void boot() {
-        empty();
+        empty(true);
         if (!storage_.available()) { std::strcpy(boot_error_, "storage-unavailable"); return; }
         int stored = read_selection();
         if (stored < 0) { std::strcpy(boot_error_, "selection-record-invalid"); return; }
@@ -172,9 +172,9 @@ private:
         char response[128]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s", message);
         if (quiet_) { hardware_.error(message); quiet_ = false; } else replies_.reply(response);
     }
-    void empty() {
+    void empty(bool startup = false) {
         document_ = Document(); controller_.deactivate();
-        hardware_.set_brightness(192); hardware_.set_splash(false, 0);
+        hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
         Pane view; view.centered = true; view.graphics.size = 16; view.graphics.line_height = 16;
         std::snprintf(view.patch, sizeof(view.patch), "No setups");
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, view);

@@ -48,6 +48,16 @@ int main() {
     renderer.show(0, no_setups); drain(renderer);
     assert(screens[0][56][26] == 0xffff && screens[0][55][26] == 0);
     renderer.show(0, empty); drain(renderer);
+    cntrl::Pane editor;
+    editor.graphics.size = editor.graphics.line_height = 16;
+    editor.wrap_patch = true;
+    std::strcpy(editor.category, "Patch");
+    std::memset(editor.patch, 'X', 63); editor.patch[63] = 0;
+    renderer.show(0, editor); drain(renderer);
+    for (unsigned row = 0; row < 6; ++row) assert(screens[0][22 + 16 * row][4] == 0xffff);
+    assert(screens[0][102][40] == 0); // Last row has only three characters.
+    padding(0, 4, 0);
+    renderer.show(0, empty); drain(renderer);
     unsigned before = writes;
     renderer.show(0, empty); renderer.show(3, empty); drain(renderer);
     assert(writes == before);

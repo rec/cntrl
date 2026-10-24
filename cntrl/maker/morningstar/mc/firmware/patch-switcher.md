@@ -109,7 +109,9 @@ for self-contained editable downloads. Existing shows need recompiling.
 Brightness
 (0..255, default 192) applies to backlight PWM pin 6 on show activation, including
 startup. Older binary shows are rejected; recompile the original show and upload
-it after updating firmware. Top-level `splash` defaults to false; when true, the
+it after updating firmware. Top-level `splash` defaults to true; explicit false
+disables startup playback. With no selected setup, boot also uses the installed
+animation. When enabled, the
 installed animation plays until any button is pressed. See the
 [splash instructions](../splash/README.md) for preparation and upload. Splash
 images fill the panels without text padding. The dismissing gesture sends no
@@ -390,3 +392,25 @@ variables plus 98,304 bytes of code/padding, leaving 234,592 for the stack.
 RAM2 has 214,976 bytes of static allocations, leaving 309,312 for the heap.
 The document manager is in RAM2; external RAM remains unused. These are linker
 budgets, not measurements of peak runtime stack/heap usage.
+
+### Startup-animation and editor-font fixup
+
+An omitted `splash` now defaults to true, using the installed animation; explicit
+false remains authoritative. A no-setup boot also starts the installed animation,
+but returning to the empty screen from management or deletion does not replay it.
+Existing compiled setups retain their encoded setting until recompiled.
+
+Management text is doubled from classic size 8 to 16. Labels and values occupy
+separate screens; long values/names wrap within padding at 12 characters per
+line. All 63 characters fit in six lines. Performance text/offsets are unchanged.
+Tests cover the default/explicit-false cases, no-setup boot, editor font settings
+and padded rendering of a complete 63-character name.
+
+All 194 Python tests and the portable, display, renderer and splash native tests
+passed, along with Ruff, formatting, ty, pyupgrade and diff checks. The ARM build
+and flash-configuration/HEX checks passed. The inspected image was uploaded via
+software bootloader entry and the existing helper, SHA-256
+`259673c606ce6214380408afb79e96a35a35f33c8ee1718fc3b73efad7c76606`.
+The updater returned its usual status 1 after reset/disappearance; the application
+subsequently replied `CNTRL READY 7 0 00000000`. Visible animation and enlarged
+editor text await user confirmation. No setup or animation data was uploaded.

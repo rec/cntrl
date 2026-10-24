@@ -20,6 +20,7 @@ struct Pane {
     ScreenGraphics graphics;
     uint16_t category_x = 4, patch_x = 4, patch_color = 0xffff;
     bool centered = false;
+    bool wrap_patch = false;
 };
 
 struct Hardware {

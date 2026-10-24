@@ -156,6 +156,9 @@ can also be None. F from patch selection offers Save/Discard/Cancel. No edit
 auditions or sends MIDI; only Save updates storage. USB operations that could
 displace unsaved edits return `unsaved-edits`. Text/font/routing edits are not
 included. Management uses built-in readable typography even without a setup.
+Management uses a 16-pixel classic font, twice the performance-independent
+editor's original size. Labels and values occupy separate screens; long names
+wrap at 12 characters per line within the padding, without truncation.
 
 A+D used to wake the pedal does not open management. Release the complete wake
 gesture, then press A+D again. During screensaver entry, every button consumes
@@ -242,6 +245,13 @@ animation after no physical input for that interval, independently of startup
 documents are rejected; recompile the source show and upload it after installing
 version 7 firmware. No automatic
 conversion of stored documents is performed.
+
+Startup `splash` defaults to true: an omitted setting uses the currently installed
+animation. Explicit `splash = false` disables it. A boot without a selected setup
+also uses the installed animation. If no valid animation is installed, the normal
+UI appears immediately. Returning to the empty state through deletion or closing
+management does not replay the startup animation. Existing compiled documents
+retain their encoded true/false setting until recompiled.
 
 All integers are little-endian; strings are NUL-terminated, zero-padded ASCII.
 Records have fixed widths; no C++ memory layouts or host pointers are serialized.

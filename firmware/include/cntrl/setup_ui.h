@@ -85,11 +85,13 @@ private:
     }
     void render() {
         const char *title = "Setups", *value = name_[0] ? name_ : "No setups";
+        const char *value_label = "Action";
         char number[64] = {};
         if (mode_ == Mode::action) { title = name_; value = item_ ? "Edit" : "Select"; }
         else if (mode_ == Mode::patch) {
             title = reinterpret_cast<const char *>(docs_.document().category(u16(docs_.document().patch(patch_) + 2)));
             value = reinterpret_cast<const char *>(docs_.document().patch(patch_) + 12);
+            value_label = "Patch";
         }
         else if (mode_ == Mode::field || mode_ == Mode::value) {
             static const char *fields[] = {"Program", "Bank", "Channel", "Volume", "Pan", "Brightness", "Idle seconds"};
@@ -99,6 +101,7 @@ private:
             else if (v >= 0) std::snprintf(number, sizeof(number), "%lu", (unsigned long)v);
             else std::snprintf(number, sizeof(number), "%ld", (long)v);
             value = number;
+            value_label = "Value";
         } else if (mode_ == Mode::decision) {
             title = "Unsaved edits"; value = item_ == 0 ? "Save" : item_ == 1 ? "Discard" : "Cancel";
         } else if (mode_ == Mode::saving) { title = "Saving"; value = "Please wait"; }
@@ -106,18 +109,23 @@ private:
         // Management has its own readable defaults; performance typography may
         // be too large for field labels or absent altogether on an empty card.
         Pane views[3];
+        for (auto &view : views) {
+            view.graphics.size = view.graphics.line_height = 16;
+            view.wrap_patch = true;
+        }
         std::snprintf(views[0].category, 64, "A/B browse");
-        std::snprintf(views[0].patch, 64, "C confirm / F back");
-        std::snprintf(views[1].category, 64, "%.25s", title);
-        std::snprintf(views[1].patch, 64, "%.25s", value);
-        std::snprintf(views[2].category, 64, "%s", mode_ == Mode::value ? "A/B adjust" : "Setup management");
-        std::snprintf(views[2].patch, 64, "%s", docs_.dirty() ? "Not saved" : "No MIDI sent");
-        if (std::strlen(value) > 25) {
-            std::snprintf(views[2].category, 64, "%.25s", value + 25);
-            std::snprintf(views[2].patch, 64, "%.25s", std::strlen(value) > 50 ? value + 50 : "");
-        } else if (std::strlen(title) > 25) {
-            std::snprintf(views[2].category, 64, "%.25s", title + 25);
-            std::snprintf(views[2].patch, 64, "%.25s", std::strlen(title) > 50 ? title + 50 : "");
+        std::snprintf(views[0].patch, 64, "C OK, F back");
+        if (mode_ == Mode::value) std::snprintf(views[0].category, 64, "A/B adjust");
+        if (mode_ == Mode::catalogue) {
+            std::snprintf(views[1].category, 64, "Setups");
+            std::snprintf(views[1].patch, 64, "%s", value);
+            std::snprintf(views[2].category, 64, "Setup menu");
+            std::snprintf(views[2].patch, 64, "No MIDI sent");
+        } else {
+            std::snprintf(views[1].category, 64, "%s", mode_ == Mode::action ? "Setup" : mode_ == Mode::patch ? "Category" : "Field");
+            std::snprintf(views[1].patch, 64, "%s", title);
+            std::snprintf(views[2].category, 64, "%s", value_label);
+            std::snprintf(views[2].patch, 64, "%s", value);
         }
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, views[i]);
     }

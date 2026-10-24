@@ -14,6 +14,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     bool available = true;
     unsigned errors = 0;
     uint8_t brightness = 0;
+    bool splash = false;
     bool send(const char *route, const uint8_t *data, unsigned n) override {
         if (!available) return false;
         sent.emplace_back(data, data + n); routes.emplace_back(route); return true;
@@ -26,7 +27,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
     void set_brightness(uint8_t value) override { brightness = value; }
-    void set_splash(bool, uint32_t) override {}
+    void set_splash(bool enabled, uint32_t) override { splash = enabled; }
     void error(const char *) override { ++errors; }
     void reply(const char *s) override { replies.emplace_back(s); }
 };
@@ -108,6 +109,7 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     TestStorage card; Fake hw; cntrl::Controller controller(hw);
     cntrl::Documents docs(card, hw, controller, hw);
     docs.boot();
+    assert(hw.splash); // No setup still uses the installed startup animation.
     for (const auto &pane : hw.panes) assert(pane.centered && !std::strcmp(pane.patch, "No setups"));
     controller.button(0, true, 0);
     assert(controller.button(3, true, 50) == cntrl::Chord::ad); // No document needed.
@@ -115,6 +117,7 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     upload(docs, bytes); command(docs, "CNTRL SETUP FINISH");
     cntrl::SetupUi ui(docs, hw);
     ui.enter(); ui.poll(0);
+    for (const auto &pane : hw.panes) assert(pane.graphics.size == 16 && pane.graphics.line_height == 16 && pane.wrap_patch);
     ui.button(2, true, 1); // Select/Edit menu.
     ui.button(1, true, 2); ui.button(2, true, 3); // Edit selected setup.
     assert(docs.dirty() && hw.sent.empty());
@@ -249,6 +252,14 @@ int main(int argc, char **argv) {
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     app.activate(doc);
     assert(hw.brightness == 192);
+    assert(hw.splash);
+    auto no_animation = bytes;
+    no_animation[19] = 0;
+    cntrl::Document disabled;
+    assert(disabled.load(no_animation.data(), unsigned(no_animation.size()), hw));
+    app.activate(disabled);
+    assert(!hw.splash);
+    app.activate(doc);
     assert(hw.sent.empty() && !hw.panes[0].patch[0] && !hw.panes[1].patch[0]);
     assert(!hw.panes[0].category[0] && !hw.panes[1].category[0]);
     assert(hw.panes[2].category_x >= 4 && hw.panes[2].patch_x >= 4);
