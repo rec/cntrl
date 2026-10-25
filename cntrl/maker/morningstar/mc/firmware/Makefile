@@ -15,7 +15,26 @@ export ARDUINO_DIRECTORIES_DOWNLOADS := $(ROOT)/.tools/downloads
 export ARDUINO_DIRECTORIES_USER := $(ROOT)/.tools/user
 export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
-.PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe
+.PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe button-timing test-button-timing
+
+button-timing: tools test-button-timing
+	"$(CLI)" compile --fqbn "$(FQBN)" --warnings all \
+		--build-path "$(ROOT)/build/button-timing" \
+		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -I$(ROOT)' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -I$(ROOT) -I$(ROOT)/usb_probe' \
+		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
+		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
+		"$(ROOT)/button_timing"
+	"$(ARM)-objcopy" -O binary "$(ROOT)/build/button-timing/button_timing.ino.elf" "$(ROOT)/build/button-timing/image.bin"
+	"$(ARM)-objcopy" -I ihex -O binary "$(ROOT)/build/button-timing/button_timing.ino.hex" "$(ROOT)/build/button-timing/from-hex.bin"
+	cmp "$(ROOT)/build/button-timing/image.bin" "$(ROOT)/build/button-timing/from-hex.bin"
+	dd if="$(ROOT)/build/button-timing/image.bin" bs=512 count=1 2>/dev/null | shasum -a 256 -c "$(ROOT)/stock-flash-config.sha256"
+
+test-button-timing:
+	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+		"$(ROOT)/test_pair_timing.cpp" -o "$(ROOT)/build/test_pair_timing"
+	"$(ROOT)/build/test_pair_timing"
 
 scroll-probe: tools
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/no-external-ram.patch"
@@ -72,7 +91,7 @@ inspect-patch-switcher: patch-switcher
 	"$(ARM)-size" -A "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf"
 	"$(ARM)-nm" -n -C "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" > "$(ROOT)/build/patch-switcher/symbols.txt"
 
-test: tools
+test: tools test-button-timing
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
 	"$(ROOT)/build/test_buttons"
