@@ -319,7 +319,7 @@ private:
         char hex[127] = {}, name[64] = {}; unsigned length = 0, overwrite = 0; unsigned long crc = 0, epoch = 0; int end = 0;
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
-            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY 8 %u %08lx", document_.length(),
+            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY 9 %u %08lx", document_.length(),
                 document_.valid() ? (unsigned long)checksum(active_, document_.length()) : 0ul);
             replies_.reply(response); return;
         }

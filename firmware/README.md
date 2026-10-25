@@ -100,12 +100,28 @@ instrument/setup pair with explicit bank mappings. Table entries identify
 order, filling missing metadata, combining tags in first-seen order, and
 reporting conflicts. SysEx references are never read or included in the binary.
 
-Regexes search within names. Zero matches always fails; multiple matches fails
+Regexes search within original synthesizer `name` values, never display labels.
+Zero matches always fails; multiple matches fails
 unless `take_first_match = true`. The first match follows table-file and entry
 order. An explicit bank filters the search. Name matches inherit their table
-bank; numeric PCs with no bank send no bank selection. An explicit display name
-takes precedence over table metadata; otherwise numeric patches use `PC N` or
-`Bank B / PC N`.
+bank; numeric PCs with no bank send no bank selection.
+
+`name` is the original synthesizer patch name. It can be supplied directly on a
+numeric show patch when no library name is available, but cannot replace a
+different known library name. To change only the displayed text, use optional
+`display_name` on the program description (table entry) or on the show patch.
+Display precedence is show patch `display_name`, program `display_name`, then
+original `name`. If none is supplied, numeric patches use `PC N` or
+`Bank B / PC N`. Display labels never change the MIDI address or regex lookup.
+
+For example, a table entry can have `name = 'Trumpet 2'` and
+`display_name = 'Muted Trumpet'`; a show patch selecting that program can use
+`display_name = 'Opening solo'`. All three values are retained separately.
+Resolved downloads embed the used program descriptions in
+`definitions.programs`, alongside `definitions.setups`, and retain each show
+patch's own `display_name`. They recompile without the original library files.
+Font sizing and precomputed offsets use the final display label only; a hidden
+original name is preserved as UTF-8 metadata without display-character limits.
 
 Shorthand uses its first character as delimiter, with fields instrument,
 program, volume, pan, bank. Empty and omitted trailing optional fields are
@@ -235,10 +251,11 @@ clamping) reaching the threshold. If no such shift works, it uses the furthest
 RGB-cube corner, warning if that distance is still <= the threshold. Contrast is
 computed in input 8-bit RGB; encoded display colors are rounded down to RGB565.
 
-## Binary and transfer protocol, version 8
+## Binary and transfer protocol, version 9
 
-Version 8 retains the rendering/MIDI records and immutable instrument and
-bank metadata, and adds the default-off `usb_midi_interface` Boolean. It is a
+Version 9 retains the rendering/MIDI records and immutable instrument and
+bank metadata, and adds separate original/program/show name metadata. The
+default-off `usb_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
 idle timeout in seconds.
@@ -249,7 +266,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 8 firmware. No automatic
+version 9 firmware. No automatic
 conversion of stored documents is performed.
 
 Startup `splash` defaults to true: an omitted setting uses the currently installed
@@ -259,30 +276,36 @@ UI appears immediately. Returning to the empty state through deletion or closing
 management does not replay the startup animation. Existing compiled documents
 retain their encoded true/false setting until recompiled.
 
-All integers are little-endian; strings are NUL-terminated, zero-padded ASCII.
+All integers are little-endian; fixed-width strings are NUL-terminated,
+zero-padded ASCII. Name metadata uses length-prefixed UTF-8 instead.
 Records have fixed widths; no C++ memory layouts or host pointers are serialized.
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (8), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (9), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment, half RGB565; two zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
-| Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, name[64], three u16 screen cursor offsets |
+| Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 screen cursor offsets |
 | Metadata header, 40 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means default 1000), font name[32] |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
+| Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
 
 Records occur in the order header, screens (undo/sent/next), instruments,
-categories, patches, metadata header, identities, bank mappings and logical banks.
+categories, patches, metadata header, identities, bank mappings, logical banks
+and name metadata. Name metadata has no terminators or trailing padding; empty
+and absent values are distinct. Its variable length avoids allocating three
+fixed-width name slots per patch. The firmware validates its bounds and retains
+it unchanged; rendering continues to read the effective label from the patch.
 MIDI values
 are 0..127; optional values use 255 for omission. Categories contain contiguous,
 nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 8 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 9 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 Names in commands are hex-encoded ASCII, never paths. Requests are:

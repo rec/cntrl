@@ -32,7 +32,7 @@ class Document {
 public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
-            || u16(bytes + 4) != 8 || u16(bytes + 6) < 1
+            || u16(bytes + 4) != 9 || u16(bytes + 6) < 1
             || u32(bytes + 8) != length || bytes[19] > 3 || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
@@ -42,7 +42,17 @@ public:
             || std::memcmp(bytes + meta, "CMTA", 4)
             || !text_valid(bytes + meta + 8, 32)) return false;
         unsigned nb = u16(bytes + meta + 4);
-        if (meta + 40 + ni * 64 + nb * 8 + np * 4 != length) return false;
+        unsigned names = meta + 40 + ni * 64 + nb * 8 + np * 4;
+        if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
+        unsigned end = names + 4;
+        for (unsigned i = 0; i < np * 3; ++i) {
+            if (end + 2 > length) return false;
+            unsigned size = u16(bytes + end); end += 2;
+            if (size == 65535) continue;
+            if (end + size > length) return false;
+            end += size;
+        }
+        if (end != length) return false;
         for (unsigned i = 0; i < ni; ++i)
             if (!text_valid(bytes + meta + 40 + i * 64, 32)
                 || !text_valid(bytes + meta + 72 + i * 64, 32)) return false;

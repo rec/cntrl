@@ -16,7 +16,7 @@ def export(data: bytes) -> str:
     )
     if (
         magic != b'CSW1'
-        or version != 8
+        or version != 9
         or flags >> 10
         or length != len(data)
         or crc32(data[28:]) != crc
@@ -26,8 +26,28 @@ def export(data: bytes) -> str:
     if meta + 40 > len(data) or data[meta : meta + 4] != b'CMTA':
         raise ValueError('missing setup metadata')
     nb = struct.unpack_from('<H', data, meta + 4)[0]
-    if meta + 40 + ni * 64 + nb * 8 + np * 4 != len(data):
+    names_offset = meta + 40 + ni * 64 + nb * 8 + np * 4
+    if data[names_offset : names_offset + 4] != b'CNAM':
         raise ValueError('invalid setup metadata size')
+    names_offset += 4
+    names: list[list[str | None]] = []
+    for _ in range(np):
+        fields: list[str | None] = []
+        for _ in range(3):
+            if names_offset + 2 > len(data):
+                raise ValueError('truncated patch-name metadata')
+            size = struct.unpack_from('<H', data, names_offset)[0]
+            names_offset += 2
+            if size == 65535:
+                fields.append(None)
+            else:
+                if names_offset + size > len(data):
+                    raise ValueError('truncated patch-name metadata')
+                fields.append(data[names_offset : names_offset + size].decode('utf-8'))
+                names_offset += size
+        names.append(fields)
+    if names_offset != len(data):
+        raise ValueError('unexpected patch-name metadata')
 
     def text(offset: int, width: int) -> str:
         return data[offset : offset + width].split(b'\0')[0].decode('ascii')
@@ -88,7 +108,7 @@ def export(data: bytes) -> str:
         if entry not in setups:
             setups.append(entry)
     result['instruments'] = instruments
-    result['definitions'] = {'setups': setups}
+    programs: dict[tuple[str, str, int, int | None], dict[str, object]] = {}
     categories: dict[str, object] = {}
     for i in range(nc):
         offset = 76 + ni * 68 + i * 74
@@ -103,10 +123,32 @@ def export(data: bytes) -> str:
             patch: dict[str, object] = {
                 'instrument': aliases[index],
                 'program': data[p + 4] + 1,
-                'name': text(p + 12, 64),
             }
+            name, program_display_name, patch_display_name = names[j]
+            identity = meta + 40 + index * 64
+            program: dict[str, object] = {
+                'instrument': text(identity, 32),
+                'setup': text(identity + 32, 32),
+                'program': data[p + 4] + 1,
+            }
+            if name is not None:
+                program['name'] = name
+            if program_display_name is not None:
+                program['display_name'] = program_display_name
+            if patch_display_name is not None:
+                patch['display_name'] = patch_display_name
             if bank != 0xFFFFFFFF:
                 patch['bank'] = bank
+                program['bank'] = bank
+            key = (
+                text(identity, 32),
+                text(identity + 32, 32),
+                data[p + 4] + 1,
+                None if bank == 0xFFFFFFFF else bank,
+            )
+            if key in programs and programs[key] != program:
+                raise ValueError(f'conflicting program names for {key}')
+            programs[key] = program
             if data[p + 7] != 255:
                 patch['volume'] = data[p + 7]
             if data[p + 8] != 255:
@@ -114,4 +156,5 @@ def export(data: bytes) -> str:
             patches.append(patch)
         categories[text(offset, 64)] = patches
     result['patches'] = categories
+    result['definitions'] = {'setups': setups, 'programs': list(programs.values())}
     return tomlkit.dumps(result)

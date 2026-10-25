@@ -259,6 +259,17 @@ int main(int argc, char **argv) {
     corrupt.back() ^= 1;
     cntrl::Document invalid;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    // Name metadata is length-delimited and must fit the document exactly.
+    unsigned names = unsigned(doc.bank(doc.patches()) - bytes.data());
+    for (unsigned offset : {names, names + 4}) {
+        corrupt = bytes; corrupt[offset] = 254;
+        cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
+        assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    }
+    corrupt = bytes; corrupt.push_back(0);
+    cntrl::put32(corrupt.data() + 8, unsigned(corrupt.size()));
+    cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
+    assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     for (unsigned offset : {28u, 29u, 30u, 36u, 42u, 76u + 2 * 68 + 68}) {
         corrupt = bytes; corrupt[offset] = 255;
         cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
@@ -371,7 +382,7 @@ int main(int argc, char **argv) {
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].patch, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 8 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 9 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     auto new_show = bytes;

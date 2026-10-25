@@ -19,7 +19,7 @@ pan = 0
 
 [[patches.synth]]
 patch = ':keys:Soft pad'
-name = 'Evening pad'
+display_name = 'Evening pad'
 
 [[patches.synth]]
 patch = ':keys:12'
