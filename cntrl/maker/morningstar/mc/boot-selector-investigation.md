@@ -1,5 +1,9 @@
 # Resident stock firmware and cntrl: investigation, 2026-10-25
 
+The subsequent [stock-first implementation](firmware/boot_switch/README.md)
+provides a configurable 50 ms switch to cntrl. This document retains the original
+investigation and its qualification scope.
+
 ## Result
 
 A small stock startup patch can hand control to cntrl linked at a higher flash

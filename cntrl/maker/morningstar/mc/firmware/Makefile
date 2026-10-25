@@ -9,13 +9,29 @@ INDEX := https://www.pjrc.com/teensy/package_teensy_index.json
 FQBN := teensy:avr:teensy41:usb=serial,speed=600,opt=osstd,keys=en-us
 IMAGE := $(ROOT)/build/usb-probe/usb_probe.ino
 SCROLL_GAP ?= 72
+PATCH_BUILD ?= $(ROOT)/build/patch-switcher
+PATCH_OUTPUT ?= $(ROOT)/build/patch-switcher.hex
+PATCH_LINKER ?=
+SWITCH_PAIR ?= A+F
+ifneq ($(PATCH_LINKER),)
+PATCH_LINK_OPTION = --build-property 'build.flags.ld=-Wl,--gc-sections,--relax,--no-warn-rwx-segments -T$(PATCH_LINKER)'
+endif
 
 export ARDUINO_DIRECTORIES_DATA := $(ROOT)/.tools/data
 export ARDUINO_DIRECTORIES_DOWNLOADS := $(ROOT)/.tools/downloads
 export ARDUINO_DIRECTORIES_USER := $(ROOT)/.tools/user
 export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
-.PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe button-timing test-button-timing
+.PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe button-timing test-button-timing boot-switch test-switch-gesture
+
+boot-switch: tools test-switch-gesture
+	cd "$(ROOT)/../../../../.." && uv run --frozen -m cntrl.maker.morningstar.mc.boot_switch --pair '$(SWITCH_PAIR)'
+
+test-switch-gesture:
+	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+		"$(ROOT)/test_switch_gesture.cpp" -o "$(ROOT)/build/test_switch_gesture"
+	"$(ROOT)/build/test_switch_gesture"
 
 button-timing: tools test-button-timing
 	"$(CLI)" compile --fqbn "$(FQBN)" --warnings all \
@@ -74,13 +90,14 @@ patch-switcher: tools
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/no-external-ram.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/external-flash-config.patch"
 	"$(CLI)" compile --fqbn teensy:avr:teensy41:usb=serialmidi,speed=600,opt=osstd,keys=en-us --warnings all \
-		--build-path "$(ROOT)/build/patch-switcher" \
+		--build-path "$(PATCH_BUILD)" \
+		$(PATCH_LINK_OPTION) \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -DCNTRL_USB_INTERFACE -I$(ROOT)/usb_probe' \
 		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_USB_INTERFACE -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/patch_switcher"
-	cp "$(ROOT)/build/patch-switcher/patch_switcher.ino.hex" "$(ROOT)/build/patch-switcher.hex"
+	cp "$(PATCH_BUILD)/patch_switcher.ino.hex" "$(PATCH_OUTPUT)"
 
 inspect-patch-switcher: patch-switcher
 	"$(ARM)-objcopy" -O binary "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" "$(ROOT)/build/patch-switcher/image.bin"
@@ -91,7 +108,7 @@ inspect-patch-switcher: patch-switcher
 	"$(ARM)-size" -A "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf"
 	"$(ARM)-nm" -n -C "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" > "$(ROOT)/build/patch-switcher/symbols.txt"
 
-test: tools test-button-timing
+test: tools test-button-timing test-switch-gesture
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
 	"$(ROOT)/build/test_buttons"
