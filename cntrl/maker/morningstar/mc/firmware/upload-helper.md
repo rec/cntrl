@@ -1,7 +1,9 @@
 # Upload-only helper
 
-The experimental image has booted on the pedal and its USB serial heartbeat
-has been read directly from Codex. Direct HalfKay uploads remain blocked by the
+The patch-switcher application has repeatedly booted and communicated over USB,
+including software-triggered uploads of the current format 9 firmware. See the
+[deployment record](patch-switcher.md#current-deployment-2026-10-25).
+Direct HalfKay uploads remain blocked by the
 command sandbox. This helper is a separate, explicitly user-launched capability;
 it does not change Codex permissions or expose general HID access.
 

@@ -1,4 +1,10 @@
-# MC6 Pro USB/button/display experimental firmware
+# MC6 Pro USB/button/display diagnostic firmware
+
+This page describes the standalone diagnostic sketch and its dated bring-up
+results. The deployed functional controller is the
+[patch-switcher target](patch-switcher.md), which adds MIDI, named setups,
+runtime drawing and software bootloader entry. Restrictions below apply to the
+diagnostic sketch unless explicitly stated otherwise.
 
 The first upload has booted and communicated over USB serial on the pedal.
 For subsequent uploads, see the [upload-only helper](upload-helper.md), whose
@@ -43,8 +49,8 @@ outputs are under this directory's `build/`:
 - `symbols.txt` and `disassembly.txt`: inspection evidence.
 
 Each sketch has its own build directory, so Arduino CLI can clean or rebuild
-one without removing the other. The diagnostic HEX remains at the path used by
-the existing upload helper; `patch-switcher.hex` is a separate artifact.
+one without removing the other. The diagnostic HEX is a separate artifact;
+the current upload helper selects `patch-switcher.hex`.
 
 ## Application and startup boundary
 
@@ -86,7 +92,8 @@ operations, and no presets. There is no LED blink: pin 13 is a shared clock.
 
 At startup, `usb_probe/displays.cpp` initializes all three panels and draws
 white `CNTRL` and `DISPLAY 1`, `DISPLAY 2` or `DISPLAY 3` on black. These numbers
-identify firmware slots, not yet established physical positions. This fixed-text
+identify firmware slots. Later testing established CS 15/24/27 as physical
+left/centre/right respectively, with 160x128 drawing areas. This fixed-text
 bring-up uses independently drawn 5x7 glyphs only for the greeting, not a complete
 font or a runtime text API. There is no framebuffer, display library dependency,
 serial text command or vendor executable code.
@@ -106,8 +113,9 @@ This does not write a vendor setting to storage.
 
 Drawing happens only in setup and takes several seconds. Button scanning starts
 afterward. The displays are deselected and clock LOW on return, so later button
-scans cannot send display data. Runtime redraws interleaved with scanning have
-not been implemented or validated.
+scans cannot send display data. The separate patch-switcher target implements
+runtime redraws interleaved with scanning; their speed and button responsiveness
+have been confirmed on the pedal.
 
 `no-external-ram.patch` removes the startup call to `configure_external_ram()`,
 which would otherwise drive optional memory pins. It patches only the local
@@ -128,9 +136,9 @@ switch-reader, display and backlight pins listed above.
 
 The linked USB ISR retains the CDC baud-134 request and timer leading to
 `_reboot_Teensyduino_()`. That routine reads security state and uses the normal
-breakpoint or secure-ROM entry path; it does not program fuses. This is static
-evidence, not a successful test on this board. PROGRAM remains the established
-physical recovery method.
+breakpoint or secure-ROM entry path; it does not program fuses. The original
+inspection was static; later patch-switcher tests successfully exercised the
+software-entry path on this board. PROGRAM remains the physical recovery method.
 
 ## Button image inspection, 2026-10-21
 
@@ -212,9 +220,10 @@ Both button and display tests pass. No Python-consumed files changed.
   `24981e85d6e95c01a450162e5767047d7adabd5e51bb0492c597a26bb54d9faa`.
 - Stock flash configuration verified; ELF-derived and HEX-derived binaries match.
 
-This image has not yet been uploaded. Visual confirmation is needed for text,
-orientation and physical slot order. USB and button regression checks are also
-needed after the display initialization.
+At this inspection the image had not yet been uploaded. Subsequent live
+bring-up confirmed display text, orientation and physical slot order, with USB
+and buttons working. Current application qualification is recorded separately
+in [patch-switcher.md](patch-switcher.md).
 
 ## Original USB-only image inspection, 2026-10-21
 

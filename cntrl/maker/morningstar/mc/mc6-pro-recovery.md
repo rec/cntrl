@@ -2,16 +2,24 @@
 
 ## Conclusion
 
-**Ordinary broken application firmware has a documented recovery route through
-the PROGRAM button and USB uploader. Recovery without opening this particular
-unit is not yet established. Do not flash an experimental image yet.**
+**PROGRAM entry and stock/custom firmware uploads have now been demonstrated on
+this unit. Healthy custom firmware also supports software bootloader entry and
+repeatable upload/reboot over USB. An application that cannot service USB may
+still require opening the enclosure to press PROGRAM.**
+
+For the current deployed application and verified upload sequence, see the
+[patch-switcher deployment record](firmware/patch-switcher.md#current-deployment-2026-10-25)
+and [upload helper](firmware/upload-helper.md). These results do not establish
+automatic rollback, recovery after every possible crash or interrupted flash,
+or an independent SD rescue loader. No deliberately broken image or fuse change
+was needed for the tests.
 
 The supplied application implements software entry into the Teensy bootloader
 and can retain that entry during some crashes. Neither mechanism survives every
 possible broken replacement image. The application-managed SD update is not an
 independent rescue loader or an automatic rollback system.
 
-This report is software-only analysis, dated 2026-10-20. No uploader executable
+The original analysis below is dated 2026-10-20. At that time no uploader executable
 was run; no reset request, firmware transfer, flash operation or fuse operation
 was sent to a device. Read-only macOS USB inventory checks did not establish a
 live connection: System Profiler reported access errors and IORegistry's text
@@ -252,7 +260,12 @@ Safe mode is not a ROM boot menu. It is reached well into startup and cannot
 rescue arbitrary broken replacement startup code. No independent SD rescue
 loader or automatic selection of an old image was established in this image.
 
-## Next steps without opening or flashing
+## Historical first-upload gate, 2026-10-20
+
+This proposed sequence predates the successful PROGRAM and software-entry tests
+summarized above. It is retained as the original risk assessment, not a remaining
+instruction to avoid all experimental uploads. The distinction between healthy
+USB entry and recovery from broken startup code still applies.
 
 The next useful device check would be a **non-flashing bootloader round trip**:
 observe the running USB identity, request bootloader mode, observe its identity,

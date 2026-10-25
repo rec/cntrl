@@ -1,10 +1,12 @@
 # Multiple named performance setups
 
-Status: implemented, 2026-10-24. Host tests, native firmware tests, target build
+Status: implemented, updated 2026-10-25. Host tests, native firmware tests, target build
 and image inspection passed. Named-setup copy/readback, selection, rotation,
-download/recompile and active/final deletion have also passed over USB. Physical
-foot-operated editing, visible empty-state layout and cold power-cycle behavior
-still require user qualification. The interaction decisions are resolved.
+download/recompile and active/final deletion have also passed over USB. The user
+confirmed operation of the management UI. Complete field-by-field editing,
+visible empty-state layout and dedicated cold power-cycle/power-loss
+qualification remain separate checks. Current format: version 9, preserving
+original names and program/show display overrides in resolved downloads.
 
 ## Goal and terminology
 
@@ -346,9 +348,11 @@ downloads and the agreed on-pedal editing workflow are part of the goal.
 
 ### Implementation notes
 
-- Compiled format 7 retains immutable instrument identities, all declared bank
+- Compiled format 9 retains immutable instrument identities, all declared bank
   mappings and each patch's logical bank alongside the authoritative runtime
-  values. Resolved TOML downloads recompile without original definitions/tables.
+  values, original names and program/show `display_name` overrides. Resolved TOML
+  embeds `definitions.programs` and recompiles without original definitions/tables.
+  Older compiled documents must be recompiled.
 - The named store and selection record use independent pairs of generations,
   checksummed metadata, payload checksums, commit trailers and readback.
 - Deletion commits a zero-length tombstone. Older content cannot reappear just
@@ -357,7 +361,8 @@ downloads and the agreed on-pedal editing workflow are part of the goal.
 - An explicit empty selection persists intent during interrupted final deletion,
   instead of treating it as the never-configured boot case.
 - The numeric editor uses existing ownership: patch PC/bank/volume/pan,
-  instrument-alias channel, and setup brightness/idle seconds. Saving changes
+  instrument-alias channel, and setup brightness/idle seconds/USB MIDI bridge.
+  The bridge defaults off. Saving changes
   neither text nor layout. Closing management without a setup change preserves
   performance history. Edits never audition MIDI.
 - Automated failure tests cover every byte boundary of replacement, selection
@@ -392,7 +397,8 @@ downloads and the agreed on-pedal editing workflow are part of the goal.
   readable font and colors because there is no active setup from which to load
   them. Do not dereference setup settings when booting an empty catalogue.
   Recognize A+D without requiring a valid active document; the current
-  performance controller ignores button events when its document is invalid.
+  performance actions are silent without a valid document, but its chord
+  recognizer still permits management entry.
 - **Usable versus merely present records:** distinguish an empty usable
   catalogue from card access failure, invalid records and an unsupported format.
   Report those errors over USB even when the displays must say `No setups`;

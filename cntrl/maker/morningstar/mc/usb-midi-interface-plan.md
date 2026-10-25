@@ -1,11 +1,15 @@
 # Standard USB MIDI interface
 
-Status: implementation built and flashed, 2026-10-24. Automated tests and target
-image checks pass. Firmware boots and setup copy/read-back works. Hardware
-qualification is in progress: USB-to-DIN output has passed byte-for-byte
-qualification through a CME U6MIDI Pro, including default-off behavior. macOS
-still exposes the old single-port MIDI layout. Do not treat the full two-input,
-six-output enumeration or the remaining physical paths as qualified yet.
+Status, 2026-10-25: implemented, built, tested and flashed. macOS now exposes
+the intended two inputs and six outputs; both the user and native port listing
+confirmed the layout. USB-to-DIN output passed byte-for-byte qualification
+through a CME U6MIDI Pro, including default-off behavior. The two physical input
+paths, TRS output and four configurable outputs still need individual physical
+loopback qualification. See the [current deployment](firmware/patch-switcher.md#current-deployment-2026-10-25).
+
+The earlier single-port macOS enumeration was transient. A saved MIDI
+configuration contained only cable 0 for this serial number, but the exact step
+that resolved enumeration was not established. Do not infer a proven cache fix.
 
 ## Goal
 
@@ -86,14 +90,14 @@ back to the computer is included. Physical inputs go to their corresponding
 computer inputs only. Computer outputs go to their corresponding physical
 outputs only. Pedal-generated messages continue to use their configured routes.
 
-## Current implementation and required changes
+## Original baseline before implementation
 
-The target currently builds with `usb=serialmidi`, initializes Serial1 and
+Before this feature, the target built with `usb=serialmidi`, initialized Serial1 and
 Serial2 at 31,250 baud, and uses four FlexSerial transmitters for configurable
-ports. It drains USB MIDI input without forwarding it. Physical outputs and
-pedal USB messages share a single 32-entry batch queue, which can cause
-head-of-line blocking and must be replaced, not supplemented by a parallel
-output path.
+ports. It drained USB MIDI input without forwarding it. Physical outputs and
+pedal USB messages shared a single 32-entry batch queue. The implementation
+replaces that queue with independent bounded destination queues and nonwaiting
+USB submission; it does not retain a parallel legacy output path.
 
 The pinned Teensy core's `usb_midi_write_packed()` can wait and call `yield()`
 for up to 40 ms when transmit capacity is unavailable. Calling the ordinary
@@ -231,9 +235,9 @@ None.
 ## Implementation notes and qualification record
 
 The setup field is `usb_midi_interface`, strict Boolean, default false. The
-compiled document is version 8: byte 19 bit 0 remains splash, bit 1 enables the
-bridge, and other bits are rejected. Version 7 documents must be recompiled.
-Before updating this pedal, its only named setup, `pman`, was downloaded to
+current compiled document is version 9: byte 19 bit 0 remains splash, bit 1 enables
+the bridge, and other bits are rejected. Older documents must be recompiled.
+During the original version 8 deployment, its only named setup, `pman`, was downloaded to
 `firmware/build/usb-midi-backup/pman.toml`. It was recompiled and copied back as
 version 8 with byte-for-byte read-back verification. The backup and test outputs
 are local ignored artifacts, not committed personal setup data.
@@ -310,7 +314,7 @@ the maximum MIDI-service duration was 47 microseconds and button-scan gap was
 3 ms; display-service calls continued. These counters establish scheduler
 progress, not visible redraw quality or wire-level MIDI correctness.
 
-The latest inspected/flashed image SHA-256 is
+The 2026-10-24 inspected/flashed image SHA-256 was
 `0e9dd09363307bfdba2b5bb1bd78b93e11eb0c814be340f3b354df1fdd5726ad`.
 After reset it reported `CNTRL READY 8 23390 e12bd7da`. The restored `pman` setup
 has the bridge disabled, matching its original/default setting. Linker budgets:

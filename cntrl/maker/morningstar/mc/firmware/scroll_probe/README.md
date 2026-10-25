@@ -4,6 +4,8 @@ Standalone experimental firmware, not a patch-switcher mode. It initializes only
 the display/backlight and switch-reader pins, uses USB serial and never opens
 the SD card or sends MIDI. Saved shows and animation assets are untouched. It
 remains installed across power cycles until normal firmware is uploaded again.
+It is not the currently installed application; normal patch-switcher firmware
+has since been restored. Dated results below describe the diagnostic experiments.
 
 The diagnostic uses the stock panel initialization, followed by native-coordinate
 `MADCTL = 0x88` (MY/BGR retained, MV cleared), `SCRLAR = 1,160,1` and scroll start

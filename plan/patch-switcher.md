@@ -1,7 +1,11 @@
 # Patch switcher implementation plan
 
-Status: implemented for host testing and target builds. Hardware qualification
-and release qualification remain pending; nothing has been flashed.
+Status: implemented and deployed, updated 2026-10-25. Host/native tests and target
+image checks pass. Live results and remaining release/hardware checks are in the
+[target deployment record](../cntrl/maker/morningstar/mc/firmware/patch-switcher.md).
+The [multiple-setups follow-up](multiple-setups.md) adds named storage and editing.
+The current compiled format is version 9, retaining original names and separate
+program/show display overrides.
 
 See the [implementation and host command](../firmware/README.md) and the target
 maker directory for build instructions, measured capacities and remaining
@@ -21,19 +25,21 @@ or JSON and upload it to persistent storage through the running application,
 without rebuilding or replacing firmware. Updating firmware remains a separate
 operation.
 
-This plan covers issue #1 only. It does not implement an editor, synth setup
-management, expression pedals, future chord actions or vendor preset imports.
+This plan records the base issue #1 behavior. Numeric editing and named
+performance-setup management have since been implemented; their follow-up plan
+supersedes the original single-show storage and no-editor scope below. Synth
+setup installation, expression support and vendor preset imports remain outside
+the implemented application.
 
 ## Existing foundation
 
 The Python package already provides hardware catalogues, Pydantic models,
 tomlkit and tyro. Keep application settings out of those hardware models.
 
-The first target's experimental firmware has USB serial communication, button
-scanning and fixed startup display text. It is not yet a MIDI controller.
-Runtime text rendering, MIDI transmission, document reception and persistent
-document storage still need implementation and verification. Existing hold and
-double-press experiments are not patch-switcher requirements.
+The original USB/button/fixed-text diagnostic is retained separately for hardware
+investigation. The application now implements runtime font rendering, bounded
+redraws, MIDI scheduling, USB data transfer and named persistent setups. Diagnostic
+hold/double-press experiments are not patch-switcher gestures.
 
 Keep all manufacturer-specific implementation, tests, data and documentation in
 `cntrl/maker/morningstar/mc/`. Consult its
@@ -94,7 +100,7 @@ implementation measurement task, not an open user preference.
    delimiter escaping: fields cannot contain the chosen delimiter. Choose a
    different delimiter, such as `|vl|Name:.*`, or use the expanded form.
    A shorthand entry may supply a separate display-name override, for example
-   `patch = ':vl:12'` with `name = 'My flute'`. Other separate fields may fill
+   `patch = ':vl:12'` with `display_name = 'My flute'`. Other separate fields may fill
    omissions in shorthand, for example `volume = 100` alongside `:vl:12`.
    Supplying a field both in shorthand and separately is an error, even if
    their values agree. Include duplicate-field errors in the accumulated report.
@@ -106,9 +112,9 @@ implementation measurement task, not an open user preference.
    entry blanks L and C, shows the undone patch in R and sends no MIDI. The instrument
    retains its last patch even though the history displays are blank. Undo
    selects the undone patch's category and cursor for R. When Undo restores a patch, C shows that patch
-   with its instrument name, for example A:Flute, even if another instrument
+   with its category and effective patch label, even if another instrument
    still has a more recent remaining history entry. L shows the patch that the
-   next Undo would restore, including its instrument name. L is blank when the
+   next Undo would restore, using its category and effective patch label. L is blank when the
    action stack is empty or its top action has no known previous patch. When
    undoing an instrument's first send sends no MIDI and other history remains,
    C stays unchanged. Emptying the entire history blanks C.
@@ -145,7 +151,7 @@ implementation measurement task, not an open user preference.
 
 ## Source documents and compilation
 
-Introduce a separate application package, proposed as `cntrl/patch_switcher/`,
+The application package is `cntrl/patch_switcher/`,
 with typed Pydantic models, compilation, binary encoding and a tyro CLI.
 Use existing dependencies. TOML and JSON describe the same schema; TOML uses
 tomlkit. Keep category and patch declaration order through compilation.
@@ -155,7 +161,8 @@ Separate three inputs:
 - Instrument/setup definitions: identity and bank/program addressing rules,
   optionally referring to host-side setup SysEx files that are not included in
   the runtime document or transmitted by the pedal.
-- Instrument tables: patch address, instrument patch name, optional range and
+- Instrument tables: patch address, immutable instrument patch name, optional
+  program-level `display_name`, range and
   description, and zero or more tags. A repeated table flag joins base tables
   with personal metadata using the agreed identity and conflict rules.
 - Show document: routing aliases, setup references, channels and output IDs;
@@ -175,13 +182,15 @@ Compilation pipeline:
 3. Validate MIDI ranges, output availability and target capacity. Reject empty
    shows/categories and unresolved or conflicting entries with source context.
 4. Resolve each patch to its display name, category, output and ordered MIDI
-   message bytes. Prefer the explicit name, then the table name. If neither
-   exists, display `PC 12`, or `Bank 3 / PC 12` when a bank is specified, using
+   message bytes. Prefer the show patch's `display_name`, then the program's
+   `display_name`, then the original synthesizer `name`. Lookup always uses
+   the original name. If none is available, display `PC 12`, or `Bank 3 / PC 12` when a bank is specified, using
    the configured bank number and human-facing PC numbering 1..128.
 5. Encode a deterministic binary document. Include a format version, total
    length, counts, offsets and integrity checksum with explicit byte order.
-   Store only runtime-required information; regexes and descriptive table
-   metadata stay on the host. Do not serialize C++ structs or pointer layouts.
+   Retain original/program/show names and instrument/bank metadata for lossless
+   resolved downloads under `definitions.programs` and `definitions.setups`.
+   Regex selectors and unrelated descriptive table metadata stay on the host. Do not serialize C++ structs or pointer layouts.
 6. Report counts, byte size and resolved routes before an explicit upload.
 
 Validation must not stop at the first invalid patch. Check all patch entries,
@@ -197,11 +206,10 @@ read by both Python compiler tests and the C++ decoder tests.
 
 ## Portable firmware and target API
 
-Proposed layout:
+Implemented layout:
 
-- `firmware/include/cntrl/`: the small abstract hardware contract.
-- `firmware/patch_switcher/`: portable decoder, state machine, gesture handler,
-  MIDI message scheduling and layout.
+- `firmware/include/cntrl/`: the hardware contract, decoder, controller,
+  gesture handler, MIDI bridge/scheduling, named setup storage and editor logic.
 - `firmware/test/`: host-side C++ tests with a fake implementation of that API.
 - `cntrl/patch_switcher/` and `test/`: generic host tools and their unit tests.
 - Existing maker directory: target library, build target, hardware-specific
@@ -251,7 +259,8 @@ previous patch to the same instrument, if one is known, without pushing an entry
 It never substitutes a different instrument's patch from the chronological
 stack. An empty stack does nothing; undoing an instrument's first send sends
 nothing. Repeated C presses still push repeated entries. After a restoration,
-C shows the restored patch and its instrument name. After every send or Undo,
+C shows the restored patch's category and effective label, without an instrument
+name or title. After every send or Undo,
 derive L from the previous patch recorded by the top remaining action, or blank
 it if no restoration target exists. If Undo sends nothing, C stays unchanged
 while history remains; an empty history blanks C. R shows the undone patch even
@@ -273,8 +282,10 @@ separate chord window, configurable with an initial value of 100 ms.
 - Delay singles from A, B, D and E for the chord window.
 - If a pending button is released before its window expires, fire its single
   action immediately on release. It can no longer form a chord after release.
-- Recognize AB, AD, BE and DE in either order. Consume both singles; the chord
-  currently does nothing. Releasing a consumed chord must not emit singles.
+- Recognize AB, AD, BE and DE in either order. Consume both singles; AD opens
+  setup management, while AB, BE and DE have no action. A wake gesture cannot
+  also open management: release it and press AD again. Releasing a consumed
+  chord must not emit singles.
 - Unrecognized pairs, such as A+E, also do nothing. If the second press arrives
   while the first is still pending and held, suppress both single actions;
   their later releases do not emit singles.
@@ -305,7 +316,7 @@ bootloader, executable image and unrelated saved settings. Document storage
 capacity and behavior during interrupted writes in the maker directory.
 
 Stage the complete new document while retaining the old committed one. Verify
-it before committing a power-loss-safe activation record, using two slots or
+it before committing a recoverable activation record, using two slots or
 an equivalent transactional mechanism supported by the chosen storage. Never
 erase the only valid document first. A checksum is integrity checking, not
 authentication.
@@ -313,8 +324,9 @@ authentication.
 Activation behavior (resolved): after successful durable commit, immediately
 activate the new show, discard old cursors and history, select the first patch
 of the first category, blank L/C and send no MIDI. Retain the
-old active document on validation or transfer failure. At boot, use the latest
-valid committed document; if none exists, display an explicit no-document/error
+old active document on validation or transfer failure. At boot, load the latest valid generation of the persistently selected named
+setup, choosing alphabetically only when no selection has ever been stored.
+If none exists, display an explicit no-document/error
 state and accept uploads without sending MIDI. Acknowledge success only after
 durable commit and verify the document identity again after reboot.
 
@@ -338,7 +350,8 @@ durable commit and verify the document identity again after reboot.
    upload. Cross-check Python and C++ against the same fixtures.
 4. **Integrate the target.** Add the release build target and hardware adapter.
    Implement general text rendering and bounded runtime redraws, then required
-   MIDI output routes. Verify names fit or truncate consistently, buttons remain
+   MIDI output routes. Fit names during compilation or report errors instead of
+   silently truncating them. Verify buttons remain
    responsive during drawing, and captured MIDI bytes match fixture sequences
    on every advertised output. Do not claim unsupported routes work.
 5. **Implement persistence and transport.** Qualify the storage region before
@@ -397,51 +410,9 @@ target display drivers, with bounded payload sizes and drawing work so input
 handling remains responsive. This custom popup protocol is separate from setup
 SysEx files, which remain excluded from live transmission.
 
-## Configurable-port findings and implementation status
+## Target-specific capabilities
 
-For the initial MC6 Pro target, the four configurable ports support MIDI
-output, expression-pedal input or auxiliary-switch input. MIDI input is not an
-established capability of these ports. The
-[manufacturer's manual](https://help.morningstar.io/en/article/mc6-pro-user-manual-psevjy/)
-and the traced stock firmware agree: every configurable-port serial instance
-explicitly disables reception. Use the dedicated MIDI inputs for MIDI reception.
-
-The stock output modes are:
-
-| Mode | MIDI signal contact | Other contact |
-| --- | --- | --- |
-| Standard / Type A | Tip | Ring driven HIGH |
-| Tip active | Tip | Intended to float |
-| Ring active | Ring | Intended to float |
-| Type B | Ring | Tip driven HIGH |
-
-We have traced the per-port signal assignments, mode-selection logic, pin muxes,
-FlexIO peripheral configuration, 31,250-baud initialization, transmit queues and
-interrupt handling needed for an independent output driver. Stock firmware reads
-per-port modes from persisted settings, then configures the selected conductors
-and enables the corresponding transmitter. Detailed evidence, mode values and
-electrical qualifications remain in the
-[hardware map](../cntrl/maker/morningstar/mc/mc6-pro-pin-map.md#configurable-ports-midi-routing-and-mode-selection).
-
-The current replacement adapter implements Standard/Type A output on
-`configurable-1` through `configurable-4`, initializing each transmitter on first
-use with tip TX and ring HIGH. It does not import stock port settings. Type B,
-tip-active and ring-active selection are not implemented by this build; the
-existing implementation is not evidence that every traced mode is available.
-See the target's
-[build and qualification notes](../cntrl/maker/morningstar/mc/firmware/patch-switcher.md#adapter-and-storage-boundaries).
-The replacement output driver still requires physical MIDI-capture validation
-for routing, polarity, timing and startup transitions.
-
-Two limits on the software evidence matter:
-
-- The stock initializer does not reliably establish that the unused conductor
-  actually floats in tip-active and ring-active modes. Circuitry, impedance and
-  contact wiring require electrical evidence; a mode name alone is insufficient.
-- Generic receive code and input-capable processor pins do not establish a
-  suitable MIDI current-loop input circuit. Do not advertise configurable-port
-  MIDI input or connect a transmitting MIDI device to test that assumption.
-
-Keep these hardware details in the target adapter. The portable patch-switcher
-uses output IDs and reported capabilities without assuming a particular
-connector, conductor arrangement or peripheral implementation.
+Keep pin assignments, electrical modes and physical qualification under the
+maker directory. The portable application uses output IDs and reported
+capabilities, not a particular jack, conductor arrangement or peripheral.
+See the [target adapter and qualification notes](../cntrl/maker/morningstar/mc/firmware/patch-switcher.md#adapter-and-storage-boundaries).

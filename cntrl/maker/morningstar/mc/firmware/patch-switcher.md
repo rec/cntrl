@@ -1,8 +1,42 @@
 # MC6 Pro patch-switcher build
 
-This is the first complete application build, not a hardware-qualified release.
-The first patch-switcher firmware and pman show were uploaded on 2026-10-22.
-See the live verification record below for confirmed results and remaining checks.
+The application is built and running on the pedal. It is not a fully
+hardware-qualified release. Dated sections below retain earlier image hashes,
+format numbers and measurements; they are historical, not the current build.
+
+## Current deployment, 2026-10-25
+
+- Deployed source: `48b2693` (`Add display_name overrides to patch_switcher`),
+  including the latest independent centre/outer splash colour and speed walks.
+- HEX SHA-256:
+  `39f4c72d434e57791e1436a8ab53180228dba945a02ed872eb7087c1acaf2a1d`.
+- Running status: `CNTRL READY 9 26866 36424cc1`.
+- Selected setup: `pman`, 256 patches, 15 categories, channel 1, DIN output.
+  The live version 8 setup was backed up and recompiled before flashing. All
+  existing runtime records, labels, MIDI addresses and settings were unchanged;
+  version 9 adds separate name metadata. The restored setup was downloaded and
+  matched the prepared export exactly. No empty setup was substituted.
+- The bridge is off in this setup. Enumeration exposes DIN and TRS inputs and
+  DIN, TRS and four configurable outputs. The CME U6MIDI Pro also enumerates
+  all three input/output pairs. Post-flash discovery/status sent no musical MIDI.
+- Before upload: 215 Python tests, portable/native controller and MIDI bridge
+  tests, button/display/renderer and splash/runtime tests passed. HEX/ELF and
+  stock flash-configuration checks passed. The helper uploaded the image after
+  software bootloader entry; no PROGRAM press was needed.
+
+The latest build has 324,480 bytes of RAM1 variables and 98,304 bytes of RAM1
+code/padding, leaving a 101,504-byte stack budget. RAM2 fixed allocation is
+215,072 bytes, leaving 309,216 bytes for heap. Flash tool usage is 396,284 bytes
+of the 8,126,464-byte application region. These are linker budgets, not measured
+runtime peak stack/heap use. No external RAM is used.
+
+Previously verified: all six buttons, text/orientation/panel ordering, fast
+hardware-SPI redraws, software bootloader entry/upload/reboot and USB-to-DIN
+short-message/SysEx output. The two physical inputs, TRS output and four
+configurable outputs still need individual loopback tests. SD-card power-loss
+safety, complete editor coverage and release qualification remain unproven.
+New version 9 labels and the latest visual animation behavior need observation
+on the pedal; successful boot and read-back are not a visual test.
 
 ## Sliding send/undo panes, 2026-10-24
 
@@ -199,8 +233,10 @@ USB exposes Serial + MIDI, using the public core's development VID/PID and the
 existing `cntrl experimental` product string. The serial receiver accepts show
 documents, not HEX or firmware. There is no new application-flash writer and no
 factory EEPROM access. The existing PROGRAM recovery path is retained by using
-the verified startup and flash configuration; this image still needs a physical
-boot and recovery check after its first authorized upload.
+the verified startup and flash configuration. PROGRAM entry and independent
+firmware uploads have been exercised, and healthy-application software entry
+has repeatedly worked. No intentionally broken-image or interrupted-flash
+recovery experiment has been qualified.
 
 The adapter uses the traced native SD interface with the pinned SD/SdFat
 libraries. It requires an existing readable FAT/exFAT card. It does not format a
@@ -227,10 +263,19 @@ standard/type-A output mode: tip TX, ring HIGH. Type B, ring-active and expressi
 modes are not advertised by this build. Only use appropriate MIDI cables/devices
 on those ports; this application does not import saved port settings.
 
-FlexSerial outputs are initialized when first used. USB host uses the core's
-host stack and one MIDI device; USB device uses MIDI cable 0. Other USB classes,
-multiple host devices/hubs and input forwarding are not implemented. A complete
-patch sequence is admitted to a 32-entry output queue before history changes.
+FlexSerial outputs are initialized when first used, or together when the bridge
+is enabled. USB host supports one MIDI device, not a host bridge or hubs.
+USB device has two computer inputs and six outputs; explicit pedal USB messages
+share input cable 0 with forwarded DIN input. `usb_midi_interface = true` enables
+the two physical inputs and six outputs as a computer interface. It defaults off
+and does not change enumeration. There is no automatic physical MIDI thru.
+
+The scheduler has independent destination queues, each with 256 forwarding
+packets and eight reserved pedal batches of up to 14 bytes. A complete pedal
+patch sequence must be admitted before history changes. Device and host USB
+submission do not wait for transmit capacity. Congestion causes bounded queuing
+and reported drops, not a global stall. See the
+[bridge qualification record](../usb-midi-interface-plan.md) for limits and tests.
 USB disconnects or later transport failures cannot be acknowledged by a MIDI
 receiver and are not equivalent to a confirmed instrument state change.
 
@@ -253,8 +298,10 @@ GPIO output LOW and pin 12 to GPIO input for the existing switch-register reader
 The next transfer restores the SPI pin mux through `SPI.begin()`. No asynchronous
 display transfer or display interrupt masking crosses a button scan. The largest
 column transaction sends 267 bytes, approximately 0.27 ms of wire time at 8 MHz,
-excluding CPU/peripheral setup. Verify redraw speed and button latency on the
-pedal; SD and USB library calls can still introduce latency. The previous
+excluding CPU/peripheral setup. Hardware SPI redraws were user-confirmed as effectively immediate. Live MIDI
+overload tests recorded 3 ms maximum button-scan intervals and continued display
+servicing, not a visual rendering guarantee. SD operations, particularly the
+storage scan, can still stall the main loop. The previous
 software-clocked driver had an observed update time around 1,500 ms.
 
 ## Capacity measurements
@@ -267,8 +314,9 @@ measurements are printed by `inspect-patch-switcher` and may vary as code change
 The current allocation supports two 65,536-byte document buffers, 32 routed
 instruments, 128 categories and 128 Undo entries, plus a 65,536-byte scratch
 buffer shared by deletion names and editor-save verification. Record sizes impose an upper
-bound of 758 patches for the smallest possible instrument/category tables and no bank mappings;
-larger tables reduce this through the document byte-size check. Instrument and
+bound that depends on instrument/category tables, banks and version 9's
+variable-length name metadata. The advertised patch-count limit is not a
+promise that that many fit; the compiler enforces the 65,536-byte limit too. Instrument and
 output IDs occupy at most 31 printable ASCII characters; category/patch names
 occupy at most 63. The compiler chooses one shared fitting font size; category
 and patch names are centered on separate lines using saved cursor offsets,

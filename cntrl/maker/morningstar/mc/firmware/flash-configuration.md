@@ -108,7 +108,13 @@ The rebuilt HEX SHA-256 is
 the raw SHA-256 is
 `dc4a1717d3decfb42608d36b69e86bb336ef1cf1604327f142afa28db61f95d5`.
 
-## First-upload boundary
+## Historical first-upload boundary
+
+This section records the pre-upload investigation. Subsequent custom images
+booted and communicated over USB; PROGRAM and software-entry uploads have now
+been demonstrated. See the [current deployment](patch-switcher.md#current-deployment-2026-10-25).
+The original FCB analysis below is not a claim of arbitrary-crash or interrupted
+flash recovery.
 
 The specific FCB mismatch is resolved. This is ready for a controlled first
 bring-up experiment, not a claim of hardware qualification. Actual boot,
