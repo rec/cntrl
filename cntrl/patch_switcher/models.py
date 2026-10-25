@@ -28,12 +28,6 @@ class Setup(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Definitions(BaseModel, frozen=True):
-    setups: list[Setup]
-
-    model_config = ConfigDict(extra='forbid')
-
-
 class Instrument(BaseModel, frozen=True):
     instrument: str
     setup: str
@@ -50,6 +44,7 @@ class Patch(BaseModel, frozen=True):
     pan: Annotated[int, Field(strict=True, ge=-64, le=63)] | None = None
     bank: Annotated[int, Field(strict=True, ge=0)] | None = None
     name: str | None = None
+    display_name: str | None = None
 
     model_config = ConfigDict(extra='forbid')
 
@@ -60,9 +55,17 @@ class TablePatch(BaseModel, frozen=True):
     program: Annotated[int, Field(strict=True, ge=1, le=128)]
     bank: Annotated[int, Field(strict=True, ge=0)] | None = None
     name: str | None = None
+    display_name: str | None = None
     range: str | None = None
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class Definitions(BaseModel, frozen=True):
+    setups: list[Setup]
+    programs: list[TablePatch] = Field(default_factory=list)
 
     model_config = ConfigDict(extra='forbid')
 

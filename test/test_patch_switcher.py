@@ -35,7 +35,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 8
+    assert compiler.HEADER.unpack_from(result)[1] == 9
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
@@ -241,6 +241,127 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
     assert compiler.compile_show(show, definitions, [table], target) == data
     show['patches'] = {'wind': [{'patch': ':a:^Flute$'}]}
     with pytest.raises(compiler.CompilationError, match='no patch matches'):
+        compiler.compile_show(show, definitions, [table], target)
+
+
+@pytest.mark.parametrize('selector', [1, '^Trumpet 2$'])
+@pytest.mark.parametrize(
+    ('program_label', 'patch_label', 'expected'),
+    [
+        (None, None, 'Trumpet 2'),
+        ('Muted Trumpet', None, 'Muted Trumpet'),
+        ('Muted Trumpet', 'Opening solo', 'Opening solo'),
+        (None, 'Opening solo', 'Opening solo'),
+    ],
+)
+def test_display_name_precedence_preserves_original_and_round_trips(
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    selector: int | str,
+    program_label: str | None,
+    patch_label: str | None,
+    expected: str,
+) -> None:
+    table = {
+        'patches': [
+            {
+                'instrument': 'synth',
+                'setup': 'stock',
+                'program': 1,
+                'name': 'Trumpet 2',
+                'display_name': program_label,
+            }
+        ]
+    }
+    show['patches'] = {
+        'wind': [
+            {
+                'instrument': 'a',
+                'program': selector,
+                'display_name': patch_label,
+            }
+        ]
+    }
+    data = compiler.compile_show(show, definitions, [table], target)
+    offset = 76 + 2 * 68 + 74
+    assert data[offset + 4] == 0
+    assert data[offset + 12 : offset + 76].split(b'\0')[0].decode() == expected
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    program = exported['definitions']['programs'][0]
+    assert program['name'] == 'Trumpet 2'
+    assert program.get('display_name') == program_label
+    assert exported['patches']['wind'][0].get('display_name') == patch_label
+    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+
+
+def test_two_show_labels_share_one_program_description(
+    show: dict[str, object], definitions: object, target: models.Target
+) -> None:
+    assert isinstance(definitions, dict)
+    show['definitions'] = dict(
+        definitions,
+        programs=[
+            {
+                'instrument': 'synth',
+                'setup': 'stock',
+                'program': 1,
+                'name': 'Trumpet 2',
+                'display_name': 'Muted Trumpet',
+            }
+        ],
+    )
+    show['patches'] = {
+        'wind': [
+            {'patch': ':a:Trumpet', 'display_name': 'Opening solo'},
+            {'patch': ':a:Trumpet', 'display_name': 'Encore'},
+        ]
+    }
+    data = compiler.compile_show(show, {}, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert len(exported['definitions']['programs']) == 1
+    assert [p['display_name'] for p in exported['patches']['wind']] == [
+        'Opening solo',
+        'Encore',
+    ]
+    assert compiler.compile_show(exported, {}, [], target) == data
+    show['patches'] = {'wind': [{'patch': ':a:Muted Trumpet'}]}
+    with pytest.raises(compiler.CompilationError, match='no patch matches'):
+        compiler.compile_show(show, {}, [], target)
+
+
+def test_display_override_does_not_require_rendering_original_name(
+    show: dict[str, object], definitions: object, target: models.Target
+) -> None:
+    original = 'Trumpet ' + 'é' * 80
+    table = {
+        'patches': [
+            {
+                'instrument': 'synth',
+                'setup': 'stock',
+                'program': 1,
+                'name': original,
+                'display_name': 'Trumpet',
+            }
+        ]
+    }
+    show['patches'] = {'wind': [{'patch': ':a:1'}]}
+    data = compiler.compile_show(show, definitions, [table], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['definitions']['programs'][0]['name'] == original
+    assert compiler.compile_show(exported, {}, [], target) == data
+
+
+def test_name_cannot_override_known_synthesizer_name(
+    show: dict[str, object], definitions: object, target: models.Target
+) -> None:
+    table = {
+        'patches': [
+            {'instrument': 'synth', 'setup': 'stock', 'program': 1, 'name': 'Trumpet 2'}
+        ]
+    }
+    show['patches'] = {'wind': [{'patch': ':a:1', 'name': 'Opening solo'}]}
+    with pytest.raises(compiler.CompilationError, match='use display_name'):
         compiler.compile_show(show, definitions, [table], target)
 
 

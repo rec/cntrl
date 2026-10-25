@@ -73,8 +73,10 @@ def compile_show(
     except ValidationError as error:
         raise CompilationError(_validation_errors('show', error)) from error
     setups: dict[tuple[str, str], models.Setup] = {}
+    embedded_programs: list[dict[str, object]] = []
     try:
         parsed = show.definitions or models.Definitions.model_validate(definitions)
+        embedded_programs = [p.model_dump() for p in parsed.programs]
         for s in parsed.setups:
             key = (s.instrument, s.name)
             if key in setups:
@@ -84,7 +86,7 @@ def compile_show(
                 errors.append(f'definitions: negative bank in {key}')
     except ValidationError as error:
         errors.extend(_validation_errors('definitions', error))
-    entries = _join_tables(tables, errors)
+    entries = _join_tables([{'patches': embedded_programs}, *tables], errors)
     instruments: dict[str, models.Instrument] = {}
     instrument_records: list[bytes] = []
     for alias, raw in show.instruments.items():
@@ -117,6 +119,8 @@ def compile_show(
     categories: list[bytes] = []
     patches: list[bytes] = []
     logical_banks: list[int] = []
+    name_records: list[bytes] = []
+    program_names: dict[tuple[str, str, int, int | None], list[str | None]] = {}
     for category, values in show.patches.items():
         category_text = _text(category, 64, target, f'patches.{category}', errors)
         if not isinstance(values, list):
@@ -148,6 +152,7 @@ def compile_show(
             bank = patch.bank
             program = patch.program
             name = patch.name
+            matched = None
             if isinstance(program, str):
                 try:
                     pattern = re.compile(program)
@@ -176,9 +181,7 @@ def compile_show(
                     continue
                 matched = matches[0]
                 program, bank = matched.program, matched.bank
-                if name is None:
-                    name = matched.name
-            elif name is None:
+            else:
                 matched = next(
                     (
                         e
@@ -188,14 +191,30 @@ def compile_show(
                     ),
                     None,
                 )
-                if matched is not None:
-                    name = matched.name
+            program_display_name = matched.display_name if matched else None
+            if matched is not None and matched.name is not None:
+                if name is not None and name != matched.name:
+                    errors.append(
+                        f'{context}: name differs from synthesizer name '
+                        f'{matched.name!r}; use display_name to override it'
+                    )
+                name = matched.name
+            identity = (instrument.instrument, instrument.setup, program, bank)
+            names = [name, program_display_name]
+            if identity in program_names and program_names[identity] != names:
+                errors.append(f'{context}: conflicting program names for {identity}')
+            program_names[identity] = names
             mapping = setup.banks.get(bank) if bank is not None else None
             if bank is not None and mapping is None:
                 errors.append(f'{context}: bank {bank} has no mapping in this setup')
                 continue
-            if name is None:
-                name = (
+            display_name = patch.display_name
+            if display_name is None:
+                display_name = program_display_name
+            if display_name is None:
+                display_name = name
+            if display_name is None:
+                display_name = (
                     f'PC {program}' if bank is None else f'Bank {bank} / PC {program}'
                 )
             patches.append(
@@ -208,10 +227,26 @@ def compile_show(
                     _optional(mapping.lsb if mapping else None),
                     _optional(patch.volume),
                     _optional(patch.pan + 64 if patch.pan is not None else None),
-                    _text(name, 64, target, context + '.name', errors),
+                    _text(display_name, 64, target, context + '.display_name', errors),
                 )
             )
             logical_banks.append(0xFFFFFFFF if bank is None else bank)
+            for field, text in (
+                ('name', name),
+                ('program.display_name', program_display_name),
+                ('display_name', patch.display_name),
+            ):
+                if text is None:
+                    name_records.append(struct.pack('<H', 65535))
+                else:
+                    encoded = text.encode('utf-8')
+                    if len(encoded) >= 65535:
+                        errors.append(
+                            f'{context}.{field}: name exceeds storage capacity'
+                        )
+                    name_records.append(
+                        struct.pack('<H', min(len(encoded), 65534)) + encoded[:65534]
+                    )
             if bank is not None and bank >= 0xFFFFFFFF:
                 errors.append(f'{context}: bank exceeds storage capacity')
         count = len(patches) - start
@@ -290,6 +325,7 @@ def compile_show(
     body = b''.join(screen_records + instrument_records + categories + patches)
     body += metadata + b''.join(identities + mappings)
     body += b''.join(struct.pack('<I', min(b, 0xFFFFFFFF)) for b in logical_banks)
+    body += b'CNAM' + b''.join(name_records)
     if len(body) + HEADER.size > target.max_document_bytes:
         errors.append(
             f'document: {len(body) + HEADER.size} bytes exceeds target capacity '
@@ -300,7 +336,7 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            8,
+            9,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
@@ -342,7 +378,7 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                 continue
             merged = previous.model_dump()
             merged['tags'] = list(dict.fromkeys(previous.tags + entry.tags))
-            for field in ('name', 'range', 'description'):
+            for field in ('name', 'display_name', 'range', 'description'):
                 old, new = getattr(previous, field), getattr(entry, field)
                 if old is None:
                     merged[field] = new
