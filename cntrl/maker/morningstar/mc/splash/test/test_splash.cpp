@@ -83,7 +83,7 @@ int main() {
     ColorWalk wrapping;
     wrapping.at(0xffffff00);
     Tint wrapped = wrapping.at(0x54);
-    assert(wrapped.red >= 56 && wrapped.green <= 7 && wrapped.blue <= 7);
+    assert(wrapped.red >= 59 && wrapped.green <= 4 && wrapped.blue <= 4);
     for (unsigned shade = 0; shade < 32; ++shade) {
         unsigned green = (shade << 1) | (shade >> 4);
         uint16_t grey = uint16_t(shade << 11 | green << 5 | shade);

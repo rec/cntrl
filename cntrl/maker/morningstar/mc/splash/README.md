@@ -108,8 +108,9 @@ using two smooth pseudorandom walks through RGB colour space: one for L/R and
 one for the mirrored centre. Each walk chooses nearby targets, with each six-bit
 channel moving by up to 20 levels per nominal colour segment, and interpolates
 toward them. Each walk also has its own independent speed walk: a new speed
-target is chosen every five seconds and approached smoothly, bounded to 0.5..2
-times the original pace. The speed target moves by at most 0.25 times base speed
+target is chosen every ten seconds and approached smoothly, bounded to 0.25..2
+times the original pace, starting at 0.5 times the original base speed. The
+fastest rate remains unchanged. The speed target moves by at most 0.25 times base speed
 per segment, reflecting at its limits. Boundary reflections keep RGB channels
 in 0..63 without
 clipping them against the cube walls. The pace is comparable to the former
@@ -161,6 +162,13 @@ passed. HEX/ELF and stock flash-configuration checks passed. Image SHA-256:
 After the updater's usual reset/disappearance status 1, USB confirmed
 `CNTRL READY 8 23390 e12bd7da`, with pman still selected. Assets and show data
 were not rewritten. The actual colour/speed effect still requires observation.
+
+On 2026-10-25 the initial colour speed and minimum were halved, while the 2x
+maximum was retained. Speed-walk segments doubled from five to ten seconds.
+GIF motion and UI transitions were unchanged. Native splash/runtime and display/
+renderer tests and image checks passed; the fixup was flashed and USB confirmed
+pman and `CNTRL READY 8 23390 e12bd7da` unchanged. Image SHA-256:
+`fb5740e44e60ef21cbc24bc36b558c35d83034fade0508797bc39fb9c9d225e8`.
 
 ## Components
 

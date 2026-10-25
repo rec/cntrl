@@ -18,12 +18,12 @@ public:
         uint32_t elapsed = now - last_; last_ = now;
         if (elapsed > 1000) elapsed = 0; // Do not replay time spent off-screen.
         unsigned speed_elapsed = now - speed_since_;
-        if (speed_elapsed >= 5000) {
+        if (speed_elapsed >= 10000) {
             speed_from_ = speed_target_;
             speed_target_ = next_speed(speed_from_);
             speed_since_ = now; speed_elapsed = 0;
         }
-        unsigned speed = (speed_from_ * (5000 - speed_elapsed) + speed_target_ * speed_elapsed) / 5000;
+        unsigned speed = (speed_from_ * (10000 - speed_elapsed) + speed_target_ * speed_elapsed) / 10000;
         phase_ += elapsed * speed;
         // At most two boundaries per poll: elapsed <= 1000, speed <= 2000.
         while (phase_ >= 1000000) {
@@ -43,7 +43,7 @@ private:
     }
     unsigned next_speed(unsigned value) {
         int next = int(value) + int(random() % 501) - 250;
-        if (next < 500) next = 1000 - next;
+        if (next < 250) next = 500 - next;
         if (next > 2000) next = 4000 - next;
         return unsigned(next);
     }
@@ -59,7 +59,7 @@ private:
     }
     Tint from_ = {63, 0, 0}, target_ = {63, 0, 0};
     uint32_t state_, last_ = 0, speed_since_ = 0, phase_ = 0;
-    unsigned speed_from_ = 1000, speed_target_ = 1000; // Permille of base speed.
+    unsigned speed_from_ = 500, speed_target_ = 500; // Permille of original base speed.
     bool started_ = false;
 };
 
