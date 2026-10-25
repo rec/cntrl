@@ -7,6 +7,7 @@ SECTIONS
         *(.rodata*)
     }
     .ARM.exidx : { *(.ARM.exidx*) }
+    .selection 0x60084000 (NOLOAD) : { . += 0x1000; }
     .bss 0x20013ca0 (NOLOAD) : {
         *(.bss*)
         *(COMMON)

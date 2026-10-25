@@ -22,9 +22,9 @@ export ARDUINO_DIRECTORIES_DOWNLOADS := $(ROOT)/.tools/downloads
 export ARDUINO_DIRECTORIES_USER := $(ROOT)/.tools/user
 export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
-.PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe button-timing test-button-timing boot-switch test-switch-gesture
+.PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe button-timing test-button-timing boot-switch test-switch-gesture test-boot-selection
 
-boot-switch: tools test-switch-gesture
+boot-switch: tools test-switch-gesture test-boot-selection
 	cd "$(ROOT)/../../../../.." && uv run --frozen -m cntrl.maker.morningstar.mc.boot_switch --pair '$(SWITCH_PAIR)'
 
 test-switch-gesture:
@@ -32,6 +32,12 @@ test-switch-gesture:
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
 		"$(ROOT)/test_switch_gesture.cpp" -o "$(ROOT)/build/test_switch_gesture"
 	"$(ROOT)/build/test_switch_gesture"
+
+test-boot-selection:
+	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+		"$(ROOT)/test_boot_selection.cpp" -o "$(ROOT)/build/test_boot_selection"
+	"$(ROOT)/build/test_boot_selection"
 
 button-timing: tools test-button-timing
 	"$(CLI)" compile --fqbn "$(FQBN)" --warnings all \
@@ -108,7 +114,7 @@ inspect-patch-switcher: patch-switcher
 	"$(ARM)-size" -A "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf"
 	"$(ARM)-nm" -n -C "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" > "$(ROOT)/build/patch-switcher/symbols.txt"
 
-test: tools test-button-timing test-switch-gesture
+test: tools test-button-timing test-switch-gesture test-boot-selection
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
 	"$(ROOT)/build/test_buttons"

@@ -51,6 +51,8 @@ def test_combined_image_preserves_stock_outside_the_patch_fields(
     assert restored == stock.data
     assert combined[0x100000:] == custom.data
     assert combined[0x83000:0x83004] == b'HOOK'
+    assert struct.unpack_from('<2I', combined, 0x84000) == (0x434E4254, 0xBCB1BDAB)
+    assert combined[0x84008:0x85000] == b'\xff' * (4096 - 8)
     assert struct.unpack_from('<I', combined, 0x7C424)[0] == 0x60083001
     assert struct.unpack_from('<I', combined, 0x15F0)[0] == 0x20013DA0
     assert struct.unpack_from('<I', combined, 0x1990)[0] == 0x20013DA0
