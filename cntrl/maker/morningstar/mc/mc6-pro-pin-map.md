@@ -6,7 +6,12 @@ SHA-256 of the HEX file:
 
 The photographed board is marked `MC6 PRO v1.2`, `2024-10-22`, with an NXP
 MIMXRT1062 processor. These findings apply to this firmware, not automatically
-to every hardware revision. Nothing was connected, flashed or electrically tested.
+to every hardware revision. The original analysis was performed without device
+I/O. Later custom-firmware tests confirmed all six button mappings and three
+displays, SD access, software bootloader entry and DIN MIDI output. See the
+[current deployment](firmware/patch-switcher.md#current-deployment-2026-10-25)
+for the verified scope and remaining physical checks. No electrical probing
+has been performed.
 
 “Confirmed” below means established by tracing firmware instructions and data.
 It does not mean confirmed by probing the board. Pin numbers are the firmware's
@@ -331,13 +336,15 @@ at the physical/runtime boundary:
   This would be hardware validation, not another conclusion from disassembly.
 - **Replacement-driver behavior:** actual output polarity, timing and startup
   transitions need measurement or an independently established, recoverable
-  firmware-test route. No such route has been established here.
+  firmware-test route. PROGRAM recovery and custom uploads have since been
+  demonstrated, but these configurable-output measurements remain outstanding.
 
 A test image could report mux and GPIO-direction registers over USB, reducing
 the need for internal probing. It cannot prove external voltage tolerance,
 isolation or continuity by reporting processor registers. Do not patch or flash
-the production image just to answer those questions: bootloader acceptance and
-recovery remain unresolved. Nothing was flashed, and no device I/O was attempted.
+the production image just to answer those questions. The original static study
+performed no device I/O; later custom-firmware acceptance and recovery-entry
+tests are summarized at the top of this map and in the recovery report.
 
 ## MIDI UARTs: confirmed startup pins and peripherals
 
@@ -481,16 +488,18 @@ Pin 13 is also the switch-reader clock. A replacement driver must account for
 that shared connection. The switch reader reloads its parallel inputs before
 each eight-bit sample; display clock edges must not be treated as switch scans.
 
-Unknown: panel positions, connector contact numbering, backlight driver circuit
+Unknown: connector contact numbering, backlight driver circuit
 and voltage/current requirements. None of these connections has been probed.
 
 Independent bring-up: `firmware/usb_probe/displays.cpp` uses this wiring and
 register data to draw `CNTRL` and a numbered display label at startup. Stock
 rotation 1 resolves to MADCTL `0xa8`, with exchanged offsets x=1, y=2. All panel
 CS lines are HIGH and clock LOW before button scanning begins. Reset and
-sleep-out waits are conservative; PWM values 5 and 63 stay within traced stock
-usage. Host SPI-transaction tests and the build pass; visible output and panel
-positions remain unverified pending upload.
+sleep-out waits are conservative. The diagnostic greeting now uses PWM 192
+after drawing; the patch-switcher uses the configured brightness, keeping the
+backlight off until its first complete frame. Live tests established physical
+left/centre/right as CS 15/24/27, each with a 160x128 drawing area. This does not
+identify the exact display-controller revision or backlight circuitry.
 
 ## EEPROM: confirmed external path and flash-emulation alternative
 

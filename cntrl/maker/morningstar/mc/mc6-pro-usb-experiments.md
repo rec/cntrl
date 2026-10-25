@@ -168,7 +168,9 @@ four-cable response behaviour is now observed rather than inferred.
 
 These queries do not expose raw RAM, peripheral registers, flash readback or
 an executable upload facility. They do not demonstrate recovery from broken
-firmware. The recovery gate in the earlier report remains unresolved.
+firmware. At this session's date the recovery gate remained unresolved; later
+PROGRAM and software-entry tests are recorded in the
+[updated recovery report](mc6-pro-recovery.md).
 
 Passive footswitch capture now works without changing controller settings.
 A labelled, one-button-at-a-time capture would resolve which switches produced

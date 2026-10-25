@@ -37,13 +37,36 @@ The MC3's third and fourth TRS MIDI outputs have DIP-selectable wiring.
 MC4 Pro has separate rear and side TRS MIDI inputs and two different
 configurable-port jack sizes.
 
-MC6 Pro uses the user-supplied 200 x 200 display dimensions. MC4 Pro and MC8 Pro
-dimensions and all Pro palette sizes remain unknown, with TODOs in the data.
-Physical DIN contact counts also remain unknown pending confirmation.
+Independent MC6 Pro bring-up established three 160 x 128 RGB565 drawing areas.
+The catalogue still carries the earlier user-supplied 200 x 200 declarations;
+that is a known data discrepancy, not the verified display geometry. The firmware
+target uses 160 x 128. This documentation update does not change catalogue data.
+MC4 Pro and MC8 Pro dimensions, palette counts and DIN contact counts remain
+unspecified in the catalogue; missing fields are not verified specifications.
 External expression pedals and switches are not built-in controls. No firmware
 restrictions, presets, calibration, or live device state are represented.
 
-## Experimental firmware and analysis
+## Current application and qualification, 2026-10-25
+
+The independent patch-switcher is running on the photographed MC6 Pro, not just
+on host test hardware. Latest deployed source: `48b2693`, with version 9 data.
+The selected `pman` setup contains 256 patches in 15 categories, routed on
+channel 1 to DIN. It was backed up, recompiled and restored after the firmware
+update; read-back matched the prepared setup exactly. No empty setup was
+substituted. The USB MIDI bridge remains off in this setup.
+
+Boot, USB serial, software bootloader entry/upload/reboot, all six buttons,
+display text and fast redraws have been exercised. USB MIDI discovery shows
+two inputs and six outputs with useful names; USB-to-DIN output passed exact
+short-message and large-SysEx capture through a CME U6MIDI Pro. The two physical
+inputs and the other five outputs still need individual loopback qualification.
+Physical SD power-loss recovery and complete release qualification are not proven.
+
+See [deployment details](firmware/patch-switcher.md),
+[USB MIDI qualification](usb-midi-interface-plan.md), and
+[splash behavior](splash/README.md).
+
+## Build and historical analysis
 
 See the [firmware build and inspection instructions](firmware/README.md),
 [patch-switcher build](firmware/patch-switcher.md),
@@ -54,11 +77,12 @@ See the [firmware build and inspection instructions](firmware/README.md),
 Run from the repository root:
 
 ```bash
-make -C cntrl/maker/morningstar/mc/firmware test inspect
+make -C cntrl/maker/morningstar/mc/firmware test inspect-patch-switcher
 uv run --frozen pytest
 ```
 
-After this relocation, stop any old upload helper between uploads and restart
-it using the module command in its updated instructions. An already-running
-helper retains its old image and socket paths. Its original socket is left
-undisturbed until that process closes it; it is not used by the relocated helper.
+The separate `inspect` target builds the historical USB/button/display diagnostic,
+not the patch-switcher. Neither build flashes anything. The helper uploads the
+fixed `firmware/build/patch-switcher.hex` path only. Keep an existing helper
+running between uploads; restart it when its source or fixed paths change. An
+address-in-use error can mean it is already serving, not that its socket is stale.

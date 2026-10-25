@@ -2,8 +2,10 @@
 
 The patch-switcher target integrates this player and upload protocol. Set
 `splash = true` in the show (`"splash": true` in JSON) to play the installed
-animation on boot or show activation. The default is false. Upload the prepared
-asset before uploading the show that enables it. A missing or invalid asset
+animation on boot or show activation. The default is true: omitting the setting
+uses the installed animation, unless `splash = false` is explicit. With no active
+setup, startup also uses the installed default animation. Upload the prepared
+asset before relying on playback. A missing or invalid asset
 falls through to the normal interface.
 
 Startup playback turns the backlight off immediately, paints the first complete
@@ -47,12 +49,13 @@ normally, without waiting for another fade.
 Once entry has finished and the screensaver is fully running, pressing any button
 retains the fast wake transition: 200 ms out, complete UI repaint while dark,
 200 ms in. This press also performs its normal musical action immediately.
-The uninterrupted entry and normal wake transitions include a
+Waking cannot also open setup management: release the wake gesture and press
+A+D a second time to open it. The uninterrupted entry and normal wake transitions include a
 brief black repaint interval beyond the two ramp durations. Neither blocks USB,
 button scanning or MIDI queues. Incoming MIDI and USB status queries do not reset
 the physical-input timer. Show/asset transfers temporarily inhibit idle entry.
 
-The setting is encoded in show format 6. Recompile older shows before upload;
+The setting is encoded in the current show format 9. Recompile older shows before upload;
 there is no implicit conversion of saved binary shows.
 
 The screensaver build was inspected and uploaded on 2026-10-23. Its HEX SHA-256
