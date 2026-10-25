@@ -3,6 +3,8 @@
 The subsequent [stock-first implementation](firmware/boot_switch/README.md)
 provides a configurable 50 ms switch to cntrl. This document retains the original
 investigation and its qualification scope.
+The later [flash usage audit](flash-usage-audit.md) identifies a candidate
+boot-choice sector and distinguishes normal-operation use from updater erasure.
 
 ## Result
 
