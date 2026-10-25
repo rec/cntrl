@@ -12,3 +12,4 @@
 - receive beats/song position/time and do the following
 - defer patch change until next beat/bar/4 bar
 - sync metronomes
+- tap tempo
