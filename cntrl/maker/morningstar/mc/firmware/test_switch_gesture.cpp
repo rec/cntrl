@@ -49,4 +49,13 @@ int main() {
     rollover.update(1, UINT32_MAX - 4);
     rollover.update(3, 10);
     assert(rollover.update(3, 25).activate);
+
+    // A failed persistence attempt must not replay its swallowed input later.
+    simultaneous.cancel();
+    for (uint32_t t = 100; t < 250; ++t) {
+        auto result = simultaneous.update(0, t);
+        assert(!result.activate && !result.pressed);
+    }
+    simultaneous.update(3, 250);
+    assert(simultaneous.update(3, 265).activate);
 }

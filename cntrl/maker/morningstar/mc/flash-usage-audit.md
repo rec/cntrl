@@ -1,5 +1,9 @@
 # Application flash usage audit, 2026-10-25
 
+The subsequent [persistent boot selection](firmware/boot_switch/README.md)
+implementation reserves the candidate sector. This report records the audit
+that preceded that implementation.
+
 ## Finding
 
 For the exact stock firmware and current combined image below, the traced

@@ -8,6 +8,14 @@ struct GestureResult {
 
 class SwitchGesture {
 public:
+    void cancel() {
+        // Volatile stores keep this freestanding hook independent of libc.
+        volatile uint8_t *history = history_;
+        for (unsigned i = 0; i < 128; ++i) history[i] = 0;
+        previous_ = candidate_ = stable_ = 0;
+        initialized_ = armed_ = false;
+    }
+
     GestureResult update(uint8_t pressed, uint32_t now) {
         // Delay the physical input stream, including releases and bounce, so
         // stock retains its own debounce and press/hold/release processing.

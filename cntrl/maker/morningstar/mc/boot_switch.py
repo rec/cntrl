@@ -1,4 +1,4 @@
-"""Build stock-first firmware with a configurable one-way switch to cntrl."""
+"""Build firmware with a configurable switch to cntrl and persistent boot choice."""
 
 import struct
 import subprocess
@@ -67,6 +67,8 @@ def combine(
             raise ValueError(f'unexpected stock patch bytes at {offset:#x}')
         result[offset : offset + len(expected)] = replacement
     result[0x83000 : 0x83000 + len(hook)] = hook
+    # This sector belongs to boot selection, not either application's image.
+    struct.pack_into('<2I', result, 0x84000, 0x434E4254, 0xBCB1BDAB)
     return bytes(result)
 
 
@@ -172,7 +174,7 @@ def build(command: Build) -> None:
     validate_firmware(image)
     if image.data != combined:
         raise ValueError('combined HEX readback differs')
-    print(f'{output}: stock -> cntrl, {command.pair}, 50 ms, no hold')
+    print(f'{output}: persistent stock -> cntrl, {command.pair}, 50 ms, no hold')
     print(f'SHA256: {image.sha256}')
 
 
