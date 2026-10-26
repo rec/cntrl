@@ -5,6 +5,7 @@ description = "Hardware-independent descriptions of MIDI controllers"
 requires-python = ">=3.13"
 dependencies = [
     "pydantic>=2,<3",
+    "reccy",
     "tomlkit>=0.15.1",
     "tyro>=1.0.16",
 ]
@@ -28,3 +29,6 @@ line-length = 88
 
 [tool.ruff.format]
 quote-style = "single"
+
+[tool.uv.sources]
+reccy = { path = "../reccy", editable = true }
