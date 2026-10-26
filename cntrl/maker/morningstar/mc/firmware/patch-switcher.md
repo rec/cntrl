@@ -538,3 +538,35 @@ software bootloader entry and the existing helper, SHA-256
 The updater returned its usual status 1 after reset/disappearance; the application
 subsequently replied `CNTRL READY 7 0 00000000`. Visible animation and enlarged
 editor text await user confirmation. No setup or animation data was uploaded.
+
+## Display pages and per-line styles: 2026-10-26
+
+Compiled format 11 uses named pages with ordered field names, partial styles
+and window bindings. The default page contains `category.name` and
+`display_name`, preserving the performance UI. Management, empty/error states
+and performance pages use the same generic line renderer. See the portable
+[display-format design](../../../../../plan/display-format.md) for configuration
+and inheritance rules.
+
+The saved pman setup was compared with its previous format 10 binary across all
+256 patches in all three windows. MIDI records, labels, font metrics, colors,
+padding and centered cursor positions match. The format 11 setup is 34,583 bytes
+of the 65,536-byte document capacity. Its default vertical placement and
+transition behavior are also covered by native renderer tests. The ARM image
+leaves 96,768 bytes of RAM1 for local variables and 309,216 bytes of RAM2 for
+heap use; these are linker budgets, not peak runtime measurements.
+
+All 266 Python tests, portable firmware tests and target native tests passed,
+including inherited styles, mixed font families, background bands, source
+round trips and live numeric field updates. Ruff, formatting, ty, pyupgrade and
+diff checks passed. The combined stock/cntrl image passed the builder's stock
+patch and boot-envelope checks, SHA-256
+`c03c690fecf51f911a411418c62407ec77549cc27ad39b281324fa91b85ebef0`.
+
+The existing upload helper installed the combined image after one USB write
+error and a successful retry. After the user's A+F gesture, the converted pman
+setup was uploaded, read-back verified and selected. USB reports
+`CNTRL READY 11 34583 43363d4a`. The pre-installation pman bytes are backed up
+under `build/pman-before-display.bin`; converted source and binary are under
+`build/pman-display-v11.toml` and `build/pman-display-v11.bin`.
+User confirmation of the visible appearance remains pending.

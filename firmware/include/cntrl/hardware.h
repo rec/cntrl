@@ -8,6 +8,7 @@ constexpr unsigned max_document = 65536;
 constexpr unsigned max_instruments = 32;
 constexpr unsigned max_categories = 128;
 constexpr unsigned history_capacity = 128;
+constexpr unsigned max_lines = 16;
 
 struct ScreenGraphics {
     uint8_t font = 0, size = 8, pad = 4, reserved = 0;
@@ -15,17 +16,17 @@ struct ScreenGraphics {
     uint16_t half = 0x7bef;
 };
 
-struct Pane {
-    char category[64] = {};
-    char patch[64] = {};
+struct TextLine {
+    char text[64] = {};
     ScreenGraphics graphics;
-    uint16_t category_x = 4, patch_x = 4, patch_color = 0;
+    uint16_t x = 4;
     bool centered = false;
-    bool wrap_patch = false;
-    struct LineLayout {
-        uint8_t size = 0;
-        uint16_t top = 0, height = 0, y = 0;
-    } lines[2] = {};
+    bool wrap = false;
+};
+
+struct Pane {
+    ScreenGraphics graphics;
+    TextLine lines[max_lines];
 };
 
 struct Hardware {

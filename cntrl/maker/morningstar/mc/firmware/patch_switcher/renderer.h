@@ -31,12 +31,11 @@ public:
         dirty_[pane] = true;
     }
     void error(const char *message) {
-        cntrl::Pane view = requested_[1];
-        view.category[0] = 0;
-        std::snprintf(view.patch, sizeof(view.patch), "%s", message);
-        view.patch_x = view.graphics.pad;
-        view.patch_color = view.graphics.foreground;
-        view.lines[0] = {}; view.lines[1] = {};
+        cntrl::Pane view;
+        view.graphics = requested_[1].graphics;
+        view.lines[0].graphics = view.graphics;
+        view.lines[0].x = view.graphics.pad;
+        std::snprintf(view.lines[0].text, sizeof(view.lines[0].text), "%s", message);
         show(1, view);
     }
     void draw(uint32_t now = 0) {
@@ -46,7 +45,7 @@ public:
             for (unsigned i = 0; i < 3; ++i) if (dirty_[i]) {
                 drawing_ = int(i); dirty_[i] = false;
                 painting_ = requested_[i]; y_ = field_ = letter_ = 0;
-                graphics_.configure(painting_.graphics); rendering_ = true; break;
+                graphics_.configure(painting_.graphics); backgrounds(); rendering_ = true; break;
             }
         }
         if (drawing_ < 0) {
@@ -57,31 +56,30 @@ public:
             return;
         }
         if (rendering_) {
-            const char *fields[] = {painting_.category, painting_.patch};
-            const char *text = fields[field_];
+            const auto &line = painting_.lines[field_];
+            const char *text = line.text;
             unsigned length = std::strlen(text);
-            const auto &settings = painting_.graphics;
+            const auto &settings = line.graphics;
             if (letter_ < length) {
                 if (!letter_) {
-                    const auto &line = painting_.lines[field_];
-                    graphics_.select_font(settings.font, line.size ? line.size : settings.size);
-                    graphics_.setTextColor(field_ ? painting_.patch_color : settings.foreground, settings.background);
-                    if (painting_.centered) {
+                    graphics_.select_font(settings.font, settings.size);
+                    graphics_.setTextColor(settings.foreground, settings.background);
+                    if (line.centered) {
                         int16_t x, y; uint16_t w, h;
                         graphics_.getTextBounds(text, 0, 0, &x, &y, &w, &h);
-                        graphics_.setCursor((160 - int(w)) / 2 - x, (128 - int(h)) / 2 - y);
-                    } else graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
+                        graphics_.setCursor((160 - int(w)) / 2 - x, text_y(field_, 0));
+                    } else graphics_.setCursor(line.x,
                         text_y(field_, 0));
                 }
-                if (field_ && painting_.wrap_patch && settings.font == 0) {
+                if (line.wrap && settings.font == 0) {
                     unsigned columns = (160 - 2 * settings.pad) / (6 * (settings.size / 8));
                     if (columns && letter_ % columns == 0)
-                        graphics_.setCursor(painting_.patch_x, text_y(field_, letter_ / columns));
+                        graphics_.setCursor(line.x, text_y(field_, letter_ / columns));
                 }
                 graphics_.write(uint8_t(text[letter_++]));
             } else {
                 letter_ = 0;
-                if (++field_ == 2) rendering_ = false;
+                if (++field_ == cntrl::max_lines) rendering_ = false;
             }
             return;
         }
@@ -103,19 +101,14 @@ public:
     }
 private:
     unsigned text_y(unsigned field, unsigned row) const {
-        const char *fields[] = {painting_.category, painting_.patch};
         const auto &settings = painting_.graphics;
         unsigned count = 0, height = 0, preceding = 0, index = 0;
-        for (unsigned i = 0; i < 2; ++i) {
-            unsigned length = std::strlen(fields[i]);
+        for (unsigned i = 0; i < cntrl::max_lines; ++i) {
+            unsigned length = std::strlen(painting_.lines[i].text);
             if (!length) continue;
             const auto &line = painting_.lines[i];
-            unsigned line_height = line.size ? line.height : settings.line_height;
-            unsigned rows = 1;
-            if (i && painting_.wrap_patch && settings.font == 0) {
-                unsigned columns = (160 - 2 * settings.pad) / (6 * (settings.size / 8));
-                if (columns) rows = (length + columns - 1) / columns;
-            }
+            unsigned line_height = line.graphics.line_height;
+            unsigned rows = line_rows(line);
             if (i < field) { preceding += rows * line_height; index += rows; }
             if (i == field) { preceding += row * line_height; index += row; }
             count += rows; height += rows * line_height;
@@ -124,7 +117,29 @@ private:
         unsigned remaining = height < available ? available - height : 0;
         const auto &line = painting_.lines[field];
         return settings.pad + preceding + remaining * (2 * index + 1) / (2 * count)
-            + (line.size ? line.top : settings.top);
+            + line.graphics.top;
+    }
+    unsigned line_rows(const cntrl::TextLine &line) const {
+        const auto &g = line.graphics;
+        unsigned columns = line.wrap && g.font == 0 ? (160 - 2 * painting_.graphics.pad) / (6 * (g.size / 8)) : 0;
+        return columns ? (std::strlen(line.text) + columns - 1) / columns : 1;
+    }
+    void backgrounds() {
+        unsigned start = painting_.graphics.pad;
+        for (unsigned i = 0; i < cntrl::max_lines; ++i) {
+            const auto &line = painting_.lines[i];
+            if (!line.text[0]) continue;
+            unsigned end = 128 - painting_.graphics.pad;
+            for (unsigned j = i + 1; j < cntrl::max_lines; ++j) if (painting_.lines[j].text[0]) {
+                unsigned bottom = text_y(i, line_rows(line) - 1) - line.graphics.top + line.graphics.line_height;
+                end = (bottom + text_y(j, 0) - painting_.lines[j].graphics.top) / 2;
+                break;
+            }
+            for (unsigned y = start; y < end && y < 128u - painting_.graphics.pad; ++y)
+                for (unsigned x = painting_.graphics.pad; x < 160u - painting_.graphics.pad; ++x)
+                    graphics_.getFrameBuffer()[y * 160 + x] = line.graphics.background;
+            start = end;
+        }
     }
     uint16_t moving_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
         auto sample = panorama_sample(panel, x, progress, undo_);
