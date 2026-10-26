@@ -123,6 +123,7 @@ class Show(BaseModel, frozen=True):
         ),
     ] = 0
     font_name: str | None = None
+    autoscale_fonts: Annotated[bool, Field(strict=True)] = False
     font_size: Annotated[int, Field(strict=True, gt=0, le=255)] | None = None
     pad: Annotated[int, Field(strict=True, ge=0, le=255)] | None = 4
     contrast: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] = 0.6

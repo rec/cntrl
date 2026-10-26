@@ -96,7 +96,7 @@ int main(int argc, char **argv) {
     assets.boot();
     while (!router.accepts_input()) router.poll(0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back() == "CNTRL READY 9 0 00000000");
+    assert(device.replies.back() == "CNTRL READY 10 0 00000000");
     command(router, "CNTRL STORAGE");
     assert(storage_queries == 1 && storage_scans == 0);
     command(router, "CNTRL STORAGE SCAN");
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
     command(router, "CNTRL SPLASH STATUS");
     assert(device.replies.back().find("CNTRL SPLASH READY ") == 0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 9 ") == 0);
+    assert(device.replies.back().find("CNTRL READY 10 ") == 0);
 
     {
         Player boot_player(assets, panels);
@@ -274,7 +274,7 @@ int main(int argc, char **argv) {
     router.poll(10001); // Finish timed-out asset upload, leaving old slot available.
     assert(!assets.busy());
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 9 ") == 0);
+    assert(device.replies.back().find("CNTRL READY 10 ") == 0);
 
     session.configure(true, 0, 10002);
     assert(session.controls(1, 10002)); // A press during pending startup also cancels.

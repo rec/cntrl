@@ -101,7 +101,7 @@ public:
         else if (field == 4 && value >= -65 && value <= 63) p[8] = value == -65 ? 255 : uint8_t(value + 64);
         else if (field == 5 && value >= 0 && value <= 255) staging_[18] = uint8_t(value);
         else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_ + 24, unsigned(value) * 1000);
-        else if (field == 7 && value >= 0 && value <= 1) staging_[19] = (staging_[19] & 1) | (uint8_t(value) << 1);
+        else if (field == 7 && value >= 0 && value <= 1) staging_[19] = (staging_[19] & ~uint8_t(2)) | (uint8_t(value) << 1);
         else return false;
         put32(staging_ + 20, checksum(staging_ + 28, document_.length() - 28)); return true;
     }
@@ -319,7 +319,7 @@ private:
         char hex[127] = {}, name[64] = {}; unsigned length = 0, overwrite = 0; unsigned long crc = 0, epoch = 0; int end = 0;
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
-            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY 9 %u %08lx", document_.length(),
+            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY 10 %u %08lx", document_.length(),
                 document_.valid() ? (unsigned long)checksum(active_, document_.length()) : 0ul);
             replies_.reply(response); return;
         }

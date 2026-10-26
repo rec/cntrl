@@ -32,8 +32,8 @@ class Document {
 public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
-            || u16(bytes + 4) != 9 || u16(bytes + 6) < 1
-            || u32(bytes + 8) != length || bytes[19] > 3 || u32(bytes + 24) > 2147483000u
+            || u16(bytes + 4) != 10 || u16(bytes + 6) < 1
+            || u32(bytes + 8) != length || bytes[19] > 7 || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 74 + np * 82;
@@ -52,7 +52,20 @@ public:
             if (end + size > length) return false;
             end += size;
         }
-        if (end != length) return false;
+        unsigned layouts = 0;
+        if (bytes[19] & 4) {
+            if (end + 4 + (nc + np) * 8 != length || std::memcmp(bytes + end, "CFNT", 4)) return false;
+            layouts = end + 4;
+            unsigned pad = bytes[30];
+            if (hardware.display_height() <= 2 * pad + 2) return false;
+            unsigned row = (hardware.display_height() - 2 * pad - 2) / 2;
+            for (unsigned i = 0; i < nc + np; ++i) {
+                const uint8_t *p = bytes + layouts + i * 8;
+                if (!hardware.supports_font(bytes[28], p[0]) || p[1]
+                    || !u16(p + 4) || u16(p + 4) > row || u16(p + 2) >= u16(p + 4)
+                    || u16(p + 6) != (i < nc ? pad : pad + row + 2)) return false;
+            }
+        } else if (end != length) return false;
         for (unsigned i = 0; i < ni; ++i)
             if (!text_valid(bytes + meta + 40 + i * 64, 32)
                 || !text_valid(bytes + meta + 72 + i * 64, 32)) return false;
@@ -110,6 +123,7 @@ public:
         }
         if (next != np) return false;
         data_ = bytes; length_ = length; instruments_ = ni; categories_ = nc; patches_ = np;
+        layouts_ = layouts;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
@@ -131,6 +145,11 @@ public:
         const uint8_t *p = data_ + 28 + slot * 16;
         return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u16(p + 12)};
     }
+    Pane::LineLayout line(unsigned index) const {
+        if (!layouts_) return {};
+        const uint8_t *p = data_ + layouts_ + index * 8;
+        return {p[0], u16(p + 2), u16(p + 4), u16(p + 6)};
+    }
     const uint8_t *instrument(unsigned i) const { return data_ + 76 + i * 68; }
     const uint8_t *category(unsigned i) const { return data_ + 76 + instruments_ * 68 + i * 74; }
     const uint8_t *patch(unsigned i) const { return data_ + 76 + instruments_ * 68 + categories_ * 74 + i * 82; }
@@ -140,6 +159,6 @@ public:
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
     const uint8_t *data_ = nullptr;
-    unsigned length_ = 0, instruments_ = 0, categories_ = 0, patches_ = 0;
+    unsigned length_ = 0, instruments_ = 0, categories_ = 0, patches_ = 0, layouts_ = 0;
 };
 } // namespace cntrl

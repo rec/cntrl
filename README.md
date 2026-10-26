@@ -11,7 +11,7 @@ packages. See [Morningstar MC](cntrl/maker/morningstar/mc/README.md).
 
 The application supports named performance setups, on-controller selection and
 numeric editing, per-setup graphics, and separate original/program/show patch
-names. Its current compiled document format is version 9; source data must be
+names. Its current compiled document format is version 10; source data must be
 recompiled for a format change. Firmware images and setup data are deployed
 separately. The [patch-switcher plan](plan/patch-switcher.md) and
 [multiple-setups plan](plan/multiple-setups.md) describe implemented behavior;

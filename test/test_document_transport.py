@@ -38,7 +38,7 @@ def test_named_setup_lifecycle_against_cpp_receiver(peer: Path) -> None:
     process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
     try:
         port = Path(os.ttyname(slave))
-        assert transport.device_status(port) == 'CNTRL READY 9 0 00000000'
+        assert transport.device_status(port) == 'CNTRL READY 10 0 00000000'
         with transport.SerialConnection(port) as connection:
             client = transport.SetupClient(connection)
             assert client.catalogue() == []
@@ -72,7 +72,7 @@ def test_named_setup_lifecycle_against_cpp_receiver(peer: Path) -> None:
             assert client.current() == 'Again'
         assert (
             transport.device_status(port)
-            == f'CNTRL READY 9 {len(data)} {crc32(data):08x}'
+            == f'CNTRL READY 10 {len(data)} {crc32(data):08x}'
         )
     finally:
         process.terminate()
@@ -91,7 +91,7 @@ def test_cpp_receiver_rejects_corrupt_document(peer: Path) -> None:
         with pytest.raises(ValueError, match='invalid-document'):
             with transport.SerialConnection(port) as connection:
                 transport.SetupClient(connection).copy('Bad', bytes(data), False)
-        assert transport.device_status(port) == 'CNTRL READY 9 0 00000000'
+        assert transport.device_status(port) == 'CNTRL READY 10 0 00000000'
     finally:
         process.terminate()
         process.wait(timeout=5)

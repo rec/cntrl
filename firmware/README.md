@@ -189,6 +189,7 @@ configurable. All settings are optional and part of the show:
 contrast = 0.6
 font_name = 'Arial'
 # font_size = 16  # Omit for automatic sizing across all three screens.
+autoscale_fonts = false
 pad = 4
 
 [screens.undo]
@@ -209,6 +210,18 @@ both omitted colors mean black on white, also used by management and the
 no-setups screen. Explicit colors are preserved. Font size is automatic when omitted.
 Available font names and discrete sizes come from the target's font metrics.
 `font_name`, `font_size` and `pad` are top-level settings, never per-screen settings.
+
+`autoscale_fonts` is a strict Boolean, default false. When true, each category
+and patch line independently uses the largest available font size that fits its
+padded width and half of the padded display height, with a two-pixel gap between
+rows. Letter proportions are preserved. This overrides `font_size` for these
+labels; `font_name` and `pad` still apply. Short labels can therefore be larger
+than long ones. Each line is centered horizontally, with its font's top-bearing
+correction applied at the top of its row. Management and error typography keep
+their existing behavior. Sizes and positions are computed by the compiler, not
+measured by the pedal. Resolved downloads preserve this setting.
+
+With `autoscale_fonts = false`, the shared-size rules below apply.
 
 Names are centered horizontally. The category is at the padded top, followed by
 the patch after one line height plus two pixels. The compiler measures all
@@ -251,10 +264,10 @@ clamping) reaching the threshold. If no such shift works, it uses the furthest
 RGB-cube corner, warning if that distance is still <= the threshold. Contrast is
 computed in input 8-bit RGB; encoded display colors are rounded down to RGB565.
 
-## Binary and transfer protocol, version 9
+## Binary and transfer protocol, version 10
 
-Version 9 retains the rendering/MIDI records and immutable instrument and
-bank metadata, and adds separate original/program/show name metadata. The
+Version 10 retains the rendering/MIDI records and name metadata, and adds
+optional per-line font layouts controlled by `autoscale_fonts`. The
 default-off `usb_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
@@ -266,7 +279,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 9 firmware. No automatic
+version 10 firmware. No automatic
 conversion of stored documents is performed.
 
 Startup `splash` defaults to true: an omitted setting uses the currently installed
@@ -282,7 +295,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (9), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (10), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 autoscale fonts; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment, half RGB565; two zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
@@ -292,10 +305,12 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
+| Per-line font metadata, optional | `CFNT`, then one 8-byte record per category followed by one per patch: u8 size, u8 zero, u16 top-bearing adjustment, u16 line height, u16 row y |
 
 Records occur in the order header, screens (undo/sent/next), instruments,
 categories, patches, metadata header, identities, bank mappings, logical banks
-and name metadata. Name metadata has no terminators or trailing padding; empty
+and name metadata, followed by per-line font metadata when the autoscale flag
+is set. Name metadata has no terminators or trailing padding; empty
 and absent values are distinct. Its variable length avoids allocating three
 fixed-width name slots per patch. The firmware validates its bounds and retains
 it unchanged; rendering continues to read the effective label from the patch.
@@ -305,7 +320,7 @@ nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 9 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 10 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 Names in commands are hex-encoded ASCII, never paths. Requests are:

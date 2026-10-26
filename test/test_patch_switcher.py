@@ -35,7 +35,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 9
+    assert compiler.HEADER.unpack_from(result)[1] == 10
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
@@ -48,6 +48,26 @@ def test_transition_duration_survives_resolved_export(
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['transition_ms'] == duration
     assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+def test_autoscale_round_trips_in_resolved_setup(
+    show: dict[str, object], definitions: object, target: models.Target, enabled: bool
+) -> None:
+    show['autoscale_fonts'] = enabled
+    data = compiler.compile_show(show, definitions, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['autoscale_fonts'] is enabled
+    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+
+
+@pytest.mark.parametrize('value', [1, 'true', None])
+def test_autoscale_requires_a_boolean(
+    show: dict[str, object], definitions: object, target: models.Target, value: object
+) -> None:
+    show['autoscale_fonts'] = value
+    with pytest.raises(compiler.CompilationError, match='autoscale_fonts'):
+        compiler.compile_show(show, definitions, [], target)
 
 
 def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) -> None:

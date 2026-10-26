@@ -90,6 +90,19 @@ int main() {
     renderer.show(0, empty); renderer.show(3, empty); drain(renderer);
     assert(writes == before);
 
+    cntrl::Pane scaled;
+    std::strcpy(scaled.category, "A"); std::strcpy(scaled.patch, "B");
+    scaled.category_x = scaled.patch_x = 4;
+    scaled.patch_color = 0;
+    scaled.lines[0] = {32, 0, 32, 4};
+    scaled.lines[1] = {16, 0, 16, 65};
+    renderer.show(0, scaled); drain(renderer);
+    assert(screens[0][30][4] == 0 && screens[0][32][4] == 0xffff);
+    assert(screens[0][65][4] == 0 && screens[0][78][4] == 0);
+    assert(screens[0][79][4] == 0xffff && screens[0][64][4] == 0xffff);
+    padding(0, 4, 0xffff);
+    renderer.show(0, empty); drain(renderer);
+
     cntrl::Pane view;
     std::strcpy(view.category, "trumpet");
     std::strcpy(view.patch, "A very long patch name that must be clipped");

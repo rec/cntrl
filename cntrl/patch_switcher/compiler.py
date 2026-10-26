@@ -266,8 +266,11 @@ def compile_show(
     names = category_names + patch_names
     screen_records: list[bytes] = []
     offsets: list[list[int]] = []
+    layouts = b''
     try:
-        screen_records, offsets = graphics.compile_screens(show, names, target)
+        screen_records, offsets, layouts = graphics.compile_screens(
+            show, names, target, len(categories)
+        )
     except ValueError as error:
         errors.append(str(error))
     if len(offsets) == 3:
@@ -326,6 +329,7 @@ def compile_show(
     body += metadata + b''.join(identities + mappings)
     body += b''.join(struct.pack('<I', min(b, 0xFFFFFFFF)) for b in logical_banks)
     body += b'CNAM' + b''.join(name_records)
+    body += layouts
     if len(body) + HEADER.size > target.max_document_bytes:
         errors.append(
             f'document: {len(body) + HEADER.size} bytes exceeds target capacity '
@@ -336,7 +340,7 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            9,
+            10,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
@@ -344,7 +348,8 @@ def compile_show(
             len(patches),
             show.brightness
             | (int(show.splash) << 8)
-            | (int(show.usb_midi_interface) << 9),
+            | (int(show.usb_midi_interface) << 9)
+            | (int(show.autoscale_fonts) << 10),
             crc32(body),
             show.screensaver_timeout * 1000,
         )

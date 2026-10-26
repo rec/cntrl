@@ -21,6 +21,10 @@ struct Pane {
     uint16_t category_x = 4, patch_x = 4, patch_color = 0;
     bool centered = false;
     bool wrap_patch = false;
+    struct LineLayout {
+        uint8_t size = 0;
+        uint16_t top = 0, height = 0, y = 0;
+    } lines[2] = {};
 };
 
 struct Hardware {

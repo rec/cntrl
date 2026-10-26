@@ -9,6 +9,23 @@ import pytest
 from cntrl.patch_switcher import compiler, graphics, models
 
 
+def test_autoscale_fits_each_line_independently(target: models.Target) -> None:
+    show = models.Show(instruments={}, patches={}, autoscale_fonts=True, font_size=8)
+    _, offsets, layouts = graphics.compile_screens(show, ['A', 'W' * 11], target, 1)
+    first = struct.unpack_from('<BBHHH', layouts, 4)
+    second = struct.unpack_from('<BBHHH', layouts, 12)
+    assert first == (56, 0, 0, 56, 4)
+    assert second == (16, 0, 0, 16, 65)
+    assert offsets == [[59, 14]] * 3
+
+
+def test_autoscale_false_retains_shared_font_layout(target: models.Target) -> None:
+    show = models.Show(instruments={}, patches={}, font_size=8)
+    records, _, layouts = graphics.compile_screens(show, ['A', 'W' * 11], target, 1)
+    assert graphics.SCREEN.unpack(records[0])[1] == 8
+    assert layouts == b''
+
+
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
@@ -38,7 +55,7 @@ def test_defaults_and_explicit_null_settings_agree(target: models.Target) -> Non
         ['Flute', 'wind'],
         target,
     )
-    records, offsets = default
+    records, offsets, _ = default
     fields = graphics.SCREEN.unpack(records[0])
     assert fields[:3] == (0, 40, 4)
     assert fields[4:8] == (0, 0xFFFF, 40, 0)
@@ -109,7 +126,7 @@ def test_half_defaults_to_rgb_midpoint(half: str | None) -> None:
 @pytest.mark.parametrize('half', ['yellow', '0x112233'])
 def test_half_accepts_named_and_hex_colors_without_contrast_warning(half: str) -> None:
     with warnings.catch_warnings(action='error'):
-        records, _ = graphics.compile_screens(
+        records, _, _ = graphics.compile_screens(
             models.Show(
                 instruments={},
                 patches={},
@@ -164,7 +181,7 @@ def test_all_screen_errors_are_reported_together(target: models.Target) -> None:
 
 
 def test_auto_size_fits_shared_padding(target: models.Target) -> None:
-    records, offsets = graphics.compile_screens(
+    records, offsets, _ = graphics.compile_screens(
         models.Show(
             instruments={},
             patches={},

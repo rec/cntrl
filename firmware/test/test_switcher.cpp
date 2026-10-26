@@ -245,6 +245,37 @@ int main(int argc, char **argv) {
     Fake hw;
     cntrl::Document doc;
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+    {
+        auto scaled = bytes;
+        scaled[19] |= 4;
+        scaled.insert(scaled.end(), {'C', 'F', 'N', 'T'});
+        for (unsigned i = 0; i < doc.categories() + doc.patches(); ++i) {
+            unsigned size = i < doc.categories() ? 16 : 32;
+            unsigned y = i < doc.categories() ? 4 : 65;
+            scaled.insert(scaled.end(), {uint8_t(size), 0, 0, 0, uint8_t(size), 0, uint8_t(y), 0});
+        }
+        cntrl::put32(scaled.data() + 8, unsigned(scaled.size()));
+        cntrl::put32(scaled.data() + 20, cntrl::checksum(scaled.data() + 28, unsigned(scaled.size()) - 28));
+        cntrl::Document autoscale;
+        assert(autoscale.load(scaled.data(), unsigned(scaled.size()), hw));
+        Fake display;
+        cntrl::Controller app(display);
+        app.activate(autoscale);
+        assert(display.panes[2].lines[0].size == 16 && display.panes[2].lines[0].y == 4);
+        assert(display.panes[2].lines[1].size == 32 && display.panes[2].lines[1].y == 65);
+        TestStorage storage;
+        cntrl::Controller controller(display);
+        cntrl::Documents documents(storage, display, controller, display);
+        documents.boot(); upload(documents, scaled); command(documents, "CNTRL SETUP FINISH");
+        assert(documents.edit_begin() && documents.edit_adjust(0, 7, 1));
+        assert(documents.edit_save(100));
+        while (documents.busy()) documents.tick(101);
+        assert(documents.document().line(0).size == 16);
+        scaled.back() = 1; // Out-of-bounds row placement, with a valid checksum.
+        cntrl::put32(scaled.data() + 20, cntrl::checksum(scaled.data() + 28, unsigned(scaled.size()) - 28));
+        cntrl::Document invalid_layout;
+        assert(!invalid_layout.load(scaled.data(), unsigned(scaled.size()), hw));
+    }
     assert(doc.graphics(2).half == 0x7bef);
     test_greyed_names(doc);
     test_undo_restores_undone_candidate(doc);
@@ -382,7 +413,7 @@ int main(int argc, char **argv) {
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].patch, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 9 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 10 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].patch, "Flute"));
     auto new_show = bytes;
