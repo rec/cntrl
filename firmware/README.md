@@ -213,25 +213,25 @@ Available font names and discrete sizes come from the target's font metrics.
 
 `autoscale_fonts` is a strict Boolean, default false. When true, each category
 and patch line independently uses the largest available font size that fits its
-padded width and half of the padded display height, with a two-pixel gap between
-rows. Letter proportions are preserved. This overrides `font_size` for these
-labels; `font_name` and `pad` still apply. Short labels can therefore be larger
+padded width and half of the padded display height after reserving two pixels
+for spacing. Letter proportions are preserved. This overrides `font_size` for
+these labels; `font_name` and `pad` still apply. Short labels can therefore be larger
 than long ones. Each line is centered horizontally, with its font's top-bearing
-correction applied at the top of its row. Management and error typography keep
-their existing behavior. Sizes and positions are computed by the compiler, not
-measured by the pedal. Resolved downloads preserve this setting.
+correction applied at its distributed vertical position. Sizes and horizontal
+positions are computed by the compiler; the renderer distributes vertical
+space using the supplied line heights. Resolved downloads preserve this setting.
 
 With `autoscale_fonts = false`, the shared-size rules below apply.
 
-Names are centered horizontally. The category is at the padded top, followed by
-the patch after one line height plus two pixels. The compiler measures all
-category/patch names with the target's actual glyph metrics. It refines the size
+Names are centered horizontally and distributed vertically. The compiler measures
+all category/patch names with the target's actual glyph metrics. It refines the size
 estimate from the four widest strings, then verifies the largest available size
 that fits the effective width and two lines within the effective height of
 every screen, using the shared padding.
 An explicitly selected size must fit too. Names are not wrapped or truncated.
 Each category and patch stores three centered cursor offsets, including any
-negative-bearing correction. The pedal never measures text to center it.
+negative-bearing correction. The pedal never measures text to center performance
+labels horizontally.
 
 The whole screen is filled with its background, including empty history panes.
 Text is clipped to the rectangle inset by `pad` on every side. Runtime errors
@@ -263,6 +263,14 @@ compiler chooses the smallest uniform integer brightness shift (with channel
 clamping) reaching the threshold. If no such shift works, it uses the furthest
 RGB-cube corner, warning if that distance is still <= the threshold. Contrast is
 computed in input 8-bit RGB; encoded display colors are rounded down to RGB565.
+
+Text lines share the unused height inside the padding evenly: for N nonempty
+lines, H is the remaining height divided by N. The top and bottom gaps are H/2,
+and each gap between lines is H. Wrapped rows count separately, and each line
+uses its own font height. Positions are rounded to whole pixels. If the text
+exceeds the available height, extra gaps are zero and clipping still applies.
+The renderer computes these positions from the complete pane; compiled row-y
+values do not determine vertical spacing.
 
 ## Binary and transfer protocol, version 10
 

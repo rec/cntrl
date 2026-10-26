@@ -71,13 +71,12 @@ public:
                         graphics_.getTextBounds(text, 0, 0, &x, &y, &w, &h);
                         graphics_.setCursor((160 - int(w)) / 2 - x, (128 - int(h)) / 2 - y);
                     } else graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
-                        line.size ? line.y + line.top : settings.pad + settings.top + field_ * (settings.line_height + 2));
+                        text_y(field_, 0));
                 }
                 if (field_ && painting_.wrap_patch && settings.font == 0) {
                     unsigned columns = (160 - 2 * settings.pad) / (6 * (settings.size / 8));
                     if (columns && letter_ % columns == 0)
-                        graphics_.setCursor(painting_.patch_x, settings.pad + settings.top
-                            + settings.line_height + 2 + (letter_ / columns) * settings.line_height);
+                        graphics_.setCursor(painting_.patch_x, text_y(field_, letter_ / columns));
                 }
                 graphics_.write(uint8_t(text[letter_++]));
             } else {
@@ -103,6 +102,30 @@ public:
         }
     }
 private:
+    unsigned text_y(unsigned field, unsigned row) const {
+        const char *fields[] = {painting_.category, painting_.patch};
+        const auto &settings = painting_.graphics;
+        unsigned count = 0, height = 0, preceding = 0, index = 0;
+        for (unsigned i = 0; i < 2; ++i) {
+            unsigned length = std::strlen(fields[i]);
+            if (!length) continue;
+            const auto &line = painting_.lines[i];
+            unsigned line_height = line.size ? line.height : settings.line_height;
+            unsigned rows = 1;
+            if (i && painting_.wrap_patch && settings.font == 0) {
+                unsigned columns = (160 - 2 * settings.pad) / (6 * (settings.size / 8));
+                if (columns) rows = (length + columns - 1) / columns;
+            }
+            if (i < field) { preceding += rows * line_height; index += rows; }
+            if (i == field) { preceding += row * line_height; index += row; }
+            count += rows; height += rows * line_height;
+        }
+        unsigned available = 128 - 2 * settings.pad;
+        unsigned remaining = height < available ? available - height : 0;
+        const auto &line = painting_.lines[field];
+        return settings.pad + preceding + remaining * (2 * index + 1) / (2 * count)
+            + (line.size ? line.top : settings.top);
+    }
     uint16_t moving_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
         auto sample = panorama_sample(panel, x, progress, undo_);
         if (sample.x >= 160) return 0; // Empty virtual space between displays.
