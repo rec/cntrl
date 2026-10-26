@@ -36,7 +36,7 @@ void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels
         uint16_t pixel = uint16_t(pixels[2 * y]) << 8 | pixels[2 * y + 1];
         if (patch_only) {
             assert(panel == 2);
-            if (y < 14 || y >= 22) assert(screens[panel][y][x] == pixel);
+            if (y < 90 || y >= 98) assert(screens[panel][y][x] == pixel);
         }
         ram[panel][y][column] = screens[panel][y][x] = pixel;
     }
@@ -82,8 +82,8 @@ int main() {
     std::strcpy(editor.category, "Patch");
     std::memset(editor.patch, 'X', 63); editor.patch[63] = 0;
     renderer.show(0, editor); drain(renderer);
-    for (unsigned row = 0; row < 6; ++row) assert(screens[0][22 + 16 * row][4] == 0);
-    assert(screens[0][102][40] == 0xffff); // Last row has only three characters.
+    for (unsigned y : {21u, 38u, 56u, 73u, 90u, 107u}) assert(screens[0][y][4] == 0);
+    assert(screens[0][107][40] == 0xffff); // Last row has only three characters.
     padding(0, 4, 0xffff);
     renderer.show(0, empty); drain(renderer);
     unsigned before = writes;
@@ -97,10 +97,17 @@ int main() {
     scaled.lines[0] = {32, 0, 32, 4};
     scaled.lines[1] = {16, 0, 16, 65};
     renderer.show(0, scaled); drain(renderer);
-    assert(screens[0][30][4] == 0 && screens[0][32][4] == 0xffff);
-    assert(screens[0][65][4] == 0 && screens[0][78][4] == 0);
-    assert(screens[0][79][4] == 0xffff && screens[0][64][4] == 0xffff);
+    assert(screens[0][22][4] == 0 && screens[0][21][4] == 0xffff);
+    assert(screens[0][49][4] == 0 && screens[0][50][4] == 0xffff);
+    assert(screens[0][90][4] == 0 && screens[0][103][4] == 0);
+    assert(screens[0][104][4] == 0xffff && screens[0][89][4] == 0xffff);
     padding(0, 4, 0xffff);
+    scaled.category[0] = 0;
+    renderer.show(0, scaled); drain(renderer);
+    assert(screens[0][56][4] == 0 && screens[0][55][4] == 0xffff);
+    assert(screens[0][69][4] == 0 && screens[0][70][4] == 0xffff);
+    scaled.patch[0] = 0;
+    renderer.show(0, scaled); drain(renderer); blank(0);
     renderer.show(0, empty); drain(renderer);
 
     cntrl::Pane view;
@@ -110,8 +117,8 @@ int main() {
     view.graphics.foreground = 0xf800; view.graphics.background = 0x001f;
     view.patch_color = view.graphics.foreground;
     renderer.show(2, view); drain(renderer);
-    assert(screens[2][4][40] == 0xf800 && screens[2][14][4] == 0xf800);
-    assert(screens[2][3][40] == 0x001f);
+    assert(screens[2][30][40] == 0xf800 && screens[2][90][4] == 0xf800);
+    assert(screens[2][29][40] == 0x001f);
     padding(2, 4, 0x001f);
     before = writes;
     renderer.show(2, view); drain(renderer); assert(writes == before);
@@ -123,21 +130,21 @@ int main() {
     view.patch_color = view.graphics.half = 0x780f;
     patch_only = true;
     renderer.show(2, view); drain(renderer);
-    assert(screens[2][4][40] == 0xf800 && screens[2][14][4] == 0x780f);
+    assert(screens[2][30][40] == 0xf800 && screens[2][90][4] == 0x780f);
     view.patch_color = view.graphics.foreground;
     renderer.show(2, view); drain(renderer);
-    assert(screens[2][4][40] == 0xf800 && screens[2][14][4] == 0xf800);
+    assert(screens[2][30][40] == 0xf800 && screens[2][90][4] == 0xf800);
     patch_only = false;
 
     std::strcpy(view.patch, "Trumpet");
     renderer.show(2, view); drain(renderer);
-    assert(screens[2][14][80] == 0x001f);
+    assert(screens[2][90][80] == 0x001f);
     renderer.show(2, empty); renderer.draw();
     view.graphics.pad = 20; view.graphics.size = 16; view.graphics.line_height = 16;
     view.category_x = view.patch_x = 0;
     renderer.show(2, view); drain(renderer);
     padding(2, 20, 0x001f);
-    assert(screens[2][38][24] == 0xf800);
+    assert(screens[2][78][24] == 0xf800);
     blank(0); blank(1);
     renderer.show(2, empty); drain(renderer); blank(2);
 
