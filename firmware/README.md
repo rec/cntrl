@@ -272,8 +272,11 @@ default-off `usb_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
 idle timeout in seconds.
-`transition_ms` controls send/undo slide duration in milliseconds, default 1000,
-with an allowed range of 1..65535. The target frame cadence remains 60 Hz;
+`transition_ms` optionally controls send/undo slide duration in milliseconds,
+with an allowed range of 1..65535. An omitted or null setting stays unspecified
+through compilation and firmware decoding. Only the renderer supplies the
+1000 ms default when starting a transition. Resolved TOML omits unspecified
+durations and retains explicit values, including 1000. The target frame cadence remains 60 Hz;
 duration is a visual target, not a MIDI delay or a hard real-time guarantee.
 Zero (the default) disables the screensaver. Positive values enable the installed
 animation after no physical input for that interval, independently of startup
@@ -300,7 +303,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
 | Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 screen cursor offsets |
-| Metadata header, 40 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means default 1000), font name[32] |
+| Metadata header, 40 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), font name[32] |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |

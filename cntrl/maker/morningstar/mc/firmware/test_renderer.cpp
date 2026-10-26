@@ -181,6 +181,14 @@ int main() {
     assert(renderer.ready() && ring == 0);
     check_motion = false; assert(checked_progress == display_pitch);
     for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 1)));
+    // An unspecified duration uses the renderer default, even after an explicit one.
+    renderer.transition(false, std::nullopt);
+    for (unsigned now = 4500; now < 5000; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    assert(!renderer.ready());
+    for (unsigned now = 5000; now < 6000; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    assert(renderer.ready());
     assert(transition_progress(1000, 2000) == display_pitch / 2);
     assert(transition_progress(1999, 2000) < display_pitch);
     assert(transition_progress(2000, 2000) == display_pitch);

@@ -137,9 +137,9 @@ public:
     bool splash() const { return data_[19] & 1; }
     bool usb_midi_interface() const { return data_[19] & 2; }
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
-    unsigned transition_ms() const {
+    std::optional<unsigned> transition_ms() const {
         unsigned value = u16(data_ + metadata() + 6);
-        return value ? value : 1000;
+        return value ? std::optional<unsigned>(value) : std::nullopt;
     }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + 28 + slot * 16;

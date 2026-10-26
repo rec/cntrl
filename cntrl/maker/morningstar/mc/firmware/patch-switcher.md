@@ -99,6 +99,11 @@ Resolved TOML exports retain this setting. Both send and undo receive the same
 duration, without changing MIDI timing. The two-second fixup was uploaded and
 boot-verified. A subsequent fixup sets the default to 1000 ms (one second);
 explicit `transition_ms` values still take precedence.
+The current implementation keeps an omitted duration unspecified through the
+model, compiled metadata (zero), and firmware (`std::nullopt`). The renderer
+alone resolves it to `DEFAULT_TRANSITION_MS` when starting a transition.
+Resolved TOML omits unspecified durations; explicit values, including 1000,
+remain explicit throughout.
 The one-second image was flashed and boot-verified with pman and its checksum
 unchanged. SHA-256: `b2c97ed563419a8a308193f7c104ad0150ea6af69ecfd1e3fadf423c42f03b2e`.
 

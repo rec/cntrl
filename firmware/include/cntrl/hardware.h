@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace cntrl {
 constexpr unsigned max_document = 65536;
@@ -37,7 +38,7 @@ struct Hardware {
     virtual unsigned display_width() const = 0;
     virtual unsigned display_height() const = 0;
     virtual void show(unsigned pane, const Pane &content) = 0;
-    virtual void transition(bool undo, unsigned duration_ms) { (void)undo; (void)duration_ms; }
+    virtual void transition(bool undo, std::optional<unsigned> duration_ms) { (void)undo; (void)duration_ms; }
     virtual void set_brightness(uint8_t value) = 0;
     virtual void set_usb_midi_interface(bool) {}
     virtual void set_splash(bool enabled, uint32_t idle_ms) = 0;

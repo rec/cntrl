@@ -6,6 +6,8 @@
 #include "show_graphics.h"
 #include "panorama.h"
 
+constexpr unsigned DEFAULT_TRANSITION_MS = 1000;
+
 // One glyph/column per repaint poll; one three-panel column step per animation poll.
 class DisplayRenderer {
 public:
@@ -17,10 +19,10 @@ public:
         preparing_ = animating_ = native_ready_ = false; ring_ = 0;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
     }
-    void transition(bool undo, unsigned duration_ms) {
+    void transition(bool undo, std::optional<unsigned> duration_ms) {
         if (!ready() || !valid_[0] || !valid_[1] || !valid_[2]) return;
         std::memcpy(previous_, cache_, sizeof(cache_));
-        undo_ = undo; duration_ms_ = duration_ms; preparing_ = true;
+        undo_ = undo; duration_ms_ = duration_ms.value_or(DEFAULT_TRANSITION_MS); preparing_ = true;
         for (auto &dirty : dirty_) dirty = true;
     }
     void show(unsigned pane, const cntrl::Pane &content) {
@@ -139,7 +141,7 @@ private:
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
     unsigned ring_ = 0, progress_ = 0;
-    unsigned duration_ms_ = 1000;
+    unsigned duration_ms_ = 0;
     uint32_t started_ = 0;
     bool dirty_[3] = {true, true, true};
     bool valid_[3] = {};
