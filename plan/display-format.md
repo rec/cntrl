@@ -1,7 +1,8 @@
 # Per-line display formatting
 
-Status: proposal, 2026-10-26. This document describes a possible extension;
-the configuration syntax and precedence rules below are not implemented.
+Status: design, 2026-10-26. Pages use an ordered list of unique field names,
+as agreed below. Style precedence and other choices marked as proposals remain
+open. This display-format extension is not implemented.
 
 ## Goal
 
@@ -21,17 +22,58 @@ appearance.
   part of the MIDI message.
 - **Patch:** a show-local use of a program, including local names and overrides.
 - **Patch category:** a named group of patches, with a displayed category label.
-- **Page:** the content and arrangement of lines presented together.
+- **Page:** an ordered list of fields to display together.
 - **Window:** the display region presenting a page, with dimensions, padding
-  and default appearance. A window may occupy an entire physical display.
-- **Line:** one displayed text item, with a source such as a category or patch.
-  A wrapped item produces multiple rendered rows.
+  and default appearance. It supplies the page's current data item. A window
+  may occupy an entire physical display.
+- **Field:** a uniquely named value sourced from an attribute of the current
+  data item or a global application parameter.
+- **Line:** one displayed field value. A wrapped value produces multiple
+  rendered rows.
 
 The current implementation has show-wide font settings, colors for the undo,
 sent and next screens, and optional independent font sizes for category and
-patch lines. Pages and windows are concepts for this proposal, not existing
-general-purpose configuration objects. Define their relationship to the current
-three screen roles before implementation.
+patch lines. Pages and windows are concepts for this design, not existing
+general-purpose configuration objects. The undo, sent and next windows can use
+the same page while supplying their respective patches as its current data item.
+
+## Pages and field lookup
+
+Specify a page with an ordered list of field names:
+
+```toml
+[pages.patch]
+fields = ['category.name', 'display_name', 'tempo']
+```
+
+Here, `category.name` and `display_name` read attributes of the patch supplied
+by the window, while `tempo` reads a global application parameter. The order in
+`fields` determines display order. This is the agreed page shape; the example
+does not imply that a global tempo parameter already exists.
+
+All field names share one namespace. Each field definition identifies its
+source, so the page does not need an `attribute` or `parameter` tag. Dots may
+appear in field names, as in `category.name`; the field definition determines
+the lookup. Reject duplicate field definitions and unknown field references
+when validating configuration rather than choosing between ambiguous sources.
+
+The responsibilities are:
+
+- The window selects the page, supplies the current data item and defines the
+  available display space.
+- The page selects fields and their order.
+- The field definition identifies how to obtain the value and may specify
+  presentation details or style overrides.
+
+Reusing a page must evaluate its fields against each window's own data item.
+Global parameters read shared application state. Changes to either source must
+update the affected displayed values.
+
+Proposed missing-value behavior: omit a field whose value is absent or whose
+formatted text is empty, then distribute the remaining lines using the normal
+spacing rule. Zero and false are values, not absence. An unknown field name is
+a configuration error, not an empty value. Confirm the missing-value policy
+before implementation.
 
 ## Style properties
 
@@ -108,8 +150,10 @@ font_name = 'Arial'
 font_size = '24 px'
 ```
 
-The category container and page/line syntax still need to be defined; do not
-introduce a second way to specify the same style property while doing so.
+The category container and the attachment syntax for field and per-line style
+overrides still need to be defined. Keep page `fields` as a list of names; do
+not introduce an alternative object form for selecting a field or a second
+way to specify the same style property.
 
 ## Layout and rendering
 
@@ -144,10 +188,12 @@ style-only changes invalidate the affected text and background.
 
 ## Implementation outline
 
-1. Agree on precedence, page/window ownership, category heading behavior,
+1. Agree on style precedence, category heading behavior, missing values,
    background bands and overflow behavior.
-2. Add the partial style model to the relevant content and presentation models.
-   Keep unspecified values absent through parsing and composition.
+2. Add page field lists and unique field definitions, with attribute and global
+   parameter lookup. Connect windows to pages and their current data items.
+   Add the partial style model to the relevant content and presentation models,
+   keeping unspecified values absent through parsing and composition.
 3. Resolve styles in the host compiler for each applicable content/window
    combination. Use the same resolver for any preview or diagnostics.
 4. Extend compiled line records and the portable rendering interface to carry
@@ -161,6 +207,11 @@ style-only changes invalidate the affected text and background.
 
 ## Verification
 
+- Field names resolve unambiguously to attributes or global parameters.
+  Duplicate definitions and unknown names are rejected during validation.
+- Pages render fields in their specified order. The same page evaluates against
+  each window's current data item, while global parameters use shared state.
+- Missing or empty values follow the agreed policy without hiding zero or false.
 - Partial overrides combine correctly at every level, including explicit false
   and absent values. The chosen precedence has direct examples in tests.
 - Category headings do not accidentally acquire the selected patch's style.
