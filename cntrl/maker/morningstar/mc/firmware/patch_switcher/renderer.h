@@ -34,6 +34,7 @@ public:
         std::snprintf(view.patch, sizeof(view.patch), "%s", message);
         view.patch_x = view.graphics.pad;
         view.patch_color = view.graphics.foreground;
+        view.lines[0] = {}; view.lines[1] = {};
         show(1, view);
     }
     void draw(uint32_t now = 0) {
@@ -60,13 +61,15 @@ public:
             const auto &settings = painting_.graphics;
             if (letter_ < length) {
                 if (!letter_) {
+                    const auto &line = painting_.lines[field_];
+                    graphics_.select_font(settings.font, line.size ? line.size : settings.size);
                     graphics_.setTextColor(field_ ? painting_.patch_color : settings.foreground, settings.background);
                     if (painting_.centered) {
                         int16_t x, y; uint16_t w, h;
                         graphics_.getTextBounds(text, 0, 0, &x, &y, &w, &h);
                         graphics_.setCursor((160 - int(w)) / 2 - x, (128 - int(h)) / 2 - y);
                     } else graphics_.setCursor(field_ ? painting_.patch_x : painting_.category_x,
-                        settings.pad + settings.top + field_ * (settings.line_height + 2));
+                        line.size ? line.y + line.top : settings.pad + settings.top + field_ * (settings.line_height + 2));
                 }
                 if (field_ && painting_.wrap_patch && settings.font == 0) {
                     unsigned columns = (160 - 2 * settings.pad) / (6 * (settings.size / 8));

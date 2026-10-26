@@ -134,8 +134,9 @@ def font_choice(
 
 
 def compile_screens(
-    show: models.Show, texts: list[str], target: models.Target
-) -> tuple[list[bytes], list[list[int]]]:
+    show: models.Show, texts: list[str], target: models.Target, category_count: int = 0
+) -> tuple[list[bytes], list[list[int]], bytes]:
+    """Compile shared graphics and offsets; category labels precede patch labels."""
     screens = show.screens or models.Screens()
     entries = [
         getattr(screens, n) or models.ScreenGraphics() for n in ('undo', 'sent', 'next')
@@ -152,8 +153,30 @@ def compile_screens(
             errors.append(f'screens.{name}: {error}')
     if errors:
         raise ValueError('\n'.join(errors))
-    face, size = font_choice(show, texts, target, pad)
+    sizing = (
+        show.model_copy(update={'font_size': None}) if show.autoscale_fonts else show
+    )
+    face, size = font_choice(sizing, texts, target, pad)
     metrics = face.sizes[size]
+    sizes = (
+        [font_choice(sizing, [t], target, pad)[1] for t in texts]
+        if show.autoscale_fonts
+        else [size] * len(texts)
+    )
+    layouts = b''
+    if show.autoscale_fonts:
+        row = (target.display_height - 2 * pad - 2) // 2
+        layouts = b'CFNT' + b''.join(
+            struct.pack(
+                '<BBHHH',
+                s,
+                0,
+                face.sizes[s].top,
+                face.sizes[s].line_height,
+                pad if i < category_count else pad + row + 2,
+            )
+            for i, s in enumerate(sizes)
+        )
     records: list[bytes] = []
     positions: list[list[int]] = []
     for fg, bg, half in pairs:
@@ -166,10 +189,12 @@ def compile_screens(
         positions.append(
             [
                 pad + (width - w) // 2 - left
-                for left, w in (bounds(t, metrics) for t in texts)
+                for left, w in (
+                    bounds(t, face.sizes[s]) for t, s in zip(texts, sizes, strict=True)
+                )
             ]
         )
-    return records, positions
+    return records, positions, layouts
 
 
 SCREEN = struct.Struct('<BBBBHHHHHH')

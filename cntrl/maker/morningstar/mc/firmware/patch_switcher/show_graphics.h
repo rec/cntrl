@@ -40,9 +40,12 @@ public:
         setClipRect();
         fillScreen(settings.background);
         setClipRect(settings.pad, settings.pad, 160 - 2 * settings.pad, 128 - 2 * settings.pad);
-        setTextSize(settings.font == 0 ? settings.size / 8 : 1);
-        if (settings.font == 0) setFont();
-        else setFont(*native_font(settings.font, settings.size));
+        select_font(settings.font, settings.size);
         setTextColor(settings.foreground, settings.background);
+    }
+    void select_font(unsigned face, unsigned size) {
+        setTextSize(face == 0 ? size / 8 : 1);
+        if (face == 0) setFont();
+        else setFont(*native_font(face, size));
     }
 };

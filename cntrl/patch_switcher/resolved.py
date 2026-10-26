@@ -16,8 +16,8 @@ def export(data: bytes) -> str:
     )
     if (
         magic != b'CSW1'
-        or version != 9
-        or flags >> 10
+        or version != 10
+        or flags >> 11
         or length != len(data)
         or crc32(data[28:]) != crc
     ):
@@ -46,7 +46,12 @@ def export(data: bytes) -> str:
                 fields.append(data[names_offset : names_offset + size].decode('utf-8'))
                 names_offset += size
         names.append(fields)
-    if names_offset != len(data):
+    if flags & 1024:
+        if data[names_offset : names_offset + 4] != b'CFNT' or names_offset + 4 + (
+            nc + np
+        ) * 8 != len(data):
+            raise ValueError('invalid per-line font metadata')
+    elif names_offset != len(data):
         raise ValueError('unexpected patch-name metadata')
 
     def text(offset: int, width: int) -> str:
@@ -66,6 +71,7 @@ def export(data: bytes) -> str:
         'screensaver_timeout': timeout // 1000,
         'font_name': text(meta + 8, 32),
         'font_size': data[29],
+        'autoscale_fonts': bool(flags & 1024),
         'pad': data[30],
     }
     result['screens'] = {

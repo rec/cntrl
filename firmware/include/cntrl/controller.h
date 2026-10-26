@@ -149,6 +149,8 @@ private:
             std::snprintf(view.patch, sizeof(view.patch), "%s", p + 12);
             view.category_x = u16(document_.category(u16(p + 2)) + 68 + slot * 2);
             view.patch_x = u16(p + 76 + slot * 2);
+            view.lines[0] = document_.line(u16(p + 2));
+            view.lines[1] = document_.line(document_.categories() + unsigned(index));
         }
         hardware_.show(slot, view);
     }
