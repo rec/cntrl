@@ -2,7 +2,8 @@
 
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+from reccy.configuration import units
 
 from . import enums
 
@@ -57,11 +58,23 @@ class Display(BaseModel, frozen=True):
     height: int | None = Field(default=None, gt=0)
     colors: int | None = Field(default=None, ge=1)
 
+    @field_validator('width', 'height', mode='before')
+    @classmethod
+    def pixel_dimensions(cls, value: object, info: ValidationInfo) -> object:
+        if value is not None and info.data.get('kind') == enums.DisplayKind.GRAPHICAL:
+            return units.magnitude(value, 'pixel')
+        return value
+
 
 class PhysicalSpecification(BaseModel, frozen=True):
     connector: enums.ConnectorKind
     contacts: int | None = Field(default=None, gt=0)
-    diameter_mm: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    diameter_mm: (
+        Annotated[
+            float, Field(gt=0, allow_inf_nan=False), units.unit_validator('millimeter')
+        ]
+        | None
+    ) = None
 
 
 class MidiProtocol(BaseModel, frozen=True):
@@ -78,6 +91,17 @@ class EthernetProtocol(BaseModel, frozen=True):
 class CvProtocol(BaseModel, frozen=True):
     voltage_range: ValueRange
     kind: Literal[enums.ProtocolKind.CV] = enums.ProtocolKind.CV
+
+    @field_validator('voltage_range', mode='before')
+    @classmethod
+    def voltage_units(cls, value: object) -> object:
+        if isinstance(value, dict):
+            return value | {
+                k: units.magnitude(value[k], 'volt')
+                for k in ('minimum', 'maximum')
+                if k in value
+            }
+        return value
 
 
 class ExpressionProtocol(BaseModel, frozen=True):

@@ -63,6 +63,59 @@ def test_omitted_transition_duration_stays_unspecified(show: dict[str, object]) 
     assert models.Show.model_validate(show).transition_ms is None
 
 
+def test_configuration_units_compile_to_the_same_document(
+    show: dict[str, object], definitions: object, target: models.Target
+) -> None:
+    numeric = show | {
+        'chord_ms': 100,
+        'transition_ms': 500,
+        'screensaver_timeout': 60,
+        'font_size': 8,
+        'pad': 4,
+        'contrast': 0.6,
+    }
+    authored = show | {
+        'chord_ms': '0.1 s',
+        'transition_ms': '500 ms',
+        'screensaver_timeout': '1:00',
+        'font_size': '8 px',
+        'pad': '4 px',
+        'contrast': '60 percent',
+    }
+    assert compiler.compile_show(
+        authored, definitions, [], target
+    ) == compiler.compile_show(numeric, definitions, [], target)
+
+
+@pytest.mark.parametrize(
+    'field,value',
+    [
+        ('chord_ms', '0.1 ms'),
+        ('transition_ms', '1 Hz'),
+        ('transition_ms', '66 s'),
+        ('transition_ms', True),
+        ('pad', '1 mm'),
+        ('font_size', '8.5 px'),
+        ('contrast', '101 percent'),
+    ],
+)
+def test_configuration_units_retain_constraints(
+    show: dict[str, object], field: str, value: object
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        models.Show.model_validate(show | {field: value})
+
+
+def test_target_units_normalize_before_compilation(target: models.Target) -> None:
+    data = target.model_dump()
+    data.update(
+        display_width='160 px', display_height='128 px', max_document_bytes='64 KiB'
+    )
+    data['fonts'][0]['sizes']['8 px'] = data['fonts'][0]['sizes'].pop(8)
+    data['fonts'][0]['sizes']['8 px'].update(line_height='8 px', top='0 px')
+    assert models.Target.model_validate(data) == target
+
+
 @pytest.mark.parametrize('enabled', [False, True])
 def test_autoscale_round_trips_in_resolved_setup(
     show: dict[str, object], definitions: object, target: models.Target, enabled: bool
@@ -154,7 +207,7 @@ def test_screensaver_timeout_is_encoded_in_milliseconds(
     assert compiler.HEADER.unpack_from(result)[9] == seconds * 1000
 
 
-@pytest.mark.parametrize('seconds', [-1, 2147484, True, 0.5, '3'])
+@pytest.mark.parametrize('seconds', [-1, 2147484, True, 0.5, '3 Hz', '0.5 s'])
 def test_invalid_screensaver_timeout_is_rejected(
     show: dict[str, object], definitions: object, target: models.Target, seconds: object
 ) -> None:

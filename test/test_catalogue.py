@@ -5,6 +5,22 @@ import pytest
 from cntrl import catalogue, enums, models
 
 
+def test_display_shorthand_and_connector_size_accept_units(tmp_path: Path) -> None:
+    path = tmp_path / 'units.toml'
+    path.write_text("""
+[example]
+name = 'Example'
+buttons = ''
+displays = ['160 px x 128 px']
+ports = {jack = {kind = 'midi-in', physical = {connector = 'trs', size = '0.35 cm'}}}
+""")
+    controller = catalogue.load_catalogue(path)['example']
+    assert (controller.displays[0].width, controller.displays[0].height) == (160, 128)
+    port = controller.ports[0]
+    assert isinstance(port, models.Port)
+    assert port.physical.diameter_mm == 3.5
+
+
 def test_shorthand_and_explicit_definitions_resolve_equivalently(
     tmp_path: Path,
 ) -> None:

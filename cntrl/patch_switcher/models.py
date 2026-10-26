@@ -4,6 +4,7 @@ from functools import cached_property
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
+from reccy.configuration import units
 
 
 class Bank(BaseModel, frozen=True):
@@ -87,8 +88,8 @@ class Screens(BaseModel, frozen=True):
 
 
 class FontMetrics(BaseModel, frozen=True):
-    line_height: int
-    top: int = 0
+    line_height: units.Pixels
+    top: units.Pixels = 0
     glyphs: str
 
     @cached_property
@@ -99,7 +100,7 @@ class FontMetrics(BaseModel, frozen=True):
 class FontFace(BaseModel, frozen=True):
     name: str
     id: int
-    sizes: dict[int, FontMetrics]
+    sizes: dict[units.Pixels, FontMetrics]
 
 
 class Show(BaseModel, frozen=True):
@@ -108,9 +109,16 @@ class Show(BaseModel, frozen=True):
     patches: dict[str, object]
     definitions: Definitions | None = None
     take_first_match: Annotated[bool, Field(strict=True)] = False
-    chord_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] = 100
+    chord_ms: Annotated[
+        int, Field(strict=True, ge=1, le=65535), units.unit_validator('millisecond')
+    ] = 100
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
-    transition_ms: Annotated[int, Field(strict=True, ge=1, le=65535)] | None = None
+    transition_ms: (
+        Annotated[
+            int, Field(strict=True, ge=1, le=65535), units.unit_validator('millisecond')
+        ]
+        | None
+    ) = None
     splash: Annotated[bool, Field(strict=True)] = True
     usb_midi_interface: Annotated[bool, Field(strict=True)] = False
     screensaver_timeout: Annotated[
@@ -121,23 +129,34 @@ class Show(BaseModel, frozen=True):
             le=2147483,
             description='Idle seconds; 0 disables the screensaver.',
         ),
+        units.unit_validator('second', exact=True),
     ] = 0
     font_name: str | None = None
     autoscale_fonts: Annotated[bool, Field(strict=True)] = False
-    font_size: Annotated[int, Field(strict=True, gt=0, le=255)] | None = None
-    pad: Annotated[int, Field(strict=True, ge=0, le=255)] | None = 4
-    contrast: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] = 0.6
+    font_size: (
+        Annotated[int, Field(strict=True, gt=0, le=255), units.unit_validator('pixel')]
+        | None
+    ) = None
+    pad: (
+        Annotated[int, Field(strict=True, ge=0, le=255), units.unit_validator('pixel')]
+        | None
+    ) = 4
+    contrast: Annotated[
+        float,
+        Field(ge=0, le=1, allow_inf_nan=False),
+        units.unit_validator('dimensionless'),
+    ] = 0.6
     screens: Screens | None = None
 
     model_config = ConfigDict(extra='forbid')
 
 
 class Target(BaseModel, frozen=True):
-    display_width: int = Field(gt=0, le=65535)
-    display_height: int = Field(gt=0, le=65535)
+    display_width: units.Pixels = Field(gt=0, le=65535)
+    display_height: units.Pixels = Field(gt=0, le=65535)
     fonts: list[FontFace]
     outputs: list[str]
-    max_document_bytes: int = Field(gt=24, le=65536)
+    max_document_bytes: units.Bytes = Field(gt=24, le=65536)
     max_instruments: int = Field(gt=0, le=32)
     max_categories: int = Field(gt=0, le=128)
     max_patches: int = Field(gt=0, le=65535)

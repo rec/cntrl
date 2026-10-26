@@ -1,5 +1,6 @@
 """Load controller descriptions with shared definitions and hardware shorthand."""
 
+import re
 from importlib.resources.abc import Traversable
 from typing import cast
 
@@ -31,7 +32,7 @@ def load_catalogue(path: Traversable) -> dict[str, models.Controller]:
 def _display(index: int, value: str | dict[str, object]) -> models.Display:
     specification = {'size': value} if isinstance(value, str) else value
     dimensions = (
-        [int(s) for s in cast(str, specification['size']).split('x')]
+        re.split(r'x(?=\s*\d)', cast(str, specification['size']))
         if 'size' in specification
         else []
     )
