@@ -6,7 +6,7 @@
 #include "show_graphics.h"
 #include "panorama.h"
 
-constexpr unsigned DEFAULT_TRANSITION_MS = 1000;
+constexpr unsigned DEFAULT_TRANSITION_MS = 500;
 
 // One glyph/column per repaint poll; one three-panel column step per animation poll.
 class DisplayRenderer {

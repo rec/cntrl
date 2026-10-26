@@ -275,7 +275,7 @@ idle timeout in seconds.
 `transition_ms` optionally controls send/undo slide duration in milliseconds,
 with an allowed range of 1..65535. An omitted or null setting stays unspecified
 through compilation and firmware decoding. Only the renderer supplies the
-1000 ms default when starting a transition. Resolved TOML omits unspecified
+500 ms default when starting a transition. Resolved TOML omits unspecified
 durations and retains explicit values, including 1000. The target frame cadence remains 60 Hz;
 duration is a visual target, not a MIDI delay or a hard real-time guarantee.
 Zero (the default) disables the screensaver. Positive values enable the installed

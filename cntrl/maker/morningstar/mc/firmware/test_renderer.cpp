@@ -183,10 +183,10 @@ int main() {
     for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 1)));
     // An unspecified duration uses the renderer default, even after an explicit one.
     renderer.transition(false, std::nullopt);
-    for (unsigned now = 4500; now < 5000; ++now)
+    for (unsigned now = 4500; now < 4750; ++now)
         for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
     assert(!renderer.ready());
-    for (unsigned now = 5000; now < 6000; ++now)
+    for (unsigned now = 4750; now < 5250; ++now)
         for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
     assert(renderer.ready());
     assert(transition_progress(1000, 2000) == display_pitch / 2);

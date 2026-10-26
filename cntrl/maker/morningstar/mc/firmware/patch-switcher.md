@@ -101,7 +101,8 @@ boot-verified. A subsequent fixup sets the default to 1000 ms (one second);
 explicit `transition_ms` values still take precedence.
 The current implementation keeps an omitted duration unspecified through the
 model, compiled metadata (zero), and firmware (`std::nullopt`). The renderer
-alone resolves it to `DEFAULT_TRANSITION_MS` when starting a transition.
+alone resolves it to `DEFAULT_TRANSITION_MS`, currently 500 ms for both send
+and undo, when starting a transition.
 Resolved TOML omits unspecified durations; explicit values, including 1000,
 remain explicit throughout.
 The one-second image was flashed and boot-verified with pman and its checksum
