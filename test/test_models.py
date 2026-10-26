@@ -4,6 +4,44 @@ from pydantic import ValidationError
 from cntrl import enums, models
 
 
+def test_physical_units_normalize_to_millimeters_and_volts() -> None:
+    physical = models.PhysicalSpecification.model_validate(
+        {'connector': 'trs', 'diameter_mm': '0.635 cm'}
+    )
+    assert physical.diameter_mm == 6.35
+    cv = models.CvProtocol.model_validate(
+        {'voltage_range': {'minimum': '-5000 mV', 'maximum': '5 V'}}
+    )
+    assert cv.voltage_range == models.ValueRange(minimum=-5, maximum=5)
+
+
+@pytest.mark.parametrize('value', ['5 s', '0 mm'])
+def test_connector_diameter_rejects_incompatible_or_nonpositive_units(
+    value: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        models.PhysicalSpecification.model_validate(
+            {'connector': 'trs', 'diameter_mm': value}
+        )
+
+
+def test_graphical_display_accepts_pixels() -> None:
+    display = models.Display.model_validate(
+        {
+            'id': 'lcd',
+            'name': 'LCD',
+            'kind': 'graphical',
+            'width': '160 px',
+            'height': '128 px',
+        }
+    )
+    assert (display.width, display.height) == (160, 128)
+    with pytest.raises(ValidationError):
+        models.Display.model_validate(
+            {'id': 'lcd', 'name': 'LCD', 'kind': 'alphanumeric', 'width': '16 px'}
+        )
+
+
 def test_controller_round_trip_preserves_control_types() -> None:
     controller = models.Controller(
         name='Example',

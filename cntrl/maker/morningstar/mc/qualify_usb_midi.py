@@ -4,9 +4,12 @@ import ctypes
 import sys
 import time
 from pathlib import Path
+from typing import Annotated
 
 import tyro
 from pydantic import BaseModel, ConfigDict
+from reccy.configuration.tyro import unit_spec
+from reccy.configuration.units import Seconds
 
 from ....patch_switcher.transport import SerialConnection, SetupClient
 
@@ -19,7 +22,7 @@ class Options(BaseModel, frozen=True):
     source: str = ''
     port: Path = Path('/dev/cu.usbmodem144682801')
     expect_enabled: bool = False
-    stress_seconds: float = 0
+    stress_seconds: Annotated[Seconds, unit_spec(Seconds, 'DURATION')] = 0
 
     model_config = ConfigDict(extra='forbid')
 

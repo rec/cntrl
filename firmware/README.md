@@ -280,6 +280,16 @@ default-off `usb_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
 idle timeout in seconds.
+Configuration quantities use `reccy.configuration.units`: `chord_ms` and
+`transition_ms` accept durations such as `"100 ms"` and `"0.5 s"`, while bare
+numbers remain milliseconds. `screensaver_timeout` accepts whole seconds such
+as `"2 min"` or `"1:30"`; bare numbers remain seconds. Values must convert
+exactly to the field's integer unit and satisfy its existing bounds. Font sizes,
+padding, target display dimensions and font metrics accept pixels (`"24 px"`);
+the target document-size limit accepts bytes (`"64 KiB"`). Contrast accepts
+dimensionless ratios or percentages (`"60 percent"`). Resolved exports contain
+normalized numbers. An unspecified transition duration remains unspecified.
+
 `transition_ms` optionally controls send/undo slide duration in milliseconds,
 with an allowed range of 1..65535. An omitted or null setting stays unspecified
 through compilation and firmware decoding. Only the renderer supplies the

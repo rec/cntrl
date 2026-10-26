@@ -108,6 +108,14 @@ or component-reference objects.
 
 ## Development
 
+Configuration values with units use `reccy.configuration.units`. Bare numbers
+keep their existing units. Physical connector diameters accept lengths such as
+`'3.5 mm'`; CV ranges accept voltages such as `'-5 V'` and `'5000 mV'`.
+Graphical display dimensions accept pixels, including in catalogue shorthand
+such as `'160 px x 128 px'`. Alphanumeric dimensions remain character counts.
+Counts, MIDI addresses, raw MIDI values and color values retain their existing
+formats.
+
 Requires Python 3.13 or later and uv.
 
 ```bash
