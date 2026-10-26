@@ -11,7 +11,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     std::vector<std::vector<uint8_t>> sent;
     std::vector<std::string> routes, replies;
     std::vector<bool> transitions;
-    std::vector<unsigned> durations;
+    std::vector<std::optional<unsigned>> durations;
     cntrl::Pane panes[3];
     bool available = true;
     unsigned errors = 0;
@@ -29,7 +29,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
-    void transition(bool undo, unsigned duration_ms) override {
+    void transition(bool undo, std::optional<unsigned> duration_ms) override {
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
     void set_brightness(uint8_t value) override { brightness = value; }
@@ -102,7 +102,7 @@ void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     assert(hw.sent.size() == sent); // No previous selection for Strings' instrument.
     assert(!std::strcmp(hw.panes[2].patch, "Strings"));
     assert((hw.transitions == std::vector<bool>{false, false, true}));
-    assert((hw.durations == std::vector<unsigned>{1000, 1000, 1000}));
+    assert((hw.durations == std::vector<std::optional<unsigned>>{std::nullopt, std::nullopt, std::nullopt}));
     app.action(5);
     assert(!std::strcmp(hw.panes[2].patch, "Flute"));
     assert(!hw.panes[0].patch[0] && !hw.panes[1].patch[0]);
@@ -113,7 +113,7 @@ void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     cntrl::Document custom; assert(custom.load(configured.data(), configured.size(), hw));
     app.activate(custom); hw.durations.clear();
     app.action(2); app.action(5);
-    assert((hw.durations == std::vector<unsigned>{333, 333}));
+    assert((hw.durations == std::vector<std::optional<unsigned>>{333, 333}));
 }
 
 void test_greyed_aliases(const std::vector<uint8_t> &bytes) {

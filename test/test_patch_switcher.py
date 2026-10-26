@@ -1,5 +1,6 @@
 """Compiler behavior, shared binary fixture and aggregate diagnostics."""
 
+import struct
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -39,15 +40,27 @@ def test_compiler_matches_shared_cpp_fixture(
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
-@pytest.mark.parametrize('duration', [1000, 2000, 750, 65535])
+@pytest.mark.parametrize('duration', [None, 1000, 2000, 750, 65535])
 def test_transition_duration_survives_resolved_export(
-    show: dict[str, object], definitions: object, target: models.Target, duration: int
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    duration: int | None,
 ) -> None:
     show['transition_ms'] = duration
     data = compiler.compile_show(show, definitions, [], target)
+    _, _, _, _, ni, nc, np, _, _, _ = compiler.HEADER.unpack_from(data)
+    meta = 76 + ni * 68 + nc * 74 + np * 82
+    assert struct.unpack_from('<H', data, meta + 6)[0] == (duration or 0)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['transition_ms'] == duration
+    assert exported.get('transition_ms') == duration
+    assert models.Show.model_validate(exported).transition_ms == duration
     assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+
+
+def test_omitted_transition_duration_stays_unspecified(show: dict[str, object]) -> None:
+    assert 'transition_ms' not in show
+    assert models.Show.model_validate(show).transition_ms is None
 
 
 @pytest.mark.parametrize('enabled', [False, True])

@@ -65,7 +65,6 @@ def export(data: bytes) -> str:
     result: dict[str, object] = {
         'chord_ms': chord,
         'brightness': flags & 255,
-        'transition_ms': struct.unpack_from('<H', data, meta + 6)[0] or 1000,
         'splash': bool(flags & 256),
         'usb_midi_interface': bool(flags & 512),
         'screensaver_timeout': timeout // 1000,
@@ -74,6 +73,8 @@ def export(data: bytes) -> str:
         'autoscale_fonts': bool(flags & 1024),
         'pad': data[30],
     }
+    if duration := struct.unpack_from('<H', data, meta + 6)[0]:
+        result['transition_ms'] = duration
     result['screens'] = {
         n: {
             'foreground_color': color(32 + i * 16),
