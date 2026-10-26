@@ -1,6 +1,18 @@
 splash = true
 screensaver_timeout = 3
 
+[pages.patch]
+fields = ['category.name', 'display_name']
+
+[windows.undo]
+page = 'patch'
+
+[windows.sent]
+page = 'patch'
+
+[windows.next]
+page = 'patch'
+
 [instruments.pman]
 instrument = "pman"
 setup = "default"

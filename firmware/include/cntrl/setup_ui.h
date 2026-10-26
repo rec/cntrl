@@ -111,22 +111,23 @@ private:
         // be too large for field labels or absent altogether on an empty card.
         Pane views[3];
         for (auto &view : views) {
-            view.graphics.size = view.graphics.line_height = 16;
-            view.wrap_patch = true;
+            for (unsigned i = 0; i < 2; ++i)
+                view.lines[i].graphics.size = view.lines[i].graphics.line_height = 16;
+            view.lines[1].wrap = true;
         }
-        std::snprintf(views[0].category, 64, "A/B browse");
-        std::snprintf(views[0].patch, 64, "C OK, F back");
-        if (mode_ == Mode::value) std::snprintf(views[0].category, 64, "A/B adjust");
+        std::snprintf(views[0].lines[0].text, 64, "A/B browse");
+        std::snprintf(views[0].lines[1].text, 64, "C OK, F back");
+        if (mode_ == Mode::value) std::snprintf(views[0].lines[0].text, 64, "A/B adjust");
         if (mode_ == Mode::catalogue) {
-            std::snprintf(views[1].category, 64, "Setups");
-            std::snprintf(views[1].patch, 64, "%s", value);
-            std::snprintf(views[2].category, 64, "Setup menu");
-            std::snprintf(views[2].patch, 64, "No MIDI sent");
+            std::snprintf(views[1].lines[0].text, 64, "Setups");
+            std::snprintf(views[1].lines[1].text, 64, "%s", value);
+            std::snprintf(views[2].lines[0].text, 64, "Setup menu");
+            std::snprintf(views[2].lines[1].text, 64, "No MIDI sent");
         } else {
-            std::snprintf(views[1].category, 64, "%s", mode_ == Mode::action ? "Setup" : mode_ == Mode::patch ? "Category" : "Field");
-            std::snprintf(views[1].patch, 64, "%s", title);
-            std::snprintf(views[2].category, 64, "%s", value_label);
-            std::snprintf(views[2].patch, 64, "%s", value);
+            std::snprintf(views[1].lines[0].text, 64, "%s", mode_ == Mode::action ? "Setup" : mode_ == Mode::patch ? "Category" : "Field");
+            std::snprintf(views[1].lines[1].text, 64, "%s", title);
+            std::snprintf(views[2].lines[0].text, 64, "%s", value_label);
+            std::snprintf(views[2].lines[1].text, 64, "%s", value);
         }
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, views[i]);
     }

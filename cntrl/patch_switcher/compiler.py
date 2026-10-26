@@ -9,7 +9,7 @@ from zlib import crc32
 import tomlkit
 from pydantic import ValidationError
 
-from . import graphics, models
+from . import display, models
 
 
 class CompilationError(ValueError):
@@ -121,6 +121,7 @@ def compile_show(
     logical_banks: list[int] = []
     name_records: list[bytes] = []
     program_names: dict[tuple[str, str, int, int | None], list[str | None]] = {}
+    display_patches: list[display.DisplayPatch] = []
     for category, values in show.patches.items():
         category_text = _text(category, 64, target, f'patches.{category}', errors)
         if not isinstance(values, list):
@@ -230,6 +231,22 @@ def compile_show(
                     _text(display_name, 64, target, context + '.display_name', errors),
                 )
             )
+            display_patches.append(
+                display.DisplayPatch(
+                    values={
+                        'category.name': category,
+                        'display_name': display_name,
+                        'name': name,
+                        'program': program,
+                        'bank': bank,
+                        'volume': patch.volume,
+                        'pan': patch.pan,
+                        'instrument': patch.instrument,
+                    },
+                    style=patch.style,
+                    program_style=matched.style if matched else None,
+                )
+            )
             logical_banks.append(0xFFFFFFFF if bank is None else bank)
             for field, text in (
                 ('name', name),
@@ -261,26 +278,18 @@ def compile_show(
     ):
         if count > maximum:
             errors.append(f'{label}: {count} exceeds target capacity {maximum}')
-    category_names = [c[:64].split(b'\0')[0].decode('ascii') for c in categories]
-    patch_names = [p[12:76].split(b'\0')[0].decode('ascii') for p in patches]
-    names = category_names + patch_names
     screen_records: list[bytes] = []
-    offsets: list[list[int]] = []
-    layouts = b''
+    references: list[list[int]] = []
+    display_records = b''
     try:
-        screen_records, offsets, layouts = graphics.compile_screens(
-            show, names, target, len(categories)
+        screen_records, references, display_records = display.compile_display(
+            show, display_patches, target
         )
     except ValueError as error:
         errors.append(str(error))
-    if len(offsets) == 3:
-        categories = [
-            c + struct.pack('<3H', *(o[i] for o in offsets))
-            for i, c in enumerate(categories)
-        ]
+    if len(references) == len(patches):
         patches = [
-            p + struct.pack('<3H', *(o[len(categories) + i] for o in offsets))
-            for i, p in enumerate(patches)
+            p + struct.pack('<3H', *references[i]) for i, p in enumerate(patches)
         ]
     # Immutable identity/mapping metadata enables resolved, editable exports.
     # Runtime bytes remain the single authoritative copy of editable values.
@@ -318,18 +327,16 @@ def compile_show(
                 )
     if len(mappings) > 65535:
         errors.append('too many bank mappings')
-    metadata = struct.pack(
-        '<4sHH32s',
+    metadata = METADATA.pack(
         b'CMTA',
         min(len(mappings), 65535),
         0 if show.transition_ms is None else show.transition_ms,
-        _text(show.font_name or 'classic', 32, target, 'font_name', errors),
     )
     body = b''.join(screen_records + instrument_records + categories + patches)
     body += metadata + b''.join(identities + mappings)
     body += b''.join(struct.pack('<I', min(b, 0xFFFFFFFF)) for b in logical_banks)
     body += b'CNAM' + b''.join(name_records)
-    body += layouts
+    body += display_records
     if len(body) + HEADER.size > target.max_document_bytes:
         errors.append(
             f'document: {len(body) + HEADER.size} bytes exceeds target capacity '
@@ -340,7 +347,7 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            10,
+            11,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
@@ -348,8 +355,7 @@ def compile_show(
             len(patches),
             show.brightness
             | (int(show.splash) << 8)
-            | (int(show.usb_midi_interface) << 9)
-            | (int(show.autoscale_fonts) << 10),
+            | (int(show.usb_midi_interface) << 9),
             crc32(body),
             show.screensaver_timeout * 1000,
         )
@@ -383,7 +389,7 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                 continue
             merged = previous.model_dump()
             merged['tags'] = list(dict.fromkeys(previous.tags + entry.tags))
-            for field in ('name', 'display_name', 'range', 'description'):
+            for field in ('name', 'display_name', 'range', 'description', 'style'):
                 old, new = getattr(previous, field), getattr(entry, field)
                 if old is None:
                     merged[field] = new
@@ -414,3 +420,4 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
+METADATA = struct.Struct('<4sHH')

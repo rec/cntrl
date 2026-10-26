@@ -38,6 +38,20 @@ class Instrument(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class Style(BaseModel, frozen=True):
+    background_color: str | None = None
+    foreground_color: str | None = None
+    half: str | None = None
+    font_name: str | None = None
+    font_size: (
+        Annotated[int, Field(strict=True, gt=0, le=255), units.unit_validator('pixel')]
+        | None
+    ) = None
+    autoscale_fonts: Annotated[bool, Field(strict=True)] | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Patch(BaseModel, frozen=True):
     instrument: str
     program: Annotated[int, Field(strict=True, ge=1, le=128)] | StrictStr
@@ -46,6 +60,7 @@ class Patch(BaseModel, frozen=True):
     bank: Annotated[int, Field(strict=True, ge=0)] | None = None
     name: str | None = None
     display_name: str | None = None
+    style: Style | None = None
 
     model_config = ConfigDict(extra='forbid')
 
@@ -60,6 +75,7 @@ class TablePatch(BaseModel, frozen=True):
     range: str | None = None
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
+    style: Style | None = None
 
     model_config = ConfigDict(extra='forbid')
 
@@ -71,20 +87,46 @@ class Definitions(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class ScreenGraphics(BaseModel, frozen=True):
-    background_color: str | None = None
-    foreground_color: str | None = None
-    half: str | None = None
+class Page(BaseModel, frozen=True):
+    fields: list[str] = Field(default_factory=lambda: ['category.name', 'display_name'])
+    style: Style | None = None
+    line_styles: dict[str, Style] = Field(default_factory=dict)
+
+    @model_validator(mode='after')
+    def unique_fields(self) -> 'Page':
+        if len(self.fields) != len(set(self.fields)):
+            raise ValueError('duplicate page field')
+        if any(n not in self.fields for n in self.line_styles):
+            raise ValueError('line_styles must refer to fields on this page')
+        return self
 
     model_config = ConfigDict(extra='forbid')
 
 
-class Screens(BaseModel, frozen=True):
-    undo: ScreenGraphics | None = None
-    sent: ScreenGraphics | None = None
-    next: ScreenGraphics | None = None
+class Window(BaseModel, frozen=True):
+    page: str = 'patch'
+    pad: (
+        Annotated[int, Field(strict=True, ge=0, le=255), units.unit_validator('pixel')]
+        | None
+    ) = None
+    style: Style | None = None
 
     model_config = ConfigDict(extra='forbid')
+
+
+class Windows(BaseModel, frozen=True):
+    undo: Window = Field(default_factory=Window)
+    sent: Window = Field(default_factory=Window)
+    next: Window = Field(default_factory=Window)
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class Parameter(BaseModel, frozen=True):
+    value: str | int | float | bool | None = None
+    style: Style | None = None
+
+    model_config = ConfigDict(extra='forbid', strict=True, allow_inf_nan=False)
 
 
 class FontMetrics(BaseModel, frozen=True):
@@ -146,7 +188,10 @@ class Show(BaseModel, frozen=True):
         Field(ge=0, le=1, allow_inf_nan=False),
         units.unit_validator('dimensionless'),
     ] = 0.6
-    screens: Screens | None = None
+    windows: Windows = Field(default_factory=Windows)
+    pages: dict[str, Page] = Field(default_factory=lambda: {'patch': Page()})
+    category_styles: dict[str, Style] = Field(default_factory=dict)
+    parameters: dict[str, Parameter] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra='forbid')
 

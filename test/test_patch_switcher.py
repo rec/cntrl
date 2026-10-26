@@ -36,7 +36,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 10
+    assert compiler.HEADER.unpack_from(result)[1] == 11
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
@@ -50,7 +50,7 @@ def test_transition_duration_survives_resolved_export(
     show['transition_ms'] = duration
     data = compiler.compile_show(show, definitions, [], target)
     _, _, _, _, ni, nc, np, _, _, _ = compiler.HEADER.unpack_from(data)
-    meta = 76 + ni * 68 + nc * 74 + np * 82
+    meta = 76 + ni * 68 + nc * 68 + np * 82
     assert struct.unpack_from('<H', data, meta + 6)[0] == (duration or 0)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported.get('transition_ms') == duration
@@ -320,7 +320,7 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
         compiler.compile_show(show, definitions, [table], target)
     show['take_first_match'] = True
     data = compiler.compile_show(show, definitions, [table], target)
-    patch_offset = 76 + 2 * 68 + 74
+    patch_offset = 76 + 2 * 68 + 68
     assert data[patch_offset + 4 : patch_offset + 7] == bytes([8, 1, 2])
     show['take_first_match'] = False
     show['patches'] = {'wind': [{'patch': ':a:Flute', 'bank': 0}]}
@@ -370,7 +370,7 @@ def test_display_name_precedence_preserves_original_and_round_trips(
         ]
     }
     data = compiler.compile_show(show, definitions, [table], target)
-    offset = 76 + 2 * 68 + 74
+    offset = 76 + 2 * 68 + 68
     assert data[offset + 4] == 0
     assert data[offset + 12 : offset + 76].split(b'\0')[0].decode() == expected
     exported = tomlkit.parse(resolved.export(data)).unwrap()
@@ -472,7 +472,7 @@ def test_bankless_pc_is_not_bank_zero_and_omission_sends_no_bank(
 ) -> None:
     show['patches'] = {'wind': [{'patch': ':a:12'}]}
     data = compiler.compile_show(show, definitions, [], target)
-    offset = 76 + 2 * 68 + 74
+    offset = 76 + 2 * 68 + 68
     assert data[offset + 4 : offset + 9] == bytes([11, 255, 255, 255, 255])
     assert data[offset + 12 : offset + 17] == b'PC 12'
     show['patches'] = {'wind': [{'patch': ':a:12:::0'}]}

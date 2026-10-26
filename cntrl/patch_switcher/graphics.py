@@ -23,7 +23,7 @@ def distance(first: tuple[int, int, int], second: tuple[int, int, int]) -> float
     )
 
 
-def colors(screen: models.ScreenGraphics, contrast: float) -> tuple[int, int, int]:
+def colors(screen: models.Style, contrast: float) -> tuple[int, int, int]:
     foreground, background = screen.foreground_color, screen.background_color
     if foreground is None and background is None:
         foreground, background = 'black', 'white'
@@ -88,6 +88,7 @@ def font_choice(
     texts: list[str],
     target: models.Target,
     pad: int,
+    lines: int = 2,
 ) -> tuple[models.FontFace, int]:
     face = next(
         (
@@ -111,7 +112,10 @@ def font_choice(
     def fits(size: int) -> bool:
         metrics = face.sizes[size]
         widest = sorted((bounds(t, metrics)[1] for t in texts), reverse=True)[:4]
-        return 2 * metrics.line_height + 2 <= height and max(widest, default=0) <= width
+        return (
+            lines * metrics.line_height + max(0, lines - 1) * 2 <= height
+            and max(widest, default=0) <= width
+        )
 
     # Refine the largest-size estimate using the four widest rendered strings.
     candidate = sizes[0]
@@ -131,70 +135,6 @@ def font_choice(
             f'{face.name}: category and patch names do not fit the padded display'
         )
     return face, selected
-
-
-def compile_screens(
-    show: models.Show, texts: list[str], target: models.Target, category_count: int = 0
-) -> tuple[list[bytes], list[list[int]], bytes]:
-    """Compile shared graphics and offsets; category labels precede patch labels."""
-    screens = show.screens or models.Screens()
-    entries = [
-        getattr(screens, n) or models.ScreenGraphics() for n in ('undo', 'sent', 'next')
-    ]
-    pad = 4 if show.pad is None else show.pad
-    errors: list[str] = []
-    pairs: list[tuple[int, int, int]] = []
-    if 2 * pad >= min(target.display_width, target.display_height):
-        errors.append('padding leaves no drawable display area')
-    for name, screen in zip(('undo', 'sent', 'next'), entries, strict=True):
-        try:
-            pairs.append(colors(screen, show.contrast))
-        except ValueError as error:
-            errors.append(f'screens.{name}: {error}')
-    if errors:
-        raise ValueError('\n'.join(errors))
-    sizing = (
-        show.model_copy(update={'font_size': None}) if show.autoscale_fonts else show
-    )
-    face, size = font_choice(sizing, texts, target, pad)
-    metrics = face.sizes[size]
-    sizes = (
-        [font_choice(sizing, [t], target, pad)[1] for t in texts]
-        if show.autoscale_fonts
-        else [size] * len(texts)
-    )
-    layouts = b''
-    if show.autoscale_fonts:
-        row = (target.display_height - 2 * pad - 2) // 2
-        layouts = b'CFNT' + b''.join(
-            struct.pack(
-                '<BBHHH',
-                s,
-                0,
-                face.sizes[s].top,
-                face.sizes[s].line_height,
-                pad if i < category_count else pad + row + 2,
-            )
-            for i, s in enumerate(sizes)
-        )
-    records: list[bytes] = []
-    positions: list[list[int]] = []
-    for fg, bg, half in pairs:
-        width = target.display_width - 2 * pad
-        records.append(
-            SCREEN.pack(
-                face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top, half, 0
-            )
-        )
-        positions.append(
-            [
-                pad + (width - w) // 2 - left
-                for left, w in (
-                    bounds(t, face.sizes[s]) for t, s in zip(texts, sizes, strict=True)
-                )
-            ]
-        )
-    return records, positions, layouts
 
 
 SCREEN = struct.Struct('<BBBBHHHHHH')

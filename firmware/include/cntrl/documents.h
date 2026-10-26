@@ -178,8 +178,9 @@ private:
         document_ = Document(); controller_.deactivate();
         hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
         hardware_.set_usb_midi_interface(false);
-        Pane view; view.centered = true; view.graphics.size = 16; view.graphics.line_height = 16;
-        std::snprintf(view.patch, sizeof(view.patch), "No setups");
+        Pane view; view.lines[1].centered = true;
+        view.lines[1].graphics.size = view.lines[1].graphics.line_height = 16;
+        std::snprintf(view.lines[1].text, sizeof(view.lines[1].text), "No setups");
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, view);
     }
     void activate() {
@@ -319,7 +320,7 @@ private:
         char hex[127] = {}, name[64] = {}; unsigned length = 0, overwrite = 0; unsigned long crc = 0, epoch = 0; int end = 0;
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
-            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY 10 %u %08lx", document_.length(),
+            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY 11 %u %08lx", document_.length(),
                 document_.valid() ? (unsigned long)checksum(active_, document_.length()) : 0ul);
             replies_.reply(response); return;
         }

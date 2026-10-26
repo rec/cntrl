@@ -71,16 +71,18 @@ int main() {
     assert(writes == 480 && pixels_sent == 3 * 160 * 128);
     for (unsigned i = 0; i < 3; ++i) blank(i);
     cntrl::Pane no_setups;
-    no_setups.centered = true; no_setups.graphics.size = no_setups.graphics.line_height = 16;
-    std::strcpy(no_setups.patch, "No setups");
+    no_setups.lines[1].centered = true;
+    no_setups.lines[1].graphics.size = no_setups.lines[1].graphics.line_height = 16;
+    std::strcpy(no_setups.lines[1].text, "No setups");
     renderer.show(0, no_setups); drain(renderer);
     assert(screens[0][56][26] == 0 && screens[0][55][26] == 0xffff);
     renderer.show(0, empty); drain(renderer);
     cntrl::Pane editor;
-    editor.graphics.size = editor.graphics.line_height = 16;
-    editor.wrap_patch = true;
-    std::strcpy(editor.category, "Patch");
-    std::memset(editor.patch, 'X', 63); editor.patch[63] = 0;
+    editor.lines[0].graphics.size = editor.lines[0].graphics.line_height = 16;
+    editor.lines[1].graphics.size = editor.lines[1].graphics.line_height = 16;
+    editor.lines[1].wrap = true;
+    std::strcpy(editor.lines[0].text, "Patch");
+    std::memset(editor.lines[1].text, 'X', 63); editor.lines[1].text[63] = 0;
     renderer.show(0, editor); drain(renderer);
     for (unsigned y : {21u, 38u, 56u, 73u, 90u, 107u}) assert(screens[0][y][4] == 0);
     assert(screens[0][107][40] == 0xffff); // Last row has only three characters.
@@ -91,31 +93,47 @@ int main() {
     assert(writes == before);
 
     cntrl::Pane scaled;
-    std::strcpy(scaled.category, "A"); std::strcpy(scaled.patch, "B");
-    scaled.category_x = scaled.patch_x = 4;
-    scaled.patch_color = 0;
-    scaled.lines[0] = {32, 0, 32, 4};
-    scaled.lines[1] = {16, 0, 16, 65};
+    std::strcpy(scaled.lines[0].text, "A"); std::strcpy(scaled.lines[1].text, "B");
+    scaled.lines[0].x = scaled.lines[1].x = 4;
+    scaled.lines[1].graphics.foreground = 0;
+    scaled.lines[0].graphics.size = scaled.lines[0].graphics.line_height = 32;
+    scaled.lines[1].graphics.size = scaled.lines[1].graphics.line_height = 16;
     renderer.show(0, scaled); drain(renderer);
     assert(screens[0][22][4] == 0 && screens[0][21][4] == 0xffff);
     assert(screens[0][49][4] == 0 && screens[0][50][4] == 0xffff);
     assert(screens[0][90][4] == 0 && screens[0][103][4] == 0);
     assert(screens[0][104][4] == 0xffff && screens[0][89][4] == 0xffff);
     padding(0, 4, 0xffff);
-    scaled.category[0] = 0;
+    scaled.lines[0].text[0] = 0;
     renderer.show(0, scaled); drain(renderer);
     assert(screens[0][56][4] == 0 && screens[0][55][4] == 0xffff);
     assert(screens[0][69][4] == 0 && screens[0][70][4] == 0xffff);
-    scaled.patch[0] = 0;
+    scaled.lines[1].text[0] = 0;
     renderer.show(0, scaled); drain(renderer); blank(0);
     renderer.show(0, empty); drain(renderer);
 
+    cntrl::Pane bands;
+    for (unsigned i = 0; i < 3; ++i) {
+        std::strcpy(bands.lines[i].text, "A");
+        bands.lines[i].graphics.background = uint16_t(1u << i);
+    }
+    renderer.show(0, bands); drain(renderer);
+    assert(screens[0][4][150] == 1 && screens[0][43][150] == 1);
+    assert(screens[0][44][150] == 2 && screens[0][83][150] == 2);
+    assert(screens[0][84][150] == 4 && screens[0][123][150] == 4);
+    assert(screens[0][3][150] == 0xffff && screens[0][124][150] == 0xffff);
+    bands.lines[1].graphics.background = 8;
+    renderer.show(0, bands); drain(renderer);
+    assert(screens[0][44][150] == 8 && screens[0][83][150] == 8);
+    renderer.show(0, empty); drain(renderer);
+
     cntrl::Pane view;
-    std::strcpy(view.category, "trumpet");
-    std::strcpy(view.patch, "A very long patch name that must be clipped");
-    view.category_x = 40; view.patch_x = 4;
+    std::strcpy(view.lines[0].text, "trumpet");
+    std::strcpy(view.lines[1].text, "A very long patch name that must be clipped");
+    view.lines[0].x = 40; view.lines[1].x = 4;
     view.graphics.foreground = 0xf800; view.graphics.background = 0x001f;
-    view.patch_color = view.graphics.foreground;
+    view.lines[0].graphics = view.lines[1].graphics = view.graphics;
+    view.lines[1].graphics.foreground = view.graphics.foreground;
     renderer.show(2, view); drain(renderer);
     assert(screens[2][30][40] == 0xf800 && screens[2][90][4] == 0xf800);
     assert(screens[2][29][40] == 0x001f);
@@ -127,21 +145,22 @@ int main() {
     assert(writes == before + 480);
     padding(2, 4, 0x001f); blank(0); blank(1);
 
-    view.patch_color = view.graphics.half = 0x780f;
+    view.lines[1].graphics.foreground = view.graphics.half = 0x780f;
     patch_only = true;
     renderer.show(2, view); drain(renderer);
     assert(screens[2][30][40] == 0xf800 && screens[2][90][4] == 0x780f);
-    view.patch_color = view.graphics.foreground;
+    view.lines[1].graphics.foreground = view.graphics.foreground;
     renderer.show(2, view); drain(renderer);
     assert(screens[2][30][40] == 0xf800 && screens[2][90][4] == 0xf800);
     patch_only = false;
 
-    std::strcpy(view.patch, "Trumpet");
+    std::strcpy(view.lines[1].text, "Trumpet");
     renderer.show(2, view); drain(renderer);
     assert(screens[2][90][80] == 0x001f);
     renderer.show(2, empty); renderer.draw();
     view.graphics.pad = 20; view.graphics.size = 16; view.graphics.line_height = 16;
-    view.category_x = view.patch_x = 0;
+    view.lines[0].graphics = view.lines[1].graphics = view.graphics;
+    view.lines[0].x = view.lines[1].x = 0;
     renderer.show(2, view); drain(renderer);
     padding(2, 20, 0x001f);
     assert(screens[2][78][24] == 0xf800);

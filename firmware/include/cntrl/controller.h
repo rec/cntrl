@@ -138,19 +138,12 @@ private:
     void pane(unsigned slot, int index) {
         Pane view;
         view.graphics = document_.graphics(slot);
-        view.patch_color = view.graphics.foreground;
         if (index >= 0) {
             const uint8_t *p = document_.patch(unsigned(index));
             int sent = last_sent_[u16(p)];
-            if (slot == 2 && sent >= 0
-                && !std::memcmp(p + 4, document_.patch(unsigned(sent)) + 4, 3))
-                view.patch_color = view.graphics.half;
-            std::snprintf(view.category, sizeof(view.category), "%s", document_.category(u16(p + 2)));
-            std::snprintf(view.patch, sizeof(view.patch), "%s", p + 12);
-            view.category_x = u16(document_.category(u16(p + 2)) + 68 + slot * 2);
-            view.patch_x = u16(p + 76 + slot * 2);
-            view.lines[0] = document_.line(u16(p + 2));
-            view.lines[1] = document_.line(document_.categories() + unsigned(index));
+            bool muted = slot == 2 && sent >= 0
+                && !std::memcmp(p + 4, document_.patch(unsigned(sent)) + 4, 3);
+            document_.page(view, unsigned(index), slot, muted);
         }
         hardware_.show(slot, view);
     }

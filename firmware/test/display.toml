@@ -1,0 +1,35 @@
+font_size = '8 px'
+
+[instruments.a]
+instrument = 'synth'
+setup = 'stock'
+channel = 1
+output = 'din'
+
+[[patches.wind]]
+instrument = 'a'
+program = 1
+name = 'Flute'
+style = {font_size = '16 px', foreground_color = 'white'}
+
+[pages.patch]
+fields = ['brightness', 'display_name', 'volume', 'tempo', 'splash']
+line_styles = {display_name = {half = 'gray'}}
+
+[parameters.tempo]
+value = 120
+
+[pages.numeric]
+fields = ['program', 'bank', 'volume', 'pan', 'instrument', 'name']
+
+[pages.settings]
+fields = ['usb_midi_interface', 'screensaver_timeout', 'chord_ms', 'transition_ms']
+
+[windows.undo]
+page = 'numeric'
+
+[windows.sent]
+page = 'settings'
+
+[windows.next.style]
+background_color = 'blue'

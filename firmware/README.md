@@ -180,10 +180,11 @@ A+D used to wake the pedal does not open management. Release the complete wake
 gesture, then press A+D again. During screensaver entry, every button consumes
 the complete wake gesture and cancels the fade without a musical action.
 
-## Screen graphics
+## Pages, windows and line styles
 
-The font and padding are shared by all screens. Colors are independently
-configurable. All settings are optional and part of the show:
+The default `patch` page reproduces the category and patch-name display. Undo,
+sent and next supply their own patch to that page. The same generic text-line
+renderer also draws management, empty-state and error messages.
 
 ```toml
 contrast = 0.6
@@ -192,46 +193,65 @@ font_name = 'Arial'
 autoscale_fonts = false
 pad = 4
 
-[screens.undo]
-foreground_color = 'black'
-background_color = 'white'
+[pages.patch]
+fields = ['category.name', 'display_name']
 
-[screens.sent]
-foreground_color = 'yellow'
+[windows.undo]
+page = 'patch'
 
-[screens.next]
-background_color = '0x002040'
-# half = 'gray'  # Omit to use the foreground/background midpoint.
+[windows.sent]
+page = 'patch'
+
+[windows.next]
+page = 'patch'
+
+# Optional overrides:
+# [windows.next.style]
+# background_color = '0x002040'
+# [pages.patch.line_styles.display_name]
+# font_name = 'ComicSansMS'
+# font_size = '16 px'
 ```
 
-Omitting `screens`, any individual screen, or any field uses its default. JSON
-`null` has the same meaning. The default font is `classic`, padding is 4, and
-both omitted colors mean black on white, also used by management and the
-no-setups screen. Explicit colors are preserved. Font size is automatic when omitted.
-Available font names and discrete sizes come from the target's font metrics.
-`font_name`, `font_size` and `pad` are top-level settings, never per-screen settings.
+Field names share one namespace. Built-in patch attributes are `category.name`,
+`display_name`, `name`, `program`, `bank`, `volume`, `pan` and `instrument` (the
+routing alias). Built-in global settings are `brightness`, `splash`,
+`usb_midi_interface`, `screensaver_timeout`, `chord_ms` and `transition_ms`.
+These read the current document, including numeric edits. Additional shared
+display values are defined as `[parameters.tempo]` with `value = 120` and an
+optional `style` block; they are configuration values, not a tempo engine.
+Their names must not collide with built-ins. Pages list names in display order;
+unknown or duplicate names are rejected. Absent/empty values are omitted, while
+zero and false remain visible. A page supports at most 16 fields, further
+limited by the available display height.
 
-`autoscale_fonts` is a strict Boolean, default false. When true, each category
-and patch line independently uses the largest available font size that fits its
-padded width and half of the padded display height after reserving two pixels
-for spacing. Letter proportions are preserved. This overrides `font_size` for
-these labels; `font_name` and `pad` still apply. Short labels can therefore be larger
-than long ones. Each line is centered horizontally, with its font's top-bearing
-correction applied at its distributed vertical position. Sizes and horizontal
-positions are computed by the compiler; the renderer distributes vertical
-space using the supplied line heights. Resolved downloads preserve this setting.
+Each partial style supports `foreground_color`, `background_color`, `half`,
+`font_name`, `font_size` and nullable `autoscale_fonts`. Merge individual
+properties in ascending priority: show defaults, window style, page style,
+program style, category style, show-local patch style, and page `line_styles`
+for that field. Attach `style` to instrument-table program entries and patch
+entries, and use `[category_styles.CATEGORY]` for category defaults. The category
+heading inherits the category style but excludes program and patch styles.
+Global fields inherit page/window styles and their parameter style, if present.
+Null/omitted properties inherit; explicit false overrides true. Downloads
+preserve partial overrides instead of flattening inherited values.
 
-With `autoscale_fonts = false`, the shared-size rules below apply.
+The default font is `classic`, default padding is 4, and default colors are
+black on white. Font size is automatic when omitted. Top-level font settings
+remain show defaults; each window may override `pad`. Its full display dimensions
+come from the target. Available fonts and sizes come from the target metrics.
+Without autoscaling, lines with the same sizing settings share the largest
+fitting size. With `autoscale_fonts = true`, each line independently selects the
+largest fitting size within its equal share of the padded height, overriding
+`font_size` and preserving proportions. Explicit sizes can differ between lines
+as long as their combined heights fit. Performance pages reject initial text
+overflow; management retains its existing wrapping/clipping. Numeric edits are
+clipped if the new value is wider than the compiled size permits.
 
-Names are centered horizontally and distributed vertically. The compiler measures
-all category/patch names with the target's actual glyph metrics. It refines the size
-estimate from the four widest strings, then verifies the largest available size
-that fits the effective width and two lines within the effective height of
-every screen, using the shared padding.
-An explicitly selected size must fit too. Names are not wrapped or truncated.
-Each category and patch stores three centered cursor offsets, including any
-negative-bearing correction. The pedal never measures text to center performance
-labels horizontally.
+The compiler measures each line with its own font and stores centered offsets.
+The pedal recalculates horizontal centering for mutable numeric/global fields.
+Vertical spacing uses the current nonempty rows. Each line's background fills
+its horizontal band inside the padding; band boundaries split the gaps halfway.
 
 The whole screen is filled with its background, including empty history panes.
 Text is clipped to the rectangle inset by `pad` on every side. Runtime errors
@@ -272,10 +292,10 @@ exceeds the available height, extra gaps are zero and clipping still applies.
 The renderer computes these positions from the complete pane; compiled row-y
 values do not determine vertical spacing.
 
-## Binary and transfer protocol, version 10
+## Binary and transfer protocol, version 11
 
-Version 10 retains the rendering/MIDI records and name metadata, and adds
-optional per-line font layouts controlled by `autoscale_fonts`. The
+Version 11 replaces fixed category/patch layouts with resolved pages and line
+styles, and retains authored formatting metadata for editable exports. The
 default-off `usb_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
@@ -300,7 +320,8 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 10 firmware. No automatic
+version 11 firmware. Replace old `screens.NAME` color tables with
+`windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
 Startup `splash` defaults to true: an omitted setting uses the currently installed
@@ -316,22 +337,26 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (10), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 autoscale fonts; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (11), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment, half RGB565; two zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
-| Category, 74 bytes | name[64], u16 first patch, u16 count, three u16 screen cursor offsets |
-| Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 screen cursor offsets |
-| Metadata header, 40 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), font name[32] |
+| Category, 68 bytes | name[64], u16 first patch, u16 count |
+| Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (undo/sent/next) |
+| Metadata header, 8 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified) |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
-| Per-line font metadata, optional | `CFNT`, then one 8-byte record per category followed by one per patch: u8 size, u8 zero, u16 top-bearing adjustment, u16 line height, u16 row y |
+| Display header, 16 bytes | `CDSP`, u16 style count, page count, text count, page-data byte count; u32 source-metadata byte count |
+| Resolved style, 16 bytes | Same layout as a screen record, one per distinct resolved style |
+| Resolved page | u8 line count followed by 8-byte line records: u8 field code, u8 already-sent indication flag, u16 style index, centered cursor x, literal-text index |
+| Literal text | u16 byte count including the final NUL, followed by ASCII text; at most 64 bytes |
+| Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, global parameter values and original show sizing defaults |
 
 Records occur in the order header, screens (undo/sent/next), instruments,
 categories, patches, metadata header, identities, bank mappings, logical banks
-and name metadata, followed by per-line font metadata when the autoscale flag
-is set. Name metadata has no terminators or trailing padding; empty
+and name metadata, followed by the display header, styles, pages, literal texts
+and display source metadata. Name metadata has no terminators or trailing padding; empty
 and absent values are distinct. Its variable length avoids allocating three
 fixed-width name slots per patch. The firmware validates its bounds and retains
 it unchanged; rendering continues to read the effective label from the patch.
@@ -341,7 +366,7 @@ nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 10 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 11 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 Names in commands are hex-encoded ASCII, never paths. Requests are:
