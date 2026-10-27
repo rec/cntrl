@@ -587,6 +587,8 @@ included/excluded builds pass. The combined image was flashed through the runnin
 upload helper on 2026-10-27, SHA-256
 `4d3a22d26c42b1a861e33a7fb7bc78d84aab0867a443700901011cf7b0fc7ce2`.
 The first upload reported a USB write error; the same verified image succeeded
-on retry and the pedal enumerated as stock firmware after reset. A+F entry,
-post-flash setup verification and physical loopback testing remain pending.
-The three saved setups were downloaded before flashing; pman was selected.
+on retry and the pedal enumerated as stock firmware after reset. After the user's
+A+F gesture, USB reported `CNTRL READY 14 34597 488beaf6`, unchanged from before
+flashing. The selected setup remains pman and all three saved setups are listed.
+The three saved setups were downloaded before flashing. Physical loopback and
+cable-test page appearance remain unverified.
