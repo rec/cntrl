@@ -1,5 +1,11 @@
 # Standard USB MIDI interface
 
+Current scope, 2026-10-27: the four omniports are temporarily unused. Their USB
+cables remain enumerated, but incoming traffic on cables 2 through 5 is discarded.
+cntrl does not initialize, read or transmit through those jacks. Only DIN and
+the dedicated TRS input/output paths participate in the physical USB bridge.
+This supersedes the configurable-output behavior in the original plan below.
+
 Status, 2026-10-25: implemented, built, tested and flashed. macOS now exposes
 the intended two inputs and six outputs; both the user and native port listing
 confirmed the layout. USB-to-DIN output passed byte-for-byte qualification
@@ -44,10 +50,9 @@ configuration transfer. Disabled ports remain visible but do not bridge traffic.
 When disabled, retain existing explicit pedal `usb-device` output behavior.
 Drain unwanted USB MIDI input in bounded steps without forwarding it. Do not
 configure unused configurable ports as outputs merely because they are
-advertised over USB. Enabling the bridge claims all four configurable ports for
-MIDI output, using the currently supported electrical mode and appropriate
-TRS wiring. Expression and auxiliary-switch use on those ports is incompatible
-with this mode; do not silently combine the roles.
+advertised over USB. For now, enabling the bridge also leaves all four
+configurable ports untouched. No MIDI, expression or auxiliary-switch role is
+configured for them by cntrl.
 
 On disabling or switching setups, stop accepting bridge traffic, discard its
 pending queues and reset parser state. If a physical SysEx transmission has
@@ -66,10 +71,10 @@ Directions below are from the computer's perspective.
 | Input: TRS | Dedicated TRS MIDI input |
 | Output: DIN | DIN MIDI output |
 | Output: TRS | Dedicated TRS MIDI output |
-| Output: Configurable 1 | Configurable port 1 |
-| Output: Configurable 2 | Configurable port 2 |
-| Output: Configurable 3 | Configurable port 3 |
-| Output: Configurable 4 | Configurable port 4 |
+| Output: Configurable 1 | Unused; traffic discarded |
+| Output: Configurable 2 | Unused; traffic discarded |
+| Output: Configurable 3 | Unused; traffic discarded |
+| Output: Configurable 4 | Unused; traffic discarded |
 
 Expose exactly two source jacks and six destination jacks in USB MIDI
 descriptors, with stable names and cable numbering. Do not expose sixteen
@@ -276,8 +281,8 @@ CNTRL MIDI enabled route received transmitted dropped aborted high_water max_mid
 
 Traffic counters count packets, not bytes; a dropped pedal batch on USB
 disconnect counts as one dropped item. `display_count` counts display-service
-calls, not completed frames. `init_errors` is a bitmask of failed configurable
-port initializations. RESET clears the two timing maxima, not traffic counters
+calls, not completed frames. `init_errors` is currently zero because configurable
+ports are not initialized. RESET clears the two timing maxima, not traffic counters
 or queues. Measure after setup/SD operations to distinguish MIDI-induced waits
 from existing SD stalls. Idle status reads show ongoing scans and display
 service, but are not physical button/visible-rendering qualification.

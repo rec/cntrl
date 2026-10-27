@@ -2,10 +2,6 @@
   "outputs": [
     "din",
     "trs",
-    "configurable-1",
-    "configurable-2",
-    "configurable-3",
-    "configurable-4",
     "usb-device",
     "usb-host"
   ],

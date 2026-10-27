@@ -261,18 +261,20 @@ safety. Qualification must check cold boot, two different uploaded shows,
 interrupted transfers and interrupted commits. If there is no readable card,
 the application displays an error, sends no MIDI and rejects persistent uploads.
 
-Output IDs are `din`, `trs`, `configurable-1` through `configurable-4`,
-`usb-device` and `usb-host`. DIN uses Serial1 and the dedicated 3.5 mm output
-uses Serial2, both 31250 baud. Configurable ports currently provide the traced
-standard/type-A output mode: tip TX, ring HIGH. Type B, ring-active and expression
-modes are not advertised by this build. Only use appropriate MIDI cables/devices
-on those ports; this application does not import saved port settings.
+Output IDs are `din`, `trs`, `usb-device` and `usb-host`. DIN uses Serial1 and
+the dedicated 3.5 mm output uses Serial2, both 31250 baud. The four omniports are
+temporarily unused: cntrl does not initialize their pins, read them, or transmit
+through them, even when the USB MIDI interface is enabled. Saved stock port
+settings are not imported. Switching from stock to cntrl resets the processor;
+leaving the ports untouched does not guarantee retention of stock configuration
+or a particular voltage or impedance at the jacks.
 
-FlexSerial outputs are initialized when first used, or together when the bridge
-is enabled. USB host supports one MIDI device, not a host bridge or hubs.
+USB host supports one MIDI device, not a host bridge or hubs.
 USB device has two computer inputs and six outputs; explicit pedal USB messages
 share input cable 0 with forwarded DIN input. `usb_midi_interface = true` enables
-the two physical inputs and six outputs as a computer interface. It defaults off
+the two physical inputs and the DIN/TRS outputs as a computer interface. The four
+configurable USB output cables remain visible but their traffic is discarded.
+It defaults off
 and does not change enumeration. There is no automatic physical MIDI thru.
 
 The scheduler has independent destination queues, each with 256 forwarding
