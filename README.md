@@ -13,7 +13,9 @@ The application supports named performance setups, on-controller selection and
 numeric editing, per-setup graphics, and separate original/program/show patch
 names. Named pages, windows and per-line styles are described in the
 [display-format design](plan/display-format.md). The default patch page retains
-the existing category/name UI. The current compiled document format is version 11; source data must be
+the existing navigation-heading/name UI. Programs and patches can independently
+carry multiple reusable categories, with inherited membership and prioritized
+category styles. The current compiled document format is version 12; source data must be
 recompiled for a format change. Firmware images and setup data are deployed
 separately. The [patch-switcher plan](plan/patch-switcher.md) and
 [multiple-setups plan](plan/multiple-setups.md) describe implemented behavior;

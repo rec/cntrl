@@ -23,7 +23,7 @@ def test_page_lines_select_different_native_font_families() -> None:
         }
     )
     value = display.DisplayPatch(
-        values={'category.name': 'Brass', 'display_name': 'Trumpet'}
+        values={'group.name': 'Brass', 'display_name': 'Trumpet'}
     )
     _, _, block = display.compile_display(show, [value], target)
     assert graphics.SCREEN.unpack_from(block, display.HEADER.size)[0] == 1

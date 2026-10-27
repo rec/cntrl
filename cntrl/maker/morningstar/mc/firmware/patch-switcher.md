@@ -541,7 +541,7 @@ editor text await user confirmation. No setup or animation data was uploaded.
 ## Display pages and per-line styles: 2026-10-26
 
 Compiled format 11 uses named pages with ordered field names, partial styles
-and window bindings. The default page contains `category.name` and
+and window bindings. The default page contains `group.name` and
 `display_name`, preserving the performance UI. Management, empty/error states
 and performance pages use the same generic line renderer. See the portable
 [display-format design](../../../../../plan/display-format.md) for configuration

@@ -194,7 +194,7 @@ autoscale_fonts = false
 pad = 4
 
 [pages.patch]
-fields = ['category.name', 'display_name']
+fields = ['group.name', 'display_name']
 
 [windows.undo]
 page = 'patch'
@@ -213,7 +213,7 @@ page = 'patch'
 # font_size = '16 px'
 ```
 
-Field names share one namespace. Built-in patch attributes are `category.name`,
+Field names share one namespace. Built-in patch attributes are `group.name`, `categories`,
 `display_name`, `name`, `program`, `bank`, `volume`, `pan` and `instrument` (the
 routing alias). Built-in global settings are `brightness`, `splash`,
 `usb_midi_interface`, `screensaver_timeout`, `chord_ms` and `transition_ms`.
@@ -228,13 +228,54 @@ limited by the available display height.
 Each partial style supports `foreground_color`, `background_color`,
 `font_name`, `font_size` and nullable `autoscale_fonts`. Merge individual
 properties in ascending priority: show defaults, window style, page style,
-program style, category style, show-local patch style, and page `line_styles`
+effective category styles, program style, show-local patch style, and page `line_styles`
 for that field. Attach `style` to instrument-table program entries and patch
-entries, and use `[category_styles.CATEGORY]` for category defaults. The category
-heading inherits the category style but excludes program and patch styles.
+entries. Define reusable classifications with `[categories.CATEGORY]`, an integer
+`priority` (default zero), and an optional `[categories.CATEGORY.style]`. Attach
+`categories = ['sax', 'whole-system']` independently to program and patch entries.
+A patch inherits its program's categories, then adds its own, removing duplicates.
+For each category style property, the highest declaring priority wins. Different
+values tied at that priority are an error; equivalent RGB colors agree. Explicit
+program and patch styles override the result. The `categories` display field
+shows the effective list, separated by commas, and excludes explicit program
+and patch styling. `group.name` shows the navigation heading with page/window
+styling. Navigation lists under `patches.GROUP` do not assign categories.
 Global fields inherit page/window styles and their parameter style, if present.
 Null/omitted properties inherit; explicit false overrides true. Downloads
 preserve partial overrides instead of flattening inherited values.
+
+For example, the program can declare `categories = ['sax']`, while a patch that
+sets up the whole board adds `categories = ['whole-system']`. That patch displays
+`sax, whole-system`; another use of the same program displays `sax`. Categories
+classify objects and supply styles; they do not cause MIDI or mixer actions.
+Downloads preserve only each object's explicit assignments, with shared category
+definitions. Program categories joined from multiple table files form a union.
+
+Configuration fragment:
+
+```toml
+[categories.sax.style]
+foreground_color = 'yellow'
+
+[categories.whole-system]
+priority = 10
+style = {font_name = 'CourierPrimeBold'}
+
+[[definitions.programs]]
+instrument = 'synth'
+setup = 'default'
+program = 1
+name = 'Sax'
+categories = ['sax']
+
+[[patches.'Song 1']]
+instrument = 'synth'
+program = 1
+categories = ['whole-system']
+
+[pages.patch]
+fields = ['group.name', 'categories', 'display_name']
+```
 
 The default font is `classic`, default padding is 4, and default colors are
 black on white. Font size is automatic when omitted. Top-level font settings
@@ -337,11 +378,11 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (12), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (12), u16 chord milliseconds, u32 total bytes, u16 instrument/group/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
-| Category, 68 bytes | name[64], u16 first patch, u16 count |
-| Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (undo/sent/next) |
+| Navigation group, 68 bytes | name[64], u16 first patch, u16 count |
+| Patch, 82 bytes | u16 instrument, u16 navigation group, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (undo/sent/next) |
 | Metadata header, 8 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified) |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
@@ -351,7 +392,11 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Resolved style, 16 bytes | Same layout as a screen record, one per distinct resolved style |
 | Resolved page | u8 line count followed by 8-byte line records: u8 field code, u8 already-sent indication flag, u16 style index, centered cursor x, literal-text index |
 | Literal text | u16 byte count including the final NUL, followed by ASCII text; at most 64 bytes |
-| Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, global parameter values and original show sizing defaults |
+| Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, shared category definitions, explicit program/patch categories, global parameter values and original show sizing defaults |
+
+The existing firmware category counters and target `max_categories` limit refer
+to navigation groups. Classification categories are resolved by the host and
+stored in authored display metadata; they do not change navigation records.
 
 Records occur in the order header, screens (undo/sent/next), instruments,
 categories, patches, metadata header, identities, bank mappings, logical banks

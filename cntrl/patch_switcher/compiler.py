@@ -234,7 +234,7 @@ def compile_show(
             display_patches.append(
                 display.DisplayPatch(
                     values={
-                        'category.name': category,
+                        'group.name': category,
                         'display_name': display_name,
                         'name': name,
                         'program': program,
@@ -245,6 +245,8 @@ def compile_show(
                     },
                     style=patch.style,
                     program_style=matched.style if matched else None,
+                    categories=patch.categories,
+                    program_categories=matched.categories if matched else [],
                 )
             )
             logical_banks.append(0xFFFFFFFF if bank is None else bank)
@@ -389,6 +391,9 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                 continue
             merged = previous.model_dump()
             merged['tags'] = list(dict.fromkeys(previous.tags + entry.tags))
+            merged['categories'] = list(
+                dict.fromkeys(previous.categories + entry.categories)
+            )
             for field in ('name', 'display_name', 'range', 'description', 'style'):
                 old, new = getattr(previous, field), getattr(entry, field)
                 if old is None:

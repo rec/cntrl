@@ -2,7 +2,7 @@ splash = true
 screensaver_timeout = 3
 
 [pages.patch]
-fields = ['category.name', 'display_name']
+fields = ['group.name', 'display_name']
 
 [windows.undo]
 page = 'patch'

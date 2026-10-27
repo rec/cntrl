@@ -51,6 +51,8 @@ def export(data: bytes) -> str:
     source = read_source(data, names_offset)
     patch_styles = cast(dict[str, object], source.pop('patch_styles'))
     program_styles = cast(dict[str, object], source.pop('program_styles'))
+    patch_categories = cast(dict[str, object], source.pop('patch_categories'))
+    program_categories = cast(dict[str, object], source.pop('program_categories'))
 
     def text(offset: int, width: int) -> str:
         return data[offset : offset + width].split(b'\0')[0].decode('ascii')
@@ -130,6 +132,10 @@ def export(data: bytes) -> str:
                 patch['style'] = patch_styles[str(j)]
             if str(j) in program_styles:
                 program['style'] = program_styles[str(j)]
+            if str(j) in patch_categories:
+                patch['categories'] = patch_categories[str(j)]
+            if str(j) in program_categories:
+                program['categories'] = program_categories[str(j)]
             if bank != 0xFFFFFFFF:
                 patch['bank'] = bank
                 program['bank'] = bank
