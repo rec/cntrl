@@ -166,3 +166,43 @@ def test_setup_cli_copy_download_and_delete(
         process.wait(timeout=5)
         os.close(master)
         os.close(slave)
+
+
+def test_revision_commands_against_cpp_receiver(peer: Path) -> None:
+    data = bytes.fromhex((ROOT / 'firmware/test/show.golden').read_text())
+    master, slave = pty.openpty()
+    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
+    try:
+        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+            client = transport.SetupClient(connection)
+            client.copy('History', data, False)
+            name = b'History'.hex()
+            client.ok(f'CNTRL HISTORY SAVE {name} 0 {b"Rehearsal".hex()}')
+            response = client.request(f'CNTRL HISTORY LIST {name} {2**64 - 1}')
+            assert response.split()[2] == '1'
+            assert client.download('History', 1) == data
+            client.ok(f'CNTRL HISTORY RESTORE {name} 1')
+            client.delete(['History'])
+            assert client.download('History', 1) == data
+            client.ok(f'CNTRL HISTORY RESTORE {name} 1')
+            assert client.download('History') == data
+            client.ok(f'CNTRL HISTORY DELETE {name} 0')
+            assert (
+                client.request(f'CNTRL HISTORY LIST {name} {2**64 - 1}') == 'CNTRL END'
+            )
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+        os.close(master)
+        os.close(slave)
+
+
+def test_progress_reply_is_not_returned_as_the_command_result() -> None:
+    master, slave = pty.openpty()
+    try:
+        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+            os.write(master, b'CNTRL WAIT\nCNTRL WAIT\nCNTRL OK\n')
+            assert connection.line() == 'CNTRL OK'
+    finally:
+        os.close(master)
+        os.close(slave)

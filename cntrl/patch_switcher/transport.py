@@ -73,7 +73,12 @@ class SerialConnection:
             if not value:
                 raise OSError('USB serial disconnected')
             if value == b'\n':
-                return result.decode('ascii').rstrip('\r')
+                response = result.decode('ascii').rstrip('\r')
+                if response == 'CNTRL WAIT':
+                    result.clear()
+                    deadline = time.monotonic() + self.timeout
+                    continue
+                return response
             result.extend(value)
         raise ValueError(f'USB serial response exceeds {limit - 1} bytes')
 
@@ -154,9 +159,12 @@ class SetupClient:
         if self.download(name) != data:
             raise ValueError(f'{name}: read-back verification failed')
 
-    def download(self, name: str) -> bytes:
+    def download(self, name: str, revision: int | None = None) -> bytes:
+        hex_name = validate_name(name).encode('ascii').hex()
         response = self.request(
-            'CNTRL SETUP GET ' + validate_name(name).encode('ascii').hex()
+            ('CNTRL SETUP GET ' + hex_name)
+            if revision is None
+            else f'CNTRL HISTORY GET {hex_name} {revision}'
         )
         parts = response.split()
         if len(parts) != 4 or parts[:2] != ['CNTRL', 'FILE']:

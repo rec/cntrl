@@ -62,6 +62,10 @@ struct Storage {
     virtual bool finish() = 0;
 };
 struct SetupStorage : Storage {
+    virtual void choose_revision(const char *name, uint64_t number) = 0;
+    virtual void revision_scan(const char *name, uint64_t before, bool records_only) = 0;
+    virtual bool revision_scan_step(uint64_t &best) = 0;
+    virtual bool remove_revision(const char *name, uint64_t number) = 0;
     virtual bool available() const = 0;
     virtual void choose(const char *name) = 0;
     virtual bool next(const char *after, char *name) = 0;

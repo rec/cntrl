@@ -189,7 +189,7 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     cntrl::Documents recovered(interrupted, hw, controller, hw); recovered.boot();
     assert(recovered.edit_begin() && recovered.edit_adjust(0, 0, 1));
     interrupted.remaining = 120;
-    assert(recovered.edit_save(0));
+    assert(recovered.edit_save(0)); // Failure is reported by the asynchronous job.
     while (recovered.busy()) recovered.tick(1);
     interrupted.remaining = -1;
     cntrl::Documents reboot(interrupted, hw, controller, hw); reboot.boot();
@@ -232,6 +232,46 @@ void test_deletion_and_selection_power_loss(const std::vector<uint8_t> &bytes) {
             for (const auto &pane : hw.panes) assert(!std::strcmp(pane.lines[1].text, "No setups"));
         }
     }
+}
+
+void test_revision_history(const std::vector<uint8_t> &bytes) {
+    TestStorage card; Fake hw; cntrl::Controller controller(hw);
+    cntrl::Documents docs(card, hw, controller, hw); docs.boot();
+    auto finish = [&](cntrl::Documents &d) {
+        unsigned ticks = 0;
+        while (d.busy()) { d.tick(1); ++ticks; assert(ticks < 3000000); }
+        assert(!d.last_error()[0]);
+    };
+    auto latest = [&](cntrl::Documents &d, uint64_t expected) {
+        assert(d.history_next("Test", UINT64_MAX)); finish(d);
+        assert(d.history_revision().number == expected);
+    };
+    upload(docs, bytes); command(docs, "CNTRL SETUP FINISH");
+    assert(docs.history_save("Test", "Rehearsal"));
+    assert(docs.busy()); finish(docs);
+    assert(!std::strcmp(docs.history_revision().label, "Rehearsal"));
+    upload(docs, bytes); latest(docs, 1);
+    assert(docs.edit_begin() && docs.edit_adjust(0, 0, 1) && docs.edit_save(0)); finish(docs);
+    latest(docs, 2);
+    assert(docs.history_compare("Test", 1)); finish(docs);
+    assert(docs.history_comparison().patches == 1);
+    auto sent = hw.sent.size();
+    assert(docs.history_restore("Test", 1, 2)); finish(docs);
+    assert(hw.sent.size() == sent); latest(docs, 3);
+    assert(docs.history_restore("Test", 3, 4)); finish(docs);
+    assert(docs.history_delete("Test", 4)); finish(docs);
+    assert(docs.history_save("Test", "After deletion")); finish(docs); latest(docs, 5);
+    card.remaining = 30;
+    assert(docs.history_save("Test", "Interrupted"));
+    while (docs.busy()) docs.tick(1);
+    assert(docs.last_error()[0]); card.remaining = -1;
+    assert(docs.history_save("Test", "After interruption")); finish(docs); latest(docs, 7);
+    for (unsigned i = 0; i < 1000; ++i) { assert(docs.history_save("Test", "")); finish(docs); }
+    latest(docs, 1007);
+    cntrl::Documents reboot(card, hw, controller, hw); reboot.boot();
+    assert(reboot.document().valid());
+    assert(reboot.history_delete("Test", 0)); finish(reboot); latest(reboot, 0);
+    assert(reboot.history_save("Test", "Still monotonic")); finish(reboot); latest(reboot, 1008);
 }
 
 int main(int argc, char **argv) {
@@ -324,6 +364,7 @@ int main(int argc, char **argv) {
         cntrl::Document invalid_layout;
         assert(!invalid_layout.load(scaled.data(), unsigned(scaled.size()), hw));
     }
+    test_revision_history(bytes);
     test_greyed_names(doc);
     test_undo_restores_undone_candidate(doc);
     test_greyed_aliases(bytes);

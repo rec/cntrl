@@ -1,6 +1,7 @@
 #pragma once
 #include "controller.h"
 #include "setup_names.h"
+#include "revisions.h"
 #include <cstdlib>
 
 namespace cntrl {
@@ -12,7 +13,7 @@ struct Replies {
 class Documents {
 public:
     Documents(SetupStorage &storage, Hardware &hardware, Controller &controller, Replies &replies)
-        : storage_(storage), hardware_(hardware), controller_(controller), replies_(replies) {}
+        : revisions_(storage), storage_(storage), hardware_(hardware), controller_(controller), replies_(replies) {}
     void boot() {
         empty(true);
         if (!storage_.available()) { std::strcpy(boot_error_, "storage-unavailable"); return; }
@@ -29,7 +30,7 @@ public:
     }
     const Document &document() const { return document_; }
     const char *selected() const { return selected_; }
-    bool busy() const { return receiving_ || writing_ || erasing_ || download_ || listing_; }
+    bool busy() const { return history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
     bool dirty() const { return dirty_; }
     const char *last_error() const { return last_error_; }
     bool next_valid(const char *after, char *name) {
@@ -111,19 +112,13 @@ public:
     void edit_cancel() { dirty_ = false; }
     bool edit_save(uint32_t now) {
         if (!dirty_ || busy()) return false;
-        // Reuse transfer scratch to preserve edits while verifying BOTH slots.
-        // A checksum-correct header alone does not establish a committed slot.
-        char name[64]; std::snprintf(name, sizeof(name), "%s", selected_);
-        std::memcpy(delete_names_, staging_, document_.length());
-        if (!load(name)) return false;
-        std::memcpy(staging_, delete_names_, document_.length());
-        std::snprintf(record_name_, sizeof(record_name_), "%s", name);
+        std::snprintf(record_name_, sizeof(record_name_), "%s", selected_);
         expected_ = document_.length(); expected_crc_ = checksum(staging_, expected_); quiet_ = true;
         if (!start_write(now)) return false;
         dirty_ = false; return true;
     }
     void receive(uint8_t byte, uint32_t now) {
-        if (writing_ || erasing_) return;
+        if (history_action_ != HistoryAction::none || writing_ || erasing_) return;
         last_byte_ = now;
         if (receiving_) {
             staging_[received_++] = byte;
@@ -143,6 +138,7 @@ public:
         if ((receiving_ || used_ || overflow_ || listing_ || download_) && uint32_t(now - last_byte_) > 10000) {
             receiving_ = false; listing_ = false; download_ = 0; used_ = 0; overflow_ = false; error("transfer-timeout");
         }
+        if (history_action_ != HistoryAction::none) { history_tick(now); return; }
         if (erasing_) { erase_step(now); return; }
         if (!writing_) return;
         unsigned n = expected_ - written_; if (n > 512) n = 512;
@@ -162,7 +158,28 @@ public:
         if (!quiet_) replies_.reply("CNTRL OK");
         quiet_ = false;
     }
+    struct HistoryComparison { unsigned patches = 0, routes = 0; bool settings = false, formatting = false; };
+    const Revision &history_revision() const { return history_revision_; }
+    const HistoryComparison &history_comparison() const { return comparison_; }
+    bool history_next(const char *name, uint64_t before) { return begin_history(HistoryAction::list, name, before); }
+    bool history_save(const char *name, const char *label) { return begin_history(HistoryAction::save, name, 0, label); }
+    bool history_restore(const char *name, uint64_t number, uint32_t) { return begin_history(HistoryAction::restore, name, number); }
+    bool history_compare(const char *name, uint64_t number) { return begin_history(HistoryAction::compare, name, number); }
+    bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
+    enum class HistoryAction { none, list, save, restore, compare, download, erase, archive };
+    enum class HistoryPhase { current, revision, append, erase };
+    HistoryAction history_action_ = HistoryAction::none;
+    HistoryPhase history_phase_ = HistoryPhase::current;
+    Revisions revisions_;
+    Revision history_revision_;
+    HistoryComparison comparison_;
+    uint8_t history_data_[max_document] = {};
+    char history_name_[64] = {}, history_label_[64] = {};
+    uint64_t history_number_ = 0;
+    unsigned history_slot_ = 0, current_length_ = 0, current_slot_ = 0;
+    uint32_t current_generation_ = 0, history_progress_ = 0;
+    bool history_reply_ = false;
     SetupStorage &storage_; Hardware &hardware_; Controller &controller_; Replies &replies_;
     uint8_t active_[max_document] = {}, staging_[max_document] = {}, header_[96] = {};
     // Deletion names survive staging-buffer reuse while loading candidate slots.
@@ -176,6 +193,122 @@ private:
     int selection_slot_ = -1;
     bool receiving_ = false, writing_ = false, overflow_ = false, dirty_ = false, quiet_ = false, listing_ = false, deleting_ = false, erasing_ = false, present_ = false;
     inline static const uint8_t zero_[64] = {};
+    bool begin_history(HistoryAction action, const char *name, uint64_t number, const char *label = "") {
+        if (busy() || (dirty_ && action != HistoryAction::archive) || !setup_name(name) || std::strlen(label) > 63) return false;
+        if (action != HistoryAction::archive) quiet_ = true;
+        history_progress_ = last_byte_;
+        history_action_ = action; history_number_ = number; history_reply_ = false;
+        last_error_[0] = 0; history_revision_ = Revision(); comparison_ = HistoryComparison();
+        std::snprintf(history_name_, sizeof(history_name_), "%s", name);
+        std::snprintf(history_label_, sizeof(history_label_), "%s", label);
+        if (action == HistoryAction::list) {
+            history_phase_ = HistoryPhase::revision; revisions_.next(name, number, staging_);
+        } else if (action == HistoryAction::download) {
+            history_phase_ = HistoryPhase::revision; revisions_.read(name, number, staging_);
+        } else if (action == HistoryAction::erase) {
+            history_phase_ = HistoryPhase::erase; revisions_.erase(name, number);
+        } else {
+            current_length_ = current_generation_ = history_slot_ = 0; current_slot_ = 1;
+            history_phase_ = HistoryPhase::current; revisions_.current(name, 0, history_data_);
+        }
+        return true;
+    }
+    void history_complete(bool good) {
+        HistoryAction action = history_action_; history_action_ = HistoryAction::none;
+        if (!good) { error("history-failed"); return; }
+        quiet_ = false;
+        if (!history_reply_) return;
+        if (action == HistoryAction::list) {
+            if (!history_revision_.number) { replies_.reply("CNTRL END"); return; }
+            char response[256], label[127], number[21]; hex_text(history_revision_.label, label);
+            revision_text(history_revision_.number, number);
+            std::snprintf(response, sizeof(response), "CNTRL REVISION %s %lu %u %s",
+                number, (unsigned long)history_revision_.modified,
+                unsigned(history_revision_.length), history_revision_.label[0] ? label : "-");
+            replies_.reply(response);
+        } else if (action == HistoryAction::download) {
+            length_ = history_revision_.length; download_ = 1; char response[80];
+            std::snprintf(response, sizeof(response), "CNTRL FILE %u %08lx", length_, (unsigned long)checksum(staging_, length_));
+            replies_.reply(response);
+        } else replies_.reply("CNTRL OK");
+    }
+    void archive_ready(uint32_t now) {
+        if (history_action_ == HistoryAction::save) {
+            if (!current_length_) { history_complete(false); return; }
+        } else {
+            generation_ = current_generation_; slot_ = 1 - current_slot_;
+            std::snprintf(record_name_, sizeof(record_name_), "%s", history_name_);
+            if (!current_length_ || (current_length_ == expected_ && !std::memcmp(staging_, delete_names_, expected_))) {
+                history_action_ = HistoryAction::none; begin_write(now); return;
+            }
+        }
+        history_phase_ = HistoryPhase::append;
+        revisions_.append(history_name_, history_label_, epoch_, delete_names_, current_length_);
+    }
+    void history_tick(uint32_t now) {
+        if (!quiet_ && uint32_t(now - history_progress_) >= 500) {
+            replies_.reply("CNTRL WAIT"); history_progress_ = now;
+        }
+        revisions_.tick(); if (revisions_.busy()) return;
+        if (history_phase_ == HistoryPhase::current) {
+            const Revision &info = revisions_.info(); Document candidate;
+            if (revisions_.success() && candidate.load(history_data_, info.length, hardware_)
+                && (!current_length_ || int32_t(uint32_t(info.number) - current_generation_) > 0)) {
+                current_generation_ = uint32_t(info.number); current_length_ = info.length; current_slot_ = history_slot_;
+                std::memcpy(delete_names_, history_data_, current_length_);
+            }
+            if (!history_slot_++) { revisions_.current(history_name_, 1, history_data_); return; }
+            if (history_action_ == HistoryAction::restore || history_action_ == HistoryAction::compare) {
+                history_phase_ = HistoryPhase::revision; revisions_.read(history_name_, history_number_, staging_);
+            } else archive_ready(now);
+        } else if (history_phase_ == HistoryPhase::revision) {
+            if (!revisions_.success()) {
+                if (history_action_ == HistoryAction::list) { history_revision_ = Revision(); history_complete(true); }
+                else history_complete(false);
+                return;
+            }
+            history_revision_ = revisions_.info();
+            if (history_action_ == HistoryAction::restore) {
+                Document candidate;
+                if (!candidate.load(staging_, history_revision_.length, hardware_) || !candidate.prepare_fonts(hardware_)) { history_complete(false); return; }
+                hardware_.finish_fonts(false);
+                expected_ = history_revision_.length; expected_crc_ = checksum(staging_, expected_);
+                archive_ready(now);
+            } else if (history_action_ == HistoryAction::compare) {
+                if (!compare_history()) { history_complete(false); return; }
+                history_complete(true);
+            } else history_complete(true);
+        } else if (history_phase_ == HistoryPhase::append) {
+            if (!revisions_.success()) { history_complete(false); return; }
+            if (history_action_ == HistoryAction::save) { history_revision_ = revisions_.info(); history_complete(true); }
+            else { history_action_ = HistoryAction::none; begin_write(now); }
+        } else history_complete(revisions_.success());
+    }
+    bool compare_history() {
+        Document old, current;
+        if (!old.load(staging_, history_revision_.length, hardware_) || !current.load(delete_names_, current_length_, hardware_)) return false;
+        unsigned &patches = comparison_.patches, &routes = comparison_.routes;
+        bool &settings = comparison_.settings, &formatting = comparison_.formatting;
+        patches = routes = 0;
+        for (unsigned i = 0; i < old.patches() || i < current.patches(); ++i)
+            if (i >= old.patches() || i >= current.patches() || std::memcmp(old.patch(i), current.patch(i), 76)) ++patches;
+        for (unsigned i = 0; i < old.instruments() || i < current.instruments(); ++i)
+            if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
+        settings = old.chord_ms() != current.chord_ms() || old.brightness() != current.brightness()
+            || old.splash() != current.splash() || old.usb_midi_interface() != current.usb_midi_interface()
+            || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();
+        auto names_end = [](const Document &d) {
+            unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + 4;
+            for (unsigned i = 0; i < d.patches() * 3; ++i) { unsigned n = u16(d.data() + cursor); cursor += 2 + (n == 65535 ? 0 : n); }
+            return cursor;
+        };
+        unsigned a = u32(old.data() + names_end(old) + 12), b = u32(current.data() + names_end(current) + 12);
+        formatting = a != b || std::memcmp(old.data() + old.length() - a, current.data() + current.length() - b, a);
+        unsigned old_names = names_end(old) - old.metadata(), current_names = names_end(current) - current.metadata();
+        formatting = formatting || old_names != current_names
+            || std::memcmp(old.data() + old.metadata(), current.data() + current.metadata(), old_names);
+        return true;
+    }
     void error(const char *message) {
         std::snprintf(last_error_, sizeof(last_error_), "%s", message);
         char response[128]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s", message);
@@ -249,6 +382,10 @@ private:
         selection_slot_ = int(slot); ++selection_generation_; return true;
     }
     bool start_write(uint32_t now) {
+        if (!expected_) return begin_write(now);
+        return begin_history(HistoryAction::archive, record_name_, 0);
+    }
+    bool begin_write(uint32_t now) {
         last_error_[0] = 0;
         std::memset(header_, 0, sizeof(header_)); std::memcpy(header_, "CNST", 4);
         put32(header_ + 4, generation_ + 1); put32(header_ + 8, expected_); put32(header_ + 12, expected_crc_);
@@ -354,6 +491,26 @@ private:
         }
         if (dirty_) { error("unsaved-edits"); return; }
         listing_ = false; download_ = 0;
+        uint64_t revision = 0; char number[21] = {}, operation[16] = {}, label_hex[127] = {}, label[64] = {};
+        if (std::sscanf(line_, "CNTRL HISTORY %15s %126s %20s%n", operation, hex, number, &end) == 3
+            && unhex_name(hex, name) && parse_revision(number, revision)) {
+            bool accepted = false;
+            if (!std::strcmp(operation, "SAVE")) {
+                int finish = 0;
+                if (!std::strcmp(line_ + end, " -")) label[0] = 0;
+                else if (std::sscanf(line_ + end, " %126s%n", label_hex, &finish) != 1 || line_[end + finish]
+                    || !unhex_name(label_hex, label)) { error("invalid-label"); return; }
+                accepted = history_save(name, label);
+            } else {
+                if (line_[end]) { error("invalid-command"); return; }
+                if (!std::strcmp(operation, "LIST")) accepted = history_next(name, revision);
+                else if (!std::strcmp(operation, "GET")) accepted = begin_history(HistoryAction::download, name, revision);
+                else if (!std::strcmp(operation, "RESTORE")) { accepted = history_restore(name, revision, now); quiet_ = false; }
+                else if (!std::strcmp(operation, "DELETE")) accepted = history_delete(name, revision);
+            }
+            if (!accepted) error("history-busy"); else { history_reply_ = true; quiet_ = false; }
+            return;
+        }
         if (std::sscanf(line_, "CNTRL TIME %lu%n", &epoch, &end) == 1 && end && !line_[end] && epoch && epoch <= 0xfffffffful) { epoch_ = uint32_t(epoch); clock_ = now; replies_.reply("CNTRL OK"); return; }
         if (std::sscanf(line_, "CNTRL SETUP SET %126s%n", hex, &end) == 1 && end && !line_[end] && unhex_name(hex, name)) {
             if (select(name)) replies_.reply("CNTRL OK"); else error("selection-failed"); return;

@@ -624,3 +624,40 @@ runtime dependency on the tester. The generic implementation and verification
 contract is in [the module plan](../../../../../plan/midi-interface.md).
 This module has not been flashed; physical forwarding and UI checks remain
 pending.
+
+## Setup revisions
+
+Revision records live at `/cntrl/history/SETUP/REVISION/0.bin`, with revision
+numbers encoded as 16 hexadecimal digits. The record contains the label,
+timestamp, complete setup, checksums and completion marker. Deleted record files
+leave their directories to reserve numbers. These directories are separate from
+`/cntrl/setups`, so history does not enter the performance setup catalogue.
+See [revision history](../../../../../doc/setup-revision-history.md) for commands
+and pedal controls. This implementation was built and tested without flashing.
+
+The cooperative history follow-up was flashed with the running upload helper on
+2026-10-27. Combined image SHA-256:
+`2c564a6b7268116238e8ef1fc9369cbaf864a290034ba5cc92c9d99d05a01aab`.
+The first upload reported a USB write error; the identical verified image
+succeeded on retry, resetting to stock firmware. Before flashing, pman was
+selected and USB reported `CNTRL READY 14 34597 488beaf6`; its source was backed
+up. Post-A+F verification and physical history latency measurements remain pending.
+History I/O now yields between blocks and directory entries. The native budget
+test uses a 64 KiB document and over 2,000 revision entries. Individual SD calls
+still require physical latency qualification.
+
+Post-A+F verification confirmed the unchanged pman selection and checksum but
+exposed `invalid-command` for HISTORY LIST. The target nano C library does not
+support the long-long scanf conversion used for revision numbers. Revision wire
+numbers now use explicit bounded decimal parsing/formatting, and directory names
+use two 32-bit hexadecimal halves. Native boundary and protocol tests pass.
+The corrected combined image was flashed through upload_helper, SHA-256
+`02766ccbb3922bbf623862a267c9aae233475c7377eae8672b8cffc543f28360`.
+Upload succeeded after the initial USB write error and retry. The pedal reset to
+stock firmware; the corrected live history-command check awaits A+F entry.
+
+On 2026-10-28, after A+F entry, the corrected firmware reported
+`CNTRL READY 14 34597 488beaf6` with pman still selected. The host history-list
+command completed successfully with no revisions listed, confirming that the
+revision-number parser accepts the live request. This was a read-only check;
+physical snapshot/restore behavior and MIDI latency remain unqualified.

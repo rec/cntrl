@@ -239,7 +239,37 @@ class Card : public cntrl::SetupStorage {
 public:
     bool ready = false;
     bool available() const override { return ready && !SD.sdfs.card()->errorCode(); }
+    void choose_revision(const char *name, uint64_t number) override {
+        std::snprintf(directory_, sizeof(directory_), "/cntrl/history/%s/%08lx%08lx", name, (unsigned long)(number >> 32), (unsigned long)(number & 0xffffffff));
+        revision_ = true;
+    }
+    void revision_scan(const char *name, uint64_t before, bool records_only) override {
+        char path[96]; std::snprintf(path, sizeof(path), "/cntrl/history/%s", name);
+        history_directory_.close(); history_directory_ = SD.sdfs.open(path, O_RDONLY);
+        history_before_ = before; history_records_ = records_only;
+    }
+    bool revision_scan_step(uint64_t &best) override {
+        FsFile entry; char candidate[32];
+        if (!history_directory_ || !entry.openNext(&history_directory_, O_RDONLY)) {
+            history_directory_.close(); return true;
+        }
+        if (entry.isDirectory() && entry.getName(candidate, sizeof(candidate)) && std::strlen(candidate) == 16) {
+            char *end; uint64_t n = std::strtoull(candidate, &end, 16);
+            if (!*end && n < history_before_ && n > best) {
+                bool record = true;
+                if (history_records_) { FsFile file; record = file.open(&entry, "0.bin", O_RDONLY) && file.size() >= 208; }
+                if (record) best = n;
+            }
+        }
+        entry.close(); return false;
+    }
+    bool remove_revision(const char *name, uint64_t number) override {
+        choose_revision(name, number); char path[144]; filename(0, path);
+        if (SD.sdfs.exists(path) && !SD.sdfs.remove(path)) return false;
+        return true; // Keep the revision number reserved after deletion.
+    }
     void choose(const char *name) override {
+        revision_ = false;
         std::snprintf(directory_, sizeof(directory_), name[0] ? "/cntrl/setups/%s" : "/cntrl/selection", name);
     }
     bool next(const char *after, char *name) override {
@@ -258,21 +288,21 @@ public:
     }
     unsigned size(unsigned slot) override {
         if (!ready) return 0;
-        char path[112]; filename(slot, path);
+        char path[144]; filename(slot, path);
         auto file = SD.sdfs.open(path, O_RDONLY);
         return file ? unsigned(file.size()) : 0;
     }
     bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned length) override {
         if (!ready) return false;
-        char path[112]; filename(slot, path);
+        char path[144]; filename(slot, path);
         auto file = SD.sdfs.open(path, O_RDONLY);
         return file && file.seekSet(offset) && file.read(data, length) == int(length);
     }
     bool begin(unsigned slot) override {
         if (!ready) return false;
         if (!SD.sdfs.exists(directory_) && !SD.sdfs.mkdir(directory_, true)) return false;
-        char path[112]; filename(slot, path);
-        file_ = SD.sdfs.open(path, O_RDWR | O_CREAT | O_TRUNC);
+        char path[144]; filename(slot, path);
+        file_ = SD.sdfs.open(path, O_RDWR | O_CREAT | (revision_ ? O_EXCL : O_TRUNC));
         if (file_) return true;
         file_.close();
         return false;
@@ -287,9 +317,12 @@ public:
         return synced; // Documents also reopens and verifies all bytes.
     }
 private:
-    FsFile file_;
-    char directory_[96] = {};
-    void filename(unsigned slot, char *path) const { std::snprintf(path, 112, "%s/%u.bin", directory_, slot); }
+    FsFile file_, history_directory_;
+    uint64_t history_before_ = 0;
+    bool history_records_ = false;
+    bool revision_ = false;
+    char directory_[128] = {};
+    void filename(unsigned slot, char *path) const { std::snprintf(path, 144, "%s/%u.bin", directory_, slot); }
 };
 
 Board board;

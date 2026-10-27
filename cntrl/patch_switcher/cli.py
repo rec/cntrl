@@ -12,7 +12,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import compiler, data_files, models, resolved, transport
+from . import compiler, data_files, history, models, resolved, transport
 
 
 class Sources(BaseModel, frozen=True):
@@ -79,7 +79,8 @@ class Download(BaseModel, frozen=True):
 
 class Setup(BaseModel, frozen=True):
     command: (
-        Annotated[Copy, tyro.conf.subcommand(name='copy')]
+        Annotated[history.History, tyro.conf.subcommand(name='history')]
+        | Annotated[Copy, tyro.conf.subcommand(name='copy')]
         | Annotated[Set, tyro.conf.subcommand(name='set')]
         | Annotated[List, tyro.conf.subcommand(name='list')]
         | Annotated[Delete, tyro.conf.subcommand(name='del')]
@@ -152,7 +153,12 @@ def compile_inputs(
     return result
 
 
-def run_setup(command: Copy | Set | List | Delete | Rotate | Download) -> None:
+def run_setup(
+    command: Copy | Set | List | Delete | Rotate | Download | history.History,
+) -> None:
+    if isinstance(command, history.History):
+        history.run(command)
+        return
     assets: dict[str, dict[int, bytes]] = {}
     compiled = compile_inputs(command, assets) if isinstance(command, Copy) else {}
     with transport.SerialConnection(command.port) as connection:

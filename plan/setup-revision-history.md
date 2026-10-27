@@ -1,6 +1,8 @@
 # Setup revision history
 
-Status: proposed, not implemented.
+Status: implemented with cooperative history jobs; flashed, physical timing
+qualification pending. See
+[usage and implementation limits](../doc/setup-revision-history.md).
 
 ## Goal
 
@@ -163,4 +165,4 @@ required. Do not introduce firmware migration machinery for this feature.
 
 ## Additional work beyond the prompt
 
-None. This document plans the feature; it does not change code or installed firmware.
+None. Implementation was explicitly requested without flashing.
