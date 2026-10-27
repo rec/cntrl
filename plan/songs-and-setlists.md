@@ -1,7 +1,10 @@
 # Songs and setlists
 
-Status: proposed behavior, not implemented. This develops the performance
-organization ideas in [features.md](features.md).
+Status: the first simple-song implementation is on branch
+`codex/songs-and-setlists`, with inline selections and references to other setup
+documents. Host tests and the combined firmware build pass; physical
+qualification is pending. See the [controls, file format and limits](../cntrl/maker/morningstar/mc/songs-and-setlists.md).
+This develops the performance organization ideas in [features.md](features.md).
 
 ## Design priority
 
@@ -24,6 +27,11 @@ editing before expanding section behavior.
   appear in several setlists or more than once in one setlist.
 - Removing a setlist entry removes that occurrence only. It does not delete the
   library song or affect its occurrences in other setlists.
+
+A song may contain its selection inline or reference a selection in another
+setup document. Inline selections remain independent of later source edits.
+References resolve when recalled; missing or ambiguous sources report an error
+without sending MIDI or advancing the setlist.
 
 Keep library editing and setlist editing visibly distinct. An action called
 “Remove from setlist” must never delete a song from the library.
@@ -121,7 +129,9 @@ Persist confirmed setlist edits automatically on the pedal. Do not make performe
 remember a separate save step. Give brief save feedback; if saving fails, report
 that the edit was not saved and preserve the last successfully saved setlist.
 
-Store songs and setlists as user data, independently of firmware updates. Reuse
+Store songs and setlists as user data on SD, independently of firmware updates.
+Load records and entries on demand, with bounded working memory and no fixed
+song, setlist or entry-count ceilings. Reuse
 the existing setup storage and transfer approach where appropriate. A completed
 edit must survive a restart, and an interrupted write must not destroy the last
 saved setlist. Persisting edits does not imply automatically recalling a sound

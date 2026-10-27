@@ -112,6 +112,12 @@ public:
         render();
     }
     unsigned depth() const { return depth_; }
+    unsigned selected_patch() const { return candidate(); }
+    void external_selection() {
+        cancel_gesture(); depth_ = 0; center_ = -1;
+        for (auto &p : current_) p = -1;
+        for (auto &p : last_sent_) p = -1;
+    }
 private:
     struct Action { uint16_t patch; int previous; };
     Hardware &hardware_;

@@ -11,6 +11,8 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/setup_ui.h>
 #include <cntrl/midi_bridge.h>
 #include <cntrl/module_menu.h>
+#include <cntrl/songs_ui.h>
+#include <cntrl/songs_transfer.h>
 #if CNTRL_MIDI_INTERFACE
 #include <cntrl/midi_interface.h>
 #endif
@@ -342,7 +344,63 @@ cntrl::Controller controller(board);
 // Keep document/transfer buffers out of RAM1's code and stack budget.
 DMAMEM cntrl::Documents documents(card, board, controller, board);
 cntrl::SetupUi setup_ui(documents, board);
-enum ModuleIndex { setups_module,
+class SongFiles : public cntrl::Storage {
+public:
+    unsigned size(unsigned slot) override { return open(slot) ? unsigned(readers_[slot].size()) : 0; }
+    bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned n) override {
+        return open(slot) && readers_[slot].seekSet(offset) && readers_[slot].read(data, n) == int(n);
+    }
+    bool begin(unsigned slot) override {
+        if (!card.ready || (!SD.sdfs.exists("/cntrl/songs") && !SD.sdfs.mkdir("/cntrl/songs", true))) return false;
+        readers_[slot].close();
+        char path[40]; filename(slot, path); writer_ = SD.sdfs.open(path, O_RDWR | O_CREAT | O_TRUNC); return bool(writer_);
+    }
+    bool write(const uint8_t *data, unsigned n) override { return writer_ && writer_.write(data, n) == n; }
+    bool finish() override { bool good = writer_ && writer_.sync(); writer_.close(); return good; }
+private:
+    FsFile writer_, readers_[4];
+    static void filename(unsigned slot, char *path) { std::snprintf(path, 40, "/cntrl/songs/%u.bin", slot); }
+    bool open(unsigned slot) {
+        if (!card.ready) return false;
+        if (!readers_[slot]) { char path[40]; filename(slot, path); readers_[slot] = SD.sdfs.open(path, O_RDONLY); }
+        return bool(readers_[slot]);
+    }
+};
+class SongSources : public cntrl::SongResolver, public cntrl::SongCapture {
+public:
+    void recalled() override { controller.external_selection(); }
+    bool capture(cntrl::Song &song, bool reference) override {
+        const auto &d = documents.document(); if (!d.valid() || documents.busy()) return false;
+        unsigned index = controller.selected_patch(); song.patch = cntrl::song_patch(d, index);
+        const uint8_t *p = d.patch(index);
+        std::snprintf(song.name, 64, "%s", reinterpret_cast<const char *>(p + 12));
+        if (reference) {
+            std::snprintf(song.document, 64, "%s", documents.selected());
+            std::memcpy(song.instrument, d.instrument(cntrl::u16(p)), 32); song.bank = cntrl::u32(d.bank(index));
+        }
+        return true;
+    }
+    bool resolve(const cntrl::Song &song, cntrl::SongPatch &patch) override {
+        cntrl::Document d; if (!documents.reference_document(song.document, d)) return false;
+        int found = -1;
+        for (unsigned i = 0; i < d.patches(); ++i) {
+            const uint8_t *p = d.patch(i);
+            if (!std::strcmp(song.instrument, reinterpret_cast<const char *>(d.instrument(cntrl::u16(p))))
+                && p[4] == song.patch.program && cntrl::u32(d.bank(i)) == song.bank) {
+                auto value = cntrl::song_patch(d, i);
+                if (found >= 0 && std::memcmp(&patch, &value, sizeof(value))) return false;
+                found = int(i); patch = value;
+            }
+        }
+        return found >= 0;
+    }
+};
+SongFiles song_files;
+SongSources song_sources;
+DMAMEM cntrl::Songs songs(song_files, board, song_sources);
+DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
+cntrl::SongsUi songs_ui(songs, board, song_sources);
+enum ModuleIndex { setups_module, songs_module,
 #if CNTRL_ORIGINAL_FIRMWARE
     original_firmware_module,
 #endif
@@ -353,7 +411,7 @@ enum ModuleIndex { setups_module,
     midi_interface_module,
 #endif
 };
-const char *const module_names[] = {"Setups",
+const char *const module_names[] = {"Setups", "Songs and setlists",
 #if CNTRL_ORIGINAL_FIRMWARE
     "Original firmware",
 #endif
@@ -366,7 +424,7 @@ const char *const module_names[] = {"Setups",
 };
 #if CNTRL_ORIGINAL_FIRMWARE
 bool start_original_firmware() {
-    if (documents.busy() || documents.dirty() || !board.output_idle()) return false;
+    if (documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
     auto words = reinterpret_cast<const volatile uint32_t *>(0x60084000);
     auto selection = inspect_boot_selection(words);
     if (!can_enter_stock(selection)) return false;
@@ -384,7 +442,7 @@ OriginalFirmware original_firmware(board, start_original_firmware);
 cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof(module_names[0]));
 bool module_controls_locked = false;
 bool feature_open() {
-    return module_menu.open() || setup_ui.open()
+    return module_menu.open() || setup_ui.open() || songs_ui.open()
 #if CNTRL_ORIGINAL_FIRMWARE
         || original_firmware.open()
 #endif
@@ -439,7 +497,13 @@ void storage_info(bool scan) {
 }
 
 void midi_status(unsigned route) { board.midi_status(route); }
-bool font_command(const char *line) { return font_files.command(line, board); }
+bool font_command(const char *line) {
+    if (!std::strncmp(line, "CNTRL SONGS ", 12)) {
+        if (songs_ui.open()) { board.reply("CNTRL ERROR close-song-editor"); return true; }
+        return songs_transfer.command(line, millis());
+    }
+    return font_files.command(line, board);
+}
 cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, font_command);
 ButtonState buttons[6];
 uint32_t last_scan = 0;
@@ -455,6 +519,7 @@ void initialize_target() {
     splash_card.ready = card.ready;
     splash_assets.boot();
     documents.boot();
+    if (card.ready && !songs.boot()) board.error("Song storage invalid");
 }
 
 void poll_target() {
@@ -472,6 +537,7 @@ void poll_target() {
         if (consumed) controller.cancel_gesture();
         setup_ui.poll(pressed);
         module_menu.poll(pressed);
+        songs_ui.poll(pressed);
         if (!pressed) module_controls_locked = false;
         if (!consumed) {
             for (unsigned i = 0; i < 6; ++i) {
@@ -479,6 +545,10 @@ void poll_target() {
                 if (module_menu.open()) {
                     int selected = module_menu.button(i, events[i] & press_event);
                     if (selected == -2) { documents.redraw(); module_controls_locked = true; }
+                    else if (selected == songs_module) {
+                        if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) { songs_ui.enter(); module_controls_locked = true; }
+                        else module_menu.enter();
+                    }
                     else if (selected == setups_module) {
                         if (documents.busy()) module_menu.enter();
                         else { setup_ui.enter(); module_controls_locked = true; }
@@ -528,6 +598,9 @@ void poll_target() {
                         else if (i == 5) { original_firmware.leave(); module_menu.enter(); module_controls_locked = true; }
                     }
 #endif
+                } else if (songs_ui.open()) {
+                    if (events[i] & press_event) songs_ui.button(i, true);
+                    if (!songs_ui.open()) { documents.redraw(); module_controls_locked = true; }
                 } else if (setup_ui.open()) {
                     if (!documents.busy()) {
                         if (events[i] & press_event) setup_ui.button(i, true, now);
@@ -546,6 +619,7 @@ void poll_target() {
     for (unsigned i = 0; i < 256 && Serial.available() && serial_router.accepts_input(); ++i)
         serial_router.receive(Serial.read(), now);
     serial_router.poll(now);
+    songs_transfer.poll(now);
     board.poll();
     board.display(now, documents.busy() || feature_open());
 }

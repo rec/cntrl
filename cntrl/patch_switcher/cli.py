@@ -12,7 +12,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import compiler, data_files, history, models, resolved, transport
+from . import compiler, data_files, history, models, resolved, songs, transport
 
 
 class Sources(BaseModel, frozen=True):
@@ -86,6 +86,13 @@ class Setup(BaseModel, frozen=True):
         | Annotated[Delete, tyro.conf.subcommand(name='del')]
         | Annotated[Rotate, tyro.conf.subcommand(name='rotate')]
         | Annotated[Download, tyro.conf.subcommand(name='download')]
+    )
+
+
+class Songs(BaseModel, frozen=True):
+    command: (
+        Annotated[songs.Copy, tyro.conf.subcommand(name='copy')]
+        | Annotated[songs.Download, tyro.conf.subcommand(name='download')]
     )
 
 
@@ -324,7 +331,8 @@ def main() -> None:
     command = tyro.cli(
         Annotated[Compile, tyro.conf.subcommand(name='compile')]
         | Annotated[Setup, tyro.conf.subcommand(name='setup')]
-        | Annotated[Status, tyro.conf.subcommand(name='status')],
+        | Annotated[Status, tyro.conf.subcommand(name='status')]
+        | Annotated[Songs, tyro.conf.subcommand(name='songs')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
@@ -351,6 +359,8 @@ def main() -> None:
                 alias = data[offset : offset + 32].split(b'\0')[0].decode('ascii')
                 route = data[offset + 32 : offset + 64].split(b'\0')[0].decode('ascii')
                 print(f'  {alias}: channel {data[offset + 64] + 1} to {route}')
+        elif isinstance(command, Songs):
+            songs.run(command.command)
         elif isinstance(command, Setup):
             run_setup(command.command)
         else:

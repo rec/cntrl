@@ -29,6 +29,9 @@ public:
         }
     }
     const Document &document() const { return document_; }
+    bool reference_document(const char *name, Document &candidate) {
+        return !busy() && !dirty_ && load(name) && candidate.load(staging_, length_, hardware_);
+    }
     const char *selected() const { return selected_; }
     bool busy() const { return history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
     bool dirty() const { return dirty_; }
