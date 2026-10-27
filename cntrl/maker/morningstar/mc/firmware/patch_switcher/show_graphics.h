@@ -1,6 +1,7 @@
 #pragma once
 #include "graphics.h"
 #include "bitmap_fonts.h"
+#include "font_asset.h"
 #include <st7735_t3_font_Arial.h>
 #include <st7735_t3_font_ComicSansMS.h>
 #include <cntrl/hardware.h>
@@ -42,12 +43,14 @@ public:
         setClipRect();
         fillScreen(settings.background);
         setClipRect(settings.pad, settings.pad, 160 - 2 * settings.pad, 128 - 2 * settings.pad);
-        select_font(settings.font, settings.size);
+        select_font(settings.font, settings.size, settings.asset);
         setTextColor(settings.foreground);
     }
-    void select_font(unsigned face, unsigned size) {
+    void select_font(unsigned face, unsigned size, uint32_t asset = 0) {
         setTextSize(face == 0 ? size / 8 : 1);
         if (face == 0) setFont();
-        else setFont(*native_font(face, size));
+        else if (face == 255) {
+            setFont(*font_assets::cache.get(asset, size));
+        } else setFont(*native_font(face, size));
     }
 };

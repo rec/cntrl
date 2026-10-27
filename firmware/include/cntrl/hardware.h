@@ -13,6 +13,7 @@ constexpr unsigned max_lines = 16;
 struct ScreenGraphics {
     uint8_t font = 0, size = 8, pad = 4, reserved = 0;
     uint16_t foreground = 0, background = 0xffff, line_height = 8, top = 0;
+    uint32_t asset = 0;
 };
 
 struct TextLine {
@@ -36,6 +37,10 @@ struct Hardware {
     virtual bool output_idle() const { return true; }
     virtual bool supports(const char *output) const = 0;
     virtual bool supports_font(unsigned font, unsigned size) const = 0;
+    virtual bool supports_font_asset(uint32_t, unsigned) const { return false; }
+    virtual void begin_fonts() {}
+    virtual bool stage_font(uint32_t, unsigned) { return false; }
+    virtual void finish_fonts(bool) {}
     virtual unsigned display_width() const = 0;
     virtual unsigned display_height() const = 0;
     virtual void show(unsigned pane, const Pane &content) = 0;

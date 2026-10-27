@@ -146,6 +146,7 @@ class FontFace(BaseModel, frozen=True):
     name: str
     id: int
     sizes: dict[units.Pixels, FontMetrics]
+    asset: int = 0
 
 
 class Show(BaseModel, frozen=True):
@@ -153,6 +154,7 @@ class Show(BaseModel, frozen=True):
     instruments: dict[str, object]
     patches: dict[str, object]
     definitions: Definitions | None = None
+    fonts: dict[str, str] = Field(default_factory=dict)
     take_first_match: Annotated[bool, Field(strict=True)] = False
     chord_ms: Annotated[
         int, Field(strict=True, ge=1, le=65535), units.unit_validator('millisecond')

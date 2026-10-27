@@ -165,6 +165,16 @@ public:
         const uint8_t *p = data_ + 28 + slot * 16;
         return read_graphics(p);
     }
+    bool prepare_fonts(Hardware &hardware) const {
+        hardware.begin_fonts();
+        for (unsigned i = 0; i < 3u + u16(data_ + styles_ - 12); ++i) {
+            const uint8_t *p = i < 3 ? data_ + 28 + i * 16 : data_ + styles_ + (i - 3) * 16;
+            if (p[0] == 255 && !hardware.stage_font(u32(p + 12), p[1])) {
+                hardware.finish_fonts(false); return false;
+            }
+        }
+        return true;
+    }
     void page(Pane &view, unsigned index, unsigned slot, bool already_sent) const {
         unsigned page = u16(patch(index) + 76 + slot * 2);
         const uint8_t *p = data_ + pages_;
@@ -188,13 +198,14 @@ public:
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
     static bool graphics_valid(const uint8_t *p, const Hardware &hardware) {
-        return hardware.supports_font(p[0], p[1]) && !p[3] && !u32(p + 12)
+        return (p[0] == 255 ? u32(p + 12) && hardware.supports_font_asset(u32(p + 12), p[1])
+                           : !u32(p + 12) && hardware.supports_font(p[0], p[1])) && !p[3]
             && 2u * p[2] < hardware.display_width()
             && 2u * p[2] + u16(p + 8) <= hardware.display_height()
             && u16(p + 8) && u16(p + 10) < u16(p + 8);
     }
     static ScreenGraphics read_graphics(const uint8_t *p) {
-        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10)};
+        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u32(p + 12)};
     }
     void field_text(char *text, unsigned size, unsigned code, unsigned index, unsigned literal) const {
         const uint8_t *p = patch(index);

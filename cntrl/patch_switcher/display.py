@@ -126,6 +126,7 @@ def compile_display(
         packed = graphics.SCREEN.pack(
             face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top
         )
+        packed = packed[:12] + struct.pack('<I', face.asset)
         if packed not in styles:
             styles.append(packed)
         left, width = graphics.bounds(text, metrics)
@@ -152,7 +153,8 @@ def compile_display(
         window_records.append(
             graphics.SCREEN.pack(
                 face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top
-            )
+            )[:12]
+            + struct.pack('<I', face.asset)
         )
     pages: list[bytes] = []
     references: list[list[int]] = []
@@ -182,6 +184,8 @@ def compile_display(
         for k, v in show.model_dump(exclude_none=True).items()
         if k in SOURCE_FIELDS
     }
+    if show.fonts:
+        source['fonts'] = show.fonts
     source['patch_styles'] = {
         str(i): p.style.model_dump(exclude_none=True)
         for i, p in enumerate(patches)

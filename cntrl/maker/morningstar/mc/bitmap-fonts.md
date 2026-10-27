@@ -33,6 +33,61 @@ included [Caveat OFL](../../../fonts/caveat/OFL.txt) and
 [Courier Prime OFL](../../../fonts/courier-prime/OFL.txt), respectively. Neither
 included license declares a Reserved Font Name.
 
+## Fonts supplied by a show
+
+A show can declare local TrueType or OpenType files and select them with the
+existing style settings:
+
+```toml
+[fonts]
+Handwriting = "fonts/MyHandwriting.ttf"
+
+[style]
+font_name = "Handwriting"
+```
+
+Paths resolve relative to the TOML file containing the declaration, including
+when combining several documents with `+`. Names must differ from built-in font
+names. A declaration can be selected anywhere `font_name` is supported, including
+page and line styles.
+
+The normal `cntrl setup copy` command renders these fonts on the development
+machine using Pillow/FreeType. It uploads the resulting bitmap assets to
+`/cntrl/fonts/` on the pedal's SD card before copying the show. Fonts are rendered
+at the same eight sizes and for the same printable ASCII characters described
+above. Existing automatic fitting chooses the sizes used by each line. Colors
+are still applied by the pedal, and glyph backgrounds remain transparent.
+
+Font changes use normal SD uploads once the supporting firmware is installed.
+They do not erase or program the firmware flash. Identical assets are shared
+between shows and are read back for verification without being rewritten.
+The SD card itself also uses flash storage; this feature avoids firmware writes,
+not all flash writes.
+
+`cntrl compile --output PATH` also writes assets under `fonts/` beside its binary
+output. `cntrl setup download` downloads the show's bitmap assets beside its TOML,
+with declarations pointing to those `.cfont` files. Downloaded shows can be edited
+and recompiled without the original outline fonts because all eight rendered
+sizes are retained. The original TTF/OTF files are not stored on the pedal.
+
+Only sizes referenced by the active show are loaded into RAM, before activation.
+Rendering does not read the SD card. The compiler and pedal enforce a maximum of
+32 distinct asset/size pairs and 96 KiB of loaded bitmap data. A single SD asset
+is limited to 256 KiB. Candidate fonts are loaded separately before replacing the
+active fonts, so a failed load preserves the current show. Missing assets prevent
+show upload; corrupt pixel data or insufficient memory prevent activation.
+Unused font files remain on SD when a show is deleted.
+
+The `.cfont` format begins with `CFN1` and a little-endian 32-bit size count. Each
+size has a 23-byte descriptor: nominal size, the existing 14 font descriptor
+bytes, and little-endian 32-bit index/data lengths, followed by those two byte
+arrays. Asset names are their eight-digit CRC32. CRC32 is an integrity check;
+byte-for-byte read-back also detects a collision with an existing asset. Assets
+are validated in a temporary file before being renamed into place.
+Show-format 14 display records use font ID 255 and the final four bytes for the
+asset CRC32; built-in font records retain zero in those bytes. Older firmware
+rejects asset references and needs a firmware update before using custom fonts.
+
 ## Regenerating
 
 Run from the repository root, using the locked Pillow build dependency:
@@ -135,3 +190,23 @@ After entering cntrl with A+F, the revised `font-demo` was copied with
 byte-for-byte read-back verification and selected. The pedal reports
 `CNTRL READY 11 1340 1dcf95b1`; its catalogue still includes pman. No MIDI send
 was requested. Physical appearance of the new samples awaits confirmation.
+
+### Custom SD font assets, 2026-10-27
+
+All 341 Python tests, both native firmware suites, Ruff, formatting, ty and
+pyupgrade checks passed. New sanitizer-enabled host tests exercise the real C++
+SD font receiver and document activation with a host filesystem adapter. They
+cover missing and malformed assets, byte-for-byte transfer, unchanged-file reuse,
+interrupted uploads, switching between built-in and custom fonts, preservation
+of active fonts after a failed load, and the compiler's RAM budget check.
+
+The combined stock/cntrl image built successfully with SHA-256
+`ba2bda4ba4b6e87a65a893d40ee8eb8a268d388c3e5a01fe08a228755e632dc3`.
+RAM1 leaves 92,384 bytes for stack/local variables and RAM2 leaves 309,216 bytes
+for allocation before custom fonts are loaded. The 96 KiB font budget applies
+separately to active and candidate font data while switching shows.
+
+This image was not flashed. A read-only device query returned
+`CNTRL READY 11 34583 43363d4a`, while the current source uses show format 14.
+Deployment therefore also requires recompiling the pedal's existing setups.
+Physical rendering and SD-card latency have not been verified for custom assets.

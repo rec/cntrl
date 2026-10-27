@@ -42,8 +42,11 @@ public:
     }
     bool select(const char *name) {
         if (busy() || dirty_ || !hardware_.output_idle() || !setup_name(name) || !load(name)) return false;
+        Document candidate;
+        if (!candidate.load(staging_, length_, hardware_) || !candidate.prepare_fonts(hardware_)) return false;
         char canonical[64]; std::snprintf(canonical, sizeof(canonical), "%s", record_name_);
-        if (std::strcmp(selected_, canonical) && !persist_selection(canonical)) return false;
+        if (std::strcmp(selected_, canonical) && !persist_selection(canonical)) { hardware_.finish_fonts(false); return false; }
+        hardware_.finish_fonts(true);
         std::snprintf(selected_, sizeof(selected_), "%s", canonical);
         activate(); return true;
     }
@@ -151,7 +154,11 @@ public:
         char name[64]; std::snprintf(name, sizeof(name), "%s", record_name_);
         uint32_t generation = generation_ + 1;
         if (!done || !load(name) || generation_ != generation || length_ != expected_ || checksum(staging_, length_) != expected_crc_) { error("storage-verify"); return; }
-        if (!name_compare(name, selected_)) activate();
+        if (!name_compare(name, selected_)) {
+            Document candidate;
+            if (!candidate.load(staging_, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { error("font-load"); return; }
+            hardware_.finish_fonts(true); activate();
+        }
         if (!quiet_) replies_.reply("CNTRL OK");
         quiet_ = false;
     }
@@ -176,6 +183,7 @@ private:
     }
     void empty(bool startup = false) {
         document_ = Document(); controller_.deactivate();
+        hardware_.begin_fonts(); hardware_.finish_fonts(true);
         hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
         hardware_.set_usb_midi_interface(false);
         Pane view; view.lines[1].centered = true;
@@ -298,6 +306,8 @@ private:
         if (deleting_) { erase_batch(); return; }
         Document candidate;
         if (!candidate.load(staging_, expected_, hardware_)) { error("invalid-document"); return; }
+        if (!candidate.prepare_fonts(hardware_)) { error("font-load"); return; }
+        hardware_.finish_fonts(false);
         start_write(now);
     }
     void listing() {

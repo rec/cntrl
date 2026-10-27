@@ -62,7 +62,7 @@ public:
             const auto &settings = line.graphics;
             if (letter_ < length) {
                 if (!letter_) {
-                    graphics_.select_font(settings.font, settings.size);
+                    graphics_.select_font(settings.font, settings.size, settings.asset);
                     // Background bands are already painted. Preserve neighboring
                     // glyphs where italic bearings overlap their advances.
                     graphics_.setTextColor(settings.foreground);

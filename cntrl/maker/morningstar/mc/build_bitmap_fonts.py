@@ -24,7 +24,7 @@ class Bits:
             self.length += 1
 
 
-def bitmap_font(path: Path, name: str, size: int) -> str:
+def bitmap_data(path: Path, size: int) -> tuple[bytes, bytes, list[int]]:
     font = ImageFont.truetype(path, size, layout_engine=ImageFont.Layout.BASIC)
     cap = -font.getbbox('H', anchor='ls')[1]
     glyphs = [font.getmask2(chr(c), mode='1', anchor='ls') for c in range(32, 127)]
@@ -61,9 +61,18 @@ def bitmap_font(path: Path, name: str, size: int) -> str:
     index = Bits()
     for o in offsets_bytes:
         index.append(o, index_bits)
+    line = max(cap, max(cap + o[1] + m.size[1] for m, o in glyphs))
+    numbers = [
+        int(n) for n in [1, 0, 32, 126, 0, 0, index_bits, *widths_bits, line, cap]
+    ]
+    return bytes(index.data), bytes(data), numbers
+
+
+def bitmap_font(path: Path, name: str, size: int) -> str:
+    index, data, numbers = bitmap_data(path, size)
     symbol = f'{name}_{size}'
     arrays = ''
-    for n, d in [('index', index.data), ('data', data)]:
+    for n, d in [('index', index), ('data', data)]:
         rows = [
             '    ' + ', '.join(f'0x{v:02x}' for v in d[i : i + 16]) + ','
             for i in range(0, len(d), 16)
@@ -73,8 +82,6 @@ def bitmap_font(path: Path, name: str, size: int) -> str:
             + '\n'.join(rows)
             + '\n};\n'
         )
-    line = max(cap, max(cap + o[1] + m.size[1] for m, o in glyphs))
-    numbers = [1, 0, 32, 126, 0, 0, index_bits, *widths_bits, line, cap]
     return (
         arrays
         + f'const ILI9341_t3_font_t {symbol} CNTRL_FONT_FLASH = {{\n'
