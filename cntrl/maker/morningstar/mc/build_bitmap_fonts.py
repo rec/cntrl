@@ -142,6 +142,24 @@ FAMILIES = [
         'metal-lord/MetalLord.otf',
         'Raymond Larabie / Typodermic. CC0 1.0: ../../../../../fonts/CC0-1.0.txt',
     ),
+    (
+        'CaveatBold',
+        'caveat/Caveat-Bold.ttf',
+        'Copyright 2014 The Caveat Project Authors.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/caveat/OFL.txt',
+    ),
+    (
+        'CourierPrime',
+        'courier-prime/CourierPrime-Regular.ttf',
+        'Copyright 2015 The Courier Prime Project Authors.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/courier-prime/OFL.txt',
+    ),
+    (
+        'CourierPrimeBold',
+        'courier-prime/CourierPrime-Bold.ttf',
+        'Copyright 2015 The Courier Prime Project Authors.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/courier-prime/OFL.txt',
+    ),
 ]
 
 

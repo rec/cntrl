@@ -21,16 +21,16 @@ program = 1
 display_name = 'Font demo'
 
 [pages.patch]
-fields = ['circuit_sample', 'still_sample', 'metal_sample']
+fields = ['handwriting_sample', 'courier_sample', 'courier_bold_sample']
 
-[parameters.circuit_sample]
-value = 'Circuit'
-style = {font_name = 'CircuitBold', foreground_color = '0x00FFFF', background_color = '0x000000'}
+[parameters.handwriting_sample]
+value = 'Caveat Bold'
+style = {font_name = 'CaveatBold', foreground_color = '0x00FFFF', background_color = '0x000000'}
 
-[parameters.still_sample]
-value = 'Still Time'
-style = {font_name = 'StillTime', foreground_color = '0xFFFF00', background_color = '0x000000'}
+[parameters.courier_sample]
+value = 'Courier'
+style = {font_name = 'CourierPrime', foreground_color = '0xFFFF00', background_color = '0x000000'}
 
-[parameters.metal_sample]
-value = 'Metal Lord'
-style = {font_name = 'MetalLord', foreground_color = '0xFF4040', background_color = '0x000000'}
+[parameters.courier_bold_sample]
+value = 'Courier'
+style = {font_name = 'CourierPrimeBold', foreground_color = '0xFF4040', background_color = '0x000000'}
