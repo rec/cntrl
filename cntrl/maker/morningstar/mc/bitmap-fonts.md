@@ -1,6 +1,6 @@
 # Bitmap display fonts
 
-The MC firmware includes four converted faces alongside classic, Arial and
+The MC firmware includes seven converted faces alongside classic, Arial and
 ComicSansMS:
 
 | Configuration name | Source | Face ID | License |
@@ -9,6 +9,9 @@ ComicSansMS:
 | `CircuitBold` | Orbitron Bold | 4 | SIL OFL 1.1 |
 | `StillTime` | Still Time | 5 | CC0 1.0 |
 | `MetalLord` | Metal Lord | 6 | CC0 1.0 |
+| `CaveatBold` | Caveat Bold | 7 | SIL OFL 1.1 |
+| `CourierPrime` | Courier Prime Regular | 8 | SIL OFL 1.1 |
+| `CourierPrimeBold` | Courier Prime Bold | 9 | SIL OFL 1.1 |
 
 Each face contains printable ASCII, characters 32 through 126, at nominal pixel
 sizes 12, 16, 20, 24, 28, 32, 40 and 48. Actual line heights depend on the face.
@@ -22,6 +25,13 @@ different names. Their font data remains under the [SIL OFL 1.1](../../../fonts/
 Still Time and Metal Lord are by Raymond Larabie / Typodermic and remain under
 [CC0 1.0](../../../fonts/CC0-1.0.txt). Source fonts, attribution and provenance
 are in [`cntrl/fonts`](../../../fonts).
+
+Caveat Bold is by the Caveat Project Authors, originally designed by Pablo
+Impallari. Courier Prime is by the Courier Prime Project Authors, designed by
+Alan Dague-Greene for Quote-Unquote Apps. Their bitmap data remains under the
+included [Caveat OFL](../../../fonts/caveat/OFL.txt) and
+[Courier Prime OFL](../../../fonts/courier-prime/OFL.txt), respectively. Neither
+included license declares a Reserved Font Name.
 
 ## Regenerating
 
@@ -39,15 +49,17 @@ glyph advances, bearings and line heights into the existing target description.
 Do not edit generated files directly. Font bytes and descriptors are placed in
 flash on the pedal. No outline rasterizer or Pillow dependency runs there.
 
-Tests compare all 3,040 generated glyphs with their source pixels and baseline
+Tests compare all 5,320 generated glyphs with their source pixels and baseline
 positions, check reproducible generated files and exported metrics, and verify
 that autoscaling finds the largest fitting size. Native tests cover the font
 registry; the ARM build checks integration with the real display library.
 
 ## Demo
 
-[`font-demo.toml`](font-demo.toml) displays CircuitBold in cyan, Still Time in
-yellow and Metal Lord in red, on three separately scaled lines. It disables
+[`font-demo.toml`](font-demo.toml) displays Caveat Bold in cyan, Courier Prime in
+yellow and Courier Prime Bold in red, on three separately scaled lines. Both
+Courier samples read `Courier` so their weights can be compared at the same size.
+It disables
 the screensaver and startup animation. Initially the candidate display shows
 the samples. It uses the normal performance controls; pressing C sends program
 1 on DIN MIDI channel 1, so viewing the demo does not require pressing C.
@@ -104,3 +116,18 @@ It passed the native tests and combined-image build checks and was flashed
 through the upload helper. The first USB write failed; after verifying HalfKay
 identity, the second attempt completed and stock firmware returned. Enter cntrl
 with A+F to check the saved demo and confirm the corrected appearance.
+
+### Caveat and Courier Prime additions
+
+Caveat Bold and both Courier Prime weights use the same conversion, metrics
+export and transparent rendering paths as the first four faces. Existing face
+IDs are unchanged. All 330 Python tests and native firmware tests passed, as
+did Ruff, formatting, ty, pyupgrade and combined-image build checks. The new
+font bytes and descriptors were verified in flash; stack and heap linker
+budgets remain 96,768 and 309,216 bytes.
+
+Combined firmware SHA-256:
+`39057d704478f0c42d16b80ce04f5cab0d346aef16c881dd0340bc9e61e11c0e`.
+The image was flashed through the upload helper after a USB write error and
+HalfKay identity verification before retrying. Stock firmware returned.
+The revised demo compiles to 1,340 bytes and uses size 32 for all three samples.

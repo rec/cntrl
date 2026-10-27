@@ -36,7 +36,18 @@ def test_page_lines_select_different_native_font_families() -> None:
 
 
 @pytest.mark.parametrize(
-    'name', ['Arial', 'ComicSansMS', 'Circuit', 'CircuitBold', 'StillTime', 'MetalLord']
+    'name',
+    [
+        'Arial',
+        'ComicSansMS',
+        'Circuit',
+        'CircuitBold',
+        'StillTime',
+        'MetalLord',
+        'CaveatBold',
+        'CourierPrime',
+        'CourierPrimeBold',
+    ],
 )
 def test_native_autoscale_uses_largest_fitting_size_per_label(name: str) -> None:
     target = models.Target.model_validate(
