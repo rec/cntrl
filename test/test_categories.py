@@ -137,17 +137,32 @@ def test_program_table_categories_merge_as_a_union(
     assert exported.definitions.programs[0].categories == ['sax', 'whole-system']
 
 
+@pytest.mark.parametrize('icon', ['images/patch.png', ''])
 def test_icons_preserve_explicit_owners_through_recompilation(
-    show: dict[str, object], target: models.Target
+    show: dict[str, object], target: models.Target, icon: str
 ) -> None:
     show = models.Show.model_validate(show).model_dump(exclude_none=True)
-    show['categories']['sax']['icon'] = 'images/sax.png'
-    show['definitions']['programs'][0]['icon'] = 'images/program.png'
-    show['patches']['Song 1'][0]['icon'] = 'images/patch.png'
+    show['categories']['sax']['style'] = {'icon': 'images/sax.png'}
+    show['definitions']['programs'][0]['style'] = {'icon': 'images/program.png'}
+    show['patches']['Song 1'][0]['style'] = {'icon': icon}
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['categories']['sax']['icon'] == 'images/sax.png'
-    assert exported['definitions']['programs'][0]['icon'] == 'images/program.png'
-    assert exported['patches']['Song 1'][0]['icon'] == 'images/patch.png'
-    assert 'icon' not in exported['patches']['Song 1'][1]
+    assert exported['categories']['sax']['style'] == {'icon': 'images/sax.png'}
+    assert exported['definitions']['programs'][0]['style'] == {
+        'icon': 'images/program.png'
+    }
+    assert exported['patches']['Song 1'][0]['style'] == {'icon': icon}
+    assert 'style' not in exported['patches']['Song 1'][1]
     assert compiler.compile_show(exported, {}, [], target) == data
+
+
+def test_style_icons_inherit_and_can_be_suppressed() -> None:
+    inherited = display.merge_style(
+        models.Style(icon='images/sax.png'), models.Style(foreground_color='red')
+    )
+    assert inherited.icon == 'images/sax.png'
+    assert (
+        display.merge_style(inherited, models.Style(icon='images/patch.png')).icon
+        == 'images/patch.png'
+    )
+    assert display.merge_style(inherited, models.Style(icon='')).icon == ''

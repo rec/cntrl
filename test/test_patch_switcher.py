@@ -36,7 +36,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 13
+    assert compiler.HEADER.unpack_from(result)[1] == 14
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 

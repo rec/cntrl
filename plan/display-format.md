@@ -2,7 +2,7 @@
 
 The current TOML formatting contract is documented in
 [formatting.md](formatting.md). It replaces this earlier design, including
-category priorities and authored font sizing. Compiled document format 13 uses
+category priorities and authored font sizing. Compiled document format 14 uses
 independently fitted lines and preserves partial styles, category assignments
 and optional icon references. These changes have not been deployed to the pedal.
 

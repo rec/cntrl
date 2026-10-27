@@ -13,8 +13,6 @@ class DisplayPatch(BaseModel, frozen=True):
     values: dict[str, str | int | bool | None]
     style: models.Style | None = None
     program_style: models.Style | None = None
-    icon: str | None = None
-    program_icon: str | None = None
     categories: list[str] = Field(default_factory=list)
     program_categories: list[str] = Field(default_factory=list)
 
@@ -201,14 +199,6 @@ def compile_display(
         str(i): p.program_categories
         for i, p in enumerate(patches)
         if p.program_categories
-    }
-    source['patch_icons'] = {
-        str(i): p.icon for i, p in enumerate(patches) if p.icon is not None
-    }
-    source['program_icons'] = {
-        str(i): p.program_icon
-        for i, p in enumerate(patches)
-        if p.program_icon is not None
     }
     authored = tomlkit.dumps(source).encode('utf-8')
     text_data = b''.join(struct.pack('<H', len(t)) + t for t in texts)

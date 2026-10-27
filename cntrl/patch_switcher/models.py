@@ -39,6 +39,7 @@ class Instrument(BaseModel, frozen=True):
 
 
 class Style(BaseModel, frozen=True):
+    icon: str | None = None
     background_color: str | None = None
     foreground_color: str | None = None
     font_name: str | None = None
@@ -47,14 +48,12 @@ class Style(BaseModel, frozen=True):
 
 
 class Category(BaseModel, frozen=True):
-    icon: str | None = None
     style: Style | None = None
 
     model_config = ConfigDict(extra='forbid')
 
 
 class Patch(BaseModel, frozen=True):
-    icon: str | None = None
     instrument: str
     program: Annotated[int, Field(strict=True, ge=1, le=128)] | StrictStr
     volume: Annotated[int, Field(strict=True, ge=0, le=127)] | None = None
@@ -69,7 +68,6 @@ class Patch(BaseModel, frozen=True):
 
 
 class TablePatch(BaseModel, frozen=True):
-    icon: str | None = None
     instrument: str
     setup: str
     program: Annotated[int, Field(strict=True, ge=1, le=128)]

@@ -243,8 +243,6 @@ def compile_show(
                         'pan': patch.pan,
                         'instrument': patch.instrument,
                     },
-                    icon=patch.icon,
-                    program_icon=matched.icon if matched else None,
                     style=patch.style,
                     program_style=matched.style if matched else None,
                     categories=patch.categories,
@@ -402,7 +400,6 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                 'range',
                 'description',
                 'style',
-                'icon',
             ):
                 old, new = getattr(previous, field), getattr(entry, field)
                 if old is None:
@@ -435,4 +432,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHH')
-DOCUMENT_VERSION = 13
+DOCUMENT_VERSION = 14

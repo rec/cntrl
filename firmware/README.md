@@ -224,8 +224,8 @@ unknown or duplicate names are rejected. Absent/empty values are omitted, while
 zero and false remain visible. A page supports at most 16 fields, further
 limited by the available display height.
 
-Each partial style supports `foreground_color`, `background_color` and
-`font_name`. Resolve properties independently: show style, window, page,
+Each partial style supports `foreground_color`, `background_color`,
+`font_name` and `icon`. Resolve properties independently: show style, window, page,
 ordered categories, program, patch, shared parameter (where applicable), then
 page field overrides. Omitted properties retain the earlier value.
 
@@ -274,8 +274,8 @@ override `pad`. Each line independently uses the largest available bitmap face
 that fits its width and equal share of the padded height, preserving proportions.
 There are no authored sizing controls. Performance pages reject initial overflow;
 management retains wrapping/clipping. Numeric edits wider than their compiled
-face are clipped. Programs, patches and categories support optional `icon` image
-file references preserved as metadata; image rendering is deferred.
+face are clipped. Styles support optional `icon` image-file references; omission inherits and an
+empty string suppresses an inherited icon. Image rendering is deferred.
 
 The compiler measures each line with its own font and stores centered offsets.
 The pedal recalculates horizontal centering for mutable numeric/global fields.
@@ -320,9 +320,9 @@ exceeds the available height, extra gaps are zero and clipping still applies.
 The renderer computes these positions from the complete pane; compiled row-y
 values do not determine vertical spacing.
 
-## Binary and transfer protocol, version 13
+## Binary and transfer protocol, version 14
 
-Version 13 stores resolved pages and line styles with foreground and background
+Version 14 stores resolved pages and line styles with foreground and background
 colors. Each display record ends with four reserved zero bytes. Authored
 formatting metadata, including icon references, is retained for editable exports. The
 default-off `usb_midi_interface` Boolean remains a
@@ -349,7 +349,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 13 firmware. Replace old `screens.NAME` color tables with
+version 14 firmware. Replace old `screens.NAME` color tables with
 `windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
@@ -366,7 +366,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (13), u16 chord milliseconds, u32 total bytes, u16 instrument/group/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (14), u16 chord milliseconds, u32 total bytes, u16 instrument/group/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation group, 68 bytes | name[64], u16 first patch, u16 count |
@@ -380,7 +380,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Resolved style, 16 bytes | Same layout as a screen record, one per distinct resolved style |
 | Resolved page | u8 line count followed by 8-byte line records: u8 field code, u8 already-sent indication flag, u16 style index, centered cursor x, literal-text index |
 | Literal text | u16 byte count including the final NUL, followed by ASCII text; at most 64 bytes |
-| Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, shared category definitions, explicit program/patch categories, global parameter values, show style, padding and explicit program/patch icon references |
+| Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, shared category definitions, explicit program/patch categories, global parameter values, show style, padding and icon references within partial styles |
 
 The existing firmware category counters and target `max_categories` limit refer
 to navigation groups. Classification categories are resolved by the host and

@@ -1,6 +1,6 @@
 # Display formatting in TOML
 
-Status: implemented in compiled document format 13; not deployed to the pedal. This replaces the CSS proposal and updates
+Status: implemented in compiled document format 14; not deployed to the pedal. This replaces the CSS proposal and updates
 [display-format.md](display-format.md), which records the current implementation.
 
 ## Goal
@@ -23,8 +23,9 @@ programs, patches and shared parameters. Keep page-specific field overrides in
 | `foreground_color` | Text color |
 | `background_color` | Color behind the line |
 | `font_name` | Exact installed bitmap font family |
+| `icon` | Image-file reference; empty string suppresses an inherited icon |
 
-All three properties are optional. Omission leaves the lower-precedence value
+All four properties are optional. Omission leaves the lower-precedence value
 unchanged. Merge individual properties, not whole style objects. Apply centrally
 defined application defaults only where no source supplies a value.
 
@@ -138,20 +139,20 @@ Already-sent text keeps its resolved foreground and uses alternating transparent
 pixels to expose the line background. Stippling remains application behavior;
 there is no extra style color or `half` setting.
 
-## Optional item icons
+## Optional style icons
 
-Programs, patches and categories may have an optional `icon` string referencing
-an image file, for example `icon = 'images/sax.png'`. Omission means no explicit
-icon on that item. Preserve the reference as authored metadata through
-download/recompile.
+Every style may include an optional `icon` image-file reference, for example
+`icon = 'images/sax.png'`. It follows the same property override order as colors
+and font names. Omission inherits; `icon = ''` explicitly suppresses an inherited
+icon. Programs, patches and categories have no separate direct icon property.
+Preserve partial styles, including empty icon strings, through download/recompile.
 
-Image loading, path resolution, conversion, embedding, layout and rendering are
-future work. Icon inheritance and selection among categories are also deferred.
-Storing a reference does not choose or display an icon.
+Image loading, path resolution, conversion, embedding, layout and rendering remain
+future work. Resolving the reference does not display an icon yet.
 
 ## Implementation and verification
 
-1. Reduce the existing style model to the three properties above. Remove
+1. Reduce the existing style model to the four properties above. Remove
    category priorities and authored sizing controls, including obsolete export
    metadata and configuration paths.
 2. Reuse the existing property merge logic with the documented category order.
