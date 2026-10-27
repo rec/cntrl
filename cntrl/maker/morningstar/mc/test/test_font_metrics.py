@@ -16,7 +16,7 @@ def test_page_lines_select_different_native_font_families() -> None:
         {
             'instruments': {},
             'patches': {},
-            'font_name': 'Arial',
+            'style': {'font_name': 'Arial'},
             'pages': {
                 'patch': {'line_styles': {'display_name': {'font_name': 'ComicSansMS'}}}
             },
@@ -56,9 +56,7 @@ def test_native_autoscale_uses_largest_fitting_size_per_label(name: str) -> None
     face = next(f for f in target.fonts if f.name == name)
     texts = ['I', 'Wide patch name']
     for t in texts:
-        _, size = graphics.font_choice(
-            models.Show(instruments={}, patches={}, font_name=name), [t], target, 4
-        )
+        _, size = graphics.font_choice(name, [t], target, 4)
         metrics = face.sizes[size]
         left, width = graphics.bounds(t, metrics)
         assert width <= 152 and metrics.line_height <= 59
@@ -81,9 +79,7 @@ def test_native_metrics_are_proportional_and_fit_selected_sizes() -> None:
             > graphics.bounds('iiii', face.sizes[16])[1]
         )
         names = ['Trumpet', 'Maynard', 'trombone', 'Flute']
-        _, size = graphics.font_choice(
-            models.Show(instruments={}, patches={}, font_name=name), names, target, 4
-        )
+        _, size = graphics.font_choice(name, names, target, 4)
         assert all(graphics.bounds(t, face.sizes[size])[1] <= 152 for t in names)
         assert all(
             2 * m.line_height + 2 > 120
@@ -98,13 +94,13 @@ def test_bit_reader_crosses_bytes_and_decodes_signed_offsets() -> None:
     assert build_font_metrics.read_bits(bytes.fromhex('f0'), 0, 4, True) == -1
 
 
-def test_missing_font_size_is_rejected() -> None:
+def test_unknown_font_is_rejected() -> None:
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
     )
-    with pytest.raises(ValueError, match='font_size must be one of'):
+    with pytest.raises(ValueError, match='unknown font'):
         graphics.font_choice(
-            models.Show(instruments={}, patches={}, font_name='Arial', font_size=15),
+            'absent',
             ['Flute'],
             target,
             4,

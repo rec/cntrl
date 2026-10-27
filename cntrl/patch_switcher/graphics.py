@@ -79,7 +79,7 @@ def bounds(text: str, metrics: models.FontMetrics) -> tuple[int, int]:
 
 
 def font_choice(
-    show: models.Show,
+    font_name: str | None,
     texts: list[str],
     target: models.Target,
     pad: int,
@@ -89,20 +89,16 @@ def font_choice(
         (
             f
             for f in target.fonts
-            if f.name == ('classic' if show.font_name is None else show.font_name)
+            if f.name == ('classic' if font_name is None else font_name)
         ),
         None,
     )
     if face is None:
-        raise ValueError(f'unknown font {show.font_name!r}')
+        raise ValueError(f'unknown font {font_name!r}')
     width, height = target.display_width - 2 * pad, target.display_height - 2 * pad
     if min(width, height) <= 0:
         raise ValueError('padding leaves no drawable display area')
     sizes = sorted(face.sizes, reverse=True)
-    if show.font_size is not None:
-        if show.font_size not in sizes:
-            raise ValueError(f'{face.name}: font_size must be one of {sorted(sizes)}')
-        sizes = [show.font_size]
 
     def fits(size: int) -> bool:
         metrics = face.sizes[size]

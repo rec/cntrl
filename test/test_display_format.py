@@ -57,7 +57,7 @@ def test_default_page_reproduces_category_and_patch_ui(target: models.Target) ->
         models.Show(instruments={}, patches={}), [patch()], target
     )
     expected = [
-        (0, (0, 40, 4, 0, 0, 65535, 40, 0), 20, 'wind'),
+        (0, (0, 48, 4, 0, 0, 65535, 48, 0), 8, 'wind'),
         (1, (0, 40, 4, 0, 0, 65535, 40, 0), 5, 'Flute'),
     ]
     assert all(lines(block, r) == expected for r in references[0])
@@ -93,44 +93,6 @@ def test_a_window_can_select_a_different_page(target: models.Target) -> None:
     assert graphics.SCREEN.unpack(windows[1])[2] == 12
 
 
-def test_explicit_different_font_heights_share_available_space(
-    target: models.Target,
-) -> None:
-    value = patch().model_copy(
-        update={'values': patch().values | {'group.name': 'A', 'display_name': 'B'}}
-    )
-    show = models.Show.model_validate(
-        {
-            'instruments': {},
-            'patches': {},
-            'pages': {
-                'patch': {
-                    'line_styles': {
-                        'group.name': {'font_size': 80},
-                        'display_name': {'font_size': 16},
-                    }
-                }
-            },
-        }
-    )
-    _, refs, block = display.compile_display(show, [value], target)
-    assert [x[1][1] for x in lines(block, refs[0][0])] == [80, 16]
-    show = show.model_copy(
-        update={
-            'pages': {
-                'patch': models.Page(
-                    line_styles={
-                        'group.name': models.Style(font_size=80),
-                        'display_name': models.Style(font_size=80),
-                    }
-                )
-            }
-        }
-    )
-    with pytest.raises(ValueError, match='exceeds drawable height'):
-        display.compile_display(show, [value], target)
-
-
 def test_each_line_autoscales_independently(target: models.Target) -> None:
     value = patch().model_copy(
         update={
@@ -138,7 +100,7 @@ def test_each_line_autoscales_independently(target: models.Target) -> None:
         }
     )
     _, refs, block = display.compile_display(
-        models.Show(instruments={}, patches={}, autoscale_fonts=True, font_size=8),
+        models.Show(instruments={}, patches={}),
         [value],
         target,
     )
@@ -152,7 +114,7 @@ def test_styles_merge_per_property_and_group_heading_excludes_content(
 ) -> None:
     value = patch().model_copy(
         update={
-            'program_style': models.Style(font_size=16, foreground_color='red'),
+            'program_style': models.Style(foreground_color='red'),
             'style': models.Style(foreground_color='green'),
             'categories': ['wind'],
         }
@@ -161,44 +123,20 @@ def test_styles_merge_per_property_and_group_heading_excludes_content(
         {
             'instruments': {},
             'patches': {'wind': []},
-            'windows': {
-                'next': {'style': {'background_color': 'blue', 'font_size': 8}}
-            },
+            'windows': {'next': {'style': {'background_color': 'blue'}}},
             'pages': {
                 'patch': {
-                    'style': {'autoscale_fonts': False},
-                    'line_styles': {'display_name': {'font_size': '24 px'}},
+                    'style': {'foreground_color': 'yellow'},
+                    'line_styles': {'display_name': {'foreground_color': 'green'}},
                 }
             },
-            'categories': {
-                'wind': {'style': {'foreground_color': 'white', 'font_size': 8}}
-            },
+            'categories': {'wind': {'style': {'foreground_color': 'white'}}},
         }
     )
     _, refs, block = display.compile_display(show, [value], target)
     heading, label = lines(block, refs[0][2])
-    assert (heading[1][1], heading[1][4], heading[1][5]) == (8, 65504, 31)
-    assert (label[1][1], label[1][4], label[1][5]) == (24, 1024, 31)
-
-
-def test_false_overrides_inherited_autoscaling(target: models.Target) -> None:
-    show = models.Show.model_validate(
-        {
-            'instruments': {},
-            'patches': {},
-            'autoscale_fonts': True,
-            'pages': {
-                'patch': {
-                    'line_styles': {
-                        'display_name': {'autoscale_fonts': False, 'font_size': 8}
-                    }
-                }
-            },
-        }
-    )
-    _, refs, block = display.compile_display(show, [patch()], target)
-    first, second = lines(block, refs[0][0])
-    assert first[1][1] == 48 and second[1][1] == 8
+    assert (heading[1][4], heading[1][5]) == (65504, 31)
+    assert (label[1][4], label[1][5]) == (1024, 31)
 
 
 def test_page_fields_use_window_data_and_global_parameters(
@@ -208,7 +146,6 @@ def test_page_fields_use_window_data_and_global_parameters(
         {
             'instruments': {},
             'patches': {},
-            'font_size': 8,
             'parameters': {
                 'tempo': {'value': 120},
                 'off': {'value': False},
@@ -272,14 +209,12 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
     show['pages'] = {
         'patch': {
             'fields': ['group.name', 'display_name', 'brightness'],
-            'line_styles': {
-                'brightness': {'font_size': '8 px', 'autoscale_fonts': False}
-            },
+            'line_styles': {'brightness': {'foreground_color': 'blue'}},
         }
     }
     show['categories'] = {'wind': {'style': {'foreground_color': 'red'}}}
     show['windows'] = {'next': {'pad': '8 px', 'style': {'background_color': 'black'}}}
-    show['patches']['wind'][0]['style'] = {'font_size': '16 px'}
+    show['patches']['wind'][0]['style'] = {'background_color': 'white'}
     definitions = compiler.read_document(FIXTURES / 'definitions.json')
     assert isinstance(definitions, dict)
     definitions['programs'] = [
@@ -295,14 +230,14 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert 'font_size' not in exported and 'font_name' not in exported
-    assert exported['patches']['wind'][0]['style'] == {'font_size': 16}
+    assert exported['patches']['wind'][0]['style'] == {'background_color': 'white'}
     assert (
         exported['definitions']['programs'][0]['style']
         == definitions['programs'][0]['style']
     )
     assert (
-        exported['pages']['patch']['line_styles']['brightness']['autoscale_fonts']
-        is False
+        exported['pages']['patch']['line_styles']['brightness']['foreground_color']
+        == 'blue'
     )
     assert compiler.compile_show(exported, {}, [], target) == data
 
@@ -313,13 +248,10 @@ def test_category_labels_and_patch_content_resolve_their_own_styles(
     show = models.Show(
         instruments={},
         patches={},
-        font_size=8,
         categories={
-            'sax': models.Category(
-                style=models.Style(foreground_color='red', font_size=8)
-            ),
+            'sax': models.Category(style=models.Style(foreground_color='red')),
             'whole-system': models.Category(
-                priority=1, style=models.Style(foreground_color='blue')
+                style=models.Style(foreground_color='blue')
             ),
         },
         pages={'patch': models.Page(fields=['categories', 'display_name'])},
@@ -328,15 +260,37 @@ def test_category_labels_and_patch_content_resolve_their_own_styles(
         update={
             'program_categories': ['sax'],
             'categories': ['whole-system'],
-            'program_style': models.Style(font_size=16),
+            'program_style': models.Style(font_name='classic'),
             'style': models.Style(foreground_color='green'),
         }
     )
     _, refs, block = display.compile_display(show, [value], target)
     categories, label = lines(block, refs[0][2])
     assert categories[3] == 'sax, whole-system'
-    assert (categories[1][1], categories[1][4]) == (8, 31)
-    assert (label[1][1], label[1][4]) == (16, 1024)
+    assert categories[1][4] == 31
+    assert label[1][4] == 1024
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'firmware/test'
+
+
+def test_local_category_reapplies_after_program_categories(
+    target: models.Target,
+) -> None:
+    show = models.Show(
+        instruments={},
+        patches={},
+        style=models.Style(background_color='white'),
+        categories={
+            'sax': models.Category(style=models.Style(foreground_color='red')),
+            'bright': models.Category(style=models.Style(foreground_color='blue')),
+        },
+        pages={'patch': models.Page(fields=['categories', 'display_name'])},
+    )
+    value = patch().model_copy(
+        update={'program_categories': ['sax', 'bright'], 'categories': ['sax']}
+    )
+    _, refs, block = display.compile_display(show, [value], target)
+    heading, label = lines(block, refs[0][0])
+    assert heading[3] == 'sax, bright'
+    assert heading[1][4] == label[1][4] == graphics.rgb565((255, 0, 0))

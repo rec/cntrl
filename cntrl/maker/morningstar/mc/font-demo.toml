@@ -2,7 +2,6 @@
 brightness = 192
 splash = false
 screensaver_timeout = '0 s'
-autoscale_fonts = true
 pad = '4 px'
 
 [instruments.pman]

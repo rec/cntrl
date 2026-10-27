@@ -39,20 +39,15 @@ class Instrument(BaseModel, frozen=True):
 
 
 class Style(BaseModel, frozen=True):
+    icon: str | None = None
     background_color: str | None = None
     foreground_color: str | None = None
     font_name: str | None = None
-    font_size: (
-        Annotated[int, Field(strict=True, gt=0, le=255), units.unit_validator('pixel')]
-        | None
-    ) = None
-    autoscale_fonts: Annotated[bool, Field(strict=True)] | None = None
 
     model_config = ConfigDict(extra='forbid')
 
 
 class Category(BaseModel, frozen=True):
-    priority: Annotated[int, Field(strict=True)] = 0
     style: Style | None = None
 
     model_config = ConfigDict(extra='forbid')
@@ -181,12 +176,7 @@ class Show(BaseModel, frozen=True):
         ),
         units.unit_validator('second', exact=True),
     ] = 0
-    font_name: str | None = None
-    autoscale_fonts: Annotated[bool, Field(strict=True)] = False
-    font_size: (
-        Annotated[int, Field(strict=True, gt=0, le=255), units.unit_validator('pixel')]
-        | None
-    ) = None
+    style: Style | None = None
     pad: (
         Annotated[int, Field(strict=True, ge=0, le=255), units.unit_validator('pixel')]
         | None

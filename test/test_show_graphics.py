@@ -60,18 +60,14 @@ def test_one_color_chooses_complement_or_furthest_with_warning() -> None:
 
 
 def test_auto_size_fits_shared_padding(target: models.Target) -> None:
-    face, size = graphics.font_choice(
-        models.Show(instruments={}, patches={}), ['Flute'], target, 20
-    )
+    face, size = graphics.font_choice(None, ['Flute'], target, 20)
     assert size == 32
     assert graphics.bounds('Flute', face.sizes[size]) == (0, 120)
 
 
 def test_padding_must_leave_drawable_area(target: models.Target) -> None:
     with pytest.raises(ValueError, match='padding leaves no drawable display area'):
-        graphics.font_choice(
-            models.Show(instruments={}, patches={}), ['Flute'], target, 80
-        )
+        graphics.font_choice(None, ['Flute'], target, 80)
 
 
 def test_metrics_account_for_negative_bearings() -> None:

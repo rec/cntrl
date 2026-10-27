@@ -394,7 +394,13 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
             merged['categories'] = list(
                 dict.fromkeys(previous.categories + entry.categories)
             )
-            for field in ('name', 'display_name', 'range', 'description', 'style'):
+            for field in (
+                'name',
+                'display_name',
+                'range',
+                'description',
+                'style',
+            ):
                 old, new = getattr(previous, field), getattr(entry, field)
                 if old is None:
                     merged[field] = new
@@ -426,4 +432,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHH')
-DOCUMENT_VERSION = 12
+DOCUMENT_VERSION = 14

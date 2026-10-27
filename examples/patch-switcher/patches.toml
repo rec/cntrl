@@ -1,6 +1,6 @@
 take_first_match = false
 brightness = 192
-font_name = 'classic'
+style = {font_name = 'classic'}
 pad = 4
 contrast = 0.6
 chord_ms = 100
