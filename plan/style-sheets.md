@@ -42,6 +42,18 @@ page = 'patch'
 
 The example illustrates syntax; it does not prescribe a new pedal color scheme.
 
+## Optional item icons
+
+Programs, patches and categories may carry an optional `icon` string referencing
+an image file, for example `icon = 'images/sax.png'` on the item's definition.
+Omission means the item has no explicit icon. Preserve the reference in authored
+metadata and download/recompile round trips.
+
+This is item data, separate from CSS. Do not introduce a custom CSS `icon`
+property. Image loading, conversion, embedding, layout and rendering are deferred
+until icons are used. Icon inheritance and selection from multiple categories
+are also deferred; storing a reference does not choose a displayed icon.
+
 ## Display tree
 
 Each window contains its own occurrence of a page and that page's fields:
