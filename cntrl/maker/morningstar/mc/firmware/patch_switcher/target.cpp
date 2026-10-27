@@ -6,6 +6,9 @@
 #include <cntrl/setup_ui.h>
 #include <cntrl/midi_bridge.h>
 #include <cntrl/module_menu.h>
+#if CNTRL_MIDI_INTERFACE
+#include <cntrl/midi_interface.h>
+#endif
 #if CNTRL_CABLE_TEST
 #include <cntrl/cable_test.h>
 #endif
@@ -27,8 +30,18 @@ USBHost host;
 MIDIDevice host_midi(host);
 const char *outputs[] = {"din", "trs", "usb-device", "usb-host"};
 
-class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink {
+class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink
+#if CNTRL_MIDI_INTERFACE
+    , public cntrl::MidiInterfaceControl
+#endif
+{
 public:
+#if CNTRL_MIDI_INTERFACE
+    // Still Time 20: measured line height 21, no top adjustment.
+    cntrl::MidiInterface midi_interface{*this, *this, {5, 20, 4, 0, 0xffff, 0, 21, 0}};
+    void configure_interface(bool enabled) override { bridge_.configure(enabled); }
+    void restore_interface() override { bridge_.configure(interface_enabled_); }
+#endif
 #if CNTRL_CABLE_TEST
     // Still Time 28: measured line height 30, top-bearing adjustment 1.
     cntrl::CableTest cable_test{*this, {5, 28, 4, 0, 0xffff, 0, 30, 1}};
@@ -63,6 +76,9 @@ public:
     bool output_idle() const override { return bridge_.idle(); }
     void set_usb_midi_interface(bool enabled) override {
         interface_enabled_ = enabled;
+#if CNTRL_MIDI_INTERFACE
+        if (midi_interface.open()) return;
+#endif
 #if CNTRL_CABLE_TEST
         if (cable_test.open()) return;
 #endif
@@ -90,7 +106,12 @@ public:
         if (route < 2) {
             HardwareSerial &serial = route == 0 ? Serial1 : Serial2;
             if (unsigned(serial.availableForWrite()) < n) return false;
-            return serial.write(p.bytes, n) == n;
+            if (serial.write(p.bytes, n) != n) return false;
+#if CNTRL_MIDI_INTERFACE
+            midi_interface.activity(route == 0 ? cntrl::MidiInterface::Port::din_out
+                : cntrl::MidiInterface::Port::trs_out, millis());
+#endif
+            return true;
         }
         return false;
     }
@@ -135,6 +156,9 @@ public:
         host.Task();
         uint32_t begin = micros(), now = millis();
         bridge_.connected(usb_configuration != 0);
+#if CNTRL_MIDI_INTERFACE
+        midi_interface.connected(usb_configuration != 0);
+#endif
         // Separate source limits plus an aggregate time budget. Rotate the
         // first source, so a saturated cable cannot starve later sources.
         for (unsigned i = 0; i < 3 && uint32_t(micros() - begin) < 180; ++i) {
@@ -154,7 +178,13 @@ public:
 #if CNTRL_CABLE_TEST
                     if (cable_test.open()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
 #endif
-                    bridge_.receive(source + 5, uint8_t(byte), now);
+                    bool complete = bridge_.receive(source + 5, uint8_t(byte), now);
+#if CNTRL_MIDI_INTERFACE
+                    if (complete) midi_interface.activity(source == 1 ? cntrl::MidiInterface::Port::din_in
+                        : cntrl::MidiInterface::Port::trs_in, now);
+#else
+                    (void)complete;
+#endif
                 }
             }
         }
@@ -166,6 +196,9 @@ public:
         else
 #endif
         bridge_.service(*this, now);
+#if CNTRL_MIDI_INTERFACE
+        midi_interface.tick(millis());
+#endif
         // Flush only already-buffered packets; this operation never waits.
         usb_midi_flush_output();
         uint32_t elapsed = micros() - begin;
@@ -265,9 +298,20 @@ cntrl::Controller controller(board);
 // Keep document/transfer buffers out of RAM1's code and stack budget.
 DMAMEM cntrl::Documents documents(card, board, controller, board);
 cntrl::SetupUi setup_ui(documents, board);
+enum ModuleIndex { setups_module,
+#if CNTRL_CABLE_TEST
+    cable_test_module,
+#endif
+#if CNTRL_MIDI_INTERFACE
+    midi_interface_module,
+#endif
+};
 const char *const module_names[] = {"Setups",
 #if CNTRL_CABLE_TEST
     "MIDI cable test",
+#endif
+#if CNTRL_MIDI_INTERFACE
+    "MIDI interface",
 #endif
 };
 cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof(module_names[0]));
@@ -276,6 +320,9 @@ bool feature_open() {
     return module_menu.open() || setup_ui.open()
 #if CNTRL_CABLE_TEST
         || board.cable_test.open()
+#endif
+#if CNTRL_MIDI_INTERFACE
+        || board.midi_interface.open()
 #endif
         ;
 }
@@ -362,21 +409,40 @@ void poll_target() {
                 if (module_menu.open()) {
                     int selected = module_menu.button(i, events[i] & press_event);
                     if (selected == -2) { documents.redraw(); module_controls_locked = true; }
-                    else if (selected == 0) {
+                    else if (selected == setups_module) {
                         if (documents.busy()) module_menu.enter();
                         else { setup_ui.enter(); module_controls_locked = true; }
                     }
 #if CNTRL_CABLE_TEST
-                    else if (selected == 1) {
+                    else if (selected == cable_test_module) {
                         if (!documents.busy() && board.output_idle()) {
                             board.enter_cable_test(); module_controls_locked = true;
                         } else module_menu.enter();
                     }
+#endif
+#if CNTRL_MIDI_INTERFACE
+                    else if (selected == midi_interface_module) {
+                        if (!documents.busy() && board.output_idle()) {
+                            board.midi_interface.enter(usb_configuration != 0);
+                            module_controls_locked = true;
+                        } else module_menu.enter();
+                    }
+#endif
+#if CNTRL_CABLE_TEST
                 } else if (board.cable_test.open()) {
                     if (events[i] & press_event) {
                         if (i == 1) board.cable_test.toggle(now);
                         else if (i == 5) {
                             board.leave_cable_test(); module_menu.enter(); module_controls_locked = true;
+                        }
+                    }
+#endif
+#if CNTRL_MIDI_INTERFACE
+                } else if (board.midi_interface.open()) {
+                    if (events[i] & press_event) {
+                        if (i == 1) board.midi_interface.toggle();
+                        else if (i == 5) {
+                            board.midi_interface.leave(); module_menu.enter(); module_controls_locked = true;
                         }
                     }
 #endif

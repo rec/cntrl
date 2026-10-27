@@ -115,8 +115,9 @@ public:
         std::memcpy(b.bytes, bytes, size); b.size = size; ++r.pedal_count;
         return true;
     }
-    void receive(unsigned route, uint8_t b, uint32_t now) {
-        if (route >= 8 || !enabled_ || !connected_) return;
+    // Report physical packet completion even without an available USB receiver.
+    bool receive(unsigned route, uint8_t b, uint32_t now) {
+        if (route >= 8 || !enabled_ || (!connected_ && route < 6)) return false;
         auto &r = routes_[route];
         bool was_sysex = r.parser.sysex();
         // Close an interrupted physical SysEx before forwarding a new status.
@@ -125,7 +126,8 @@ public:
         Packet p;
         bool complete = r.parser.receive(b, p);
         if (b < 0xf8 && (was_sysex || r.parser.sysex())) r.last_sysex = now;
-        if (complete) enqueue(route, p);
+        if (complete && connected_) enqueue(route, p);
+        return complete;
     }
     void usb(uint32_t packed, uint32_t now) {
         unsigned route = (packed >> 4) & 15;

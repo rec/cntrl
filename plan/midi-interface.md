@@ -1,6 +1,7 @@
 # USB MIDI interface module
 
-Status: proposed module using the existing USB MIDI interface implementation.
+Status: implemented as a standalone module using the existing USB MIDI bridge.
+Not flashed; physical module verification remains pending.
 
 ## Goal and existing foundation
 
@@ -135,4 +136,23 @@ setup field is needed.
 
 ## Additional work beyond the prompt
 
-None. This document proposes the module; it does not implement or flash it.
+None. Implementation is limited to this module and its core integration.
+
+## Implementation
+
+`firmware/include/cntrl/midi_interface.h` owns the page, enable state, host status
+and activity pulses. Its `MidiInterfaceControl` interface grants temporary bridge
+control and restores the setup setting on release. It has no dependency on the
+cable tester or another module. The target supplies host state and activity
+events and registers the module in the existing menu.
+
+The shared bridge reports packet completion before queue acceptance and also
+parses physical input while enabled without a configured USB host. It does not
+queue that disconnected input for later replay. Output events come only after a
+successful physical transmitter submission. The module repaints once per poll
+when visible state changes, not for every received byte or refreshed pulse.
+
+Native tests cover lifecycle and setup restoration, host status, independent
+pulses, expiry and timer wraparound, stale-state clearing, queue overflow and
+physical parsing without a host. Firmware builds use isolated output paths;
+no device access or upload is part of this implementation's verification.

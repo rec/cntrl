@@ -604,3 +604,23 @@ After an initial USB write error, the verified retry completed and reset to stoc
 After the user's A+F entry, status remained `CNTRL READY 14 34597 488beaf6`
 and pman remained selected. Visual verification of the revised layout remains
 pending.
+
+## Standalone MIDI interface module
+
+The module menu includes MIDI interface when `MIDI_INTERFACE=1` (the build
+default). It starts Off on every visit. B toggles the existing DIN/TRS USB MIDI
+bridge; F returns to the menu and restores the setup's previous bridge setting.
+The setup is not edited or saved by the module.
+
+The center screen shows host USB configuration state, DIN/TRS input and output
+activity indicators, and On/Off above B. The outer screens are black with Back
+near F; brightness is unchanged. Each indicator remains lit for 100 ms after a
+complete input packet or successful physical output submission. USB configured
+status does not indicate that a DAW has opened a port.
+
+Build with `MIDI_INTERFACE=0` to omit the module and its menu entry. Cable tester
+inclusion remains controlled separately by `CABLE_TEST`. The module has no
+runtime dependency on the tester. The generic implementation and verification
+contract is in [the module plan](../../../../../plan/midi-interface.md).
+This module has not been flashed; physical forwarding and UI checks remain
+pending.
