@@ -6,6 +6,10 @@
 #include <cntrl/documents.h>
 #include <cntrl/setup_ui.h>
 #include <cntrl/midi_bridge.h>
+#include <cntrl/module_menu.h>
+#if CNTRL_CABLE_TEST
+#include <cntrl/cable_test.h>
+#endif
 #include "buttons.h"
 #include "displays.h"
 #include "switches.h"
@@ -30,6 +34,17 @@ const char *outputs[] = {"din", "trs", "configurable-1", "configurable-2",
 
 class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink {
 public:
+#if CNTRL_CABLE_TEST
+    cntrl::CableTest cable_test{*this};
+    void enter_cable_test() {
+        bridge_.configure(false);
+        cable_test.enter();
+    }
+    void leave_cable_test() {
+        cable_test.leave();
+        bridge_.configure(interface_enabled_);
+    }
+#endif
     void begin() {
         Serial1.begin(31250);
         Serial2.begin(31250);
@@ -51,6 +66,10 @@ public:
     }
     bool output_idle() const override { return bridge_.idle(); }
     void set_usb_midi_interface(bool enabled) override {
+        interface_enabled_ = enabled;
+#if CNTRL_CABLE_TEST
+        if (cable_test.open()) return;
+#endif
         bridge_.configure(enabled);
         if (enabled) for (unsigned i = 0; i < 4; ++i) enable_port(i);
     }
@@ -61,6 +80,12 @@ public:
         while (route < 8 && std::strcmp(outputs[route], output)) ++route;
         if (route == 8 || length > 14
             || (route == 6 && !usb_configuration) || (route == 7 && !host_midi)) return false;
+#if CNTRL_CABLE_TEST
+        if (cable_test.open()) {
+            if (route >= 2 || length != 3) return false;
+            return submit(route, {11, {data[0], data[1], data[2]}});
+        }
+#endif
         if (route >= 2 && route < 6 && !enable_port(route - 2)) return false;
         return bridge_.pedal(route == 7 ? 8 : route, data, length);
     }
@@ -126,10 +151,16 @@ public:
                 if (source == 0) {
                     uint32_t packet = usb_midi_read_message();
                     if (!packet) break;
+#if CNTRL_CABLE_TEST
+                    if (cable_test.open()) continue;
+#endif
                     bridge_.usb(packet, now);
                 } else {
                     HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
                     int byte = serial.read(); if (byte < 0) break;
+#if CNTRL_CABLE_TEST
+                    if (cable_test.open()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
+#endif
                     bridge_.receive(source + 5, uint8_t(byte), now);
                 }
             }
@@ -137,6 +168,10 @@ public:
         source_cursor_ = (source_cursor_ + 1) % 3;
         // Existing USB-host input is deliberately not bridged.
         host_midi.read();
+#if CNTRL_CABLE_TEST
+        if (cable_test.open()) cable_test.tick(now);
+        else
+#endif
         bridge_.service(*this, now);
         // Flush only already-buffered packets; this operation never waits.
         usb_midi_flush_output();
@@ -168,6 +203,7 @@ private:
     cntrl::midi::Bridge bridge_;
     unsigned source_cursor_ = 0, init_errors_ = 0;
     uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
+    bool interface_enabled_ = false;
     bool enabled_[4] = {};
     DisplayRenderer renderer_;
     unsigned response_offset_ = 0;
@@ -252,6 +288,20 @@ cntrl::Controller controller(board);
 // Keep document/transfer buffers out of RAM1's code and stack budget.
 DMAMEM cntrl::Documents documents(card, board, controller, board);
 cntrl::SetupUi setup_ui(documents, board);
+const char *const module_names[] = {"Setups",
+#if CNTRL_CABLE_TEST
+    "MIDI cable test",
+#endif
+};
+cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof(module_names[0]));
+bool module_controls_locked = false;
+bool feature_open() {
+    return module_menu.open() || setup_ui.open()
+#if CNTRL_CABLE_TEST
+        || board.cable_test.open()
+#endif
+        ;
+}
 cntrl::splash::SdSlots splash_card;
 cntrl::splash::Receiver splash_assets(splash_card, board);
 cntrl::splash::Panels splash_panels;
@@ -327,19 +377,43 @@ void poll_target() {
         bool consumed = splash_session.controls(pressed, now);
         if (consumed) controller.cancel_gesture();
         setup_ui.poll(pressed);
+        module_menu.poll(pressed);
+        if (!pressed) module_controls_locked = false;
         if (!consumed) {
             for (unsigned i = 0; i < 6; ++i) {
-                if (setup_ui.open()) {
+                if (module_controls_locked) continue;
+                if (module_menu.open()) {
+                    int selected = module_menu.button(i, events[i] & press_event);
+                    if (selected == -2) { documents.redraw(); module_controls_locked = true; }
+                    else if (selected == 0) {
+                        if (documents.busy()) module_menu.enter();
+                        else { setup_ui.enter(); module_controls_locked = true; }
+                    }
+#if CNTRL_CABLE_TEST
+                    else if (selected == 1) {
+                        if (!documents.busy() && board.output_idle()) {
+                            board.enter_cable_test(); module_controls_locked = true;
+                        } else module_menu.enter();
+                    }
+                } else if (board.cable_test.open()) {
+                    if (events[i] & press_event) {
+                        if (i == 2) board.cable_test.toggle(now);
+                        else if (i == 5) {
+                            board.leave_cable_test(); module_menu.enter(); module_controls_locked = true;
+                        }
+                    }
+#endif
+                } else if (setup_ui.open()) {
                     if (!documents.busy()) {
                         if (events[i] & press_event) setup_ui.button(i, true, now);
                         if (events[i] & release_event) setup_ui.button(i, false, now);
                     }
                 } else {
-                    if ((events[i] & press_event) && controller.button(i, true, now) == cntrl::Chord::ad && splash_session.management_allowed()) setup_ui.enter();
+                    if ((events[i] & press_event) && controller.button(i, true, now) == cntrl::Chord::ad && splash_session.management_allowed()) module_menu.enter();
                     if (events[i] & release_event) controller.button(i, false, now);
                 }
             }
-            if (!setup_ui.open()) controller.tick(now);
+            if (!feature_open()) controller.tick(now);
         }
     }
     // A bounded amount of work per iteration; SD-card latency itself depends
@@ -348,5 +422,5 @@ void poll_target() {
         serial_router.receive(Serial.read(), now);
     serial_router.poll(now);
     board.poll();
-    board.display(now, documents.busy() || setup_ui.open());
+    board.display(now, documents.busy() || feature_open());
 }

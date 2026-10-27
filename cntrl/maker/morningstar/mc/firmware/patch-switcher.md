@@ -504,7 +504,7 @@ single-show slots were not read for migration, modified or removed. No MIDI
 messages were requested by these tests. The final state intentionally has no
 active setup, following the agreed no-automatic-migration policy.
 
-A+D opens management even without a valid setup. A/B browse, C confirms, F
+A+D opens the module menu even without a valid setup; choose Setups for management. A/B browse, C confirms, F
 goes back. A+D used to wake the screen is consumed; a second A+D after release
 opens management. The numeric editor and this wake gate have native test
 coverage. Physical display centering, pedal-operated editing and cold-power
@@ -570,3 +570,18 @@ setup was uploaded, read-back verified and selected. USB reports
 under `build/pman-before-display.bin`; converted source and binary are under
 `build/pman-display-v11.toml` and `build/pman-display-v11.bin`.
 User confirmation of the visible appearance remains pending.
+
+## MIDI cable-test module
+
+A+D now opens the module menu. A/B choose Setups or MIDI cable test, C opens the
+selection, and F returns to performance. On the test page, C toggles transmission
+and F stops the test and returns to the module menu. Every entry starts Off.
+The left display shows the title and switch, the center shows the two return
+lines, and the right shows the controls. DIN is Serial1 and the dedicated 3.5 mm
+TRS port is Serial2; Omniports are not used.
+
+The module is included by default. Build `patch-switcher` with `CABLE_TEST=0` to
+exclude it and its menu entry. See the generic
+[cable-test behavior](../../../../../doc/midi-cable-test.md). Native tests and
+builds verify the implementation; the module has not been flashed or physically
+loopback-tested.

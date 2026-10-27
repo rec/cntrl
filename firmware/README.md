@@ -159,7 +159,7 @@ startup both clear history and select the first candidate without sending MIDI.
 
 A/B/D/E singles wait up to `chord_ms` (default 100). Early release fires a single
 immediately. A second press at or before the deadline consumes both singles.
-Recognized AB/BE/DE pairs are reserved. A+D opens setup management. A pair
+Recognized AB/BE/DE pairs are reserved. A+D opens the module menu; choose Setups for setup management or MIDI cable test. A pair
 blocks further A/B/D/E actions until all four are released. C/F remain immediate
 after electrical debounce. No hold, repeat or double-press actions are installed.
 
