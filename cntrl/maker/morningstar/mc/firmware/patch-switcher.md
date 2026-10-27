@@ -504,7 +504,7 @@ single-show slots were not read for migration, modified or removed. No MIDI
 messages were requested by these tests. The final state intentionally has no
 active setup, following the agreed no-automatic-migration policy.
 
-A+D opens management even without a valid setup. A/B browse, C confirms, F
+A+D opens the module menu even without a valid setup; choose Setups for management. A/B browse, C confirms, F
 goes back. A+D used to wake the screen is consumed; a second A+D after release
 opens management. The numeric editor and this wake gate have native test
 coverage. Physical display centering, pedal-operated editing and cold-power
@@ -570,3 +570,35 @@ setup was uploaded, read-back verified and selected. USB reports
 under `build/pman-before-display.bin`; converted source and binary are under
 `build/pman-display-v11.toml` and `build/pman-display-v11.bin`.
 User confirmation of the visible appearance remains pending.
+
+## MIDI cable-test module
+
+A+D now opens the module menu. A/B choose Setups or MIDI cable test, C opens the
+selection, and F returns to performance. On the test page, B toggles transmission
+and F stops the test and returns to the module menu. Every entry starts Off.
+The center display shows the Still Time title, DIN and TRS result rows, and
+On/Off centered above B. The left and right displays are black, except for a
+white Back label at the top-right near F. The backlight stays unchanged.
+DIN is Serial1 and the dedicated 3.5 mm TRS port is Serial2; Omniports are not used.
+
+The module is included by default. Build `patch-switcher` with `CABLE_TEST=0` to
+exclude it and its menu entry. See the generic
+[cable-test behavior](../../../../../doc/midi-cable-test.md). Native tests and
+included/excluded builds pass. The combined image was flashed through the running
+upload helper on 2026-10-27, SHA-256
+`4d3a22d26c42b1a861e33a7fb7bc78d84aab0867a443700901011cf7b0fc7ce2`.
+The first upload reported a USB write error; the same verified image succeeded
+on retry and the pedal enumerated as stock firmware after reset. After the user's
+A+F gesture, USB reported `CNTRL READY 14 34597 488beaf6`, unchanged from before
+flashing. The selected setup remains pman and all three saved setups are listed.
+The three saved setups were downloaded before flashing. The original cable-test
+page and loopback behavior were confirmed by the user. The revised centered
+layout awaits physical verification.
+
+The centered layout was flashed through upload_helper on 2026-10-27, combined
+image SHA-256
+`a47039b721fc2537f7356365dd97858b4647384e13a2e11808d38100a3624221`.
+After an initial USB write error, the verified retry completed and reset to stock.
+After the user's A+F entry, status remained `CNTRL READY 14 34597 488beaf6`
+and pman remained selected. Visual verification of the revised layout remains
+pending.

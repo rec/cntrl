@@ -1,6 +1,7 @@
 # Optional feature modules
 
-Status: proposed architecture, not implemented.
+Status: initial MIDI cable-test module and static module menu implemented. The
+broader module organization below remains guidance for subsequent features.
 
 ## Purpose
 
@@ -75,10 +76,11 @@ scheduling rather than blocking waits.
 
 ## Establishing the interfaces
 
-Define the ownership and routing boundaries first, then implement or extract one
-real module, preferably the MIDI monitor. Build the MIDI cable tester against the
-same core services next. Use those two modules to establish which interfaces are
-actually shared before formalizing more of the framework.
+The MIDI cable tester is the first module. Its target adapter grants port access
+and delivers physical input, while the module owns test behavior and its page.
+Build the MIDI monitor against the shared core services next. Use those two
+modules to establish which interfaces are actually shared before formalizing
+more of the framework.
 
 Verify each module's logic independently. Also verify that observers leave
 routing unchanged, processors follow configured routes, active tools respect
@@ -87,5 +89,4 @@ separate physical verification.
 
 ## Additional work beyond the prompt
 
-None. This document records the proposed organization; it does not implement
-modules or change installed firmware.
+None. The first implementation is documented in [midi-cable-test.md](midi-cable-test.md).

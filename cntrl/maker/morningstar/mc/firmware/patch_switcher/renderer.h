@@ -108,6 +108,8 @@ public:
     }
 private:
     unsigned text_y(unsigned field, unsigned row) const {
+        const auto &positioned = painting_.lines[field];
+        if (positioned.y >= 0) return unsigned(positioned.y) + row * positioned.graphics.line_height + positioned.graphics.top;
         const auto &settings = painting_.graphics;
         unsigned count = 0, height = 0, preceding = 0, index = 0;
         for (unsigned i = 0; i < cntrl::max_lines; ++i) {
