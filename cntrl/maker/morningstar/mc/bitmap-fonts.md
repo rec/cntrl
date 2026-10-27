@@ -75,3 +75,15 @@ flash configuration and boot-envelope checks. Its SHA-256 is
 The linked font data and descriptors are in the `0x601...` flash region. RAM1
 leaves 96,768 bytes for the stack, and RAM2 leaves 309,216 bytes for the heap.
 These are linker budgets. Physical readability requires checking the pedal.
+
+The combined image was uploaded through the running upload helper. The first
+attempt reported a USB write error; after confirming the pedal still enumerated
+as HalfKay with serial 14468280, the same verified image uploaded successfully.
+The pedal returned directly to cntrl and reported the unchanged pman setup as
+`CNTRL READY 11 34583 43363d4a`. A resolved pman backup is saved locally under
+the ignored `firmware/build/fonts-backup/` directory.
+
+The separate `font-demo` setup was copied with byte-for-byte read-back
+verification and selected. Status is `CNTRL READY 11 1306 9d0922bd`; the setup
+catalogue still includes pman. No MIDI send was requested during deployment.
+Physical appearance has not yet been confirmed.
