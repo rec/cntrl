@@ -583,5 +583,10 @@ TRS port is Serial2; Omniports are not used.
 The module is included by default. Build `patch-switcher` with `CABLE_TEST=0` to
 exclude it and its menu entry. See the generic
 [cable-test behavior](../../../../../doc/midi-cable-test.md). Native tests and
-builds verify the implementation; the module has not been flashed or physically
-loopback-tested.
+included/excluded builds pass. The combined image was flashed through the running
+upload helper on 2026-10-27, SHA-256
+`4d3a22d26c42b1a861e33a7fb7bc78d84aab0867a443700901011cf7b0fc7ce2`.
+The first upload reported a USB write error; the same verified image succeeded
+on retry and the pedal enumerated as stock firmware after reset. A+F entry,
+post-flash setup verification and physical loopback testing remain pending.
+The three saved setups were downloaded before flashing; pman was selected.
