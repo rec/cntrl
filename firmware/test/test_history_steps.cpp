@@ -15,6 +15,13 @@ struct BoundedStorage : TestStorage {
 };
 
 int main() {
+    uint64_t number; char text[21];
+    assert(cntrl::parse_revision("18446744073709551615", number) && number == UINT64_MAX);
+    cntrl::revision_text(number, text); assert(!std::strcmp(text, "18446744073709551615"));
+    assert(!cntrl::parse_revision("18446744073709551616", number));
+    assert(!cntrl::parse_revision("-1", number));
+    assert(!cntrl::parse_revision("", number));
+    cntrl::revision_text(0, text); assert(!std::strcmp(text, "0"));
     BoundedStorage storage;
     cntrl::Revisions revisions(storage);
     std::vector<uint8_t> source(cntrl::max_document), downloaded(cntrl::max_document);

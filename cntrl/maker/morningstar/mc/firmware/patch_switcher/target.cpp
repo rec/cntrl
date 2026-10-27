@@ -240,7 +240,7 @@ public:
     bool ready = false;
     bool available() const override { return ready && !SD.sdfs.card()->errorCode(); }
     void choose_revision(const char *name, uint64_t number) override {
-        std::snprintf(directory_, sizeof(directory_), "/cntrl/history/%s/%016llx", name, (unsigned long long)number);
+        std::snprintf(directory_, sizeof(directory_), "/cntrl/history/%s/%08lx%08lx", name, (unsigned long)(number >> 32), (unsigned long)(number & 0xffffffff));
         revision_ = true;
     }
     void revision_scan(const char *name, uint64_t before, bool records_only) override {

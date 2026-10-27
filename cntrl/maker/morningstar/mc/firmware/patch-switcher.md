@@ -645,3 +645,13 @@ up. Post-A+F verification and physical history latency measurements remain pendi
 History I/O now yields between blocks and directory entries. The native budget
 test uses a 64 KiB document and over 2,000 revision entries. Individual SD calls
 still require physical latency qualification.
+
+Post-A+F verification confirmed the unchanged pman selection and checksum but
+exposed `invalid-command` for HISTORY LIST. The target nano C library does not
+support the long-long scanf conversion used for revision numbers. Revision wire
+numbers now use explicit bounded decimal parsing/formatting, and directory names
+use two 32-bit hexadecimal halves. Native boundary and protocol tests pass.
+The corrected combined image was flashed through upload_helper, SHA-256
+`02766ccbb3922bbf623862a267c9aae233475c7377eae8672b8cffc543f28360`.
+Upload succeeded after the initial USB write error and retry. The pedal reset to
+stock firmware; the corrected live history-command check awaits A+F entry.

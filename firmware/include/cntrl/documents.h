@@ -220,9 +220,10 @@ private:
         if (!history_reply_) return;
         if (action == HistoryAction::list) {
             if (!history_revision_.number) { replies_.reply("CNTRL END"); return; }
-            char response[256], label[127]; hex_text(history_revision_.label, label);
-            std::snprintf(response, sizeof(response), "CNTRL REVISION %llu %lu %u %s",
-                (unsigned long long)history_revision_.number, (unsigned long)history_revision_.modified,
+            char response[256], label[127], number[21]; hex_text(history_revision_.label, label);
+            revision_text(history_revision_.number, number);
+            std::snprintf(response, sizeof(response), "CNTRL REVISION %s %lu %u %s",
+                number, (unsigned long)history_revision_.modified,
                 unsigned(history_revision_.length), history_revision_.label[0] ? label : "-");
             replies_.reply(response);
         } else if (action == HistoryAction::download) {
@@ -490,9 +491,9 @@ private:
         }
         if (dirty_) { error("unsaved-edits"); return; }
         listing_ = false; download_ = 0;
-        unsigned long long revision = 0; char operation[16] = {}, label_hex[127] = {}, label[64] = {};
-        if (std::sscanf(line_, "CNTRL HISTORY %15s %126s %llu%n", operation, hex, &revision, &end) == 3
-            && unhex_name(hex, name)) {
+        uint64_t revision = 0; char number[21] = {}, operation[16] = {}, label_hex[127] = {}, label[64] = {};
+        if (std::sscanf(line_, "CNTRL HISTORY %15s %126s %20s%n", operation, hex, number, &end) == 3
+            && unhex_name(hex, name) && parse_revision(number, revision)) {
             bool accepted = false;
             if (!std::strcmp(operation, "SAVE")) {
                 int finish = 0;

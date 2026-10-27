@@ -4,6 +4,24 @@
 #include <cstdio>
 
 namespace cntrl {
+// The target's nano C library does not support long-long scanf conversions.
+inline bool parse_revision(const char *text, uint64_t &number) {
+    if (!*text) return false;
+    number = 0;
+    for (const char *p = text; *p; ++p) {
+        if (*p < '0' || *p > '9') return false;
+        unsigned digit = unsigned(*p - '0');
+        if (number > (UINT64_MAX - digit) / 10) return false;
+        number = number * 10 + digit;
+    }
+    return true;
+}
+inline void revision_text(uint64_t number, char *text) {
+    char digits[20]; unsigned n = 0;
+    do { digits[n++] = char('0' + number % 10); number /= 10; } while (number);
+    for (unsigned i = 0; i < n; ++i) text[i] = digits[n - i - 1];
+    text[n] = 0;
+}
 struct Revision {
     uint64_t number = 0;
     uint32_t modified = 0, length = 0;

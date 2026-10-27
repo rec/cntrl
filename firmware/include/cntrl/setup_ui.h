@@ -150,7 +150,10 @@ private:
         else if (mode_ == Mode::failed) { title = "Save failed"; value = docs_.last_error(); }
         if (mode_ == Mode::history) {
             title = "History"; value_label = "Revision";
-            if (revision_.number) std::snprintf(number, sizeof(number), "%llu @%lu %.24s", (unsigned long long)revision_.number, (unsigned long)revision_.modified, revision_.label);
+            if (revision_.number) {
+                char id[21]; revision_text(revision_.number, id);
+                std::snprintf(number, sizeof(number), "%s @%lu %.24s", id, (unsigned long)revision_.modified, revision_.label);
+            }
             else std::snprintf(number, sizeof(number), "Current: C snapshot");
             value = number;
         } else if (mode_ == Mode::comparison) {
