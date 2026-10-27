@@ -63,7 +63,9 @@ public:
             if (letter_ < length) {
                 if (!letter_) {
                     graphics_.select_font(settings.font, settings.size);
-                    graphics_.setTextColor(settings.foreground, settings.background);
+                    // Background bands are already painted. Preserve neighboring
+                    // glyphs where italic bearings overlap their advances.
+                    graphics_.setTextColor(settings.foreground);
                     if (line.centered) {
                         int16_t x, y; uint16_t w, h;
                         graphics_.getTextBounds(text, 0, 0, &x, &y, &w, &h);

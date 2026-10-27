@@ -63,6 +63,18 @@ static void padding(unsigned panel, unsigned pad, uint16_t color) {
 }
 
 int main() {
+    {
+        ShowGraphics graphics;
+        cntrl::ScreenGraphics settings;
+        settings.font = 5; settings.size = 32;
+        graphics.configure(settings);
+        graphics.setCursor(10, 10); graphics.write('S');
+        uint16_t before[160 * 128];
+        std::memcpy(before, graphics.getFrameBuffer(), sizeof(before));
+        // An overlapping space must preserve the previous letter's strokes.
+        graphics.setCursor(10, 10); graphics.write(' ');
+        assert(std::memcmp(before, graphics.getFrameBuffer(), sizeof(before)) == 0);
+    }
     std::memset(screens, 123, sizeof(screens));
     DisplayRenderer renderer;
     assert(!renderer.ready());

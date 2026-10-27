@@ -86,4 +86,21 @@ the ignored `firmware/build/fonts-backup/` directory.
 The separate `font-demo` setup was copied with byte-for-byte read-back
 verification and selected. Status is `CNTRL READY 11 1306 9d0922bd`; the setup
 catalogue still includes pman. No MIDI send was requested during deployment.
-Physical appearance has not yet been confirmed.
+The user confirmed a rendering defect in Still Time: opaque per-character
+backgrounds erased overlapping italic strokes. Individual glyph conversion
+tests did not cover that compositing behavior.
+
+### Transparent text correction
+
+The renderer now paints only glyph foreground pixels over the existing line
+background bands. Both initial graphics configuration and per-line color
+selection use the display library's transparent mode. A native regression
+checks that an overlapping space preserves previously drawn strokes, and the
+existing repaint, background, padding and transition tests still pass.
+
+The corrected combined image has SHA-256
+`f4edd145bf919958535d8dd23e575e580fdcb5ff2df6635299b0d78a5d7b5817`.
+It passed the native tests and combined-image build checks and was flashed
+through the upload helper. The first USB write failed; after verifying HalfKay
+identity, the second attempt completed and stock firmware returned. Enter cntrl
+with A+F to check the saved demo and confirm the corrected appearance.
