@@ -8,6 +8,9 @@ list of unique field names. The inheritance, missing-value and background rules
 below are implemented. The default page represents the existing UI. The page UI
 and stippled appearance are deployed and visually verified. The format-12 color
 cleanup is implemented but has not been flashed.
+Multiple program/patch categories, priority resolution and authored assignment
+round trips are implemented and covered by the 334-test Python suite and the
+portable/native firmware tests. The category changes have not been deployed.
 
 ## Goal
 
@@ -26,7 +29,10 @@ appearance.
   program and optional bank. Its display style is configuration metadata, not
   part of the MIDI message.
 - **Patch:** a show-local use of a program, including local names and overrides.
-- **Patch category:** a named group of patches, with a displayed category label.
+- **Category:** a reusable classification attached independently to programs and
+  patches. Each object can have multiple categories.
+- **Navigation group:** an ordered patch list under `patches.GROUP`, independent
+  of classification categories.
 - **Page:** an ordered list of fields to display together.
 - **Window:** the display region presenting a page, with dimensions, padding
   and default appearance. It supplies the page's current data item. A window
@@ -38,8 +44,8 @@ appearance.
 
 The undo, sent and next windows use the same default `patch` page while supplying
 their respective patches as its current data item. The default fields are
-`['category.name', 'display_name']`. Omitting page/window configuration preserves
-the existing category/name UI, typography, spacing, colors and send indication.
+`['group.name', 'display_name']`. Omitting page/window configuration preserves
+the existing navigation-heading/name UI, typography, spacing, colors and send indication.
 The management, empty-state and error screens use the same generic line renderer
 with their existing fixed text, wrapping and readable defaults.
 
@@ -49,7 +55,7 @@ Specify a page with an ordered list of field names:
 
 ```toml
 [pages.patch]
-fields = ['category.name', 'display_name']
+fields = ['group.name', 'display_name']
 
 [windows.undo]
 page = 'patch'
@@ -61,7 +67,7 @@ page = 'patch'
 page = 'patch'
 ```
 
-Here, `category.name` and `display_name` read attributes of the patch supplied
+Here, `group.name` reads the navigation group and `display_name` the patch supplied
 by the window. The order in `fields` determines display order. A page can also
 include a shared parameter such as `tempo` after defining its value:
 
@@ -75,7 +81,7 @@ Parameters accept string, numeric or Boolean values, or an absent value.
 
 All field names share one namespace. Built-in field definitions identify their
 sources, so the page does not need an `attribute` or `parameter` tag. Patch
-attributes are `category.name`, `display_name`, `name`, `program`, `bank`,
+attributes are `group.name`, `categories`, `display_name`, `name`, `program`, `bank`,
 `volume`, `pan` and `instrument` (the routing alias). Global configuration fields
 are `brightness`, `splash`, `usb_midi_interface`, `screensaver_timeout`,
 `chord_ms` and `transition_ms`. Global fields and editable numeric patch fields
@@ -132,8 +138,8 @@ to highest priority; a later explicit value replaces an earlier one:
 1. Application defaults, with the current show-wide settings as show defaults.
 2. Window style.
 3. Page style.
-4. Program definition style, when the line represents a program or patch.
-5. Patch category style, when the line belongs to a category.
+4. Effective category styles, resolved per property by category priority.
+5. Program definition style, when the line represents a program or patch.
 6. Show-local patch style, when the line represents that patch.
 7. An explicit style on the displayed line.
 
@@ -147,20 +153,32 @@ color still inherits its font and background from the applicable sources.
 The same line can consequently use a program's font, a category's foreground,
 and a window's background.
 
-Only consult sources that belong to the line. A category heading inherits the
-category style, but not the current patch's or program's style. A patch label
-can inherit all three. Unrelated page text uses the page and window defaults.
+Only consult sources that belong to the line. The `categories` field inherits
+the effective category style, but not explicit program or patch styles. A patch
+label can inherit all three. The `group.name` heading and unrelated page text
+use the page and window defaults.
 
-### Category labels and category-wide defaults
+### Multiple categories and inheritance
 
-A category's style supplies defaults for both its heading and its patch labels.
-An explicit style on the heading line can distinguish the heading without
-changing the category's patches. Likewise, a patch or its displayed line can
-override a category property for one entry.
+Define categories once under `[categories.NAME]` in the show configuration.
+Attach them with `categories = ['sax', 'whole-system']` on program-table entries
+or show-local patches. A patch's effective categories are its program's own
+categories followed by its own categories, with duplicates removed. The order
+is stable and controls the comma-separated `categories` display field. Membership
+does not change navigation groups, MIDI routing or patch actions.
 
-For example, a brass category can supply gold text; its heading line can use a
-larger font; and one muted-trumpet patch can override the text color. Other
-patches in the category continue to inherit gold.
+Only explicit categories are stored in authored metadata. Downloads preserve
+program and patch assignments separately; changing a program updates inherited
+membership when recompiled. The current patch contains one program. Categories
+on future child-object types can use the same union rule when those types exist.
+
+Each category has an integer `priority`, defaulting to zero, and an optional
+partial `style`. For each style property the highest declaring priority wins.
+Conflicting values tied at that winning priority are a compilation error;
+identical values and disjoint properties combine. Named and hexadecimal colors
+are compared by their RGB values. Explicit program and patch styles then
+override the category result, followed by per-field overrides. Category styles
+are independent of category declaration and assignment order.
 
 ### Illustrative style fragment
 
@@ -175,15 +193,18 @@ font_name = 'Arial'
 font_size = '24 px'
 ```
 
-Category styles use `[category_styles.CATEGORY]`; this leaves category patch
-lists in `patches.CATEGORY`. Per-line overrides use
+Category styles use `[categories.CATEGORY.style]`; navigation lists remain in
+`patches.GROUP`. Per-line overrides use
 `[pages.PAGE.line_styles.FIELD]`, quoting field names containing dots:
 
 ```toml
-[category_styles.brass]
+[categories.brass]
+priority = 0
+
+[categories.brass.style]
 foreground_color = '0xFFD700'
 
-[pages.patch.line_styles.'category.name']
+[pages.patch.line_styles.'group.name']
 font_name = 'Arial'
 font_size = '24 px'
 ```
@@ -256,6 +277,10 @@ migration is included. See the [binary protocol](../firmware/README.md).
   and absent values. The chosen precedence has direct examples in tests.
 - Category headings do not accidentally acquire the selected patch's style.
 - A category style reaches its patches; a patch override affects only that patch.
+- Multiple category memberships preserve explicit program and patch assignments
+  through export/recompile. Child categories are inherited once, independently
+  of navigation groups; unknown references and winning-priority style conflicts
+  are rejected.
 - One program displayed through different patches, pages or windows resolves
   independently without modifying its shared definition.
 - Mixed font families and sizes fit, center and distribute vertically using

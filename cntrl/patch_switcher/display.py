@@ -1,9 +1,10 @@
 """Resolve named page fields and partial styles into compact display records."""
 
 import struct
+from functools import cached_property
 
 import tomlkit
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import graphics, models
 
@@ -12,6 +13,12 @@ class DisplayPatch(BaseModel, frozen=True):
     values: dict[str, str | int | bool | None]
     style: models.Style | None = None
     program_style: models.Style | None = None
+    categories: list[str] = Field(default_factory=list)
+    program_categories: list[str] = Field(default_factory=list)
+
+    @cached_property
+    def effective_categories(self) -> list[str]:
+        return list(dict.fromkeys(self.program_categories + self.categories))
 
 
 def compile_display(
@@ -26,9 +33,6 @@ def compile_display(
         unknown = set(page.fields) - set(FIELDS) - set(show.parameters)
         if unknown:
             raise ValueError(f'pages.{name}: unknown fields {sorted(unknown)}')
-    unknown_categories = set(show.category_styles) - set(show.patches)
-    if unknown_categories:
-        raise ValueError(f'unknown category styles: {sorted(unknown_categories)}')
     windows = [getattr(show.windows, n) for n in WINDOW_NAMES]
     errors: list[str] = []
     for name, window in zip(WINDOW_NAMES, windows, strict=True):
@@ -52,6 +56,7 @@ def compile_display(
     instances: list[list[int]] = []
     shared: dict[tuple[str | None, int | None, int, int], list[str]] = {}
     for patch in patches:
+        category = category_style(patch.effective_categories, show.categories)
         for window in windows:
             page = show.pages[window.page]
             pad = (
@@ -65,7 +70,13 @@ def compile_display(
             for name in page.fields:
                 parameter = show.parameters.get(name)
                 code = FIELDS.get(name, CONSTANT)
-                value = parameter.value if parameter else field_value(name, patch, show)
+                value = (
+                    parameter.value
+                    if parameter
+                    else ', '.join(patch.effective_categories)
+                    if name == 'categories'
+                    else field_value(name, patch, show)
+                )
                 if (value is None or value == '') and code not in DYNAMIC_FIELDS:
                     continue
                 text = (
@@ -82,14 +93,13 @@ def compile_display(
                         f'field {name}: display text must contain at most '
                         '63 supported characters'
                     )
-                category = show.category_styles.get(str(patch.values['category.name']))
                 content = name in PATCH_FIELDS
                 style = merge_style(
                     base,
                     window.style,
                     page.style,
+                    category if content or name == 'categories' else None,
                     patch.program_style if content else None,
-                    category if content or name == 'category.name' else None,
                     patch.style if content else None,
                     parameter.style if parameter else None,
                     page.line_styles.get(name),
@@ -159,9 +169,7 @@ def compile_display(
             LINE.pack(code, stipple, styles.index(packed), x, texts.index(encoded))
         )
     # Window records supply the outer background and padding, including empty panes.
-    names = [
-        str(p.values[n]) for p in patches for n in ('category.name', 'display_name')
-    ]
+    names = [str(p.values[n]) for p in patches for n in ('group.name', 'display_name')]
     window_records: list[bytes] = []
     for window in windows:
         pad = (
@@ -226,6 +234,14 @@ def compile_display(
         for i, p in enumerate(patches)
         if p.program_style is not None
     }
+    source['patch_categories'] = {
+        str(i): p.categories for i, p in enumerate(patches) if p.categories
+    }
+    source['program_categories'] = {
+        str(i): p.program_categories
+        for i, p in enumerate(patches)
+        if p.program_categories
+    }
     authored = tomlkit.dumps(source).encode('utf-8')
     text_data = b''.join(struct.pack('<H', len(t)) + t for t in texts)
     page_data = b''.join(pages)
@@ -245,6 +261,40 @@ def merge_style(*styles: models.Style | None) -> models.Style:
     for style in styles:
         if style is not None:
             values.update(style.model_dump(exclude_none=True))
+    return models.Style.model_validate(values)
+
+
+def category_style(
+    names: list[str], categories: dict[str, models.Category]
+) -> models.Style:
+    if unknown := set(names) - set(categories):
+        raise ValueError(f'unknown categories: {sorted(unknown)}')
+    values: dict[str, object] = {}
+    priorities: dict[str, int] = {}
+    owners: dict[str, str] = {}
+    for name in sorted(set(names), key=lambda n: (-categories[n].priority, n)):
+        category = categories[name]
+        if category.style is None:
+            continue
+        for field, value in category.style.model_dump(exclude_none=True).items():
+            if field not in priorities:
+                values[field], priorities[field], owners[field] = (
+                    value,
+                    category.priority,
+                    name,
+                )
+            elif priorities[field] == category.priority:
+                conflict = (
+                    graphics.color(str(values[field])) != graphics.color(str(value))
+                    if field in ('foreground_color', 'background_color')
+                    else values[field] != value
+                )
+                if conflict:
+                    raise ValueError(
+                        f'categories {owners[field]!r} and {name!r}: '
+                        f'conflicting {field} '
+                        f'at priority {category.priority}'
+                    )
     return models.Style.model_validate(values)
 
 
@@ -291,7 +341,8 @@ PATCH_FIELDS = (
     'instrument',
 )
 FIELDS = {
-    'category.name': 0,
+    'group.name': 0,
+    'categories': CONSTANT,
     'display_name': 1,
     'program': 2,
     'bank': 3,
@@ -314,6 +365,6 @@ SOURCE_FIELDS = (
     'contrast',
     'windows',
     'pages',
-    'category_styles',
+    'categories',
     'parameters',
 )

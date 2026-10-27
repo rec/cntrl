@@ -51,6 +51,13 @@ class Style(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class Category(BaseModel, frozen=True):
+    priority: Annotated[int, Field(strict=True)] = 0
+    style: Style | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Patch(BaseModel, frozen=True):
     instrument: str
     program: Annotated[int, Field(strict=True, ge=1, le=128)] | StrictStr
@@ -60,6 +67,7 @@ class Patch(BaseModel, frozen=True):
     name: str | None = None
     display_name: str | None = None
     style: Style | None = None
+    categories: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -75,6 +83,7 @@ class TablePatch(BaseModel, frozen=True):
     description: str | None = None
     tags: list[str] = Field(default_factory=list)
     style: Style | None = None
+    categories: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -87,7 +96,7 @@ class Definitions(BaseModel, frozen=True):
 
 
 class Page(BaseModel, frozen=True):
-    fields: list[str] = Field(default_factory=lambda: ['category.name', 'display_name'])
+    fields: list[str] = Field(default_factory=lambda: ['group.name', 'display_name'])
     style: Style | None = None
     line_styles: dict[str, Style] = Field(default_factory=dict)
 
@@ -189,7 +198,7 @@ class Show(BaseModel, frozen=True):
     ] = 0.6
     windows: Windows = Field(default_factory=Windows)
     pages: dict[str, Page] = Field(default_factory=lambda: {'patch': Page()})
-    category_styles: dict[str, Style] = Field(default_factory=dict)
+    categories: dict[str, Category] = Field(default_factory=dict)
     parameters: dict[str, Parameter] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra='forbid')
