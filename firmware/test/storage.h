@@ -6,7 +6,7 @@
 #include <vector>
 
 struct TestStorage : cntrl::SetupStorage {
-    std::map<std::string, std::array<std::vector<uint8_t>, 2>> files;
+    std::map<std::string, std::array<std::vector<uint8_t>, 4>> files;
     std::string directory;
     unsigned slot = 0;
     int remaining = -1;

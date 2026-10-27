@@ -4,6 +4,10 @@ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 test:
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" \
+		-fsanitize=address,undefined "$(ROOT)/test/test_songs.cpp" -o "$(ROOT)/build/test_songs"
+	"$(ROOT)/build/test_songs"
+	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" \
 		-fsanitize=address,undefined -fno-omit-frame-pointer \
 		"$(ROOT)/test/test_history_steps.cpp" -o "$(ROOT)/build/test_history_steps"
 	"$(ROOT)/build/test_history_steps"
