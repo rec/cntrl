@@ -210,3 +210,40 @@ This image was not flashed. A read-only device query returned
 `CNTRL READY 11 34583 43363d4a`, while the current source uses show format 14.
 Deployment therefore also requires recompiling the pedal's existing setups.
 Physical rendering and SD-card latency have not been verified for custom assets.
+
+### SD font deployment completed, 2026-10-27
+
+The image above was subsequently installed through the running upload helper.
+The first attempt reported a USB write error. After checking that the expected
+serial 14468280 still enumerated as HalfKay, the same verified image uploaded
+successfully. Stock firmware returned, and the user entered cntrl with A+F.
+
+Before flashing, both existing setups were downloaded with checksum verification.
+The historical version-11 exporter from `681ed88^` exported each backup, and the
+historical compiler reproduced both original binaries byte-for-byte. Local
+backups, converted TOML, verification scripts and downloaded results are retained
+under the ignored `firmware/build/sd-font-deploy-20261027/` directory.
+The conversion preserved all 256 pman patches, their order, instrument routes and
+MIDI bytes. Display settings were converted to the current automatic fitting and
+checkerboard treatment of already-sent names.
+
+The three installed setups passed byte-for-byte read-back:
+
+| Setup | Show bytes | CRC32 |
+| --- | ---: | --- |
+| `pman` | 34597 | `488beaf6` |
+| `font-demo` | 1354 | `e824a96d` |
+| `sd-font-demo` | 1473 | `b98c9bca` |
+
+The SD demo uses Caveat Bold, Courier Prime and Courier Prime Bold through local
+font declarations. Its three SD assets total 107365 bytes:
+`7cdcbd69.cfont` (35586), `a60f4793.cfont` (36466), and
+`f57d73e3.cfont` (35313). Each asset was downloaded and compared byte-for-byte;
+a second copy request exercised reuse of each existing asset. The demo activated
+successfully, and the user confirmed correct appearance of all three samples.
+
+The normal setup download command then downloaded all three setups and the SD
+font files. Each downloaded TOML recompiled byte-for-byte to its installed binary,
+and its regenerated font assets matched the uploaded files. No MIDI send was
+requested during deployment or verification. The pedal was returned to `pman`;
+final status is `CNTRL READY 14 34597 488beaf6`. SD latency was not measured.
