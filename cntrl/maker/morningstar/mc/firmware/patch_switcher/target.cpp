@@ -11,6 +11,7 @@
 #include "switches.h"
 #include "renderer.h"
 #include "storage_listing.h"
+#include "font_storage.h"
 #include "../../splash/board.h"
 #include "../../splash/router.h"
 
@@ -18,6 +19,7 @@
 
 namespace {
 extern cntrl::splash::Session splash_session;
+font_assets::Files font_files;
 USBHost host;
 MIDIDevice host_midi(host);
 FlexSerial port1(-1, 26), port2(-1, 38), port3(-1, 39), port4(-1, 14);
@@ -39,6 +41,13 @@ public:
     }
     bool supports_font(unsigned font, unsigned size) const override {
         return ShowGraphics::supports_font(font, size);
+    }
+    bool supports_font_asset(uint32_t key, unsigned size) const override { return font_files.supports(key, size); }
+    void begin_fonts() override { font_assets::cache.begin(); }
+    bool stage_font(uint32_t key, unsigned size) override { return font_files.stage(key, size); }
+    void finish_fonts(bool commit) override {
+        if (commit) renderer_.invalidate();
+        font_assets::cache.finish(commit);
     }
     bool output_idle() const override { return bridge_.idle(); }
     void set_usb_midi_interface(bool enabled) override {
@@ -286,7 +295,8 @@ void storage_info(bool scan) {
 }
 
 void midi_status(unsigned route) { board.midi_status(route); }
-cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status);
+bool font_command(const char *line) { return font_files.command(line, board); }
+cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, font_command);
 ButtonState buttons[6];
 uint32_t last_scan = 0;
 
@@ -297,6 +307,7 @@ void initialize_target() {
     initialize_displays(false);
     board.begin();
     card.ready = SD.begin(BUILTIN_SDCARD);
+    font_files.ready = card.ready;
     splash_card.ready = card.ready;
     splash_assets.boot();
     documents.boot();

@@ -7,9 +7,10 @@ namespace cntrl::splash {
 class Router {
 public:
     Router(cntrl::Documents &documents, Receiver &assets, Session &session, cntrl::Replies &replies,
-           void (*storage_info)(bool), void (*midi_status)(unsigned) = nullptr)
+           void (*storage_info)(bool), void (*midi_status)(unsigned) = nullptr,
+           bool (*font_command)(const char *) = nullptr)
         : documents_(documents), assets_(assets), session_(session), replies_(replies),
-          storage_info_(storage_info), midi_status_(midi_status) {}
+          storage_info_(storage_info), midi_status_(midi_status), font_command_(font_command) {}
     bool accepts_input() const { return assets_.accepts_input(); }
     void receive(uint8_t byte, uint32_t now) {
         if (assets_.busy()) { assets_.receive(byte, now); return; }
@@ -24,6 +25,9 @@ public:
         if (overflow_) replies_.reply("CNTRL ERROR command-too-long");
         else {
             line_[used_] = 0;
+            if (font_command_ && !std::strncmp(line_, "CNTRL FONT ", 11)) {
+                session_.stop(); font_command_(line_); used_ = 0; overflow_ = false; return;
+            }
             if (midi_status_ && !std::strcmp(line_, "CNTRL MIDI RESET")) {
                 midi_status_(9); used_ = 0; overflow_ = false; return;
             }
@@ -69,7 +73,8 @@ private:
     cntrl::Replies &replies_;
     void (*storage_info_)(bool);
     void (*midi_status_)(unsigned);
-    char line_[256];
+    bool (*font_command_)(const char *);
+    char line_[320];
     unsigned used_ = 0;
     uint32_t last_ = 0;
     bool overflow_ = false;

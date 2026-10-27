@@ -34,6 +34,10 @@ def read_document(path: Path) -> object:
         for p in patches:
             if isinstance(p, dict):
                 p.setdefault('instrument', path.stem)
+    if isinstance(document, dict) and isinstance(fonts := document.get('fonts'), dict):
+        for n, f in fonts.items():
+            if isinstance(f, str):
+                fonts[n] = str((path.parent / f).resolve())
     return document
 
 
@@ -65,13 +69,27 @@ def normalize_patch(value: object) -> models.Patch:
 
 
 def compile_show(
-    document: object, definitions: object, tables: list[object], target: models.Target
+    document: object,
+    definitions: object,
+    tables: list[object],
+    target: models.Target,
+    assets: dict[int, bytes] | None = None,
 ) -> bytes:
     errors: list[str] = []
+    generated: dict[int, bytes] = {}
     try:
         show = models.Show.model_validate(document)
     except ValidationError as error:
         raise CompilationError(_validation_errors('show', error)) from error
+    if show.fonts:
+        from ..maker.morningstar.mc.font_assets import prepare_fonts
+
+        try:
+            show, target, generated = prepare_fonts(show, target)
+        except (OSError, ValueError) as error:
+            raise CompilationError([f'fonts: {error}']) from error
+        if assets is not None:
+            assets.update(generated)
     setups: dict[tuple[str, str], models.Setup] = {}
     embedded_programs: list[dict[str, object]] = []
     try:
@@ -287,6 +305,10 @@ def compile_show(
         screen_records, references, display_records = display.compile_display(
             show, display_patches, target
         )
+        if generated:
+            from ..maker.morningstar.mc.font_assets import validate_budget
+
+            validate_budget(screen_records, display_records, generated)
     except ValueError as error:
         errors.append(str(error))
     if len(references) == len(patches):

@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Annotated
 
+import tomlkit
 import tyro
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -91,7 +92,9 @@ class Status(BaseModel, frozen=True):
     port: Path
 
 
-def compile_inputs(command: Sources) -> dict[str, bytes]:
+def compile_inputs(
+    command: Sources, assets: dict[str, dict[int, bytes]] | None = None
+) -> dict[str, bytes]:
     errors: list[str] = []
 
     documents = data_files.expressions(command.document, errors)
@@ -132,12 +135,16 @@ def compile_inputs(command: Sources) -> dict[str, bytes]:
         seen.add(e.name.lower())
         if target is not None:
             try:
+                fonts: dict[int, bytes] = {}
                 result[e.name] = compiler.compile_show(
                     document,
                     definition_data[0] if definition_data else {'setups': []},
                     table_data,
                     target,
+                    fonts,
                 )
+                if assets is not None:
+                    assets[e.name] = fonts
             except compiler.CompilationError as error:
                 errors.extend(f'{e.name}: {x}' for x in error.errors)
     if errors:
@@ -146,7 +153,8 @@ def compile_inputs(command: Sources) -> dict[str, bytes]:
 
 
 def run_setup(command: Copy | Set | List | Delete | Rotate | Download) -> None:
-    compiled = compile_inputs(command) if isinstance(command, Copy) else {}
+    assets: dict[str, dict[int, bytes]] = {}
+    compiled = compile_inputs(command, assets) if isinstance(command, Copy) else {}
     with transport.SerialConnection(command.port) as connection:
         client = transport.SetupClient(connection)
         if isinstance(command, Set):
@@ -184,6 +192,8 @@ def run_setup(command: Copy | Set | List | Delete | Rotate | Download) -> None:
             failures: list[str] = []
             try:
                 for name, data in compiled.items():
+                    for key, font in assets[name].items():
+                        client.copy_font(key, font)
                     client.copy(name, data, command.overwrite)
                     print(
                         f'{name}: copied and verified ({len(data)} bytes)', flush=True
@@ -256,6 +266,14 @@ def run_setup(command: Copy | Set | List | Delete | Rotate | Download) -> None:
             else:
                 for n in names:
                     text = resolved.export(client.download(n))
+                    fonts = tomlkit.parse(text).unwrap().get('fonts', {})
+                    if isinstance(fonts, dict):
+                        for p in fonts.values():
+                            if not isinstance(p, str):
+                                raise ValueError('invalid font asset path')
+                            key = int(Path(p).stem, 16)
+                            data = client.download_font(key)
+                            save_font(command.directory, key, data)
                     destination = command.directory / f'{n}.toml'
                     # Complete transfer before touching the destination; publish
                     # a synced sibling atomically, including overwrite protection.
@@ -276,6 +294,26 @@ def run_setup(command: Copy | Set | List | Delete | Rotate | Download) -> None:
                     print(destination)
 
 
+def save_font(directory: Path, key: int, data: bytes) -> None:
+    destination = directory / 'fonts' / f'{key:08x}.cfont'
+    destination.parent.mkdir(exist_ok=True)
+    if destination.exists():
+        if destination.read_bytes() != data:
+            raise ValueError(f'{destination}: font checksum collision')
+        return
+    with NamedTemporaryFile(
+        dir=destination.parent, prefix='.cntrl-', delete=False
+    ) as output:
+        temporary = Path(output.name)
+        output.write(data)
+        output.flush()
+        os.fsync(output.fileno())
+    try:
+        destination.hardlink_to(temporary)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def main() -> None:
     command = tyro.cli(
         Annotated[Compile, tyro.conf.subcommand(name='compile')]
@@ -285,12 +323,16 @@ def main() -> None:
     )
     try:
         if isinstance(command, Compile):
-            results = compile_inputs(command)
+            assets: dict[str, dict[int, bytes]] = {}
+            results = compile_inputs(command, assets)
             if len(results) != 1:
                 raise ValueError(
                     'compile accepts one expression; use setup copy for multiple setups'
                 )
             data = next(iter(results.values()))
+            for fonts in assets.values():
+                for key, font in fonts.items():
+                    save_font(command.output.parent, key, font)
             command.output.write_bytes(data)
             ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
             print(

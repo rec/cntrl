@@ -190,6 +190,40 @@ class SetupClient:
         if (response := self.connection.line()) != 'CNTRL OK':
             raise ValueError(response)
 
+    def copy_font(self, key: int, data: bytes) -> None:
+        if not 8 <= len(data) <= 262144 or not key or crc32(data) != key:
+            raise ValueError('invalid font asset size/checksum')
+        response = self.request(f'CNTRL FONT BEGIN {key:08x} {len(data)}')
+        if response not in ('CNTRL SEND', 'CNTRL EXISTS'):
+            raise ValueError(response)
+        if response == 'CNTRL SEND':
+            for i in range(0, len(data), 128):
+                self.ok('CNTRL FONT DATA ' + data[i : i + 128].hex())
+            self.ok('CNTRL FONT END')
+        if self.download_font(key) != data:
+            raise ValueError('font asset read-back mismatch or checksum collision')
+
+    def download_font(self, key: int) -> bytes:
+        response = self.request(f'CNTRL FONT SIZE {key:08x}')
+        parts = response.split()
+        if len(parts) != 3 or parts[:2] != ['CNTRL', 'FONT']:
+            raise ValueError(f'invalid font response: {response}')
+        length = int(parts[2])
+        if not 8 <= length <= 262144:
+            raise ValueError('invalid font asset length')
+        result = bytearray()
+        while len(result) < length:
+            response = self.request(f'CNTRL FONT READ {key:08x} {len(result)}')
+            if not response.startswith('CNTRL DATA '):
+                raise ValueError(response)
+            chunk = bytes.fromhex(response[11:])
+            if not 1 <= len(chunk) <= 128:
+                raise ValueError('invalid font asset chunk')
+            result.extend(chunk)
+        if len(result) != length or crc32(result) != key:
+            raise ValueError('font asset checksum/length mismatch')
+        return bytes(result)
+
 
 def device_status(port: Path) -> str:
     with SerialConnection(port) as connection:
