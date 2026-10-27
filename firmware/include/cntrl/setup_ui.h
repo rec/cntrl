@@ -16,13 +16,23 @@ public:
     }
     void poll(uint8_t held) {
         if (locked_ && !held) locked_ = false;
+        if (mode_ == Mode::history_work && !docs_.busy()) {
+            if (docs_.last_error()[0]) mode_ = Mode::failed;
+            else {
+                mode_ = history_destination_; revision_ = docs_.history_revision();
+                const auto &comparison = docs_.history_comparison();
+                changed_patches_ = comparison.patches; changed_routes_ = comparison.routes;
+                changed_settings_ = comparison.settings; changed_formatting_ = comparison.formatting;
+            }
+            render();
+        }
         if (mode_ == Mode::saving && !docs_.busy()) {
             if (docs_.last_error()[0]) { mode_ = Mode::failed; render(); }
             else { mode_ = Mode::closed; docs_.redraw(); }
         }
     }
     void button(unsigned button, bool down, uint32_t now) {
-        if (!down || locked_ || mode_ == Mode::saving) return;
+        if (!down || locked_ || (mode_ == Mode::saving || mode_ == Mode::history_work)) return;
         if (mode_ == Mode::failed) { if (button == 2 || button == 5) close(); return; }
         if (mode_ == Mode::catalogue) {
             if (button < 2) browse(button == 0);
@@ -48,18 +58,19 @@ public:
         } else if (mode_ == Mode::history) {
             if (button == 2 && !revision_.number) {
                 if (!docs_.history_save(name_, "")) { hardware_.error("Snapshot failed"); return; }
-                docs_.history_next(name_, UINT64_MAX, revision_); render(); return;
+                history_destination_ = Mode::history; mode_ = Mode::history_work; render(); return;
             }
             if (button == 5) mode_ = Mode::action;
             else if (button < 2) {
-                Revision next;
-                if (button == 1) docs_.history_next(name_, revision_.number ? revision_.number : UINT64_MAX, next);
-                revision_ = next;
+                if (button == 0) revision_ = Revision();
+                else if (docs_.history_next(name_, revision_.number ? revision_.number : UINT64_MAX)) {
+                    history_destination_ = Mode::history; mode_ = Mode::history_work;
+                }
             } else if (button == 2 && revision_.number) {
-                if (!docs_.history_compare(name_, revision_.number, changed_patches_, changed_routes_, changed_settings_, changed_formatting_)) {
+                if (!docs_.history_compare(name_, revision_.number)) {
                     hardware_.error("Cannot compare revision"); return;
                 }
-                mode_ = Mode::comparison; item_ = 0;
+                history_destination_ = Mode::comparison; mode_ = Mode::history_work; item_ = 0;
             }
         } else if (mode_ == Mode::comparison) {
             if (button == 5) mode_ = Mode::history;
@@ -91,9 +102,9 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, catalogue, action, patch, field, value, decision, saving, failed, history, comparison };
+    enum class Mode { closed, catalogue, action, patch, field, value, decision, saving, failed, history, comparison, history_work };
     Documents &docs_; Hardware &hardware_;
-    Mode mode_ = Mode::closed;
+    Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
     unsigned changed_patches_ = 0, changed_routes_ = 0;
     bool changed_settings_ = false, changed_formatting_ = false;
@@ -134,7 +145,8 @@ private:
             value_label = "Value";
         } else if (mode_ == Mode::decision) {
             title = "Unsaved edits"; value = item_ == 0 ? "Save" : item_ == 1 ? "Discard" : "Cancel";
-        } else if (mode_ == Mode::saving) { title = "Saving"; value = "Please wait"; }
+        } else if (mode_ == Mode::history_work) { title = "History"; value = "Working..."; }
+        else if (mode_ == Mode::saving) { title = "Saving"; value = "Please wait"; }
         else if (mode_ == Mode::failed) { title = "Save failed"; value = docs_.last_error(); }
         if (mode_ == Mode::history) {
             title = "History"; value_label = "Revision";

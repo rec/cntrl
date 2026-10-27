@@ -1,6 +1,7 @@
 // A host-only protocol peer. No device access, used by the Python PTY test.
 #include <cntrl/documents.h>
 #include <unistd.h>
+#include <poll.h>
 #include <vector>
 #include "storage.h"
 
@@ -29,10 +30,15 @@ int main() {
     cntrl::Documents docs(peer, peer, app, peer);
     docs.boot();
     uint8_t buffer[37];
-    ssize_t n;
-    while ((n = ::read(0, buffer, sizeof(buffer))) > 0) {
-        for (ssize_t i = 0; i < n; ++i) docs.receive(buffer[i], 0);
-        // A maximum-sized document needs at most 128 commit chunks.
-        for (unsigned i = 0; i < 129; ++i) docs.tick(0);
+    pollfd input{0, POLLIN, 0};
+    while (true) {
+        int ready = ::poll(&input, 1, docs.busy() ? 0 : -1);
+        if (ready < 0) return 1;
+        if (ready) {
+            ssize_t n = ::read(0, buffer, sizeof(buffer));
+            if (n <= 0) break;
+            for (ssize_t i = 0; i < n; ++i) docs.receive(buffer[i], 0);
+        }
+        docs.tick(0);
     }
 }

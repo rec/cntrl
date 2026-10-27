@@ -73,7 +73,12 @@ class SerialConnection:
             if not value:
                 raise OSError('USB serial disconnected')
             if value == b'\n':
-                return result.decode('ascii').rstrip('\r')
+                response = result.decode('ascii').rstrip('\r')
+                if response == 'CNTRL WAIT':
+                    result.clear()
+                    deadline = time.monotonic() + self.timeout
+                    continue
+                return response
             result.extend(value)
         raise ValueError(f'USB serial response exceeds {limit - 1} bytes')
 

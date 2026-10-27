@@ -16,10 +16,17 @@ struct TestStorage : cntrl::SetupStorage {
         directory = std::string("history/") + name + "/" + std::to_string(number);
         revisions[name][number] = directory; revision = true;
     }
-    uint64_t revision_before(const char *name, uint64_t before) override {
-        uint64_t best = 0;
-        for (const auto &r : revisions[name]) if (r.first < before && r.first > best) best = r.first;
-        return best;
+    std::map<uint64_t, std::string>::const_iterator scan_, scan_end_;
+    uint64_t scan_before_ = 0;
+    bool scan_records_ = false;
+    void revision_scan(const char *name, uint64_t before, bool records_only) override {
+        scan_ = revisions[name].begin(); scan_end_ = revisions[name].end(); scan_before_ = before; scan_records_ = records_only;
+    }
+    bool revision_scan_step(uint64_t &best) override {
+        if (scan_ == scan_end_) return true;
+        if (scan_->first < scan_before_ && scan_->first > best
+            && (!scan_records_ || files[scan_->second][0].size() >= 208)) best = scan_->first;
+        ++scan_; return false;
     }
     bool remove_revision(const char *name, uint64_t number) override {
         auto &r = revisions[name]; auto i = r.find(number); if (i == r.end()) return false;

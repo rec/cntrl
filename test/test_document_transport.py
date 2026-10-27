@@ -195,3 +195,14 @@ def test_revision_commands_against_cpp_receiver(peer: Path) -> None:
         process.wait(timeout=5)
         os.close(master)
         os.close(slave)
+
+
+def test_progress_reply_is_not_returned_as_the_command_result() -> None:
+    master, slave = pty.openpty()
+    try:
+        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+            os.write(master, b'CNTRL WAIT\nCNTRL WAIT\nCNTRL OK\n')
+            assert connection.line() == 'CNTRL OK'
+    finally:
+        os.close(master)
+        os.close(slave)

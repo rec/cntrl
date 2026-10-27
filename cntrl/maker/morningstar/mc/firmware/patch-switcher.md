@@ -634,3 +634,14 @@ leave their directories to reserve numbers. These directories are separate from
 `/cntrl/setups`, so history does not enter the performance setup catalogue.
 See [revision history](../../../../../doc/setup-revision-history.md) for commands
 and pedal controls. This implementation was built and tested without flashing.
+
+The cooperative history follow-up was flashed with the running upload helper on
+2026-10-27. Combined image SHA-256:
+`2c564a6b7268116238e8ef1fc9369cbaf864a290034ba5cc92c9d99d05a01aab`.
+The first upload reported a USB write error; the identical verified image
+succeeded on retry, resetting to stock firmware. Before flashing, pman was
+selected and USB reported `CNTRL READY 14 34597 488beaf6`; its source was backed
+up. Post-A+F verification and physical history latency measurements remain pending.
+History I/O now yields between blocks and directory entries. The native budget
+test uses a 64 KiB document and over 2,000 revision entries. Individual SD calls
+still require physical latency qualification.

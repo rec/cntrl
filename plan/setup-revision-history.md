@@ -1,6 +1,7 @@
 # Setup revision history
 
-Status: implemented; not flashed or physically qualified. See
+Status: implemented with cooperative history jobs; flashed, physical timing
+qualification pending. See
 [usage and implementation limits](../doc/setup-revision-history.md).
 
 ## Goal

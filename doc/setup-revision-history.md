@@ -54,14 +54,22 @@ document and stages required fonts before replacing Current; missing assets or
 unsupported compiled versions fail without replacement. Unsupported revisions
 remain downloadable for recompilation with appropriate host tooling.
 
-History reads, writes and directory enumeration use fixed-size buffers; no full
-history index is held in RAM, and boot does not enumerate history. A snapshot is
-written and verified in 512-byte blocks. Directory scans and snapshot operations
-currently run synchronously during management/save operations. SD latency and
-large-history browsing responsiveness need physical qualification; they are not
-hard real-time operations.
+History work runs as cooperative jobs. Each main-loop step handles one directory
+entry or at most 512 bytes of file I/O. Snapshot hashing, writing and read-back
+verification yield between blocks, including the outgoing current-document read.
+Clear history traverses the directory once, deleting one record per step. The
+pedal displays Working while a history action is pending, then shows its result
+or error. Host operations receive progress replies during long jobs.
+
+No history index is held in RAM and boot does not enumerate history. The state
+machine bounds application work; an individual SD library call can still have
+hardware-dependent latency. Storage calls, font loading and the existing final
+current-setup activation path are not hard real-time guarantees. Physical timing
+qualification is still required.
 
 Native tests cover reversible restores, failed writes, deletion, interrupted
-records and more than 1,000 revisions. Python tests compare configurations and
-exercise the real C++ command receiver through a pseudo-terminal. No pedal flash
-or physical storage qualification was performed for this implementation.
+records, more than 1,000 revisions, and per-step I/O limits with a 64 KiB document
+and more than 2,000 directory entries. Python tests compare configurations and
+exercise the real C++ command receiver through a pseudo-terminal, including
+progress replies. The cooperative implementation has been flashed; post-boot
+verification and physical storage timing qualification remain pending.

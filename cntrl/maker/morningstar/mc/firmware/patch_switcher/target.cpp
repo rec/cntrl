@@ -243,19 +243,25 @@ public:
         std::snprintf(directory_, sizeof(directory_), "/cntrl/history/%s/%016llx", name, (unsigned long long)number);
         revision_ = true;
     }
-    uint64_t revision_before(const char *name, uint64_t before) override {
+    void revision_scan(const char *name, uint64_t before, bool records_only) override {
         char path[96]; std::snprintf(path, sizeof(path), "/cntrl/history/%s", name);
-        auto root = SD.sdfs.open(path, O_RDONLY); FsFile entry; uint64_t best = 0;
-        if (!root) return 0;
-        char candidate[32];
-        while (entry.openNext(&root, O_RDONLY)) {
-            if (entry.isDirectory() && entry.getName(candidate, sizeof(candidate)) && std::strlen(candidate) == 16) {
-                char *end; uint64_t n = std::strtoull(candidate, &end, 16);
-                if (!*end && n < before && n > best) best = n;
-            }
-            entry.close();
+        history_directory_.close(); history_directory_ = SD.sdfs.open(path, O_RDONLY);
+        history_before_ = before; history_records_ = records_only;
+    }
+    bool revision_scan_step(uint64_t &best) override {
+        FsFile entry; char candidate[32];
+        if (!history_directory_ || !entry.openNext(&history_directory_, O_RDONLY)) {
+            history_directory_.close(); return true;
         }
-        return best;
+        if (entry.isDirectory() && entry.getName(candidate, sizeof(candidate)) && std::strlen(candidate) == 16) {
+            char *end; uint64_t n = std::strtoull(candidate, &end, 16);
+            if (!*end && n < history_before_ && n > best) {
+                bool record = true;
+                if (history_records_) { FsFile file; record = file.open(&entry, "0.bin", O_RDONLY) && file.size() >= 208; }
+                if (record) best = n;
+            }
+        }
+        entry.close(); return false;
     }
     bool remove_revision(const char *name, uint64_t number) override {
         choose_revision(name, number); char path[144]; filename(0, path);
@@ -311,7 +317,9 @@ public:
         return synced; // Documents also reopens and verifies all bytes.
     }
 private:
-    FsFile file_;
+    FsFile file_, history_directory_;
+    uint64_t history_before_ = 0;
+    bool history_records_ = false;
     bool revision_ = false;
     char directory_[128] = {};
     void filename(unsigned slot, char *path) const { std::snprintf(path, 144, "%s/%u.bin", directory_, slot); }
