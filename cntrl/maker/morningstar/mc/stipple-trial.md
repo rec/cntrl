@@ -30,5 +30,8 @@ checks. It is `firmware/build/boot-switch/combined.hex`, SHA-256
 RAM1 leaves 96,640 bytes for local variables; RAM2 leaves 309,216 bytes for
 the heap. These are linker budgets, not runtime peak measurements.
 
-The trial has not been flashed. The pedal remains on the solid-color pman
-version for comparison.
+The trial was flashed through the running upload helper after the user finished
+the solid-color comparison and requested installation. The first USB write
+failed; after verifying HalfKay serial 14468280, the same image uploaded
+successfully on the second attempt. Stock firmware returned. Enter cntrl with
+A+F to verify pman selection and compare the stippled appearance physically.
