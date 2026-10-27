@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.13"
 
 [options]
-exclude-newer = "2026-10-20T08:26:56.387422Z"
+exclude-newer = "2026-10-20T17:38:10.505584Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -20,6 +20,7 @@ name = "cntrl"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "pillow" },
     { name = "pydantic" },
     { name = "reccy" },
     { name = "tomlkit" },
@@ -28,7 +29,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "pillow" },
     { name = "pytest" },
     { name = "pyupgrade" },
     { name = "ruff" },
@@ -37,6 +37,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "pillow", specifier = ">=13.0.0" },
     { name = "pydantic", specifier = ">=2,<3" },
     { name = "reccy", editable = "../reccy" },
     { name = "tomlkit", specifier = ">=0.15.1" },
@@ -45,7 +46,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pillow", specifier = ">=13.0.0" },
     { name = "pytest" },
     { name = "pyupgrade" },
     { name = "ruff" },
