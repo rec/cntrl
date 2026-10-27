@@ -141,9 +141,9 @@ private:
         if (index >= 0) {
             const uint8_t *p = document_.patch(unsigned(index));
             int sent = last_sent_[u16(p)];
-            bool muted = slot == 2 && sent >= 0
+            bool already_sent = slot == 2 && sent >= 0
                 && !std::memcmp(p + 4, document_.patch(unsigned(sent)) + 4, 3);
-            document_.page(view, unsigned(index), slot, muted);
+            document_.page(view, unsigned(index), slot, already_sent);
         }
         hardware_.show(slot, view);
     }

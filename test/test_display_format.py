@@ -57,11 +57,12 @@ def test_default_page_reproduces_category_and_patch_ui(target: models.Target) ->
         models.Show(instruments={}, patches={}), [patch()], target
     )
     expected = [
-        (0, (0, 40, 4, 0, 0, 65535, 40, 0, 31727, 0), 20, 'wind'),
-        (1, (0, 40, 4, 0, 0, 65535, 40, 0, 31727, 0), 5, 'Flute'),
+        (0, (0, 40, 4, 0, 0, 65535, 40, 0), 20, 'wind'),
+        (1, (0, 40, 4, 0, 0, 65535, 40, 0), 5, 'Flute'),
     ]
     assert all(lines(block, r) == expected for r in references[0])
     assert all(graphics.SCREEN.unpack(w)[1:3] == (40, 4) for w in windows)
+    assert all(w[12:] == bytes(4) for w in windows)
 
 
 def test_display_fixture_matches_portable_firmware(target: models.Target) -> None:
@@ -164,7 +165,7 @@ def test_styles_merge_per_property_and_category_heading_excludes_patch(
             },
             'pages': {
                 'patch': {
-                    'style': {'half': 'gray'},
+                    'style': {'autoscale_fonts': False},
                     'line_styles': {'display_name': {'font_size': '24 px'}},
                 }
             },
@@ -175,7 +176,6 @@ def test_styles_merge_per_property_and_category_heading_excludes_patch(
     heading, label = lines(block, refs[0][2])
     assert (heading[1][1], heading[1][4], heading[1][5]) == (8, 65535, 31)
     assert (label[1][1], label[1][4], label[1][5]) == (24, 65504, 31)
-    assert label[1][8] == graphics.rgb565(graphics.color('gray'))
 
 
 def test_false_overrides_inherited_autoscaling(target: models.Target) -> None:

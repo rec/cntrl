@@ -225,7 +225,7 @@ unknown or duplicate names are rejected. Absent/empty values are omitted, while
 zero and false remain visible. A page supports at most 16 fields, further
 limited by the available display height.
 
-Each partial style supports `foreground_color`, `background_color`, `half`,
+Each partial style supports `foreground_color`, `background_color`,
 `font_name`, `font_size` and nullable `autoscale_fonts`. Merge individual
 properties in ascending priority: show defaults, window style, page style,
 program style, category style, show-local patch style, and page `line_styles`
@@ -266,12 +266,10 @@ Undo updates it only when a restoration is actually sent. A failed send does
 not change it, and starting a new show clears known selections. Greyed-out names
 can still be sent normally; no MIDI messages or history entries are suppressed.
 
-The stipple trial preserves the resolved foreground color and exposes the
+The stipple preserves the resolved foreground color and exposes the
 line's background at pixels where `(x + y) & 1` is nonzero. Masking follows
 composition of all glyphs, so overlapping letters share a consistent pattern.
 Category headings, other windows and padding keep their normal appearance.
-The existing `half` property and RGB565 field remain in compiled format 11 for
-this comparison trial, but no longer determine the already-sent appearance.
 
 Colors accept `0xRRGGBB` or case-insensitive names: black, white, red, green,
 lime, blue, yellow, cyan/aqua, magenta/fuchsia, silver, gray/grey, maroon, olive,
@@ -293,10 +291,11 @@ exceeds the available height, extra gaps are zero and clipping still applies.
 The renderer computes these positions from the complete pane; compiled row-y
 values do not determine vertical spacing.
 
-## Binary and transfer protocol, version 11
+## Binary and transfer protocol, version 12
 
-Version 11 replaces fixed category/patch layouts with resolved pages and line
-styles, and retains authored formatting metadata for editable exports. The
+Version 12 stores resolved pages and line styles with foreground and background
+colors. Each display record ends with four reserved zero bytes. Authored
+formatting metadata is retained for editable exports. The
 default-off `usb_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
@@ -321,7 +320,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 11 firmware. Replace old `screens.NAME` color tables with
+version 12 firmware. Replace old `screens.NAME` color tables with
 `windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
@@ -338,8 +337,8 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (11), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
-| Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment, half RGB565; two zero bytes |
+| Header, 28 bytes | `CSW1`, u16 version (12), u16 chord milliseconds, u32 total bytes, u16 instrument/category/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Category, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 category, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (undo/sent/next) |
@@ -367,7 +366,7 @@ nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 11 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 12 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 Names in commands are hex-encoded ASCII, never paths. Requests are:

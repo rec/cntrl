@@ -14,7 +14,6 @@ style = {font_size = '16 px', foreground_color = 'white'}
 
 [pages.patch]
 fields = ['brightness', 'display_name', 'volume', 'tempo', 'splash']
-line_styles = {display_name = {half = 'gray'}}
 
 [parameters.tempo]
 value = 120
