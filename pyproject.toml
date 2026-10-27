@@ -14,7 +14,13 @@ dependencies = [
 cntrl = "cntrl.patch_switcher.cli:main"
 
 [dependency-groups]
-dev = ["pytest", "ruff", "ty", "pyupgrade"]
+dev = [
+    "pytest",
+    "ruff",
+    "ty",
+    "pyupgrade",
+    "pillow>=13.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
