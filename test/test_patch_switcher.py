@@ -36,7 +36,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 12
+    assert compiler.HEADER.unpack_from(result)[1] == 13
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
@@ -70,7 +70,6 @@ def test_configuration_units_compile_to_the_same_document(
         'chord_ms': 100,
         'transition_ms': 500,
         'screensaver_timeout': 60,
-        'font_size': 8,
         'pad': 4,
         'contrast': 0.6,
     }
@@ -78,7 +77,6 @@ def test_configuration_units_compile_to_the_same_document(
         'chord_ms': '0.1 s',
         'transition_ms': '500 ms',
         'screensaver_timeout': '1:00',
-        'font_size': '8 px',
         'pad': '4 px',
         'contrast': '60 percent',
     }
@@ -116,24 +114,15 @@ def test_target_units_normalize_before_compilation(target: models.Target) -> Non
     assert models.Target.model_validate(data) == target
 
 
-@pytest.mark.parametrize('enabled', [False, True])
-def test_autoscale_round_trips_in_resolved_setup(
-    show: dict[str, object], definitions: object, target: models.Target, enabled: bool
+@pytest.mark.parametrize(
+    'field,value',
+    [('font_size', 8), ('autoscale_fonts', True), ('font_name', 'classic')],
+)
+def test_removed_show_sizing_controls_are_rejected(
+    show: dict[str, object], field: str, value: object
 ) -> None:
-    show['autoscale_fonts'] = enabled
-    data = compiler.compile_show(show, definitions, [], target)
-    exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['autoscale_fonts'] is enabled
-    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
-
-
-@pytest.mark.parametrize('value', [1, 'true', None])
-def test_autoscale_requires_a_boolean(
-    show: dict[str, object], definitions: object, target: models.Target, value: object
-) -> None:
-    show['autoscale_fonts'] = value
-    with pytest.raises(compiler.CompilationError, match='autoscale_fonts'):
-        compiler.compile_show(show, definitions, [], target)
+    with pytest.raises(ValueError, match=field):
+        models.Show.model_validate(show | {field: value})
 
 
 def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) -> None:

@@ -15,7 +15,7 @@ names. Named pages, windows and per-line styles are described in the
 [display-format design](plan/display-format.md). The default patch page retains
 the existing navigation-heading/name UI. Programs and patches can independently
 carry multiple reusable categories, with inherited membership and prioritized
-category styles. The current compiled document format is version 12; source data must be
+category styles. The current compiled document format is version 13; source data must be
 recompiled for a format change. Firmware images and setup data are deployed
 separately. The [patch-switcher plan](plan/patch-switcher.md) and
 [multiple-setups plan](plan/multiple-setups.md) describe implemented behavior;

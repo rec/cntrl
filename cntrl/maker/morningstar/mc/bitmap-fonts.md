@@ -15,8 +15,8 @@ ComicSansMS:
 
 Each face contains printable ASCII, characters 32 through 126, at nominal pixel
 sizes 12, 16, 20, 24, 28, 32, 40 and 48. Actual line heights depend on the face.
-`autoscale_fonts = true` selects a fitting size for each line. Fixed sizes use
-the usual `font_size` setting. Styles can select these fonts at any existing
+Each line automatically selects its largest fitting face. Styles select a font
+using `font_name` at any existing
 style level, including individual page fields.
 
 Circuit and CircuitBold are bitmap derivatives of Matt McInerney's Orbitron.

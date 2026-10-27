@@ -42,23 +42,19 @@ class Style(BaseModel, frozen=True):
     background_color: str | None = None
     foreground_color: str | None = None
     font_name: str | None = None
-    font_size: (
-        Annotated[int, Field(strict=True, gt=0, le=255), units.unit_validator('pixel')]
-        | None
-    ) = None
-    autoscale_fonts: Annotated[bool, Field(strict=True)] | None = None
 
     model_config = ConfigDict(extra='forbid')
 
 
 class Category(BaseModel, frozen=True):
-    priority: Annotated[int, Field(strict=True)] = 0
+    icon: str | None = None
     style: Style | None = None
 
     model_config = ConfigDict(extra='forbid')
 
 
 class Patch(BaseModel, frozen=True):
+    icon: str | None = None
     instrument: str
     program: Annotated[int, Field(strict=True, ge=1, le=128)] | StrictStr
     volume: Annotated[int, Field(strict=True, ge=0, le=127)] | None = None
@@ -73,6 +69,7 @@ class Patch(BaseModel, frozen=True):
 
 
 class TablePatch(BaseModel, frozen=True):
+    icon: str | None = None
     instrument: str
     setup: str
     program: Annotated[int, Field(strict=True, ge=1, le=128)]
@@ -181,12 +178,7 @@ class Show(BaseModel, frozen=True):
         ),
         units.unit_validator('second', exact=True),
     ] = 0
-    font_name: str | None = None
-    autoscale_fonts: Annotated[bool, Field(strict=True)] = False
-    font_size: (
-        Annotated[int, Field(strict=True, gt=0, le=255), units.unit_validator('pixel')]
-        | None
-    ) = None
+    style: Style | None = None
     pad: (
         Annotated[int, Field(strict=True, ge=0, le=255), units.unit_validator('pixel')]
         | None

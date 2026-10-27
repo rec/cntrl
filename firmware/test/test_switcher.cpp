@@ -261,7 +261,7 @@ int main(int argc, char **argv) {
         assert(!view.lines[2].text[0]);
         assert(!std::strcmp(view.lines[3].text, "120"));
         assert(!std::strcmp(view.lines[4].text, "true"));
-        assert(view.lines[0].graphics.size == 8 && view.lines[1].graphics.size == 16);
+        assert(view.lines[0].graphics.size == 16 && view.lines[1].graphics.size == 16);
         assert(view.lines[1].graphics.background == 31 && view.lines[1].graphics.foreground == 65535);
         cntrl::Pane numeric, settings;
         formatted.page(numeric, 0, 0, false);
@@ -299,7 +299,10 @@ int main(int argc, char **argv) {
             display_offset += 2 + (size == 65535 ? 0 : size);
         }
         unsigned style = display_offset + 16;
-        scaled[style + 1] = 16; scaled[style + 8] = 16;
+        for (unsigned i = 0; i < cntrl::u16(scaled.data() + display_offset + 4); ++i) {
+            scaled[style + i * 16 + 1] = 16;
+            scaled[style + i * 16 + 8] = 16;
+        }
         cntrl::put32(scaled.data() + 20, cntrl::checksum(scaled.data() + 28, unsigned(scaled.size()) - 28));
         cntrl::Document autoscale;
         assert(autoscale.load(scaled.data(), unsigned(scaled.size()), hw));
@@ -464,7 +467,7 @@ int main(int argc, char **argv) {
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].lines[1].text, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 12 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 13 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].lines[1].text, "Flute"));
     auto new_show = bytes;

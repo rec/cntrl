@@ -49,6 +49,8 @@ def export(data: bytes) -> str:
                 names_offset += size
         names.append(fields)
     source = read_source(data, names_offset)
+    patch_icons = cast(dict[str, object], source.pop('patch_icons'))
+    program_icons = cast(dict[str, object], source.pop('program_icons'))
     patch_styles = cast(dict[str, object], source.pop('patch_styles'))
     program_styles = cast(dict[str, object], source.pop('program_styles'))
     patch_categories = cast(dict[str, object], source.pop('patch_categories'))
@@ -128,6 +130,10 @@ def export(data: bytes) -> str:
                 program['display_name'] = program_display_name
             if patch_display_name is not None:
                 patch['display_name'] = patch_display_name
+            if str(j) in patch_icons:
+                patch['icon'] = patch_icons[str(j)]
+            if str(j) in program_icons:
+                program['icon'] = program_icons[str(j)]
             if str(j) in patch_styles:
                 patch['style'] = patch_styles[str(j)]
             if str(j) in program_styles:

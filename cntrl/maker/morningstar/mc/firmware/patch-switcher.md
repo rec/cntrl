@@ -203,7 +203,7 @@ The complete generated report is saved locally as
 
 ## Adapter and storage boundaries
 
-Show format version 9 includes shared top-level `font_name`/`font_size`/`pad` and
+Historically, show format version 9 included shared top-level `font_name`/`font_size`/`pad` and
 `screens.undo`, `screens.sent`, `screens.next` colors. Current firmware uses
 foreground-color stippling for the rightmost patch name when it matches the last
 successful send for its instrument (program and bank select, not label/category).
@@ -410,17 +410,18 @@ buffered traffic, so it is not a latency measurement; no lost events were report
 ## Show graphics configuration
 
 See [show configuration](../../../../../firmware/README.md#screen-graphics).
-Every screen displays only its category and patch, not a title or instrument.
-`font_name`, `font_size` and `pad` are shared by all three screens. Only colors
-remain independent. The shared padding determines the common available
-width/height for automatic sizing; the selected font must fit both lines there.
+Windows display ordered page fields, defaulting to navigation group and patch
+name. Partial styles attach to shows, windows, pages, categories, programs,
+patches and fields. Each line independently fits its font to the padded width
+and allocated height; authors select font names, not sizes. Window padding may
+override the show default.
 Foreground/background color selection and warnings are resolved on the host.
 Rendering fills the whole background and clips all text to the padded rectangle.
 
 Fonts are `classic` (default), `Arial`, and `ComicSansMS`. Classic sizes are 8,
 16, ... 96 (6x8 cell scaled by an integer). Native font sizes are 8, 9, 10, 11,
 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 60, 72 and 96; these are the
-library's nominal size names. Unsupported sizes are errors, not silently rounded.
+library's nominal size names. The compiler selects among these available bitmap faces automatically.
 Automatic sizing picks the largest supported size fitting every name and both
 lines. The selected size is resolved once on the Mac, never searched on the pedal.
 

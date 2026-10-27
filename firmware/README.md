@@ -188,10 +188,10 @@ renderer also draws management, empty-state and error messages.
 
 ```toml
 contrast = 0.6
-font_name = 'Arial'
-# font_size = 16  # Omit for automatic sizing across all three screens.
-autoscale_fonts = false
 pad = 4
+
+[style]
+font_name = 'Arial'
 
 [pages.patch]
 fields = ['group.name', 'display_name']
@@ -210,7 +210,6 @@ page = 'patch'
 # background_color = '0x002040'
 # [pages.patch.line_styles.display_name]
 # font_name = 'ComicSansMS'
-# font_size = '16 px'
 ```
 
 Field names share one namespace. Built-in patch attributes are `group.name`, `categories`,
@@ -225,24 +224,17 @@ unknown or duplicate names are rejected. Absent/empty values are omitted, while
 zero and false remain visible. A page supports at most 16 fields, further
 limited by the available display height.
 
-Each partial style supports `foreground_color`, `background_color`,
-`font_name`, `font_size` and nullable `autoscale_fonts`. Merge individual
-properties in ascending priority: show defaults, window style, page style,
-effective category styles, program style, show-local patch style, and page `line_styles`
-for that field. Attach `style` to instrument-table program entries and patch
-entries. Define reusable classifications with `[categories.CATEGORY]`, an integer
-`priority` (default zero), and an optional `[categories.CATEGORY.style]`. Attach
-`categories = ['sax', 'whole-system']` independently to program and patch entries.
-A patch inherits its program's categories, then adds its own, removing duplicates.
-For each category style property, the highest declaring priority wins. Different
-values tied at that priority are an error; equivalent RGB colors agree. Explicit
-program and patch styles override the result. The `categories` display field
-shows the effective list, separated by commas, and excludes explicit program
-and patch styling. `group.name` shows the navigation heading with page/window
-styling. Navigation lists under `patches.GROUP` do not assign categories.
-Global fields inherit page/window styles and their parameter style, if present.
-Null/omitted properties inherit; explicit false overrides true. Downloads
-preserve partial overrides instead of flattening inherited values.
+Each partial style supports `foreground_color`, `background_color` and
+`font_name`. Resolve properties independently: show style, window, page,
+ordered categories, program, patch, shared parameter (where applicable), then
+page field overrides. Omitted properties retain the earlier value.
+
+Apply program categories in listed order, followed by patch categories in listed
+order; later explicit properties win. A locally repeated category applies again.
+The `categories` field displays the unique first-occurrence membership list and
+uses category styles without program/patch overrides. Navigation headings and
+global fields do not acquire patch styles. There are no category priorities.
+See [formatting](../plan/formatting.md) for the complete contract.
 
 For example, the program can declare `categories = ['sax']`, while a patch that
 sets up the whole board adds `categories = ['whole-system']`. That patch displays
@@ -258,7 +250,6 @@ Configuration fragment:
 foreground_color = 'yellow'
 
 [categories.whole-system]
-priority = 10
 style = {font_name = 'CourierPrimeBold'}
 
 [[definitions.programs]]
@@ -278,16 +269,13 @@ fields = ['group.name', 'categories', 'display_name']
 ```
 
 The default font is `classic`, default padding is 4, and default colors are
-black on white. Font size is automatic when omitted. Top-level font settings
-remain show defaults; each window may override `pad`. Its full display dimensions
-come from the target. Available fonts and sizes come from the target metrics.
-Without autoscaling, lines with the same sizing settings share the largest
-fitting size. With `autoscale_fonts = true`, each line independently selects the
-largest fitting size within its equal share of the padded height, overriding
-`font_size` and preserving proportions. Explicit sizes can differ between lines
-as long as their combined heights fit. Performance pages reject initial text
-overflow; management retains its existing wrapping/clipping. Numeric edits are
-clipped if the new value is wider than the compiled size permits.
+black on white. Set the show font with `[style].font_name`; each window may
+override `pad`. Each line independently uses the largest available bitmap face
+that fits its width and equal share of the padded height, preserving proportions.
+There are no authored sizing controls. Performance pages reject initial overflow;
+management retains wrapping/clipping. Numeric edits wider than their compiled
+face are clipped. Programs, patches and categories support optional `icon` image
+file references preserved as metadata; image rendering is deferred.
 
 The compiler measures each line with its own font and stores centered offsets.
 The pedal recalculates horizontal centering for mutable numeric/global fields.
@@ -332,11 +320,11 @@ exceeds the available height, extra gaps are zero and clipping still applies.
 The renderer computes these positions from the complete pane; compiled row-y
 values do not determine vertical spacing.
 
-## Binary and transfer protocol, version 12
+## Binary and transfer protocol, version 13
 
-Version 12 stores resolved pages and line styles with foreground and background
+Version 13 stores resolved pages and line styles with foreground and background
 colors. Each display record ends with four reserved zero bytes. Authored
-formatting metadata is retained for editable exports. The
+formatting metadata, including icon references, is retained for editable exports. The
 default-off `usb_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
@@ -345,7 +333,7 @@ Configuration quantities use `reccy.configuration.units`: `chord_ms` and
 `transition_ms` accept durations such as `"100 ms"` and `"0.5 s"`, while bare
 numbers remain milliseconds. `screensaver_timeout` accepts whole seconds such
 as `"2 min"` or `"1:30"`; bare numbers remain seconds. Values must convert
-exactly to the field's integer unit and satisfy its existing bounds. Font sizes,
+exactly to the field's integer unit and satisfy its existing bounds.
 padding, target display dimensions and font metrics accept pixels (`"24 px"`);
 the target document-size limit accepts bytes (`"64 KiB"`). Contrast accepts
 dimensionless ratios or percentages (`"60 percent"`). Resolved exports contain
@@ -361,7 +349,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 12 firmware. Replace old `screens.NAME` color tables with
+version 13 firmware. Replace old `screens.NAME` color tables with
 `windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
@@ -378,7 +366,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (12), u16 chord milliseconds, u32 total bytes, u16 instrument/group/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (13), u16 chord milliseconds, u32 total bytes, u16 instrument/group/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation group, 68 bytes | name[64], u16 first patch, u16 count |
@@ -392,7 +380,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Resolved style, 16 bytes | Same layout as a screen record, one per distinct resolved style |
 | Resolved page | u8 line count followed by 8-byte line records: u8 field code, u8 already-sent indication flag, u16 style index, centered cursor x, literal-text index |
 | Literal text | u16 byte count including the final NUL, followed by ASCII text; at most 64 bytes |
-| Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, shared category definitions, explicit program/patch categories, global parameter values and original show sizing defaults |
+| Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, shared category definitions, explicit program/patch categories, global parameter values, show style, padding and explicit program/patch icon references |
 
 The existing firmware category counters and target `max_categories` limit refer
 to navigation groups. Classification categories are resolved by the host and

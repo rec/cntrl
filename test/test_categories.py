@@ -1,4 +1,4 @@
-"""Reusable categories, inheritance, style priority and authored round trips."""
+"""Reusable categories, inheritance, ordered styles and authored round trips."""
 
 from pathlib import Path
 
@@ -48,7 +48,6 @@ def show() -> dict[str, object]:
         pages={
             'patch': models.Page(fields=['group.name', 'categories', 'display_name'])
         },
-        font_size=8,
     ).model_dump(exclude_none=True)
 
 
@@ -86,48 +85,22 @@ def test_categories_are_inherited_once_in_child_then_parent_order() -> None:
     assert patch.effective_categories == ['sax', 'wind', 'whole-system']
 
 
-def test_category_priority_resolves_each_property_independently() -> None:
+def test_later_categories_override_properties_without_replacing_the_style() -> None:
     categories = {
         'sax': models.Category(
-            style=models.Style(
-                foreground_color='red', font_size=16, autoscale_fonts=True
-            )
+            style=models.Style(foreground_color='red', font_name='classic')
         ),
-        'whole-system': models.Category(
-            priority=1,
-            style=models.Style(foreground_color='blue', autoscale_fonts=False),
-        ),
+        'whole-system': models.Category(style=models.Style(foreground_color='blue')),
     }
-    expected = models.Style(
-        foreground_color='blue', font_size=16, autoscale_fonts=False
+    assert display.category_style(['sax', 'whole-system'], categories) == models.Style(
+        foreground_color='blue', font_name='classic'
     )
-    assert display.category_style(['sax', 'whole-system'], categories) == expected
-    assert display.category_style(['whole-system', 'sax'], categories) == expected
-
-
-def test_equal_priority_categories_can_combine_or_agree() -> None:
-    categories = {
-        'sax': models.Category(style=models.Style(foreground_color='red')),
-        'whole-system': models.Category(
-            style=models.Style(foreground_color='0xFF0000', font_size=16)
-        ),
-    }
-    assert display.category_style(list(categories), categories) == models.Style(
-        foreground_color='red', font_size=16
+    assert (
+        display.category_style(
+            ['sax', 'whole-system', 'sax'], categories
+        ).foreground_color
+        == 'red'
     )
-
-
-def test_conflicting_winning_category_priorities_are_rejected(
-    show: dict[str, object], target: models.Target
-) -> None:
-    show['categories'] = {
-        'sax': {'style': {'foreground_color': 'red'}},
-        'whole-system': {'style': {'foreground_color': 'blue'}},
-    }
-    with pytest.raises(
-        compiler.CompilationError, match='conflicting foreground_color at priority 0'
-    ):
-        compiler.compile_show(show, {}, [], target)
 
 
 @pytest.mark.parametrize('owner', ['program', 'patch'])
@@ -162,3 +135,19 @@ def test_program_table_categories_merge_as_a_union(
     exported = models.Show.model_validate(tomlkit.parse(resolved.export(data)).unwrap())
     assert exported.definitions is not None
     assert exported.definitions.programs[0].categories == ['sax', 'whole-system']
+
+
+def test_icons_preserve_explicit_owners_through_recompilation(
+    show: dict[str, object], target: models.Target
+) -> None:
+    show = models.Show.model_validate(show).model_dump(exclude_none=True)
+    show['categories']['sax']['icon'] = 'images/sax.png'
+    show['definitions']['programs'][0]['icon'] = 'images/program.png'
+    show['patches']['Song 1'][0]['icon'] = 'images/patch.png'
+    data = compiler.compile_show(show, {}, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['categories']['sax']['icon'] == 'images/sax.png'
+    assert exported['definitions']['programs'][0]['icon'] == 'images/program.png'
+    assert exported['patches']['Song 1'][0]['icon'] == 'images/patch.png'
+    assert 'icon' not in exported['patches']['Song 1'][1]
+    assert compiler.compile_show(exported, {}, [], target) == data

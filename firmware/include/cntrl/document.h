@@ -5,7 +5,7 @@
 
 namespace cntrl {
 constexpr unsigned metadata_header_size = 8;
-constexpr unsigned document_version = 12;
+constexpr unsigned document_version = 13;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;

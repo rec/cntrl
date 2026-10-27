@@ -1,4 +1,3 @@
-font_size = '8 px'
 
 [instruments.a]
 instrument = 'synth'
@@ -10,7 +9,7 @@ output = 'din'
 instrument = 'a'
 program = 1
 name = 'Flute'
-style = {font_size = '16 px', foreground_color = 'white'}
+style = {foreground_color = 'white'}
 
 [pages.patch]
 fields = ['brightness', 'display_name', 'volume', 'tempo', 'splash']

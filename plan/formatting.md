@@ -1,6 +1,6 @@
 # Display formatting in TOML
 
-Status: proposed, not implemented. This replaces the CSS proposal and updates
+Status: implemented in compiled document format 13; not deployed to the pedal. This replaces the CSS proposal and updates
 [display-format.md](display-format.md), which records the current implementation.
 
 ## Goal
@@ -173,5 +173,4 @@ layout features are part of this work.
 
 ## Additional work beyond the prompt
 
-None. This document proposes changes; it does not implement them or change the
-installed pedal firmware.
+None. Physical verification requires a separately requested deployment.

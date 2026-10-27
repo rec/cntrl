@@ -13,6 +13,8 @@ class DisplayPatch(BaseModel, frozen=True):
     values: dict[str, str | int | bool | None]
     style: models.Style | None = None
     program_style: models.Style | None = None
+    icon: str | None = None
+    program_icon: str | None = None
     categories: list[str] = Field(default_factory=list)
     program_categories: list[str] = Field(default_factory=list)
 
@@ -47,16 +49,13 @@ def compile_display(
             errors.append(f'windows.{name}.style: {error}')
     if errors:
         raise ValueError('\n'.join(errors))
-    base = models.Style(
-        font_name=show.font_name,
-        font_size=show.font_size,
-        autoscale_fonts=show.autoscale_fonts,
-    )
+    base = show.style
     requests: list[tuple[int, str, models.Style, int, int, int]] = []
     instances: list[list[int]] = []
-    shared: dict[tuple[str | None, int | None, int, int], list[str]] = {}
     for patch in patches:
-        category = category_style(patch.effective_categories, show.categories)
+        category = category_style(
+            patch.program_categories + patch.categories, show.categories
+        )
         for window in windows:
             page = show.pages[window.page]
             pad = (
@@ -119,40 +118,11 @@ def compile_display(
             for j in lines:
                 code, text, style, pad, _, stipple = requests[j]
                 requests[j] = (code, text, style, pad, max(1, len(lines)), stipple)
-    for _, text, style, pad, count, _ in requests:
-        if not style.autoscale_fonts:
-            shared.setdefault(
-                (style.font_name, style.font_size, pad, count), []
-            ).append(text)
-    selected: dict[
-        tuple[str | None, int | None, int, int], tuple[models.FontFace, int]
-    ] = {}
-    for key, texts in shared.items():
-        font, size, pad, count = key
-        selected[key] = graphics.font_choice(
-            show.model_copy(update={'font_name': font, 'font_size': size}),
-            texts,
-            target,
-            pad,
-            1 if size is not None else count,
-        )
     styles: list[bytes] = []
     records: list[bytes] = []
     texts: list[bytes] = []
     for code, text, style, pad, count, stipple in requests:
-        face, size = (
-            graphics.font_choice(
-                show.model_copy(
-                    update={'font_name': style.font_name, 'font_size': None}
-                ),
-                [text],
-                target,
-                pad,
-                count,
-            )
-            if style.autoscale_fonts
-            else selected[(style.font_name, style.font_size, pad, count)]
-        )
+        face, size = graphics.font_choice(style.font_name, [text], target, pad, count)
         metrics = face.sizes[size]
         fg, bg = graphics.colors(style, show.contrast)
         packed = graphics.SCREEN.pack(
@@ -178,17 +148,7 @@ def compile_display(
             else (4 if show.pad is None else show.pad)
         )
         style = merge_style(base, window.style)
-        face, size = graphics.font_choice(
-            show.model_copy(
-                update={
-                    'font_name': style.font_name,
-                    'font_size': None if style.autoscale_fonts else style.font_size,
-                }
-            ),
-            names,
-            target,
-            pad,
-        )
+        face, size = graphics.font_choice(style.font_name, names, target, pad)
         metrics = face.sizes[size]
         fg, bg = graphics.colors(style, show.contrast)
         window_records.append(
@@ -242,6 +202,14 @@ def compile_display(
         for i, p in enumerate(patches)
         if p.program_categories
     }
+    source['patch_icons'] = {
+        str(i): p.icon for i, p in enumerate(patches) if p.icon is not None
+    }
+    source['program_icons'] = {
+        str(i): p.program_icon
+        for i, p in enumerate(patches)
+        if p.program_icon is not None
+    }
     authored = tomlkit.dumps(source).encode('utf-8')
     text_data = b''.join(struct.pack('<H', len(t)) + t for t in texts)
     page_data = b''.join(pages)
@@ -269,33 +237,7 @@ def category_style(
 ) -> models.Style:
     if unknown := set(names) - set(categories):
         raise ValueError(f'unknown categories: {sorted(unknown)}')
-    values: dict[str, object] = {}
-    priorities: dict[str, int] = {}
-    owners: dict[str, str] = {}
-    for name in sorted(set(names), key=lambda n: (-categories[n].priority, n)):
-        category = categories[name]
-        if category.style is None:
-            continue
-        for field, value in category.style.model_dump(exclude_none=True).items():
-            if field not in priorities:
-                values[field], priorities[field], owners[field] = (
-                    value,
-                    category.priority,
-                    name,
-                )
-            elif priorities[field] == category.priority:
-                conflict = (
-                    graphics.color(str(values[field])) != graphics.color(str(value))
-                    if field in ('foreground_color', 'background_color')
-                    else values[field] != value
-                )
-                if conflict:
-                    raise ValueError(
-                        f'categories {owners[field]!r} and {name!r}: '
-                        f'conflicting {field} '
-                        f'at priority {category.priority}'
-                    )
-    return models.Style.model_validate(values)
+    return merge_style(*(categories[n].style for n in names))
 
 
 def field_value(
@@ -358,9 +300,7 @@ FIELDS = {
     'transition_ms': 21,
 }
 SOURCE_FIELDS = (
-    'font_name',
-    'font_size',
-    'autoscale_fonts',
+    'style',
     'pad',
     'contrast',
     'windows',
