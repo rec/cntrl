@@ -1,6 +1,7 @@
 #pragma once
 #include "controller.h"
 #include "setup_names.h"
+#include "revisions.h"
 #include <cstdlib>
 
 namespace cntrl {
@@ -162,6 +163,60 @@ public:
         if (!quiet_) replies_.reply("CNTRL OK");
         quiet_ = false;
     }
+    bool history_next(const char *name, uint64_t before, Revision &info) {
+        return !busy() && !dirty_ && Revisions(storage_).next(name, before, info, staging_);
+    }
+    bool history_save(const char *name, const char *label) {
+        if (busy() || dirty_ || !load(name)) return false;
+        return Revisions(storage_).append(name, label, epoch_, staging_, length_);
+    }
+    bool history_restore(const char *name, uint64_t number, uint32_t now) {
+        if (busy() || dirty_ || !hardware_.output_idle()) return false;
+        load(name); Revision info;
+        if (!Revisions(storage_).read(name, number, info, staging_)) return false;
+        Document candidate;
+        if (!candidate.load(staging_, info.length, hardware_) || !candidate.prepare_fonts(hardware_)) return false;
+        hardware_.finish_fonts(false);
+        expected_ = info.length; expected_crc_ = checksum(staging_, expected_);
+        std::snprintf(record_name_, sizeof(record_name_), "%s", name);
+        quiet_ = true; return start_write(now);
+    }
+    bool history_compare(const char *name, uint64_t number, unsigned &patches, unsigned &routes, bool &settings, bool &formatting) {
+        if (busy() || dirty_ || !load(name)) return false;
+        unsigned current_length = length_; std::memcpy(delete_names_, staging_, length_);
+        Revision info; if (!Revisions(storage_).read(name, number, info, staging_)) return false;
+        Document old, current;
+        if (!old.load(staging_, info.length, hardware_) || !current.load(delete_names_, current_length, hardware_)) return false;
+        patches = routes = 0;
+        for (unsigned i = 0; i < old.patches() || i < current.patches(); ++i)
+            if (i >= old.patches() || i >= current.patches() || std::memcmp(old.patch(i), current.patch(i), 76)) ++patches;
+        for (unsigned i = 0; i < old.instruments() || i < current.instruments(); ++i)
+            if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
+        settings = old.chord_ms() != current.chord_ms() || old.brightness() != current.brightness()
+            || old.splash() != current.splash() || old.usb_midi_interface() != current.usb_midi_interface()
+            || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();
+        auto names_end = [](const Document &d) {
+            unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + 4;
+            for (unsigned i = 0; i < d.patches() * 3; ++i) { unsigned n = u16(d.data() + cursor); cursor += 2 + (n == 65535 ? 0 : n); }
+            return cursor;
+        };
+        unsigned a = u32(old.data() + names_end(old) + 12), b = u32(current.data() + names_end(current) + 12);
+        formatting = a != b || std::memcmp(old.data() + old.length() - a, current.data() + current.length() - b, a);
+        unsigned old_names = names_end(old) - old.metadata(), current_names = names_end(current) - current.metadata();
+        formatting = formatting || old_names != current_names
+            || std::memcmp(old.data() + old.metadata(), current.data() + current.metadata(), old_names);
+        return true;
+    }
+    bool history_delete(const char *name, uint64_t number) {
+        if (busy() || dirty_) return false;
+        if (number) return storage_.remove_revision(name, number);
+        uint64_t before = UINT64_MAX;
+        while (auto n = storage_.revision_before(name, before)) {
+            if (!storage_.remove_revision(name, n)) return false;
+            before = n;
+        }
+        return true;
+    }
 private:
     SetupStorage &storage_; Hardware &hardware_; Controller &controller_; Replies &replies_;
     uint8_t active_[max_document] = {}, staging_[max_document] = {}, header_[96] = {};
@@ -249,6 +304,17 @@ private:
         selection_slot_ = int(slot); ++selection_generation_; return true;
     }
     bool start_write(uint32_t now) {
+        if (expected_) {
+            std::memcpy(delete_names_, staging_, expected_);
+            char name[64]; std::snprintf(name, sizeof(name), "%s", record_name_);
+            bool exists = load(name);
+            bool changed = exists && (length_ != expected_ || std::memcmp(staging_, delete_names_, expected_));
+            bool archived = !changed || Revisions(storage_).append(name, "", epoch_, staging_, length_);
+            std::memcpy(staging_, delete_names_, expected_);
+            std::snprintf(record_name_, sizeof(record_name_), "%s", name);
+            if (!archived) { error("history-write"); return false; }
+        }
+
         last_error_[0] = 0;
         std::memset(header_, 0, sizeof(header_)); std::memcpy(header_, "CNST", 4);
         put32(header_ + 4, generation_ + 1); put32(header_ + 8, expected_); put32(header_ + 12, expected_crc_);
@@ -354,6 +420,39 @@ private:
         }
         if (dirty_) { error("unsaved-edits"); return; }
         listing_ = false; download_ = 0;
+        unsigned long long revision = 0; char operation[16] = {}, label_hex[127] = {}, label[64] = {};
+        if (std::sscanf(line_, "CNTRL HISTORY %15s %126s %llu%n", operation, hex, &revision, &end) == 3
+            && unhex_name(hex, name)) {
+            if (!std::strcmp(operation, "SAVE")) {
+                int finish = 0;
+                if (!std::strcmp(line_ + end, " -")) label[0] = 0;
+                else if (std::sscanf(line_ + end, " %126s%n", label_hex, &finish) != 1 || line_[end + finish]
+                    || !unhex_name(label_hex, label)) { error("invalid-label"); return; }
+                if (history_save(name, label)) replies_.reply("CNTRL OK"); else error("history-write"); return;
+            }
+            if (line_[end]) { error("invalid-command"); return; }
+            if (!std::strcmp(operation, "LIST")) {
+                Revision info; char response[256];
+                if (!history_next(name, revision, info)) { replies_.reply("CNTRL END"); return; }
+                hex_text(info.label, label_hex);
+                std::snprintf(response, sizeof(response), "CNTRL REVISION %llu %lu %u %s", (unsigned long long)info.number,
+                    (unsigned long)info.modified, unsigned(info.length), info.label[0] ? label_hex : "-");
+                replies_.reply(response); return;
+            }
+            if (!std::strcmp(operation, "GET")) {
+                Revision info;
+                if (!Revisions(storage_).read(name, revision, info, staging_)) { error("missing-revision"); return; }
+                length_ = info.length; download_ = 1; char response[80];
+                std::snprintf(response, sizeof(response), "CNTRL FILE %u %08lx", length_, (unsigned long)checksum(staging_, length_));
+                replies_.reply(response); return;
+            }
+            if (!std::strcmp(operation, "RESTORE")) {
+                if (history_restore(name, revision, now)) quiet_ = false; else error("restore-failed"); return;
+            }
+            if (!std::strcmp(operation, "DELETE")) {
+                if (history_delete(name, revision)) replies_.reply("CNTRL OK"); else error("history-delete"); return;
+            }
+        }
         if (std::sscanf(line_, "CNTRL TIME %lu%n", &epoch, &end) == 1 && end && !line_[end] && epoch && epoch <= 0xfffffffful) { epoch_ = uint32_t(epoch); clock_ = now; replies_.reply("CNTRL OK"); return; }
         if (std::sscanf(line_, "CNTRL SETUP SET %126s%n", hex, &end) == 1 && end && !line_[end] && unhex_name(hex, name)) {
             if (select(name)) replies_.reply("CNTRL OK"); else error("selection-failed"); return;

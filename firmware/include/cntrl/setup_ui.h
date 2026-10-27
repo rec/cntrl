@@ -29,9 +29,12 @@ public:
             else if (button == 2 && name_[0]) { mode_ = Mode::action; item_ = 0; }
             else if (button == 5) { close(); return; }
         } else if (mode_ == Mode::action) {
-            if (button < 2) item_ = 1 - item_;
+            if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
             else if (button == 5) mode_ = Mode::catalogue;
             else if (button == 2) {
+                if (item_ == 2) {
+                    revision_ = Revision(); mode_ = Mode::history; render(); return;
+                }
                 if (item_ == 0) {
                     if (!docs_.select(name_)) { hardware_.error("Selection failed"); return; }
                     close(); return;
@@ -41,6 +44,29 @@ public:
                 }
                 if (!docs_.edit_begin()) return;
                 mode_ = Mode::patch; patch_ = field_ = 0;
+            }
+        } else if (mode_ == Mode::history) {
+            if (button == 2 && !revision_.number) {
+                if (!docs_.history_save(name_, "")) { hardware_.error("Snapshot failed"); return; }
+                docs_.history_next(name_, UINT64_MAX, revision_); render(); return;
+            }
+            if (button == 5) mode_ = Mode::action;
+            else if (button < 2) {
+                Revision next;
+                if (button == 1) docs_.history_next(name_, revision_.number ? revision_.number : UINT64_MAX, next);
+                revision_ = next;
+            } else if (button == 2 && revision_.number) {
+                if (!docs_.history_compare(name_, revision_.number, changed_patches_, changed_routes_, changed_settings_, changed_formatting_)) {
+                    hardware_.error("Cannot compare revision"); return;
+                }
+                mode_ = Mode::comparison; item_ = 0;
+            }
+        } else if (mode_ == Mode::comparison) {
+            if (button == 5) mode_ = Mode::history;
+            else if (button < 2) item_ = (item_ + 5 + (button == 0 ? -1 : 1)) % 5;
+            else if (button == 2 && item_ == 4) {
+                if (docs_.history_restore(name_, revision_.number, now)) mode_ = Mode::saving;
+                else { hardware_.error("Restore failed"); return; }
             }
         } else if (mode_ == Mode::patch) {
             if (button < 2) patch_ = (patch_ + docs_.document().patches() + (button == 0 ? -1 : 1)) % docs_.document().patches();
@@ -65,9 +91,12 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, catalogue, action, patch, field, value, decision, saving, failed };
+    enum class Mode { closed, catalogue, action, patch, field, value, decision, saving, failed, history, comparison };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed;
+    Revision revision_;
+    unsigned changed_patches_ = 0, changed_routes_ = 0;
+    bool changed_settings_ = false, changed_formatting_ = false;
     bool locked_ = false;
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
@@ -87,7 +116,7 @@ private:
         const char *title = "Setups", *value = name_[0] ? name_ : "No setups";
         const char *value_label = "Action";
         char number[64] = {};
-        if (mode_ == Mode::action) { title = name_; value = item_ ? "Edit" : "Select"; }
+        if (mode_ == Mode::action) { title = name_; value = item_ == 2 ? "History" : item_ ? "Edit" : "Select"; }
         else if (mode_ == Mode::patch) {
             title = reinterpret_cast<const char *>(docs_.document().category(u16(docs_.document().patch(patch_) + 2)));
             value = reinterpret_cast<const char *>(docs_.document().patch(patch_) + 12);
@@ -107,6 +136,20 @@ private:
             title = "Unsaved edits"; value = item_ == 0 ? "Save" : item_ == 1 ? "Discard" : "Cancel";
         } else if (mode_ == Mode::saving) { title = "Saving"; value = "Please wait"; }
         else if (mode_ == Mode::failed) { title = "Save failed"; value = docs_.last_error(); }
+        if (mode_ == Mode::history) {
+            title = "History"; value_label = "Revision";
+            if (revision_.number) std::snprintf(number, sizeof(number), "%llu @%lu %.24s", (unsigned long long)revision_.number, (unsigned long)revision_.modified, revision_.label);
+            else std::snprintf(number, sizeof(number), "Current: C snapshot");
+            value = number;
+        } else if (mode_ == Mode::comparison) {
+            title = "Compare to current"; value_label = "Change";
+            if (item_ == 0) std::snprintf(number, sizeof(number), "%u changed patches", changed_patches_);
+            else if (item_ == 1) std::snprintf(number, sizeof(number), "%u changed routes", changed_routes_);
+            else if (item_ == 2) std::snprintf(number, sizeof(number), "Settings: %s", changed_settings_ ? "changed" : "same");
+            else if (item_ == 3) std::snprintf(number, sizeof(number), "Authored data: %s", changed_formatting_ ? "changed" : "same");
+            else std::snprintf(number, sizeof(number), "C Restore, F Back");
+            value = number;
+        }
         // Management has its own readable defaults; performance typography may
         // be too large for field labels or absent altogether on an empty card.
         Pane views[3];

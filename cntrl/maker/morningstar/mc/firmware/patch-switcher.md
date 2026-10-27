@@ -624,3 +624,13 @@ runtime dependency on the tester. The generic implementation and verification
 contract is in [the module plan](../../../../../plan/midi-interface.md).
 This module has not been flashed; physical forwarding and UI checks remain
 pending.
+
+## Setup revisions
+
+Revision records live at `/cntrl/history/SETUP/REVISION/0.bin`, with revision
+numbers encoded as 16 hexadecimal digits. The record contains the label,
+timestamp, complete setup, checksums and completion marker. Deleted record files
+leave their directories to reserve numbers. These directories are separate from
+`/cntrl/setups`, so history does not enter the performance setup catalogue.
+See [revision history](../../../../../doc/setup-revision-history.md) for commands
+and pedal controls. This implementation was built and tested without flashing.
