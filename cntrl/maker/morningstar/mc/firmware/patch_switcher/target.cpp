@@ -1,6 +1,5 @@
 #include "target.h"
 #include <Arduino.h>
-#include <FlexSerial.h>
 #include <SD.h>
 #include <USBHost_t36.h>
 #include <cntrl/documents.h>
@@ -26,11 +25,7 @@ extern cntrl::splash::Session splash_session;
 font_assets::Files font_files;
 USBHost host;
 MIDIDevice host_midi(host);
-FlexSerial port1(-1, 26), port2(-1, 38), port3(-1, 39), port4(-1, 14);
-FlexSerial *ports[] = {&port1, &port2, &port3, &port4};
-constexpr uint8_t ring_pins[] = {32, 9, 37, 36};
-const char *outputs[] = {"din", "trs", "configurable-1", "configurable-2",
-                         "configurable-3", "configurable-4", "usb-device", "usb-host"};
+const char *outputs[] = {"din", "trs", "usb-device", "usb-host"};
 
 class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink {
 public:
@@ -72,23 +67,21 @@ public:
         if (cable_test.open()) return;
 #endif
         bridge_.configure(enabled);
-        if (enabled) for (unsigned i = 0; i < 4; ++i) enable_port(i);
     }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     bool send(const char *output, const uint8_t *data, unsigned length) override {
         unsigned route = 0;
-        while (route < 8 && std::strcmp(outputs[route], output)) ++route;
-        if (route == 8 || length > 14
-            || (route == 6 && !usb_configuration) || (route == 7 && !host_midi)) return false;
+        while (route < 4 && std::strcmp(outputs[route], output)) ++route;
+        if (route == 4 || length > 14
+            || (route == 2 && !usb_configuration) || (route == 3 && !host_midi)) return false;
 #if CNTRL_CABLE_TEST
         if (cable_test.open()) {
             if (route >= 2 || length != 3) return false;
             return submit(route, {11, {data[0], data[1], data[2]}});
         }
 #endif
-        if (route >= 2 && route < 6 && !enable_port(route - 2)) return false;
-        return bridge_.pedal(route == 7 ? 8 : route, data, length);
+        return bridge_.pedal(route == 2 ? 6 : route == 3 ? 8 : route, data, length);
     }
     bool submit(unsigned route, const cntrl::midi::Packet &p) override {
         if (route >= 6 && route < 8) return usb_midi_try_write_packed(p.packed(route - 6));
@@ -99,9 +92,7 @@ public:
             if (unsigned(serial.availableForWrite()) < n) return false;
             return serial.write(p.bytes, n) == n;
         }
-        unsigned port = route - 2;
-        if (!enabled_[port] || unsigned(ports[port]->availableForWrite()) < n) return false;
-        return ports[port]->write(p.bytes, n) == n;
+        return false;
     }
     void midi_status(unsigned route) {
         if (route == cntrl::midi::Bridge::destinations) {
@@ -115,7 +106,7 @@ public:
             unsigned(bridge_.enabled()), route, (unsigned long)c.received,
             (unsigned long)c.transmitted, (unsigned long)c.dropped, (unsigned long)c.aborted,
             c.high_water, (unsigned long)max_midi_us_, (unsigned long)max_scan_gap_,
-            (unsigned long)scan_count_, (unsigned long)display_count_, init_errors_);
+            (unsigned long)scan_count_, (unsigned long)display_count_, 0u);
         reply(response);
     }
     void scanned(uint32_t gap) {
@@ -155,7 +146,8 @@ public:
 #if CNTRL_CABLE_TEST
                     if (cable_test.open()) continue;
 #endif
-                    bridge_.usb(packet, now);
+                    // Omniport USB cables remain enumerated but are unused.
+                    if (((packet >> 4) & 15) < 2) bridge_.usb(packet, now);
                 } else {
                     HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
                     int byte = serial.read(); if (byte < 0) break;
@@ -202,28 +194,12 @@ private:
     uint8_t brightness_ = 192;
     int applied_brightness_ = -1;
     cntrl::midi::Bridge bridge_;
-    unsigned source_cursor_ = 0, init_errors_ = 0;
+    unsigned source_cursor_ = 0;
     uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
     bool interface_enabled_ = false;
-    bool enabled_[4] = {};
     DisplayRenderer renderer_;
     unsigned response_offset_ = 0;
     char response_[600] = {};
-    bool enable_port(unsigned port) {
-        if (enabled_[port]) return true;
-        // Preload the reference before enabling the current loop.
-        switch (port) {
-            case 0: digitalWriteFast(32, HIGH); break;
-            case 1: digitalWriteFast(9, HIGH); break;
-            case 2: digitalWriteFast(37, HIGH); break;
-            case 3: digitalWriteFast(36, HIGH); break;
-        }
-        pinMode(ring_pins[port], OUTPUT);
-        ports[port]->begin(31250);
-        enabled_[port] = bool(*ports[port]);
-        if (!enabled_[port]) init_errors_ |= 1u << port;
-        return enabled_[port];
-    }
 };
 
 class Card : public cntrl::SetupStorage {
