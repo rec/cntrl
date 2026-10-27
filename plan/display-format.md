@@ -1,5 +1,10 @@
 # Per-line display formatting
 
+Current trial, 2026-10-27: already-sent patch names preserve their foreground
+color and use a checkerboard with alternating transparent pixels. This replaces
+the solid `half` appearance described below for the trial. The authored `half`
+property and compiled field are retained while comparing the two appearances.
+
 Status: implemented, 2026-10-26, compiled document format 11. Pages use an ordered
 list of unique field names. The inheritance, missing-value and background rules
 below are implemented. The default page represents the existing UI. Firmware

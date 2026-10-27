@@ -157,13 +157,19 @@ int main() {
     assert(writes == before + 480);
     padding(2, 4, 0x001f); blank(0); blank(1);
 
-    view.lines[1].graphics.foreground = view.graphics.half = 0x780f;
+    uint16_t solid[128][160];
+    std::memcpy(solid, screens[2], sizeof(solid));
+    view.lines[1].stippled = true;
     patch_only = true;
     renderer.show(2, view); drain(renderer);
-    assert(screens[2][30][40] == 0xf800 && screens[2][90][4] == 0x780f);
-    view.lines[1].graphics.foreground = view.graphics.foreground;
+    for (unsigned y = 0; y < 128; ++y) for (unsigned x = 0; x < 160; ++x) {
+        bool hole = y >= 64 && y < 124 && x >= 4 && x < 156 && ((x + y) & 1);
+        assert(screens[2][y][x] == (hole ? view.lines[1].graphics.background : solid[y][x]));
+    }
+    assert(screens[2][90][4] == 0xf800 && screens[2][90][5] == 0x001f);
+    view.lines[1].stippled = false;
     renderer.show(2, view); drain(renderer);
-    assert(screens[2][30][40] == 0xf800 && screens[2][90][4] == 0xf800);
+    assert(std::memcmp(solid, screens[2], sizeof(solid)) == 0);
     patch_only = false;
 
     std::strcpy(view.lines[1].text, "Trumpet");

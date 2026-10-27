@@ -22,6 +22,7 @@ struct TextLine {
     uint16_t x = 4;
     bool centered = false;
     bool wrap = false;
+    bool stippled = false;
 };
 
 struct Pane {

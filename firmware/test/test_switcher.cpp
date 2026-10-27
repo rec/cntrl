@@ -55,38 +55,38 @@ void test_greyed_names(const cntrl::Document &doc) {
     Fake hw;
     cntrl::Controller app(hw);
     app.activate(doc);
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2); // A:Flute is now known to be selected.
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.half);
+    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     assert(hw.panes[1].lines[1].graphics.foreground == hw.panes[1].graphics.foreground);
     app.action(0); // B:Strings has not been sent.
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2);
     app.action(1); // Back to A:Flute, although B was sent more recently.
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.half);
+    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(1); // A:Sax is different from A's last send.
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2);
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.half);
+    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     hw.available = false;
     app.action(5); // Failed undo leaves A:Sax selected.
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.half);
+    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     hw.available = true;
     app.action(5); // Restore A:Flute, leaving A:Sax as candidate.
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(0);
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.half);
+    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     unsigned sent = unsigned(hw.sent.size());
     app.action(5); app.action(5); // Unknown pre-show selections: no MIDI sent.
     assert(hw.sent.size() == sent && app.depth() == 0);
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.half);
+    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(1); // A:Sax
     hw.available = false; app.action(2);
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(0);
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.half);
+    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.activate(doc); // A new document starts with unknown instrument state.
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
 }
 
 void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
@@ -126,14 +126,14 @@ void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
     cntrl::Document doc;
     assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
     app.activate(doc); app.action(2); app.action(1);
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     std::memcpy(aliased.data() + second + 5, aliased.data() + first + 5, 2);
     cntrl::put32(aliased.data() + (doc.bank(1) - aliased.data()), cntrl::u32(doc.bank(0)));
     cntrl::put32(aliased.data() + 20, cntrl::checksum(aliased.data() + 28, unsigned(aliased.size()) - 28));
     assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
     app.activate(doc); app.action(2); app.action(1);
     assert(!std::strcmp(hw.panes[2].lines[1].text, "Sax")); // Different name, same patch address.
-    assert(hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.half);
+    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     unsigned sent = unsigned(hw.sent.size());
     app.action(2); // Grey is informational; it must not suppress repeated sends.
     assert(hw.sent.size() == sent + 1);
@@ -275,7 +275,9 @@ int main(int argc, char **argv) {
         assert(!std::strcmp(settings.lines[2].text, "100"));
         assert(!settings.lines[3].text[0]);
         app.action(2);
-        assert(output.panes[2].lines[1].graphics.foreground == 0x8410);
+        assert(output.panes[2].lines[1].stippled);
+        assert(output.panes[2].lines[1].graphics.foreground == 65535);
+        assert(!output.panes[2].lines[0].stippled);
         assert(output.panes[2].lines[0].graphics.foreground != 0x8410);
         TestStorage storage;
         cntrl::Documents documents(storage, output, app, output);

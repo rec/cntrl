@@ -257,7 +257,7 @@ The whole screen is filled with its background, including empty history panes.
 Text is clipped to the rectangle inset by `pad` on every side. Runtime errors
 retain the center screen's colors/padding and use its left inset.
 
-The rightmost patch name alone uses `half` when its instrument, program and
+The rightmost patch name alone is stippled when its instrument, program and
 bank-select address match the most recent successful send for that instrument.
 The category and the other two screens keep their normal foreground color.
 Names/categories are not part of this comparison; the same addressed patch can
@@ -266,11 +266,12 @@ Undo updates it only when a restoration is actually sent. A failed send does
 not change it, and starting a new show clears known selections. Greyed-out names
 can still be sent normally; no MIDI messages or history entries are suppressed.
 
-Each screen accepts optional `half`, using the same named/hex color syntax.
-Omitted, `null` or empty `half` uses the component-wise RGB midpoint of the
-resolved foreground/background colors, rounded down before RGB565 conversion.
-It intentionally has lower contrast, so the contrast warning does not apply to
-`half`. This appearance is called "greyed out" even when the color is not grey.
+The stipple trial preserves the resolved foreground color and exposes the
+line's background at pixels where `(x + y) & 1` is nonzero. Masking follows
+composition of all glyphs, so overlapping letters share a consistent pattern.
+Category headings, other windows and padding keep their normal appearance.
+The existing `half` property and RGB565 field remain in compiled format 11 for
+this comparison trial, but no longer determine the already-sent appearance.
 
 Colors accept `0xRRGGBB` or case-insensitive names: black, white, red, green,
 lime, blue, yellow, cyan/aqua, magenta/fuchsia, silver, gray/grey, maroon, olive,
