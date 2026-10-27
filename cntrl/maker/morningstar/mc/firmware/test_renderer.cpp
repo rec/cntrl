@@ -173,6 +173,14 @@ int main() {
     blank(1, 0x07e0);
     assert(ShowGraphics::supports_font(0, 8) && ShowGraphics::supports_font(1, 13));
     assert(ShowGraphics::supports_font(2, 96) && !ShowGraphics::supports_font(3, 8));
+    for (unsigned face = 3; face <= 6; ++face) {
+        for (unsigned size : {12, 16, 20, 24, 28, 32, 40, 48}) {
+            const auto *font = ShowGraphics::native_font(face, size);
+            assert(font && font->version == 1 && font->index1_first == 32 && font->index1_last == 126);
+        }
+        assert(!ShowGraphics::supports_font(face, 13));
+    }
+    assert(!ShowGraphics::supports_font(7, 24));
     assert(!ShowGraphics::supports_font(0, 13) && !ShowGraphics::supports_font(1, 15));
 
     // A complete send shifts C/R left and introduces the new grey candidate.

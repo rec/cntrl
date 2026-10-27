@@ -8,6 +8,7 @@ import tyro
 from pydantic import BaseModel
 
 from ....patch_switcher import models
+from .build_bitmap_fonts import FAMILIES
 
 
 class Options(BaseModel, frozen=True):
@@ -108,6 +109,16 @@ def main() -> None:
     faces = [classic] + [
         native_face((options.source / f'st7735_t3_font_{n}.c').read_text(), n, i)
         for i, n in enumerate(['Arial', 'ComicSansMS'], 1)
+    ]
+    faces += [
+        native_face(
+            (
+                Path(__file__).parent / 'firmware/patch_switcher' / f'font_{n}.cpp'
+            ).read_text(),
+            n,
+            i,
+        )
+        for i, (n, _, _) in enumerate(FAMILIES, 3)
     ]
     data = json.loads(options.output.read_text())
     data.update(

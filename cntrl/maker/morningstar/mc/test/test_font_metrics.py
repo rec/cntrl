@@ -35,7 +35,9 @@ def test_page_lines_select_different_native_font_families() -> None:
     )
 
 
-@pytest.mark.parametrize('name', ['Arial', 'ComicSansMS'])
+@pytest.mark.parametrize(
+    'name', ['Arial', 'ComicSansMS', 'Circuit', 'CircuitBold', 'StillTime', 'MetalLord']
+)
 def test_native_autoscale_uses_largest_fitting_size_per_label(name: str) -> None:
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')

@@ -1,5 +1,6 @@
 #pragma once
 #include "graphics.h"
+#include "bitmap_fonts.h"
 #include <st7735_t3_font_Arial.h>
 #include <st7735_t3_font_ComicSansMS.h>
 #include <cntrl/hardware.h>
@@ -7,6 +8,7 @@
 class ShowGraphics : public Graphics {
 public:
     static const ILI9341_t3_font_t *native_font(unsigned face, unsigned size) {
+        if (face >= 3) return bitmap_font(face, size);
         if (face != 1 && face != 2) return nullptr;
         switch (size) {
         case 8: return face == 1 ? &Arial_8 : &ComicSansMS_8;
