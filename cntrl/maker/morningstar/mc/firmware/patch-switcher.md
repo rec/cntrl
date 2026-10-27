@@ -601,5 +601,6 @@ The centered layout was flashed through upload_helper on 2026-10-27, combined
 image SHA-256
 `a47039b721fc2537f7356365dd97858b4647384e13a2e11808d38100a3624221`.
 After an initial USB write error, the verified retry completed and reset to stock.
-Pre-flash status was `CNTRL READY 14 34597 488beaf6`. Post-flash A+F entry and
-visual verification of the revised layout remain pending.
+After the user's A+F entry, status remained `CNTRL READY 14 34597 488beaf6`
+and pman remained selected. Visual verification of the revised layout remains
+pending.
