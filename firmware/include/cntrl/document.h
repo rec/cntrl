@@ -174,7 +174,7 @@ public:
             line.graphics = read_graphics(data_ + styles_ + u16(p + 2) * 16);
             line.x = u16(p + 4);
             line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 21);
-            if (muted && p[1]) line.graphics.foreground = line.graphics.half;
+            line.stippled = muted && p[1];
             field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6));
         }
     }

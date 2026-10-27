@@ -81,7 +81,12 @@ public:
                 graphics_.write(uint8_t(text[letter_++]));
             } else {
                 letter_ = 0;
-                if (++field_ == cntrl::max_lines) rendering_ = false;
+                if (++field_ == cntrl::max_lines) {
+                    // Mask after composing all glyphs so italic overlaps keep
+                    // the same checkerboard phase across the whole line.
+                    backgrounds(true);
+                    rendering_ = false;
+                }
             }
             return;
         }
@@ -126,7 +131,7 @@ private:
         unsigned columns = line.wrap && g.font == 0 ? (160 - 2 * painting_.graphics.pad) / (6 * (g.size / 8)) : 0;
         return columns ? (std::strlen(line.text) + columns - 1) / columns : 1;
     }
-    void backgrounds() {
+    void backgrounds(bool preserve_text = false) {
         unsigned start = painting_.graphics.pad;
         for (unsigned i = 0; i < cntrl::max_lines; ++i) {
             const auto &line = painting_.lines[i];
@@ -139,7 +144,8 @@ private:
             }
             for (unsigned y = start; y < end && y < 128u - painting_.graphics.pad; ++y)
                 for (unsigned x = painting_.graphics.pad; x < 160u - painting_.graphics.pad; ++x)
-                    graphics_.getFrameBuffer()[y * 160 + x] = line.graphics.background;
+                    if (!preserve_text || (line.stippled && ((x + y) & 1)))
+                        graphics_.getFrameBuffer()[y * 160 + x] = line.graphics.background;
             start = end;
         }
     }
