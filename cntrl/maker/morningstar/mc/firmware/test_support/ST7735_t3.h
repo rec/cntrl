@@ -23,6 +23,7 @@ public:
     void setFont() {}
     void setFont(const ILI9341_t3_font_t &) {}
     void setTextWrap(bool enabled) { assert(!enabled); }
+    void setTextColor(uint16_t color) { color_ = background_ = color; }
     void setTextColor(uint16_t color, uint16_t background) {
         color_ = color; background_ = background;
     }
@@ -39,9 +40,12 @@ public:
         ++glyphs;
         for (unsigned y = 0; y < 8 * scale_ && y_ + y < unsigned(_height); ++y)
             for (unsigned x = 0; x < 6 * scale_ && x_ + x < unsigned(_width); ++x)
-                if (x_ + x >= left_ && x_ + x < right_ && y_ + y >= top_ && y_ + y < bottom_)
-                    pixels_[(y_ + y) * _width + x_ + x] =
-                        character != ' ' && x < 5 * scale_ && y < 7 * scale_ ? color_ : background_;
+                if (x_ + x >= left_ && x_ + x < right_ && y_ + y >= top_ && y_ + y < bottom_) {
+                    if (character != ' ' && x < 5 * scale_ && y < 7 * scale_)
+                        pixels_[(y_ + y) * _width + x_ + x] = color_;
+                    else if (background_ != color_)
+                        pixels_[(y_ + y) * _width + x_ + x] = background_;
+                }
         x_ += 6 * scale_;
     }
     inline static unsigned glyphs = 0;

@@ -43,7 +43,7 @@ public:
         fillScreen(settings.background);
         setClipRect(settings.pad, settings.pad, 160 - 2 * settings.pad, 128 - 2 * settings.pad);
         select_font(settings.font, settings.size);
-        setTextColor(settings.foreground, settings.background);
+        setTextColor(settings.foreground);
     }
     void select_font(unsigned face, unsigned size) {
         setTextSize(face == 0 ? size / 8 : 1);
