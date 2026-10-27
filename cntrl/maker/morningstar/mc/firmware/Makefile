@@ -127,7 +127,7 @@ test: tools test-button-timing test-switch-gesture test-boot-selection
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
 		-I"$(abspath $(ROOT)/../../../../..)/firmware/include" -I"$(ROOT)/usb_probe" -I"$(ROOT)/test_support" \
 		-I"$(CORE)/libraries/ST7735_t3/src" -x c++ \
-		"$(ROOT)/test_renderer.cpp" "$(CORE)/libraries/ST7735_t3/src/st7735_t3_font_Arial.c" \
+		"$(ROOT)/test_renderer.cpp" $(wildcard $(ROOT)/patch_switcher/font_*.cpp) "$(CORE)/libraries/ST7735_t3/src/st7735_t3_font_Arial.c" \
 		"$(CORE)/libraries/ST7735_t3/src/st7735_t3_font_ComicSansMS.c" -o "$(ROOT)/build/test_renderer"
 	"$(ROOT)/build/test_renderer"
 
