@@ -1,8 +1,14 @@
 # MIDI cable test
 
 The cable test is an optional active-tool module. Opening its page always starts
-with the switch Off and both result lines empty. C toggles On/Off. F stops the
+with the switch Off and both result lines empty. B toggles On/Off. F stops the
 test and returns to the module menu. Leaving and reopening never restores On.
+
+The center screen has four fixed rows: title, DIN result, TRS result and the
+On/Off indicator centered above B. Empty results leave their rows blank without
+moving the other content. The outer screens are black, with a white Back label
+in the top-right corner of the right screen near F. Backlight brightness stays
+unchanged. The target supplies the title font; other text uses the normal font.
 
 While On, the module sends a stream of breath-controller messages on both test
 outputs. [MIDI CC 2 is Breath Controller](https://midi.org/midi-1-0-control-change-messages).

@@ -35,7 +35,8 @@ const char *outputs[] = {"din", "trs", "configurable-1", "configurable-2",
 class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink {
 public:
 #if CNTRL_CABLE_TEST
-    cntrl::CableTest cable_test{*this};
+    // Still Time 28: measured line height 30, top-bearing adjustment 1.
+    cntrl::CableTest cable_test{*this, {5, 28, 4, 0, 0xffff, 0, 30, 1}};
     void enter_cable_test() {
         bridge_.configure(false);
         cable_test.enter();
@@ -397,7 +398,7 @@ void poll_target() {
                     }
                 } else if (board.cable_test.open()) {
                     if (events[i] & press_event) {
-                        if (i == 2) board.cable_test.toggle(now);
+                        if (i == 1) board.cable_test.toggle(now);
                         else if (i == 5) {
                             board.leave_cable_test(); module_menu.enter(); module_controls_locked = true;
                         }

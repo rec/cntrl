@@ -32,8 +32,15 @@ int main() {
     cntrl::CableTest test(hw);
     test.enter(); test.tick(100);
     assert(!test.enabled() && hw.messages.empty());
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Off"));
-    assert(!hw.panes[1].lines[0].text[0] && !hw.panes[1].lines[1].text[0]);
+    assert(!std::strcmp(hw.panes[1].lines[3].text, "Off"));
+    assert(!hw.panes[1].lines[1].text[0] && !hw.panes[1].lines[2].text[0]);
+    assert(!std::strcmp(hw.panes[1].lines[0].text, "MIDI cable test"));
+    assert(hw.panes[1].lines[3].centered && hw.panes[1].lines[3].y == 104);
+    assert(hw.panes[0].graphics.background == 0 && hw.panes[2].graphics.background == 0);
+    for (const auto &line : hw.panes[0].lines) assert(!line.text[0]);
+    assert(!std::strcmp(hw.panes[2].lines[0].text, "Back"));
+    assert(hw.panes[2].lines[0].graphics.foreground == 0xffff);
+    assert(hw.panes[2].lines[0].x == 108 && hw.panes[2].lines[0].y == 4);
     test.toggle(100); test.tick(100);
     assert(hw.messages.size() == 2);
     assert(hw.messages[0].route == "din" && hw.messages[0].bytes == std::vector<uint8_t>({0xb0, 2, 0}));
@@ -42,32 +49,32 @@ int main() {
     test.tick(110); assert(hw.messages.size() == 4);
     receive(test, 0, 0xb0, 1, 111);
     receive(test, 1, 0xb1, 1, 111);
-    assert(!std::strcmp(hw.panes[1].lines[0].text, "DIN"));
-    assert(!std::strcmp(hw.panes[1].lines[1].text, "TRS"));
+    assert(!std::strcmp(hw.panes[1].lines[1].text, "DIN"));
+    assert(!std::strcmp(hw.panes[1].lines[2].text, "TRS"));
     receive(test, 1, 0xb0, 1, 112);
     receive(test, 0, 0xb1, 1, 112);
-    assert(!std::strcmp(hw.panes[1].lines[0].text, "DIN to TRS"));
-    assert(!std::strcmp(hw.panes[1].lines[1].text, "TRS to DIN"));
+    assert(!std::strcmp(hw.panes[1].lines[1].text, "DIN to TRS"));
+    assert(!std::strcmp(hw.panes[1].lines[2].text, "TRS to DIN"));
     // Running status and interleaved MIDI clock use the shared parser.
     for (uint8_t b : {2, 0xf8, 1}) test.receive(0, b, 120);
     test.tick(369);
-    assert(!hw.panes[1].lines[0].text[0] && hw.panes[1].lines[1].text[0]);
-    test.tick(370); assert(!hw.panes[1].lines[1].text[0]);
+    assert(!hw.panes[1].lines[1].text[0] && hw.panes[1].lines[2].text[0]);
+    test.tick(370); assert(!hw.panes[1].lines[2].text[0]);
     receive(test, 0, 0xb0, 127, 371); // Never sent: no match.
     receive(test, 1, 0xb2, 1, 371); // Wrong channel.
     for (uint8_t b : {0xb0, 3, 1}) test.receive(0, b, 371); // Wrong controller.
-    assert(!hw.panes[1].lines[0].text[0] && !hw.panes[1].lines[1].text[0]);
+    assert(!hw.panes[1].lines[1].text[0] && !hw.panes[1].lines[2].text[0]);
     test.toggle(372);
     auto count = hw.messages.size(); test.tick(1000);
     assert(hw.messages.size() == count);
     test.toggle(1000); hw.available = false; test.tick(1000);
     receive(test, 0, 0xb0, 0, 1001); // Failed send cannot pass.
-    assert(!hw.panes[1].lines[0].text[0]);
+    assert(!hw.panes[1].lines[1].text[0]);
     hw.available = true; test.tick(1010); receive(test, 0, 0xb0, 0, 1011);
-    assert(hw.panes[1].lines[0].text[0]);
+    assert(hw.panes[1].lines[1].text[0]);
     test.leave(); count = hw.messages.size(); test.tick(2000);
     assert(!test.open() && hw.messages.size() == count);
-    test.enter(); assert(!test.enabled() && !hw.panes[1].lines[0].text[0]);
+    test.enter(); assert(!test.enabled() && !hw.panes[1].lines[1].text[0]);
     test.toggle(0xfffffffau); test.tick(0xfffffffau); test.tick(4);
     assert(hw.messages.size() == count + 4); // Timestamp wrap.
 

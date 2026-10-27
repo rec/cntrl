@@ -7,7 +7,7 @@ namespace cntrl {
 // Owns test behavior only. The caller grants exclusive DIN/TRS access while open.
 class CableTest {
 public:
-    explicit CableTest(Hardware &hardware) : hardware_(hardware) {}
+    explicit CableTest(Hardware &hardware, ScreenGraphics title = {}) : hardware_(hardware), title_(title) {}
     bool open() const { return open_; }
     bool enabled() const { return enabled_; }
     void enter() { open_ = true; enabled_ = false; reset(); render(); }
@@ -60,6 +60,7 @@ private:
     static constexpr unsigned history = 8;
     struct Probe { bool valid = false; uint8_t value = 0; uint32_t sent = 0; };
     Hardware &hardware_;
+    ScreenGraphics title_;
     bool open_ = false, enabled_ = false, seen_[2] = {};
     unsigned input_[2] = {}, cursor_[2] = {};
     uint8_t value_[2] = {};
@@ -75,23 +76,33 @@ private:
     }
     void render() {
         Pane views[3];
-        for (auto &view : views) for (auto &line : view.lines) {
-            line.graphics.size = line.graphics.line_height = 16;
-            line.centered = true;
-        }
-        std::snprintf(views[0].lines[0].text, 64, "MIDI cable test");
-        std::snprintf(views[0].lines[1].text, 64, "%s", enabled_ ? "On" : "Off");
-        if (seen_[0]) std::snprintf(views[1].lines[0].text, 64, "%s", input_[0] ? "DIN to TRS" : "DIN");
-        if (seen_[1]) std::snprintf(views[1].lines[1].text, 64, "%s", input_[1] ? "TRS" : "TRS to DIN");
-        std::snprintf(views[2].lines[0].text, 64, "C on/off");
-        std::snprintf(views[2].lines[1].text, 64, "F modules");
-        for (unsigned i = 0; i < 3; ++i) {
-            for (auto &line : views[i].lines) {
-                if (std::strlen(line.text) * 12 > hardware_.display_width() - 8)
-                    line.graphics.size = line.graphics.line_height = 8;
+        for (auto &view : views) {
+            view.graphics.background = 0;
+            view.graphics.foreground = 0xffff;
+            for (auto &line : view.lines) {
+                line.graphics = view.graphics;
+                line.graphics.size = line.graphics.line_height = 16;
+                line.centered = true;
             }
-            hardware_.show(i, views[i]);
         }
+        auto &center = views[1];
+        std::snprintf(center.lines[0].text, 64, "MIDI cable test");
+        center.lines[0].graphics = title_;
+        center.lines[0].graphics.foreground = 0xffff;
+        center.lines[0].graphics.background = 0;
+        center.lines[0].y = 4;
+        if (seen_[0]) std::snprintf(center.lines[1].text, 64, "%s", input_[0] ? "DIN to TRS" : "DIN");
+        if (seen_[1]) std::snprintf(center.lines[2].text, 64, "%s", input_[1] ? "TRS" : "TRS to DIN");
+        center.lines[1].y = 44;
+        center.lines[2].y = 72;
+        std::snprintf(center.lines[3].text, 64, "%s", enabled_ ? "On" : "Off");
+        center.lines[3].y = hardware_.display_height() - 24;
+        auto &back = views[2].lines[0];
+        std::snprintf(back.text, 64, "Back");
+        back.centered = false;
+        back.x = hardware_.display_width() - 4 - 4 * 12;
+        back.y = 4;
+        for (unsigned i = 0; i < 3; ++i) hardware_.show(i, views[i]);
     }
 };
 }

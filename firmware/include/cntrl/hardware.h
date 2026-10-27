@@ -20,6 +20,7 @@ struct TextLine {
     char text[64] = {};
     ScreenGraphics graphics;
     uint16_t x = 4;
+    int16_t y = -1; // Negative uses the normal vertical distribution.
     bool centered = false;
     bool wrap = false;
     bool stippled = false;

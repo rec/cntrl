@@ -124,6 +124,24 @@ int main() {
     renderer.show(0, scaled); drain(renderer); blank(0);
     renderer.show(0, empty); drain(renderer);
 
+    cntrl::Pane back;
+    back.graphics.background = 0;
+    std::strcpy(back.lines[0].text, "Back");
+    back.lines[0].graphics.background = 0;
+    back.lines[0].graphics.foreground = 0xffff;
+    back.lines[0].graphics.size = back.lines[0].graphics.line_height = 16;
+    back.lines[0].x = 108; back.lines[0].y = 4;
+    renderer.show(2, back); drain(renderer);
+    unsigned label_pixels = 0;
+    for (unsigned y = 0; y < 128; ++y) for (unsigned x = 0; x < 160; ++x) {
+        if (screens[2][y][x]) {
+            assert(x >= 108 && x < 156 && y >= 4 && y < 20);
+            ++label_pixels;
+        }
+    }
+    assert(label_pixels);
+    renderer.show(2, empty); drain(renderer);
+
     cntrl::Pane bands;
     for (unsigned i = 0; i < 3; ++i) {
         std::strcpy(bands.lines[i].text, "A");
