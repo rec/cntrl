@@ -5,6 +5,7 @@
 
 namespace cntrl {
 constexpr unsigned metadata_header_size = 8;
+constexpr unsigned document_version = 12;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -34,7 +35,7 @@ class Document {
 public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
-            || u16(bytes + 4) != 11 || u16(bytes + 6) < 1
+            || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
             || u32(bytes + 8) != length || bytes[19] > 3 || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
@@ -162,9 +163,9 @@ public:
     }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + 28 + slot * 16;
-        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u16(p + 12)};
+        return read_graphics(p);
     }
-    void page(Pane &view, unsigned index, unsigned slot, bool muted) const {
+    void page(Pane &view, unsigned index, unsigned slot, bool already_sent) const {
         unsigned page = u16(patch(index) + 76 + slot * 2);
         const uint8_t *p = data_ + pages_;
         while (page--) p += 1 + p[0] * 8;
@@ -174,7 +175,7 @@ public:
             line.graphics = read_graphics(data_ + styles_ + u16(p + 2) * 16);
             line.x = u16(p + 4);
             line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 21);
-            line.stippled = muted && p[1];
+            line.stippled = already_sent && p[1];
             field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6));
         }
     }
@@ -187,13 +188,13 @@ public:
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
     static bool graphics_valid(const uint8_t *p, const Hardware &hardware) {
-        return hardware.supports_font(p[0], p[1]) && !p[3] && !u16(p + 14)
+        return hardware.supports_font(p[0], p[1]) && !p[3] && !u32(p + 12)
             && 2u * p[2] < hardware.display_width()
             && 2u * p[2] + u16(p + 8) <= hardware.display_height()
             && u16(p + 8) && u16(p + 10) < u16(p + 8);
     }
     static ScreenGraphics read_graphics(const uint8_t *p) {
-        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u16(p + 12)};
+        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10)};
     }
     void field_text(char *text, unsigned size, unsigned code, unsigned index, unsigned literal) const {
         const uint8_t *p = patch(index);

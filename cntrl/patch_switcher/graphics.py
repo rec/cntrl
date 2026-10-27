@@ -23,7 +23,7 @@ def distance(first: tuple[int, int, int], second: tuple[int, int, int]) -> float
     )
 
 
-def colors(screen: models.Style, contrast: float) -> tuple[int, int, int]:
+def colors(screen: models.Style, contrast: float) -> tuple[int, int]:
     foreground, background = screen.foreground_color, screen.background_color
     if foreground is None and background is None:
         foreground, background = 'black', 'white'
@@ -57,12 +57,7 @@ def colors(screen: models.Style, contrast: float) -> tuple[int, int, int]:
             UserWarning,
             stacklevel=2,
         )
-    half = (
-        color(screen.half)
-        if screen.half
-        else tuple((a + b) // 2 for a, b in zip(fg, bg, strict=True))
-    )
-    return rgb565(fg), rgb565(bg), rgb565((half[0], half[1], half[2]))
+    return rgb565(fg), rgb565(bg)
 
 
 def rgb565(value: tuple[int, int, int]) -> int:
@@ -137,7 +132,7 @@ def font_choice(
     return face, selected
 
 
-SCREEN = struct.Struct('<BBBBHHHHHH')
+SCREEN = struct.Struct('<BBBBHHHH4x')
 COLORS = {
     'black': '0x000000',
     'white': '0xFFFFFF',

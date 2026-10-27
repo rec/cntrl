@@ -204,10 +204,9 @@ The complete generated report is saved locally as
 ## Adapter and storage boundaries
 
 Show format version 9 includes shared top-level `font_name`/`font_size`/`pad` and
-`screens.undo`, `screens.sent`, `screens.next` colors, including optional `half`.
-Only the rightmost patch name uses `half` when it matches the last successful
-send for its instrument (program and bank select, not label/category). Without
-an explicit `half`, the Mac computes the RGB midpoint of foreground/background.
+`screens.undo`, `screens.sent`, `screens.next` colors. Current firmware uses
+foreground-color stippling for the rightmost patch name when it matches the last
+successful send for its instrument (program and bank select, not label/category).
 It also retains instrument identities, logical banks and bank mappings for
 self-contained editable downloads. Version 9 preserves original synthesizer
 names and the separate program/show `display_name` overrides in variable-length

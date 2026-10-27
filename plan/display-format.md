@@ -1,15 +1,13 @@
 # Per-line display formatting
 
-Current trial, 2026-10-27: already-sent patch names preserve their foreground
-color and use a checkerboard with alternating transparent pixels. This replaces
-the solid `half` appearance described below for the trial. The authored `half`
-property and compiled field are retained while comparing the two appearances.
+Already-sent patch names preserve their foreground color and use a checkerboard
+with alternating transparent pixels. This appearance is verified on the pedal.
 
-Status: implemented, 2026-10-26, compiled document format 11. Pages use an ordered
+Status: implemented, 2026-10-27, compiled document format 12. Pages use an ordered
 list of unique field names. The inheritance, missing-value and background rules
-below are implemented. The default page represents the existing UI. Firmware
-and the converted setup are deployed and verified over USB. User confirmation
-of the visible appearance remains pending.
+below are implemented. The default page represents the existing UI. The page UI
+and stippled appearance are deployed and visually verified. The format-12 color
+cleanup is implemented but has not been flashed.
 
 ## Goal
 
@@ -114,7 +112,6 @@ Use one partial style structure wherever styling is permitted:
 | `font_name` | Font family supported by the target |
 | `font_size` | Requested size in pixels |
 | `autoscale_fonts` | Whether to choose the largest fitting size for this line |
-| `half` | Color for the existing already-sent patch indication |
 
 Retain the existing property names and color syntax. Read sizes through
 `reccy.configuration.units`, including values such as `"24 px"`.
@@ -224,10 +221,10 @@ edges; the outer padding uses the window background. This gives lines with
 different backgrounds a defined result even when their fonts have different
 heights.
 
-Apply the existing already-sent indication after resolving the line style.
-An inherited or explicit `half` value applies to that line; otherwise derive
-the midpoint from its final foreground and background. Evaluate contrast against
-the final color pair, rather than against partially inherited colors.
+Apply the already-sent indication after resolving the line style. Retain its
+foreground color and expose its background through alternating checkerboard
+pixels after composing the glyphs. Evaluate contrast against the final color
+pair, rather than against partially inherited colors.
 
 The same page can resolve differently in different windows. Resolve the
 destination appearance when content moves between undo, sent and next. Ensure
@@ -241,7 +238,7 @@ combination, deduplicating styles, pages and literal text in the compiled
 document. The pedal receives bounded generic line records, not an inheritance
 engine. Mutable attribute/global field codes read live document values.
 
-Compiled format 11 replaces the old category cursor offsets and `CFNT` metadata
+Compiled format 12 uses resolved pages in place of category cursor offsets and `CFNT` metadata
 with resolved pages. It stores authored display settings and partial overrides
 as UTF-8 TOML metadata, so downloads preserve inheritance rather than flattening
 it. Existing MIDI records remain authoritative for numeric edits. Older
@@ -263,8 +260,8 @@ migration is included. See the [binary protocol](../firmware/README.md).
   independently without modifying its shared definition.
 - Mixed font families and sizes fit, center and distribute vertically using
   their own metrics. Empty and wrapped lines are handled consistently.
-- Background bands meet without gaps, and the already-sent color is derived
-  from the final style when no explicit `half` is supplied.
+- Background bands meet without gaps, and the already-sent pattern retains
+  the final foreground color with alternating transparent pixels.
 - A style-only edit repaints correctly. Send and undo finish with the correct
   destination appearance and preserve MIDI behavior.
 - Export and recompile preserve both effective appearance and inheritance.

@@ -6,7 +6,7 @@ from zlib import crc32
 
 import tomlkit
 
-from .compiler import HEADER, METADATA
+from .compiler import DOCUMENT_VERSION, HEADER, METADATA
 from .display import read_source
 
 
@@ -18,7 +18,7 @@ def export(data: bytes) -> str:
     )
     if (
         magic != b'CSW1'
-        or version != 11
+        or version != DOCUMENT_VERSION
         or flags >> 10
         or length != len(data)
         or crc32(data[28:]) != crc

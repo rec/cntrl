@@ -2,16 +2,15 @@
 
 The full pman setup was selected on the pedal before changing firmware code.
 It reported `CNTRL READY 11 34583 43363d4a`, with all 256 patches and the current
-solid `half` indication. The previous Caveat/Courier font demo remains stored
+solid-color indication. The previous Caveat/Courier font demo remains stored
 separately. Selecting pman required no firmware upload because the installed
 firmware already supports it. No MIDI send was requested by the host.
 
 The trial changes only the already-sent appearance. The controller marks the
 affected patch-name line as stippled while retaining its resolved foreground
 color. Detection of matching instrument/program/bank addresses, successful
-sends and undo behavior is unchanged. The document format and saved setups
-are unchanged; `half` is still encoded but is not used for this trial's
-already-sent indication.
+sends and undo behavior is unchanged. The initial trial used existing documents
+without recompilation.
 
 After composing the glyphs, the display renderer restores each affected line's
 background at alternating checkerboard pixels. Pixels where `(x + y) & 1` is
@@ -35,3 +34,15 @@ the solid-color comparison and requested installation. The first USB write
 failed; after verifying HalfKay serial 14468280, the same image uploaded
 successfully on the second attempt. Stock firmware returned. Enter cntrl with
 A+F to verify pman selection and compare the stippled appearance physically.
+
+The user confirmed the stippled appearance is better. The source now removes
+the separate already-sent color from configuration and runtime graphics.
+Compiled format 12 requires the final four bytes of each 16-byte display record
+to be zero. Previously compiled documents must be recompiled from configuration
+using only foreground and background colors. This cleanup has not been flashed.
+
+Cleanup verification: all 326 Python tests, portable controller tests, native
+renderer tests, Ruff, formatting, ty and pyupgrade checks pass. Native decoder
+tests reject format 11 and nonzero reserved bytes in both window and line-style
+records. The format-12 combined build passed its boot-envelope checks, SHA-256
+`1e1c1e48574bb7853f03a31f3d205e283e7c8772d681de5252cda1dc1c2d4af4`.

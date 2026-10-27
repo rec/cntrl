@@ -278,7 +278,6 @@ int main(int argc, char **argv) {
         assert(output.panes[2].lines[1].stippled);
         assert(output.panes[2].lines[1].graphics.foreground == 65535);
         assert(!output.panes[2].lines[0].stippled);
-        assert(output.panes[2].lines[0].graphics.foreground != 0x8410);
         TestStorage storage;
         cntrl::Documents documents(storage, output, app, output);
         documents.boot(); upload(documents, display_bytes); command(documents, "CNTRL SETUP FINISH");
@@ -322,7 +321,6 @@ int main(int argc, char **argv) {
         cntrl::Document invalid_layout;
         assert(!invalid_layout.load(scaled.data(), unsigned(scaled.size()), hw));
     }
-    assert(doc.graphics(2).half == 0x7bef);
     test_greyed_names(doc);
     test_undo_restores_undone_candidate(doc);
     test_greyed_aliases(bytes);
@@ -335,6 +333,18 @@ int main(int argc, char **argv) {
     auto corrupt = bytes;
     corrupt.back() ^= 1;
     cntrl::Document invalid;
+    assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    // Reserved display bytes must be zero in both windows and line styles.
+    unsigned display = 0;
+    for (unsigned i = 0; i + 4 <= bytes.size(); ++i)
+        if (!std::memcmp(bytes.data() + i, "CDSP", 4)) { display = i; break; }
+    assert(display);
+    for (unsigned record : {28u, display + 16}) for (unsigned i = 12; i < 16; ++i) {
+        corrupt = bytes; corrupt[record + i] = 1;
+        cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
+        assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    }
+    corrupt = bytes; corrupt[4] = 11;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     // Name metadata is length-delimited and must fit the document exactly.
     unsigned names = unsigned(doc.bank(doc.patches()) - bytes.data());
@@ -454,7 +464,7 @@ int main(int argc, char **argv) {
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].lines[1].text, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 11 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 12 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].lines[1].text, "Flute"));
     auto new_show = bytes;

@@ -347,7 +347,7 @@ def compile_show(
     return (
         HEADER.pack(
             b'CSW1',
-            11,
+            DOCUMENT_VERSION,
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
@@ -421,3 +421,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHH')
+DOCUMENT_VERSION = 12

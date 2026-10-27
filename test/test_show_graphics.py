@@ -1,6 +1,5 @@
 """Color resolution and font metrics shared by the display compiler."""
 
-import warnings
 from pathlib import Path
 
 import pytest
@@ -45,37 +44,19 @@ def test_one_color_chooses_complement_or_furthest_with_warning() -> None:
     assert graphics.colors(models.Style(foreground_color='red'), 0.6) == (
         0xF800,
         0x07FF,
-        0x7BEF,
     )
     assert graphics.colors(models.Style(background_color='red'), 0.6) == (
         0x07FF,
         0xF800,
-        0x7BEF,
     )
     with pytest.warns(UserWarning, match='contrast 0.600'):
         assert graphics.colors(models.Style(foreground_color='gray'), 0.6) == (
             graphics.rgb565((128, 128, 128)),
             0,
-            graphics.rgb565((64, 64, 64)),
         )
     chosen = graphics.color('0x909090')
-    fg, bg, _ = graphics.colors(models.Style(foreground_color='0x909090'), 0.41)
+    fg, bg = graphics.colors(models.Style(foreground_color='0x909090'), 0.41)
     assert fg == graphics.rgb565(chosen) and bg != graphics.rgb565((111, 111, 111))
-
-
-@pytest.mark.parametrize('half', [None, ''])
-def test_half_defaults_to_rgb_midpoint(half: str | None) -> None:
-    assert graphics.colors(
-        models.Style(foreground_color='red', background_color='blue', half=half), 0.6
-    )[2] == graphics.rgb565((127, 0, 127))
-
-
-@pytest.mark.parametrize('half', ['yellow', '0x112233'])
-def test_half_accepts_named_and_hex_colors_without_contrast_warning(half: str) -> None:
-    with warnings.catch_warnings(action='error'):
-        assert graphics.colors(models.Style(half=half), 0.6)[2] == graphics.rgb565(
-            graphics.color(half)
-        )
 
 
 def test_auto_size_fits_shared_padding(target: models.Target) -> None:

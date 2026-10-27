@@ -41,7 +41,6 @@ class Instrument(BaseModel, frozen=True):
 class Style(BaseModel, frozen=True):
     background_color: str | None = None
     foreground_color: str | None = None
-    half: str | None = None
     font_name: str | None = None
     font_size: (
         Annotated[int, Field(strict=True, gt=0, le=255), units.unit_validator('pixel')]

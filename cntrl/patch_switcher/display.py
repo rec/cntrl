@@ -36,7 +36,7 @@ def compile_display(
             raise ValueError(f'windows.{name}: unknown page {window.page!r}')
         try:
             if window.style:
-                for key in ('foreground_color', 'background_color', 'half'):
+                for key in ('foreground_color', 'background_color'):
                     if value := getattr(window.style, key):
                         graphics.color(value)
         except ValueError as error:
@@ -107,8 +107,8 @@ def compile_display(
                 )
             instances.append(lines)
             for j in lines:
-                code, text, style, pad, _, half = requests[j]
-                requests[j] = (code, text, style, pad, max(1, len(lines)), half)
+                code, text, style, pad, _, stipple = requests[j]
+                requests[j] = (code, text, style, pad, max(1, len(lines)), stipple)
     for _, text, style, pad, count, _ in requests:
         if not style.autoscale_fonts:
             shared.setdefault(
@@ -129,7 +129,7 @@ def compile_display(
     styles: list[bytes] = []
     records: list[bytes] = []
     texts: list[bytes] = []
-    for code, text, style, pad, count, half in requests:
+    for code, text, style, pad, count, stipple in requests:
         face, size = (
             graphics.font_choice(
                 show.model_copy(
@@ -144,9 +144,9 @@ def compile_display(
             else selected[(style.font_name, style.font_size, pad, count)]
         )
         metrics = face.sizes[size]
-        fg, bg, muted = graphics.colors(style, show.contrast)
+        fg, bg = graphics.colors(style, show.contrast)
         packed = graphics.SCREEN.pack(
-            face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top, muted, 0
+            face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top
         )
         if packed not in styles:
             styles.append(packed)
@@ -156,7 +156,7 @@ def compile_display(
         if encoded not in texts:
             texts.append(encoded)
         records.append(
-            LINE.pack(code, half, styles.index(packed), x, texts.index(encoded))
+            LINE.pack(code, stipple, styles.index(packed), x, texts.index(encoded))
         )
     # Window records supply the outer background and padding, including empty panes.
     names = [
@@ -182,10 +182,10 @@ def compile_display(
             pad,
         )
         metrics = face.sizes[size]
-        fg, bg, half = graphics.colors(style, show.contrast)
+        fg, bg = graphics.colors(style, show.contrast)
         window_records.append(
             graphics.SCREEN.pack(
-                face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top, half, 0
+                face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top
             )
         )
     pages: list[bytes] = []
