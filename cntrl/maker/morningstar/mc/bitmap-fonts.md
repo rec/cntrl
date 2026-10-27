@@ -131,3 +131,7 @@ Combined firmware SHA-256:
 The image was flashed through the upload helper after a USB write error and
 HalfKay identity verification before retrying. Stock firmware returned.
 The revised demo compiles to 1,340 bytes and uses size 32 for all three samples.
+After entering cntrl with A+F, the revised `font-demo` was copied with
+byte-for-byte read-back verification and selected. The pedal reports
+`CNTRL READY 11 1340 1dcf95b1`; its catalogue still includes pman. No MIDI send
+was requested. Physical appearance of the new samples awaits confirmation.
