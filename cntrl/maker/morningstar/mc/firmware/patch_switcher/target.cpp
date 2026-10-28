@@ -537,14 +537,14 @@ void storage_info(bool scan) {
 }
 
 void midi_status(unsigned route) { board.midi_status(route); }
-bool font_command(const char *line) {
+bool asset_command(const char *line) {
     if (!std::strncmp(line, "CNTRL SONGS ", 12)) {
         if (songs_ui.open()) { board.reply("CNTRL ERROR close-song-editor"); return true; }
         return songs_transfer.command(line, millis());
     }
-    return font_files.command(line, board);
+    return font_files.command(line, board, millis());
 }
-cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, font_command);
+cntrl::splash::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command);
 ButtonState buttons[6];
 uint32_t last_scan = 0;
 
@@ -676,6 +676,7 @@ void poll_target() {
         serial_router.receive(Serial.read(), now);
     serial_router.poll(now);
     songs_transfer.poll(now);
+    font_files.poll(now, board);
     board.poll();
     board.display(now, documents.busy() || feature_open());
 }

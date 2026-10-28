@@ -67,6 +67,9 @@ ready-state is sufficient. Test a serial sink accepting one byte at a time.
 
 ## M4. P2: font upload errors/timeouts retain the writer
 
+**Resolved:** failed commands close the writer, and the target polls a ten-second
+inactivity timeout. Native font-peer assertions cover timeout and malformed DATA.
+
 **Evidence:** `firmware/patch_switcher/font_storage.h:23`–`:57`.
 
 The generic error lambda only replies. Invalid DATA, an unknown font command or
