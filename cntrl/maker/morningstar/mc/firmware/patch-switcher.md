@@ -655,3 +655,9 @@ The corrected combined image was flashed through upload_helper, SHA-256
 `02766ccbb3922bbf623862a267c9aae233475c7377eae8672b8cffc543f28360`.
 Upload succeeded after the initial USB write error and retry. The pedal reset to
 stock firmware; the corrected live history-command check awaits A+F entry.
+
+On 2026-10-28, after A+F entry, the corrected firmware reported
+`CNTRL READY 14 34597 488beaf6` with pman still selected. The host history-list
+command completed successfully with no revisions listed, confirming that the
+revision-number parser accepts the live request. This was a read-only check;
+physical snapshot/restore behavior and MIDI latency remain unqualified.
