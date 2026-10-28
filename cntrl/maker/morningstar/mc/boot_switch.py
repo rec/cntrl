@@ -174,7 +174,10 @@ def build(command: Build) -> None:
     validate_firmware(image)
     if image.data != combined:
         raise ValueError('combined HEX readback differs')
-    print(f'{output}: persistent stock -> cntrl, {command.pair}, 50 ms, no hold')
+    print(
+        f'{output}: patch mode by default; '
+        f'stock {command.pair} -> patch mode, 50 ms, no hold'
+    )
     print(f'SHA256: {image.sha256}')
 
 
