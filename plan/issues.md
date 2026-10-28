@@ -101,6 +101,15 @@ interrupt handler.
 
 ### C4. P2: setup browsing repeatedly validates the whole catalogue synchronously
 
+**Resolved:** catalogue browse and host rotation now visit one directory entry or
+read at most 512 document bytes per tick. They compare both saved slots, honor
+newer tombstones, skip invalid records and preserve alphabetical wraparound.
+Rotation rereads its chosen slot cooperatively before activation. A native
+regression uses reverse directory order and 1,000 invalid entries, checking
+aggregate per-step I/O and directory work. Initial boot lookup and explicit
+selection/font preparation retain their existing bounded-document synchronous
+paths; the catalogue-sized browse loops are removed from the UI and rotation.
+
 **Evidence:** `firmware/include/cntrl/setup_ui.h:114` (`browse`),
 `firmware/include/cntrl/documents.h:39` (`next_valid`), `:57` (`rotate`),
 `:350` (`load`).

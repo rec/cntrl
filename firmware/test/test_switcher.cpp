@@ -328,6 +328,60 @@ void test_revision_history(const std::vector<uint8_t> &bytes) {
     assert(hw.replies.back() != "CNTRL WAIT");
 }
 
+void test_catalogue_jobs_are_bounded_and_preserve_order(const std::vector<uint8_t> &bytes) {
+    struct Card : TestStorage {
+        unsigned io = 0, entries = 0;
+        decltype(files)::const_reverse_iterator cursor;
+        void catalogue_begin() override { cursor = files.rbegin(); }
+        bool catalogue_step(char *name) override {
+            ++entries; name[0] = 0;
+            if (cursor == files.rend()) return true;
+            if (cntrl::setup_name(cursor->first.c_str())) std::snprintf(name, 64, "%s", cursor->first.c_str());
+            ++cursor; return false;
+        }
+        bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned n) override {
+            io += n; return TestStorage::read(slot, offset, data, n);
+        }
+        bool write(const uint8_t *data, unsigned n) override { io += n; return TestStorage::write(data, n); }
+    } card;
+    Fake hw; cntrl::Controller controller(hw); cntrl::Documents docs(card, hw, controller, hw);
+    docs.boot();
+    for (const char *name : {"Zulu", "Alpha", "Middle", "Deleted"}) upload(docs, bytes, name);
+    // Newer tombstone hides the older valid payload.
+    auto &deleted = card.files["Deleted"];
+    deleted[1].assign(deleted[0].begin(), deleted[0].begin() + 96); deleted[1].resize(100);
+    cntrl::put32(deleted[1].data() + 4, cntrl::u32(deleted[0].data() + 4) + 1);
+    cntrl::put32(deleted[1].data() + 8, 0); cntrl::put32(deleted[1].data() + 12, 0);
+    cntrl::put32(deleted[1].data() + 92, cntrl::checksum(deleted[1].data(), 92));
+    std::memcpy(deleted[1].data() + 96, "DONE", 4);
+    // A damaged newer payload must fall back to the older valid slot.
+    auto &middle = card.files["Middle"]; middle[1] = middle[0]; middle[1][96] ^= 1;
+    cntrl::put32(middle[1].data() + 4, cntrl::u32(middle[0].data() + 4) + 1);
+    cntrl::put32(middle[1].data() + 92, cntrl::checksum(middle[1].data(), 92));
+    for (unsigned i = 0; i < 1000; ++i) card.files["Invalid" + std::to_string(i)][0] = {'B'};
+    command(docs, "CNTRL SETUP FINISH"); assert(!std::strcmp(docs.selected(), "Alpha"));
+    auto finish = [&] {
+        unsigned tick = 0;
+        while (docs.busy()) {
+            card.io = card.entries = 0; auto replies = hw.replies.size();
+            docs.tick(++tick * 10);
+            assert(card.io <= 512 && card.entries <= 1 && hw.replies.size() <= replies + 1);
+            assert(tick < 100000);
+        }
+        assert(!docs.last_error()[0] && hw.sent.empty());
+    };
+    cntrl::SetupUi ui(docs, hw); ui.enter(); ui.poll(0); ui.button(1, true, 0);
+    assert(docs.busy() && !std::strcmp(docs.selected(), "Alpha")); finish(); ui.poll(0);
+    assert(!std::strcmp(hw.panes[1].lines[1].text, "Middle"));
+    for (const char *expected : {"Middle", "Zulu", "Alpha"}) {
+        command(docs, "CNTRL SETUP FORWARD"); assert(docs.busy()); finish();
+        assert(!std::strcmp(docs.selected(), expected) && hw.replies.back() == "CNTRL OK");
+    }
+    command(docs, "CNTRL SETUP BACKWARD"); finish(); assert(!std::strcmp(docs.selected(), "Zulu"));
+    assert(docs.browse("Alpha", false)); assert(!docs.browse("Alpha", true));
+    finish(); assert(!std::strcmp(docs.browse_result(), "Middle"));
+}
+
 int main(int argc, char **argv) {
     assert(argc == 3);
     std::ifstream file(argv[1]);
@@ -337,6 +391,7 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < hex.size(); i += 2)
         bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     Fake hw;
+    test_catalogue_jobs_are_bounded_and_preserve_order(bytes);
     cntrl::Document doc;
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
     {

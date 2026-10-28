@@ -11,11 +11,17 @@ public:
         if (docs_.busy()) return;
         mode_ = Mode::catalogue; locked_ = true;
         std::snprintf(name_, sizeof(name_), "%s", docs_.selected());
-        if (!name_[0]) docs_.next_valid("", name_);
+        if (!name_[0]) browse(false);
         render();
     }
     void poll(uint8_t held) {
         if (locked_ && !held) locked_ = false;
+        if (browsing_ && !docs_.busy()) {
+            browsing_ = false;
+            if (docs_.last_error()[0]) mode_ = Mode::failed;
+            else std::snprintf(name_, sizeof(name_), "%s", docs_.browse_result());
+            render();
+        }
         if (mode_ == Mode::history_work && !docs_.busy()) {
             if (docs_.last_error()[0]) mode_ = Mode::failed;
             else {
@@ -32,7 +38,7 @@ public:
         }
     }
     void button(unsigned button, bool down, uint32_t now) {
-        if (!down || locked_ || (mode_ == Mode::saving || mode_ == Mode::history_work)) return;
+        if (!down || locked_ || browsing_ || (mode_ == Mode::saving || mode_ == Mode::history_work)) return;
         if (mode_ == Mode::failed) {
             if (button == 2 || button == 5) {
                 if (docs_.dirty()) { mode_ = Mode::decision; item_ = 0; render(); }
@@ -114,23 +120,15 @@ private:
     Revision revision_;
     unsigned changed_patches_ = 0, changed_routes_ = 0;
     bool changed_settings_ = false, changed_formatting_ = false;
-    bool locked_ = false;
+    bool locked_ = false, browsing_ = false;
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
     void close() { mode_ = Mode::closed; docs_.redraw(); }
     void browse(bool backward) {
-        char cursor[64] = {}, next[64], first[64] = {}, last[64] = {}, previous[64] = {}, following[64] = {};
-        while (docs_.next_valid(cursor, next)) {
-            if (!first[0]) std::snprintf(first, sizeof(first), "%s", next);
-            if (name_compare(next, name_) < 0) std::snprintf(previous, sizeof(previous), "%s", next);
-            if (!following[0] && name_compare(next, name_) > 0) std::snprintf(following, sizeof(following), "%s", next);
-            std::snprintf(last, sizeof(last), "%s", next);
-            std::snprintf(cursor, sizeof(cursor), "%s", next);
-        }
-        std::snprintf(name_, sizeof(name_), "%s", backward ? (previous[0] ? previous : last) : (following[0] ? following : first));
+        if (docs_.browse(name_, backward)) browsing_ = true;
     }
     void render() {
-        const char *title = "Setups", *value = name_[0] ? name_ : "No setups";
+        const char *title = "Setups", *value = browsing_ ? "Working..." : name_[0] ? name_ : "No setups";
         const char *value_label = "Action";
         char number[64] = {};
         if (mode_ == Mode::action) { title = name_; value = item_ == 2 ? "History" : item_ ? "Edit" : "Select"; }
@@ -153,7 +151,7 @@ private:
             title = "Unsaved edits"; value = item_ == 0 ? "Save" : item_ == 1 ? "Discard" : "Cancel";
         } else if (mode_ == Mode::history_work) { title = "History"; value = "Working..."; }
         else if (mode_ == Mode::saving) { title = "Saving"; value = "Please wait"; }
-        else if (mode_ == Mode::failed) { title = "Save failed"; value = docs_.last_error(); }
+        else if (mode_ == Mode::failed) { title = "Operation failed"; value = docs_.last_error(); }
         if (mode_ == Mode::history) {
             title = "History"; value_label = "Revision";
             if (revision_.number) {

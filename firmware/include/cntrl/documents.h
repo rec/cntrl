@@ -34,7 +34,7 @@ public:
         return !busy() && !dirty_ && load(name) && candidate.load(staging_, length_, hardware_);
     }
     const char *selected() const { return selected_; }
-    bool busy() const { return history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
+    bool busy() const { return browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
     bool dirty() const { return dirty_; }
     const char *last_error() const { return last_error_; }
     bool next_valid(const char *after, char *name) {
@@ -55,19 +55,15 @@ public:
         std::snprintf(selected_, sizeof(selected_), "%s", canonical);
         activate(); return true;
     }
-    bool rotate(bool backward) {
-        if (busy() || dirty_) return false;
-        char cursor[64] = {}, name[64], first[64] = {}, last[64] = {}, before[64] = {}, after[64] = {};
-        unsigned count = 0;
-        while (next_valid(cursor, name)) {
-            if (!count++) std::snprintf(first, sizeof(first), "%s", name);
-            if (name_compare(name, selected_) < 0) std::snprintf(before, sizeof(before), "%s", name);
-            if (!after[0] && name_compare(name, selected_) > 0) std::snprintf(after, sizeof(after), "%s", name);
-            std::snprintf(last, sizeof(last), "%s", name);
-            std::snprintf(cursor, sizeof(cursor), "%s", name);
-        }
-        return count > 1 && select(backward ? (before[0] ? before : last) : (after[0] ? after : first));
+    bool browse(const char *after, bool backward, bool select_result = false) {
+        if (busy() || dirty_ || !storage_.available()) return false;
+        browse_ = Browse(); std::snprintf(browse_.reference, 64, "%s", after);
+        browse_.backward = backward; browse_.select = select_result;
+        last_error_[0] = 0; quiet_ = !select_result;
+        storage_.catalogue_begin(); browse_phase_ = BrowsePhase::scan; return true;
     }
+    const char *browse_result() const { return browse_.result; }
+    bool rotate(bool backward) { return browse(selected_, backward, true); }
     void redraw() { if (document_.valid()) controller_.refresh(); else empty(); }
     bool edit_begin() {
         if (busy() || !document_.valid()) return false;
@@ -136,7 +132,7 @@ public:
         return true;
     }
     void receive(uint8_t byte, uint32_t now) {
-        if (history_action_ != HistoryAction::none || writing_ || erasing_) return;
+        if (browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || writing_ || erasing_) return;
         last_byte_ = now;
         if (receiving_) {
             staging_[received_++] = byte;
@@ -156,6 +152,7 @@ public:
         if ((receiving_ || used_ || overflow_ || listing_ || download_) && uint32_t(now - last_byte_) > 10000) {
             receiving_ = false; listing_ = false; download_ = 0; used_ = 0; overflow_ = false; error("transfer-timeout");
         }
+        if (browse_phase_ != BrowsePhase::idle) { browse_tick(now); return; }
         if (history_action_ != HistoryAction::none) { history_tick(now); return; }
         if (erasing_) { erase_step(now); return; }
         if (!writing_) return;
@@ -190,6 +187,104 @@ public:
     bool history_compare(const char *name, uint64_t number) { return begin_history(HistoryAction::compare, name, number); }
     bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
+    enum class BrowsePhase { idle, scan, header, body, trailer, activate };
+    struct Browse {
+        char reference[64] = {}, candidate[64] = {}, canonical[64] = {}, result[64] = {};
+        char first[64] = {}, last[64] = {}, before[64] = {}, after[64] = {};
+        unsigned slot = 0, best_slot = 0, length = 0, position = 0, best_length = 0, count = 0;
+        uint32_t generation = 0, best_generation = 0, crc = 0xffffffff, expected_crc = 0, progress = 0;
+        bool valid = false, backward = false, select = false, loading = false, final = false;
+    } browse_;
+    BrowsePhase browse_phase_ = BrowsePhase::idle;
+    void browse_fail() { browse_phase_ = BrowsePhase::idle; error("catalogue-failed"); }
+    void browse_next_slot() {
+        if (browse_.final) { browse_fail(); return; }
+        if (++browse_.slot < 2) { browse_phase_ = BrowsePhase::header; return; }
+        if (browse_.loading) {
+            if (!browse_.valid || !browse_.best_length) { browse_fail(); return; }
+            browse_.slot = browse_.best_slot; browse_.final = true; browse_phase_ = BrowsePhase::header; return;
+        }
+        if (browse_.valid && browse_.best_length) {
+            const char *name = browse_.canonical;
+            auto copy = [&](char *destination) { std::snprintf(destination, 64, "%s", name); };
+            if (!browse_.first[0] || name_compare(name, browse_.first) < 0) copy(browse_.first);
+            if (!browse_.last[0] || name_compare(name, browse_.last) > 0) copy(browse_.last);
+            if (name_compare(name, browse_.reference) < 0 && (!browse_.before[0] || name_compare(name, browse_.before) > 0)) copy(browse_.before);
+            if (name_compare(name, browse_.reference) > 0 && (!browse_.after[0] || name_compare(name, browse_.after) < 0)) copy(browse_.after);
+            ++browse_.count;
+        }
+        browse_phase_ = BrowsePhase::scan;
+    }
+    void browse_tick(uint32_t now) {
+        browse_step();
+        if (browse_phase_ != BrowsePhase::idle && browse_.select && uint32_t(now - browse_.progress) >= 500) {
+            replies_.reply("CNTRL WAIT"); browse_.progress = now;
+        }
+    }
+    void browse_step() {
+        switch (browse_phase_) {
+        case BrowsePhase::idle: return;
+        case BrowsePhase::scan:
+            if (storage_.catalogue_step(browse_.candidate)) {
+                if (!storage_.available()) { browse_fail(); return; }
+                const char *result = browse_.backward ? (browse_.before[0] ? browse_.before : browse_.last)
+                    : (browse_.after[0] ? browse_.after : browse_.first);
+                std::snprintf(browse_.result, 64, "%s", result);
+                if (!browse_.select) { browse_phase_ = BrowsePhase::idle; quiet_ = false; return; }
+                if (browse_.count < 2) { browse_phase_ = BrowsePhase::idle; error("rotation-failed"); return; }
+                std::snprintf(browse_.candidate, 64, "%s", result); browse_.loading = true;
+            } else if (!browse_.candidate[0]) return;
+            storage_.choose(browse_.candidate);
+            browse_.slot = 0; browse_.valid = false; browse_phase_ = BrowsePhase::header; return;
+        case BrowsePhase::header:
+            if (!storage_.read(browse_.slot, 0, header_, 96) || !header_valid(header_)
+                || name_compare(browse_.candidate, reinterpret_cast<const char *>(header_ + 20))) { browse_next_slot(); return; }
+            browse_.length = u32(header_ + 8); browse_.generation = u32(header_ + 4);
+            if (storage_.size(browse_.slot) != browse_.length + 100
+                || (browse_.final && (browse_.length != browse_.best_length || browse_.generation != browse_.best_generation))) { browse_next_slot(); return; }
+            browse_.expected_crc = u32(header_ + 12); browse_.crc = 0xffffffff; browse_.position = 0;
+            browse_phase_ = browse_.length ? BrowsePhase::body : BrowsePhase::trailer; return;
+        case BrowsePhase::body: {
+            unsigned n = browse_.length - browse_.position; if (n > 512) n = 512;
+            uint8_t *p = scratch_ + browse_.position;
+            if (!storage_.read(browse_.slot, 96 + browse_.position, p, n)) { browse_next_slot(); return; }
+            for (unsigned i = 0; i < n; ++i) {
+                browse_.crc ^= p[i];
+                for (unsigned b = 0; b < 8; ++b) browse_.crc = (browse_.crc >> 1) ^ (0xedb88320u & (0u - (browse_.crc & 1)));
+            }
+            browse_.position += n;
+            if (browse_.position == browse_.length) browse_phase_ = BrowsePhase::trailer;
+            return;
+        }
+        case BrowsePhase::trailer: {
+            uint8_t trailer[4]; Document candidate;
+            if (!storage_.read(browse_.slot, 96 + browse_.length, trailer, 4) || std::memcmp(trailer, "DONE", 4)
+                || ~browse_.crc != browse_.expected_crc || (browse_.length && !candidate.load(scratch_, browse_.length, hardware_))) {
+                browse_next_slot(); return;
+            }
+            if (browse_.final) {
+                std::memcpy(staging_, scratch_, browse_.length); length_ = browse_.length;
+                generation_ = browse_.generation; slot_ = 1 - browse_.slot;
+                std::snprintf(record_name_, 64, "%s", header_ + 20);
+                browse_phase_ = BrowsePhase::activate; return;
+            }
+            if (!browse_.valid || int32_t(browse_.generation - browse_.best_generation) > 0) {
+                browse_.valid = true; browse_.best_generation = browse_.generation; browse_.best_length = browse_.length; browse_.best_slot = browse_.slot;
+                std::snprintf(browse_.canonical, 64, "%s", header_ + 20);
+            }
+            browse_next_slot(); return;
+        }
+        case BrowsePhase::activate: {
+            Document candidate;
+            if (!hardware_.output_idle() || !candidate.load(staging_, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { browse_fail(); return; }
+            if (std::strcmp(selected_, record_name_) && !persist_selection(record_name_)) {
+                hardware_.finish_fonts(false); browse_fail(); return;
+            }
+            hardware_.finish_fonts(true); std::snprintf(selected_, 64, "%s", record_name_);
+            activate(); browse_phase_ = BrowsePhase::idle; replies_.reply("CNTRL OK"); quiet_ = false; return;
+        }
+        }
+    }
     enum class HistoryAction { none, list, save, restore, compare, download, erase, archive };
     enum class HistoryPhase { current, selected, revision, append, erase };
     HistoryAction history_action_ = HistoryAction::none;
@@ -553,7 +648,7 @@ private:
             if (select(name)) replies_.reply("CNTRL OK"); else error("selection-failed"); return;
         }
         if (!std::strcmp(line_, "CNTRL SETUP FORWARD") || !std::strcmp(line_, "CNTRL SETUP BACKWARD")) {
-            if (rotate(!std::strcmp(line_, "CNTRL SETUP BACKWARD"))) replies_.reply("CNTRL OK"); else error("rotation-failed"); return;
+            if (!rotate(!std::strcmp(line_, "CNTRL SETUP BACKWARD"))) error("rotation-failed"); return;
         }
         if (!std::strcmp(line_, "CNTRL SETUP FINISH")) {
             char first[64]; if (!selected_[0] && next_valid("", first) && !select(first)) { error("selection-failed"); return; }

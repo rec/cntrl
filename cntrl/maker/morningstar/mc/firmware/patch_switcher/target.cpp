@@ -368,6 +368,16 @@ public:
         }
         std::snprintf(name, 64, "%s", best); return best[0];
     }
+    void catalogue_begin() override {
+        catalogue_.close(); catalogue_ = SD.sdfs.open("/cntrl/setups", O_RDONLY);
+    }
+    bool catalogue_step(char *name) override {
+        name[0] = 0; FsFile entry; char candidate[128];
+        if (!catalogue_ || !entry.openNext(&catalogue_, O_RDONLY)) { catalogue_.close(); return true; }
+        if (entry.isDirectory() && entry.getName(candidate, sizeof(candidate)) && cntrl::setup_name(candidate))
+            std::snprintf(name, 64, "%.63s", candidate);
+        return false;
+    }
     unsigned size(unsigned slot) override {
         if (!ready) return 0;
         char path[144]; filename(slot, path);
@@ -399,7 +409,7 @@ public:
         return synced; // Documents also reopens and verifies all bytes.
     }
 private:
-    FsFile file_, history_directory_;
+    FsFile file_, history_directory_, catalogue_;
     uint64_t history_before_ = 0;
     bool history_records_ = false;
     bool revision_ = false;

@@ -33,6 +33,14 @@ struct TestStorage : cntrl::SetupStorage {
         files.erase(i->second); return true;
     }
     bool available() const override { return ready; }
+    decltype(files)::const_iterator catalogue_;
+    void catalogue_begin() override { catalogue_ = files.begin(); }
+    bool catalogue_step(char *name) override {
+        name[0] = 0;
+        if (catalogue_ == files.end()) return true;
+        if (cntrl::setup_name(catalogue_->first.c_str())) std::snprintf(name, 64, "%s", catalogue_->first.c_str());
+        ++catalogue_; return false;
+    }
     void choose(const char *name) override {
         revision = false; directory = name;
         for (const auto &f : files) if (!cntrl::name_compare(f.first.c_str(), name)) { directory = f.first; break; }
