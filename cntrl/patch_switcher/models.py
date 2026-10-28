@@ -202,7 +202,7 @@ class PatchCommand(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class ActionAssignment(BaseModel, frozen=True):
+class SwitchAssignment(BaseModel, frozen=True):
     name: str | None = None
     button: Literal['A', 'B', 'C', 'D', 'E']
     mode: Literal['momentary', 'latched']
@@ -255,7 +255,7 @@ class Show(BaseModel, frozen=True):
     pages: dict[str, Page] = Field(default_factory=lambda: {'patch': Page()})
     categories: dict[str, Category] = Field(default_factory=dict)
     parameters: dict[str, Parameter] = Field(default_factory=dict)
-    actions: dict[str, ActionAssignment] = Field(default_factory=dict)
+    actions: dict[str, SwitchAssignment] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra='forbid')
 

@@ -34,5 +34,5 @@ def test_history_command_accepts_the_documented_positional_action() -> None:
     import tyro
 
     command = tyro.cli(history.History, args=['Example', 'list', '--port', '/unused'])
-    assert command.action == history.Action.list
+    assert command.action == history.Command.list
     assert command.name == 'Example'

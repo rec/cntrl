@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from . import data_files, resolved, transport
 
 
-class Action(StrEnum):
+class Command(StrEnum):
     list = auto()
     save = auto()
     download = auto()
@@ -28,7 +28,7 @@ class History(BaseModel, frozen=True):
 
     name: Annotated[str, tyro.conf.Positional]
     port: Path
-    action: Annotated[Action, tyro.conf.Positional] = Action.list
+    action: Annotated[Command, tyro.conf.Positional] = Command.list
     revision: int = 0
     label: str = ''
     output: Path | None = None
