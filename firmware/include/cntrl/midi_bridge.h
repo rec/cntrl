@@ -1,8 +1,21 @@
 #pragma once
 #include <cstdint>
+#include <array>
 #include <cstring>
 
 namespace cntrl::midi {
+inline bool batch_valid(const uint8_t *bytes, unsigned size) {
+    if (!size || size > 14) return false;
+    for (unsigned offset = 0; offset < size;) {
+        unsigned kind = bytes[offset] >> 4;
+        if (kind < 8 || kind > 14) return false;
+        unsigned n = kind == 12 || kind == 13 ? 2 : 3;
+        if (n > size - offset) return false;
+        for (unsigned i = 1; i < n; ++i) if (bytes[offset + i] & 0x80) return false;
+        offset += n;
+    }
+    return true;
+}
 // A complete short message, or up to three bytes of a streamed SysEx.
 struct Packet {
     uint8_t cin = 0, bytes[3] = {};
@@ -82,10 +95,22 @@ struct Sink {
 // All storage is fixed. One service() attempts at most one packet per route.
 class Bridge {
 public:
+    enum class Delivery { idle, pending, complete, cancelled };
+    static constexpr unsigned owners = 5;
+    Delivery delivery(unsigned owner) const { return owner < owned_.size() ? owned_[owner].delivery : Delivery::idle; }
+    bool owned_send(unsigned owner, unsigned route, const uint8_t *bytes, unsigned size) {
+        if (owner >= owned_.size() || route >= destinations || !batch_valid(bytes, size)
+            || owned_[owner].delivery == Delivery::pending) return false;
+        auto &b = owned_[owner];
+        std::memcpy(b.bytes, bytes, size); b.size = size; b.offset = 0;
+        b.route = route; b.delivery = Delivery::pending; return true;
+    }
+    void cancel_owner(unsigned owner) { if (owner < owned_.size()) owned_[owner].delivery = Delivery::cancelled; }
     static constexpr unsigned destinations = 9, capacity = 256, pedal_capacity = 8;
     bool enabled() const { return enabled_; }
     const Counters &counters(unsigned route) const { return routes_[route].counts; }
     bool idle() const {
+        for (const auto &b : owned_) if (b.delivery == Delivery::pending) return false;
         for (const auto &r : routes_) if (r.pedal_count) return false;
         return true;
     }
@@ -99,6 +124,7 @@ public:
         connected_ = connected;
         for (unsigned i = 0; i < 8; ++i) reset_route(i);
         if (!connected) {
+            cancel_route(6); cancel_route(7);
             for (unsigned i = 6; i < 8; ++i) {
                 auto &r = routes_[i];
                 r.counts.dropped += r.pedal_count;
@@ -111,21 +137,14 @@ public:
         if (host_connected_ == connected) return;
         host_connected_ = connected;
         if (!connected) {
+            cancel_route(8);
             auto &r = routes_[8];
             r.counts.dropped += r.pedal_count;
             r.pedal_count = r.pedal_head = r.pedal_offset = 0;
         }
     }
     bool pedal(unsigned route, const uint8_t *bytes, unsigned size) {
-        if (route >= destinations || !size || size > 14 || (route == 6 && !connected_)) return false;
-        for (unsigned offset = 0; offset < size;) {
-            unsigned kind = bytes[offset] >> 4;
-            if (kind < 8 || kind > 14) return false;
-            unsigned n = kind == 12 || kind == 13 ? 2 : 3;
-            if (n > size - offset) return false;
-            for (unsigned i = 1; i < n; ++i) if (bytes[offset + i] & 0x80) return false;
-            offset += n;
-        }
+        if (route >= destinations || !batch_valid(bytes, size) || (route == 6 && !connected_)) return false;
         auto &r = routes_[route];
         if (r.pedal_count == pedal_capacity) return false;
         auto &b = r.pedal[(r.pedal_head + r.pedal_count) % pedal_capacity];
@@ -172,6 +191,7 @@ public:
                 terminate(index, sink);
                 continue;
             }
+            if (!r.wire_sysex && !r.pedal_offset && service_owned(index, sink)) continue;
             // A pedal batch is indivisible relative to ordinary bridge traffic.
             if (r.pedal_count && !r.wire_sysex) {
                 auto &b = r.pedal[r.pedal_head];
@@ -198,6 +218,42 @@ public:
         cursor_ = (cursor_ + 1) % destinations;
     }
 private:
+    struct Owned {
+        uint8_t bytes[14] = {};
+        unsigned size = 0, offset = 0, route = 0;
+        Delivery delivery = Delivery::idle;
+    };
+#if defined(CNTRL_ACTIONS) && !CNTRL_ACTIONS
+    std::array<Owned, 0> owned_;
+#else
+    std::array<Owned, owners> owned_;
+#endif
+    unsigned owner_cursor_ = 0;
+    void cancel_route(unsigned route) {
+        for (auto &b : owned_) if (b.route == route && b.delivery == Delivery::pending) b.delivery = Delivery::cancelled;
+    }
+    bool service_owned(unsigned route, Sink &sink) {
+        if (owned_.empty()) return false;
+        int chosen = -1;
+        for (unsigned i = 0; i < owners; ++i) {
+            unsigned owner = (owner_cursor_ + i) % owners;
+            const auto &b = owned_[owner];
+            if (b.route != route || b.delivery != Delivery::pending) continue;
+            if (chosen < 0 || b.offset) chosen = int(owner);
+            if (b.offset) break;
+        }
+        if (chosen < 0) return false;
+        auto &b = owned_[chosen];
+        uint8_t status = b.bytes[b.offset];
+        unsigned n = status >> 4 == 12 || status >> 4 == 13 ? 2 : 3;
+        Packet p{uint8_t(status >> 4), {status, b.bytes[b.offset + 1], 0}};
+        if (n == 3) p.bytes[2] = b.bytes[b.offset + 2];
+        if (sink.submit(route, p)) {
+            ++routes_[route].counts.transmitted; b.offset += n;
+            if (b.offset == b.size) { b.delivery = Delivery::complete; owner_cursor_ = (unsigned(chosen) + 1) % owners; }
+        }
+        return true;
+    }
     void terminate(unsigned index, Sink &sink) {
         auto &r = routes_[index];
         if (sink.submit(index, {5, {0xf7, 0, 0}})) r.terminate = r.wire_sysex = false;

@@ -23,6 +23,36 @@ def bitmap() -> bytes:
     )
 
 
+def test_action_statuses_have_prepared_runs_and_unicode_labels() -> None:
+    source = compiler.read_document(ROOT / 'firmware/test/show.json')
+    assert isinstance(source, dict)
+    source['actions'] = {
+        'sustain': {
+            'name': 'Résumé',
+            'button': 'A',
+            'mode': 'momentary',
+            'style': {'font_name': 'CaveatBold'},
+            'on': {'instrument': 'a', 'controller': 64, 'value': 127},
+            'off': {'instrument': 'a', 'controller': 64, 'value': 0},
+        }
+    }
+    assets: dict[int, bytes] = {}
+    target = models.Target.model_validate(
+        compiler.read_document(MC / 'patch-switcher-target.json')
+    )
+    data = compiler.compile_show(
+        source,
+        compiler.read_document(ROOT / 'firmware/test/definitions.json'),
+        [],
+        target,
+        assets,
+    )
+    assert data and assets
+    faces = [font_assets.decode(b, 'Actions', k) for k, b in assets.items()]
+    for text in ['A: Résumé', *font_assets.ACTION_STATES]:
+        assert any(text in m.runs for f in faces for m in f.sizes.values())
+
+
 @pytest.fixture(scope='module')
 def peer(tmp_path_factory: pytest.TempPathFactory) -> Path:
     executable = tmp_path_factory.mktemp('font-peer') / 'peer'
