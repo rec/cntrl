@@ -18,7 +18,9 @@ def library() -> songs.Library:
             songs.Song(
                 id=1,
                 name='Simple',
-                patches=[songs.Patch(id=10, output='din', channel=2, program=34)],
+                patches=[
+                    songs.ProgramChange(id=10, output='din', channel=2, program=34)
+                ],
             ),
             songs.Song(
                 id=2,
@@ -92,7 +94,7 @@ def test_song_library_transfer_against_cpp_receiver(
                 songs.Song(
                     id=i + 1,
                     name=f'Song {i}',
-                    patches=[songs.Patch(output='din', channel=1, program=1)],
+                    patches=[songs.ProgramChange(output='din', channel=1, program=1)],
                 )
                 for i in range(130)
             ],

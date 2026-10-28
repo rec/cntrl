@@ -228,11 +228,13 @@ def test_toml_json_and_expanded_shorthand_agree(
     ) == compiler.compile_show(show, definitions, [], target)
     assert compiler.normalize_patch(
         {'patch': ':a:12:::0', 'volume': 100, 'name': 'Flute'}
-    ) == models.Patch(instrument='a', program=12, bank=0, volume=100, name='Flute')
+    ) == models.ProgramChange(
+        instrument='a', program=12, bank=0, volume=100, name='Flute'
+    )
     first = compiler.normalize_patch({'patch': '|a|Name:.*'})
     second = compiler.normalize_patch({'patch': ':a:^12$'})
-    assert isinstance(first, models.Patch) and first.program == 'Name:.*'
-    assert isinstance(second, models.Patch) and second.program == '^12$'
+    assert isinstance(first, models.ProgramChange) and first.program == 'Name:.*'
+    assert isinstance(second, models.ProgramChange) and second.program == '^12$'
 
 
 @pytest.mark.parametrize(

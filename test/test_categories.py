@@ -63,7 +63,7 @@ def test_patch_inherits_program_categories_without_changing_groups(
     assert exported.definitions.programs[0].categories == ['sax']
     raw = exported.patches['Song 1']
     assert isinstance(raw, list)
-    patches = [models.Patch.model_validate(p) for p in raw]
+    patches = [models.ProgramChange.model_validate(p) for p in raw]
     assert [p.categories for p in patches] == [['whole-system'], []]
     assert (
         compiler.compile_show(exported.model_dump(exclude_none=True), {}, [], target)

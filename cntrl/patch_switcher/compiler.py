@@ -41,7 +41,7 @@ def read_document(path: Path) -> object:
     return document
 
 
-def normalize_patch(value: object) -> models.Patch | models.FunctionPatch:
+def normalize_patch(value: object) -> models.ProgramChange | models.FunctionPatch:
     if not isinstance(value, dict):
         raise ValueError('patch must be a table/object')
     fields = dict(value)
@@ -67,7 +67,7 @@ def normalize_patch(value: object) -> models.Patch | models.FunctionPatch:
                 fields[name] = part
     if 'function' in fields:
         return models.FunctionPatch.model_validate(fields)
-    return models.Patch.model_validate(fields)
+    return models.ProgramChange.model_validate(fields)
 
 
 def compile_show(

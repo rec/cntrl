@@ -14,7 +14,7 @@ from .data_files import validate_name
 from .models import StockFirmware
 
 
-class Patch(BaseModel, frozen=True):
+class ProgramChange(BaseModel, frozen=True):
     id: int | None = Field(default=None, gt=0, lt=0xFFFFFFFF)
     output: str
     channel: int = Field(ge=1, le=16)
@@ -42,7 +42,7 @@ class Function(StockFirmware, frozen=True):
 class Song(BaseModel, frozen=True):
     id: int = Field(gt=0, lt=0xFFFFFFFF)
     name: str
-    patches: list[Patch | Reference | Function] = Field(min_length=1)
+    patches: list[ProgramChange | Reference | Function] = Field(min_length=1)
     model_config = ConfigDict(extra='forbid')
 
 
@@ -171,7 +171,7 @@ def decode(data: bytes) -> Library:
     def string(value: bytes) -> str:
         return value.split(b'\0')[0].decode('ascii')
 
-    def selection(offset: int) -> Patch | Reference | Function:
+    def selection(offset: int) -> ProgramChange | Reference | Function:
         if offset + SELECTION.size > len(data):
             raise ValueError('truncated song patch')
         document, instrument, midi, bank, key = SELECTION.unpack_from(data, offset)
@@ -208,7 +208,7 @@ def decode(data: bytes) -> Library:
                 program=program + 1,
                 bank=None if bank == 0xFFFFFFFF else bank,
             )
-        return Patch(
+        return ProgramChange(
             id=key,
             output=string(output),
             channel=channel + 1,
