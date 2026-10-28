@@ -101,12 +101,22 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2); // A:Flute is now known to be selected.
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    hw.available = false;
+    for (unsigned i = 0; i < 3; ++i) {
+        app.button(2, true, 2 * i); app.button(2, false, 2 * i + 1);
+        assert(hw.sent.size() == 1 && app.depth() == 1 && hw.transitions.size() == 1);
+        assert(hw.errors == 0 && hw.brightness == doc.brightness());
+    }
+    hw.available = true;
     assert(hw.panes[1].lines[1].graphics.foreground == hw.panes[1].graphics.foreground);
     app.action(0); // B:Strings has not been sent.
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2);
     app.action(1); // Back to A:Flute, although B was sent more recently.
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    auto sends = hw.sent.size(), transitions = hw.transitions.size();
+    app.action(2);
+    assert(hw.sent.size() == sends && hw.transitions.size() == transitions && app.depth() == 2);
     app.action(1); // A:Sax is different from A's last send.
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2);
@@ -178,8 +188,10 @@ void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
     assert(!std::strcmp(hw.panes[2].lines[1].text, "Sax")); // Different name, same patch address.
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     unsigned sent = unsigned(hw.sent.size());
-    app.action(2); // Grey is informational; it must not suppress repeated sends.
-    assert(hw.sent.size() == sent + 1);
+    auto transitions = hw.transitions.size();
+    app.button(2, true, 100); app.button(2, false, 101);
+    assert(hw.sent.size() == sent && hw.transitions.size() == transitions && app.depth() == 1);
+    assert(hw.brightness == doc.brightness());
 }
 
 void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
@@ -572,12 +584,15 @@ int main(int argc, char **argv) {
     assert(!hw.panes[0].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
     assert(!std::strcmp(hw.panes[2].lines[1].text, "Flute"));
     app.action(5); assert(hw.sent.size() == count);
+    app.activate(doc);
     hw.available = false; app.action(2); assert(app.depth() == 0 && hw.errors);
     hw.available = true; app.action(2); app.action(1); app.action(2);
     hw.available = false; app.action(5); assert(app.depth() == 2);
     hw.available = true;
     app.activate(doc);
-    for (unsigned i = 0; i < cntrl::history_capacity + 20; ++i) app.action(2);
+    for (unsigned i = 0; i < cntrl::history_capacity + 20; ++i) {
+        app.action(2); app.action(i % 2 ? 0 : 1); // Alternate Flute and Sax.
+    }
     assert(app.depth() == cntrl::history_capacity);
     for (unsigned i = 0; i < cntrl::history_capacity; ++i) app.action(5);
     assert(app.depth() == 0);

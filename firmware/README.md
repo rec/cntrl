@@ -302,8 +302,9 @@ The category and the other two screens keep their normal foreground color.
 Names/categories are not part of this comparison; the same addressed patch can
 appear under different names. Sending to another instrument does not clear it.
 Undo updates it only when a restoration is actually sent. A failed send does
-not change it, and starting a new show clears known selections. Greyed-out names
-can still be sent normally; no MIDI messages or history entries are suppressed.
+not change it, and starting a new show clears known selections. Pressing C on a
+greyed-out patch does nothing: it sends no MIDI, adds no history entry, and
+triggers neither a transition nor brightness feedback.
 
 The stipple preserves the resolved foreground color and exposes the
 line's background at pixels where `(x + y) & 1` is nonzero. Masking follows
