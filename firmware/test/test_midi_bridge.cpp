@@ -181,7 +181,42 @@ void test_tool_handoff_waits_for_sysex_termination() {
     assert((out.bytes[0] == std::vector<uint8_t>{0xf0, 1, 2, 0xf7}));
     assert(b.handoff(out) && out.bytes[0].size() == 4);
 }
+void test_owned_sysex_streams_and_abandonment_terminates() {
+    cntrl::midi::Bridge bridge; Output output;
+    std::vector<uint8_t> bytes(257, 0x12); bytes.front() = 0xf0; bytes.back() = 0xf7;
+    assert(bridge.owned_stream(5, 0, bytes.data(), unsigned(bytes.size())));
+    bridge.service(output, 0);
+    uint8_t ordinary[] = {0xb0, 7, 1};
+    assert(bridge.owned_send(1, 0, ordinary, sizeof(ordinary)));
+    for (unsigned i = 1; i < 86; ++i) bridge.service(output, i);
+    assert(output.bytes[0] == bytes);
+    assert(bridge.delivery(5) == cntrl::midi::Bridge::Delivery::complete);
+    bridge.service(output, 87);
+    assert(output.bytes[0].size() == 260);
+    assert(bridge.owned_stream(5, 0, bytes.data(), unsigned(bytes.size())));
+    bridge.service(output, 88); bridge.cancel_owner(5); bridge.service(output, 89);
+    assert(output.bytes[0].back() == 0xf7);
+    assert(bridge.delivery(5) == cntrl::midi::Bridge::Delivery::cancelled);
+}
+void test_owned_nrpn_is_not_interleaved_with_other_owners() {
+    cntrl::midi::Bridge bridge; Output output;
+    uint8_t nrpn[] = {0xb0, 99, 1, 0xb0, 98, 2, 0xb0, 6, 3, 0xb0, 38, 4};
+    uint8_t other[] = {0xb0, 99, 7};
+    assert(bridge.owned_stream(0, 0, nrpn, sizeof(nrpn)));
+    bridge.service(output, 0);
+    assert(bridge.owned_stream(1, 0, other, sizeof(other)));
+    for (unsigned i = 1; i < 5; ++i) bridge.service(output, i);
+    std::vector<uint8_t> expected(nrpn, nrpn + sizeof(nrpn));
+    expected.insert(expected.end(), other, other + sizeof(other));
+    assert(output.bytes[0] == expected);
+    assert(!cntrl::midi::message_valid(nrpn, sizeof(nrpn)));
+    assert(cntrl::midi::stream_valid(nrpn, sizeof(nrpn)));
+    uint8_t invalid[] = {0xf0, 1, 0xf8, 0xf7};
+    assert(!cntrl::midi::message_valid(invalid, sizeof(invalid)));
+}
 int main() {
+    test_owned_sysex_streams_and_abandonment_terminates();
+    test_owned_nrpn_is_not_interleaved_with_other_owners();
     for (const auto &connection : cntrl::midi::output_connections) {
         assert(cntrl::midi::find_output(connection.name) == &connection);
         assert(cntrl::midi::physical_output(connection.route) == &connection);

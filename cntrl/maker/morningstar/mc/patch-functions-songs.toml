@@ -1,17 +1,27 @@
+[instruments.piano]
+instrument = 'piano'
+setup = 'default'
+output = 'din'
+channel = 1
+
+[[definitions.setups]]
+instrument = 'piano'
+name = 'default'
+
 [[songs]]
 id = 1
 name = 'Stock round trip'
 patches = [
-    {output = 'din', channel = 1, program = 1},
-    {function = 'stock-firmware', exit_buttons = 'A+F'},
-    {output = 'din', channel = 1, program = 2},
+    {type = 'program-change', instrument = 'piano', program = 1},
+    {type = 'stock-firmware', exit_buttons = 'A+F'},
+    {type = 'program-change', instrument = 'piano', program = 2},
 ]
 
 [[songs]]
 id = 2
 name = 'Stock B+E at end'
 patches = [
-    {function = 'stock-firmware', exit_buttons = 'B+E'},
+    {type = 'stock-firmware', exit_buttons = 'B+E'},
 ]
 
 [[setlists]]

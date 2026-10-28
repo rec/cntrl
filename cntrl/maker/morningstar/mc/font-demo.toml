@@ -14,7 +14,8 @@ output = 'din'
 instrument = 'pman'
 name = 'default'
 
-[[patches.fonts]]
+[[groups.fonts]]
+type = 'program-change'
 instrument = 'pman'
 program = 1
 display_name = 'Font demo'

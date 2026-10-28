@@ -31,7 +31,15 @@ public:
     }
     const Document &document() const { return document_; }
     bool reference_document(const char *name, Document &candidate) {
-        return !busy() && !dirty_ && load(name) && candidate.load(staging_, length_, hardware_);
+        if (busy() || dirty_ || !setup_name(name)) return false;
+        unsigned length = length_, slot = slot_;
+        uint32_t generation = generation_, modified = modified_;
+        bool present = present_;
+        char record_name[64]; std::memcpy(record_name, record_name_, sizeof(record_name));
+        bool valid = load(name) && candidate.load(staging_, length_, hardware_);
+        length_ = length; slot_ = slot; generation_ = generation; modified_ = modified; present_ = present;
+        std::memcpy(record_name_, record_name, sizeof(record_name));
+        return valid;
     }
     const char *selected() const { return selected_; }
     bool busy() const { return browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
@@ -46,7 +54,7 @@ public:
         return false;
     }
     bool select(const char *name) {
-        if (busy() || dirty_ || !hardware_.output_idle() || !setup_name(name) || !load(name)) return false;
+        if (busy() || dirty_ || hardware_.configuration_locked() || !hardware_.output_idle() || !setup_name(name) || !load(name)) return false;
         Document candidate;
         if (!candidate.load(staging_, length_, hardware_) || !candidate.prepare_fonts(hardware_)) return false;
         char canonical[64]; std::snprintf(canonical, sizeof(canonical), "%s", record_name_);
@@ -56,7 +64,7 @@ public:
         activate(); return true;
     }
     bool browse(const char *after, bool backward, bool select_result = false) {
-        if (busy() || dirty_ || !storage_.available()) return false;
+        if (busy() || dirty_ || hardware_.configuration_locked() || !storage_.available()) return false;
         browse_ = Browse(); std::snprintf(browse_.reference, 64, "%s", after);
         browse_.backward = backward; browse_.select = select_result;
         last_error_[0] = 0; quiet_ = !select_result;
@@ -66,13 +74,13 @@ public:
     bool rotate(bool backward) { return browse(selected_, backward, true); }
     void redraw() { if (document_.valid()) controller_.refresh(); else empty(); }
     bool edit_begin() {
-        if (busy() || !document_.valid()) return false;
+        if (busy() || hardware_.configuration_locked() || !document_.valid()) return false;
         std::memcpy(staging_, active_, document_.length()); dirty_ = true; return true;
     }
     int64_t edit_value(unsigned patch, unsigned field) const {
-        Document d; if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || patch >= d.patches()) return 0;
-        const uint8_t *p = d.patch(patch);
-        if (u16(p) == 65535 && field <= 4) return -1;
+        Document d; if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || (field <= 4 && patch >= d.patches())) return 0;
+        const uint8_t *p = patch < d.patches() ? d.patch(patch) : nullptr;
+        if (p && u16(p) == 65535 && field <= 4) return -1;
         switch (field) {
         case 0: return p[4] + 1;
         case 1: return u32(d.bank(patch)) == 0xffffffffu ? int64_t(-1) : int64_t(u32(d.bank(patch)));
@@ -86,14 +94,12 @@ public:
     }
     bool edit_adjust(unsigned patch, unsigned field, int delta) {
         Document d;
-        if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || patch >= d.patches() || field > 7) return false;
-        uint8_t *p = staging_ + (d.patch(patch) - staging_);
-        if (u16(p) == 65535 && field <= 4) return false;
-        uint8_t previous_patch[82], previous_header[28], previous_bank[4];
-        std::memcpy(previous_patch, p, 82); std::memcpy(previous_header, staging_, 28);
-        std::memcpy(previous_bank, d.bank(patch), 4);
-        uint8_t *channel = u16(p) == 65535 ? nullptr : staging_ + (d.instrument(u16(p)) - staging_) + 64;
-        uint8_t previous_channel = channel ? *channel : 0;
+        if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || (field <= 4 && patch >= d.patches()) || field > 7) return false;
+        uint8_t *p = patch < d.patches() ? staging_ + (d.patch(patch) - staging_) : nullptr;
+        if (p && u16(p) == 65535 && field <= 4) return false;
+        int node = patch < d.patches() ? editable_node(d, patch) : -1;
+        if (field <= 4 && node < 0) return false;
+        std::memcpy(scratch_, staging_, document_.length());
         int64_t old = edit_value(patch, field), value = old + delta;
         if (field == 0 && value >= 1 && value <= 128) p[4] = uint8_t(value - 1);
         else if (field == 1) {
@@ -114,18 +120,28 @@ public:
         else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_ + 24, unsigned(value) * 1000);
         else if (field == 7 && value >= 0 && value <= 1) staging_[19] = (staging_[19] & ~uint8_t(2)) | (uint8_t(value) << 1);
         else return false;
+        if (field <= 4) {
+            uint8_t *program = staging_ + (d.node(unsigned(node)) - staging_) + 4;
+            std::memcpy(program + 2, p + 4, 5);
+            std::memcpy(program + 7, d.bank(patch), 4);
+            for (unsigned i = 0; i < d.patches(); ++i) {
+                if (editable_node(d, i) != node) continue;
+                uint8_t *cache = staging_ + (d.patch(i) - staging_);
+                std::memcpy(cache + 4, program + 2, 5);
+                std::memcpy(staging_ + (d.bank(i) - staging_), program + 7, 4);
+            }
+        }
         put32(staging_ + 20, checksum(staging_ + 28, document_.length() - 28));
         Document candidate;
         if (!candidate.load(staging_, document_.length(), hardware_)) {
-            std::memcpy(p, previous_patch, 82); std::memcpy(staging_, previous_header, 28);
-            std::memcpy(staging_ + (d.bank(patch) - staging_), previous_bank, 4); if (channel) *channel = previous_channel;
+            std::memcpy(staging_, scratch_, document_.length());
             return false;
         }
         return true;
     }
     void edit_cancel() { dirty_ = false; }
     bool edit_save(uint32_t now) {
-        if (!dirty_ || busy()) return false;
+        if (!dirty_ || busy() || hardware_.configuration_locked()) return false;
         std::snprintf(record_name_, sizeof(record_name_), "%s", selected_);
         expected_ = document_.length(); expected_crc_ = checksum(staging_, expected_); quiet_ = true;
         if (!start_write(now)) return false;
@@ -159,7 +175,7 @@ public:
         unsigned n = expected_ - written_; if (n > 512) n = 512;
         if (n && !storage_.write(staging_ + written_, n)) { storage_.finish(); writing_ = false; error("storage-write"); return; }
         written_ += n; if (written_ != expected_) return;
-        if (!hardware_.output_idle()) return;
+        if (!hardware_.output_idle() || hardware_.configuration_locked()) return;
         bool done = storage_.write(reinterpret_cast<const uint8_t *>("DONE"), 4);
         done = storage_.finish() && done; writing_ = false;
         char name[64]; std::snprintf(name, sizeof(name), "%s", record_name_);
@@ -187,6 +203,18 @@ public:
     bool history_compare(const char *name, uint64_t number) { return begin_history(HistoryAction::compare, name, number); }
     bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
+    static int editable_node(const Document &document, unsigned patch) {
+        unsigned node = document.browser_root(patch);
+        for (unsigned visited = 0; visited < document.nodes(); ++visited) {
+            const uint8_t *p = document.node(node);
+            if (p[0] == 1) return int(node);
+            if (p[0] != 6 || p[4]) return -1;
+            int referenced = document.named_patch(reinterpret_cast<const char *>(p + 68));
+            if (referenced < 0) return -1;
+            node = unsigned(referenced);
+        }
+        return -1;
+    }
     enum class BrowsePhase { idle, scan, header, body, trailer, activate };
     struct Browse {
         char reference[64] = {}, candidate[64] = {}, canonical[64] = {}, result[64] = {};
@@ -418,6 +446,19 @@ private:
         patches = routes = 0;
         for (unsigned i = 0; i < old.patches() || i < current.patches(); ++i)
             if (i >= old.patches() || i >= current.patches() || std::memcmp(old.patch(i), current.patch(i), 76)) ++patches;
+        unsigned changed_nodes = 0;
+        for (unsigned i = 0; i < old.nodes() || i < current.nodes(); ++i) {
+            if (i >= old.nodes() || i >= current.nodes()) { ++changed_nodes; continue; }
+            const uint8_t *a = old.node(i), *b = current.node(i);
+            if (u16(a + 2) != u16(b + 2) || std::memcmp(a, b, 4 + u16(a + 2))) ++changed_nodes;
+        }
+        if (changed_nodes > patches) patches = changed_nodes;
+        for (unsigned i = 0; i < old.switches() || i < current.switches(); ++i)
+            if (i >= old.switches() || i >= current.switches()
+                || std::memcmp(old.switch_assignment(i), current.switch_assignment(i), 70)) ++patches;
+        for (unsigned i = 0; i < old.named_patches() || i < current.named_patches(); ++i)
+            if (i >= old.named_patches() || i >= current.named_patches()
+                || std::memcmp(old.named_patch(i), current.named_patch(i), 66)) ++patches;
         for (unsigned i = 0; i < old.instruments() || i < current.instruments(); ++i)
             if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
         settings = old.chord_ms() != current.chord_ms() || old.brightness() != current.brightness()
@@ -607,7 +648,7 @@ private:
             char response[160]; hex_text(selected_, hex); std::snprintf(response, sizeof(response), "CNTRL CURRENT %s", hex);
             replies_.reply(response); return;
         }
-        if (hardware_.configuration_locked()) { error("close-actions-first"); return; }
+        if (hardware_.configuration_locked()) { error("configuration-locked"); return; }
         if (!storage_.available()) { error("storage-unavailable"); return; }
         if (!std::strcmp(line_, "CNTRL SETUP LIST")) { if (dirty_) { error("unsaved-edits"); return; } download_ = 0; cursor_[0] = 0; listing_ = true; listing(); return; }
         if (!std::strcmp(line_, "CNTRL NEXT")) {

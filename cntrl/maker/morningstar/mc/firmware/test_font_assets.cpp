@@ -1,3 +1,4 @@
+#include "../../../../../firmware/test/patch_hardware.h"
 #include "patch_switcher/font_storage.h"
 #include <cntrl/documents.h>
 #include "storage.h"
@@ -5,7 +6,7 @@
 #include <iostream>
 #include <string>
 
-struct Peer : cntrl::Hardware, cntrl::Replies, TestStorage {
+struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     font_assets::Files fonts;
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *name) const override { return !std::strcmp(name, "din") || !std::strcmp(name, "trs"); }
@@ -43,7 +44,7 @@ int main(int argc, char **argv) {
         assert(files.command("CNTRL FONT DATA xx", replies, 10004));
         assert(!files.busy() && replies.last == "CNTRL ERROR font-asset");
     }
-    cntrl::Controller controller(peer);
+    TestController controller(peer);
     cntrl::Documents documents(peer, peer, controller, peer); documents.boot();
     std::string line; char byte;
     while (std::cin.get(byte)) {

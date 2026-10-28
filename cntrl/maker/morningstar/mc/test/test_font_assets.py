@@ -23,17 +23,29 @@ def bitmap() -> bytes:
     )
 
 
-def test_action_statuses_have_prepared_runs_and_unicode_labels() -> None:
+def test_switch_statuses_have_prepared_runs_and_unicode_labels() -> None:
     source = compiler.read_document(ROOT / 'firmware/test/show.json')
     assert isinstance(source, dict)
-    source['actions'] = {
+    source['switches'] = {
         'sustain': {
             'name': 'Résumé',
             'button': 'A',
             'mode': 'momentary',
             'style': {'font_name': 'CaveatBold'},
-            'on': {'instrument': 'a', 'controller': 64, 'value': 127},
-            'off': {'instrument': 'a', 'controller': 64, 'value': 0},
+            'on': {
+                'type': 'control-change',
+                'output': 'din',
+                'channel': 1,
+                'controller': 64,
+                'value': 127,
+            },
+            'off': {
+                'type': 'control-change',
+                'output': 'din',
+                'channel': 1,
+                'controller': 64,
+                'value': 0,
+            },
         }
     }
     assets: dict[int, bytes] = {}
@@ -49,7 +61,7 @@ def test_action_statuses_have_prepared_runs_and_unicode_labels() -> None:
     )
     assert data and assets
     faces = [font_assets.decode(b, 'Actions', k) for k, b in assets.items()]
-    for text in ['A: Résumé', *font_assets.ACTION_STATES]:
+    for text in ['A: Résumé', *font_assets.SWITCH_STATES]:
         assert any(text in m.runs for f in faces for m in f.sizes.values())
 
 
@@ -265,8 +277,15 @@ def test_unicode_labels_compile_transfer_and_export(
 ) -> None:
     source = compiler.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
-    source['patches'] = {
-        'Été': [{'instrument': 'a', 'program': 1, 'name': 'Café e\u0301'}]
+    source['groups'] = {
+        'Été': [
+            {
+                'type': 'program-change',
+                'instrument': 'a',
+                'program': 1,
+                'name': 'Café e\u0301',
+            }
+        ]
     }
     source['fonts'] = {
         'Custom': str(ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf')
@@ -276,11 +295,11 @@ def test_unicode_labels_compile_transfer_and_export(
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
     if function:
-        source['patches']['Été'].append(
+        source['groups']['Été'].append(
             {
-                'function': 'stock-firmware',
                 'exit_buttons': 'A+F',
                 'display_name': 'Été original',
+                'type': 'stock-firmware',
             }
         )
         target = target.model_copy(
@@ -315,10 +334,10 @@ def test_unicode_labels_compile_transfer_and_export(
 def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
     source = compiler.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
-    source['patches'] = {
+    source['groups'] = {
         'Group': [
-            {'instrument': 'a', 'program': 1, 'name': '☃☂'},
-            {'instrument': 'a', 'program': 2, 'name': '♠'},
+            {'type': 'program-change', 'instrument': 'a', 'program': 1, 'name': '☃☂'},
+            {'type': 'program-change', 'instrument': 'a', 'program': 2, 'name': '♠'},
         ]
     }
     outline = str(ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf')
@@ -352,8 +371,8 @@ def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
         'U+2602',
         'U+2660',
         'U+2663',
-        'patches.Group[1]',
-        'patches.Group[2]',
+        'groups.Group[1]',
+        'groups.Group[0]',
         'field other',
         'field display_name',
     ]:
@@ -379,7 +398,7 @@ def test_adding_text_requires_the_original_outline(
     path = tmp_path / 'subset.cfont'
     path.write_bytes(bitmap)
     show = models.Show.model_validate(
-        {'instruments': {}, 'patches': {}, 'fonts': {'Custom': str(path)}}
+        {'instruments': {}, 'groups': {}, 'fonts': {'Custom': str(path)}}
     )
     with pytest.raises(ValueError, match='original font file'):
         font_assets.Preparation(
@@ -420,7 +439,7 @@ def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
     show = models.Show.model_validate(
-        {'instruments': {}, 'patches': {}, 'pages': {'patch': {'fields': []}}}
+        {'instruments': {}, 'groups': {}, 'pages': {'patch': {'fields': []}}}
     )
     windows, _, _ = display.compile_display(
         show,

@@ -1,9 +1,11 @@
 # Patch unity
 
-Status: implementation started. The existing setup and song selection models
-are renamed ProgramChange. Unified TOML authoring, Patch execution, switch
-handling and durable composite continuation are not implemented yet. The schema
-below remains a proposal until those paths are replaced together.
+Status: implemented in setup format 17 and song format CSG4. Authoring, compilation,
+switches, browser activation and songs use the tagged Patch graph and shared
+executor. Durable stock continuation resumes a composite before advancing its
+song. See [configuration and required authoring changes](../doc/patches.md).
+Hardware qualification of this format remains separate from automated tests and
+target builds.
 
 ## Goal
 

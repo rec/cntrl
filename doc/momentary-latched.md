@@ -1,70 +1,85 @@
-# Momentary and latched actions
+# Switch assignments
 
-Actions is an optional module for two-state MIDI assignments. Open it from the
-module menu. Every visit starts locally Off without transmitting anything.
-Held entry switches must be released before they can activate an assignment.
+Switches is an optional module for press, momentary and latched Patch assignments.
+Open it from the module menu. Every visit starts locally Off without transmitting
+anything. Held entry switches must be released before they activate an assignment.
 
 Configure assignments in the performance setup:
 
 ```toml
-[actions.sustain]
+[switches.sustain]
 button = 'A'
 mode = 'momentary'
-on = { instrument = 'piano', controller = 64, value = 127 }
-off = { instrument = 'piano', controller = 64, value = 0 }
+on = { type = 'control-change', output = 'din', channel = 1, controller = 64, value = 127 }
+off = { type = 'control-change', output = 'din', channel = 1, controller = 64, value = 0 }
 
-[actions.solo]
+[switches.solo]
 button = 'B'
 mode = 'latched'
-on = { instrument = 'sax', controller = 7, value = 110 }
-off = { instrument = 'sax', controller = 7, value = 85 }
+on = { type = 'control-change', output = 'trs', channel = 2, controller = 7, value = 110 }
+off = { type = 'control-change', output = 'trs', channel = 2, controller = 7, value = 85 }
+
+[switches.start]
+button = 'C'
+on = { type = 'midi', output = 'din', bytes = [0xFA] }
 ```
 
-Instrument names refer to existing setup aliases. A momentary action requests On
-when pressed and Off when released. A latched action alternates on successive
-presses. Both states can instead reference named patches with
-`on = { patch = 'Solo' }` and `off = { patch = 'Clean' }`. Each name must match
-exactly one resolved patch name. Both states must have the same output/channel.
-Other assignments cannot own overlapping MIDI controls on that output/channel.
+`press` is the default mode and requires only `on`; it forbids `off`. Each new
+press invokes the Patch once. A momentary switch requests On when pressed and
+Off when released. A latched switch alternates states on successive presses.
+Both persistent modes require an explicit `off` Patch. On and Off may have
+different Patch types, outputs and channels.
 
-An optional `name` defaults to the assignment key; `style` uses the existing
-formatting properties. The optional `pages.actions` page accepts up to three
-action, parameter or global-setting fields. Its default fields are
-`action.name`, `action.mode` and `action.state`. `action.name` includes the bound
-button in its display label; `action.button` exposes just that label. State text
-is fitted using the longest error state at compile time. Fonts and colors use
-the existing compiler and firmware page machinery. Icons remain references only.
+Each branch accepts the common [Patch representation](patches.md), including
+inline program selections, sequences and stable references such as
+`{ type = 'reference', patch = 'clean' }`. Program selections use instrument
+aliases; other MIDI variants name their output directly. Definitions are keyed
+by `patches.clean`, independently of their display labels.
 
-The page displays On, Off, Pending or Unknown / Unavailable. These report the
-pedal's local scheduling state, not acknowledgement from an instrument. Off sends
-the explicit authored command and does not reconstruct the previous sound.
+Persistent assignments reserve the controls their reachable patches affect.
+Raw MIDI and SysEx reserve their entire destination output until Off cleanup or
+explicit abandonment. Other assignments cannot share those reserved resources.
+Two press assignments can share controls because each invocation completes its
+accepted work. Firmware visits and operations that leave this context are
+allowed only in press assignments. Other assignments finish cleanup before the
+context is left.
 
-F begins cleanup and waits for accepted On/Off work to finish. F again explicitly
-abandons blocked cleanup and reports unknown remote state. A disconnected output
-also produces a warning. Reconnecting never replays old commands; an explicit
-new activation establishes the Off baseline before On. Other modules, including
-Panic and firmware switching, are reached only after leaving Actions. Thus normal
-navigation performs cleanup first; after explicit abandonment it cancels unsent
-action work before those modules can run. Configuration/asset transfer commands
-are rejected while Actions is open; close it before replacing a setup. Status
-queries remain available. Playback undo is kept separate from action state.
+An optional assignment `name` defaults to its dictionary key; `style` uses the
+normal formatting properties. The optional `pages.switches` page accepts up to
+three switch, parameter or global-setting fields. Its default fields are
+`switch.name`, `switch.mode` and `switch.state`. `switch.name` includes the button
+in its label; `switch.button` exposes just that button. Status text is fitted
+against all possible status strings at compile time. Icons remain references
+for future use.
 
-The scheduler reserves one fixed batch slot per assignment, outside the ordinary
-pedal queue's capacity. An assignment waits for its accepted batch to complete
-before reusing its slot. Requested transitions coalesce in bounded state, while
-required Off commands retain their slot. No action allocates memory per press.
-Resolved commands are copied on entry; configuration remains locked until exit,
-so pending work never borrows replaced document or staging bytes. Patch references
-resolve from the current decoded patch records, including saved pedal edits.
-Edits that create action ownership conflicts are rejected transactionally.
+The page displays On, Off, Pending, Completed locally, Unknown remote state or
+Failed / unknown. These describe local execution and scheduling;
+completion does not acknowledge receipt by an instrument. Off executes its
+authored Patch and does not reconstruct the previous sound or roll back effects.
 
-Live state is never persisted. Configuration round-trips through compiled format
-15, resolved TOML, setup transfers and revision history. Older compiled setups
-must be exported with the matching host version and recompiled before use with
-format 16; this change does not add a legacy firmware decoder.
+F begins cleanup and waits for accepted On/Off work to finish. F again abandons
+blocked cleanup. Disconnecting an active output marks its state unknown.
+Reconnecting never replays old work; an explicit new activation establishes the
+Off baseline before On. Configuration and asset replacement stay locked while
+the module or an invocation holds its source data. Status queries remain
+available. Program-selection Undo is separate from switch state.
 
-Native sanitizer tests cover press/release, latching, coalescing, queue pressure,
-cleanup, abandonment, disconnect/rearm and malformed commands. Python tests cover
-configuration errors, ownership conflicts, target capacity and byte-for-byte
-export/recompile. Physical latency, switches and external MIDI reception require
-qualification on the pedal.
+Each assignment uses the shared Patch executor and its reserved scheduler owner.
+Backpressure preserves accepted work and required Off cleanup. Referenced source
+documents remain pinned for the assignment context, so pending work cannot read
+replaced configuration or staging bytes. Storage and memory limits are actual
+resource limits; there is no separate short-message command buffer or fixed
+sequence-depth restriction.
+
+Live On/Off state is never persisted. This configuration uses setup format 17
+and the tagged authoring schema. Older setups need conversion and recompilation;
+there is no legacy firmware decoder. See [Patch authoring](patches.md) for the
+complete schema and required authoring changes. Exports after pedal program edits
+canonicalize synthesizer-name metadata while preserving MIDI selections and the
+visible labels; recompiling that canonical export is stable.
+
+Native sanitizer tests cover edge handling, latching, queue pressure, cleanup,
+abandonment, disconnect/rearm and malformed records. Python tests cover schema
+errors, composed ownership, target capacity and exact export/recompile equality.
+Physical latency, switches and external MIDI reception require qualification on
+the pedal.

@@ -27,6 +27,7 @@ def compile_display(
     patches: list[DisplayPatch],
     target: models.Target,
     assets: dict[int, bytes] | None = None,
+    patch_metadata: dict[str, object] | None = None,
 ) -> tuple[list[bytes], list[list[int]], bytes]:
     overlap = set(show.parameters) & set(FIELDS)
     if overlap:
@@ -62,23 +63,23 @@ def compile_display(
         for window in windows:
             page = (
                 show.pages.get(
-                    'actions',
-                    models.Page(fields=['action.name', 'action.mode', 'action.state']),
+                    'switches',
+                    models.Page(fields=['switch.name', 'switch.mode', 'switch.state']),
                 )
-                if 'action.name' in patch.values
+                if 'switch.name' in patch.values
                 else show.pages[window.page]
             )
-            if 'action.name' in patch.values and (
+            if 'switch.name' in patch.values and (
                 len(page.fields) > 3
                 or any(
-                    not n.startswith('action.')
+                    not n.startswith('switch.')
                     and n not in show.parameters
                     and FIELDS.get(n) not in range(16, 22)
                     for n in page.fields
                 )
             ):
                 raise ValueError(
-                    'action pages support at most three action or parameter fields'
+                    'switch pages support at most three action or parameter fields'
                 )
             pad = (
                 window.pad
@@ -114,7 +115,7 @@ def compile_display(
                         f'field {name}: display text must contain at most '
                         '63 UTF-8 bytes and no control characters'
                     )
-                content = name in PATCH_FIELDS or name.startswith('action.')
+                content = name in PATCH_FIELDS or name.startswith('switch.')
                 style = merge_style(
                     base,
                     window.style,
@@ -145,16 +146,16 @@ def compile_display(
                     text,
                     style,
                     pad,
-                    max(6 if 'action.name' in patch.values else 1, len(lines)),
+                    max(6 if 'switch.name' in patch.values else 1, len(lines)),
                     stipple,
                 )
-    from ..maker.morningstar.mc.font_assets import ACTION_STATES, Preparation
+    from ..maker.morningstar.mc.font_assets import SWITCH_STATES, Preparation
 
     prepared = Preparation(show, target, requests, contexts)
     target = prepared.target
     choices = [
         graphics.font_choice(
-            s.font_name, list(ACTION_STATES) if c == 22 else [t], target, p, n
+            s.font_name, list(SWITCH_STATES) if c == 22 else [t], target, p, n
         )
         for c, t, s, p, n, _ in requests
     ]
@@ -204,7 +205,7 @@ def compile_display(
             )[:12]
             + struct.pack('<I', keys.get(face.name, face.asset))
         )
-    pages: list[bytes] = []
+    pages: list[bytes] = [] if patches else [b'\0']
     references: list[list[int]] = []
     for i in range(len(patches)):
         refs: list[int] = []
@@ -232,6 +233,17 @@ def compile_display(
         for k, v in show.model_dump(exclude_none=True).items()
         if k in SOURCE_FIELDS
     }
+    source['switches'] = {
+        k: {
+            n: w
+            for n, w in models.SwitchAssignment.model_validate(v)
+            .model_dump(exclude_none=True)
+            .items()
+            if n in ('name', 'style')
+        }
+        for k, v in show.switches.items()
+    }
+    source['patch_metadata'] = patch_metadata or {}
     if show.fonts:
         source['fonts'] = show.fonts
     source['patch_styles'] = {
@@ -291,9 +303,9 @@ def field_value(
 
 
 def read_source(data: bytes, offset: int) -> dict[str, object]:
-    if data[offset : offset + 4] != b'CACT' or offset + 6 > len(data):
-        raise ValueError('missing action metadata')
-    offset += 6 + struct.unpack_from('<H', data, offset + 4)[0] * 100
+    if data[offset : offset + 4] != b'CPAT' or offset + 16 > len(data):
+        raise ValueError('missing patch graph')
+    offset += struct.unpack_from('<I', data, offset + 4)[0]
     if offset + HEADER.size > len(data):
         raise ValueError('truncated display metadata')
     magic, styles, pages, texts, page_size, source_size = HEADER.unpack_from(
@@ -328,10 +340,10 @@ PATCH_FIELDS = (
     'instrument',
 )
 FIELDS = {
-    'action.name': 255,
-    'action.mode': 255,
-    'action.button': 255,
-    'action.state': 22,
+    'switch.name': 255,
+    'switch.mode': 255,
+    'switch.button': 255,
+    'switch.state': 22,
     'group.name': 0,
     'categories': CONSTANT,
     'display_name': 1,
@@ -349,7 +361,7 @@ FIELDS = {
     'transition_ms': 21,
 }
 SOURCE_FIELDS = (
-    'actions',
+    'switches',
     'style',
     'pad',
     'contrast',

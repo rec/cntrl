@@ -192,7 +192,7 @@ class Preparation:
                 if code in NUMERIC_FIELDS
                 else ['true', 'false']
                 if code == 18
-                else list(ACTION_STATES)
+                else list(SWITCH_STATES)
                 if code == 22
                 else []
             )
@@ -275,7 +275,7 @@ class Preparation:
             if code in NUMERIC_FIELDS
             else ['true', 'false']
             if code == 18
-            else list(ACTION_STATES)
+            else list(SWITCH_STATES)
             if code == 22
             else []
         )
@@ -326,4 +326,11 @@ ENTRY = struct.Struct('<15BII')
 MAX_ASSET = 256 * 1024
 NUMBERS = '-0123456789'
 NUMERIC_FIELDS = (2, 3, 4, 5, 16, 17, 19, 20, 21)
-ACTION_STATES = ('Off', 'On', 'Pending', 'Unknown / Unavailable')
+SWITCH_STATES = (
+    'Off',
+    'On',
+    'Pending',
+    'Completed locally',
+    'Unknown remote state',
+    'Failed / unknown',
+)

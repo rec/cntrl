@@ -8,12 +8,13 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <SD.h>
 #include <USBHost_t36.h>
 #include <cntrl/documents.h>
+#include <cntrl/patch_sources.h>
 #include <cntrl/setup_ui.h>
 #include <cntrl/midi_bridge.h>
 #include <cntrl/midi_outputs.h>
 #include <cntrl/module_menu.h>
-#if CNTRL_ACTIONS
-#include <cntrl/actions.h>
+#if CNTRL_SWITCHES
+#include <cntrl/switches.h>
 #endif
 #if CNTRL_PANIC
 #include <cntrl/panic.h>
@@ -42,14 +43,29 @@ extern cntrl::splash::Session splash_session;
 font_assets::Files font_files;
 USBHost host;
 MIDIDevice host_midi(host);
+extern cntrl::StoredPatchSources patch_sources;
+extern cntrl::Controller controller;
+bool patch_state(unsigned operation, uint32_t value);
+enum class UiOperation : unsigned {
+    menu_previous = 128, menu_next, menu_activate, menu_back, menu_open, performance_show,
+    setup_previous, setup_next, setup_confirm, setup_back,
+    songs_previous, songs_next, songs_confirm, songs_previous_section, songs_next_section, songs_back,
+    cable_toggle, cable_back, interface_toggle, interface_back,
+    panic_begin, panic_end, panic_back, stock_confirm, stock_back, switches_return,
+};
+bool state_ui(UiOperation operation);
+bool patch_stock(uint8_t pair, cntrl::PatchExecutor &invocation);
+bool patch_work_pending();
+DMAMEM cntrl::Controller::NavigationState invocation_navigation[6];
+bool restoring_invocation = false;
+unsigned pending_ui_operation = 0;
+bool return_to_switches = false;
+cntrl::PatchExecutor *visiting_invocation = nullptr;
 
 #if CNTRL_ORIGINAL_FIRMWARE
 bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation);
 #endif
-class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink
-#if CNTRL_ACTIONS
-    , public cntrl::ActionOutputs
-#endif
+class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink, public cntrl::PatchOutputs
 #if CNTRL_PANIC
     , public cntrl::PanicOutputs
 #endif
@@ -58,27 +74,58 @@ class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splas
 #endif
 {
 public:
+    struct RuntimeState { uint8_t brightness = 192; bool interface = false; } runtime;
 #if CNTRL_ORIGINAL_FIRMWARE
     bool supports_function(unsigned function) const override { return function == 1; }
     bool stock_firmware(uint8_t pair, const cntrl::SongContinuation *continuation = nullptr) override { return request_stock(pair, continuation); }
 #endif
-#if CNTRL_ACTIONS
-    cntrl::Actions actions{*this, *this};
-    unsigned action_capacity() const override { return 5; }
-    bool configuration_locked() const override { return actions.open(); }
-    bool send_action(unsigned owner, const char *output, const uint8_t *bytes, unsigned n) override {
+#if CNTRL_SWITCHES
+    cntrl::Switches switches{*this, *this, patch_sources};
+    unsigned switch_capacity() const override { return 5; }
+#endif
+    bool configuration_locked() const override { return patch_work_pending()
+#if CNTRL_SWITCHES
+        || switches.open()
+#endif
+        ; }
+    bool send_patch(unsigned owner, const char *output, const uint8_t *bytes, unsigned n) override {
         const auto *connection = cntrl::midi::find_output(output);
-        return connection && available(output) && bridge_.owned_send(owner, connection->route, bytes, n);
+        return connection && available(output) && bridge_.owned_stream(owner, connection->route, bytes, n);
     }
-    cntrl::midi::Bridge::Delivery action_delivery(unsigned owner) const override { return bridge_.delivery(owner); }
-    void cancel_action(unsigned owner) override { bridge_.cancel_owner(owner); }
-    void enter_actions(const cntrl::Document &document, uint8_t held) { bridge_.configure(false); actions.enter(document, held); }
-    void leave_actions() { bridge_.configure(interface_enabled_); }
+    cntrl::midi::Bridge::Delivery patch_delivery(unsigned owner) const override { return bridge_.delivery(owner); }
+    void cancel_patch(unsigned owner) override { bridge_.cancel_owner(owner); }
+    bool state(unsigned operation, uint32_t value) override { return patch_state(operation, value); }
+    bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override { return patch_stock(pair, invocation); }
+    void validation(bool begin) override { controller.validation(begin); }
+    void validation_context(cntrl::PatchExecutor &invocation, bool begin) override {
+        if (begin && !restoring_invocation && !invocation.reconstructing())
+            invocation_navigation[invocation.owner()] = controller.navigation();
+        controller.validation(begin);
+    }
+    bool preview_state(unsigned operation, uint32_t value) override { return controller.preview_state(operation, value); }
+    bool selection(unsigned operation, const cntrl::Document *&document, unsigned &node) override {
+        return controller.selection(operation, document, node);
+    }
+    void selection_complete(unsigned operation) override { controller.selection_complete(operation); }
+    cntrl::midi::Bridge::Delivery prepare_leave(cntrl::PatchExecutor &invocation) override {
+#if CNTRL_SWITCHES
+        if (switches.open()) {
+            auto result = switches.prepare_leave(invocation);
+            if (result != cntrl::midi::Bridge::Delivery::complete) return result;
+        }
+#else
+        (void)invocation;
+#endif
+        return bridge_.idle() ? cntrl::midi::Bridge::Delivery::complete : cntrl::midi::Bridge::Delivery::pending;
+    }
+#if CNTRL_SWITCHES
+    void enter_switches(const cntrl::Document &document, uint8_t held) { bridge_.configure(false); switches.enter(document, held); }
+    void leave_switches() { bridge_.configure(runtime.interface); }
 #endif
 #if CNTRL_PANIC
     cntrl::Panic panic{*this, *this};
-    void enter_panic() { bridge_.configure(false); panic.enter(brightness_); }
-    void leave_panic() { panic.leave(); bridge_.configure(interface_enabled_); }
+    void enter_panic() { bridge_.configure(false); panic.enter(runtime.brightness); }
+    void leave_panic() { panic.leave(); bridge_.configure(runtime.interface); }
     bool transmit(const char *output, const uint8_t *bytes) override {
         const auto *connection = cntrl::midi::find_output(output);
         return connection && submit(connection->route, {uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}});
@@ -88,7 +135,7 @@ public:
     // Still Time 20: measured line height 21, no top adjustment.
     cntrl::MidiInterface midi_interface{*this, *this, {5, 20, 4, 0, 0xffff, 0, 21, 0}};
     void configure_interface(bool enabled) override { bridge_.configure(enabled); }
-    void restore_interface() override { bridge_.configure(interface_enabled_); }
+    void restore_interface() override { bridge_.configure(runtime.interface); }
 #endif
 #if CNTRL_CABLE_TEST
     // Still Time 28: measured line height 30, top-bearing adjustment 1.
@@ -99,7 +146,7 @@ public:
     }
     void leave_cable_test() {
         cable_test.leave();
-        bridge_.configure(interface_enabled_);
+        bridge_.configure(runtime.interface);
     }
 #endif
     void begin() {
@@ -130,9 +177,9 @@ public:
     }
     bool output_idle() const override { return bridge_.idle(); }
     void set_usb_midi_interface(bool enabled) override {
-        interface_enabled_ = enabled;
-#if CNTRL_ACTIONS
-        if (actions.open()) return;
+        runtime.interface = enabled;
+#if CNTRL_SWITCHES
+        if (switches.open()) return;
 #endif
 #if CNTRL_PANIC
         if (panic.open()) return;
@@ -204,7 +251,9 @@ public:
     }
     void transition(bool undo, std::optional<unsigned> duration_ms) override { renderer_.transition(undo, duration_ms); }
     void set_brightness(uint8_t value, bool temporary = false) override {
-        brightness_ = value; brightness_feedback_ = temporary;
+        brightness_feedback_ = temporary;
+        if (temporary) feedback_brightness_ = value;
+        else { runtime.brightness = value; controller.runtime_brightness(value); }
         if (temporary) splash_session.stop();
         apply_brightness(millis());
     }
@@ -271,8 +320,8 @@ public:
         else
 #endif
         bridge_.service(*this, now);
-#if CNTRL_ACTIONS
-        actions.tick();
+#if CNTRL_SWITCHES
+        switches.tick();
 #endif
 #if CNTRL_MIDI_INTERFACE
         midi_interface.tick(millis());
@@ -300,18 +349,17 @@ public:
     }
 private:
     void apply_brightness(uint32_t now) {
-        uint8_t brightness = brightness_feedback_ ? brightness_ : splash_session.brightness(brightness_, now);
+        uint8_t brightness = brightness_feedback_ ? feedback_brightness_ : splash_session.brightness(runtime.brightness, now);
         if (brightness != applied_brightness_) {
             analogWrite(6, brightness); applied_brightness_ = brightness;
         }
     }
     bool brightness_feedback_ = false;
-    uint8_t brightness_ = 192;
+    uint8_t feedback_brightness_ = 255;
     int applied_brightness_ = -1;
     cntrl::midi::Bridge bridge_;
     unsigned source_cursor_ = 0;
     uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
-    bool interface_enabled_ = false;
     DisplayRenderer renderer_;
     unsigned response_offset_ = 0;
     char response_[600] = {};
@@ -419,9 +467,10 @@ private:
 
 Board board;
 Card card;
-cntrl::Controller controller(board);
+cntrl::Controller controller(board, board, patch_sources);
 // Keep document/transfer buffers out of RAM1's code and stack budget.
 DMAMEM cntrl::Documents documents(card, board, controller, board);
+cntrl::StoredPatchSources patch_sources(documents, board);
 cntrl::SetupUi setup_ui(documents, board);
 class SongFiles : public cntrl::Storage {
 public:
@@ -445,48 +494,103 @@ private:
         return bool(readers_[slot]);
     }
 };
+extern cntrl::Songs songs;
 class SongSources : public cntrl::SongResolver, public cntrl::SongCapture {
 public:
-    void recalled() override { controller.external_selection(); }
+    cntrl::PatchExecutor executor{board, board, patch_sources, 5};
+    ~SongSources() override { executor.cancel(); std::free(embedded_); }
+    void tick() {
+        executor.tick();
+        if (embedded_ && !executor.busy()) {
+            std::free(embedded_); embedded_ = nullptr; embedded_document_ = cntrl::Document();
+        }
+    }
+    const cntrl::SongContinuation &context() const { return context_; }
+    void recalled() override { controller.cancel_gesture(); }
     bool capture(cntrl::Song &song, bool reference) override {
-        const auto &d = documents.document(); if (!d.valid() || documents.busy()) return false;
-        unsigned index = controller.selected_patch(); song.patch = cntrl::song_patch(d, index);
+        const auto &d = documents.document();
+        if (!d.valid() || !d.patches() || documents.busy() || documents.dirty() || patch_work_pending()) return false;
+        unsigned index = controller.selected_patch();
         const uint8_t *p = d.patch(index);
         std::snprintf(song.name, 64, "%s", reinterpret_cast<const char *>(p + 12));
+        std::snprintf(song.label, 64, "%s", song.name);
+        song.node = d.browser_root(index);
         if (reference) {
-            if (song.patch.function) return false;
+            const char *key = nullptr;
+            const uint8_t *node = d.node(song.node);
+            if (node[0] == 6 && !node[4]) key = reinterpret_cast<const char *>(node + 68);
+            for (unsigned i = 0; !key && i < d.named_patches(); ++i)
+                if (cntrl::u16(d.named_patch(i) + 64) == song.node) key = reinterpret_cast<const char *>(d.named_patch(i));
+            if (!key) return false;
             std::snprintf(song.document, 64, "%s", documents.selected());
-            std::memcpy(song.instrument, d.instrument(cntrl::u16(p)), 32); song.bank = cntrl::u32(d.bank(index));
-        }
+            std::snprintf(song.key, 64, "%s", key); song.source = 0xffffffff;
+        } else song.source = 0xfffffffe;
         return true;
     }
-    bool revision(const cntrl::SongSelection &song, uint32_t &crc) override {
-        cntrl::Document d; if (!documents.reference_document(song.document, d)) return false;
-        crc = cntrl::checksum(d.data(), d.length()); return true;
+    bool capture_source(const cntrl::Document *&source) override {
+        if (documents.busy() || documents.dirty() || controller.busy() || songs.executing()) return false;
+        source = &documents.document(); return source->valid();
     }
-    bool resolve(const cntrl::SongSelection &song, cntrl::SongPatch &patch) override {
-        cntrl::Document d; if (!documents.reference_document(song.document, d)) return false;
-        int found = -1;
-        for (unsigned i = 0; i < d.patches(); ++i) {
-            const uint8_t *p = d.patch(i);
-            if (cntrl::u16(p) != 65535 && !std::strcmp(song.instrument, reinterpret_cast<const char *>(d.instrument(cntrl::u16(p))))
-                && p[4] == song.patch.program && cntrl::u32(d.bank(i)) == song.bank) {
-                auto value = cntrl::song_patch(d, i);
-                if (found >= 0 && std::memcmp(&patch, &value, sizeof(value))) return false;
-                found = int(i); patch = value;
+    bool revision(const cntrl::SongSelection &song, uint32_t &crc) override {
+        patch_sources.begin();
+        const cntrl::Document *source = nullptr;
+        bool valid = song.document[0] && patch_sources.acquire(song.document, source, crc);
+        patch_sources.end(); return valid;
+    }
+    bool activate(const cntrl::SongSelection &song, const cntrl::SongContinuation &context, bool resume) override {
+        if (controller.busy() || executor.busy() || documents.busy() || documents.dirty()) return false;
+        std::free(embedded_); embedded_ = nullptr;
+        patch_sources.begin();
+        const cntrl::Document *source = nullptr;
+        unsigned node = song.node;
+        uint32_t revision = 0;
+        bool valid = false;
+        if (song.document[0]) {
+            valid = patch_sources.acquire(song.document, source, revision);
+            if (valid) {
+                int root = source->named_patch(song.key);
+                valid = root >= 0; node = valid ? unsigned(root) : 0;
+            }
+        } else {
+            unsigned size = songs.source_size(song.source);
+            if (size && size <= cntrl::max_document) embedded_ = static_cast<uint8_t *>(std::malloc(size));
+            if (embedded_ && songs.read_source(song.source, 0, embedded_, size)
+                && embedded_document_.load(embedded_, size, board)) {
+                source = &embedded_document_; valid = true;
             }
         }
-        return found >= 0;
+        context_ = context;
+        if (valid) {
+            auto previous = controller.navigation();
+            if (!resume) controller.external_selection();
+            valid = resume ? node == context.node && executor.resume(*source, node, context.completed, context.sources_crc)
+                           : executor.start(*source, node);
+            if (!valid && !resume) controller.navigation(previous);
+        }
+        patch_sources.end(); return valid;
     }
+    cntrl::SongExecution execution_status() const override {
+        switch (executor.status()) {
+        case cntrl::PatchExecutor::Status::pending: return cntrl::SongExecution::pending;
+        case cntrl::PatchExecutor::Status::failed: return cntrl::SongExecution::failed;
+        case cntrl::PatchExecutor::Status::unknown: return cntrl::SongExecution::unknown;
+        case cntrl::PatchExecutor::Status::suspended: return cntrl::SongExecution::suspended;
+        default: return cntrl::SongExecution::completed;
+        }
+    }
+private:
+    cntrl::SongContinuation context_;
+    cntrl::Document embedded_document_;
+    uint8_t *embedded_ = nullptr;
 };
 SongFiles song_files;
 SongSources song_sources;
-DMAMEM cntrl::Songs songs(song_files, board, song_sources);
+DMAMEM cntrl::Songs songs(song_files, song_sources);
 DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
 cntrl::SongsUi songs_ui(songs, board, song_sources);
 enum ModuleIndex { setups_module, songs_module,
-#if CNTRL_ACTIONS
-    actions_module,
+#if CNTRL_SWITCHES
+    switches_module,
 #endif
 #if CNTRL_PANIC
     panic_module,
@@ -502,8 +606,8 @@ enum ModuleIndex { setups_module, songs_module,
 #endif
 };
 const char *const module_names[] = {"Setups", "Songs and setlists",
-#if CNTRL_ACTIONS
-    "Actions",
+#if CNTRL_SWITCHES
+    "Switches",
 #endif
 #if CNTRL_PANIC
     "Panic",
@@ -520,14 +624,18 @@ const char *const module_names[] = {"Setups", "Songs and setlists",
 };
 #if CNTRL_ORIGINAL_FIRMWARE
 struct FirmwareVisitRecord {
-    uint32_t magic = 0x46564931, token = 0, setup_crc = 0;
+    uint32_t magic = 0x46564932, token = 0, setup_crc = 0;
     char setup[64] = {};
     cntrl::SongContinuation continuation;
+    cntrl::Controller::NavigationState initial_navigation, return_navigation;
+    Board::RuntimeState runtime;
+    uint32_t ui_operation = 0;
     uint32_t crc = 0;
 };
-FirmwareVisitRecord firmware_visit;
+DMAMEM FirmwareVisitRecord firmware_visit;
 FsFile firmware_visit_file;
 unsigned firmware_visit_stage = 0;
+unsigned firmware_visit_offset = 0;
 uint8_t firmware_exit_pair = 33;
 bool firmware_resume_checked = false;
 bool append_boot_record(uint32_t value) {
@@ -539,13 +647,15 @@ bool append_boot_record(uint32_t value) {
     return words[state.next * 2] == value && words[state.next * 2 + 1] == ~value;
 }
 bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
-    if (board.configuration_locked()) return false;
     if (firmware_visit_stage || !valid_exit_pair(pair) || documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
     auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
     if (!can_enter_stock(state) || (continuation && !card.ready)) return false;
-    firmware_visit = FirmwareVisitRecord(); firmware_exit_pair = pair;
+    firmware_visit = FirmwareVisitRecord(); firmware_exit_pair = pair; firmware_visit_offset = 0;
     if (continuation) {
         firmware_visit.token = state.next; firmware_visit.continuation = *continuation;
+        firmware_visit.initial_navigation = invocation_navigation[visiting_invocation->owner()];
+        firmware_visit.return_navigation = controller.navigation();
+        firmware_visit.runtime = board.runtime; firmware_visit.ui_operation = pending_ui_operation;
         std::snprintf(firmware_visit.setup, 64, "%s", documents.selected());
         const auto &document = documents.document();
         firmware_visit.setup_crc = document.valid() ? cntrl::checksum(document.data(), document.length()) : 0;
@@ -554,9 +664,13 @@ bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
     } else firmware_visit_stage = 5;
     return true;
 }
-bool start_original_firmware() { return request_stock(33, nullptr); }
+bool start_original_firmware() { return controller.executor().invoke(cntrl::StockFirmwarePatch{33}); }
 void poll_firmware_visit(bool released) {
-    auto fail = [&]() { firmware_visit_file.close(); firmware_visit_stage = 0; songs.cancel_function(); board.error("Firmware switch failed"); };
+    auto fail = [&]() {
+        firmware_visit_file.close(); firmware_visit_stage = 0; songs.cancel_function();
+        if (visiting_invocation) visiting_invocation->cancel();
+        visiting_invocation = nullptr; board.error("Firmware switch failed");
+    };
     if (firmware_visit_stage >= 8) {
         static uint32_t token = 0;
         static bool valid = false;
@@ -565,13 +679,18 @@ void poll_firmware_visit(bool released) {
             token = firmware_visit.token;
             firmware_visit_file = SD.sdfs.open("/cntrl/firmware-visit.bin", O_RDONLY);
             valid = firmware_visit_file && firmware_visit_file.size() == sizeof(firmware_visit);
+            firmware_visit_offset = 0;
             break;
-        case 9:
-            valid = valid && firmware_visit_file.read(&firmware_visit, sizeof(firmware_visit)) == sizeof(firmware_visit);
+        case 9: {
+            unsigned n = sizeof(firmware_visit) - firmware_visit_offset; if (n > 512) n = 512;
+            valid = valid && firmware_visit_file.read(reinterpret_cast<uint8_t *>(&firmware_visit) + firmware_visit_offset, n) == int(n);
+            firmware_visit_offset += n;
+            if (valid && firmware_visit_offset < sizeof(firmware_visit)) return;
             firmware_visit_file.close(); break;
+        }
         case 10: {
             const auto &document = documents.document();
-            valid = valid && firmware_visit.magic == 0x46564931 && firmware_visit.token == token
+            valid = valid && firmware_visit.magic == 0x46564932 && firmware_visit.token == token
                 && firmware_visit.crc == cntrl::checksum(reinterpret_cast<const uint8_t *>(&firmware_visit), sizeof(firmware_visit) - 4)
                 && !std::strncmp(firmware_visit.setup, documents.selected(), 64)
                 && firmware_visit.setup_crc == (document.valid() ? cntrl::checksum(document.data(), document.length()) : 0);
@@ -583,8 +702,22 @@ void poll_firmware_visit(bool released) {
         case 12: {
             auto continuation = firmware_visit.continuation;
             firmware_visit_stage = 0;
-            if (!valid || !songs.resume(continuation)) { board.error("Song return unavailable"); return; }
-            controller.external_selection(); songs_ui.perform(); return;
+            if (!valid || !controller.navigation(firmware_visit.initial_navigation)) { board.error("Patch return unavailable"); return; }
+            restoring_invocation = true;
+            bool resumed = continuation.caller == 1 ? songs.resume(continuation)
+                : controller.executor().resume(documents.document(), continuation.node, continuation.completed, continuation.sources_crc);
+            restoring_invocation = false;
+            if (!resumed || !controller.navigation(firmware_visit.return_navigation)) {
+                controller.executor().cancel(); song_sources.executor.cancel();
+                board.error("Patch return unavailable"); return;
+            }
+            invocation_navigation[5] = firmware_visit.initial_navigation;
+            board.set_brightness(firmware_visit.runtime.brightness);
+            board.set_usb_midi_interface(firmware_visit.runtime.interface);
+            pending_ui_operation = firmware_visit.ui_operation;
+            if (continuation.caller == 1) songs_ui.perform();
+            else return_to_switches = continuation.caller == 2;
+            return;
         }
         }
         ++firmware_visit_stage; return;
@@ -595,16 +728,25 @@ void poll_firmware_visit(bool released) {
             firmware_visit_file = SD.sdfs.open("/cntrl/firmware-visit.bin", O_RDWR | O_CREAT | O_TRUNC);
             if (!firmware_visit_file) { fail(); return; }
             break;
-        case 2:
-            if (firmware_visit_file.write(&firmware_visit, sizeof(firmware_visit)) != sizeof(firmware_visit)) { fail(); return; }
+        case 2: {
+            unsigned n = sizeof(firmware_visit) - firmware_visit_offset; if (n > 512) n = 512;
+            if (firmware_visit_file.write(reinterpret_cast<const uint8_t *>(&firmware_visit) + firmware_visit_offset, n) != n) { fail(); return; }
+            firmware_visit_offset += n;
+            if (firmware_visit_offset < sizeof(firmware_visit)) return;
             break;
+        }
         case 3:
             if (!firmware_visit_file.sync()) { fail(); return; }
+            if (!firmware_visit_file.seekSet(0)) { fail(); return; }
+            firmware_visit_offset = 0;
             break;
         case 4: {
-            FirmwareVisitRecord verify;
-            bool good = firmware_visit_file.seekSet(0) && firmware_visit_file.read(&verify, sizeof(verify)) == sizeof(verify) && !std::memcmp(&verify, &firmware_visit, sizeof(verify));
-            firmware_visit_file.close(); if (!good) { fail(); return; } break;
+            uint8_t verify[512]; unsigned n = sizeof(firmware_visit) - firmware_visit_offset; if (n > sizeof(verify)) n = sizeof(verify);
+            if (firmware_visit_file.read(verify, n) != int(n)
+                || std::memcmp(verify, reinterpret_cast<const uint8_t *>(&firmware_visit) + firmware_visit_offset, n)) { fail(); return; }
+            firmware_visit_offset += n;
+            if (firmware_visit_offset < sizeof(firmware_visit)) return;
+            firmware_visit_file.close(); break;
         }
         case 5:
             if (!append_boot_record(visit_config | firmware_exit_pair | (firmware_visit.token ? 0x8000 : 0))) { fail(); return; }
@@ -631,11 +773,163 @@ void poll_firmware_visit(bool released) {
 OriginalFirmware original_firmware(board, start_original_firmware);
 #endif
 cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof(module_names[0]));
+bool patch_work_pending() { return controller.busy() || songs.executing() || songs.busy(); }
+bool patch_state(unsigned operation, uint32_t value) {
+    if (operation == 1) { board.set_brightness(uint8_t(value)); return true; }
+    if (operation == 2) { board.set_usb_midi_interface(value != 0); return true; }
+    if (operation >= 3 && operation <= 8) {
+        if ((operation == 7 || operation == 8) && (songs.executing() || documents.busy() || documents.dirty())) return false;
+        return controller.navigate(operation);
+    }
+    if (operation == 9 || operation == 10) { pending_ui_operation = operation; return true; }
+    return state_ui(UiOperation(operation));
+}
+bool patch_stock(uint8_t pair, cntrl::PatchExecutor &invocation) {
+#if CNTRL_ORIGINAL_FIRMWARE
+    visiting_invocation = &invocation;
+    if (!invocation.document().valid()) return request_stock(pair, nullptr);
+    cntrl::SongContinuation saved;
+    if (&invocation == &song_sources.executor) saved = song_sources.context();
+#if CNTRL_SWITCHES
+    else if (board.switches.owns(invocation)) saved.caller = 2;
+#endif
+    saved.node = invocation.root(); saved.completed = invocation.completed(); saved.sources_crc = invocation.fingerprint();
+    return request_stock(pair, &saved);
+#else
+    (void)pair; (void)invocation; return false;
+#endif
+}
 bool module_controls_locked = false;
+uint8_t held_controls = 0;
+bool state_ui(UiOperation operation) {
+    uint32_t now = millis();
+    switch (operation) {
+    case UiOperation::menu_previous:
+    case UiOperation::menu_next:
+        if (!module_menu.open()) return false;
+        module_menu.button(operation == UiOperation::menu_previous ? 0 : 1, true); return true;
+    case UiOperation::menu_back:
+        if (!module_menu.open()) return false;
+        if (module_menu.button(5, true) == -2) { documents.redraw(); module_controls_locked = true; }
+        return true;
+    case UiOperation::menu_open:
+        songs_ui.leave(); module_menu.enter(); module_controls_locked = true; return true;
+    case UiOperation::performance_show:
+        module_menu.leave(); songs_ui.leave(); documents.redraw(); module_controls_locked = true; return true;
+    case UiOperation::menu_activate: {
+        if (!module_menu.open()) return false;
+        int selected = module_menu.button(2, true);
+        if (selected == -1) return true;
+        if (selected == songs_module) {
+            if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) { songs_ui.enter(); module_controls_locked = true; }
+            else module_menu.enter();
+        }
+#if CNTRL_SWITCHES
+        else if (selected == switches_module) {
+            if (!documents.busy() && !documents.dirty() && !songs_transfer.busy() && board.output_idle() && documents.document().valid()) {
+                board.enter_switches(documents.document(), held_controls);
+            } else module_menu.enter();
+        }
+#endif
+#if CNTRL_PANIC
+        else if (selected == panic_module) {
+            if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) {
+                board.enter_panic(); module_controls_locked = true;
+            } else module_menu.enter();
+        }
+#endif
+        else if (selected == setups_module) {
+            if (documents.busy()) module_menu.enter();
+            else { setup_ui.enter(); module_controls_locked = true; }
+        }
+#if CNTRL_ORIGINAL_FIRMWARE
+        else if (selected == original_firmware_module) {
+            original_firmware.enter(); module_controls_locked = true;
+        }
+#endif
+#if CNTRL_CABLE_TEST
+        else if (selected == cable_test_module) {
+            if (!documents.busy() && board.output_idle()) {
+                board.enter_cable_test(); module_controls_locked = true;
+            } else module_menu.enter();
+        }
+#endif
+#if CNTRL_MIDI_INTERFACE
+        else if (selected == midi_interface_module) {
+            if (!documents.busy() && board.output_idle()) {
+                board.midi_interface.enter(usb_configuration != 0); module_controls_locked = true;
+            } else module_menu.enter();
+        }
+#endif
+        return true;
+    }
+    case UiOperation::setup_previous:
+    case UiOperation::setup_next:
+    case UiOperation::setup_confirm:
+    case UiOperation::setup_back: {
+        if (!setup_ui.open() || documents.busy()) return false;
+        unsigned button = operation == UiOperation::setup_previous ? 0 : operation == UiOperation::setup_next ? 1
+            : operation == UiOperation::setup_confirm ? 2 : 5;
+        setup_ui.button(button, true, now); return true;
+    }
+    case UiOperation::songs_previous:
+    case UiOperation::songs_next:
+    case UiOperation::songs_confirm:
+    case UiOperation::songs_previous_section:
+    case UiOperation::songs_next_section:
+    case UiOperation::songs_back: {
+        if (!songs_ui.open()) return false;
+        unsigned button = operation == UiOperation::songs_previous ? 0 : operation == UiOperation::songs_next ? 1
+            : operation == UiOperation::songs_confirm ? 2 : operation == UiOperation::songs_previous_section ? 3
+            : operation == UiOperation::songs_next_section ? 4 : 5;
+        songs_ui.button(button, true);
+        if (!songs_ui.open()) { documents.redraw(); module_controls_locked = true; }
+        return true;
+    }
+#if CNTRL_CABLE_TEST
+    case UiOperation::cable_toggle:
+        if (!board.cable_test.open()) return false;
+        board.cable_test.toggle(now); return true;
+    case UiOperation::cable_back:
+        if (!board.cable_test.open()) return false;
+        board.leave_cable_test(); module_menu.enter(); module_controls_locked = true; return true;
+#endif
+#if CNTRL_MIDI_INTERFACE
+    case UiOperation::interface_toggle:
+        if (!board.midi_interface.open()) return false;
+        board.midi_interface.toggle(); return true;
+    case UiOperation::interface_back:
+        if (!board.midi_interface.open()) return false;
+        board.midi_interface.leave(); module_menu.enter(); module_controls_locked = true; return true;
+#endif
+#if CNTRL_PANIC
+    case UiOperation::panic_begin:
+    case UiOperation::panic_end:
+        if (!board.panic.open()) return false;
+        board.panic.button(operation == UiOperation::panic_begin); return true;
+    case UiOperation::panic_back:
+        if (!board.panic.open()) return false;
+        board.leave_panic(); module_menu.enter(); module_controls_locked = true; return true;
+#endif
+#if CNTRL_SWITCHES
+    case UiOperation::switches_return:
+        board.enter_switches(documents.document(), 0); module_controls_locked = true; return true;
+#endif
+#if CNTRL_ORIGINAL_FIRMWARE
+    case UiOperation::stock_confirm:
+        if (!original_firmware.open()) return false;
+        original_firmware.start(); return true;
+    case UiOperation::stock_back:
+        if (!original_firmware.open()) return false;
+        original_firmware.leave(); module_menu.enter(); module_controls_locked = true; return true;
+#endif
+    default: return false;
+    }
+}
 bool feature_open() {
     return module_menu.open() || setup_ui.open() || songs_ui.open()
-#if CNTRL_ACTIONS
-        || board.actions.open()
+#if CNTRL_SWITCHES
+        || board.switches.open()
 #endif
 #if CNTRL_PANIC
         || board.panic.open()
@@ -695,7 +989,7 @@ void storage_info(bool scan) {
 
 void midi_status(unsigned route) { board.midi_status(route); }
 bool asset_command(const char *line) {
-    if (board.configuration_locked()) { board.reply("CNTRL ERROR close-actions-first"); return true; }
+    if (board.configuration_locked()) { board.reply("CNTRL ERROR close-switches-first"); return true; }
     if (!std::strncmp(line, "CNTRL SONGS ", 12)) {
         if (songs_ui.open()) { board.reply("CNTRL ERROR close-song-editor"); return true; }
         return songs_transfer.command(line, millis());
@@ -731,6 +1025,7 @@ void poll_target() {
             events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now);
             if (buttons[i].pressed) pressed |= 1u << i;
         }
+        held_controls = pressed;
         bool consumed = splash_session.controls(pressed, now, !feature_open() && pressed == (1u << 2));
         if (consumed) controller.cancel_gesture();
         setup_ui.poll(pressed);
@@ -743,108 +1038,72 @@ void poll_target() {
 #endif
         if (!consumed) {
             for (unsigned i = 0; i < 6; ++i) {
-#if CNTRL_ACTIONS
-                if (board.actions.open() && (events[i] & release_event)) board.actions.button(i, false);
+#if CNTRL_SWITCHES
+                if (board.switches.open() && (events[i] & release_event)) board.switches.button(i, false);
 #endif
                 if (module_controls_locked) continue;
                 if (module_menu.open()) {
-                    int selected = module_menu.button(i, events[i] & press_event);
-                    if (selected == -2) { documents.redraw(); module_controls_locked = true; }
-                    else if (selected == songs_module) {
-                        if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) { songs_ui.enter(); module_controls_locked = true; }
-                        else module_menu.enter();
+                    if (events[i] & press_event) {
+                        if (i == 0) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_previous)});
+                        else if (i == 1) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_next)});
+                        else if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_activate)});
+                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_back)});
                     }
-#if CNTRL_ACTIONS
-                    else if (selected == actions_module) {
-                        if (!documents.busy() && !documents.dirty() && !songs_transfer.busy() && board.output_idle() && documents.document().valid()) {
-                            board.enter_actions(documents.document(), pressed);
-                        } else module_menu.enter();
-                    }
-#endif
-#if CNTRL_PANIC
-                    else if (selected == panic_module) {
-                        if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) {
-                            board.enter_panic(); module_controls_locked = true;
-                        } else module_menu.enter();
-                    }
-#endif
-                    else if (selected == setups_module) {
-                        if (documents.busy()) module_menu.enter();
-                        else { setup_ui.enter(); module_controls_locked = true; }
-                    }
-#if CNTRL_ORIGINAL_FIRMWARE
-                    else if (selected == original_firmware_module) {
-                        original_firmware.enter(); module_controls_locked = true;
-                    }
-#endif
-#if CNTRL_CABLE_TEST
-                    else if (selected == cable_test_module) {
-                        if (!documents.busy() && board.output_idle()) {
-                            board.enter_cable_test(); module_controls_locked = true;
-                        } else module_menu.enter();
-                    }
-#endif
-#if CNTRL_MIDI_INTERFACE
-                    else if (selected == midi_interface_module) {
-                        if (!documents.busy() && board.output_idle()) {
-                            board.midi_interface.enter(usb_configuration != 0);
-                            module_controls_locked = true;
-                        } else module_menu.enter();
-                    }
-#endif
 #if CNTRL_CABLE_TEST
                 } else if (board.cable_test.open()) {
                     if (events[i] & press_event) {
-                        if (i == 1) board.cable_test.toggle(now);
-                        else if (i == 5) {
-                            board.leave_cable_test(); module_menu.enter(); module_controls_locked = true;
-                        }
+                        if (i == 1) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::cable_toggle)});
+                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::cable_back)});
                     }
 #endif
 #if CNTRL_MIDI_INTERFACE
                 } else if (board.midi_interface.open()) {
                     if (events[i] & press_event) {
-                        if (i == 1) board.midi_interface.toggle();
-                        else if (i == 5) {
-                            board.midi_interface.leave(); module_menu.enter(); module_controls_locked = true;
-                        }
+                        if (i == 1) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::interface_toggle)});
+                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::interface_back)});
                     }
 #endif
 #if CNTRL_ORIGINAL_FIRMWARE
                 } else if (original_firmware.open()) {
                     if (events[i] & press_event) {
-                        if (i == 2) original_firmware.start();
-                        else if (i == 5) { original_firmware.leave(); module_menu.enter(); module_controls_locked = true; }
+                        if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::stock_confirm)});
+                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::stock_back)});
                     }
 #endif
-#if CNTRL_ACTIONS
-                } else if (board.actions.open()) {
-                    if (events[i] & press_event) board.actions.button(i, true);
-                    if (events[i] & release_event) board.actions.button(i, false);
+#if CNTRL_SWITCHES
+                } else if (board.switches.open()) {
+                    if (events[i] & press_event) board.switches.button(i, true);
+                    if (events[i] & release_event) board.switches.button(i, false);
 #endif
                 } else if (songs_ui.open()) {
-                    if (events[i] & press_event) songs_ui.button(i, true);
-                    if (!songs_ui.open()) { documents.redraw(); module_controls_locked = true; }
+                    constexpr UiOperation operations[] = {UiOperation::songs_previous, UiOperation::songs_next,
+                        UiOperation::songs_confirm, UiOperation::songs_previous_section,
+                        UiOperation::songs_next_section, UiOperation::songs_back};
+                    if (events[i] & press_event) controller.executor().invoke(cntrl::StatePatch{unsigned(operations[i])});
 #if CNTRL_PANIC
                 } else if (board.panic.open()) {
                     if (i == 1) {
-                        if (events[i] & press_event) board.panic.button(true);
-                        if (events[i] & release_event) board.panic.button(false);
+                        if (events[i] & press_event) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::panic_begin)});
+                        if (events[i] & release_event) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::panic_end)});
                     } else if (i == 5 && (events[i] & press_event)) {
-                        board.leave_panic(); module_menu.enter(); module_controls_locked = true;
+                        controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::panic_back)});
                     }
 #endif
                 } else if (setup_ui.open()) {
-                    if (!documents.busy()) {
-                        if (events[i] & press_event) setup_ui.button(i, true, now);
-                        if (events[i] & release_event) setup_ui.button(i, false, now);
+                    if (events[i] & press_event) {
+                        if (i == 0) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_previous)});
+                        else if (i == 1) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_next)});
+                        else if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_confirm)});
+                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_back)});
                     }
                 } else {
-                    if ((events[i] & press_event) && controller.button(i, true, now) == cntrl::Chord::ad && splash_session.management_allowed()) { controller.cancel_gesture(); module_menu.enter(); }
+                    if ((events[i] & press_event) && controller.button(i, true, now) == cntrl::Chord::ad
+                        && !patch_work_pending() && splash_session.management_allowed()) {
+                        controller.cancel_gesture(); controller.executor().invoke(cntrl::StatePatch{9});
+                    }
                     if (events[i] & release_event) controller.button(i, false, now);
                 }
             }
-            if (!feature_open()) controller.tick(now);
         }
     }
     // A bounded amount of work per iteration; SD-card latency itself depends
@@ -859,16 +1118,38 @@ void poll_target() {
     // continue while command input and reply-producing jobs wait for room.
     if (board.reply_ready()) serial_router.poll(now);
     if (board.reply_ready()) songs_transfer.poll(now);
+    controller.tick(now);
+    song_sources.tick();
     songs.tick();
     if (board.reply_ready()) font_files.poll(now, board);
     board.poll();
-#if CNTRL_ACTIONS
-    static bool actions_open = false;
-    if (actions_open && !board.actions.open()) {
-        board.leave_actions(); module_menu.enter(); module_controls_locked = true;
-        if (board.actions.abandoned()) board.error("Action state unknown");
+#if CNTRL_SWITCHES
+    static bool switches_open = false;
+    if (switches_open && !board.switches.open()) {
+        board.leave_switches();
+        if (pending_ui_operation == 10) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::performance_show)});
+        else controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_open)});
+        pending_ui_operation = 0; module_controls_locked = true;
+        if (board.switches.abandoned()) board.error("Switch state unknown");
     }
-    actions_open = board.actions.open();
+    switches_open = board.switches.open();
 #endif
-    board.display(now, documents.busy() || feature_open());
+    if (!patch_work_pending()
+#if CNTRL_SWITCHES
+        && !board.switches.open()
+#endif
+    ) {
+        if (pending_ui_operation) {
+            if (pending_ui_operation == 9) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_open)});
+            else controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::performance_show)});
+            pending_ui_operation = 0; return_to_switches = false; module_controls_locked = true;
+        }
+#if CNTRL_SWITCHES
+        else if (return_to_switches) {
+            return_to_switches = false;
+            controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::switches_return)});
+        }
+#endif
+    }
+    board.display(now, documents.busy() || feature_open() || patch_work_pending());
 }

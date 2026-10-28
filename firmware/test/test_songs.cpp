@@ -20,10 +20,21 @@ struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::SongCapture {
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
     bool revision(const cntrl::SongSelection &, uint32_t &crc) override { crc = 1; return true; }
-    bool resolve(const cntrl::SongSelection &, cntrl::SongPatch &p) override { p = patch(); return !missing; }
-    bool capture(cntrl::Song &s, bool) override { s.patch = patch(); std::strcpy(s.name, "Sound"); return true; }
+    cntrl::SongExecution state = cntrl::SongExecution::completed;
+    bool activate(const cntrl::SongSelection &selection, const cntrl::SongContinuation &continuation, bool resume) override {
+        if (missing || !writable) return false;
+        state = cntrl::SongExecution::completed;
+        if (!resume && !std::strcmp(selection.key, "stock")) {
+            saved = continuation; ++switches; state = cntrl::SongExecution::suspended;
+        } else if (!resume) ++sends;
+        return true;
+    }
+    cntrl::SongExecution execution_status() const override { return state; }
+    bool capture_source(const cntrl::Document *&) override { return false; }
+    bool capture(cntrl::Song &s, bool) override { static_cast<cntrl::SongSelection &>(s) = patch(); std::strcpy(s.name, "Sound"); return true; }
     void recalled() override {}
-    static cntrl::SongPatch patch() { cntrl::SongPatch p; std::strcpy(p.output, "din"); return p; }
+    static cntrl::SongSelection patch() { cntrl::SongSelection p; std::strcpy(p.document, "source"); std::strcpy(p.key, "sound"); return p; }
+
 };
 struct SongStorage : TestStorage {
     bool fail_reads = false;
@@ -60,7 +71,7 @@ std::vector<uint8_t> snapshot(const cntrl::Songs &songs) {
     return bytes;
 }
 void test_rename_read_failure_can_be_retried() {
-    SongStorage storage; Board board; cntrl::Songs songs(storage, board, board);
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board);
     assert(songs.boot());
     assert(completed(storage, songs, songs.save_song("A", Board::patch())));
     assert(completed(storage, songs, songs.save_song("B", Board::patch())));
@@ -78,10 +89,10 @@ void test_rename_read_failure_can_be_retried() {
 }
 void test_abandoned_imports_close_without_changing_library() {
     struct Replies : cntrl::Replies { void reply(const char *) override {} } replies;
-    SongStorage storage; Board board; cntrl::Songs songs(storage, board, board);
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board);
     assert(songs.boot()); auto before = snapshot(songs);
     cntrl::SongsTransfer transfer(songs, replies);
-    auto begin = [&]() { assert(transfer.command("CNTRL SONGS BEGIN 12 0 1", 1)); assert(transfer.busy()); };
+    auto begin = [&]() { assert(transfer.command("CNTRL SONGS BEGIN 16 0 1", 1)); assert(transfer.busy()); };
     begin(); unsigned finishes = storage.finishes;
     transfer.poll(10002); assert(!transfer.busy() && storage.finishes == ++finishes);
     begin(); transfer.command("CNTRL SONGS DATA xx", 2);
@@ -98,7 +109,7 @@ void test_import_progress_and_failure_keep_the_active_generation() {
         unsigned count = 0, waits = 0; std::string last;
         void reply(const char *text) override { ++count; waits += !std::strcmp(text, "CNTRL WAIT"); last = text; }
     } replies;
-    SongStorage storage; Board board; cntrl::Songs songs(storage, board, board);
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board);
     assert(songs.boot());
     assert(completed(storage, songs, songs.save_song("A", Board::patch())));
     assert(completed(storage, songs, songs.save_song("B", Board::patch())));
@@ -139,9 +150,9 @@ int main() {
     test_import_progress_and_failure_keep_the_active_generation();
     test_abandoned_imports_close_without_changing_library();
     test_rename_read_failure_can_be_retried();
-    SongStorage storage; Board board; cntrl::Songs songs(storage, board, board);
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board);
     assert(songs.boot()); assert(completed(storage, songs, songs.save_song("A", Board::patch())));
-    assert(completed(storage, songs, songs.save_song("B", Board::patch(), "source", "synth")));
+    assert(completed(storage, songs, songs.save_song("B", Board::patch())));
     cntrl::Song first, second; assert(songs.song_at(0, first) && songs.song_at(1, second));
     uint32_t a = first.id, b = second.id;
     uint32_t set = completed(storage, songs, songs.new_setlist()); assert(set);
@@ -165,7 +176,7 @@ int main() {
     auto before = snapshot(songs); storage.remaining = 30;
     assert(!completed(storage, songs, songs.remove(set, 0))); assert(before == snapshot(songs));
     storage.remaining = -1;
-    cntrl::Songs reboot(storage, board, board); assert(reboot.boot());
+    cntrl::Songs reboot(storage, board); assert(reboot.boot());
     assert(before == snapshot(reboot)); assert(board.sends == sent);
     cntrl::SongsUi ui(reboot, board, board); ui.enter(); ui.poll(0);
     press(storage, ui, reboot, 1, true); press(storage, ui, reboot, 2, true); // Setlists.
@@ -175,7 +186,7 @@ int main() {
     press(storage, ui, reboot, 5, true); // Editing.
     assert(ui.open());
     // The former collection ceilings are not RAM dimensions any more.
-    static_assert(sizeof(cntrl::Songs) < 3072);
+    static_assert(sizeof(cntrl::Songs) < 4096);
     static_assert(sizeof(cntrl::SongsTransfer) < 128);
     for (unsigned i = 0; i < 128; ++i) assert(completed(storage, reboot, reboot.save_song("More", Board::patch())));
     for (unsigned i = 0; i < 20; ++i) assert(completed(storage, reboot, reboot.new_setlist()));
@@ -185,37 +196,37 @@ int main() {
     assert(reboot.setlist(large_set)->count == 105);
     assert(completed(storage, reboot, reboot.move(large_set, 104, 0)));
     assert(completed(storage, reboot, reboot.remove(large_set, 104))); assert(completed(storage, reboot, reboot.undo()));
-    cntrl::Songs large_boot(storage, board, board); assert(large_boot.boot());
+    cntrl::Songs large_boot(storage, board); assert(large_boot.boot());
     assert(large_boot.counts().songs == 130 && large_boot.counts().sets == 22);
     assert(large_boot.setlist(large_set)->count == 105);
     assert(board.sends == sent);
     // A stock visit advances within the same song, never to the next song.
-    SongStorage visits; Board target; cntrl::Songs sequence(visits, target, target);
+    SongStorage visits; Board target; cntrl::Songs sequence(visits, target);
     assert(sequence.boot() && completed(visits, sequence, sequence.save_song("Sequence", Board::patch())));
     cntrl::Song item; assert(sequence.song_at(0, item));
-    cntrl::SongSelection stock; stock.patch.function = 1; stock.patch.exit_buttons = 33;
+    cntrl::SongSelection stock = Board::patch(); std::strcpy(stock.key, "stock");
     assert(completed(visits, sequence, sequence.insert_patch(item.id, 0, stock)));
-    cntrl::SongSelection midi; midi.patch = Board::patch();
+    cntrl::SongSelection midi = Board::patch();
     assert(completed(visits, sequence, sequence.insert_patch(item.id, 1, midi)));
     assert(sequence.song(item.id)->count == 3);
     uint32_t list = completed(visits, sequence, sequence.new_setlist()); assert(list && completed(visits, sequence, sequence.insert(list, 0, item.id))); sequence.choose(list);
     assert(sequence.next() && target.sends == 1);
     assert(sequence.next() && target.switches == 1 && target.sends == 1);
-    cntrl::Songs returned(visits, target, target); assert(returned.boot());
+    cntrl::Songs returned(visits, target); assert(returned.boot());
     assert(target.sends == 1); assert(returned.resume(target.saved)); assert(target.sends == 2);
     assert(!returned.next() && !std::strcmp(returned.last_error(), "End of set"));
     assert(completed(visits, returned, returned.move_patch(item.id, 1, true)));
-    cntrl::SongSelection check; assert(returned.patch_at(item.id, 0, check) && check.patch.function == 1);
+    cntrl::SongSelection check; assert(returned.patch_at(item.id, 0, check) && !std::strcmp(check.key, "stock"));
     assert(completed(visits, returned, returned.move_patch(item.id, 0, false)));
     assert(completed(visits, returned, returned.remove_patch(item.id, 2)));
     assert(!returned.resume(target.saved)); // A changed library cannot auto-recall.
     returned.choose(list); assert(returned.next()); assert(returned.next());
     unsigned sends = target.sends;
-    cntrl::Songs final_return(visits, target, target); assert(final_return.boot());
+    cntrl::Songs final_return(visits, target); assert(final_return.boot());
     assert(final_return.resume(target.saved) && target.sends == sends);
     assert(!std::strcmp(final_return.last_error(), "End of song"));
     assert(completed(visits, final_return, final_return.remove_patch(item.id, 0)));
-    assert(final_return.patch_at(item.id, 0, check) && check.patch.function == 1);
+    assert(final_return.patch_at(item.id, 0, check) && !std::strcmp(check.key, "stock"));
     assert(!completed(visits, final_return, final_return.remove_patch(item.id, 0)));
     // A failed asynchronous entry restores the previous performance cursor.
     final_return.choose(list);
@@ -223,8 +234,9 @@ int main() {
     final_return.cancel_function();
     assert(!final_return.current_name()[0]);
     // Incompatible/corrupt generations can only be replaced by an explicit import.
+    target.state = cntrl::SongExecution::completed;
     SongStorage invalid; invalid.files[""][0] = {'B', 'A', 'D'};
-    cntrl::Songs repair(invalid, target, target);
+    cntrl::Songs repair(invalid, target);
     assert(!repair.boot() && repair.invalid());
     assert(!completed(invalid, repair, repair.save_song("Do not overwrite", Board::patch())));
     auto replacement = snapshot(final_return);

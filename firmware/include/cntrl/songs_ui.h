@@ -11,10 +11,14 @@ class SongsUi {
 public:
     SongsUi(Songs &songs, Hardware &hardware, SongCapture &capture) : songs_(songs), hardware_(hardware), capture_(capture) {}
     bool open() const { return mode_ != closed; }
+    void leave() { mode_ = closed; }
     void perform() { mode_ = performance; cursor_ = 0; locked_ = true; std::snprintf(feedback_, 64, "%s", songs_.last_error()); render(); }
     void enter() { mode_ = root; cursor_ = 0; locked_ = true; render(); }
     void poll(uint8_t held) {
         if (!held) locked_ = false;
+        if (mode_ == performance && !songs_.busy() && std::strcmp(feedback_, songs_.last_error())) {
+            std::snprintf(feedback_, sizeof(feedback_), "%s", songs_.last_error()); render();
+        }
         if (waiting_ && !songs_.busy()) {
             waiting_ = false;
             if (!songs_.success()) {
@@ -57,7 +61,7 @@ private:
             else if (action == 2) mode_ = library;
             else {
                 Song item;
-                if (!capture_.capture(item, action == 4) || !songs_.save_song(item.name, item.patch, item.document, item.instrument, item.bank)) fail();
+                if (!capture_.capture(item, action == 4) || !songs_.save_song(item.name, item)) fail();
                 else { mode_ = library; picker_ = 0; }
             }
         } else if (mode_ == sets && button == 2) {
@@ -76,7 +80,7 @@ private:
             else if (cursor_ == 2) { mode_ = patches; cursor_ = 0; }
             else {
                 Song item;
-                if (!capture_.capture(item, false) || !songs_.change_song(song_id_, item.patch)) fail();
+                if (!capture_.capture(item, false) || !songs_.change_song(song_id_, item)) fail();
                 else { mode_ = library; cursor_ = 0; }
             }
         } else if (mode_ == patches && button == 2 && count) {
@@ -159,8 +163,7 @@ private:
         text(0, 0, songs_.removed() ? "Current (removed)" : "Current"); text(0, 1, songs_.current_name());
         SongSelection current_patch;
         if (songs_.current_patch(current_patch)) {
-            if (current_patch.patch.function) text(0, 2, "Original firmware");
-            else std::snprintf(panes[0].lines[2].text, 64, "%.31s ch%u PC%u", current_patch.document[0] ? current_patch.document : current_patch.patch.output, unsigned(current_patch.patch.channel) + 1, unsigned(current_patch.patch.program) + 1);
+            text(0, 2, current_patch.label[0] ? current_patch.label : current_patch.document[0] ? current_patch.key : "Patch");
         }
         const Setlist *set = current_set(); unsigned next = songs_.next_position();
         text(2, 0, "Next");
@@ -170,8 +173,7 @@ private:
         SongSelection next_patch;
         if (songs_.upcoming_patch(next_patch)) {
             text(2, 0, "Next patch");
-            if (next_patch.patch.function) text(2, 1, "Original firmware");
-            else std::snprintf(panes[2].lines[1].text, 64, "%.31s PC%u", next_patch.document[0] ? next_patch.document : next_patch.patch.output, unsigned(next_patch.patch.program) + 1);
+            text(2, 1, next_patch.label[0] ? next_patch.label : next_patch.document[0] ? next_patch.key : "Patch");
         }
         static const char *roots[] = {"Perform setlist", "Setlists", "Songs", "Save as song", "Save reference"};
         static const char *edits[] = {"Add next", "Add to end", "Remove from setlist", "Move", "Rename setlist", "Undo edit", "Restart setlist", "Done"};
@@ -184,7 +186,7 @@ private:
         else if (mode_ == patches) {
             SongSelection selected;
             if (songs_.patch_at(song_id_, cursor_, selected)) {
-                text(1, 1, selected.patch.function ? "Original firmware" : selected.document[0] ? selected.document : selected.patch.output);
+                text(1, 1, selected.label[0] ? selected.label : selected.document[0] ? selected.key : "Patch");
                 const Song *song = songs_.song(song_id_);
                 if (song) std::snprintf(panes[1].lines[2].text, 64, "Patch %u/%lu", cursor_ + 1, (unsigned long)song->count);
                 else text(1, 2, "Song read failed");

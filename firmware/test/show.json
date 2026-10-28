@@ -1,14 +1,49 @@
 {
   "instruments": {
-    "a": {"instrument": "synth", "setup": "stock", "channel": 1, "output": "din"},
-    "b": {"instrument": "synth", "setup": "stock", "channel": 2, "output": "trs"}
+    "a": {
+      "instrument": "synth",
+      "setup": "stock",
+      "channel": 1,
+      "output": "din"
+    },
+    "b": {
+      "instrument": "synth",
+      "setup": "stock",
+      "channel": 2,
+      "output": "trs"
+    }
   },
-  "patches": {
+  "groups": {
     "wind": [
-      {"instrument": "a", "program": 1, "name": "Flute", "bank": 0, "volume": 100, "pan": -64},
-      {"patch": ":a:2", "name": "Sax"},
-      {"patch": ":b:3", "name": "Strings"}
+      {
+        "instrument": "a",
+        "program": 1,
+        "name": "Flute",
+        "bank": 0,
+        "volume": 100,
+        "pan": -64,
+        "type": "program-change"
+      },
+      {
+        "name": "Sax",
+        "type": "program-change",
+        "instrument": "a",
+        "program": 2
+      },
+      {
+        "name": "Strings",
+        "type": "program-change",
+        "instrument": "b",
+        "program": 3
+      }
     ],
-    "synth": [{"patch": ":b:128", "name": "Pad"}]
+    "synth": [
+      {
+        "name": "Pad",
+        "type": "program-change",
+        "instrument": "b",
+        "program": 128
+      }
+    ]
   }
 }

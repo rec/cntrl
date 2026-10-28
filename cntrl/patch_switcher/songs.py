@@ -1,48 +1,51 @@
 """Portable song libraries with inline selections and live setup references."""
 
 import struct
+from copy import deepcopy
 from pathlib import Path
 from typing import Annotated
 from zlib import crc32
 
 import tomlkit
 import tyro
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from . import transport
+from . import compiler, models, resolved, transport
 from .data_files import validate_name
-from .models import StockFirmware
-
-
-class ProgramChange(BaseModel, frozen=True):
-    id: int | None = Field(default=None, gt=0, lt=0xFFFFFFFF)
-    output: str
-    channel: int = Field(ge=1, le=16)
-    program: int = Field(ge=1, le=128)
-    msb: int | None = Field(default=None, ge=0, le=127)
-    lsb: int | None = Field(default=None, ge=0, le=127)
-    volume: int | None = Field(default=None, ge=0, le=127)
-    pan: int | None = Field(default=None, ge=-64, le=63)
-    model_config = ConfigDict(extra='forbid')
-
-
-class Reference(BaseModel, frozen=True):
-    id: int | None = Field(default=None, gt=0, lt=0xFFFFFFFF)
-    document: str
-    instrument: str
-    program: int = Field(ge=1, le=128)
-    bank: int | None = Field(default=None, ge=0, le=0xFFFFFFFE)
-    model_config = ConfigDict(extra='forbid')
-
-
-class Function(StockFirmware, frozen=True):
-    id: int | None = Field(default=None, gt=0, lt=0xFFFFFFFF)
 
 
 class Song(BaseModel, frozen=True):
     id: int = Field(gt=0, lt=0xFFFFFFFF)
     name: str
-    patches: list[ProgramChange | Reference | Function] = Field(min_length=1)
+    patches: list[dict[str, object]] = Field(min_length=1)
+
+    @field_validator('patches')
+    @classmethod
+    def validate_patches(
+        cls, values: list[dict[str, object]]
+    ) -> list[dict[str, object]]:
+        result = []
+        errors: list[str] = []
+        for index, value in enumerate(values):
+            fields = dict(value)
+            occurrence = fields.pop('id', None)
+            if occurrence is not None and (
+                type(occurrence) is not int or not 0 < occurrence < 0xFFFFFFFF
+            ):
+                errors.append(f'patches[{index}].id: expected 1..4294967294')
+            try:
+                patch = models.patch_adapter.validate_python(fields)
+            except ValidationError as error:
+                errors.append(f'patches[{index}]: {error}')
+                continue
+            fields = patch.model_dump(exclude_none=True)
+            if occurrence is not None:
+                fields['id'] = occurrence
+            result.append(fields)
+        if errors:
+            raise ValueError('\n'.join(errors))
+        return result
+
     model_config = ConfigDict(extra='forbid')
 
 
@@ -56,6 +59,11 @@ class Setlist(BaseModel, frozen=True):
 
 class Library(BaseModel, frozen=True):
     next_id: int | None = Field(default=None, ge=1, le=0xFFFFFFFF)
+    instruments: dict[str, object] = Field(default_factory=dict)
+    definitions: models.Definitions | None = None
+    patches: dict[str, object] = Field(default_factory=dict)
+    fonts: dict[str, str] = Field(default_factory=dict)
+    categories: dict[str, models.Category] = Field(default_factory=dict)
     songs: list[Song] = Field(default_factory=list)
     setlists: list[Setlist] = Field(default_factory=list)
     model_config = ConfigDict(extra='forbid')
@@ -81,63 +89,117 @@ def text(value: str, size: int) -> bytes:
     return value.encode().ljust(size, b'\0')
 
 
-def encode(library: Library) -> bytes:
+def label_text(value: str) -> bytes:
+    encoded = value.encode('utf-8')
+    if (
+        not encoded
+        or len(encoded) >= 64
+        or any(ord(c) < 32 or ord(c) == 127 for c in value)
+    ):
+        raise ValueError('song Patch labels must contain 1..63 UTF-8 bytes')
+    return encoded.ljust(64, b'\0')
+
+
+def encode(
+    library: Library,
+    target: models.Target | None = None,
+    documents: dict[str, object] | None = None,
+    assets: dict[int, bytes] | None = None,
+) -> bytes:
     ids = [s.id for s in library.songs] + [s.id for s in library.setlists]
+    song_ids = {s.id for s in library.songs}
     for s in library.setlists:
         if s.entry_ids and len(s.entry_ids) != len(s.songs):
             raise ValueError('entry_ids must match songs')
         ids.extend(s.entry_ids)
-        if any(i not in [s.id for s in library.songs] for i in s.songs):
+        if any(i not in song_ids for i in s.songs):
             raise ValueError('setlist references an unknown song')
-    if len(set(ids)) != len(ids):
-        raise ValueError('song, setlist and occurrence IDs must be unique')
-    next_id = max(ids, default=0) + 1
+    explicit = [
+        i for s in library.songs for p in s.patches if isinstance(i := p.get('id'), int)
+    ]
+    if len(set(ids + explicit)) != len(ids + explicit):
+        raise ValueError('song, setlist and patch occurrence IDs must be unique')
+    next_id = max(ids + explicit, default=0) + 1
     if library.next_id is not None:
         if library.next_id < next_id:
             raise ValueError('next_id must exceed all existing IDs')
         next_id = library.next_id
-    explicit = [p.id for s in library.songs for p in s.patches if p.id is not None]
-    if len(set(ids + explicit)) != len(ids + explicit):
-        raise ValueError('song, setlist and patch occurrence IDs must be unique')
-    if library.next_id is not None and library.next_id <= max(
-        ids + explicit, default=0
-    ):
-        raise ValueError('next_id must exceed all existing IDs')
-    next_id = max(next_id, max(explicit, default=0) + 1)
-    records = []
-    for s in library.songs:
-        selections = []
-        for p in s.patches:
-            key = p.id
-            if key is None:
-                key = next_id
+    positions: list[list[tuple[int, dict[str, object], str]]] = []
+    values_for_source: list[dict[str, object]] = []
+    paths: list[str] = []
+    for song_index, song in enumerate(library.songs):
+        values = []
+        for patch_index, position in enumerate(song.patches):
+            value = dict(position)
+            occurrence = value.pop('id', None)
+            if occurrence is None:
+                occurrence = next_id
                 next_id += 1
-            document, instrument, bank = bytes(64), bytes(32), 0xFFFFFFFF
-            if isinstance(p, Reference):
-                validate_name(p.document)
-                document, instrument = text(p.document, 64), text(p.instrument, 32)
-                bank = 0xFFFFFFFF if p.bank is None else p.bank
-                midi = PATCH.pack(
-                    text('din', 32), 0, p.program - 1, 255, 255, 255, 255, 0, 0
+            if not isinstance(occurrence, int):
+                raise ValueError('invalid occurrence ID')
+            key = f'@song-{occurrence}'
+            values_for_source.append(value)
+            paths.append(f'songs[{song_index}].patches[{patch_index}]')
+            values.append((occurrence, value, key))
+        positions.append(values)
+    source = b''
+    roots: dict[str, int] = {}
+    if values_for_source or library.patches:
+        if target is None:
+            raise ValueError(
+                'song patches require --target to compile their setup context'
+            )
+        context: dict[str, object] = {
+            'instruments': library.instruments,
+            'patches': library.patches,
+            'groups': {'Songs': values_for_source} if values_for_source else {},
+            'fonts': library.fonts,
+            'categories': {
+                k: v.model_dump(exclude_none=True)
+                for k, v in library.categories.items()
+            },
+        }
+        if library.definitions is not None:
+            context['definitions'] = library.definitions.model_dump(exclude_none=True)
+        try:
+            source = compiler.compile_show(context, {}, [], target, assets, documents)
+        except compiler.CompilationError as error:
+            messages = error.errors
+            for index, path in enumerate(paths):
+                messages = [m.replace(f'groups.Songs[{index}]', path) for m in messages]
+            raise compiler.CompilationError(messages) from error
+        graph = resolved.graph_offset(source)
+        _, _, count, _, _, _ = compiler.GRAPH.unpack_from(source, graph)
+        offset = graph + compiler.GRAPH.size + count * 4
+        for index, (occurrence, _, _) in enumerate(p for s in positions for p in s):
+            roots[f'@song-{occurrence}'] = struct.unpack_from(
+                '<H', source, offset + index * 2
+            )[0]
+    records = []
+    browser = 0
+    for song, values in zip(library.songs, positions, strict=True):
+        selections = []
+        for occurrence, _, key in values:
+            document, reference, origin, node = (
+                bytes(64),
+                bytes(64),
+                0,
+                roots[key],
+            )
+            header = compiler.HEADER.unpack_from(source)
+            label_offset = 76 + header[4] * 68 + header[5] * 68 + browser * 82 + 12
+            label = (
+                source[label_offset : label_offset + 64].split(b'\0')[0].decode('utf-8')
+            )
+            browser += 1
+            selections.append(
+                SELECTION.pack(
+                    document, reference, label_text(label), origin, node, occurrence
                 )
-            elif isinstance(p, Function):
-                midi = PATCH.pack(bytes(32), 0, 0, 255, 255, 255, 255, 1, p.button_mask)
-            else:
-                midi = PATCH.pack(
-                    text(p.output, 32),
-                    p.channel - 1,
-                    p.program - 1,
-                    255 if p.msb is None else p.msb,
-                    255 if p.lsb is None else p.lsb,
-                    255 if p.volume is None else p.volume,
-                    255 if p.pan is None else p.pan + 64,
-                    0,
-                    0,
-                )
-            selections.append(SELECTION.pack(document, instrument, midi, bank, key))
+            )
         records.append(
             selections[0]
-            + SONG.pack(s.id, text(s.name, 64), len(selections))
+            + SONG.pack(song.id, text(song.name, 64), len(selections))
             + b''.join(selections[1:])
         )
     sets = []
@@ -145,121 +207,219 @@ def encode(library: Library) -> bytes:
         entries = []
         for i, song in enumerate(s.songs):
             if s.entry_ids:
-                key = s.entry_ids[i]
+                occurrence = s.entry_ids[i]
             else:
-                key = next_id
+                occurrence = next_id
                 next_id += 1
-            entries.append(struct.pack('<II', key, song))
+            entries.append(struct.pack('<II', occurrence, song))
         sets.append(SET.pack(s.id, text(s.name, 64), len(entries)) + b''.join(entries))
     if next_id > 0xFFFFFFFF:
         raise ValueError('song IDs exhausted')
-    payload = struct.pack(
-        '<III', next_id, len(library.songs), len(library.setlists)
-    ) + b''.join(records + sets)
+    payload = (
+        struct.pack('<III', next_id, len(library.songs), len(library.setlists))
+        + b''.join(records + sets)
+        + b'CSP4'
+    )
+    if source:
+        payload += struct.pack('<I', len(source)) + source
     if len(payload) > 0xFFFFFFFF - 20:
         raise ValueError('song library exceeds the SD file format size')
     return payload
 
 
 def decode(data: bytes) -> Library:
-    if len(data) < 12:
+    if len(data) < 16:
         raise ValueError('invalid song library size')
     next_id, ns, nl = struct.unpack_from('<III', data)
-    if ns > (len(data) - 12) // (SONG.size + SELECTION.size):
+    if ns > (len(data) - 16) // (SONG.size + SELECTION.size):
         raise ValueError('invalid song library counts')
-
-    def string(value: bytes) -> str:
-        return value.split(b'\0')[0].decode('ascii')
-
-    def selection(offset: int) -> ProgramChange | Reference | Function:
-        if offset + SELECTION.size > len(data):
-            raise ValueError('truncated song patch')
-        document, instrument, midi, bank, key = SELECTION.unpack_from(data, offset)
-        output, channel, program, msb, lsb, volume, pan, function, pair = PATCH.unpack(
-            midi
-        )
-        if function:
-            if (
-                function != 1
-                or document[0]
-                or instrument[0]
-                or output != bytes(32)
-                or channel
-                or program
-                or (msb, lsb, volume, pan) != (255, 255, 255, 255)
-                or bank != 0xFFFFFFFF
-                or pair >= 64
-            ):
-                raise ValueError('invalid function patch')
-            return Function(
-                id=key,
-                function='stock-firmware',
-                exit_buttons='+'.join(
-                    c for i, c in enumerate('ABCDEF') if pair & (1 << i)
-                ),
-            )
-        if pair:
-            raise ValueError('invalid MIDI patch')
-        if document[0]:
-            return Reference(
-                id=key,
-                document=string(document),
-                instrument=string(instrument),
-                program=program + 1,
-                bank=None if bank == 0xFFFFFFFF else bank,
-            )
-        return ProgramChange(
-            id=key,
-            output=string(output),
-            channel=channel + 1,
-            program=program + 1,
-            msb=None if msb == 255 else msb,
-            lsb=None if lsb == 255 else lsb,
-            volume=None if volume == 255 else volume,
-            pan=None if pan == 255 else pan - 64,
-        )
-
-    songs = []
     offset = 12
+    positions = []
+    song_headers = []
     for _ in range(ns):
-        first = selection(offset)
-        offset += SELECTION.size
-        if offset + SONG.size > len(data):
+        if offset + SELECTION.size + SONG.size > len(data):
             raise ValueError('truncated song')
+        first = SELECTION.unpack_from(data, offset)
+        offset += SELECTION.size
         key, name, count = SONG.unpack_from(data, offset)
         offset += SONG.size
         if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
             raise ValueError('invalid song patch count')
-        patches = [first]
+        values = [first]
         for _ in range(count - 1):
-            patches.append(selection(offset))
+            values.append(SELECTION.unpack_from(data, offset))
             offset += SELECTION.size
-        songs.append(Song(id=key, name=string(name), patches=patches))
+        positions.append(values)
+        song_headers.append((key, _string(name)))
     sets = []
     for _ in range(nl):
         if offset + SET.size > len(data):
             raise ValueError('truncated setlist')
         key, name, count = SET.unpack_from(data, offset)
-        if count > (len(data) - offset - SET.size) // 8:
+        offset += SET.size
+        if count > (len(data) - offset) // 8:
             raise ValueError('invalid setlist count')
         entries = [
-            struct.unpack_from('<II', data, offset + SET.size + j * 8)
-            for j in range(count)
+            struct.unpack_from('<II', data, offset + j * 8) for j in range(count)
         ]
+        offset += count * 8
         sets.append(
             Setlist(
                 id=key,
-                name=string(name),
+                name=_string(name),
                 songs=[e[1] for e in entries],
                 entry_ids=[e[0] for e in entries],
             )
         )
-        offset += SET.size + count * 8
-    if offset != len(data):
-        raise ValueError('trailing song library data')
-    result = Library(next_id=next_id, songs=songs, setlists=sets)
-    encode(result)
+    if data[offset : offset + 4] != b'CSP4':
+        raise ValueError('missing song Patch sources')
+    offset += 4
+    sources = []
+    while offset < len(data):
+        if offset + 4 > len(data):
+            raise ValueError('truncated song Patch source')
+        length = struct.unpack_from('<I', data, offset)[0]
+        offset += 4
+        if length > len(data) - offset:
+            raise ValueError('truncated song Patch source')
+        value = data[offset : offset + length]
+        resolved.graph_offset(value)
+        sources.append(value)
+        offset += length
+    context: dict[str, object] = {'instruments': {}, 'patches': {}}
+    instruments: dict[str, object] = {}
+    definitions: dict[str, object] = {}
+    setups: list[object] = []
+    programs: list[object] = []
+    fonts: dict[str, str] = {}
+    source_fonts: list[dict[str, str]] = []
+    categories: dict[str, object] = {}
+    source_categories: list[set[str]] = []
+    for index, source in enumerate(sources):
+        exported = tomlkit.parse(resolved.export(source)).unwrap()
+        prefix = f'source-{index}-' if len(sources) > 1 else ''
+        renamed = {k: prefix + k for k in exported.get('fonts', {})}
+        source_fonts.append(renamed)
+        fonts.update({renamed[k]: v for k, v in exported.get('fonts', {}).items()})
+        category_names = set(exported.get('categories', {}))
+        source_categories.append(category_names)
+        for key, value in exported.get('categories', {}).items():
+            categories[prefix + key] = _rebind(value, prefix, renamed, category_names)
+        for key, value in exported.get('instruments', {}).items():
+            value = dict(value)
+            value['instrument'] = _qualified(prefix, value['instrument'], 31)
+            instruments[_qualified(prefix, key, 31)] = value
+        for value in exported.get('definitions', {}).get('setups', []):
+            value = dict(value)
+            value['instrument'] = _qualified(prefix, value['instrument'], 31)
+            setups.append(value)
+        for value in exported.get('definitions', {}).get('programs', []):
+            value = dict(value)
+            value['instrument'] = _qualified(prefix, value['instrument'], 31)
+            programs.append(_rebind(value, prefix, renamed, category_names))
+        for key, value in exported.get('patches', {}).items():
+            definitions[_qualified(prefix, key, 63)] = _rebind(
+                value, prefix, renamed, category_names
+            )
+    context['instruments'] = instruments
+    context['patches'] = definitions
+    context['fonts'] = fonts
+    context['categories'] = categories
+    if sources:
+        context['definitions'] = {'setups': setups, 'programs': programs}
+    songs = []
+    for (key, name), values in zip(song_headers, positions, strict=True):
+        patches = []
+        for document, reference, label, source, node, occurrence in values:
+            if document[0]:
+                if source != 0xFFFFFFFF:
+                    raise ValueError('invalid external song Patch')
+                value = {
+                    'type': 'reference',
+                    'document': _string(document),
+                    'patch': _string(reference),
+                }
+                if label[0] and _string(label) != value['patch']:
+                    value['display_name'] = _string(label)
+            else:
+                if source >= len(sources):
+                    raise ValueError('missing song Patch source')
+                value = resolved.patch(sources[source], node)
+                value = _rebind(
+                    value,
+                    f'source-{source}-' if len(sources) > 1 else '',
+                    source_fonts[source],
+                    source_categories[source],
+                )
+            value['id'] = occurrence
+            patches.append(value)
+        songs.append(Song(id=key, name=name, patches=patches))
+    result = Library.model_validate(
+        context | {'next_id': next_id, 'songs': songs, 'setlists': sets}
+    )
     return result
+
+
+def _string(value: bytes) -> str:
+    return value.split(b'\0')[0].decode('ascii')
+
+
+def _rebind(
+    value: dict[str, object], prefix: str, fonts: dict[str, str], categories: set[str]
+) -> dict[str, object]:
+    result = deepcopy(value)
+    work = [result]
+    while work:
+        item = work.pop()
+        if item.get('type') == 'program-change':
+            item['instrument'] = _qualified(prefix, str(item['instrument']), 31)
+        elif item.get('type') == 'reference' and not item.get('document'):
+            item['patch'] = _qualified(prefix, str(item['patch']), 63)
+        children = item.get('patches', [])
+        if isinstance(children, list):
+            work.extend(c for c in children if isinstance(c, dict))
+        tags = item.get('categories')
+        if isinstance(tags, list):
+            item['categories'] = [
+                prefix + c if isinstance(c, str) and c in categories else c
+                for c in tags
+            ]
+        style = item.get('style')
+        if (
+            isinstance(style, dict)
+            and isinstance(font := style.get('font_name'), str)
+            and font in fonts
+        ):
+            style['font_name'] = fonts[font]
+    return result
+
+
+def _qualified(prefix: str, name: str, maximum: int) -> str:
+    value = prefix + name
+    if len(value) <= maximum:
+        return value
+    suffix = f'-{crc32(name.encode()):08x}'
+    return prefix + name[: maximum - len(prefix) - len(suffix)] + suffix
+
+
+def references(library: Library) -> list[str]:
+    work = [p for s in library.songs for p in s.patches] + list(
+        library.patches.values()
+    )
+    result: set[str] = set()
+    while work:
+        item = work.pop()
+        if not isinstance(item, dict):
+            continue
+        if item.get('type') == 'reference' and isinstance(
+            document := item.get('document'), str
+        ):
+            validate_name(document)
+            result.add(document)
+        children = item.get('patches', [])
+        if isinstance(children, list):
+            work.extend(children)
+    return sorted(result)
 
 
 def download(client: transport.SetupClient) -> bytes:
@@ -267,7 +427,7 @@ def download(client: transport.SetupClient) -> bytes:
     if (
         len(response) != 4
         or response[:2] != ['CNTRL', 'SONGS']
-        or not 12 <= int(response[2]) <= 0xFFFFFFFF - 20
+        or not 16 <= int(response[2]) <= 0xFFFFFFFF - 20
     ):
         raise ValueError('invalid song library response')
     length = int(response[2])
@@ -290,24 +450,35 @@ def run(command: Copy | Download) -> None:
     from . import cli
 
     if isinstance(command, Copy):
-        library = Library.model_validate(
-            tomlkit.parse(command.document.read_text()).unwrap()
+        library = Library.model_validate(compiler.read_document(command.document))
+        target = (
+            models.Target.model_validate(compiler.read_document(command.target))
+            if command.target is not None
+            else None
         )
-        data = encode(library)
+        companion_names = references(library)
+        companions = {
+            n: compiler.read_document(command.document.parent / (n + '.toml'))
+            for n in companion_names
+        }
+        index = 0
+        while index < len(companion_names):
+            for name in cli.document_references(companions[companion_names[index]]):
+                if name not in companions:
+                    validate_name(name)
+                    companions[name] = compiler.read_document(
+                        command.document.parent / (name + '.toml')
+                    )
+                    companion_names.append(name)
+            index += 1
+        assets: dict[int, bytes] = {}
+        data = encode(library, target, companions, assets)
         if not command.overwrite:
             with transport.SerialConnection(command.port) as connection:
                 existing = decode(download(transport.SetupClient(connection)))
             if existing.songs or existing.setlists:
                 raise ValueError('song library exists; use --overwrite')
-        references = sorted(
-            {
-                p.document
-                for s in library.songs
-                for p in s.patches
-                if isinstance(p, Reference)
-            }
-        )
-        if references:
+        if companion_names:
             if command.target is None:
                 raise ValueError('reference imports require --target')
             # The companion setup documents are copied with their font assets.
@@ -316,7 +487,7 @@ def run(command: Copy | Download) -> None:
                     document=[
                         f'{n.replace("=", "==")}='
                         f'{command.document.parent / (n + ".toml")}'
-                        for n in references
+                        for n in companion_names
                     ],
                     target=[str(command.target)],
                     port=command.port,
@@ -325,6 +496,8 @@ def run(command: Copy | Download) -> None:
             )
         with transport.SerialConnection(command.port) as connection:
             client = transport.SetupClient(connection)
+            for key, font in assets.items():
+                client.copy_font(key, font)
             client.ok(
                 f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} '
                 f'{int(command.overwrite)}'
@@ -341,26 +514,24 @@ def run(command: Copy | Download) -> None:
         if destination.exists():
             raise ValueError(f'{destination}: already exists')
         with transport.SerialConnection(command.port) as connection:
-            library = decode(download(transport.SetupClient(connection)))
-        references = sorted(
-            {
-                p.document
-                for s in library.songs
-                for p in s.patches
-                if isinstance(p, Reference)
-            }
-        )
-        if references:
+            client = transport.SetupClient(connection)
+            library = decode(download(client))
+            for path in library.fonts.values():
+                key = int(Path(path).stem, 16)
+                cli.save_font(command.directory, key, client.download_font(key))
+        companion_names = references(library)
+        if companion_names:
             cli.run_setup(
                 cli.Download(
-                    names=references, directory=command.directory, port=command.port
+                    names=companion_names,
+                    directory=command.directory,
+                    port=command.port,
                 )
             )
         destination.write_text(tomlkit.dumps(library.model_dump(exclude_none=True)))
         print(destination)
 
 
-PATCH = struct.Struct('<32s8B')
-SELECTION = struct.Struct('<64s32s40sII')
+SELECTION = struct.Struct('<64s64s64sIII')
 SONG = struct.Struct('<I64sI')
 SET = struct.Struct('<I64sI')

@@ -36,7 +36,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 16
+    assert compiler.HEADER.unpack_from(result)[1] == compiler.DOCUMENT_VERSION
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
@@ -217,7 +217,7 @@ def test_invalid_brightness_is_rejected(
         compiler.compile_show(show, definitions, [], target)
 
 
-def test_toml_json_and_expanded_shorthand_agree(
+def test_toml_json_and_explicit_patch_tables_agree(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
     import tomlkit
@@ -227,12 +227,28 @@ def test_toml_json_and_expanded_shorthand_agree(
         toml, definitions, [], target
     ) == compiler.compile_show(show, definitions, [], target)
     assert compiler.normalize_patch(
-        {'patch': ':a:12:::0', 'volume': 100, 'name': 'Flute'}
+        {
+            'volume': 100,
+            'name': 'Flute',
+            'type': 'program-change',
+            'instrument': 'a',
+            'program': 12,
+            'bank': 0,
+        }
     ) == models.ProgramChange(
-        instrument='a', program=12, bank=0, volume=100, name='Flute'
+        type='program-change',
+        instrument='a',
+        program=12,
+        bank=0,
+        volume=100,
+        name='Flute',
     )
-    first = compiler.normalize_patch({'patch': '|a|Name:.*'})
-    second = compiler.normalize_patch({'patch': ':a:^12$'})
+    first = compiler.normalize_patch(
+        {'type': 'program-change', 'instrument': 'a', 'program': 'Name:.*'}
+    )
+    second = compiler.normalize_patch(
+        {'type': 'program-change', 'instrument': 'a', 'program': '^12$'}
+    )
     assert isinstance(first, models.ProgramChange) and first.program == 'Name:.*'
     assert isinstance(second, models.ProgramChange) and second.program == '^12$'
 
@@ -241,9 +257,9 @@ def test_toml_json_and_expanded_shorthand_agree(
     'value',
     [
         {'patch': ':a:12:100', 'volume': 100},
-        {'patch': ':a:12:::-'},
-        {'patch': ':a:129'},
-        {'patch': ':a:0'},
+        {'type': 'program-change', 'instrument': 'a', 'program': 12, 'bank': '-'},
+        {'type': 'program-change', 'instrument': 'a', 'program': 129},
+        {'type': 'program-change', 'instrument': 'a', 'program': 0},
         {'patch': ':a:1:2:3:4:5'},
         {'patch': ':'},
     ],
@@ -256,20 +272,26 @@ def test_invalid_shorthand_is_rejected(value: object) -> None:
 def test_reports_errors_across_all_patch_entries(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['patches'] = {
+    show['groups'] = {
         'wind': [
-            {'instrument': 'a', 'program': 0, 'volume': 128, 'pan': 64},
-            {'patch': ':a:[invalid'},
-            {'patch': ':missing:1'},
-            {'patch': ':a:no match'},
-            {'patch': ':a:12', 'name': '☃'},
-            {'patch': ':a:1', 'bank': 999},
+            {
+                'type': 'program-change',
+                'instrument': 'a',
+                'program': 0,
+                'volume': 128,
+                'pan': 64,
+            },
+            {'type': 'program-change', 'instrument': 'a', 'program': '[invalid'},
+            {'type': 'program-change', 'instrument': 'missing', 'program': 1},
+            {'type': 'program-change', 'instrument': 'a', 'program': 'no match'},
+            {'name': '☃', 'type': 'program-change', 'instrument': 'a', 'program': 12},
+            {'bank': 999, 'type': 'program-change', 'instrument': 'a', 'program': 1},
         ]
     }
     with pytest.raises(compiler.CompilationError) as failure:
         compiler.compile_show(show, definitions, [], target)
     message = str(failure.value)
-    for index in range(1, 7):
+    for index in range(6):
         assert f'wind[{index}]' in message
     assert 'volume' in message and 'pan' in message
     assert '☃' in message and 'bank 999' in message
@@ -283,7 +305,9 @@ def test_zero_matches_always_fail(
     take_first: bool,
 ) -> None:
     show['take_first_match'] = take_first
-    show['patches'] = {'wind': [{'patch': ':a:absent'}]}
+    show['groups'] = {
+        'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'absent'}]
+    }
     with pytest.raises(compiler.CompilationError, match='no patch matches'):
         compiler.compile_show(show, definitions, [], target)
 
@@ -308,7 +332,9 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
             },
         ]
     }
-    show['patches'] = {'wind': [{'patch': ':a:Flute'}]}
+    show['groups'] = {
+        'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'Flute'}]
+    }
     with pytest.raises(compiler.CompilationError, match='multiple matches'):
         compiler.compile_show(show, definitions, [table], target)
     show['take_first_match'] = True
@@ -316,9 +342,15 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
     patch_offset = 76 + 2 * 68 + 68
     assert data[patch_offset + 4 : patch_offset + 7] == bytes([8, 1, 2])
     show['take_first_match'] = False
-    show['patches'] = {'wind': [{'patch': ':a:Flute', 'bank': 0}]}
+    show['groups'] = {
+        'wind': [
+            {'bank': 0, 'type': 'program-change', 'instrument': 'a', 'program': 'Flute'}
+        ]
+    }
     assert compiler.compile_show(show, definitions, [table], target) == data
-    show['patches'] = {'wind': [{'patch': ':a:^Flute$'}]}
+    show['groups'] = {
+        'wind': [{'type': 'program-change', 'instrument': 'a', 'program': '^Flute$'}]
+    }
     with pytest.raises(compiler.CompilationError, match='no patch matches'):
         compiler.compile_show(show, definitions, [table], target)
 
@@ -353,9 +385,10 @@ def test_display_name_precedence_preserves_original_and_round_trips(
             }
         ]
     }
-    show['patches'] = {
+    show['groups'] = {
         'wind': [
             {
+                'type': 'program-change',
                 'instrument': 'a',
                 'program': selector,
                 'display_name': patch_label,
@@ -370,7 +403,7 @@ def test_display_name_precedence_preserves_original_and_round_trips(
     program = exported['definitions']['programs'][0]
     assert program['name'] == 'Trumpet 2'
     assert program.get('display_name') == program_label
-    assert exported['patches']['wind'][0].get('display_name') == patch_label
+    assert exported['groups']['wind'][0].get('display_name') == patch_label
     assert compiler.compile_show(exported, {'setups': []}, [], target) == data
 
 
@@ -390,21 +423,35 @@ def test_two_show_labels_share_one_program_description(
             }
         ],
     )
-    show['patches'] = {
+    show['groups'] = {
         'wind': [
-            {'patch': ':a:Trumpet', 'display_name': 'Opening solo'},
-            {'patch': ':a:Trumpet', 'display_name': 'Encore'},
+            {
+                'display_name': 'Opening solo',
+                'type': 'program-change',
+                'instrument': 'a',
+                'program': 'Trumpet',
+            },
+            {
+                'display_name': 'Encore',
+                'type': 'program-change',
+                'instrument': 'a',
+                'program': 'Trumpet',
+            },
         ]
     }
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert len(exported['definitions']['programs']) == 1
-    assert [p['display_name'] for p in exported['patches']['wind']] == [
+    assert [p['display_name'] for p in exported['groups']['wind']] == [
         'Opening solo',
         'Encore',
     ]
     assert compiler.compile_show(exported, {}, [], target) == data
-    show['patches'] = {'wind': [{'patch': ':a:Muted Trumpet'}]}
+    show['groups'] = {
+        'wind': [
+            {'type': 'program-change', 'instrument': 'a', 'program': 'Muted Trumpet'}
+        ]
+    }
     with pytest.raises(compiler.CompilationError, match='no patch matches'):
         compiler.compile_show(show, {}, [], target)
 
@@ -424,7 +471,9 @@ def test_display_override_does_not_require_rendering_original_name(
             }
         ]
     }
-    show['patches'] = {'wind': [{'patch': ':a:1'}]}
+    show['groups'] = {
+        'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 1}]
+    }
     data = compiler.compile_show(show, definitions, [table], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['definitions']['programs'][0]['name'] == original
@@ -439,7 +488,16 @@ def test_name_cannot_override_known_synthesizer_name(
             {'instrument': 'synth', 'setup': 'stock', 'program': 1, 'name': 'Trumpet 2'}
         ]
     }
-    show['patches'] = {'wind': [{'patch': ':a:1', 'name': 'Opening solo'}]}
+    show['groups'] = {
+        'wind': [
+            {
+                'name': 'Opening solo',
+                'type': 'program-change',
+                'instrument': 'a',
+                'program': 1,
+            }
+        ]
+    }
     with pytest.raises(compiler.CompilationError, match='use display_name'):
         compiler.compile_show(show, definitions, [table], target)
 
@@ -448,7 +506,9 @@ def test_table_conflicts_are_collected_and_missing_metadata_is_filled(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
     base = {'instrument': 'synth', 'setup': 'stock', 'program': 1}
-    show['patches'] = {'wind': [{'patch': ':a:Flute'}]}
+    show['groups'] = {
+        'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'Flute'}]
+    }
     first = {'patches': [dict(base, tags=['wind'])]}
     second = {'patches': [dict(base, name='Flute', tags=['wind', 'acoustic'])]}
     compiler.compile_show(show, definitions, [first, second], target)
@@ -463,12 +523,18 @@ def test_table_conflicts_are_collected_and_missing_metadata_is_filled(
 def test_bankless_pc_is_not_bank_zero_and_omission_sends_no_bank(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['patches'] = {'wind': [{'patch': ':a:12'}]}
+    show['groups'] = {
+        'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 12}]
+    }
     data = compiler.compile_show(show, definitions, [], target)
     offset = 76 + 2 * 68 + 68
     assert data[offset + 4 : offset + 9] == bytes([11, 255, 255, 255, 255])
     assert data[offset + 12 : offset + 17] == b'PC 12'
-    show['patches'] = {'wind': [{'patch': ':a:12:::0'}]}
+    show['groups'] = {
+        'wind': [
+            {'type': 'program-change', 'instrument': 'a', 'program': 12, 'bank': 0}
+        ]
+    }
     data = compiler.compile_show(show, definitions, [], target)
     assert data[offset + 5 : offset + 7] == bytes([1, 2])
     assert b'Bank 0 / PC 12' in data
@@ -477,7 +543,16 @@ def test_bankless_pc_is_not_bank_zero_and_omission_sends_no_bank(
 def test_capacity_and_all_display_fields_are_checked(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['patches'] = {'bad\ncategory': [{'patch': ':a:1', 'name': 'x' * 64}]}
+    show['groups'] = {
+        'bad\ncategory': [
+            {
+                'type': 'program-change',
+                'instrument': 'a',
+                'program': 1,
+                'name': 'x' * 64,
+            }
+        ]
+    }
     small = target.model_copy(update={'max_document_bytes': 100})
     with pytest.raises(compiler.CompilationError) as failure:
         compiler.compile_show(show, definitions, [], small)
@@ -498,11 +573,14 @@ def test_setup_sysex_files_are_not_read_or_encoded(
 def test_bad_category_does_not_hide_errors_in_other_categories(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['patches'] = {'bad': 1, 'wind': [{'patch': ':missing:12'}]}
+    show['groups'] = {
+        'bad': 1,
+        'wind': [{'type': 'program-change', 'instrument': 'missing', 'program': 12}],
+    }
     with pytest.raises(compiler.CompilationError) as failure:
         compiler.compile_show(show, definitions, [], target)
-    assert 'patches.bad' in str(failure.value)
-    assert 'patches.wind[1]' in str(failure.value)
+    assert 'groups.bad' in str(failure.value)
+    assert 'groups.wind[0]' in str(failure.value)
 
 
 def test_cli_compiles_and_reports_counts_and_routes(
@@ -537,7 +615,8 @@ def test_cli_does_not_write_binary_when_patches_have_errors(
     document = tmp_path / 'invalid.toml'
     document.write_text(
         '[instruments.a]\ninstrument="synth"\nsetup="stock"\nchannel=1\noutput="din"\n'
-        '[[patches.wind]]\npatch=":a:0"\n[[patches.wind]]\npatch=":a:129"\n'
+        '[[groups.wind]]\ntype="program-change"\ninstrument="a"\nprogram=0\n'
+        '[[groups.wind]]\ntype="program-change"\ninstrument="a"\nprogram=129\n'
     )
     output = tmp_path / 'show.bin'
     monkeypatch.setattr(
@@ -557,7 +636,7 @@ def test_cli_does_not_write_binary_when_patches_have_errors(
     )
     with pytest.raises(SystemExit) as failure:
         cli.main()
-    assert 'wind[1]' in str(failure.value) and 'wind[2]' in str(failure.value)
+    assert 'wind[0]' in str(failure.value) and 'wind[1]' in str(failure.value)
     assert not output.exists()
 
 

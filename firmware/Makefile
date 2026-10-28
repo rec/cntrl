@@ -3,6 +3,10 @@ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 .PHONY: test
 test:
 	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_patch_executor.cpp" -o "$(ROOT)/build/test_patch_executor"
+	"$(ROOT)/build/test_patch_executor" "$(ROOT)/test/actions.golden"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_patch_sources.cpp" -o "$(ROOT)/build/test_patch_sources"
+	"$(ROOT)/build/test_patch_sources" "$(ROOT)/test/actions.golden"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_actions.cpp" -o "$(ROOT)/build/test_actions"
 	"$(ROOT)/build/test_actions" "$(ROOT)/test/actions.golden"
 	mkdir -p "$(ROOT)/build"

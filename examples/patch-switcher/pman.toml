@@ -19,1282 +19,1538 @@ setup = "default"
 channel = 1
 output = "din"
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 1
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 2
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 3
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 4
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 5
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 7
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 8
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 9
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 10
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 11
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 12
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 13
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 14
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 15
 bank = 0
 
-[[patches.trumpet]]
+[[groups.trumpet]]
+type = 'program-change'
 instrument = "pman"
 program = 16
 bank = 0
 
-[[patches.clarinet]]
+[[groups.clarinet]]
+type = 'program-change'
 instrument = "pman"
 program = 6
 bank = 0
 
-[[patches.clarinet]]
+[[groups.clarinet]]
+type = 'program-change'
 instrument = "pman"
 program = 66
 bank = 0
 
-[[patches.clarinet]]
+[[groups.clarinet]]
+type = 'program-change'
 instrument = "pman"
 program = 95
 bank = 0
 
-[[patches.clarinet]]
+[[groups.clarinet]]
+type = 'program-change'
 instrument = "pman"
 program = 96
 bank = 0
 
-[[patches.clarinet]]
+[[groups.clarinet]]
+type = 'program-change'
 instrument = "pman"
 program = 104
 bank = 0
 
-[[patches.clarinet]]
+[[groups.clarinet]]
+type = 'program-change'
 instrument = "pman"
 program = 9
 bank = 1
 
-[[patches.clarinet]]
+[[groups.clarinet]]
+type = 'program-change'
 instrument = "pman"
 program = 37
 bank = 1
 
-[[patches.clarinet]]
+[[groups.clarinet]]
+type = 'program-change'
 instrument = "pman"
 program = 52
 bank = 1
 
-[[patches.trombone]]
+[[groups.trombone]]
+type = 'program-change'
 instrument = "pman"
 program = 17
 bank = 0
 
-[[patches.trombone]]
+[[groups.trombone]]
+type = 'program-change'
 instrument = "pman"
 program = 18
 bank = 0
 
-[[patches.trombone]]
+[[groups.trombone]]
+type = 'program-change'
 instrument = "pman"
 program = 19
 bank = 0
 
-[[patches.trombone]]
+[[groups.trombone]]
+type = 'program-change'
 instrument = "pman"
 program = 20
 bank = 0
 
-[[patches.trombone]]
+[[groups.trombone]]
+type = 'program-change'
 instrument = "pman"
 program = 21
 bank = 0
 
-[[patches.trombone]]
+[[groups.trombone]]
+type = 'program-change'
 instrument = "pman"
 program = 23
 bank = 0
 
-[[patches.trombone]]
+[[groups.trombone]]
+type = 'program-change'
 instrument = "pman"
 program = 24
 bank = 0
 
-[[patches.trombone]]
+[[groups.trombone]]
+type = 'program-change'
 instrument = "pman"
 program = 61
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 22
 bank = 0
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 71
 bank = 0
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 83
 bank = 0
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 89
 bank = 0
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 98
 bank = 0
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 99
 bank = 0
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 126
 bank = 0
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 112
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 113
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 114
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 115
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 116
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 117
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 118
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 119
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 120
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 121
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 123
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 124
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 125
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 126
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 127
 bank = 1
 
-[[patches.bass]]
+[[groups.bass]]
+type = 'program-change'
 instrument = "pman"
 program = 128
 bank = 1
 
-[[patches.horn]]
+[[groups.horn]]
+type = 'program-change'
 instrument = "pman"
 program = 25
 bank = 0
 
-[[patches.horn]]
+[[groups.horn]]
+type = 'program-change'
 instrument = "pman"
 program = 26
 bank = 0
 
-[[patches.horn]]
+[[groups.horn]]
+type = 'program-change'
 instrument = "pman"
 program = 27
 bank = 0
 
-[[patches.horn]]
+[[groups.horn]]
+type = 'program-change'
 instrument = "pman"
 program = 28
 bank = 0
 
-[[patches.horn]]
+[[groups.horn]]
+type = 'program-change'
 instrument = "pman"
 program = 29
 bank = 0
 
-[[patches.horn]]
+[[groups.horn]]
+type = 'program-change'
 instrument = "pman"
 program = 30
 bank = 0
 
-[[patches.horn]]
+[[groups.horn]]
+type = 'program-change'
 instrument = "pman"
 program = 101
 bank = 0
 
-[[patches.horn]]
+[[groups.horn]]
+type = 'program-change'
 instrument = "pman"
 program = 104
 bank = 1
 
-[[patches.tuba]]
+[[groups.tuba]]
+type = 'program-change'
 instrument = "pman"
 program = 31
 bank = 0
 
-[[patches.tuba]]
+[[groups.tuba]]
+type = 'program-change'
 instrument = "pman"
 program = 32
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 33
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 34
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 35
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 36
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 37
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 38
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 40
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 43
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 45
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 49
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 52
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 53
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 54
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 61
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 64
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 65
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 72
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 73
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 74
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 76
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 77
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 78
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 79
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 81
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 84
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 85
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 86
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 87
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 90
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 91
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 92
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 93
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 94
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 97
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 102
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 105
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 106
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 109
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 114
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 119
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 122
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 127
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 128
 bank = 0
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 1
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 2
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 3
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 4
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 5
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 6
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 7
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 8
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 10
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 11
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 12
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 13
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 14
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 15
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 16
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 17
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 18
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 21
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 26
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 28
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 29
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 30
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 31
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 39
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 43
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 44
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 46
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 47
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 48
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 49
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 50
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 51
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 54
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 55
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 56
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 57
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 58
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 59
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 60
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 62
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 63
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 64
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 65
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 66
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 67
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 68
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 69
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 70
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 71
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 72
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 73
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 74
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 75
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 76
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 77
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 78
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 79
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 80
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 81
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 82
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 83
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 84
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 85
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 86
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 87
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 88
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 89
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 90
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 91
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 94
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 95
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 96
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 97
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 98
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 99
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 100
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 101
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 102
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 103
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 105
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 106
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 107
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 108
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 109
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 110
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 111
 bank = 1
 
-[[patches.none]]
+[[groups.none]]
+type = 'program-change'
 instrument = "pman"
 program = 122
 bank = 1
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 39
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 41
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 42
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 44
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 46
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 47
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 48
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 50
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 51
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 55
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 56
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 57
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 58
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 59
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 60
 bank = 0
 
-[[patches.sax]]
+[[groups.sax]]
+type = 'program-change'
 instrument = "pman"
 program = 113
 bank = 0
 
-[[patches.flute]]
+[[groups.flute]]
+type = 'program-change'
 instrument = "pman"
 program = 62
 bank = 0
 
-[[patches.flute]]
+[[groups.flute]]
+type = 'program-change'
 instrument = "pman"
 program = 63
 bank = 0
 
-[[patches.flute]]
+[[groups.flute]]
+type = 'program-change'
 instrument = "pman"
 program = 67
 bank = 0
 
-[[patches.flute]]
+[[groups.flute]]
+type = 'program-change'
 instrument = "pman"
 program = 68
 bank = 0
 
-[[patches.flute]]
+[[groups.flute]]
+type = 'program-change'
 instrument = "pman"
 program = 69
 bank = 0
 
-[[patches.flute]]
+[[groups.flute]]
+type = 'program-change'
 instrument = "pman"
 program = 70
 bank = 0
 
-[[patches.flute]]
+[[groups.flute]]
+type = 'program-change'
 instrument = "pman"
 program = 75
 bank = 0
 
-[[patches.flute]]
+[[groups.flute]]
+type = 'program-change'
 instrument = "pman"
 program = 80
 bank = 0
 
-[[patches.pipe]]
+[[groups.pipe]]
+type = 'program-change'
 instrument = "pman"
 program = 82
 bank = 0
 
-[[patches.pipe]]
+[[groups.pipe]]
+type = 'program-change'
 instrument = "pman"
 program = 88
 bank = 0
 
-[[patches.pipe]]
+[[groups.pipe]]
+type = 'program-change'
 instrument = "pman"
 program = 110
 bank = 0
 
-[[patches.pipe]]
+[[groups.pipe]]
+type = 'program-change'
 instrument = "pman"
 program = 111
 bank = 0
 
-[[patches.pipe]]
+[[groups.pipe]]
+type = 'program-change'
 instrument = "pman"
 program = 112
 bank = 0
 
-[[patches.reed]]
+[[groups.reed]]
+type = 'program-change'
 instrument = "pman"
 program = 100
 bank = 0
 
-[[patches.reed]]
+[[groups.reed]]
+type = 'program-change'
 instrument = "pman"
 program = 103
 bank = 0
 
-[[patches.reed]]
+[[groups.reed]]
+type = 'program-change'
 instrument = "pman"
 program = 107
 bank = 0
 
-[[patches.reed]]
+[[groups.reed]]
+type = 'program-change'
 instrument = "pman"
 program = 108
 bank = 0
 
-[[patches.violin]]
+[[groups.violin]]
+type = 'program-change'
 instrument = "pman"
 program = 115
 bank = 0
 
-[[patches.violin]]
+[[groups.violin]]
+type = 'program-change'
 instrument = "pman"
 program = 116
 bank = 0
 
-[[patches.violin]]
+[[groups.violin]]
+type = 'program-change'
 instrument = "pman"
 program = 117
 bank = 0
 
-[[patches.violin]]
+[[groups.violin]]
+type = 'program-change'
 instrument = "pman"
 program = 118
 bank = 0
 
-[[patches.violin]]
+[[groups.violin]]
+type = 'program-change'
 instrument = "pman"
 program = 120
 bank = 0
 
-[[patches.violin]]
+[[groups.violin]]
+type = 'program-change'
 instrument = "pman"
 program = 121
 bank = 0
 
-[[patches.cello]]
+[[groups.cello]]
+type = 'program-change'
 instrument = "pman"
 program = 123
 bank = 0
 
-[[patches.cello]]
+[[groups.cello]]
+type = 'program-change'
 instrument = "pman"
 program = 124
 bank = 0
 
-[[patches.cello]]
+[[groups.cello]]
+type = 'program-change'
 instrument = "pman"
 program = 125
 bank = 0
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 19
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 20
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 22
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 23
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 24
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 25
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 27
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 32
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 33
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 34
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 35
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 36
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 38
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 40
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 41
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 42
 bank = 1
 
-[[patches.guitar]]
+[[groups.guitar]]
+type = 'program-change'
 instrument = "pman"
 program = 45
 bank = 1
 
-[[patches.synth]]
+[[groups.synth]]
+type = 'program-change'
 instrument = "pman"
 program = 53
 bank = 1
 
-[[patches.synth]]
+[[groups.synth]]
+type = 'program-change'
 instrument = "pman"
 program = 92
 bank = 1
 
-[[patches.synth]]
+[[groups.synth]]
+type = 'program-change'
 instrument = "pman"
 program = 93
 bank = 1

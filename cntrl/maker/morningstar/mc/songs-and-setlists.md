@@ -1,8 +1,9 @@
 # Songs and setlists
 
-The first implementation supports simple songs, an on-pedal song library and
-editable setlists. It lives on branch `codex/songs-and-setlists`. It has not been
-flashed or physically qualified. Song sections remain deferred as described in
+The implementation supports songs, an on-pedal song library and editable
+setlists. Song positions now use the unified Patch schema and CSG4 records. See
+[authoring, execution and required format changes](../../../../doc/patches.md).
+Hardware qualification of this format is pending. Song sections remain deferred as described in
 [the plan](../../../../plan/songs-and-setlists.md).
 
 ## On the pedal
@@ -14,7 +15,8 @@ Save as song and Save reference.
 In the ordinary patch browser, highlight a patch before opening the module.
 **Save as song** creates an inline song using that selection and its displayed
 name. No naming step is required. **Save reference** instead remembers the
-selected setup document, instrument alias, program and logical bank. Neither
+selected setup document and the named patch's stable key. An inline browser entry
+must be named before it can be saved as a live reference. Neither
 operation sends MIDI.
 
 Under Songs, C opens Rename song or Use selected patch. The latter replaces the
@@ -54,15 +56,16 @@ a separate sound-undo command.
 
 ## Inline and referenced selections
 
-Inline selections store output, MIDI channel, program, optional bank-select
-bytes, volume and pan. Editing the original setup does not change an inline song.
+Inline positions retain their compiled Patch source, including arbitrary MIDI,
+state changes, sequences and nested references. Editing the original setup does
+not replace this captured source. External references inside it still resolve
+their current saved source documents.
 
 A reference resolves the current saved source setup each time the song is
-recalled. Its key is the instrument alias, program and logical bank. Changes to
-that selection's route, channel, volume and pan therefore take effect on the next
-recall. Changing its key or deleting the document makes the reference unresolved.
-If multiple matching occurrences have different selections, recall fails as
-ambiguous. A missing or invalid reference never falls back to an old snapshot,
+recalled. Its identity is the setup document and a named Patch's stable key.
+Changes to the referenced Patch take effect on the next recall. Renaming its key
+or deleting the document makes the reference unresolved.
+A missing or invalid reference never falls back to an old snapshot,
 sends nothing, and does not advance the setlist.
 
 ## Computer files and transfer
@@ -70,15 +73,25 @@ sends nothing, and does not advance the setlist.
 A single TOML document contains the song library and its setlists. Example:
 
 ```toml
+[instruments.piano]
+instrument = 'piano'
+setup = 'default'
+output = 'din'
+channel = 1
+
+[[definitions.setups]]
+instrument = 'piano'
+name = 'default'
+
 [[songs]]
 id = 1
 name = 'One Love'
-patches = [{output = 'din', channel = 1, program = 12}]
+patches = [{type = 'program-change', instrument = 'piano', program = 12}]
 
 [[songs]]
 id = 2
 name = 'Linked sound'
-patches = [{document = 'pman', instrument = 'pman', program = 7, bank = 0}]
+patches = [{type = 'reference', document = 'pman', patch = 'clean'}]
 
 [[setlists]]
 id = 3
@@ -86,10 +99,10 @@ name = 'Tonight'
 songs = [1, 2, 1]
 ```
 
-Each song requires a nonempty ordered `patches` list. Each entry is an inline MIDI selection, a live reference, or a function. Channels and program numbers
-are one-based. Optional inline `msb`, `lsb` and `volume` are 0..127; `pan` is
--64..63. Omitted bank/controller values send no corresponding controller change.
-An omitted reference bank selects an unbanked source selection.
+Each song requires a nonempty ordered `patches` list of tagged Patch tables.
+Channels and program numbers are one-based. Program patches resolve logical
+bank mappings through their instrument context. A sequence at one position runs
+all its children on that activation; it does not add song positions.
 
 Song and setlist IDs must be positive and unique across the file. Occurrence IDs
 are allocated automatically. Downloads include `entry_ids` and `next_id`; retain
@@ -103,8 +116,8 @@ uv run --frozen cntrl songs copy songs.toml \
 uv run --frozen cntrl songs download ./downloaded --port /dev/cu.usbmodem144682801
 ```
 
-Copy requires `--overwrite` to replace an existing library. Referenced setup
-imports also require `--target`; an inline-only library does not need it. Referenced documents
+Copy requires `--overwrite` to replace an existing library and `--target` to
+compile its patches, including inline-only libraries. Referenced documents
 must accompany the library as `DOCUMENT.toml`, for example `pman.toml` beside
 `songs.toml`. They use the normal setup copy path, including font assets and its
 existing overwrite checks. Downloads include those documents and their fonts.
@@ -150,7 +163,13 @@ Names and patch-selection fields retain their existing format bounds.
 The payload begins with three little-endian 32-bit values: next ID, song count
 and setlist count. Song records follow. Each setlist has its ID, name and a 32-bit
 entry count followed by exactly that many occurrence/song ID pairs. There are no
-unused padded collection slots. Committed files use the `CSG3` envelope. Each song stores its first selection followed by its ID, name and patch count, then the remaining selections. Each selection has a persistent occurrence ID. Old CSG2 generations require export with the previous host and reimport in the new format; there is no legacy decoder.
+unused padded collection slots. Committed files use the `CSG4` envelope. Each song
+stores its first occurrence followed by its ID, name and position count, then
+the remaining occurrences. Each occurrence has a persistent ID and either a
+document/key reference or a root in an immutable compiled source document.
+A CSP4 appendix stores those source documents. Export preceding formats with
+the preceding host and author them using the new tagged schema before compiling;
+there is no legacy decoder.
 
 Saving and boot verification stream over the file, so their work grows with the
 amount of stored data. Import checks use repeated scans to validate identities
