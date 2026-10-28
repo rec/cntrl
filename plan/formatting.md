@@ -1,6 +1,8 @@
 # Display formatting in TOML
 
-Status: implemented in compiled document format 14; not deployed to the pedal. This replaces the CSS proposal and updates
+Status: implemented on main in compiled document format 14. Included in the
+combined firmware deployment recorded in the hardware documentation. This
+replaces the CSS proposal and updates
 [display-format.md](display-format.md), which records the current implementation.
 
 ## Goal

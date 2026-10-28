@@ -1,8 +1,8 @@
 # Songs and setlists
 
-Status: the first simple-song implementation is on branch
-`codex/songs-and-setlists`, with inline selections and references to other setup
-documents. Host tests and the combined firmware build pass; physical
+Status: the first simple-song implementation is integrated into main, with inline
+selections and references to other setup documents. Included in the combined
+firmware deployment; host tests and the combined firmware build pass. Physical
 qualification is pending. See the [controls, file format and limits](../cntrl/maker/morningstar/mc/songs-and-setlists.md).
 This develops the performance organization ideas in [features.md](features.md).
 

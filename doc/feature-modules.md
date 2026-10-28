@@ -1,7 +1,9 @@
 # Optional feature modules
 
-Status: initial MIDI cable-test module and static module menu implemented. The
-broader module organization below remains guidance for subsequent features.
+Status: the static module menu includes setup management, songs/setlists, Panic,
+the MIDI cable tester and the MIDI interface. Firmware-specific modules are
+registered by their target. The broader organization below remains guidance for
+subsequent features.
 
 ## Purpose
 
