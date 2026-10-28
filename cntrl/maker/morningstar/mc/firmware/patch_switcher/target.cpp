@@ -11,6 +11,9 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/setup_ui.h>
 #include <cntrl/midi_bridge.h>
 #include <cntrl/module_menu.h>
+#if CNTRL_ACTIONS
+#include <cntrl/actions.h>
+#endif
 #if CNTRL_PANIC
 #include <cntrl/panic.h>
 #endif
@@ -44,6 +47,9 @@ const char *outputs[] = {"din", "trs", "usb-device", "usb-host"};
 bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation);
 #endif
 class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink
+#if CNTRL_ACTIONS
+    , public cntrl::ActionOutputs
+#endif
 #if CNTRL_PANIC
     , public cntrl::PanicOutputs
 #endif
@@ -55,6 +61,24 @@ public:
 #if CNTRL_ORIGINAL_FIRMWARE
     bool supports_function(unsigned function) const override { return function == 1; }
     bool stock_firmware(uint8_t pair, const cntrl::SongContinuation *continuation = nullptr) override { return request_stock(pair, continuation); }
+#endif
+#if CNTRL_ACTIONS
+    cntrl::Actions actions{*this, *this};
+    unsigned action_capacity() const override { return 5; }
+    bool configuration_locked() const override { return actions.open(); }
+    bool available(const char *output) const override {
+        return !std::strcmp(output, "usb-device") ? usb_configuration != 0
+            : !std::strcmp(output, "usb-host") ? bool(host_midi) : supports(output);
+    }
+    bool send_action(unsigned owner, const char *output, const uint8_t *bytes, unsigned n) override {
+        unsigned route = 0;
+        while (route < 4 && std::strcmp(outputs[route], output)) ++route;
+        return route < 4 && available(output) && bridge_.owned_send(owner, route == 2 ? 6 : route == 3 ? 8 : route, bytes, n);
+    }
+    cntrl::midi::Bridge::Delivery action_delivery(unsigned owner) const override { return bridge_.delivery(owner); }
+    void cancel_action(unsigned owner) override { bridge_.cancel_owner(owner); }
+    void enter_actions(const cntrl::Document &document, uint8_t held) { bridge_.configure(false); actions.enter(document, held); }
+    void leave_actions() { bridge_.configure(interface_enabled_); }
 #endif
 #if CNTRL_PANIC
     cntrl::Panic panic{*this, *this};
@@ -110,6 +134,9 @@ public:
     bool output_idle() const override { return bridge_.idle(); }
     void set_usb_midi_interface(bool enabled) override {
         interface_enabled_ = enabled;
+#if CNTRL_ACTIONS
+        if (actions.open()) return;
+#endif
 #if CNTRL_PANIC
         if (panic.open()) return;
 #endif
@@ -244,6 +271,9 @@ public:
         else
 #endif
         bridge_.service(*this, now);
+#if CNTRL_ACTIONS
+        actions.tick();
+#endif
 #if CNTRL_MIDI_INTERFACE
         midi_interface.tick(millis());
 #endif
@@ -445,6 +475,9 @@ DMAMEM cntrl::Songs songs(song_files, board, song_sources);
 DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
 cntrl::SongsUi songs_ui(songs, board, song_sources);
 enum ModuleIndex { setups_module, songs_module,
+#if CNTRL_ACTIONS
+    actions_module,
+#endif
 #if CNTRL_PANIC
     panic_module,
 #endif
@@ -459,6 +492,9 @@ enum ModuleIndex { setups_module, songs_module,
 #endif
 };
 const char *const module_names[] = {"Setups", "Songs and setlists",
+#if CNTRL_ACTIONS
+    "Actions",
+#endif
 #if CNTRL_PANIC
     "Panic",
 #endif
@@ -493,6 +529,7 @@ bool append_boot_record(uint32_t value) {
     return words[state.next * 2] == value && words[state.next * 2 + 1] == ~value;
 }
 bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
+    if (board.configuration_locked()) return false;
     if (firmware_visit_stage || !valid_exit_pair(pair) || documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
     auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
     if (!can_enter_stock(state) || (continuation && !card.ready)) return false;
@@ -587,6 +624,9 @@ cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof
 bool module_controls_locked = false;
 bool feature_open() {
     return module_menu.open() || setup_ui.open() || songs_ui.open()
+#if CNTRL_ACTIONS
+        || board.actions.open()
+#endif
 #if CNTRL_PANIC
         || board.panic.open()
 #endif
@@ -645,6 +685,7 @@ void storage_info(bool scan) {
 
 void midi_status(unsigned route) { board.midi_status(route); }
 bool asset_command(const char *line) {
+    if (board.configuration_locked()) { board.reply("CNTRL ERROR close-actions-first"); return true; }
     if (!std::strncmp(line, "CNTRL SONGS ", 12)) {
         if (songs_ui.open()) { board.reply("CNTRL ERROR close-song-editor"); return true; }
         return songs_transfer.command(line, millis());
@@ -692,6 +733,9 @@ void poll_target() {
 #endif
         if (!consumed) {
             for (unsigned i = 0; i < 6; ++i) {
+#if CNTRL_ACTIONS
+                if (board.actions.open() && (events[i] & release_event)) board.actions.button(i, false);
+#endif
                 if (module_controls_locked) continue;
                 if (module_menu.open()) {
                     int selected = module_menu.button(i, events[i] & press_event);
@@ -700,6 +744,13 @@ void poll_target() {
                         if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) { songs_ui.enter(); module_controls_locked = true; }
                         else module_menu.enter();
                     }
+#if CNTRL_ACTIONS
+                    else if (selected == actions_module) {
+                        if (!documents.busy() && !documents.dirty() && !songs_transfer.busy() && board.output_idle() && documents.document().valid()) {
+                            board.enter_actions(documents.document(), pressed); module_controls_locked = true;
+                        } else module_menu.enter();
+                    }
+#endif
 #if CNTRL_PANIC
                     else if (selected == panic_module) {
                         if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) {
@@ -756,6 +807,11 @@ void poll_target() {
                         else if (i == 5) { original_firmware.leave(); module_menu.enter(); module_controls_locked = true; }
                     }
 #endif
+#if CNTRL_ACTIONS
+                } else if (board.actions.open()) {
+                    if (events[i] & press_event) board.actions.button(i, true);
+                    if (events[i] & release_event) board.actions.button(i, false);
+#endif
                 } else if (songs_ui.open()) {
                     if (events[i] & press_event) songs_ui.button(i, true);
                     if (!songs_ui.open()) { documents.redraw(); module_controls_locked = true; }
@@ -796,5 +852,13 @@ void poll_target() {
     songs.tick();
     if (board.reply_ready()) font_files.poll(now, board);
     board.poll();
+#if CNTRL_ACTIONS
+    static bool actions_open = false;
+    if (actions_open && !board.actions.open()) {
+        board.leave_actions(); module_menu.enter(); module_controls_locked = true;
+        if (board.actions.abandoned()) board.error("Action state unknown");
+    }
+    actions_open = board.actions.open();
+#endif
     board.display(now, documents.busy() || feature_open());
 }

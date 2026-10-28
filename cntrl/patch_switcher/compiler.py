@@ -9,7 +9,7 @@ from zlib import crc32
 import tomlkit
 from pydantic import ValidationError
 
-from . import display, models
+from . import actions, display, models
 
 
 class CompilationError(ValueError):
@@ -131,6 +131,7 @@ def compile_show(
     name_records: list[bytes] = []
     program_names: dict[tuple[str, str, int, int | None], list[str | None]] = {}
     display_patches: list[display.DisplayPatch] = []
+    action_names: list[str | None] = []
     for category, values in show.patches.items():
         category_text = _text(
             category, 64, target, f'patches.{category}', errors, unicode=True
@@ -160,6 +161,7 @@ def compile_show(
                     )
                     continue
                 label = patch.display_name or patch.name or patch.function
+                action_names.append(None)
                 patches.append(
                     struct.pack(
                         '<HHBBBBBBBB64s',
@@ -287,6 +289,7 @@ def compile_show(
                 display_name = (
                     f'PC {program}' if bank is None else f'Bank {bank} / PC {program}'
                 )
+            action_names.append(name)
             patches.append(
                 struct.pack(
                     '<HHBBBBB3x64s',
@@ -360,9 +363,13 @@ def compile_show(
     screen_records: list[bytes] = []
     references: list[list[int]] = []
     display_records = b''
+    action_records: list[bytes] = []
     try:
+        action_records, action_views = actions.compile_actions(
+            show, instruments, patches, action_names, target
+        )
         screen_records, references, display_records = display.compile_display(
-            show, display_patches, target, generated
+            show, display_patches + action_views, target, generated
         )
         if generated:
             from ..maker.morningstar.mc.font_assets import validate_budget
@@ -372,7 +379,11 @@ def compile_show(
         errors.append(str(error))
     if assets is not None:
         assets.update(generated)
-    if len(references) == len(patches):
+    if len(references) == len(patches) + len(action_records):
+        action_records = [
+            r[:-2] + struct.pack('<H', references[len(patches) + i][1])
+            for i, r in enumerate(action_records)
+        ]
         patches = [
             p + struct.pack('<3H', *references[i]) for i, p in enumerate(patches)
         ]
@@ -421,6 +432,7 @@ def compile_show(
     body += metadata + b''.join(identities + mappings)
     body += b''.join(struct.pack('<I', min(b, 0xFFFFFFFF)) for b in logical_banks)
     body += b'CNAM' + b''.join(name_records)
+    body += struct.pack('<4sH', b'CACT', len(action_records)) + b''.join(action_records)
     body += display_records
     if len(body) + HEADER.size > target.max_document_bytes:
         errors.append(
@@ -527,4 +539,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHH')
-DOCUMENT_VERSION = 15
+DOCUMENT_VERSION = 16

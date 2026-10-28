@@ -1,11 +1,12 @@
 #pragma once
 #include "hardware.h"
+#include "midi_bridge.h"
 #include <cstring>
 #include <cstdio>
 
 namespace cntrl {
 constexpr unsigned metadata_header_size = 8;
-constexpr unsigned document_version = 15;
+constexpr unsigned document_version = 16;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -77,11 +78,58 @@ public:
             if (end + size > length) return false;
             end += size;
         }
+        if (end + 6 > length || std::memcmp(bytes + end, "CACT", 4)) return false;
+        unsigned action_start = end + 6, action_count = u16(bytes + end + 4);
+        if (action_count > hardware.action_capacity() || action_start + action_count * 100 > length) return false;
+        unsigned buttons = 0;
+        for (unsigned i = 0; i < action_count; ++i) {
+            const uint8_t *a = bytes + action_start + i * 100;
+            if (a[0] >= 5 || a[1] > 3 || u16(a + 2) >= ni || !label_valid(a + 34, 64) || (buttons & (1u << a[0]))) return false;
+            buttons |= 1u << a[0];
+            unsigned channel = bytes[76 + u16(a + 2) * 68 + 64];
+            if (!(a[1] & 2)) {
+                if (u16(a + 32) >= ni) return false;
+                const uint8_t *off = bytes + 76 + u16(a + 32) * 68;
+                if (off[64] != channel || std::memcmp(off + 32, bytes + 76 + u16(a + 2) * 68 + 32, 32)) return false;
+            }
+            for (unsigned s = 0; s < 2; ++s) {
+                const uint8_t *b = a + 6 + s * 14;
+                if (a[1] & 2) {
+                    if (a[4 + s] || u16(b) >= np) return false;
+                    const uint8_t *p = bytes + 76 + ni * 68 + nc * 68 + u16(b) * 82;
+                    if (u16(p) >= ni) return false;
+                    const uint8_t *instrument = bytes + 76 + u16(p) * 68;
+                    if (instrument[64] != channel || std::memcmp(instrument + 32, bytes + 76 + u16(a + 2) * 68 + 32, 32)) return false;
+                    continue;
+                }
+                if (!midi::batch_valid(b, a[4 + s])) return false;
+                if (a[4 + s] != 3 || b[0] != 0xb0) return false;
+            }
+        }
+        end = action_start + action_count * 100;
+        auto controls = [&](const uint8_t *a, unsigned controller) {
+            for (unsigned s = 0; s < 2; ++s) {
+                const uint8_t *b = a + 6 + s * 14;
+                if (!(a[1] & 2)) { if (b[1] == controller) return true; continue; }
+                const uint8_t *p = bytes + 76 + ni * 68 + nc * 68 + u16(b) * 82;
+                if ((controller == 0 && p[5] != 255) || (controller == 32 && p[6] != 255)
+                    || (controller == 7 && p[7] != 255) || (controller == 10 && p[8] != 255)) return true;
+            }
+            return false;
+        };
+        for (unsigned i = 0; i < action_count; ++i) for (unsigned j = 0; j < i; ++j) {
+            const uint8_t *a = bytes + action_start + i * 100, *b = bytes + action_start + j * 100;
+            const uint8_t *x = bytes + 76 + u16(a + 2) * 68, *y = bytes + 76 + u16(b + 2) * 68;
+            if (x[64] != y[64] || std::memcmp(x + 32, y + 32, 32)) continue;
+            if ((a[1] & 2) && (b[1] & 2)) return false;
+            for (unsigned c = 0; c < 128; ++c) if (controls(a, c) && controls(b, c)) return false;
+        }
         if (end + 16 > length || std::memcmp(bytes + end, "CDSP", 4)) return false;
         unsigned styles = end + 16, ns = u16(bytes + end + 4), pages = u16(bytes + end + 6);
         unsigned nt = u16(bytes + end + 8), page_bytes = u16(bytes + end + 10);
         unsigned page_start = styles + ns * 16, texts = page_start + page_bytes;
         if (!pages || texts > length) return false;
+        for (unsigned i = 0; i < action_count; ++i) if (u16(bytes + action_start + i * 100 + 98) >= pages) return false;
         for (unsigned i = 0; i < ns; ++i)
             if (!graphics_valid(bytes + styles + i * 16, hardware)) return false;
         unsigned cursor = page_start;
@@ -91,7 +139,7 @@ public:
             if (cursor + count * 8 > texts) return false;
             for (unsigned j = 0; j < count; ++j, cursor += 8) {
                 const uint8_t *p = bytes + cursor;
-                if ((p[0] > 7 && (p[0] < 16 || p[0] > 21) && p[0] != 255)
+                if ((p[0] > 7 && (p[0] < 16 || p[0] > 22) && p[0] != 255)
                     || p[1] > 1 || u16(p + 2) >= ns || u16(p + 6) >= nt) return false;
                 const uint8_t *g = bytes + styles + u16(p + 2) * 16;
                 if (u16(p + 4) < g[2] || u16(p + 4) >= hardware.display_width() - g[2]) return false;
@@ -168,9 +216,13 @@ public:
         if (next != np) return false;
         data_ = bytes; length_ = length; instruments_ = ni; categories_ = nc; patches_ = np;
         styles_ = styles; pages_ = page_start; texts_ = texts;
+        actions_ = action_start; action_count_ = action_count;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
+    unsigned actions() const { return action_count_; }
+    const uint8_t *action(unsigned i) const { return data_ + actions_ + i * 100; }
+    unsigned display_metadata() const { return actions_ + action_count_ * 100; }
     unsigned length() const { return length_; }
     const uint8_t *data() const { return data_; }
     unsigned categories() const { return categories_; }
@@ -201,6 +253,9 @@ public:
     }
     void page(Pane &view, unsigned index, unsigned slot, bool already_sent) const {
         unsigned page = u16(patch(index) + 76 + slot * 2);
+        page_record(view, page, index, already_sent);
+    }
+    void page_record(Pane &view, unsigned page, unsigned index, bool already_sent, const char *state = "") const {
         const uint8_t *p = data_ + pages_;
         while (page--) p += 1 + p[0] * 8;
         unsigned count = *p++;
@@ -208,9 +263,10 @@ public:
             TextLine &line = view.lines[i];
             line.graphics = read_graphics(data_ + styles_ + u16(p + 2) * 16);
             line.x = u16(p + 4);
-            line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 21);
+            line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 22);
             line.stippled = already_sent && p[1];
-            field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6));
+            if (p[0] == 22) std::snprintf(line.text, sizeof(line.text), "%s", state);
+            else field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6));
         }
     }
     const uint8_t *instrument(unsigned i) const { return data_ + 76 + i * 68; }
@@ -256,5 +312,6 @@ private:
     const uint8_t *data_ = nullptr;
     unsigned length_ = 0, instruments_ = 0, categories_ = 0, patches_ = 0;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
+    unsigned actions_ = 0, action_count_ = 0;
 };
 } // namespace cntrl

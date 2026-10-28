@@ -3,6 +3,9 @@ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 .PHONY: test
 test:
 	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_actions.cpp" -o "$(ROOT)/build/test_actions"
+	"$(ROOT)/build/test_actions" "$(ROOT)/test/actions.golden"
+	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" \
 		-fsanitize=address,undefined -fno-omit-frame-pointer \
 		"$(ROOT)/test/test_panic.cpp" -o "$(ROOT)/build/test_panic"

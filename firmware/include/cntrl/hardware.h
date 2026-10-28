@@ -43,6 +43,8 @@ struct Hardware {
     virtual bool supports_function(unsigned) const { return false; }
     virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
     virtual bool output_idle() const { return true; }
+    virtual unsigned action_capacity() const { return 0; }
+    virtual bool configuration_locked() const { return false; }
     virtual bool supports(const char *output) const = 0;
     virtual bool supports_font(unsigned font, unsigned size) const = 0;
     virtual bool supports_font_asset(uint32_t, unsigned) const { return false; }

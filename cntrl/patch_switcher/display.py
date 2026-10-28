@@ -60,7 +60,26 @@ def compile_display(
             patch.program_categories + patch.categories, show.categories
         )
         for window in windows:
-            page = show.pages[window.page]
+            page = (
+                show.pages.get(
+                    'actions',
+                    models.Page(fields=['action.name', 'action.mode', 'action.state']),
+                )
+                if 'action.name' in patch.values
+                else show.pages[window.page]
+            )
+            if 'action.name' in patch.values and (
+                len(page.fields) > 3
+                or any(
+                    not n.startswith('action.')
+                    and n not in show.parameters
+                    and FIELDS.get(n) not in range(16, 22)
+                    for n in page.fields
+                )
+            ):
+                raise ValueError(
+                    'action pages support at most three action or parameter fields'
+                )
             pad = (
                 window.pad
                 if window.pad is not None
@@ -95,7 +114,7 @@ def compile_display(
                         f'field {name}: display text must contain at most '
                         '63 UTF-8 bytes and no control characters'
                     )
-                content = name in PATCH_FIELDS
+                content = name in PATCH_FIELDS or name.startswith('action.')
                 style = merge_style(
                     base,
                     window.style,
@@ -121,7 +140,7 @@ def compile_display(
             instances.append(lines)
             for j in lines:
                 code, text, style, pad, _, stipple = requests[j]
-                requests[j] = (code, text, style, pad, max(1, len(lines)), stipple)
+                requests[j] = (code, text, style, pad, max(6 if 'action.name' in patch.values else 1, len(lines)), stipple)
     from ..maker.morningstar.mc.font_assets import Preparation
 
     prepared = Preparation(show, target, requests, contexts)
@@ -263,6 +282,9 @@ def field_value(
 
 
 def read_source(data: bytes, offset: int) -> dict[str, object]:
+    if data[offset : offset + 4] != b'CACT' or offset + 6 > len(data):
+        raise ValueError('missing action metadata')
+    offset += 6 + struct.unpack_from('<H', data, offset + 4)[0] * 100
     if offset + HEADER.size > len(data):
         raise ValueError('truncated display metadata')
     magic, styles, pages, texts, page_size, source_size = HEADER.unpack_from(
@@ -283,7 +305,7 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
 
 MAX_LINES = 16
 CONSTANT = 255
-DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21)
+DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22)
 WINDOW_NAMES = ('undo', 'sent', 'next')
 LINE = struct.Struct('<BBHHH')
 HEADER = struct.Struct('<4sHHHHI')
@@ -297,6 +319,10 @@ PATCH_FIELDS = (
     'instrument',
 )
 FIELDS = {
+    'action.name': 255,
+    'action.mode': 255,
+    'action.button': 255,
+    'action.state': 22,
     'group.name': 0,
     'categories': CONSTANT,
     'display_name': 1,
@@ -314,6 +340,7 @@ FIELDS = {
     'transition_ms': 21,
 }
 SOURCE_FIELDS = (
+    'actions',
     'style',
     'pad',
     'contrast',

@@ -93,6 +93,11 @@ public:
         if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || patch >= d.patches() || field > 7) return false;
         uint8_t *p = staging_ + (d.patch(patch) - staging_);
         if (u16(p) == 65535 && field <= 4) return false;
+        uint8_t previous_patch[82], previous_header[28], previous_bank[4];
+        std::memcpy(previous_patch, p, 82); std::memcpy(previous_header, staging_, 28);
+        std::memcpy(previous_bank, d.bank(patch), 4);
+        uint8_t *channel = u16(p) == 65535 ? nullptr : staging_ + (d.instrument(u16(p)) - staging_) + 64;
+        uint8_t previous_channel = channel ? *channel : 0;
         int64_t old = edit_value(patch, field), value = old + delta;
         if (field == 0 && value >= 1 && value <= 128) p[4] = uint8_t(value - 1);
         else if (field == 1) {
@@ -113,7 +118,14 @@ public:
         else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_ + 24, unsigned(value) * 1000);
         else if (field == 7 && value >= 0 && value <= 1) staging_[19] = (staging_[19] & ~uint8_t(2)) | (uint8_t(value) << 1);
         else return false;
-        put32(staging_ + 20, checksum(staging_ + 28, document_.length() - 28)); return true;
+        put32(staging_ + 20, checksum(staging_ + 28, document_.length() - 28));
+        Document candidate;
+        if (!candidate.load(staging_, document_.length(), hardware_)) {
+            std::memcpy(p, previous_patch, 82); std::memcpy(staging_, previous_header, 28);
+            std::memcpy(staging_ + (d.bank(patch) - staging_), previous_bank, 4); if (channel) *channel = previous_channel;
+            return false;
+        }
+        return true;
     }
     void edit_cancel() { dirty_ = false; }
     bool edit_save(uint32_t now) {
@@ -321,7 +333,7 @@ private:
             for (unsigned i = 0; i < d.patches() * 3; ++i) { unsigned n = u16(d.data() + cursor); cursor += 2 + (n == 65535 ? 0 : n); }
             return cursor;
         };
-        unsigned a = u32(old.data() + names_end(old) + 12), b = u32(current.data() + names_end(current) + 12);
+        unsigned a = u32(old.data() + old.display_metadata() + 12), b = u32(current.data() + current.display_metadata() + 12);
         formatting = a != b || std::memcmp(old.data() + old.length() - a, current.data() + current.length() - b, a);
         unsigned old_names = names_end(old) - old.metadata(), current_names = names_end(current) - current.metadata();
         formatting = formatting || old_names != current_names
@@ -500,6 +512,7 @@ private:
             char response[160]; hex_text(selected_, hex); std::snprintf(response, sizeof(response), "CNTRL CURRENT %s", hex);
             replies_.reply(response); return;
         }
+        if (hardware_.configuration_locked()) { error("close-actions-first"); return; }
         if (!storage_.available()) { error("storage-unavailable"); return; }
         if (!std::strcmp(line_, "CNTRL SETUP LIST")) { if (dirty_) { error("unsaved-edits"); return; } download_ = 0; cursor_[0] = 0; listing_ = true; listing(); return; }
         if (!std::strcmp(line_, "CNTRL NEXT")) {

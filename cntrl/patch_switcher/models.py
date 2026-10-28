@@ -190,6 +190,28 @@ class FontFace(BaseModel, frozen=True):
     asset: int = 0
 
 
+class ControlCommand(BaseModel, frozen=True):
+    instrument: str
+    controller: Annotated[int, Field(strict=True, ge=0, le=127)]
+    value: Annotated[int, Field(strict=True, ge=0, le=127)]
+    model_config = ConfigDict(extra='forbid')
+
+
+class PatchCommand(BaseModel, frozen=True):
+    patch: str
+    model_config = ConfigDict(extra='forbid')
+
+
+class ActionAssignment(BaseModel, frozen=True):
+    name: str | None = None
+    button: Literal['A', 'B', 'C', 'D', 'E']
+    mode: Literal['momentary', 'latched']
+    on: ControlCommand | PatchCommand
+    off: ControlCommand | PatchCommand
+    style: Style | None = None
+    model_config = ConfigDict(extra='forbid')
+
+
 class Show(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object]
@@ -233,6 +255,7 @@ class Show(BaseModel, frozen=True):
     pages: dict[str, Page] = Field(default_factory=lambda: {'patch': Page()})
     categories: dict[str, Category] = Field(default_factory=dict)
     parameters: dict[str, Parameter] = Field(default_factory=dict)
+    actions: dict[str, ActionAssignment] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -240,6 +263,7 @@ class Show(BaseModel, frozen=True):
 class Target(BaseModel, frozen=True):
     functions: list[str] = Field(default_factory=list)
     buttons: list[str] = Field(default_factory=list)
+    max_actions: Annotated[int, Field(strict=True, ge=0, le=5)] = 5
     display_width: units.Pixels = Field(gt=0, le=65535)
     display_height: units.Pixels = Field(gt=0, le=65535)
     fonts: list[FontFace]

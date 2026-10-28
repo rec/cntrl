@@ -392,6 +392,7 @@ int main(int argc, char **argv) {
             unsigned size = cntrl::u16(scaled.data() + display_offset);
             display_offset += 2 + (size == 65535 ? 0 : size);
         }
+        display_offset += 6 + cntrl::u16(scaled.data() + display_offset + 4) * 100;
         unsigned style = display_offset + 16;
         for (unsigned i = 0; i < cntrl::u16(scaled.data() + display_offset + 4); ++i) {
             scaled[style + i * 16 + 1] = 16;
@@ -563,7 +564,7 @@ int main(int argc, char **argv) {
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].lines[1].text, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 15 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 16 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].lines[1].text, "Flute"));
     auto new_show = bytes;
