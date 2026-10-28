@@ -21,6 +21,14 @@ displays, storage and time. Modules access these through small interfaces rather
 than accessing hardware directly. Hardware-specific implementations stay in the
 existing maker directories.
 
+`firmware/include/cntrl/midi_outputs.h` defines the enabled physical MIDI output
+connections in `cntrl::midi::output_connections`: currently DIN and TRS. Each
+connection carries its configuration name, display label and bridge route. USB
+outputs are listed separately. Routing, Panic, the cable tester and MIDI-interface
+output indicators use this shared metadata. Input ports remain independent.
+Omniports are not enabled by this extraction; their MIDI configuration, target
+driver support and presentation of additional ports remain later work.
+
 Dependencies point from modules to shared core interfaces. The core coordinates
 modules through an explicit registry; it does not depend on individual modules'
 implementation details. Share functionality only when real modules need it.

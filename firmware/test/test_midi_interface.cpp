@@ -68,25 +68,25 @@ void test_independent_lights_and_timing() {
     Hardware hw; cntrl::MidiInterface ui(hw, hw);
     ui.enter(true); ui.toggle(); ui.tick(0);
     for (unsigned i = 0; i < 4; ++i) {
-        ui.activity(cntrl::MidiInterface::Port(i), i * 10); ui.tick(i * 10);
+        ui.activity(i % 2, i >= 2, i * 10); ui.tick(i * 10);
         assert(hw.lit(i));
     }
     unsigned renders = hw.renders;
-    ui.activity(cntrl::MidiInterface::Port::din_in, 50); ui.tick(50);
+    ui.activity(0, false, 50); ui.tick(50);
     assert(hw.renders == renders); // Refreshing an already lit indicator is invisible.
     ui.tick(110); assert(hw.lit(0) && !hw.lit(1) && hw.lit(2) && hw.lit(3));
     ui.tick(130); assert(hw.lit(0) && !hw.lit(2) && !hw.lit(3));
     ui.tick(150); assert(!hw.lit(0));
-    ui.activity(cntrl::MidiInterface::Port::din_in, 0xffffffd0u);
+    ui.activity(0, false, 0xffffffd0u);
     ui.tick(51); assert(hw.lit(0));
     ui.tick(52); assert(!hw.lit(0));
-    ui.activity(cntrl::MidiInterface::Port::trs_out, 53); ui.tick(53);
+    ui.activity(1, true, 53); ui.tick(53);
     ui.connected(false); ui.tick(54);
     for (unsigned i = 0; i < 4; ++i) assert(!hw.lit(i));
     ui.connected(true); ui.tick(55); assert(!hw.lit(3));
-    ui.activity(cntrl::MidiInterface::Port::din_out, 56); ui.toggle(); ui.tick(56);
+    ui.activity(0, true, 56); ui.toggle(); ui.tick(56);
     for (unsigned i = 0; i < 4; ++i) assert(!hw.lit(i));
-    ui.activity(cntrl::MidiInterface::Port::din_in, 57); ui.tick(57);
+    ui.activity(0, false, 57); ui.tick(57);
     assert(!hw.lit(0));
     ui.leave(); renders = hw.renders; ui.tick(1000);
     assert(hw.renders == renders);

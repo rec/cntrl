@@ -10,6 +10,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/documents.h>
 #include <cntrl/setup_ui.h>
 #include <cntrl/midi_bridge.h>
+#include <cntrl/midi_outputs.h>
 #include <cntrl/module_menu.h>
 #if CNTRL_ACTIONS
 #include <cntrl/actions.h>
@@ -41,7 +42,6 @@ extern cntrl::splash::Session splash_session;
 font_assets::Files font_files;
 USBHost host;
 MIDIDevice host_midi(host);
-const char *outputs[] = {"din", "trs", "usb-device", "usb-host"};
 
 #if CNTRL_ORIGINAL_FIRMWARE
 bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation);
@@ -66,14 +66,9 @@ public:
     cntrl::Actions actions{*this, *this};
     unsigned action_capacity() const override { return 5; }
     bool configuration_locked() const override { return actions.open(); }
-    bool available(const char *output) const override {
-        return !std::strcmp(output, "usb-device") ? usb_configuration != 0
-            : !std::strcmp(output, "usb-host") ? bool(host_midi) : supports(output);
-    }
     bool send_action(unsigned owner, const char *output, const uint8_t *bytes, unsigned n) override {
-        unsigned route = 0;
-        while (route < 4 && std::strcmp(outputs[route], output)) ++route;
-        return route < 4 && available(output) && bridge_.owned_send(owner, route == 2 ? 6 : route == 3 ? 8 : route, bytes, n);
+        const auto *connection = cntrl::midi::find_output(output);
+        return connection && available(output) && bridge_.owned_send(owner, connection->route, bytes, n);
     }
     cntrl::midi::Bridge::Delivery action_delivery(unsigned owner) const override { return bridge_.delivery(owner); }
     void cancel_action(unsigned owner) override { bridge_.cancel_owner(owner); }
@@ -84,14 +79,9 @@ public:
     cntrl::Panic panic{*this, *this};
     void enter_panic() { bridge_.configure(false); panic.enter(brightness_); }
     void leave_panic() { panic.leave(); bridge_.configure(interface_enabled_); }
-    bool available(cntrl::PanicPort port) const override {
-        if (port == cntrl::PanicPort::usb_device) return usb_configuration != 0;
-        if (port == cntrl::PanicPort::usb_host) return bool(host_midi);
-        return true;
-    }
-    bool transmit(cntrl::PanicPort port, const uint8_t *bytes) override {
-        static constexpr unsigned routes[] = {0, 1, 6, 8};
-        return submit(routes[unsigned(port)], {uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}});
+    bool transmit(const char *output, const uint8_t *bytes) override {
+        const auto *connection = cntrl::midi::find_output(output);
+        return connection && submit(connection->route, {uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}});
     }
 #endif
 #if CNTRL_MIDI_INTERFACE
@@ -117,8 +107,15 @@ public:
         Serial2.begin(31250);
         host.begin();
     }
-    bool supports(const char *output) const override {
-        for (auto name : outputs) if (!std::strcmp(name, output)) return true;
+    bool supports(const char *output) const override { return cntrl::midi::find_output(output) != nullptr; }
+    bool available(const char *output) const {
+        const auto *connection = cntrl::midi::find_output(output);
+        if (!connection) return false;
+        switch (connection->transport) {
+        case cntrl::midi::OutputTransport::physical: return true;
+        case cntrl::midi::OutputTransport::usb_device: return usb_configuration != 0;
+        case cntrl::midi::OutputTransport::usb_host: return bool(host_midi);
+        }
         return false;
     }
     bool supports_font(unsigned font, unsigned size) const override {
@@ -151,29 +148,33 @@ public:
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     bool send(const char *output, const uint8_t *data, unsigned length) override {
-        unsigned route = 0;
-        while (route < 4 && std::strcmp(outputs[route], output)) ++route;
-        if (route == 4 || length > 14
-            || (route == 2 && !usb_configuration) || (route == 3 && !host_midi)) return false;
+        const auto *connection = cntrl::midi::find_output(output);
+        if (!connection || length > 14 || !available(output)) return false;
 #if CNTRL_CABLE_TEST
         if (cable_test.open()) {
-            if (route >= 2 || length != 3) return false;
-            return submit(route, {11, {data[0], data[1], data[2]}});
+            if (connection->transport != cntrl::midi::OutputTransport::physical || length != 3) return false;
+            return submit(connection->route, {11, {data[0], data[1], data[2]}});
         }
 #endif
-        return bridge_.pedal(route == 2 ? 6 : route == 3 ? 8 : route, data, length);
+        return bridge_.pedal(connection->route, data, length);
     }
     bool submit(unsigned route, const cntrl::midi::Packet &p) override {
         if (route >= 6 && route < 8) return usb_midi_try_write_packed(p.packed(route - 6));
         if (route == 8) return host_midi.try_write_packed(p.packed());
         unsigned n = p.size();
-        if (route < 2) {
-            HardwareSerial &serial = route == 0 ? Serial1 : Serial2;
-            if (unsigned(serial.availableForWrite()) < n) return false;
-            if (serial.write(p.bytes, n) != n) return false;
+        if (const auto *connection = cntrl::midi::physical_output(route)) {
+            HardwareSerial *serial;
+            switch (route) {
+            case 0: serial = &Serial1; break;
+            case 1: serial = &Serial2; break;
+            default: return false;
+            }
+            if (unsigned(serial->availableForWrite()) < n) return false;
+            if (serial->write(p.bytes, n) != n) return false;
 #if CNTRL_MIDI_INTERFACE
-            midi_interface.activity(route == 0 ? cntrl::MidiInterface::Port::din_out
-                : cntrl::MidiInterface::Port::trs_out, millis());
+            midi_interface.activity(unsigned(connection - cntrl::midi::output_connections.data()), true, millis());
+#else
+            (void)connection;
 #endif
             return true;
         }
@@ -242,7 +243,7 @@ public:
                     if (panic.open()) continue;
 #endif
                     // Omniport USB cables remain enumerated but are unused.
-                    if (((packet >> 4) & 15) < 2) bridge_.usb(packet, now);
+                    if (cntrl::midi::physical_output((packet >> 4) & 15)) bridge_.usb(packet, now);
                 } else {
                     HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
                     int byte = serial.read(); if (byte < 0) break;
@@ -251,8 +252,7 @@ public:
 #endif
                     bool complete = bridge_.receive(source + 5, uint8_t(byte), now);
 #if CNTRL_MIDI_INTERFACE
-                    if (complete) midi_interface.activity(source == 1 ? cntrl::MidiInterface::Port::din_in
-                        : cntrl::MidiInterface::Port::trs_in, now);
+                    if (complete) midi_interface.activity(source - 1, false, now);
 #else
                     (void)complete;
 #endif

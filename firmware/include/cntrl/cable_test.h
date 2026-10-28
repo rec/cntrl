@@ -1,6 +1,7 @@
 #pragma once
 #include "hardware.h"
 #include "midi_bridge.h"
+#include "midi_outputs.h"
 #include <cstdio>
 
 namespace cntrl {
@@ -18,12 +19,12 @@ public:
         render();
     }
     void receive(unsigned input, uint8_t byte, uint32_t now) {
-        if (!enabled_ || input >= 2) return;
+        if (!enabled_ || input >= input_names.size()) return;
         midi::Packet packet;
         if (!parsers_[input].receive(byte, packet) || packet.cin != 11
             || packet.bytes[1] != breath_controller) return;
         unsigned output = packet.bytes[0] - 0xb0;
-        if (output >= 2) return;
+        if (output >= output_count) return;
         for (const auto &probe : probes_[output]) {
             if (probe.valid && probe.value == packet.bytes[2]
                 && uint32_t(now - probe.sent) < timeout_ms) {
@@ -37,7 +38,7 @@ public:
     void tick(uint32_t now) {
         if (!enabled_) return;
         bool changed = false;
-        for (unsigned i = 0; i < 2; ++i) {
+        for (unsigned i = 0; i < output_count; ++i) {
             if (seen_[i] && uint32_t(now - received_[i]) >= timeout_ms) {
                 seen_[i] = false; changed = true;
             }
@@ -45,9 +46,9 @@ public:
         if (changed) render();
         if (uint32_t(now - last_send_) < interval_ms) return;
         last_send_ = now;
-        for (unsigned i = 0; i < 2; ++i) {
+        for (unsigned i = 0; i < output_count; ++i) {
             const uint8_t bytes[] = {uint8_t(0xb0 + i), breath_controller, value_[i]};
-            if (hardware_.send(i ? "trs" : "din", bytes, sizeof(bytes))) {
+            if (hardware_.send(midi::output_connections[i].name, bytes, sizeof(bytes))) {
                 probes_[i][cursor_[i]] = {true, value_[i], now};
                 cursor_[i] = (cursor_[i] + 1) % history;
                 value_[i] = (value_[i] + 1) & 127;
@@ -55,22 +56,24 @@ public:
         }
     }
 private:
+    static constexpr std::array<const char *, 2> input_names = {"DIN", "TRS"};
+    static constexpr unsigned output_count = midi::output_connections.size();
     static constexpr uint8_t breath_controller = 2;
     static constexpr uint32_t interval_ms = 10, timeout_ms = 250;
     static constexpr unsigned history = 8;
     struct Probe { bool valid = false; uint8_t value = 0; uint32_t sent = 0; };
     Hardware &hardware_;
     ScreenGraphics title_;
-    bool open_ = false, enabled_ = false, seen_[2] = {};
-    unsigned input_[2] = {}, cursor_[2] = {};
-    uint8_t value_[2] = {};
-    uint32_t last_send_ = 0, received_[2] = {};
-    Probe probes_[2][history];
-    midi::Parser parsers_[2];
+    bool open_ = false, enabled_ = false, seen_[output_count] = {};
+    unsigned input_[output_count] = {}, cursor_[output_count] = {};
+    uint8_t value_[output_count] = {};
+    uint32_t last_send_ = 0, received_[output_count] = {};
+    Probe probes_[output_count][history];
+    midi::Parser parsers_[input_names.size()];
     void reset() {
-        for (unsigned i = 0; i < 2; ++i) {
+        for (auto &parser : parsers_) parser.reset();
+        for (unsigned i = 0; i < output_count; ++i) {
             seen_[i] = false; cursor_[i] = value_[i] = 0;
-            parsers_[i].reset();
             for (auto &probe : probes_[i]) probe = Probe();
         }
     }
@@ -91,8 +94,11 @@ private:
         center.lines[0].graphics.foreground = 0xffff;
         center.lines[0].graphics.background = 0;
         center.lines[0].y = 4;
-        if (seen_[0]) std::snprintf(center.lines[1].text, 64, "%s", input_[0] ? "DIN to TRS" : "DIN");
-        if (seen_[1]) std::snprintf(center.lines[2].text, 64, "%s", input_[1] ? "TRS" : "TRS to DIN");
+        for (unsigned i = 0; i < output_count; ++i) if (seen_[i]) {
+            const char *name = midi::output_connections[i].label;
+            const char *input = input_names[input_[i]];
+            std::snprintf(center.lines[1 + i].text, 64, input_[i] == i ? "%s" : "%s to %s", name, input);
+        }
         center.lines[1].y = 44;
         center.lines[2].y = 72;
         std::snprintf(center.lines[3].text, 64, "%s", enabled_ ? "On" : "Off");

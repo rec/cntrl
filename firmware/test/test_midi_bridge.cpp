@@ -1,4 +1,5 @@
 #include <cntrl/midi_bridge.h>
+#include <cntrl/midi_outputs.h>
 #include <cassert>
 #include <vector>
 #include <iostream>
@@ -181,6 +182,15 @@ void test_tool_handoff_waits_for_sysex_termination() {
     assert(b.handoff(out) && out.bytes[0].size() == 4);
 }
 int main() {
+    for (const auto &connection : cntrl::midi::output_connections) {
+        assert(cntrl::midi::find_output(connection.name) == &connection);
+        assert(cntrl::midi::physical_output(connection.route) == &connection);
+    }
+    for (const auto &connection : cntrl::midi::usb_output_connections) {
+        assert(cntrl::midi::find_output(connection.name) == &connection);
+        assert(!cntrl::midi::physical_output(connection.route));
+    }
+    assert(!cntrl::midi::find_output("omniport-1") && !cntrl::midi::physical_output(2));
     test_tool_handoff_waits_for_sysex_termination();
     test_host_disconnect_discards_pending_selection();
     test_malformed_pedal_batches_are_rejected_atomically();

@@ -1,5 +1,6 @@
 #pragma once
 #include "hardware.h"
+#include "midi_outputs.h"
 #include <cstdio>
 
 namespace cntrl {
@@ -11,7 +12,6 @@ struct MidiInterfaceControl {
 
 class MidiInterface {
 public:
-    enum class Port { din_in, trs_in, din_out, trs_out };
     MidiInterface(Hardware &hardware, MidiInterfaceControl &control, ScreenGraphics title = {})
         : hardware_(hardware), control_(control), title_(title) {}
     bool open() const { return open_; }
@@ -33,15 +33,15 @@ public:
         if (!connected) clear();
         if (open_ && enabled_) dirty_ = true;
     }
-    void activity(Port port, uint32_t now) {
-        if (!open_ || !enabled_) return;
-        unsigned i = unsigned(port);
+    void activity(unsigned connection, bool output, uint32_t now) {
+        if (!open_ || !enabled_ || connection >= (output ? midi::output_connections.size() : input_count)) return;
+        unsigned i = connection + (output ? input_count : 0);
         last_[i] = now;
         if (!lit_[i]) { lit_[i] = true; dirty_ = true; }
     }
     void tick(uint32_t now) {
         if (!open_) return;
-        for (unsigned i = 0; i < 4; ++i) {
+        for (unsigned i = 0; i < port_count; ++i) {
             if (lit_[i] && uint32_t(now - last_[i]) >= pulse_ms) {
                 lit_[i] = false; dirty_ = true;
             }
@@ -49,13 +49,15 @@ public:
         if (dirty_) render();
     }
 private:
+    static constexpr unsigned input_count = 2;
+    static constexpr unsigned port_count = input_count + midi::output_connections.size();
     static constexpr uint32_t pulse_ms = 100;
     Hardware &hardware_;
     MidiInterfaceControl &control_;
     ScreenGraphics title_;
     bool open_ = false, enabled_ = false, connected_ = false, dirty_ = false;
-    bool lit_[4] = {};
-    uint32_t last_[4] = {};
+    bool lit_[port_count] = {};
+    uint32_t last_[port_count] = {};
     void clear() { for (auto &light : lit_) light = false; }
     void render() {
         Pane views[3];
@@ -78,16 +80,17 @@ private:
         std::snprintf(toggle.text, 64, "%s", enabled_ ? "On" : "Off");
         toggle.graphics.size = toggle.graphics.line_height = 16;
         toggle.y = hardware_.display_height() - 24;
-        static const char *const labels[] = {"DIN in", "TRS in", "DIN out", "TRS out"};
-        for (unsigned i = 0; i < 4; ++i) {
+        static constexpr const char *input_labels[] = {"DIN in", "TRS in"};
+        for (unsigned i = 0; i < port_count; ++i) {
             auto &light = center.lines[3 + i];
-            auto &label = center.lines[7 + i];
+            auto &label = center.lines[3 + port_count + i];
             light.centered = label.centered = false;
             light.x = 8 + (i % 2) * 76; label.x = light.x + 12;
             light.y = label.y = 60 + (i / 2) * 20;
             std::snprintf(light.text, 64, "%s", lit_[i] ? "*" : "o");
             light.graphics.foreground = lit_[i] ? 0x07e0 : 0x8410;
-            std::snprintf(label.text, 64, "%s", labels[i]);
+            if (i < input_count) std::snprintf(label.text, 64, "%s", input_labels[i]);
+            else std::snprintf(label.text, 64, "%s out", midi::output_connections[i - input_count].label);
         }
         auto &back = views[2].lines[0];
         std::snprintf(back.text, 64, "Back"); back.centered = false;

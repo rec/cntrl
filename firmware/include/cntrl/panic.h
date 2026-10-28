@@ -1,13 +1,13 @@
 #pragma once
 #include "hardware.h"
+#include "midi_outputs.h"
 #include <cstdio>
 
 namespace cntrl {
-enum class PanicPort { din, trs, usb_device, usb_host };
 struct PanicOutputs {
     virtual ~PanicOutputs() = default;
-    virtual bool available(PanicPort port) const = 0;
-    virtual bool transmit(PanicPort port, const uint8_t *bytes) = 0;
+    virtual bool available(const char *output) const = 0;
+    virtual bool transmit(const char *output, const uint8_t *bytes) = 0;
 };
 
 class Panic {
@@ -38,7 +38,9 @@ public:
             cursor_ = (cursor_ + 1) % port_count;
             auto &progress = progress_[port];
             if (progress.done) continue;
-            if (!outputs_.available(PanicPort(port))) progress.done = true;
+            const auto &connection = port < midi::output_connections.size() ? midi::output_connections[port]
+                : midi::usb_output_connections[port - midi::output_connections.size()];
+            if (!outputs_.available(connection.name)) progress.done = true;
             else {
                 static constexpr uint8_t controllers[] = {123, 120, 121};
                 uint8_t bytes[] = {
@@ -46,7 +48,7 @@ public:
                     phase_ == Phase::controllers ? controllers[progress.index] : uint8_t(progress.index),
                     0,
                 };
-                if (outputs_.transmit(PanicPort(port), bytes)) {
+                if (outputs_.transmit(connection.name, bytes)) {
                     unsigned count = phase_ == Phase::controllers ? 3 : 128;
                     if (++progress.index == count) {
                         progress.index = 0;
@@ -63,7 +65,7 @@ public:
         reset_progress();
     }
 private:
-    static constexpr unsigned port_count = 4;
+    static constexpr unsigned port_count = midi::output_connections.size() + midi::usb_output_connections.size();
     enum class Phase { idle, controllers, notes };
     struct Progress { unsigned channel = 0, index = 0; bool done = false; };
     Hardware &hardware_;

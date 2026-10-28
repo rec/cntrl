@@ -10,11 +10,16 @@ struct Hardware : cntrl::Hardware, cntrl::PanicOutputs {
     std::vector<std::pair<uint8_t, bool>> brightness;
     bool connected[4] = {true, true, true, true}, blocked[4] = {};
     unsigned attempts = 0;
-    bool available(cntrl::PanicPort port) const override { return connected[unsigned(port)]; }
-    bool transmit(cntrl::PanicPort port, const uint8_t *bytes) override {
+    static unsigned index(const char *output) {
+        const char *names[] = {"din", "trs", "usb-device", "usb-host"};
+        for (unsigned i = 0; i < 4; ++i) if (!std::strcmp(output, names[i])) return i;
+        assert(false); return 0;
+    }
+    bool available(const char *output) const override { return connected[index(output)]; }
+    bool transmit(const char *output, const uint8_t *bytes) override {
         ++attempts;
-        if (blocked[unsigned(port)]) return false;
-        messages[unsigned(port)].push_back({bytes[0], bytes[1], bytes[2]}); return true;
+        if (blocked[index(output)]) return false;
+        messages[index(output)].push_back({bytes[0], bytes[1], bytes[2]}); return true;
     }
     bool send(const char *, const uint8_t *, unsigned) override { assert(false); return false; }
     bool supports(const char *) const override { return true; }
