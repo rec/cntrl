@@ -61,7 +61,7 @@ def test_default_page_reproduces_category_and_patch_ui(target: models.Target) ->
         (1, (0, 40, 4, 0, 0, 65535, 40, 0), 5, 'Flute'),
     ]
     assert all(lines(block, r) == expected for r in references[0])
-    assert all(graphics.SCREEN.unpack(w)[1:3] == (40, 4) for w in windows)
+    assert all(graphics.SCREEN.unpack(w)[1:3] == (8, 4) for w in windows)
     assert all(w[12:] == bytes(4) for w in windows)
 
 

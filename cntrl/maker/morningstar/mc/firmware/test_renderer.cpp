@@ -62,11 +62,53 @@ static void padding(unsigned panel, unsigned pad, uint16_t color) {
             assert(screens[panel][y][x] == color);
 }
 
+static void sparse_text() {
+    // One two-pixel diagonal glyph, referenced twice in a prepared UTF-8 run.
+    font_assets::Entry entry;
+    entry.bytes[0] = 24; entry.bytes[1] = 2; entry.bytes[7] = 1;
+    entry.bytes[9] = 1; entry.bytes[11] = 1;
+    entry.bytes[13] = 3; entry.bytes[14] = 2;
+    entry.bytes[15] = 46; entry.bytes[19] = 2;
+    auto data = std::make_unique<uint8_t[]>(48);
+    data[0] = 9; data[4] = 2; data[6] = 2; data[10] = 2;
+    data[16] = '1'; data[22] = 3;
+    data[24] = 2; data[28] = 5; data[30] = 2;
+    data[32] = 0xc3; data[33] = 0xa9; data[42] = 3;
+    data[46] = 128; data[47] = 64;
+    assert(font_assets::valid_pixels(entry, data.get()));
+    font_assets::cache.begin();
+    assert(font_assets::cache.add(123, entry, std::move(data)));
+    font_assets::cache.finish(true);
+    ShowGraphics graphics; cntrl::ScreenGraphics settings;
+    settings.font = 255; settings.asset = 123; settings.size = 24;
+    settings.foreground = 0x1234; settings.background = 0xffff; settings.pad = 4;
+    graphics.configure(settings);
+    assert(graphics.sparse_letter(settings, "é", 0, 5, 10, false));
+    assert(graphics.sparse_letter(settings, "é", 1, 5, 10, false));
+    assert(!graphics.sparse_letter(settings, "é", 2, 5, 10, false));
+    auto pixels = graphics.getFrameBuffer();
+    assert(pixels[8 * 160 + 5] == 0x1234 && pixels[9 * 160 + 6] == 0x1234);
+    assert(pixels[8 * 160 + 8] == 0x1234 && pixels[9 * 160 + 9] == 0x1234);
+    assert(pixels[8 * 160 + 6] == 0xffff);
+    assert(graphics.sparse_letter(settings, "11", 1, 10, 20, false));
+    assert(pixels[18 * 160 + 13] == 0x1234);
+    assert(!graphics.sparse_letter(settings, "2", 0, 10, 20, false));
+    assert(graphics.sparse_letter(settings, "é", 0, 0, 2, false));
+    assert(pixels[0] == 0xffff); // Padding clips sparse glyphs too.
+    assert(graphics.sparse_letter(settings, "é", 0, 0, 30, true));
+    assert(pixels[28 * 160 + 77] == 0x1234);
+    assert(cntrl::label_valid(reinterpret_cast<const uint8_t *>("Café"), 6));
+    assert(!cntrl::label_valid(reinterpret_cast<const uint8_t *>("\xc0\xaf"), 3));
+    assert(!cntrl::label_valid(reinterpret_cast<const uint8_t *>("\xed\xa0\x80"), 4));
+    font_assets::cache.begin(); font_assets::cache.finish(true);
+}
+
 int main() {
+    sparse_text();
     {
         ShowGraphics graphics;
         cntrl::ScreenGraphics settings;
-        settings.font = 5; settings.size = 32;
+        settings.font = 5; settings.size = 28;
         graphics.configure(settings);
         graphics.setCursor(10, 10); graphics.write('S');
         uint16_t before[160 * 128];
@@ -209,13 +251,9 @@ int main() {
     blank(1, 0x07e0);
     assert(ShowGraphics::supports_font(0, 8) && ShowGraphics::supports_font(1, 13));
     assert(ShowGraphics::supports_font(2, 96) && !ShowGraphics::supports_font(3, 8));
-    for (unsigned face = 3; face <= 9; ++face) {
-        for (unsigned size : {12, 16, 20, 24, 28, 32, 40, 48}) {
-            const auto *font = ShowGraphics::native_font(face, size);
-            assert(font && font->version == 1 && font->index1_first == 32 && font->index1_last == 126);
-        }
-        assert(!ShowGraphics::supports_font(face, 13));
-    }
+    assert(ShowGraphics::supports_font(5, 28)); // Fixed cable-test UI title.
+    assert(!ShowGraphics::supports_font(5, 32));
+    assert(!ShowGraphics::supports_font(8, 24)); // Shows use sparse SD assets.
     assert(!ShowGraphics::supports_font(10, 24));
     assert(!ShowGraphics::supports_font(0, 13) && !ShowGraphics::supports_font(1, 15));
 

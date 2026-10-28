@@ -31,6 +31,29 @@ inline bool text_valid(const uint8_t *p, unsigned length) {
     return ended;
 }
 
+inline bool utf8_valid(const uint8_t *p, unsigned length) {
+    for (unsigned i = 0; i < length;) {
+        uint32_t c = p[i++];
+        if (c < 128) { if (c < 32 || c == 127) return false; continue; }
+        unsigned n; uint32_t minimum;
+        if (c >= 0xc2 && c <= 0xdf) { n = 1; c &= 31; minimum = 128; }
+        else if (c >= 0xe0 && c <= 0xef) { n = 2; c &= 15; minimum = 2048; }
+        else if (c >= 0xf0 && c <= 0xf4) { n = 3; c &= 7; minimum = 65536; }
+        else return false;
+        if (n > length - i) return false;
+        while (n--) { unsigned b = p[i++]; if ((b & 0xc0) != 0x80) return false; c = (c << 6) | (b & 63); }
+        if (c < minimum || c > 0x10ffff || (c >= 0xd800 && c <= 0xdfff)) return false;
+    }
+    return true;
+}
+inline bool label_valid(const uint8_t *p, unsigned length) {
+    unsigned end = 0;
+    while (end < length && p[end]) ++end;
+    if (!end || end == length || !utf8_valid(p, end)) return false;
+    for (unsigned i = end; i < length; ++i) if (p[i]) return false;
+    return true;
+}
+
 class Document {
 public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
@@ -78,7 +101,7 @@ public:
         for (unsigned i = 0; i < nt; ++i) {
             if (cursor + 2 > length) return false;
             unsigned size = u16(bytes + cursor); cursor += 2;
-            if (!size || size > 64 || cursor + size > length || !text_valid(bytes + cursor, size)) return false;
+            if (!size || size > 64 || cursor + size > length || !label_valid(bytes + cursor, size)) return false;
             cursor += size;
         }
         if (cursor + u32(bytes + end + 12) != length) return false;
@@ -112,12 +135,12 @@ public:
         for (unsigned c = 0; c < nc; ++c) {
             const uint8_t *p = bytes + 76 + ni * 68 + c * 68;
             unsigned start = u16(p + 64), count = u16(p + 66);
-            if (!text_valid(p, 64) || !count || start != next || start + count > np) return false;
+            if (!label_valid(p, 64) || !count || start != next || start + count > np) return false;
             for (unsigned j = start; j < start + count; ++j) {
                 const uint8_t *q = bytes + 76 + ni * 68 + nc * 68 + j * 82;
                 bool function = u16(q) == 65535;
-                if (function ? (!hardware.supports_function(q[9]) || q[9] != 1 || !button_pair_valid(q[10]) || q[11] || q[4] || q[5] != 255 || q[6] != 255 || q[7] != 255 || q[8] != 255 || u16(q + 2) != c || !text_valid(q + 12, 64)) : (u16(q) >= ni || u16(q + 2) != c || q[4] > 127
-                    || q[9] || q[10] || q[11] || !text_valid(q + 12, 64))) return false;
+                if (function ? (!hardware.supports_function(q[9]) || q[9] != 1 || !button_pair_valid(q[10]) || q[11] || q[4] || q[5] != 255 || q[6] != 255 || q[7] != 255 || q[8] != 255 || u16(q + 2) != c || !label_valid(q + 12, 64)) : (u16(q) >= ni || u16(q + 2) != c || q[4] > 127
+                    || q[9] || q[10] || q[11] || !label_valid(q + 12, 64))) return false;
                 for (unsigned k = 5; k < 9; ++k) if (q[k] > 127 && q[k] != 255) return false;
                 uint32_t bank = u32(bytes + meta + metadata_header_size + ni * 64 + nb * 8 + j * 4);
                 bool mapped = bank == 0xffffffffu && q[5] == 255 && q[6] == 255;

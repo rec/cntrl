@@ -326,8 +326,8 @@ buffer shared by deletion names and editor-save verification. Record sizes impos
 bound that depends on instrument/category tables, banks and version 9's
 variable-length name metadata. The advertised patch-count limit is not a
 promise that that many fit; the compiler enforces the 65,536-byte limit too. Instrument and
-output IDs occupy at most 31 printable ASCII characters; category/patch names
-occupy at most 63. The compiler chooses one shared fitting font size; category
+output IDs occupy at most 31 printable ASCII characters; category/patch labels
+occupy at most 63 UTF-8 bytes. The compiler fits each line independently; category
 and patch names are centered on separate lines using saved cursor offsets,
 without runtime width measurement, wrapping or font-size changes. These are the
 implemented build's limits, not claims about maximum
@@ -422,12 +422,15 @@ override the show default.
 Foreground/background color selection and warnings are resolved on the host.
 Rendering fills the whole background and clips all text to the padded rectangle.
 
-Fonts are `classic` (default), `Arial`, and `ComicSansMS`. Classic sizes are 8,
+Built-in fonts are `classic` (default), `Arial`, and `ComicSansMS`.
+Bundled outline families and user-supplied TTF/OTF files use
+[sparse SD assets](../bitmap-fonts.md#fonts-supplied-by-a-show), containing only
+the glyphs and sizes used by the show. Unicode shaping and missing-glyph checks
+run on the host. The pedal draws prepared positions. Classic sizes are 8,
 16, ... 96 (6x8 cell scaled by an integer). Native font sizes are 8, 9, 10, 11,
 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 60, 72 and 96; these are the
 library's nominal size names. The compiler selects among these available bitmap faces automatically.
-Automatic sizing picks the largest supported size fitting every name and both
-lines. The selected size is resolved once on the Mac, never searched on the pedal.
+Automatic sizing picks the largest supported size fitting each line. The selected size is resolved once on the Mac, never searched on the pedal.
 
 `build_font_metrics.py` exports advances, left bearings, widths and vertical
 extents from the pinned library into `patch-switcher-target.json`:
@@ -438,8 +441,10 @@ uv run --frozen -m cntrl.maker.morningstar.mc.build_font_metrics
 
 Packed glyph metrics in the target file are generated data. The document stores
 only selected font IDs/sizes, RGB565 colors, padding, vertical metrics and
-precomputed name offsets, not glyph bitmaps. All supported font variants remain
-in the generic firmware so future shows can change fonts without reflashing.
+precomputed name offsets. Sparse font records reference their SD asset by CRC32;
+bitmaps and shaped runs are transferred separately. Classic, Arial, ComicSansMS
+and the fixed StillTime cable-test title remain in firmware. Changing show
+fonts uses SD uploads without reflashing.
 `fonts-in-flash.patch` places the library's immutable native font data in mapped
 program flash instead of DTCM. It does not change font contents or decoding.
 Native tests link the same library font tables; their graphics test double tests
