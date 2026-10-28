@@ -170,7 +170,18 @@ void test_host_disconnect_discards_pending_selection() {
     b.service(out, 2); b.host_connected(false);
     assert(b.idle() && b.counters(8).dropped == 2);
 }
+void test_tool_handoff_waits_for_sysex_termination() {
+    cntrl::midi::Bridge b; Output out; b.configure(true); b.connected(true);
+    input(b, 0, {0xf0, 1, 2}); b.service(out, 0);
+    b.configure(false); out.blocked[0] = true;
+    assert(!b.handoff(out));
+    assert((out.bytes[0] == std::vector<uint8_t>{0xf0, 1, 2}));
+    out.blocked[0] = false; assert(b.handoff(out));
+    assert((out.bytes[0] == std::vector<uint8_t>{0xf0, 1, 2, 0xf7}));
+    assert(b.handoff(out) && out.bytes[0].size() == 4);
+}
 int main() {
+    test_tool_handoff_waits_for_sysex_termination();
     test_host_disconnect_discards_pending_selection();
     test_malformed_pedal_batches_are_rejected_atomically();
     test_messages_and_running_status();

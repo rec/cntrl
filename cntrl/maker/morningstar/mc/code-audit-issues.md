@@ -7,6 +7,11 @@ Paths below are relative to this directory unless stated otherwise.
 
 ## M1. P2: tool takeover can suspend an unfinished SysEx termination
 
+**Resolved:** each tool poll services pending bridge terminators before advancing
+tool output, including while the tool is Off. Native tests cover a blocked
+termination and eventual completion without duplicates. The target submits into
+the same ordered transmitter FIFO, placing tool bytes after the terminator.
+
 **Evidence:** `firmware/patch_switcher/target.cpp:57` (`enter_panic`),
 `:76` (`enter_cable_test`), `:103` (`output_idle`), and `Board::poll`;
 generic `firmware/include/cntrl/midi_bridge.h:88`, `reset_route()` and `service()`.

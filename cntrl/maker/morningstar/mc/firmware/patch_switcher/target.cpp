@@ -228,11 +228,11 @@ public:
         // Existing USB-host input is deliberately not bridged.
         host_midi.read();
 #if CNTRL_PANIC
-        if (panic.open()) panic.tick();
+        if (panic.open()) { if (bridge_.handoff(*this)) panic.tick(); }
         else
 #endif
 #if CNTRL_CABLE_TEST
-        if (cable_test.open()) cable_test.tick(now);
+        if (cable_test.open()) { if (bridge_.handoff(*this)) cable_test.tick(now); }
         else
 #endif
         bridge_.service(*this, now);
