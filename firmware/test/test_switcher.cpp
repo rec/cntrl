@@ -319,6 +319,13 @@ void test_revision_history(const std::vector<uint8_t> &bytes) {
     assert(reboot.document().valid());
     assert(reboot.history_delete("Test", 0)); finish(reboot); latest(reboot, 0);
     assert(reboot.history_save("Test", "Still monotonic")); finish(reboot); latest(reboot, 1008);
+    command(reboot, "CNTRL HISTORY SAVE 54657374 0 -");
+    for (unsigned tick = 1; reboot.busy(); ++tick) {
+        auto replies = hw.replies.size();
+        reboot.tick(tick * 1000);
+        assert(hw.replies.size() <= replies + 1);
+    }
+    assert(hw.replies.back() != "CNTRL WAIT");
 }
 
 int main(int argc, char **argv) {

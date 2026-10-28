@@ -179,6 +179,7 @@ public:
     void error(const char *message) override {
         renderer_.error(message);
     }
+    bool reply_ready() const { return !response_[response_offset_]; }
     void reply(const char *text) override {
         // Replies are bounded and only produced in response to host requests.
         std::snprintf(response_, sizeof(response_), "%s\n", text);
@@ -672,11 +673,13 @@ void poll_target() {
     }
     // A bounded amount of work per iteration; SD-card latency itself depends
     // on the card and must be measured on the pedal before release.
-    for (unsigned i = 0; i < 256 && Serial.available() && serial_router.accepts_input(); ++i)
+    for (unsigned i = 0; i < 256 && board.reply_ready() && Serial.available() && serial_router.accepts_input(); ++i)
         serial_router.receive(Serial.read(), now);
-    serial_router.poll(now);
-    songs_transfer.poll(now);
-    font_files.poll(now, board);
+    // Preserve the current serial frame under host backpressure. MIDI/buttons
+    // continue while command input and reply-producing jobs wait for room.
+    if (board.reply_ready()) serial_router.poll(now);
+    if (board.reply_ready()) songs_transfer.poll(now);
+    if (board.reply_ready()) font_files.poll(now, board);
     board.poll();
     board.display(now, documents.busy() || feature_open());
 }

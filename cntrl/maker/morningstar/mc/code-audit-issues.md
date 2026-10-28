@@ -55,6 +55,11 @@ between acceptance and delivery, including a partially delivered batch.
 
 ## M3. P2: reply replacement can splice two serial responses together
 
+**Resolved:** command input and reply-producing jobs wait until the current frame
+has drained. History steps emit WAIT only while still busy, so a completion cannot
+overwrite a progress reply from the same step. MIDI, buttons and drawing keep
+running under serial backpressure; no extra reply queue is allocated.
+
 **Evidence:** `firmware/patch_switcher/target.cpp:182` (`reply`) and the partial
 serial write at the end of `Board::poll`; generic Documents history progress
 replies in `history_tick()`.
