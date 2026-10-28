@@ -161,7 +161,9 @@ private:
             SongSelection selected;
             if (songs_.patch_at(song_id_, cursor_, selected)) {
                 text(1, 1, selected.patch.function ? "Original firmware" : selected.document[0] ? selected.document : selected.patch.output);
-                std::snprintf(panes[1].lines[2].text, 64, "Patch %u/%lu", cursor_ + 1, (unsigned long)songs_.song(song_id_)->count);
+                const Song *song = songs_.song(song_id_);
+                if (song) std::snprintf(panes[1].lines[2].text, 64, "Patch %u/%lu", cursor_ + 1, (unsigned long)song->count);
+                else text(1, 2, "Song read failed");
             }
         } else if (mode_ == patch_actions) { static const char *actions[] = {"Replace with selected", "Insert selected after", "Remove patch", "Move earlier", "Move later"}; text(1, 1, actions[cursor_]); }
         else if (mode_ == library || mode_ == adding) {

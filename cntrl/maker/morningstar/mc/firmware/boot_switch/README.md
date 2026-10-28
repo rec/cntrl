@@ -183,5 +183,5 @@ The format-15 combined image builds successfully. Python and native tests cover
 function dispatch, song continuation, stale library detection, torn markers,
 consumption and journal capacity. It has not been flashed: the user requested
 finishing the branch without flashing after concurrent pedal work was detected.
-The image is in this worktree's `build/boot-switch/combined.hex`; its SHA-256 is
-`5792dfa70b1f3e96cddc364445c59b986de557f37e2bc4d691b072064753cddc`.
+The image is in this worktree's `build/boot-switch/combined.hex`. The build prints
+its SHA-256; rebasing onto subsequent firmware fixes changes it.
