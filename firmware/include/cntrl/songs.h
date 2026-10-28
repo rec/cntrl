@@ -154,7 +154,7 @@ public:
         return have_best ? best.id : have_wrap ? wrap.id : 0;
     }
     bool save_song(const char *name, const SongPatch &patch, const char *document = "", const char *instrument = "", uint32_t bank = 0xffffffff) {
-        if (counts_.next_id >= 0xfffffffe) return false;
+        if (counts_.next_id >= 0xfffffffe || length_ > 0xffffffffu - 20 - sizeof(Song)) return false;
         Song s; s.id = counts_.next_id; s.occurrence = counts_.next_id + 1; s.patch = patch; s.bank = bank;
         if (document[0]) { s.patch = SongPatch(); std::strcpy(s.patch.output, "din"); s.patch.program = patch.program; }
         std::snprintf(s.name, 64, "%s", name); std::snprintf(s.document, 64, "%s", document); std::snprintf(s.instrument, 32, "%s", instrument);
@@ -344,7 +344,8 @@ private:
             }
             if (song < counts.songs) {
                 Song value;
-                if (!storage.read(slot, base + position, reinterpret_cast<uint8_t *>(&value), sizeof(value))
+                if (position > length || sizeof(value) > length - position
+                    || !storage.read(slot, base + position, reinterpret_cast<uint8_t *>(&value), sizeof(value))
                     || !valid_song(value) || value.id >= counts.next_id || value.occurrence >= counts.next_id) return false;
                 song_value = value; position += sizeof(value);
                 if (value.count - 1 > (length - position) / sizeof(SongSelection)) return false;
