@@ -68,6 +68,16 @@ three-byte messages and invalid statuses.
 
 ### C3. P1: song operations have bounded buffers but unbounded execution time
 
+**Resolved:** edits, undo, import checking, hashing, writing and read-back now run
+as cooperative jobs. Each tick transfers at most 512 bytes in total, including
+source reads plus writes; identity scans advance one record at a time. The UI
+waits for completion and restores its editing position on failure. USB import
+acknowledgment waits for verified completion and sends progress while busy.
+Native tests check aggregate I/O and that the prior generation remains visible
+until completion. Import identity validation still uses quadratic repeated scans,
+but yields between records. Initial boot qualification remains synchronous before
+the live event loop starts; read-only song browsing is unchanged.
+
 **Evidence:** `firmware/include/cntrl/songs.h`, `commit()` at line 358,
 `validate_import()` at line 292, `crc_range()` at line 258;
 `firmware/include/cntrl/songs_transfer.h:36`.

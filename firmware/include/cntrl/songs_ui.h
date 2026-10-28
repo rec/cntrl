@@ -13,8 +13,25 @@ public:
     bool open() const { return mode_ != closed; }
     void perform() { mode_ = performance; cursor_ = 0; locked_ = true; std::snprintf(feedback_, 64, "%s", songs_.last_error()); render(); }
     void enter() { mode_ = root; cursor_ = 0; locked_ = true; render(); }
-    void poll(uint8_t held) { if (!held) locked_ = false; }
+    void poll(uint8_t held) {
+        if (!held) locked_ = false;
+        if (waiting_ && !songs_.busy()) {
+            waiting_ = false;
+            if (!songs_.success()) {
+                mode_ = saved_.mode; cursor_ = saved_.cursor; insertion_ = saved_.insertion;
+                added_ = saved_.added; picker_ = saved_.picker; fail();
+            } else if (!feedback_[0]) std::strcpy(feedback_, "Saved");
+            render();
+        }
+    }
     void button(unsigned button, bool down) {
+        if (songs_.busy() || waiting_) return;
+        saved_ = {mode_, cursor_, insertion_, added_, picker_};
+        handle_button(button, down);
+        if (songs_.busy()) { waiting_ = true; render(); }
+    }
+private:
+    void handle_button(unsigned button, bool down) {
         if (!down || locked_ || !open()) return;
         uint32_t before = songs_.generation();
         feedback_[0] = 0;
@@ -103,6 +120,8 @@ private:
     uint32_t song_id_ = 0;
     uint32_t picker_ = 0;
     bool locked_ = false, naming_set_ = false;
+    struct Saved { Mode mode; unsigned cursor, insertion, added; uint32_t picker; } saved_ = {};
+    bool waiting_ = false;
     char feedback_[64] = {}, name_[64] = {};
     const Setlist *current_set() const { return songs_.setlist(songs_.active_set()); }
     void fail() { std::strcpy(feedback_, "Not saved"); }
@@ -131,6 +150,11 @@ private:
     void render() {
         Pane panes[3];
         for (auto &p : panes) for (auto &line : p.lines) { line.graphics.size = line.graphics.line_height = 16; line.wrap = true; }
+        if (songs_.busy()) {
+            std::strcpy(panes[1].lines[0].text, "Saving...");
+            for (unsigned i = 0; i < 3; ++i) hardware_.show(i, panes[i]);
+            return;
+        }
         auto text = [&](unsigned pane, unsigned line, const char *s) { std::snprintf(panes[pane].lines[line].text, 64, "%s", s); };
         text(0, 0, songs_.removed() ? "Current (removed)" : "Current"); text(0, 1, songs_.current_name());
         SongSelection current_patch;
