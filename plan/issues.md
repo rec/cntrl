@@ -170,6 +170,9 @@ Use a memory-budget assertion to make any recovered RAM measurable.
 
 ### C8. P3: history comparison emits inconsistent configuration paths
 
+**Resolved:** additions and removals normalize paths in the same way as value
+changes. A regression compares list removal and addition in both directions.
+
 **Evidence:** `cntrl/patch_switcher/history.py:49`–`:75` (`visit`).
 
 Changed existing scalar values use `path.lstrip('.')`, whereas added/removed

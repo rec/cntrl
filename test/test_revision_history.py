@@ -19,6 +19,15 @@ def test_comparison_reports_configuration_paths_and_preserves_order() -> None:
     assert any(c.path == 'brightness' and c.after == 23 for c in changes)
     assert any('patches.wind[' in c.path for c in changes)
     assert history.compare(before, before) == []
+    source['patches']['wind'].pop()
+    shortened = compiler.compile_show(source, {}, [], target)
+    for old, new in ((before, shortened), (shortened, before)):
+        changes = history.compare(old, new)
+        assert any(
+            'patches.wind[' in c.path and (c.before is None or c.after is None)
+            for c in changes
+        )
+        assert all(not c.path.startswith('.') for c in changes)
 
 
 def test_history_command_accepts_the_documented_positional_action() -> None:
