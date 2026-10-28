@@ -51,7 +51,11 @@ def compare(before: bytes, after: bytes) -> list[Change]:
             for k in sorted(old.keys() | new.keys()):
                 if k not in old or k not in new:
                     result.append(
-                        Change(path=f'{path}.{k}', before=old.get(k), after=new.get(k))
+                        Change(
+                            path=f'{path}.{k}'.lstrip('.'),
+                            before=old.get(k),
+                            after=new.get(k),
+                        )
                     )
                 else:
                     visit(f'{path}.{k}', old[k], new[k])
@@ -60,7 +64,7 @@ def compare(before: bytes, after: bytes) -> list[Change]:
                 if i >= len(old) or i >= len(new):
                     result.append(
                         Change(
-                            path=f'{path}[{i}]',
+                            path=f'{path}[{i}]'.lstrip('.'),
                             before=old[i] if i < len(old) else None,
                             after=new[i] if i < len(new) else None,
                         )
