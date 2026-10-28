@@ -153,9 +153,9 @@ public:
         char name[64]; std::snprintf(name, sizeof(name), "%s", record_name_);
         uint32_t generation = generation_ + 1;
         // Read-back reuses staging. Keep editable bytes if verification fails.
-        if (dirty_) std::memcpy(history_data_, staging_, expected_);
+        if (dirty_) std::memcpy(scratch_, staging_, expected_);
         if (!done || !load(name) || generation_ != generation || length_ != expected_ || checksum(staging_, length_) != expected_crc_) {
-            if (dirty_) std::memcpy(staging_, history_data_, expected_);
+            if (dirty_) std::memcpy(staging_, scratch_, expected_);
             error("storage-verify"); return;
         }
         if (!name_compare(name, selected_)) {
@@ -176,13 +176,14 @@ public:
     bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
     enum class HistoryAction { none, list, save, restore, compare, download, erase, archive };
-    enum class HistoryPhase { current, revision, append, erase };
+    enum class HistoryPhase { current, selected, revision, append, erase };
     HistoryAction history_action_ = HistoryAction::none;
     HistoryPhase history_phase_ = HistoryPhase::current;
     Revisions revisions_;
     Revision history_revision_;
     HistoryComparison comparison_;
-    uint8_t history_data_[max_document] = {};
+    // History reads/current bytes and deletion names have exclusive lifetimes.
+    uint8_t scratch_[max_document] = {};
     char history_name_[64] = {}, history_label_[64] = {};
     uint64_t history_number_ = 0;
     unsigned history_slot_ = 0, current_length_ = 0, current_slot_ = 0;
@@ -190,8 +191,6 @@ private:
     bool history_reply_ = false;
     SetupStorage &storage_; Hardware &hardware_; Controller &controller_; Replies &replies_;
     uint8_t active_[max_document] = {}, staging_[max_document] = {}, header_[96] = {};
-    // Deletion names survive staging-buffer reuse while loading candidate slots.
-    uint8_t delete_names_[max_document] = {};
     Document document_;
     char selected_[64] = {}, record_name_[64] = {}, cursor_[64] = {}, line_[256] = {}, last_error_[64] = {}, boot_error_[64] = {};
     unsigned used_ = 0, received_ = 0, expected_ = 0, written_ = 0, slot_ = 0, length_ = 0, download_ = 0;
@@ -217,7 +216,7 @@ private:
             history_phase_ = HistoryPhase::erase; revisions_.erase(name, number);
         } else {
             current_length_ = current_generation_ = history_slot_ = 0; current_slot_ = 1;
-            history_phase_ = HistoryPhase::current; revisions_.current(name, 0, history_data_);
+            history_phase_ = HistoryPhase::current; revisions_.current(name, 0, scratch_);
         }
         return true;
     }
@@ -246,12 +245,12 @@ private:
         } else {
             generation_ = current_generation_; slot_ = 1 - current_slot_;
             std::snprintf(record_name_, sizeof(record_name_), "%s", history_name_);
-            if (!current_length_ || (current_length_ == expected_ && !std::memcmp(staging_, delete_names_, expected_))) {
+            if (!current_length_ || (current_length_ == expected_ && !std::memcmp(staging_, scratch_, expected_))) {
                 history_action_ = HistoryAction::none; begin_write(now); return;
             }
         }
         history_phase_ = HistoryPhase::append;
-        revisions_.append(history_name_, history_label_, epoch_, delete_names_, current_length_);
+        revisions_.append(history_name_, history_label_, epoch_, scratch_, current_length_);
     }
     void history_tick(uint32_t now) {
         if (!quiet_ && uint32_t(now - history_progress_) >= 500) {
@@ -260,15 +259,21 @@ private:
         revisions_.tick(); if (revisions_.busy()) return;
         if (history_phase_ == HistoryPhase::current) {
             const Revision &info = revisions_.info(); Document candidate;
-            if (revisions_.success() && candidate.load(history_data_, info.length, hardware_)
+            if (revisions_.success() && candidate.load(scratch_, info.length, hardware_)
                 && (!current_length_ || int32_t(uint32_t(info.number) - current_generation_) > 0)) {
                 current_generation_ = uint32_t(info.number); current_length_ = info.length; current_slot_ = history_slot_;
-                std::memcpy(delete_names_, history_data_, current_length_);
             }
-            if (!history_slot_++) { revisions_.current(history_name_, 1, history_data_); return; }
-            if (history_action_ == HistoryAction::restore || history_action_ == HistoryAction::compare) {
-                history_phase_ = HistoryPhase::revision; revisions_.read(history_name_, history_number_, staging_);
-            } else archive_ready(now);
+            if (!history_slot_++) { revisions_.current(history_name_, 1, scratch_); return; }
+            if (current_length_) {
+                history_phase_ = HistoryPhase::selected;
+                revisions_.current(history_name_, current_slot_, scratch_); return;
+            }
+            current_ready(now);
+        } else if (history_phase_ == HistoryPhase::selected) {
+            Document candidate; const auto &info = revisions_.info();
+            if (!revisions_.success() || info.length != current_length_ || info.number != current_generation_
+                || !candidate.load(scratch_, info.length, hardware_)) { history_complete(false); return; }
+            current_ready(now);
         } else if (history_phase_ == HistoryPhase::revision) {
             if (!revisions_.success()) {
                 if (history_action_ == HistoryAction::list) { history_revision_ = Revision(); history_complete(true); }
@@ -294,7 +299,7 @@ private:
     }
     bool compare_history() {
         Document old, current;
-        if (!old.load(staging_, history_revision_.length, hardware_) || !current.load(delete_names_, current_length_, hardware_)) return false;
+        if (!old.load(staging_, history_revision_.length, hardware_) || !current.load(scratch_, current_length_, hardware_)) return false;
         unsigned &patches = comparison_.patches, &routes = comparison_.routes;
         bool &settings = comparison_.settings, &formatting = comparison_.formatting;
         patches = routes = 0;
@@ -316,6 +321,11 @@ private:
         formatting = formatting || old_names != current_names
             || std::memcmp(old.data() + old.metadata(), current.data() + current.metadata(), old_names);
         return true;
+    }
+    void current_ready(uint32_t now) {
+        if (history_action_ == HistoryAction::restore || history_action_ == HistoryAction::compare) {
+            history_phase_ = HistoryPhase::revision; revisions_.read(history_name_, history_number_, staging_);
+        } else archive_ready(now);
     }
     void error(const char *message) {
         std::snprintf(last_error_, sizeof(last_error_), "%s", message);
@@ -406,17 +416,17 @@ private:
     }
     void erase_batch() {
         if (!expected_ || staging_[expected_ - 1]) { error("invalid-delete-list"); return; }
-        unsigned names_length = expected_; std::memcpy(delete_names_, staging_, names_length);
+        unsigned names_length = expected_; std::memcpy(scratch_, staging_, names_length);
         for (unsigned i = 0; i < names_length;) {
-            const char *n = reinterpret_cast<const char *>(delete_names_ + i);
+            const char *n = reinterpret_cast<const char *>(scratch_ + i);
             if (!setup_name(n) || !load(n)) { error("missing-setup"); return; }
-            for (unsigned j = 0; j < i; j += unsigned(std::strlen(reinterpret_cast<const char *>(delete_names_ + j))) + 1)
-                if (!name_compare(n, reinterpret_cast<const char *>(delete_names_ + j))) { error("duplicate-setup"); return; }
+            for (unsigned j = 0; j < i; j += unsigned(std::strlen(reinterpret_cast<const char *>(scratch_ + j))) + 1)
+                if (!name_compare(n, reinterpret_cast<const char *>(scratch_ + j))) { error("duplicate-setup"); return; }
             i += unsigned(std::strlen(n)) + 1;
         }
         auto deleting = [&](const char *name) {
-            for (unsigned i = 0; i < names_length; i += unsigned(std::strlen(reinterpret_cast<const char *>(delete_names_ + i))) + 1)
-                if (!name_compare(name, reinterpret_cast<const char *>(delete_names_ + i))) return true;
+            for (unsigned i = 0; i < names_length; i += unsigned(std::strlen(reinterpret_cast<const char *>(scratch_ + i))) + 1)
+                if (!name_compare(name, reinterpret_cast<const char *>(scratch_ + i))) return true;
             return false;
         };
         if (deleting(selected_)) {
@@ -435,7 +445,7 @@ private:
     }
     void erase_step(uint32_t now) {
         erasing_ = false;
-        const char *name = reinterpret_cast<const char *>(delete_names_ + delete_offset_);
+        const char *name = reinterpret_cast<const char *>(scratch_ + delete_offset_);
         load(name); expected_ = 0; expected_crc_ = checksum(staging_, 0);
         if (!start_write(now)) return;
         bool ok = storage_.write(reinterpret_cast<const uint8_t *>("DONE"), 4);

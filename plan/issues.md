@@ -149,6 +149,10 @@ This is retained resource ownership, not evidence of an accumulating heap leak.
 
 ### C7. P3: four full-document buffers reserve 256 KiB, with obscured ownership
 
+**Resolved:** history and deletion now share `scratch_`. The history job examines
+both slots and cooperatively rereads the chosen valid slot, removing one 64 KiB
+buffer. A compile-time memory-budget assertion prevents restoring that overhead.
+
 **Evidence:** `firmware/include/cntrl/documents.h:180`–`:189`,
 `:255`–`:263`; `firmware/include/cntrl/hardware.h:7`.
 

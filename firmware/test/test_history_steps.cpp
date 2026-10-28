@@ -15,6 +15,7 @@ struct BoundedStorage : TestStorage {
 };
 
 int main() {
+    static_assert(sizeof(cntrl::Documents) < 3 * cntrl::max_document + 4096);
     uint64_t number; char text[21];
     assert(cntrl::parse_revision("18446744073709551615", number) && number == UINT64_MAX);
     cntrl::revision_text(number, text); assert(!std::strcmp(text, "18446744073709551615"));
