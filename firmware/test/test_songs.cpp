@@ -23,6 +23,8 @@ struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::SongCapture {
 };
 struct SongStorage : TestStorage {
     bool fail_reads = false;
+    unsigned finishes = 0;
+    bool finish() override { ++finishes; return TestStorage::finish(); }
     bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned n) override {
         assert(n <= 256); if (fail_reads) return false; return TestStorage::read(slot, offset, data, n);
     }
@@ -55,7 +57,25 @@ void test_rename_read_failure_can_be_retried() {
     assert(songs.song_at(0, a) && !std::strcmp(a.name, "B"));
     assert(board.sends == 0);
 }
+void test_abandoned_imports_close_without_changing_library() {
+    struct Replies : cntrl::Replies { void reply(const char *) override {} } replies;
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board, board);
+    assert(songs.boot()); auto before = snapshot(songs);
+    cntrl::SongsTransfer transfer(songs, replies);
+    auto begin = [&]() { assert(transfer.command("CNTRL SONGS BEGIN 12 0 1", 1)); assert(transfer.busy()); };
+    begin(); unsigned finishes = storage.finishes;
+    transfer.poll(10002); assert(!transfer.busy() && storage.finishes == ++finishes);
+    begin(); transfer.command("CNTRL SONGS DATA xx", 2);
+    assert(!transfer.busy() && storage.finishes == ++finishes);
+    begin(); transfer.command("CNTRL SONGS END", 2);
+    assert(!transfer.busy() && storage.finishes == ++finishes);
+    begin(); begin(); assert(storage.finishes == ++finishes);
+    storage.remaining = 0; transfer.command("CNTRL SONGS DATA 00", 2);
+    assert(!transfer.busy() && storage.finishes == ++finishes);
+    assert(snapshot(songs) == before);
+}
 int main() {
+    test_abandoned_imports_close_without_changing_library();
     test_rename_read_failure_can_be_retried();
     SongStorage storage; Board board; cntrl::Songs songs(storage, board, board);
     assert(songs.boot()); assert(songs.save_song("A", Board::patch()));

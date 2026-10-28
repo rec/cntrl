@@ -123,6 +123,10 @@ and a current-slot write failure after `edit_save()` has returned successfully.
 
 ### C6. P2: abandoned song imports have no storage-abort path
 
+**Resolved:** timeout, malformed/failed DATA, incomplete END and replacement
+BEGIN close the incomplete writer without committing it. A native regression
+checks cleanup and preservation of the active library for each failure path.
+
 **Evidence:** `firmware/include/cntrl/songs_transfer.h:9`, `:13`, `:35`;
 `firmware/include/cntrl/songs.h:223`–`:226`.
 

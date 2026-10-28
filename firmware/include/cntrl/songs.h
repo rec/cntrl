@@ -222,6 +222,7 @@ public:
     }
     bool import_begin(unsigned length) { return ready_ && length >= 12 && length <= 0xffffffffu - 20 && storage_.begin(3); }
     bool import_write(const uint8_t *bytes, unsigned n) { return storage_.write(bytes, n); }
+    void import_abort() { storage_.finish(); }
     bool import_finish(unsigned length, uint32_t crc) {
         if (!storage_.finish() || storage_.size(3) != length) return false;
         uint32_t actual; if (!crc_range(3, 0, length, actual) || actual != crc || !validate(3, length, 0) || !validate_import(length)) return false;

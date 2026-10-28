@@ -6,14 +6,22 @@ class SongsTransfer {
 public:
     SongsTransfer(Songs &songs, Replies &replies) : songs_(songs), replies_(replies) {}
     bool busy() const { return receiving_; }
-    void poll(uint32_t now) { if (receiving_ && uint32_t(now - last_) > 10000) receiving_ = false; }
+    void poll(uint32_t now) {
+        if (receiving_ && uint32_t(now - last_) > 10000) {
+            songs_.import_abort(); receiving_ = false; replies_.reply("CNTRL ERROR songs-timeout");
+        }
+    }
     bool command(const char *line, uint32_t now = 0) {
         last_ = now;
         if (std::strncmp(line, "CNTRL SONGS ", 12)) return false;
-        auto error = [&]() { receiving_ = false; replies_.reply("CNTRL ERROR songs"); return true; };
+        auto error = [&]() {
+            if (receiving_) songs_.import_abort();
+            receiving_ = false; replies_.reply("CNTRL ERROR songs"); return true;
+        };
         unsigned length = 0, overwrite = 0; unsigned long crc = 0; int end = 0;
         if (std::sscanf(line, "CNTRL SONGS BEGIN %u %lx %u%n", &length, &crc, &overwrite, &end) == 3
             && end && !line[end] && length >= 12 && length <= 0xffffffffu - 20 && crc <= 0xfffffffful && overwrite <= 1) {
+            if (receiving_) { songs_.import_abort(); receiving_ = false; }
             if (!overwrite && (songs_.counts().songs || songs_.counts().sets)) return error();
             if (!songs_.import_begin(length)) return error();
             expected_ = length; received_ = 0; expected_crc_ = uint32_t(crc); receiving_ = true; replies_.reply("CNTRL OK"); return true;
@@ -31,9 +39,9 @@ public:
             received_ += n / 2; replies_.reply("CNTRL OK"); return true;
         }
         if (!std::strcmp(line, "CNTRL SONGS END")) {
-            if (!receiving_) return error();
+            if (!receiving_ || received_ != expected_) return error();
             receiving_ = false;
-            if (received_ != expected_ || !songs_.import_finish(expected_, expected_crc_)) return error();
+            if (!songs_.import_finish(expected_, expected_crc_)) return error();
             replies_.reply("CNTRL OK"); return true;
         }
         if (!std::strcmp(line, "CNTRL SONGS SIZE")) {
