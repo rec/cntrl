@@ -5,12 +5,12 @@ or a priority order.
 
 ## Performance organization
 
-### Setlists and song sections
+### Song sections
 
-Arrange songs in performance order, with named sections such as intro, verse,
-chorus and solo. Each section recalls its associated selections, while the
-displays show the current section and what comes next. Allow a song to appear
-more than once with different section orders.
+Add named song sections such as intro, verse, chorus and solo. Each section
+recalls its associated selections, while the displays show the current section
+and what comes next. Allow a song to appear more than once in a setlist with
+different section orders.
 
 ### Multi-instrument scenes
 
@@ -24,12 +24,6 @@ the previous scene's known selections.
 Keep a small favorites list and a list of recently used patches across setups.
 Allow quick access without traversing the full category list. Store the patch's
 instrument identity alongside its name so similarly named sounds remain distinct.
-
-### Setup revision history
-
-Keep named revisions of a performance setup and compare changes before restoring
-one. This would make it easier to recover a rehearsal configuration or experiment
-with new assignments while retaining the version used at the previous show.
 
 ## Controls and expression
 
@@ -69,12 +63,6 @@ Use an expression pedal to move between two sets of continuous parameter values.
 For example, move from a quiet, dry sound to a brighter sound with more delay
 and modulation. Treat discrete patch changes separately from interpolated
 controller values.
-
-### Momentary and latched actions
-
-Let an assignment operate while a switch is held or alternate between two states
-on successive presses. Examples include a temporary solo boost, sustain, an
-effect bypass or an alternate sound. Display the active state clearly.
 
 ## MIDI routing and processing
 
@@ -119,11 +107,10 @@ and effect states when another controller changes them. Distinguish confirmed
 device state from the pedal's last transmitted value. This would depend on what
 each connected device can report.
 
-### Panic and performance mute
+### Performance mute
 
-Provide an easily reached action to release stuck notes and sustain on selected
-outputs. A separate performance mute could suppress new musical messages while
-allowing navigation and configuration, with an unmistakable display indication.
+Suppress new musical messages while allowing navigation and configuration,
+with an unmistakable display indication.
 
 ## Additional work beyond the prompt
 
