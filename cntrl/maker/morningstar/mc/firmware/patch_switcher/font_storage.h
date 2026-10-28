@@ -97,7 +97,7 @@ private:
     }
     static bool header(FsFile &file, unsigned &count) {
         uint8_t bytes[8];
-        if (file.size() < 8 || file.size() > max_file || !file.seekSet(0) || file.read(bytes, 8) != 8 || std::memcmp(bytes, "CFN1", 4)) return false;
+        if (file.size() < 8 || file.size() > max_file || !file.seekSet(0) || file.read(bytes, 8) != 8 || std::memcmp(bytes, "CFN2", 4)) return false;
         count = cntrl::u32(bytes + 4); return count && count <= 32;
     }
     static bool find(FsFile &file, unsigned size, Entry &result, unsigned &offset) {
