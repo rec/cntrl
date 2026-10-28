@@ -19,6 +19,10 @@ audit and contains issues M1–M5.
 
 ### C1. P1: song rename dereferences a failed lookup
 
+**Resolved:** the rename action reports `Song read failed` and remains available
+for retry. A native sanitizer regression covers failure with the upcoming song
+cached, recovery and successful renaming without MIDI output.
+
 **Evidence:** `firmware/include/cntrl/songs_ui.h:53`,
 `firmware/include/cntrl/songs.h:63` (`Songs::song`).
 
