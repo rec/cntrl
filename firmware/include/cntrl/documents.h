@@ -7,6 +7,7 @@
 namespace cntrl {
 struct Replies {
     virtual ~Replies() = default;
+    virtual bool reply_ready() const { return true; }
     virtual void reply(const char *text) = 0;
 };
 
@@ -253,10 +254,13 @@ private:
         revisions_.append(history_name_, history_label_, epoch_, scratch_, current_length_);
     }
     void history_tick(uint32_t now) {
-        if (!quiet_ && uint32_t(now - history_progress_) >= 500) {
-            replies_.reply("CNTRL WAIT"); history_progress_ = now;
+        revisions_.tick();
+        if (revisions_.busy()) {
+            if (!quiet_ && uint32_t(now - history_progress_) >= 500) {
+                replies_.reply("CNTRL WAIT"); history_progress_ = now;
+            }
+            return;
         }
-        revisions_.tick(); if (revisions_.busy()) return;
         if (history_phase_ == HistoryPhase::current) {
             const Revision &info = revisions_.info(); Document candidate;
             if (revisions_.success() && candidate.load(scratch_, info.length, hardware_)

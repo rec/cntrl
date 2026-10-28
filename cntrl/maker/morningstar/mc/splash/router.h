@@ -59,8 +59,11 @@ public:
         used_ = 0; overflow_ = false;
     }
     void poll(uint32_t now) {
+        if (!replies_.reply_ready()) return;
         documents_.tick(now);
+        if (!replies_.reply_ready()) return;
         assets_.poll(now);
+        if (!replies_.reply_ready()) return;
         if ((used_ || overflow_) && uint32_t(now - last_) > 10000) {
             used_ = 0; overflow_ = false;
             replies_.reply("CNTRL ERROR transfer-timeout");
