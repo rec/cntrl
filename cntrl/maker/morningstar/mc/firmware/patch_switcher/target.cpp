@@ -40,6 +40,9 @@ USBHost host;
 MIDIDevice host_midi(host);
 const char *outputs[] = {"din", "trs", "usb-device", "usb-host"};
 
+#if CNTRL_ORIGINAL_FIRMWARE
+bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation);
+#endif
 class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink
 #if CNTRL_PANIC
     , public cntrl::PanicOutputs
@@ -49,6 +52,10 @@ class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splas
 #endif
 {
 public:
+#if CNTRL_ORIGINAL_FIRMWARE
+    bool supports_function(unsigned function) const override { return function == 1; }
+    bool stock_firmware(uint8_t pair, const cntrl::SongContinuation *continuation = nullptr) override { return request_stock(pair, continuation); }
+#endif
 #if CNTRL_PANIC
     cntrl::Panic panic{*this, *this};
     void enter_panic() { bridge_.configure(false); panic.enter(brightness_); }
@@ -407,17 +414,22 @@ public:
         const uint8_t *p = d.patch(index);
         std::snprintf(song.name, 64, "%s", reinterpret_cast<const char *>(p + 12));
         if (reference) {
+            if (song.patch.function) return false;
             std::snprintf(song.document, 64, "%s", documents.selected());
             std::memcpy(song.instrument, d.instrument(cntrl::u16(p)), 32); song.bank = cntrl::u32(d.bank(index));
         }
         return true;
     }
-    bool resolve(const cntrl::Song &song, cntrl::SongPatch &patch) override {
+    bool revision(const cntrl::SongSelection &song, uint32_t &crc) override {
+        cntrl::Document d; if (!documents.reference_document(song.document, d)) return false;
+        crc = cntrl::checksum(d.data(), d.length()); return true;
+    }
+    bool resolve(const cntrl::SongSelection &song, cntrl::SongPatch &patch) override {
         cntrl::Document d; if (!documents.reference_document(song.document, d)) return false;
         int found = -1;
         for (unsigned i = 0; i < d.patches(); ++i) {
             const uint8_t *p = d.patch(i);
-            if (!std::strcmp(song.instrument, reinterpret_cast<const char *>(d.instrument(cntrl::u16(p))))
+            if (cntrl::u16(p) != 65535 && !std::strcmp(song.instrument, reinterpret_cast<const char *>(d.instrument(cntrl::u16(p))))
                 && p[4] == song.patch.program && cntrl::u32(d.bank(i)) == song.bank) {
                 auto value = cntrl::song_patch(d, i);
                 if (found >= 0 && std::memcmp(&patch, &value, sizeof(value))) return false;
@@ -461,19 +473,113 @@ const char *const module_names[] = {"Setups", "Songs and setlists",
 #endif
 };
 #if CNTRL_ORIGINAL_FIRMWARE
-bool start_original_firmware() {
-    if (documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
+struct FirmwareVisitRecord {
+    uint32_t magic = 0x46564931, token = 0, setup_crc = 0;
+    char setup[64] = {};
+    cntrl::SongContinuation continuation;
+    uint32_t crc = 0;
+};
+FirmwareVisitRecord firmware_visit;
+FsFile firmware_visit_file;
+unsigned firmware_visit_stage = 0;
+uint8_t firmware_exit_pair = 33;
+bool firmware_resume_checked = false;
+bool append_boot_record(uint32_t value) {
     auto words = reinterpret_cast<const volatile uint32_t *>(0x60084000);
-    auto selection = inspect_boot_selection(words);
-    if (!can_enter_stock(selection)) return false;
-    uint32_t record[] = {uint32_t(BootChoice::stock), ~uint32_t(BootChoice::stock)};
-    eepromemu_flash_write(reinterpret_cast<void *>(0x60084000 + selection.next * 8), record, sizeof(record));
-    if (inspect_boot_selection(words).choice != BootChoice::stock) return false;
-    // Use the same disconnect/reset sequence as stock's A+F return hook.
-    USB1_USBCMD = 2; USBPHY1_CTRL_SET = 0x80000000;
-    delay(100); __disable_irq(); SCB_AIRCR = 0x05fa0004;
-    __asm__ volatile("dsb" ::: "memory");
-    while (true) __asm__ volatile("wfi");
+    auto state = inspect_boot_selection(words);
+    if (!state.next) return false;
+    uint32_t record[] = {value, ~value};
+    eepromemu_flash_write(reinterpret_cast<void *>(0x60084000 + state.next * 8), record, sizeof(record));
+    return words[state.next * 2] == value && words[state.next * 2 + 1] == ~value;
+}
+bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
+    if (firmware_visit_stage || !valid_exit_pair(pair) || documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
+    auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
+    if (!can_enter_stock(state) || (continuation && !card.ready)) return false;
+    firmware_visit = FirmwareVisitRecord(); firmware_exit_pair = pair;
+    if (continuation) {
+        firmware_visit.token = state.next; firmware_visit.continuation = *continuation;
+        std::snprintf(firmware_visit.setup, 64, "%s", documents.selected());
+        const auto &document = documents.document();
+        firmware_visit.setup_crc = document.valid() ? cntrl::checksum(document.data(), document.length()) : 0;
+        firmware_visit.crc = cntrl::checksum(reinterpret_cast<const uint8_t *>(&firmware_visit), sizeof(firmware_visit) - 4);
+        firmware_visit_stage = 1;
+    } else firmware_visit_stage = 5;
+    return true;
+}
+bool start_original_firmware() { return request_stock(33, nullptr); }
+void poll_firmware_visit(bool released) {
+    auto fail = [&]() { firmware_visit_file.close(); firmware_visit_stage = 0; songs.cancel_function(); board.error("Firmware switch failed"); };
+    if (firmware_visit_stage >= 8) {
+        static uint32_t token = 0;
+        static bool valid = false;
+        switch (firmware_visit_stage) {
+        case 8:
+            token = firmware_visit.token;
+            firmware_visit_file = SD.sdfs.open("/cntrl/firmware-visit.bin", O_RDONLY);
+            valid = firmware_visit_file && firmware_visit_file.size() == sizeof(firmware_visit);
+            break;
+        case 9:
+            valid = valid && firmware_visit_file.read(&firmware_visit, sizeof(firmware_visit)) == sizeof(firmware_visit);
+            firmware_visit_file.close(); break;
+        case 10: {
+            const auto &document = documents.document();
+            valid = valid && firmware_visit.magic == 0x46564931 && firmware_visit.token == token
+                && firmware_visit.crc == cntrl::checksum(reinterpret_cast<const uint8_t *>(&firmware_visit), sizeof(firmware_visit) - 4)
+                && !std::strncmp(firmware_visit.setup, documents.selected(), 64)
+                && firmware_visit.setup_crc == (document.valid() ? cntrl::checksum(document.data(), document.length()) : 0);
+            break;
+        }
+        case 11:
+            if (!append_boot_record(visit_consumed | token)) { fail(); return; }
+            break;
+        case 12: {
+            auto continuation = firmware_visit.continuation;
+            firmware_visit_stage = 0;
+            if (!valid || !songs.resume(continuation)) { board.error("Song return unavailable"); return; }
+            controller.external_selection(); songs_ui.perform(); return;
+        }
+        }
+        ++firmware_visit_stage; return;
+    }
+    if (firmware_visit_stage) {
+        switch (firmware_visit_stage) {
+        case 1:
+            firmware_visit_file = SD.sdfs.open("/cntrl/firmware-visit.bin", O_RDWR | O_CREAT | O_TRUNC);
+            if (!firmware_visit_file) { fail(); return; }
+            break;
+        case 2:
+            if (firmware_visit_file.write(&firmware_visit, sizeof(firmware_visit)) != sizeof(firmware_visit)) { fail(); return; }
+            break;
+        case 3:
+            if (!firmware_visit_file.sync()) { fail(); return; }
+            break;
+        case 4: {
+            FirmwareVisitRecord verify;
+            bool good = firmware_visit_file.seekSet(0) && firmware_visit_file.read(&verify, sizeof(verify)) == sizeof(verify) && !std::memcmp(&verify, &firmware_visit, sizeof(verify));
+            firmware_visit_file.close(); if (!good) { fail(); return; } break;
+        }
+        case 5:
+            if (!append_boot_record(visit_config | firmware_exit_pair | (firmware_visit.token ? 0x8000 : 0))) { fail(); return; }
+            break;
+        case 6:
+            if (!append_boot_record(uint32_t(BootChoice::stock))) { fail(); return; }
+            break;
+        case 7:
+            USB1_USBCMD = 2; USBPHY1_CTRL_SET = 0x80000000;
+            delay(100); __disable_irq(); SCB_AIRCR = 0x05fa0004;
+            __asm__ volatile("dsb" ::: "memory");
+            while (true) __asm__ volatile("wfi");
+        }
+        ++firmware_visit_stage; return;
+    }
+    if (firmware_resume_checked || !released || documents.busy()) return;
+    firmware_resume_checked = true;
+    auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
+    if (state.returned && state.choice == BootChoice::cntrl) {
+        firmware_visit = FirmwareVisitRecord(); firmware_visit.token = state.returned;
+        firmware_visit_stage = 8;
+    }
 }
 OriginalFirmware original_firmware(board, start_original_firmware);
 #endif
@@ -580,6 +686,10 @@ void poll_target() {
         module_menu.poll(pressed);
         songs_ui.poll(pressed);
         if (!pressed) module_controls_locked = false;
+#if CNTRL_ORIGINAL_FIRMWARE
+        poll_firmware_visit(!pressed);
+        consumed = consumed || firmware_visit_stage;
+#endif
         if (!consumed) {
             for (unsigned i = 0; i < 6; ++i) {
                 if (module_controls_locked) continue;
@@ -673,7 +783,11 @@ void poll_target() {
     }
     // A bounded amount of work per iteration; SD-card latency itself depends
     // on the card and must be measured on the pedal before release.
-    for (unsigned i = 0; i < 256 && board.reply_ready() && Serial.available() && serial_router.accepts_input(); ++i)
+    for (unsigned i = 0; i < 256 && board.reply_ready() && Serial.available()
+#if CNTRL_ORIGINAL_FIRMWARE
+        && !firmware_visit_stage
+#endif
+        && serial_router.accepts_input(); ++i)
         serial_router.receive(Serial.read(), now);
     // Preserve the current serial frame under host backpressure. MIDI/buttons
     // continue while command input and reply-producing jobs wait for room.

@@ -12,7 +12,8 @@ struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::Replies {
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
-    bool resolve(const cntrl::Song &, cntrl::SongPatch &) override { return false; }
+    bool revision(const cntrl::SongSelection &, uint32_t &crc) override { crc = 1; return true; }
+    bool resolve(const cntrl::SongSelection &, cntrl::SongPatch &) override { return false; }
     void reply(const char *line) override { std::cout << line << std::endl; }
 };
 int main() {

@@ -73,12 +73,12 @@ A single TOML document contains the song library and its setlists. Example:
 [[songs]]
 id = 1
 name = 'One Love'
-patch = {output = 'din', channel = 1, program = 12}
+patches = [{output = 'din', channel = 1, program = 12}]
 
 [[songs]]
 id = 2
 name = 'Linked sound'
-reference = {document = 'pman', instrument = 'pman', program = 7, bank = 0}
+patches = [{document = 'pman', instrument = 'pman', program = 7, bank = 0}]
 
 [[setlists]]
 id = 3
@@ -86,7 +86,7 @@ name = 'Tonight'
 songs = [1, 2, 1]
 ```
 
-Exactly one of `patch` or `reference` is required. Channels and program numbers
+Each song requires a nonempty ordered `patches` list. Each entry is an inline MIDI selection, a live reference, or a function. Channels and program numbers
 are one-based. Optional inline `msb`, `lsb` and `volume` are 0..127; `pan` is
 -64..63. Omitted bank/controller values send no corresponding controller change.
 An omitted reference bank selects an unbanked source selection.
@@ -150,7 +150,7 @@ Names and patch-selection fields retain their existing format bounds.
 The payload begins with three little-endian 32-bit values: next ID, song count
 and setlist count. Song records follow. Each setlist has its ID, name and a 32-bit
 entry count followed by exactly that many occurrence/song ID pairs. There are no
-unused padded collection slots. Committed files use the `CSG2` envelope.
+unused padded collection slots. Committed files use the `CSG3` envelope. Each song stores its first selection followed by its ID, name and patch count, then the remaining selections. Each selection has a persistent occurrence ID. Old CSG2 generations require export with the previous host and reimport in the new format; there is no legacy decoder.
 
 Saving and boot verification stream over the file, so their work grows with the
 amount of stored data. Import checks use repeated scans to validate identities
@@ -198,3 +198,35 @@ commands and setup history. The combined image built without compiler warnings;
 SHA-256 is `f32567c52fd627889ccd8a97a13c45d3b2849d2cb0888af0804c1a91fc8bfeeb`.
 The combined feature set leaves 55,232 bytes for stack/local variables and
 242,656 bytes for heap allocation before custom fonts. This build was not flashed.
+
+## Function patches and returning from stock
+
+A song can contain an explicit firmware visit between MIDI selections:
+
+```toml
+[[songs]]
+id = 1
+name = 'Firmware visit'
+patches = [
+    {output = 'din', channel = 1, program = 12},
+    {function = 'stock-firmware', exit_buttons = 'A+F'},
+    {output = 'din', channel = 1, program = 34},
+]
+```
+
+C advances through patches in the active song before advancing to the next song.
+A stock visit returns directly to the following patch and transmits its MIDI.
+A final stock patch returns to End of song without starting the next song.
+Ordinary boot sends nothing. Changed library or source data prevents automatic
+recall. The Original firmware module remains independent of song continuation.
+
+In the song library, choose Edit patches to browse occurrences. C opens actions
+for replacing with the selected browser patch, inserting it after the occurrence,
+removing it, or moving it earlier/later. The last patch cannot be removed. Close
+the module to choose another browser patch, then reopen the editor to insert it.
+Function patches can be selected from a setup just like MIDI patches. Source
+references remain MIDI selections; use an inline function for firmware visits.
+
+Host export includes occurrence IDs; keep them to preserve identity when editing.
+An omitted patch ID allocates a new identity during compilation. Setup documents
+now use format 15 and must be recompiled before use with this firmware.

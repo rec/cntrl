@@ -36,7 +36,7 @@ def test_compiler_matches_shared_cpp_fixture(
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == 14
+    assert compiler.HEADER.unpack_from(result)[1] == 15
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
@@ -229,8 +229,10 @@ def test_toml_json_and_expanded_shorthand_agree(
     assert compiler.normalize_patch(
         {'patch': ':a:12:::0', 'volume': 100, 'name': 'Flute'}
     ) == models.Patch(instrument='a', program=12, bank=0, volume=100, name='Flute')
-    assert compiler.normalize_patch({'patch': '|a|Name:.*'}).program == 'Name:.*'
-    assert compiler.normalize_patch({'patch': ':a:^12$'}).program == '^12$'
+    first = compiler.normalize_patch({'patch': '|a|Name:.*'})
+    second = compiler.normalize_patch({'patch': ':a:^12$'})
+    assert isinstance(first, models.Patch) and first.program == 'Name:.*'
+    assert isinstance(second, models.Patch) and second.program == '^12$'
 
 
 @pytest.mark.parametrize(

@@ -1,4 +1,6 @@
 {
+  "functions": ["stock-firmware"],
+  "buttons": ["A", "B", "C", "D", "E", "F"],
   "outputs": [
     "din",
     "trs",

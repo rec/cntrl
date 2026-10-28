@@ -37,4 +37,29 @@ int main() {
     words[1] ^= 1;
     assert(inspect_boot_selection(words).choice == BootChoice::cntrl);
     assert(!inspect_boot_selection(words).next);
+    for (auto &word : words) word = UINT32_MAX;
+    words[0] = selection_magic; words[1] = ~selection_magic;
+    auto append = [&](uint32_t v) {
+        auto state = inspect_boot_selection(words); assert(state.next);
+        words[state.next * 2] = v; words[state.next * 2 + 1] = ~v;
+    };
+    append(visit_config | 18 | 0x8000); // B+E, visit 1.
+    append(uint32_t(BootChoice::stock));
+    auto state = inspect_boot_selection(words);
+    assert(state.pair == 18 && state.visit == 1 && !state.returned);
+    // An interrupted return marker does not trigger automatic recall.
+    words[6] = visit_return | 1;
+    assert(!inspect_boot_selection(words).returned);
+    words[7] = ~words[6];
+    append(uint32_t(BootChoice::cntrl));
+    assert(inspect_boot_selection(words).returned == 1);
+    append(visit_consumed | 1);
+    assert(!inspect_boot_selection(words).returned);
+    append(visit_config | 33); // Standalone module never resumes a song.
+    assert(!inspect_boot_selection(words).visit && inspect_boot_selection(words).pair == 33);
+    for (unsigned i = 1; i < selection_records - 5; ++i) { words[i * 2] = 0; words[i * 2 + 1] = ~0u; }
+    state = inspect_boot_selection(words);
+    assert(state.next == selection_records - 5 && can_enter_stock(state));
+    append(0);
+    assert(!can_enter_stock(inspect_boot_selection(words)));
 }

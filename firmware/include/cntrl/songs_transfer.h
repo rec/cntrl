@@ -22,7 +22,7 @@ public:
         if (std::sscanf(line, "CNTRL SONGS BEGIN %u %lx %u%n", &length, &crc, &overwrite, &end) == 3
             && end && !line[end] && length >= 12 && length <= 0xffffffffu - 20 && crc <= 0xfffffffful && overwrite <= 1) {
             if (receiving_) { songs_.import_abort(); receiving_ = false; }
-            if (!overwrite && (songs_.counts().songs || songs_.counts().sets)) return error();
+            if (!overwrite && (songs_.invalid() || songs_.counts().songs || songs_.counts().sets)) return error();
             if (!songs_.import_begin(length)) return error();
             expected_ = length; received_ = 0; expected_crc_ = uint32_t(crc); receiving_ = true; replies_.reply("CNTRL OK"); return true;
         }
@@ -45,6 +45,7 @@ public:
             replies_.reply("CNTRL OK"); return true;
         }
         if (!std::strcmp(line, "CNTRL SONGS SIZE")) {
+            if (songs_.invalid()) return error();
             char response[64];
             std::snprintf(response, 64, "CNTRL SONGS %u %08lx", songs_.length(), (unsigned long)songs_.crc());
             replies_.reply(response); return true;

@@ -111,6 +111,24 @@ def export(data: bytes) -> str:
             bank = struct.unpack_from(
                 '<I', data, meta + METADATA.size + ni * 64 + nb * 8 + j * 4
             )[0]
+            if index == 65535:
+                patch = {
+                    'function': 'stock-firmware',
+                    'exit_buttons': '+'.join(
+                        c for i, c in enumerate('ABCDEF') if data[p + 10] & (1 << i)
+                    ),
+                }
+                name, _, label = names[j]
+                if name is not None:
+                    patch['name'] = name
+                if label is not None:
+                    patch['display_name'] = label
+                if str(j) in patch_styles:
+                    patch['style'] = patch_styles[str(j)]
+                if str(j) in patch_categories:
+                    patch['categories'] = patch_categories[str(j)]
+                patches.append(patch)
+                continue
             patch: dict[str, object] = {
                 'instrument': aliases[index],
                 'program': data[p + 4] + 1,

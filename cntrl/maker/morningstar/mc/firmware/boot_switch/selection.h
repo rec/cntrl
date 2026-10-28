@@ -5,11 +5,16 @@ enum class BootChoice : uint32_t { stock = 0x53544b31, cntrl = 0x43545231 };
 
 struct BootSelection {
     BootChoice choice = BootChoice::cntrl;
-    unsigned next = 0;
+    unsigned next = 0, pair = 33, visit = 0, returned = 0;
 };
 
 constexpr uint32_t selection_magic = 0x434e4254;
 constexpr unsigned selection_records = 512;
+constexpr uint32_t visit_config = 0x46430000, visit_return = 0x46520000, visit_consumed = 0x46580000;
+inline bool valid_exit_pair(unsigned mask) {
+    unsigned rest = mask & (mask - 1);
+    return mask < 64 && rest && !(rest & (rest - 1));
+}
 
 inline BootSelection inspect_boot_selection(const volatile uint32_t *words) {
     BootSelection result;
@@ -18,6 +23,13 @@ inline BootSelection inspect_boot_selection(const volatile uint32_t *words) {
     for (unsigned i = 1; i < selection_records; ++i) {
         uint32_t value = words[i * 2], check = words[i * 2 + 1];
         if (value != UINT32_MAX || check != UINT32_MAX) result.next = i + 1;
+        if (check == ~value) {
+            if ((value & 0xffff0000) == visit_config && valid_exit_pair(value & 63)) {
+                result.pair = value & 63; result.visit = value & 0x8000 ? i : 0; result.returned = 0;
+            }
+            if ((value & 0xffff0000) == visit_return && (value & 0xffff) == result.visit) result.returned = result.visit;
+            if ((value & 0xffff0000) == visit_consumed && (value & 0xffff) == result.visit) result.returned = result.visit = 0;
+        }
         if (check == ~value && (value == uint32_t(BootChoice::stock)
             || value == uint32_t(BootChoice::cntrl))) result.choice = BootChoice(value);
     }
@@ -27,5 +39,5 @@ inline BootSelection inspect_boot_selection(const volatile uint32_t *words) {
 
 // Reserve the following record for A+F to return from stock without erasing flash.
 inline bool can_enter_stock(const BootSelection &selection) {
-    return selection.next && selection.next < selection_records - 1;
+    return selection.next && selection.next <= selection_records - 5;
 }

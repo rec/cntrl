@@ -1,9 +1,16 @@
 """Show and instrument-table formats, separate from hardware catalogues."""
 
 from functools import cached_property
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 from reccy.configuration import units
 
 
@@ -51,6 +58,38 @@ class Category(BaseModel, frozen=True):
     style: Style | None = None
 
     model_config = ConfigDict(extra='forbid')
+
+
+class StockFirmware(BaseModel, frozen=True):
+    function: Literal['stock-firmware']
+    exit_buttons: str
+
+    @field_validator('exit_buttons')
+    @classmethod
+    def button_pair(cls, value: str) -> str:
+        if (
+            len(value) != 3
+            or value[1] != '+'
+            or any(c not in 'ABCDEF' for c in (value[0], value[2]))
+            or value[0] == value[2]
+        ):
+            raise ValueError(
+                'exit_buttons must be two distinct buttons, for example A+F'
+            )
+        return '+'.join(sorted((value[0], value[2])))
+
+    @property
+    def button_mask(self) -> int:
+        return sum(1 << 'ABCDEF'.index(c) for c in self.exit_buttons.split('+'))
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class FunctionPatch(StockFirmware, frozen=True):
+    name: str | None = None
+    display_name: str | None = None
+    style: Style | None = None
+    categories: list[str] = Field(default_factory=list)
 
 
 class Patch(BaseModel, frozen=True):
@@ -197,6 +236,8 @@ class Show(BaseModel, frozen=True):
 
 
 class Target(BaseModel, frozen=True):
+    functions: list[str] = Field(default_factory=list)
+    buttons: list[str] = Field(default_factory=list)
     display_width: units.Pixels = Field(gt=0, le=65535)
     display_height: units.Pixels = Field(gt=0, le=65535)
     fonts: list[FontFace]

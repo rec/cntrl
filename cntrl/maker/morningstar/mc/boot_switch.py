@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import tyro
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 from .firmware import FirmwareImage, read_hex
 from .upload_helper import validate_firmware
@@ -16,20 +16,6 @@ class Build(BaseModel, frozen=True):
     stock: Path = Path(__file__).parent / (
         '2026-10-16_MC6_PRO_Firmware_v_3_14_0_261016501_0.hex'
     )
-    pair: str = 'A+F'
-
-    @field_validator('pair')
-    @classmethod
-    def valid_pair(cls, value: str) -> str:
-        if (
-            len(value) != 3
-            or value[1] != '+'
-            or value[0] not in 'ABCDEF'
-            or value[2] not in 'ABCDEF'
-            or value[0] == value[2]
-        ):
-            raise ValueError('pair must be two distinct switches, for example A+F')
-        return value
 
 
 def combine(
@@ -122,7 +108,6 @@ def build(command: Build) -> None:
     arm = root / '.tools/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin'
     tool = arm / 'arm-none-eabi'
     source = root / 'boot_switch'
-    bits = {'A': 2, 'B': 1, 'C': 0, 'D': 3, 'E': 4, 'F': 5}
     elf = work / 'hook.elf'
     subprocess.run(
         [
@@ -142,8 +127,6 @@ def build(command: Build) -> None:
             '-Wall',
             '-Wextra',
             '-Werror',
-            f'-DCNTRL_SWITCH_FIRST_BIT={bits[command.pair[0]]}',
-            f'-DCNTRL_SWITCH_SECOND_BIT={bits[command.pair[2]]}',
             f'-Wl,-T,{source / "hook.ld"},--defsym,custom_entry={entry}',
             str(source / 'gate.S'),
             str(source / 'hook.cpp'),
@@ -176,7 +159,7 @@ def build(command: Build) -> None:
         raise ValueError('combined HEX readback differs')
     print(
         f'{output}: patch mode by default; '
-        f'stock {command.pair} -> patch mode, 50 ms, no hold'
+        'stock exit pair is configured per visit, 50 ms, no hold'
     )
     print(f'SHA256: {image.sha256}')
 

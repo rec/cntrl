@@ -1,0 +1,20 @@
+[[songs]]
+id = 1
+name = 'Stock round trip'
+patches = [
+    {output = 'din', channel = 1, program = 1},
+    {function = 'stock-firmware', exit_buttons = 'A+F'},
+    {output = 'din', channel = 1, program = 2},
+]
+
+[[songs]]
+id = 2
+name = 'Stock B+E at end'
+patches = [
+    {function = 'stock-firmware', exit_buttons = 'B+E'},
+]
+
+[[setlists]]
+id = 3
+name = 'Firmware switching'
+songs = [1, 2]

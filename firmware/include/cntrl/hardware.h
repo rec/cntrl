@@ -31,10 +31,17 @@ struct Pane {
     TextLine lines[max_lines];
 };
 
+inline bool button_pair_valid(unsigned mask) {
+    return mask < 64 && mask && (mask & (mask - 1)) && !( (mask & (mask - 1)) & ((mask & (mask - 1)) - 1));
+}
+
+struct SongContinuation;
 struct Hardware {
     virtual ~Hardware() = default;
     // Accept the complete message sequence, or accept none of it.
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
+    virtual bool supports_function(unsigned) const { return false; }
+    virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
     virtual bool output_idle() const { return true; }
     virtual bool supports(const char *output) const = 0;
     virtual bool supports_font(unsigned font, unsigned size) const = 0;

@@ -5,7 +5,7 @@
 
 namespace cntrl {
 constexpr unsigned metadata_header_size = 8;
-constexpr unsigned document_version = 14;
+constexpr unsigned document_version = 15;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -40,7 +40,7 @@ public:
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 68 + np * 82;
-        if (!ni || ni > max_instruments || !nc || nc > max_categories || !np
+        if (ni > max_instruments || !nc || nc > max_categories || !np
             || meta + metadata_header_size + ni * 64 + np * 4 > length
             || std::memcmp(bytes + meta, "CMTA", 4)) return false;
         unsigned nb = u16(bytes + meta + 4);
@@ -115,8 +115,9 @@ public:
             if (!text_valid(p, 64) || !count || start != next || start + count > np) return false;
             for (unsigned j = start; j < start + count; ++j) {
                 const uint8_t *q = bytes + 76 + ni * 68 + nc * 68 + j * 82;
-                if (u16(q) >= ni || u16(q + 2) != c || q[4] > 127
-                    || q[9] || q[10] || q[11] || !text_valid(q + 12, 64)) return false;
+                bool function = u16(q) == 65535;
+                if (function ? (!hardware.supports_function(q[9]) || q[9] != 1 || !button_pair_valid(q[10]) || q[11] || q[4] || q[5] != 255 || q[6] != 255 || q[7] != 255 || q[8] != 255 || u16(q + 2) != c || !text_valid(q + 12, 64)) : (u16(q) >= ni || u16(q + 2) != c || q[4] > 127
+                    || q[9] || q[10] || q[11] || !text_valid(q + 12, 64))) return false;
                 for (unsigned k = 5; k < 9; ++k) if (q[k] > 127 && q[k] != 255) return false;
                 uint32_t bank = u32(bytes + meta + metadata_header_size + ni * 64 + nb * 8 + j * 4);
                 bool mapped = bank == 0xffffffffu && q[5] == 255 && q[6] == 255;
@@ -212,10 +213,11 @@ private:
         const uint8_t *source = data_ + texts_;
         while (literal--) source += 2 + u16(source);
         source += 2;
+        if (u16(p) == 65535 && code >= 2 && code <= 6) return;
         switch (code) {
         case 0: source = category(u16(p + 2)); break;
         case 1: source = p + 12; break;
-        case 6: source = instrument(u16(p)); break;
+        case 6: if (u16(p) == 65535) return; source = instrument(u16(p)); break;
         case 2: std::snprintf(text, size, "%u", unsigned(p[4]) + 1); return;
         case 3: if (u32(bank(index)) == 0xffffffffu) return; std::snprintf(text, size, "%lu", (unsigned long)u32(bank(index))); return;
         case 4: if (p[7] == 255) return; std::snprintf(text, size, "%u", unsigned(p[7])); return;

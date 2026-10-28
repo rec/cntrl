@@ -12,7 +12,6 @@ SCROLL_GAP ?= 72
 PATCH_BUILD ?= $(ROOT)/build/patch-switcher
 PATCH_OUTPUT ?= $(ROOT)/build/patch-switcher.hex
 PATCH_LINKER ?=
-SWITCH_PAIR ?= A+F
 CABLE_TEST ?= 1
 ORIGINAL_FIRMWARE ?= 1
 MIDI_INTERFACE ?= 1
@@ -29,7 +28,7 @@ export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 .PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe button-timing test-button-timing boot-switch test-switch-gesture test-boot-selection
 
 boot-switch: tools test-switch-gesture test-boot-selection
-	cd "$(ROOT)/../../../../.." && uv run --frozen -m cntrl.maker.morningstar.mc.boot_switch --pair '$(SWITCH_PAIR)'
+	cd "$(ROOT)/../../../../.." && uv run --frozen -m cntrl.maker.morningstar.mc.boot_switch
 
 test-switch-gesture:
 	mkdir -p "$(ROOT)/build"
