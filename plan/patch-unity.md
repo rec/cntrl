@@ -21,29 +21,12 @@ executable content. Remove the separate `ControlCommand`, `PatchCommand` and
 kind, not a competing top-level executable concept. The unrelated history CLI
 `Command` enum stays unchanged.
 
-## One TOML rule
+## Start with one button
 
 Every executable value is a table with a required `type`. The table has the same
 shape whether it appears in a named definition, directly in a switch assignment,
 in a song, or inside another patch. Do not accept strings as implicit references,
 bare lists as implicit sequences, or infer a type from whichever fields exist.
-
-The initial types are:
-
-| `type` | Required content | Meaning |
-| --- | --- | --- |
-| `program-change` | `instrument`, `program` | The existing selection structure, renamed `ProgramChange` |
-| `stock-firmware` | `exit_buttons` | Enter stock firmware, retaining the existing return mechanism |
-| `midi` | `output`, `bytes` | Send one complete MIDI message |
-| `state` | `operation` and its required fields | Apply one supported, typed application-state change |
-| `sequence` | `patches` | Execute a nonempty ordered list of Patch values |
-| `reference` | `patch` | Invoke a named patch; optional `document` selects another setup |
-
-Optional presentation properties belong to Patch: `name`, `display_name`,
-`style` and existing category/style tags. They do not change execution. A named
-patch's table key is its stable identity; its display name can change without
-breaking references. A reference's presentation overrides apply to that use,
-without modifying the referenced definition.
 
 Keep the common case short. A single program selection needs no named helper,
 sequence wrapper or message-byte knowledge:
@@ -57,9 +40,42 @@ on = { type = 'program-change', instrument = 'piano', program = 1 }
 This uses the existing instrument declaration to resolve output and channel.
 `mode` defaults to `press`, which invokes `on` once for each new press.
 
+## One Patch, several kinds
+
+`type` says what the patch does. These are variants of Patch, not separate
+command or action systems. Common MIDI operations have readable fields:
+
+| `type` | Content | Meaning |
+| --- | --- | --- |
+| `program-change` | `instrument`, `program`; optional `bank`, `volume`, `pan` | Existing ProgramChange selection |
+| `control-change` | `output`, `channel`, `controller`, `value` | Send a CC |
+| `pitch-bend` | `output`, `channel`, `value` | Send pitch bend |
+| `nrpn` | `output`, `channel`, `parameter`, `value` | Send an NRPN selection and value |
+| `sysex` | `output`, `data` | Send a SysEx payload |
+| `midi` | `output`, `bytes` | Advanced use: send another complete MIDI message |
+| `state` | `operation` and its documented fields | Change application state |
+| `stock-firmware` | `exit_buttons` | Visit stock firmware |
+| `sequence` | `patches` | Run patches in order from one activation |
+| `reference` | `patch`; optional `document` | Use a named patch |
+
+The normal authoring form for a known MIDI operation is its readable variant.
+`midi` is an explicit low-level escape hatch, not a second recommended syntax for
+ordinary controls. All variants compile through shared MIDI encoding and Patch
+execution. Adding readable fields must not recreate a separate ControlCommand.
+
+Channels are 1..16. CC numbers and values are 0..127. Pitch bend is -8192..8191,
+with 0 at the center. NRPN parameters and values are 0..16383. ProgramChange
+retains the current 1..128 numbering and named program lookup. These are musical
+values; authors do not split them into MIDI bytes or subtract one from channels.
+
+Examples below are independent fragments. Instrument aliases such as `piano`
+refer to existing instrument declarations. Output names must exist on the target.
+
 ## Named patches and composition
 
-Reusable definitions live in a dictionary named `patches`:
+Name a patch only when it needs reuse or a place in the patch browser. Inline
+patches remain sufficient for a simple switch assignment. Reusable definitions
+live in a dictionary named `patches`:
 
 ```toml
 [patches.clean]
@@ -89,6 +105,14 @@ button = 'B'
 on = { type = 'reference', patch = 'both' }
 ```
 
+A definition's table key is its stable identity. References use that key, never
+a display label or an instrument/program match. Labels default to the key for
+named patches and to a useful description for inline patches. Existing `name`,
+`display_name`, `style` and category/style tags remain optional presentation
+metadata; authors need none of them to execute a patch. Sequence children do not
+replace the parent patch's performance display while they run. A reference uses
+the referenced presentation unless explicitly overridden at that occurrence.
+
 A sequence can contain inline patches, references and other sequences. It uses
 normal Patch values throughout. There is no separate step, action or command
 schema. Order is significant; a sequence sends both selections on one activation.
@@ -97,60 +121,64 @@ The existing ProgramChange bank resolution and message order stay intact:
 bank MSB, bank LSB, program, optional volume, optional pan. A standalone `midi`
 patch does not require a program selection or an instrument alias.
 
-## Arbitrary MIDI
-
-Use `output` and a byte array for the universal MIDI case. This is the single
-MIDI-message representation; do not introduce a separate CC-only command model.
-TOML decimal and hexadecimal integers are both valid. Comments can describe
-manufacturer-specific bytes without becoming data.
+## MIDI without byte arithmetic
 
 ```toml
-[patches.sustain-on]
-type = 'midi'
-output = 'din'
-bytes = [0xB0, 64, 127] # Channel 1, CC 64, value 127.
-
-[patches.sustain-off]
-type = 'midi'
-output = 'din'
-bytes = [0xB0, 64, 0]
+[switches.sustain]
+button = 'A'
+mode = 'momentary'
+on = { type = 'control-change', output = 'din', channel = 1, controller = 64, value = 127 }
+off = { type = 'control-change', output = 'din', channel = 1, controller = 64, value = 0 }
 
 [patches.bend-up]
-type = 'midi'
+type = 'pitch-bend'
 output = 'usb-device'
-bytes = [0xE0, 0, 96] # Channel 1, pitch bend +4096.
+channel = 1
+value = 4096
+
+[patches.filter]
+type = 'nrpn'
+output = 'din'
+channel = 1
+parameter = 130
+value = 388
 
 [patches.device-message]
-type = 'midi'
+type = 'sysex'
 output = 'usb-host'
-bytes = [0xF0, 0x7D, 1, 2, 0xF7] # Example noncommercial SysEx.
+data = [0x7D, 1, 2] # Example noncommercial payload; F0/F7 are added.
 ```
 
-An NRPN is an ordinary sequence of MIDI patches, not a new executable type:
+NRPN expands into CC 99, CC 98, CC 6 and CC 38, in that order. Do not add an
+unrequested parameter reset. Keep this group together relative to other ordinary
+messages on the same output; MIDI real-time traffic may interleave. Merely
+placing each CC in an independent queue would not preserve the parameter/value
+relationship under competing traffic.
+
+SysEx `data` contains payload bytes, each 0..127, without delimiters. The compiler
+adds F0 and F7. Long messages stream cooperatively rather than fit inside the old
+small action batch. Neither SysEx nor other MIDI sends wait for an instrument
+reply unless a future, explicitly defined feature implements that behavior.
+
+For MIDI not covered by a readable variant, use one complete message:
 
 ```toml
-[patches.nrpn]
-type = 'sequence'
-patches = [
-    { type = 'midi', output = 'din', bytes = [0xB0, 99, 1] },
-    { type = 'midi', output = 'din', bytes = [0xB0, 98, 2] },
-    { type = 'midi', output = 'din', bytes = [0xB0, 6, 3] },
-    { type = 'midi', output = 'din', bytes = [0xB0, 38, 4] },
-]
+[patches.start]
+type = 'midi'
+output = 'din'
+bytes = [0xFA] # MIDI Start.
 ```
 
-The above selects NRPN 130 and sets its 14-bit value to 388 on channel 1.
-Notes, arbitrary CCs, pitch bend, system common, real-time messages and SysEx all
-use `midi`. Each `bytes` array contains exactly one complete message, including
-its status and any SysEx delimiters. Use a sequence for several messages. Do not
-rely on running status inherited from another patch. Preserve every authored
-message and its order; do not silently deduplicate controllers or add resets.
+This supports notes, system common and real-time messages as well as any other
+valid MIDI message. Raw bytes include the status and any delimiters. Validate
+them using the shared MIDI parser; reject incomplete messages and inherited
+running status. Several messages use a sequence. Preserve authored order.
 
-Validate messages using shared MIDI logic. Outputs are the target's existing
-output IDs, including supported USB outputs. Do not invent new Omniport drivers
-or imply that every catalogued connector is an implemented output. Large SysEx
-must stream cooperatively through the existing scheduler rather than fit inside
-the current small action-batch record.
+For the existing ProgramChange selection, `instrument` resolves output and
+channel. Other MIDI variants specify output directly, and channel where the
+message needs one. There is no hidden current output or channel to inherit from
+an earlier patch. Use existing supported output IDs, including USB outputs;
+this plan does not add drivers for currently unsupported hardware ports.
 
 ## Application state and stock firmware
 
@@ -180,16 +208,21 @@ exit_buttons = 'A+F'
 These examples reuse existing capabilities. Do not expose arbitrary attribute
 paths, Python expressions, strings to evaluate, or a generic dictionary of
 arguments. Adding a supported state operation requires an explicit typed
-implementation. Each operation defines whether it changes a runtime value or a
-saved setup; executing a patch must never silently save unrelated edits.
+implementation. Brightness and interface changes affect the active runtime
+state only; executing them does not save the setup. Persistence requires the
+existing explicit Save operation. Document the effect and arguments of each
+supported state operation alongside the schema, rather than leaving authors to
+guess what an internal method name means.
 
 `StockFirmware` remains its own typed Patch variant because it suspends execution
 and resets the processor. It is not an opaque string passed to another module.
 Keep the existing configurable return pair and release/arming behavior.
 
 Navigation, menu selection and activation of the currently selected patch are
-also explicit operations of the `state` variant in the shared executor. Built-in button
-bindings construct Patch values internally, so users need not author the UI.
+also explicit operations of the `state` variant in the shared executor.
+`next-patch` changes the preview only; `activate-selection` executes the selected
+Patch. Built-in button bindings construct Patch values internally, so users need
+not author the UI or replace normal navigation to use this feature.
 Hardware scanning reports switch edges; it does not execute a second family of
 button callbacks. Background MIDI processing and scheduler ticks remain normal
 runtime work, not synthetic button activations.
@@ -226,13 +259,20 @@ Preserve accepted-work completion, required Off cleanup, entry-switch suppressio
 output backpressure and explicit abandonment behavior. Resolve resource ownership
 from the entire reachable patch, including referenced sequences. Give a specific
 error when an existing ownership guarantee cannot be met; do not treat arbitrary
-SysEx as though its affected controls were known. A firmware switch or UI-context
-change must complete required cleanup before leaving. Do not add automatic note
+SysEx as though its affected controls were known. Firmware switching and leaving the switch-assignment context require special
+care: a momentary switch cannot receive its release while another firmware is
+running. Initially allow those operations only in `press` assignments and song
+positions, including their nested sequences. Reject them in either branch of a
+momentary or latched assignment with a clear diagnostic. This restriction concerns
+execution context, not a second Patch type. Complete any other assignment's
+required cleanup before leaving. Do not add automatic note
 ownership, inferred inverses or rollback as part of this unification.
 
-## Navigation, songs and references
+## Optional catalogue, songs and references
 
-A dictionary of named patches is a catalogue, not a performance order. Replace
+Simple switch-only setups need neither a catalogue nor groups. For setups that
+use the existing patch browser, a dictionary of named patches is a catalogue,
+not a performance order. Replace
 the old category-to-patches dictionary with `groups`, whose ordered entries are
 Patch values. For example:
 
@@ -298,6 +338,16 @@ current no-replay behavior after ordinary boot, invalid continuation or changed
 source data. As today, consumption before dispatch favors avoiding duplicate
 execution; power loss can leave an operation unexecuted or its result unknown.
 
+## Errors users can fix
+
+Report all independent authoring errors together, naming the source file and
+patch or switch path. Say what is wrong and what is accepted, for example:
+`switches.sustain.on.channel: expected 1..16; got 0` or
+`patches.both.patches[2]: patch "lead" does not exist`. Show the full reference
+chain for cycles. Unknown type names and fields are errors, with no silent
+fallback to a different kind of patch. Validate cross-document dependencies
+before sending anything.
+
 ## Implementation and acceptance
 
 1. Define the tagged Patch union and the single TOML schema. Rename the existing
@@ -327,7 +377,7 @@ Acceptance includes a simple inline program selection, a CC-only patch, pitch
 bend, SysEx longer than the old action buffer, an NRPN sequence, a multi-instrument
 sequence, mixed MIDI/state changes and a nested stock visit. The same patch must
 behave identically whether invoked directly, through a reference, from a song or
-from either edge of a switch assignment.
+from an allowed switch event. Invalid context combinations fail at compilation.
 
 ## Additional work beyond the prompt
 
