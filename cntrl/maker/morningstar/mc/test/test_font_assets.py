@@ -11,13 +11,15 @@ import pytest
 import tomlkit
 
 from cntrl.maker.morningstar.mc import font_assets
-from cntrl.patch_switcher import cli, compiler, models, resolved, transport
+from cntrl.maker.morningstar.mc.sparse_fonts import Outline, text_runs
+from cntrl.patch_switcher import cli, compiler, display, models, resolved, transport
 
 
 @pytest.fixture(scope='module')
 def bitmap() -> bytes:
-    return font_assets.encode(
-        ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf'
+    return font_assets.pack(
+        Outline(ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf'),
+        {24: ['Café', 'office', 'é', *font_assets.NUMBERS]},
     )
 
 
@@ -67,7 +69,8 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     data = cli.compile_inputs(command, assets)['show']
     assert assets['show']
     key, bitmap = next(iter(assets['show'].items()))
-    assert data[28] == 255 and struct.unpack_from('<I', data, 40)[0] == key
+    assert data[28] == 0  # Window records only paint backgrounds.
+    assert struct.pack('<I', key) in data
     exported = resolved.export(data)
     assert tomlkit.parse(exported).unwrap()['fonts'] == {
         'Handwriting': f'fonts/{key:08x}.cfont'
@@ -78,14 +81,13 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     assert cli.compile_inputs(command)['show'] == data
 
 
-def test_font_metrics_match_existing_converter(bitmap: bytes) -> None:
-    key = crc32(bitmap)
-    face = font_assets.decode(bitmap, 'Custom', key)
-    target = models.Target.model_validate(
-        compiler.read_document(MC / 'patch-switcher-target.json')
-    )
-    original = next(f for f in target.fonts if f.name == 'CourierPrime')
-    assert face.sizes == original.sizes
+def test_sparse_font_contains_only_requested_sizes_and_runs(bitmap: bytes) -> None:
+    face = font_assets.decode(bitmap, 'Custom', crc32(bitmap))
+    assert set(face.sizes) == {24}
+    assert set(face.sizes[24].runs) == {'Café', 'office', 'é', *font_assets.NUMBERS}
+    assert len(bitmap) < 4000
+    fields, _, _ = font_assets.entries(bitmap)[24]
+    assert struct.unpack('<H', bytes(fields[7:9]))[0] < 24
 
 
 @pytest.mark.parametrize('kind', ['truncated', 'index', 'descriptor', 'extra'])
@@ -96,7 +98,7 @@ def test_malformed_fonts_are_rejected(bitmap: bytes, kind: str) -> None:
     elif kind == 'index':
         data[31:50] = bytes([255] * 19)
     elif kind == 'descriptor':
-        data[9] = 2
+        data[9] = 1
     else:
         data += b'garbage'
     with pytest.raises(ValueError):
@@ -163,9 +165,10 @@ def test_show_activation_requires_assets_and_releases_previous_fonts(
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
     definitions = compiler.read_document(ROOT / 'firmware/test/definitions.json')
-    data = compiler.compile_show(source, definitions, [], target)
-    key = crc32(bitmap)
-    size = data[29]
+    assets: dict[int, bytes] = {}
+    data = compiler.compile_show(source, definitions, [], target, assets)
+    key, bitmap = next(iter(assets.items()))
+    size = next(iter(font_assets.entries(bitmap)))
     master, slave = pty.openpty()
     process = subprocess.Popen([str(peer), str(tmp_path)], stdin=master, stdout=master)
     try:
@@ -201,56 +204,183 @@ def test_show_activation_requires_assets_and_releases_previous_fonts(
         os.close(slave)
 
 
-def test_compiler_rejects_fonts_that_exceed_the_loaded_ram_budget(
-    bitmap: bytes, tmp_path: Path
+def test_rejects_selected_fonts_that_exceed_the_loaded_ram_budget(
+    bitmap: bytes,
 ) -> None:
-    offset = font_assets.HEADER.size
-    for _ in range(font_assets.HEADER.unpack_from(bitmap)[1]):
-        fields = list(font_assets.ENTRY.unpack_from(bitmap, offset))
-        ni, nd = fields[-2:]
-        if fields[0] == 24:
-            payload = bitmap[
-                offset + font_assets.ENTRY.size : offset
-                + font_assets.ENTRY.size
-                + ni
-                + nd
-            ]
-            fields[-1] = 90000 - ni
-            padded = (
-                font_assets.HEADER.pack(b'CFN1', 1)
-                + font_assets.ENTRY.pack(*fields)
-                + payload
-                + bytes(90000 - len(payload))
-            )
-            break
-        offset += font_assets.ENTRY.size + ni + nd
-    else:
-        pytest.fail('missing sample size')
-    first, second = tmp_path / 'first.cfont', tmp_path / 'second.cfont'
-    first.write_bytes(padded)
-    second.write_bytes(padded[:-1] + b'\x01')
+    key = crc32(bitmap)
+    # Exercise the combined budget independently of individual file validation.
+    fields, index, pixels = font_assets.entries(bitmap)[24]
+    fields[-1] += 48000
+    large = (
+        font_assets.HEADER.pack(b'CFN2', 1)
+        + font_assets.ENTRY.pack(*fields)
+        + index
+        + pixels
+        + bytes(48000)
+    )
+    records = [
+        bytes([255, 24]) + bytes(10) + struct.pack('<I', k) for k in (key, key + 1)
+    ]
+    with pytest.raises(ValueError, match='96 KiB RAM budget'):
+        font_assets.validate_budget(records, bytes(16), {key: large, key + 1: large})
+
+
+ROOT = Path(__file__).resolve().parents[5]
+MC = Path(__file__).resolve().parents[1]
+
+
+def test_unicode_labels_compile_transfer_and_export(peer: Path, tmp_path: Path) -> None:
     source = compiler.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
-    source['fonts'] = {'First': str(first), 'Second': str(second)}
+    source['patches'] = {
+        'Été': [{'instrument': 'a', 'program': 1, 'name': 'Café e\u0301'}]
+    }
+    source['fonts'] = {
+        'Custom': str(ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf')
+    }
+    source['style'] = {'font_name': 'Custom'}
+    target = models.Target.model_validate(
+        compiler.read_document(ROOT / 'firmware/test/target.json')
+    )
+    assets: dict[int, bytes] = {}
+    data = compiler.compile_show(
+        source,
+        compiler.read_document(ROOT / 'firmware/test/definitions.json'),
+        [],
+        target,
+        assets,
+    )
+    assert 'Café e\u0301' in resolved.export(data)
+    master, slave = pty.openpty()
+    process = subprocess.Popen([str(peer), str(tmp_path)], stdin=master, stdout=master)
+    try:
+        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+            client = transport.SetupClient(connection)
+            for k, b in assets.items():
+                client.copy_font(k, b)
+            client.copy('Unicode', data, False)
+            client.ok('CNTRL SETUP FINISH')
+            assert client.download('Unicode') == data
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+        os.close(master)
+        os.close(slave)
+
+
+def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
+    source = compiler.read_document(ROOT / 'firmware/test/display.toml')
+    assert isinstance(source, dict)
+    source['patches'] = {
+        'Group': [
+            {'instrument': 'a', 'program': 1, 'name': '☃☂'},
+            {'instrument': 'a', 'program': 2, 'name': '♠'},
+        ]
+    }
+    outline = str(ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf')
+    source['fonts'] = {'First': outline, 'Second': outline}
     source['style'] = {'font_name': 'First'}
     source['pages'] = {
         'patch': {
-            'fields': ['group.name', 'display_name'],
-            'line_styles': {'display_name': {'font_name': 'Second'}},
+            'fields': ['display_name', 'other'],
+            'line_styles': {'other': {'font_name': 'Second'}},
         }
     }
+    source['parameters'] = {'other': {'value': '♣'}}
     source['windows'] = {}
     target = models.Target.model_validate(
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
-    with pytest.raises(compiler.CompilationError, match='96 KiB RAM budget'):
+    assets: dict[int, bytes] = {}
+    with pytest.raises(compiler.CompilationError) as failure:
         compiler.compile_show(
             source,
             compiler.read_document(ROOT / 'firmware/test/definitions.json'),
             [],
             target,
+            assets,
+        )
+    message = str(failure.value)
+    for t in [
+        'First',
+        'Second',
+        'U+2603',
+        'U+2602',
+        'U+2660',
+        'U+2663',
+        'patches.Group[1]',
+        'patches.Group[2]',
+        'field other',
+        'field display_name',
+    ]:
+        assert t in message
+    assert not assets
+
+
+def test_shaping_retains_ligatures_and_normalizes_combining_accents() -> None:
+    outline = Outline(ROOT / 'cntrl/fonts/caveat/Caveat-Bold.ttf')
+    assert outline.shape(24, 'é') == outline.shape(24, 'e\u0301')
+    assert len(outline.shape(24, 'fi').positions) == 1
+    assert len(outline.shape(24, 'office').positions) < len('office')
+    assert [t[:3] for t in text_runs('abc אבג 12')] == [
+        (0, 4, 0),
+        (8, 10, 2),
+        (4, 8, 1),
+    ]
+
+
+def test_adding_text_requires_the_original_outline(
+    tmp_path: Path, bitmap: bytes
+) -> None:
+    path = tmp_path / 'subset.cfont'
+    path.write_bytes(bitmap)
+    show = models.Show.model_validate(
+        {'instruments': {}, 'patches': {}, 'fonts': {'Custom': str(path)}}
+    )
+    with pytest.raises(ValueError, match='original font file'):
+        font_assets.Preparation(
+            show,
+            models.Target.model_validate(
+                compiler.read_document(ROOT / 'firmware/test/target.json')
+            ),
+            [(255, 'Never prepared', models.Style(font_name='Custom'), 4, 1, 0)],
+            ['field title'],
         )
 
 
-ROOT = Path(__file__).resolve().parents[5]
-MC = Path(__file__).resolve().parents[1]
+def test_bundled_outline_fonts_use_sparse_unicode_assets() -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(MC / 'patch-switcher-target.json')
+    )
+    show = models.Show(
+        instruments={}, patches={}, style=models.Style(font_name='CourierPrime')
+    )
+    assets: dict[int, bytes] = {}
+    _, _, block = display.compile_display(
+        show,
+        [display.DisplayPatch(values={'group.name': 'Été', 'display_name': 'Café'})],
+        target,
+        assets,
+    )
+    assert assets and block[display.HEADER.size] == 255
+    for k, b in assets.items():
+        face = font_assets.decode(b, 'CourierPrime', k)
+        assert set().union(*(set(m.runs) for m in face.sizes.values())) == {
+            'Été',
+            'Café',
+        }
+
+
+def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(ROOT / 'firmware/test/target.json')
+    )
+    show = models.Show.model_validate(
+        {'instruments': {}, 'patches': {}, 'pages': {'patch': {'fields': []}}}
+    )
+    windows, _, _ = display.compile_display(
+        show,
+        [display.DisplayPatch(values={'group.name': '☃', 'display_name': '雪'})],
+        target,
+    )
+    assert all(w[0:2] == bytes([0, 8]) for w in windows)

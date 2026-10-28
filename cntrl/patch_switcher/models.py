@@ -135,7 +135,9 @@ class Parameter(BaseModel, frozen=True):
 class FontMetrics(BaseModel, frozen=True):
     line_height: units.Pixels
     top: units.Pixels = 0
-    glyphs: str
+    glyphs: str = ''
+    runs: dict[str, list[int]] = Field(default_factory=dict)
+    characters: dict[str, list[int]] = Field(default_factory=dict)
 
     @cached_property
     def data(self) -> bytes:

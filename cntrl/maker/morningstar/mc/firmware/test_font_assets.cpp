@@ -53,16 +53,16 @@ int main(int argc, char **argv) {
             if (peer.fonts.command(line.c_str(), peer)) {}
             else if (std::sscanf(line.c_str(), "STAGE %lx %u", &key, &size) == 2) {
                 const auto *active = font_assets::cache.get(uint32_t(key), size);
-                const uint8_t *original = active ? active->index : nullptr;
+                const uint8_t *original = active ? active->data.get() : nullptr;
                 font_assets::cache.begin();
                 bool good = peer.fonts.supports(uint32_t(key), size) && peer.fonts.stage(uint32_t(key), size);
                 if (good && original) {
                     font_assets::cache.finish(false);
-                    assert(font_assets::cache.get(uint32_t(key), size)->index == original);
+                    assert(font_assets::cache.get(uint32_t(key), size)->data.get() == original);
                     font_assets::cache.begin(); assert(peer.fonts.stage(uint32_t(key), size));
                 }
                 font_assets::cache.finish(good);
-                if (good && original) assert(font_assets::cache.get(uint32_t(key), size)->index == original);
+                if (good && original) assert(font_assets::cache.get(uint32_t(key), size)->data.get() == original);
                 peer.reply(good ? "CNTRL OK" : "CNTRL ERROR font-load");
             } else if (std::sscanf(line.c_str(), "ACTIVE %lx %u", &key, &size) == 2) {
                 peer.reply(font_assets::cache.get(uint32_t(key), size) ? "CNTRL OK" : "CNTRL ERROR absent");

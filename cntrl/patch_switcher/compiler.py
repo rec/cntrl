@@ -81,15 +81,6 @@ def compile_show(
         show = models.Show.model_validate(document)
     except ValidationError as error:
         raise CompilationError(_validation_errors('show', error)) from error
-    if show.fonts:
-        from ..maker.morningstar.mc.font_assets import prepare_fonts
-
-        try:
-            show, target, generated = prepare_fonts(show, target)
-        except (OSError, ValueError) as error:
-            raise CompilationError([f'fonts: {error}']) from error
-        if assets is not None:
-            assets.update(generated)
     setups: dict[tuple[str, str], models.Setup] = {}
     embedded_programs: list[dict[str, object]] = []
     try:
@@ -141,7 +132,9 @@ def compile_show(
     program_names: dict[tuple[str, str, int, int | None], list[str | None]] = {}
     display_patches: list[display.DisplayPatch] = []
     for category, values in show.patches.items():
-        category_text = _text(category, 64, target, f'patches.{category}', errors)
+        category_text = _text(
+            category, 64, target, f'patches.{category}', errors, unicode=True
+        )
         if not isinstance(values, list):
             errors.append(f'patches.{category}: expected a list of patches')
             continue
@@ -246,11 +239,19 @@ def compile_show(
                     _optional(mapping.lsb if mapping else None),
                     _optional(patch.volume),
                     _optional(patch.pan + 64 if patch.pan is not None else None),
-                    _text(display_name, 64, target, context + '.display_name', errors),
+                    _text(
+                        display_name,
+                        64,
+                        target,
+                        context + '.display_name',
+                        errors,
+                        unicode=True,
+                    ),
                 )
             )
             display_patches.append(
                 display.DisplayPatch(
+                    context=context,
                     values={
                         'group.name': category,
                         'display_name': display_name,
@@ -303,14 +304,16 @@ def compile_show(
     display_records = b''
     try:
         screen_records, references, display_records = display.compile_display(
-            show, display_patches, target
+            show, display_patches, target, generated
         )
         if generated:
             from ..maker.morningstar.mc.font_assets import validate_budget
 
             validate_budget(screen_records, display_records, generated)
-    except ValueError as error:
+    except (OSError, ValueError) as error:
         errors.append(str(error))
+    if assets is not None:
+        assets.update(generated)
     if len(references) == len(patches):
         patches = [
             p + struct.pack('<3H', *references[i]) for i, p in enumerate(patches)
@@ -433,19 +436,31 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
 
 
 def _text(
-    value: str, width: int, target: models.Target, context: str, errors: list[str]
+    value: str,
+    width: int,
+    target: models.Target,
+    context: str,
+    errors: list[str],
+    unicode: bool = False,
 ) -> bytes:
     unsupported = list(
         dict.fromkeys(
-            c for c in value if c not in target.characters or not 32 <= ord(c) <= 126
+            c
+            for c in value
+            if ord(c) < 32
+            or ord(c) == 127
+            or (not unicode and (c not in target.characters or ord(c) > 126))
         )
     )
     if unsupported:
         errors.append(f'{context}: unsupported characters {unsupported!r}')
-    if not value or len(value) >= width:
+    encoded = (
+        value.encode('utf-8') if unicode else value.encode('ascii', errors='replace')
+    )
+    if not value or len(encoded) >= width:
         errors.append(f'{context}: text must contain 1..{width - 1} characters')
     # Placeholder bytes let later entries be checked. Errors prevent emission.
-    return value.encode('ascii', errors='replace')[: width - 1]
+    return encoded[: width - 1]
 
 
 def _optional(value: int | None) -> int:

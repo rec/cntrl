@@ -33,6 +33,8 @@ public:
     void error(const char *message) {
         cntrl::Pane view;
         view.graphics = requested_[1].graphics;
+        view.graphics.font = 0; view.graphics.size = 8; view.graphics.asset = 0;
+        view.graphics.line_height = 8; view.graphics.top = 0;
         view.lines[0].graphics = view.graphics;
         view.lines[0].x = view.graphics.pad;
         std::snprintf(view.lines[0].text, sizeof(view.lines[0].text), "%s", message);
@@ -60,7 +62,10 @@ public:
             const char *text = line.text;
             unsigned length = std::strlen(text);
             const auto &settings = line.graphics;
-            if (letter_ < length) {
+            bool sparse = settings.font == 255;
+            bool painted = sparse && graphics_.sparse_letter(settings, text, letter_, line.x, text_y(field_, 0), line.centered);
+            if (painted) { ++letter_; }
+            else if (!sparse && letter_ < length) {
                 if (!letter_) {
                     graphics_.select_font(settings.font, settings.size, settings.asset);
                     // Background bands are already painted. Preserve neighboring

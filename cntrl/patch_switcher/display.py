@@ -10,6 +10,7 @@ from . import graphics, models
 
 
 class DisplayPatch(BaseModel, frozen=True):
+    context: str = 'patch'
     values: dict[str, str | int | bool | None]
     style: models.Style | None = None
     program_style: models.Style | None = None
@@ -22,7 +23,10 @@ class DisplayPatch(BaseModel, frozen=True):
 
 
 def compile_display(
-    show: models.Show, patches: list[DisplayPatch], target: models.Target
+    show: models.Show,
+    patches: list[DisplayPatch],
+    target: models.Target,
+    assets: dict[int, bytes] | None = None,
 ) -> tuple[list[bytes], list[list[int]], bytes]:
     overlap = set(show.parameters) & set(FIELDS)
     if overlap:
@@ -50,6 +54,7 @@ def compile_display(
     base = show.style
     requests: list[tuple[int, str, models.Style, int, int, int]] = []
     instances: list[list[int]] = []
+    contexts: list[str] = []
     for patch in patches:
         category = category_style(
             patch.program_categories + patch.categories, show.categories
@@ -83,12 +88,12 @@ def compile_display(
                     if isinstance(value, bool)
                     else str(value)
                 )
-                if len(text) >= 64 or any(
-                    c not in target.characters or not 32 <= ord(c) <= 126 for c in text
+                if len(text.encode('utf-8')) >= 64 or any(
+                    ord(c) < 32 or ord(c) == 127 for c in text
                 ):
                     raise ValueError(
                         f'field {name}: display text must contain at most '
-                        '63 supported characters'
+                        '63 UTF-8 bytes and no control characters'
                     )
                 content = name in PATCH_FIELDS
                 style = merge_style(
@@ -101,6 +106,7 @@ def compile_display(
                     parameter.style if parameter else None,
                     page.line_styles.get(name),
                 )
+                contexts.append(f'{patch.context}, field {name}')
                 lines.append(len(requests))
                 requests.append(
                     (
@@ -116,29 +122,42 @@ def compile_display(
             for j in lines:
                 code, text, style, pad, _, stipple = requests[j]
                 requests[j] = (code, text, style, pad, max(1, len(lines)), stipple)
+    from ..maker.morningstar.mc.font_assets import Preparation
+
+    prepared = Preparation(show, target, requests, contexts)
+    target = prepared.target
+    choices = [
+        graphics.font_choice(s.font_name, [t], target, p, n)
+        for _, t, s, p, n, _ in requests
+    ]
+    for (code, text, _, _, _, _), (face, size) in zip(requests, choices, strict=True):
+        prepared.use(face.name, size, code, text)
+    show, keys, generated = prepared.finish()
+    if assets is not None:
+        assets.update(generated)
     styles: list[bytes] = []
     records: list[bytes] = []
     texts: list[bytes] = []
-    for code, text, style, pad, count, stipple in requests:
-        face, size = graphics.font_choice(style.font_name, [text], target, pad, count)
+    for (code, text, style, pad, _count, stipple), (face, size) in zip(
+        requests, choices, strict=True
+    ):
         metrics = face.sizes[size]
         fg, bg = graphics.colors(style, show.contrast)
         packed = graphics.SCREEN.pack(
             face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top
         )
-        packed = packed[:12] + struct.pack('<I', face.asset)
+        packed = packed[:12] + struct.pack('<I', keys.get(face.name, face.asset))
         if packed not in styles:
             styles.append(packed)
         left, width = graphics.bounds(text, metrics)
         x = pad + (target.display_width - 2 * pad - width) // 2 - left
-        encoded = text.encode('ascii') + b'\0'
+        encoded = text.encode('utf-8') + b'\0'
         if encoded not in texts:
             texts.append(encoded)
         records.append(
             LINE.pack(code, stipple, styles.index(packed), x, texts.index(encoded))
         )
     # Window records supply the outer background and padding, including empty panes.
-    names = [str(p.values[n]) for p in patches for n in ('group.name', 'display_name')]
     window_records: list[bytes] = []
     for window in windows:
         pad = (
@@ -147,14 +166,15 @@ def compile_display(
             else (4 if show.pad is None else show.pad)
         )
         style = merge_style(base, window.style)
-        face, size = graphics.font_choice(style.font_name, names, target, pad)
+        face = next(f for f in target.fonts if f.name == 'classic')
+        size = 8
         metrics = face.sizes[size]
         fg, bg = graphics.colors(style, show.contrast)
         window_records.append(
             graphics.SCREEN.pack(
                 face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top
             )[:12]
-            + struct.pack('<I', face.asset)
+            + struct.pack('<I', keys.get(face.name, face.asset))
         )
     pages: list[bytes] = []
     references: list[list[int]] = []

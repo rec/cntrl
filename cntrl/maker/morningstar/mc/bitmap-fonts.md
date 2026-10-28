@@ -1,7 +1,7 @@
 # Bitmap display fonts
 
-The MC firmware includes seven converted faces alongside classic, Arial and
-ComicSansMS:
+Seven bundled outline families are available alongside classic, Arial and
+ComicSansMS. The IDs below identify their generated reference tables:
 
 | Configuration name | Source | Face ID | License |
 | --- | --- | --- | --- |
@@ -13,9 +13,11 @@ ComicSansMS:
 | `CourierPrime` | Courier Prime Regular | 8 | SIL OFL 1.1 |
 | `CourierPrimeBold` | Courier Prime Bold | 9 | SIL OFL 1.1 |
 
-Each face contains printable ASCII, characters 32 through 126, at nominal pixel
+The generated reference tables contain printable ASCII, characters 32 through
+126, at nominal pixel
 sizes 12, 16, 20, 24, 28, 32, 40 and 48. Actual line heights depend on the face.
-Each line automatically selects its largest fitting face. Styles select a font
+Show text uses sparse SD assets built from the corresponding outlines, as
+described below. Each line automatically selects its largest fitting size. Styles select a font
 using `font_name` at any existing
 style level, including individual page fields.
 
@@ -51,12 +53,30 @@ when combining several documents with `+`. Names must differ from built-in font
 names. A declaration can be selected anywhere `font_name` is supported, including
 page and line styles.
 
-The normal `cntrl setup copy` command renders these fonts on the development
-machine using Pillow/FreeType. It uploads the resulting bitmap assets to
-`/cntrl/fonts/` on the pedal's SD card before copying the show. Fonts are rendered
-at the same eight sizes and for the same printable ASCII characters described
-above. Existing automatic fitting chooses the sizes used by each line. Colors
-are still applied by the pedal, and glyph backgrounds remain transparent.
+The normal `cntrl setup copy` command shapes text with HarfBuzz and rasterizes
+it with FreeType on the development machine. Only glyphs actually used by the
+show, at the sizes selected by automatic fitting, are uploaded to
+`/cntrl/fonts/` on the pedal's SD card. The bundled outline families (Circuit,
+CircuitBold, StillTime, MetalLord, CaveatBold, CourierPrime and CourierPrimeBold)
+use this same sparse path automatically. Classic, Arial and ComicSansMS remain
+built-in ASCII fonts for the UI and shows that select them. StillTime at size
+28 remains built in for the fixed cable-test title; show text uses its SD subset.
+
+Display labels and static page fields accept Unicode supported by the selected
+outline font. UTF-8 labels are limited to 63 bytes by the existing display
+buffers. Identifiers, routing names and the on-pedal editing UI retain their
+existing ASCII repertoire. Before emitting a show, the compiler reports all
+missing glyphs with their font, Unicode codepoint and field location, then fails.
+It does not silently replace missing characters or choose another font.
+
+The host prepares complete glyph runs, including ligatures, combining marks,
+script shaping and bidirectional ordering. The pedal draws those positions and
+does not run a Unicode shaping engine. Explicit bidi isolation controls are not
+supported. Fonts must provide monochrome-renderable outlines; color emoji and
+vertical text are not supported. Runtime numeric fields reserve digits and a
+minus sign, composed individually on the pedal. Boolean settings reserve both
+`true` and `false`. Colors and stippling remain runtime effects, with transparent
+glyph backgrounds.
 
 Font changes use normal SD uploads once the supporting firmware is installed.
 They do not erase or program the firmware flash. Identical assets are shared
@@ -66,9 +86,10 @@ not all flash writes.
 
 `cntrl compile --output PATH` also writes assets under `fonts/` beside its binary
 output. `cntrl setup download` downloads the show's bitmap assets beside its TOML,
-with declarations pointing to those `.cfont` files. Downloaded shows can be edited
-and recompiled without the original outline fonts because all eight rendered
-sizes are retained. The original TTF/OTF files are not stored on the pedal.
+with declarations pointing to those `.cfont` files. They can be recompiled with
+their existing text, sizes and styling without the original outline fonts.
+Adding text or choosing a size absent from a subset requires rebuilding with
+the original TTF/OTF file. Original outline files are not stored on the pedal.
 
 Only sizes referenced by the active show are loaded into RAM, before activation.
 Rendering does not read the SD card. The compiler and pedal enforce a maximum of
@@ -78,15 +99,27 @@ active fonts, so a failed load preserves the current show. Missing assets preven
 show upload; corrupt pixel data or insufficient memory prevent activation.
 Unused font files remain on SD when a show is deleted.
 
-The `.cfont` format begins with `CFN1` and a little-endian 32-bit size count. Each
-size has a 23-byte descriptor: nominal size, the existing 14 font descriptor
-bytes, and little-endian 32-bit index/data lengths, followed by those two byte
-arrays. Asset names are their eight-digit CRC32. CRC32 is an integrity check;
-byte-for-byte read-back also detects a collision with an existing asset. Assets
-are validated in a temporary file before being renamed into place.
+The `.cfont` format begins with `CFN2` and a little-endian 32-bit size count.
+Each size has a 23-byte descriptor: nominal size, format byte `2`, five reserved
+zero bytes, three 16-bit counts (glyphs, runs, runtime characters), byte-sized
+line height and baseline, and 32-bit index/pixel lengths. The index contains:
+
+- Sorted glyph records `<IHHhhI>`: original glyph ID, width, height, left bearing,
+  top bearing and bitmap offset.
+- Runtime character records `<IHh>`: Unicode codepoint, local glyph index and
+  integer advance.
+- Exact UTF-8 runs: `<HhhH>` for text byte length, left bound, width and position
+  count, followed by the text and `<Hhh>` glyph-index/x/y positions.
+
+All fields are little-endian. Each glyph bitmap uses one bit per pixel, most
+significant bit first, with each row padded to a byte. Repeated characters and
+ligatures share glyph bitmaps within a size. Assets are named by eight-digit
+CRC32, validated in a temporary file, then renamed into place. CRC32 checks
+integrity; byte-for-byte read-back also detects a collision with an existing
+asset. Old `CFN1` assets must be regenerated with their outline files.
 Show-format 14 display records use font ID 255 and the final four bytes for the
-asset CRC32; built-in font records retain zero in those bytes. Older firmware
-rejects asset references and needs a firmware update before using custom fonts.
+asset CRC32. Built-in font records retain zero in those bytes. Firmware with the
+CFN2 reader is required before uploading sparse fonts.
 
 ## Regenerating
 

@@ -55,7 +55,7 @@ def export(data: bytes) -> str:
     program_categories = cast(dict[str, object], source.pop('program_categories'))
 
     def text(offset: int, width: int) -> str:
-        return data[offset : offset + width].split(b'\0')[0].decode('ascii')
+        return data[offset : offset + width].split(b'\0')[0].decode('utf-8')
 
     result: dict[str, object] = {
         'chord_ms': chord,

@@ -65,13 +65,25 @@ def rgb565(value: tuple[int, int, int]) -> int:
 
 
 def bounds(text: str, metrics: models.FontMetrics) -> tuple[int, int]:
+    if text in metrics.runs:
+        values = metrics.runs[text]
+        return values[0], values[1]
     cursor = 0
     left, right = 0, 0
     for c in text:
-        index = (ord(c) - 32) * 3
-        advance, bearing, width = metrics.data[index : index + 3]
-        if bearing >= 128:
-            bearing -= 256
+        if metrics.characters:
+            if c not in metrics.characters:
+                raise ValueError(
+                    f'text was not prepared for this sparse font: {text!r}'
+                )
+            advance, bearing, width = metrics.characters[c]
+        else:
+            if not 32 <= ord(c) <= 126:
+                raise ValueError(f'font has no U+{ord(c):04X} {c!r}')
+            index = (ord(c) - 32) * 3
+            advance, bearing, width = metrics.data[index : index + 3]
+            if bearing >= 128:
+                bearing -= 256
         left = min(left, cursor + bearing)
         right = max(right, cursor + bearing + width)
         cursor += advance
@@ -98,7 +110,20 @@ def font_choice(
     width, height = target.display_width - 2 * pad, target.display_height - 2 * pad
     if min(width, height) <= 0:
         raise ValueError('padding leaves no drawable display area')
-    sizes = sorted(face.sizes, reverse=True)
+    sizes = sorted(
+        (
+            s
+            for s, m in face.sizes.items()
+            if not m.runs
+            or all(
+                t in m.runs or (m.characters and all(c in m.characters for c in t))
+                for t in texts
+            )
+        ),
+        reverse=True,
+    )
+    if not sizes:
+        raise ValueError(f'{face.name}: text was not prepared in the compiled font')
 
     def fits(size: int) -> bool:
         metrics = face.sizes[size]
