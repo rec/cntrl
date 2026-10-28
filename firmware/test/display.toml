@@ -5,7 +5,8 @@ setup = 'stock'
 channel = 1
 output = 'din'
 
-[[patches.wind]]
+[[groups.wind]]
+type = 'program-change'
 instrument = 'a'
 program = 1
 name = 'Flute'

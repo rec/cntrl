@@ -1,3 +1,4 @@
+#include "../../../../../../firmware/test/patch_hardware.h"
 #include "../router.h"
 #include "storage.h"
 #include "../../../../../../firmware/test/storage.h"
@@ -6,7 +7,7 @@
 #include <string>
 #include <vector>
 
-struct Device : cntrl::Hardware, cntrl::Replies, cntrl::splash::Replies {
+struct Device : TestPatchHardware, cntrl::Replies, cntrl::splash::Replies {
     cntrl::splash::Session *session = nullptr;
     std::vector<std::string> replies;
     unsigned sent = 0;
@@ -47,7 +48,7 @@ void test_performance_c_during_idle_fade(cntrl::splash::Receiver &assets, const 
         cntrl::splash::Player player(assets, panels);
         cntrl::splash::Session session(assets, player); device.session = &session;
         cntrl::Document document; assert(document.load(show.data(), unsigned(show.size()), device));
-        cntrl::Controller controller(device); controller.activate(document);
+        TestController controller(device); controller.activate(document);
         session.configure(false, 3000, 0); session.poll(0, true); session.poll(3000, true);
         unsigned now = 5000;
         if (phase) {
@@ -76,7 +77,7 @@ void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<u
         cntrl::splash::Player player(assets, panels);
         cntrl::splash::Session session(assets, player);
         device.session = &session;
-        cntrl::Controller controller(device);
+        TestController controller(device);
         cntrl::Document document;
         assert(document.load(show.data(), unsigned(show.size()), device));
         controller.activate(document);
@@ -119,7 +120,7 @@ int main(int argc, char **argv) {
     Memory asset_card;
     Device device;
     Panels panels;
-    cntrl::Controller controller(device);
+    TestController controller(device);
     cntrl::Documents documents(show_card, device, controller, device);
     cntrl::splash::Receiver assets(asset_card, device);
     cntrl::splash::Player player(assets, panels);

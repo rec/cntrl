@@ -1,3 +1,4 @@
+#include "patch_hardware.h"
 // A host-only protocol peer. No device access, used by the Python PTY test.
 #include <cntrl/documents.h>
 #include <unistd.h>
@@ -5,7 +6,7 @@
 #include <vector>
 #include "storage.h"
 
-struct Peer : cntrl::Hardware, cntrl::Replies, TestStorage {
+struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *name) const override {
         return !std::strcmp(name, "din") || !std::strcmp(name, "trs");
@@ -26,7 +27,7 @@ struct Peer : cntrl::Hardware, cntrl::Replies, TestStorage {
 
 int main() {
     Peer peer;
-    cntrl::Controller app(peer);
+    TestController app(peer);
     cntrl::Documents docs(peer, peer, app, peer);
     docs.boot();
     uint8_t buffer[37];

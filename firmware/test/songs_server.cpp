@@ -13,11 +13,13 @@ struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::Replies {
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
     bool revision(const cntrl::SongSelection &, uint32_t &crc) override { crc = 1; return true; }
-    bool resolve(const cntrl::SongSelection &, cntrl::SongPatch &) override { return false; }
+    bool activate(const cntrl::SongSelection &, const cntrl::SongContinuation &, bool) override { return false; }
+    cntrl::SongExecution execution_status() const override { return cntrl::SongExecution::completed; }
+    bool capture_source(const cntrl::Document *&) override { return false; }
     void reply(const char *line) override { std::cout << line << std::endl; }
 };
 int main() {
-    Board board; TestStorage storage; cntrl::Songs songs(storage, board, board);
+    Board board; TestStorage storage; cntrl::Songs songs(storage, board);
     if (!songs.boot()) return 1;
     cntrl::SongsTransfer transfer(songs, board);
     std::string line;

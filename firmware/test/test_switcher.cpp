@@ -1,3 +1,4 @@
+#include "patch_hardware.h"
 #include <cntrl/documents.h>
 #include <cassert>
 #include <fstream>
@@ -7,19 +8,20 @@
 #include "storage.h"
 #include <cntrl/setup_ui.h>
 
-struct Fake : cntrl::Hardware, cntrl::Replies {
+struct Fake : TestPatchHardware, cntrl::Replies {
     std::vector<std::vector<uint8_t>> sent;
     std::vector<std::string> routes, replies;
     std::vector<bool> transitions;
     std::vector<std::optional<unsigned>> durations;
     cntrl::Pane panes[3];
-    bool available = true;
+    bool connected = true;
+    bool available(const char *output) const override { return connected && supports(output); }
     unsigned errors = 0;
     uint8_t brightness = 0;
     bool splash = false;
     bool usb_midi_interface = false;
     bool send(const char *route, const uint8_t *data, unsigned n) override {
-        if (!available) return false;
+        if (!connected) return false;
         sent.emplace_back(data, data + n); routes.emplace_back(route); return true;
     }
     bool supports(const char *route) const override {
@@ -51,8 +53,17 @@ void upload(cntrl::Documents &docs, const std::vector<uint8_t> &data, const char
     while (docs.busy()) docs.tick(1);
 }
 
+void sync_program(std::vector<uint8_t> &bytes, const cntrl::Document &document, unsigned index) {
+    const uint8_t *cache = bytes.data() + (document.patch(index) - document.data());
+    uint8_t *node = bytes.data() + (document.node(document.browser_root(index)) - document.data());
+    assert(node[0] == 1);
+    std::memcpy(node + 4, cache, 2);
+    std::memcpy(node + 6, cache + 4, 5);
+    std::memcpy(node + 11, bytes.data() + (document.bank(index) - document.data()), 4);
+}
+
 void test_program_change_brightness(const cntrl::Document &doc) {
-    Fake hw; cntrl::Controller app(hw); app.activate(doc);
+    Fake hw; TestController app(hw); app.activate(doc);
     const auto normal = doc.brightness();
     app.button(2, true, 0); assert(hw.brightness == 255);
     auto count = hw.sent.size();
@@ -62,9 +73,9 @@ void test_program_change_brightness(const cntrl::Document &doc) {
     app.button(2, true, 1002); assert(hw.brightness == normal);
     app.button(2, false, 1003);
     app.action(1); // Another program for the same instrument.
-    hw.available = false;
+    hw.connected = false;
     app.button(2, true, 1004); assert(hw.brightness == normal);
-    app.button(2, false, 1005); hw.available = true;
+    app.button(2, false, 1005); hw.connected = true;
     app.button(2, true, 1006); assert(hw.brightness == 255);
     app.cancel_gesture(); assert(hw.brightness == normal);
     app.button(2, false, 1007); assert(hw.brightness == normal);
@@ -81,6 +92,7 @@ void test_program_change_brightness(const cntrl::Document &doc) {
     std::memcpy(aliases.data() + second + 4, aliases.data() + first + 4, 3);
     aliases[second + 7] = 64;
     std::memcpy(aliases.data() + (doc.bank(1) - doc.data()), doc.bank(0), 4);
+    sync_program(aliases, doc, 1);
     cntrl::put32(aliases.data() + 20, cntrl::checksum(aliases.data() + 28, unsigned(aliases.size()) - 28));
     for (uint8_t brightness : {uint8_t(0), uint8_t(255)}) {
         aliases[18] = brightness;
@@ -96,18 +108,18 @@ void test_program_change_brightness(const cntrl::Document &doc) {
 
 void test_greyed_names(const cntrl::Document &doc) {
     Fake hw;
-    cntrl::Controller app(hw);
+    TestController app(hw);
     app.activate(doc);
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2); // A:Flute is now known to be selected.
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
-    hw.available = false;
+    hw.connected = false;
     for (unsigned i = 0; i < 3; ++i) {
         app.button(2, true, 2 * i); app.button(2, false, 2 * i + 1);
         assert(hw.sent.size() == 1 && app.depth() == 1 && hw.transitions.size() == 1);
         assert(hw.errors == 0 && hw.brightness == doc.brightness());
     }
-    hw.available = true;
+    hw.connected = true;
     assert(hw.panes[1].lines[1].graphics.foreground == hw.panes[1].graphics.foreground);
     app.action(0); // B:Strings has not been sent.
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
@@ -121,10 +133,10 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2);
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
-    hw.available = false;
+    hw.connected = false;
     app.action(5); // Failed undo leaves A:Sax selected.
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
-    hw.available = true;
+    hw.connected = true;
     app.action(5); // Restore A:Flute, leaving A:Sax as candidate.
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(0);
@@ -134,7 +146,7 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert(hw.sent.size() == sent && app.depth() == 0);
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(1); // A:Sax
-    hw.available = false; app.action(2);
+    hw.connected = false; app.action(2);
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(0);
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
@@ -144,10 +156,10 @@ void test_greyed_names(const cntrl::Document &doc) {
 
 void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     Fake hw;
-    cntrl::Controller app(hw); app.activate(doc);
+    TestController app(hw); app.activate(doc);
     app.action(5); assert(hw.transitions.empty());
-    hw.available = false; app.action(2); assert(hw.transitions.empty());
-    hw.available = true; app.action(2); // Flute.
+    hw.connected = false; app.action(2); assert(hw.transitions.empty());
+    hw.connected = true; app.action(2); // Flute.
     app.action(0); app.action(2); // Strings.
     app.action(0); // Browse away to Sax before undoing Strings.
     unsigned sent = hw.sent.size();
@@ -171,17 +183,19 @@ void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
 
 void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
     Fake hw;
-    cntrl::Controller app(hw);
+    TestController app(hw);
     auto aliased = bytes;
+    cntrl::Document doc; assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
     unsigned first = 76 + 2 * 68 + 2 * 68, second = first + 82;
     aliased[second + 4] = aliased[first + 4]; // Same PC, but a different bank.
+    sync_program(aliased, doc, 1);
     cntrl::put32(aliased.data() + 20, cntrl::checksum(aliased.data() + 28, unsigned(aliased.size()) - 28));
-    cntrl::Document doc;
     assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
     app.activate(doc); app.action(2); app.action(1);
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     std::memcpy(aliased.data() + second + 5, aliased.data() + first + 5, 2);
     cntrl::put32(aliased.data() + (doc.bank(1) - aliased.data()), cntrl::u32(doc.bank(0)));
+    sync_program(aliased, doc, 1);
     cntrl::put32(aliased.data() + 20, cntrl::checksum(aliased.data() + 28, unsigned(aliased.size()) - 28));
     assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
     app.activate(doc); app.action(2); app.action(1);
@@ -195,7 +209,7 @@ void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
 }
 
 void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
-    TestStorage card; Fake hw; cntrl::Controller controller(hw);
+    TestStorage card; Fake hw; TestController controller(hw);
     cntrl::Documents docs(card, hw, controller, hw);
     docs.boot();
     assert(hw.splash); // No setup still uses the installed startup animation.
@@ -260,7 +274,7 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
 }
 
 void test_deletion_and_selection_power_loss(const std::vector<uint8_t> &bytes) {
-    TestStorage card; Fake hw; cntrl::Controller controller(hw);
+    TestStorage card; Fake hw; TestController controller(hw);
     cntrl::Documents docs(card, hw, controller, hw); docs.boot();
     upload(docs, bytes, "Alpha"); upload(docs, bytes, "Zulu");
     command(docs, "CNTRL SETUP FINISH"); assert(!std::strcmp(docs.selected(), "Alpha"));
@@ -294,7 +308,7 @@ void test_deletion_and_selection_power_loss(const std::vector<uint8_t> &bytes) {
 }
 
 void test_revision_history(const std::vector<uint8_t> &bytes) {
-    TestStorage card; Fake hw; cntrl::Controller controller(hw);
+    TestStorage card; Fake hw; TestController controller(hw);
     cntrl::Documents docs(card, hw, controller, hw); docs.boot();
     auto finish = [&](cntrl::Documents &d) {
         unsigned ticks = 0;
@@ -356,7 +370,7 @@ void test_catalogue_jobs_are_bounded_and_preserve_order(const std::vector<uint8_
         }
         bool write(const uint8_t *data, unsigned n) override { io += n; return TestStorage::write(data, n); }
     } card;
-    Fake hw; cntrl::Controller controller(hw); cntrl::Documents docs(card, hw, controller, hw);
+    Fake hw; TestController controller(hw); cntrl::Documents docs(card, hw, controller, hw);
     docs.boot();
     for (const char *name : {"Zulu", "Alpha", "Middle", "Deleted"}) upload(docs, bytes, name);
     // Newer tombstone hides the older valid payload.
@@ -415,7 +429,7 @@ int main(int argc, char **argv) {
         cntrl::Document formatted;
         assert(formatted.load(display_bytes.data(), unsigned(display_bytes.size()), hw));
         Fake output;
-        cntrl::Controller app(output); app.activate(formatted);
+        TestController app(output); app.activate(formatted);
         const auto &view = output.panes[2];
         assert(!std::strcmp(view.lines[0].text, "192"));
         assert(!std::strcmp(view.lines[1].text, "Flute"));
@@ -454,12 +468,7 @@ int main(int argc, char **argv) {
     }
     {
         auto scaled = bytes;
-        unsigned display_offset = unsigned(doc.bank(doc.patches()) - bytes.data()) + 4;
-        for (unsigned i = 0; i < doc.patches() * 3; ++i) {
-            unsigned size = cntrl::u16(scaled.data() + display_offset);
-            display_offset += 2 + (size == 65535 ? 0 : size);
-        }
-        display_offset += 6 + cntrl::u16(scaled.data() + display_offset + 4) * 100;
+        unsigned display_offset = doc.display_metadata();
         unsigned style = display_offset + 16;
         for (unsigned i = 0; i < cntrl::u16(scaled.data() + display_offset + 4); ++i) {
             scaled[style + i * 16 + 1] = 16;
@@ -469,12 +478,12 @@ int main(int argc, char **argv) {
         cntrl::Document autoscale;
         assert(autoscale.load(scaled.data(), unsigned(scaled.size()), hw));
         Fake display;
-        cntrl::Controller app(display);
+        TestController app(display);
         app.activate(autoscale);
         assert(display.panes[2].lines[0].graphics.size == 16);
         assert(display.panes[2].lines[1].graphics.size == 16);
         TestStorage storage;
-        cntrl::Controller controller(display);
+        TestController controller(display);
         cntrl::Documents documents(storage, display, controller, display);
         documents.boot(); upload(documents, scaled); command(documents, "CNTRL SETUP FINISH");
         assert(documents.edit_begin() && documents.edit_adjust(0, 7, 1));
@@ -533,7 +542,7 @@ int main(int argc, char **argv) {
     corrupt = bytes; corrupt[76 + 64] = 16;
     cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
-    cntrl::Controller app(hw);
+    TestController app(hw);
     for (unsigned value : {0u, 64u, 255u}) {
         auto configured = bytes;
         configured[18] = uint8_t(value);
@@ -585,10 +594,10 @@ int main(int argc, char **argv) {
     assert(!std::strcmp(hw.panes[2].lines[1].text, "Flute"));
     app.action(5); assert(hw.sent.size() == count);
     app.activate(doc);
-    hw.available = false; app.action(2); assert(app.depth() == 0 && hw.errors);
-    hw.available = true; app.action(2); app.action(1); app.action(2);
-    hw.available = false; app.action(5); assert(app.depth() == 2);
-    hw.available = true;
+    hw.connected = false; app.action(2); assert(app.depth() == 0 && hw.errors);
+    hw.connected = true; app.action(2); app.action(1); app.action(2);
+    hw.connected = false; app.action(5); assert(app.depth() == 2);
+    hw.connected = true;
     app.activate(doc);
     for (unsigned i = 0; i < cntrl::history_capacity + 20; ++i) {
         app.action(2); app.action(i % 2 ? 0 : 1); // Alternate Flute and Sax.
@@ -628,13 +637,13 @@ int main(int argc, char **argv) {
     // Persistent upload, status, reboot, and interrupted inactive-slot writes.
     TestStorage memory;
     Fake io;
-    cntrl::Controller runner(io);
+    TestController runner(io);
     cntrl::Documents docs(memory, io, runner, io);
     docs.boot(); assert(io.sent.empty());
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].lines[1].text, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 16 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 17 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].lines[1].text, "Flute"));
     auto new_show = bytes;

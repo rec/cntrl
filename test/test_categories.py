@@ -38,10 +38,15 @@ def show() -> dict[str, object]:
                 ),
             ],
         ),
-        patches={
+        groups={
             'Song 1': [
-                {'instrument': 'synth', 'program': 1, 'categories': ['whole-system']},
-                {'instrument': 'synth', 'program': 1},
+                {
+                    'type': 'program-change',
+                    'instrument': 'synth',
+                    'program': 1,
+                    'categories': ['whole-system'],
+                },
+                {'type': 'program-change', 'instrument': 'synth', 'program': 1},
             ]
         },
         categories={'sax': models.Category(), 'whole-system': models.Category()},
@@ -58,10 +63,10 @@ def test_patch_inherits_program_categories_without_changing_groups(
     assert b'sax, whole-system\0' in data
     assert b'sax\0' in data
     exported = models.Show.model_validate(tomlkit.parse(resolved.export(data)).unwrap())
-    assert list(exported.patches) == ['Song 1']
+    assert list(exported.groups) == ['Song 1']
     assert exported.definitions is not None
     assert exported.definitions.programs[0].categories == ['sax']
-    raw = exported.patches['Song 1']
+    raw = exported.groups['Song 1']
     assert isinstance(raw, list)
     patches = [models.ProgramChange.model_validate(p) for p in raw]
     assert [p.categories for p in patches] == [['whole-system'], []]
@@ -111,7 +116,7 @@ def test_unknown_category_references_are_errors(
     entry = (
         document['definitions']['programs'][0]
         if owner == 'program'
-        else document['patches']['Song 1'][0]
+        else document['groups']['Song 1'][0]
     )
     entry['categories'] = ['absent']
     with pytest.raises(compiler.CompilationError, match='unknown categories.*absent'):
@@ -144,15 +149,15 @@ def test_icons_preserve_explicit_owners_through_recompilation(
     show = models.Show.model_validate(show).model_dump(exclude_none=True)
     show['categories']['sax']['style'] = {'icon': 'images/sax.png'}
     show['definitions']['programs'][0]['style'] = {'icon': 'images/program.png'}
-    show['patches']['Song 1'][0]['style'] = {'icon': icon}
+    show['groups']['Song 1'][0]['style'] = {'icon': icon}
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['categories']['sax']['style'] == {'icon': 'images/sax.png'}
     assert exported['definitions']['programs'][0]['style'] == {
         'icon': 'images/program.png'
     }
-    assert exported['patches']['Song 1'][0]['style'] == {'icon': icon}
-    assert 'style' not in exported['patches']['Song 1'][1]
+    assert exported['groups']['Song 1'][0]['style'] == {'icon': icon}
+    assert 'style' not in exported['groups']['Song 1'][1]
     assert compiler.compile_show(exported, {}, [], target) == data
 
 

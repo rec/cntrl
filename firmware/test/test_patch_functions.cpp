@@ -1,9 +1,10 @@
+#include "patch_hardware.h"
 #include <cntrl/controller.h>
 #include <cassert>
 #include <fstream>
 #include <iterator>
 #include <vector>
-struct Board : cntrl::Hardware {
+struct Board : TestPatchHardware {
     unsigned switches = 0, sends = 0, errors = 0;
     bool available = true;
     bool send(const char *, const uint8_t *, unsigned) override { ++sends; return true; }
@@ -23,10 +24,11 @@ int main(int argc, char **argv) {
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
     Board board; cntrl::Document document;
     assert(document.load(bytes.data(), unsigned(bytes.size()), board));
-    cntrl::Controller controller(board); controller.activate(document);
+    TestController controller(board); controller.activate(document);
     controller.action(0); controller.action(1); controller.action(5);
     assert(!board.switches && !board.sends);
     controller.action(2); assert(board.switches == 1 && !board.sends && !controller.depth());
     controller.action(5); assert(board.switches == 1);
+    controller.activate(document); // A failed later visit starts after a fresh boot.
     board.available = false; controller.action(2); assert(board.errors == 1 && !controller.depth());
 }

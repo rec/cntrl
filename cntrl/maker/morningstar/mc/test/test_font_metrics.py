@@ -15,7 +15,7 @@ def test_page_lines_select_different_native_font_families() -> None:
     show = models.Show.model_validate(
         {
             'instruments': {},
-            'patches': {},
+            'groups': {},
             'style': {'font_name': 'Arial'},
             'pages': {
                 'patch': {'line_styles': {'display_name': {'font_name': 'ComicSansMS'}}}

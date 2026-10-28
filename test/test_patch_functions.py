@@ -16,20 +16,20 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
     ).model_copy(update={'functions': ['stock-firmware'], 'buttons': list('ABCDEF')})
     show = {
         'instruments': {},
-        'patches': {
+        'groups': {
             'Functions': [
                 {
-                    'function': 'stock-firmware',
                     'exit_buttons': 'F+A',
                     'display_name': 'Original firmware',
                     'style': {'foreground_color': 'red'},
+                    'type': 'stock-firmware',
                 }
             ]
         },
     }
     data = compiler.compile_show(show, {'setups': []}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['patches']['Functions'][0]['exit_buttons'] == 'A+F'
+    assert exported['groups']['Functions'][0]['exit_buttons'] == 'A+F'
     assert compiler.compile_show(exported, {'setups': []}, [], target) == data
     with pytest.raises(compiler.CompilationError, match='unavailable'):
         compiler.compile_show(
@@ -59,33 +59,37 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
 @pytest.mark.parametrize('pair', ['A+A', 'AF', 'A+G', 'A+B+C', 'a+f'])
 def test_invalid_exit_combinations_are_rejected(pair: str) -> None:
     with pytest.raises(ValueError, match='exit_buttons'):
-        models.FunctionPatch(function='stock-firmware', exit_buttons=pair)
+        models.StockFirmware(type='stock-firmware', exit_buttons=pair)
 
 
 def test_function_patches_cannot_contain_midi_properties() -> None:
     with pytest.raises(ValueError):
         compiler.normalize_patch(
-            {'function': 'stock-firmware', 'exit_buttons': 'A+F', 'program': 1}
+            {'exit_buttons': 'A+F', 'program': 1, 'type': 'stock-firmware'}
         )
 
 
 def test_song_with_function_and_repeated_patches_preserves_occurrences() -> None:
+    root = Path(__file__).resolve().parents[1]
+    target = models.Target.model_validate(
+        compiler.read_document(root / 'firmware/test/target.json')
+    ).model_copy(update={'functions': ['stock-firmware'], 'buttons': list('ABCDEF')})
     library = songs.Library(
         songs=[
             songs.Song(
                 id=1,
                 name='Song',
                 patches=[
-                    songs.ProgramChange(output='din', channel=1, program=1),
-                    songs.Function(function='stock-firmware', exit_buttons='E+B'),
-                    songs.ProgramChange(output='din', channel=1, program=1),
+                    {'type': 'midi', 'output': 'din', 'bytes': [0xC0, 0]},
+                    {'type': 'stock-firmware', 'exit_buttons': 'E+B'},
+                    {'type': 'midi', 'output': 'din', 'bytes': [0xC0, 0]},
                 ],
             )
         ]
     )
-    data = songs.encode(library)
+    data = songs.encode(library, target)
     restored = songs.decode(data)
-    assert len({p.id for p in restored.songs[0].patches}) == 3
+    assert len({p['id'] for p in restored.songs[0].patches}) == 3
     function = restored.songs[0].patches[1]
-    assert isinstance(function, songs.Function) and function.exit_buttons == 'B+E'
-    assert songs.encode(restored) == data
+    assert function['type'] == 'stock-firmware' and function['exit_buttons'] == 'B+E'
+    assert songs.encode(restored, target) == data

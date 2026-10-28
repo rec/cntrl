@@ -66,6 +66,7 @@ public:
                 }
                 if (!docs_.edit_begin()) return;
                 mode_ = Mode::patch; patch_ = field_ = 0;
+                if (!docs_.document().patches()) { mode_ = Mode::field; field_ = 5; }
             }
         } else if (mode_ == Mode::history) {
             if (button == 2 && !revision_.number) {
@@ -96,19 +97,22 @@ public:
             else if (button == 2) { mode_ = Mode::field; field_ = 0; }
             else if (button == 5) { mode_ = Mode::decision; item_ = 2; }
         } else if (mode_ == Mode::field) {
-            if (button < 2) field_ = (field_ + 8 + (button == 0 ? -1 : 1)) % 8;
+            if (button < 2) {
+                unsigned first = docs_.document().patches() ? 0 : 5, count = 8 - first;
+                field_ = first + (field_ - first + count + (button == 0 ? -1 : 1)) % count;
+            }
             else if (button == 2) mode_ = Mode::value;
-            else if (button == 5) mode_ = Mode::patch;
+            else if (button == 5) { mode_ = docs_.document().patches() ? Mode::patch : Mode::decision; item_ = 2; }
         } else if (mode_ == Mode::value) {
             if (button < 2) docs_.edit_adjust(patch_, field_, button == 0 ? -1 : 1);
             else if (button == 2 || button == 5) mode_ = Mode::field;
         } else if (mode_ == Mode::decision) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
-            else if (button == 5) mode_ = Mode::patch;
+            else if (button == 5) mode_ = docs_.document().patches() ? Mode::patch : Mode::field;
             else if (button == 2) {
                 if (item_ == 0) { if (docs_.edit_save(now)) mode_ = Mode::saving; else { hardware_.error("Save failed"); return; } }
                 else if (item_ == 1) { docs_.edit_cancel(); close(); return; }
-                else mode_ = Mode::patch;
+                else mode_ = docs_.document().patches() ? Mode::patch : Mode::field;
             }
         }
         render();

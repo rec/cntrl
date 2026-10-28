@@ -6,7 +6,7 @@
 
 namespace cntrl {
 constexpr unsigned metadata_header_size = 8;
-constexpr unsigned document_version = 16;
+constexpr unsigned document_version = 17;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -64,7 +64,7 @@ public:
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 68 + np * 82;
-        if (ni > max_instruments || !nc || nc > max_categories || !np
+        if (ni > max_instruments || nc > max_categories || bool(nc) != bool(np)
             || meta + metadata_header_size + ni * 64 + np * 4 > length
             || std::memcmp(bytes + meta, "CMTA", 4)) return false;
         unsigned nb = u16(bytes + meta + 4);
@@ -78,58 +78,17 @@ public:
             if (end + size > length) return false;
             end += size;
         }
-        if (end + 6 > length || std::memcmp(bytes + end, "CACT", 4)) return false;
-        unsigned action_start = end + 6, action_count = u16(bytes + end + 4);
-        if (action_count > hardware.action_capacity() || action_start + action_count * 100 > length) return false;
-        unsigned buttons = 0;
-        for (unsigned i = 0; i < action_count; ++i) {
-            const uint8_t *a = bytes + action_start + i * 100;
-            if (a[0] >= 5 || a[1] > 3 || u16(a + 2) >= ni || !label_valid(a + 34, 64) || (buttons & (1u << a[0]))) return false;
-            buttons |= 1u << a[0];
-            unsigned channel = bytes[76 + u16(a + 2) * 68 + 64];
-            if (!(a[1] & 2)) {
-                if (u16(a + 32) >= ni) return false;
-                const uint8_t *off = bytes + 76 + u16(a + 32) * 68;
-                if (off[64] != channel || std::memcmp(off + 32, bytes + 76 + u16(a + 2) * 68 + 32, 32)) return false;
-            }
-            for (unsigned s = 0; s < 2; ++s) {
-                const uint8_t *b = a + 6 + s * 14;
-                if (a[1] & 2) {
-                    if (a[4 + s] || u16(b) >= np) return false;
-                    const uint8_t *p = bytes + 76 + ni * 68 + nc * 68 + u16(b) * 82;
-                    if (u16(p) >= ni) return false;
-                    const uint8_t *instrument = bytes + 76 + u16(p) * 68;
-                    if (instrument[64] != channel || std::memcmp(instrument + 32, bytes + 76 + u16(a + 2) * 68 + 32, 32)) return false;
-                    continue;
-                }
-                if (!midi::batch_valid(b, a[4 + s])) return false;
-                if (a[4 + s] != 3 || b[0] != 0xb0) return false;
-            }
-        }
-        end = action_start + action_count * 100;
-        auto controls = [&](const uint8_t *a, unsigned controller) {
-            for (unsigned s = 0; s < 2; ++s) {
-                const uint8_t *b = a + 6 + s * 14;
-                if (!(a[1] & 2)) { if (b[1] == controller) return true; continue; }
-                const uint8_t *p = bytes + 76 + ni * 68 + nc * 68 + u16(b) * 82;
-                if ((controller == 0 && p[5] != 255) || (controller == 32 && p[6] != 255)
-                    || (controller == 7 && p[7] != 255) || (controller == 10 && p[8] != 255)) return true;
-            }
-            return false;
-        };
-        for (unsigned i = 0; i < action_count; ++i) for (unsigned j = 0; j < i; ++j) {
-            const uint8_t *a = bytes + action_start + i * 100, *b = bytes + action_start + j * 100;
-            const uint8_t *x = bytes + 76 + u16(a + 2) * 68, *y = bytes + 76 + u16(b + 2) * 68;
-            if (x[64] != y[64] || std::memcmp(x + 32, y + 32, 32)) continue;
-            if ((a[1] & 2) && (b[1] & 2)) return false;
-            for (unsigned c = 0; c < 128; ++c) if (controls(a, c) && controls(b, c)) return false;
-        }
+        unsigned graph = end;
+        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware)) return false;
+        unsigned switch_count = u16(bytes + graph + 10);
+        unsigned switch_start = graph + 16 + u16(bytes + graph + 8) * 4 + np * 2;
+        end += u32(bytes + graph + 4);
         if (end + 16 > length || std::memcmp(bytes + end, "CDSP", 4)) return false;
         unsigned styles = end + 16, ns = u16(bytes + end + 4), pages = u16(bytes + end + 6);
         unsigned nt = u16(bytes + end + 8), page_bytes = u16(bytes + end + 10);
         unsigned page_start = styles + ns * 16, texts = page_start + page_bytes;
         if (!pages || texts > length) return false;
-        for (unsigned i = 0; i < action_count; ++i) if (u16(bytes + action_start + i * 100 + 98) >= pages) return false;
+        for (unsigned i = 0; i < switch_count; ++i) if (u16(bytes + switch_start + i * 72 + 70) >= pages) return false;
         for (unsigned i = 0; i < ns; ++i)
             if (!graphics_valid(bytes + styles + i * 16, hardware)) return false;
         unsigned cursor = page_start;
@@ -187,7 +146,7 @@ public:
             for (unsigned j = start; j < start + count; ++j) {
                 const uint8_t *q = bytes + 76 + ni * 68 + nc * 68 + j * 82;
                 bool function = u16(q) == 65535;
-                if (function ? (!hardware.supports_function(q[9]) || q[9] != 1 || !button_pair_valid(q[10]) || q[11] || q[4] || q[5] != 255 || q[6] != 255 || q[7] != 255 || q[8] != 255 || u16(q + 2) != c || !label_valid(q + 12, 64)) : (u16(q) >= ni || u16(q + 2) != c || q[4] > 127
+                if (function ? ((q[9] && (!hardware.supports_function(q[9]) || q[9] != 1 || !button_pair_valid(q[10]))) || (!q[9] && q[10]) || q[11] || q[4] || q[5] != 255 || q[6] != 255 || q[7] != 255 || q[8] != 255 || u16(q + 2) != c || !label_valid(q + 12, 64)) : (u16(q) >= ni || u16(q + 2) != c || q[4] > 127
                     || q[9] || q[10] || q[11] || !label_valid(q + 12, 64))) return false;
                 for (unsigned k = 5; k < 9; ++k) if (q[k] > 127 && q[k] != 255) return false;
                 uint32_t bank = u32(bytes + meta + metadata_header_size + ni * 64 + nb * 8 + j * 4);
@@ -216,13 +175,24 @@ public:
         if (next != np) return false;
         data_ = bytes; length_ = length; instruments_ = ni; categories_ = nc; patches_ = np;
         styles_ = styles; pages_ = page_start; texts_ = texts;
-        actions_ = action_start; action_count_ = action_count;
+        graph_ = graph;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
-    unsigned actions() const { return action_count_; }
-    const uint8_t *action(unsigned i) const { return data_ + actions_ + i * 100; }
-    unsigned display_metadata() const { return actions_ + action_count_ * 100; }
+    unsigned switches() const { return u16(data_ + graph_ + 10); }
+    const uint8_t *switch_assignment(unsigned i) const { return data_ + graph_ + 16 + nodes() * 4 + patches_ * 2 + i * 72; }
+    unsigned nodes() const { return u16(data_ + graph_ + 8); }
+    unsigned graph_metadata() const { return graph_; }
+    const uint8_t *node(unsigned i) const { return data_ + graph_ + u32(data_ + graph_ + 16 + i * 4); }
+    unsigned browser_root(unsigned i) const { return u16(data_ + graph_ + 16 + nodes() * 4 + i * 2); }
+    unsigned named_patches() const { return u16(data_ + graph_ + 14); }
+    const uint8_t *named_patch(unsigned i) const { return switch_assignment(switches()) + i * 66; }
+    int named_patch(const char *key) const {
+        for (unsigned i = 0; i < named_patches(); ++i)
+            if (!std::strcmp(key, reinterpret_cast<const char *>(named_patch(i)))) return int(u16(named_patch(i) + 64));
+        return -1;
+    }
+    unsigned display_metadata() const { return graph_ + u32(data_ + graph_ + 4); }
     unsigned length() const { return length_; }
     const uint8_t *data() const { return data_; }
     unsigned categories() const { return categories_; }
@@ -277,6 +247,116 @@ public:
     const uint8_t *mapping(unsigned i) const { return data_ + metadata() + metadata_header_size + instruments_ * 64 + i * 8; }
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
+    static bool graph_valid(const uint8_t *bytes, unsigned length, unsigned start,
+                            unsigned instruments, unsigned browser_count, unsigned metadata,
+                            unsigned mappings, const Hardware &hardware) {
+        if (start > length || length - start < 16 || std::memcmp(bytes + start, "CPAT", 4)) return false;
+        const uint8_t *g = bytes + start;
+        unsigned size = u32(g + 4), count = u16(g + 8), switches = u16(g + 10), named = u16(g + 14);
+        unsigned browser = 16 + count * 4, assignments = browser + browser_count * 2;
+        unsigned names = assignments + switches * 72, first = names + named * 66;
+        if (size > length - start || size < first || u16(g + 12) != browser_count
+            || switches > hardware.switch_capacity()) return false;
+        for (unsigned i = 0; i < browser_count; ++i) if (u16(g + browser + i * 2) >= count) return false;
+        unsigned buttons = 0;
+        for (unsigned i = 0; i < switches; ++i) {
+            const uint8_t *s = g + assignments + i * 72;
+            if (s[0] >= 5 || s[1] > 2 || u16(s + 2) >= count || (buttons & (1u << s[0]))
+                || !label_valid(s + 6, 64) || (s[1] ? u16(s + 4) >= count : u16(s + 4) != 65535)) return false;
+            buttons |= 1u << s[0];
+        }
+        for (unsigned i = 0; i < named; ++i) {
+            const uint8_t *n = g + names + i * 66;
+            if (!text_valid(n, 64) || u16(n + 64) >= count) return false;
+            for (unsigned j = 0; j < i; ++j) if (!std::strcmp(reinterpret_cast<const char *>(n),
+                reinterpret_cast<const char *>(g + names + j * 66))) return false;
+        }
+        for (unsigned i = 0; i < count; ++i) {
+            unsigned offset = u32(g + 16 + i * 4);
+            if (offset != first || offset > size || size - offset < 4) return false;
+            const uint8_t *n = g + offset, *p = n + 4;
+            unsigned length = u16(n + 2);
+            if (length > size - offset - 4) return false;
+            first = offset + 4 + length;
+            switch (n[0]) {
+            case 1:
+                if (n[1] || length != 11 || u16(p) >= instruments || p[2] > 127) return false;
+                for (unsigned j = 3; j < 7; ++j) if (p[j] > 127 && p[j] != 255) return false;
+                {
+                    uint32_t bank = u32(p + 7);
+                    bool mapped = bank == 0xffffffffu && p[3] == 255 && p[4] == 255;
+                    for (unsigned j = 0; j < mappings; ++j) {
+                        const uint8_t *m = bytes + metadata + metadata_header_size + instruments * 64 + j * 8;
+                        if (u16(m) == u16(p) && u32(m + 2) == bank && m[6] == p[3] && m[7] == p[4]) mapped = true;
+                    }
+                    if (!mapped) return false;
+                }
+                break;
+            case 2:
+                if ((n[1] != 0 && n[1] != 1 && n[1] != 2 && n[1] != 4 && n[1] != 9)
+                    || length <= 32 || !text_valid(p, 32)
+                    || !hardware.supports(reinterpret_cast<const char *>(p))
+                    || !(n[1] == 4 ? midi::stream_valid(p + 32, length - 32) : midi::message_valid(p + 32, length - 32))) return false;
+                if (n[1] == 0 && (length != 35 || p[32] >> 4 != 11)) return false;
+                if (n[1] == 2 && (length != 35 || p[32] >> 4 != 14)) return false;
+                if (n[1] == 9 && p[32] != 0xf0) return false;
+                if (n[1] == 4) {
+                    if (length != 44 || p[32] >> 4 != 11) return false;
+                    constexpr unsigned controllers[] = {99, 98, 6, 38};
+                    for (unsigned j = 0; j < 4; ++j)
+                        if (p[32 + j * 3] != p[32] || p[33 + j * 3] != controllers[j]) return false;
+                }
+                break;
+            case 3:
+                if (n[1] || length != 5 || p[0] < 1 || p[0] > 10
+                    || (p[0] == 1 && u32(p + 1) > 255) || (p[0] == 2 && u32(p + 1) > 1)
+                    || (p[0] > 2 && u32(p + 1))) return false;
+                break;
+            case 4:
+                if (n[1] || length != 1 || !button_pair_valid(p[0]) || !hardware.supports_function(1)) return false;
+                break;
+            case 5:
+                if (n[1] || length < 2 || length != 2u + u16(p) * 2u) return false;
+                for (unsigned j = 0; j < u16(p); ++j) if (u16(p + 2 + j * 2) >= count) return false;
+                break;
+            case 6:
+                if (n[1] || length != 128 || (p[0] && !text_valid(p, 64)) || !text_valid(p + 64, 64)) return false;
+                if (!p[0]) {
+                    bool found = false;
+                    for (unsigned j = 0; j < named; ++j)
+                        if (!std::strcmp(reinterpret_cast<const char *>(p + 64), reinterpret_cast<const char *>(g + names + j * 66))) found = true;
+                    if (!found) return false;
+                }
+                break;
+            default: return false;
+            }
+        }
+        if (first != size) return false;
+        for (unsigned i = 0; i < browser_count; ++i) {
+            unsigned root = u16(g + browser + i * 2), visited = 0;
+            const uint8_t *node = nullptr;
+            while (visited++ <= count) {
+                node = g + u32(g + 16 + root * 4);
+                if (node[0] != 6 || node[4]) break;
+                bool found = false;
+                for (unsigned j = 0; j < named; ++j)
+                    if (!std::strcmp(reinterpret_cast<const char *>(node + 68), reinterpret_cast<const char *>(g + names + j * 66))) {
+                        root = u16(g + names + j * 66 + 64); found = true; break;
+                    }
+                if (!found) return false;
+            }
+            if (visited > count + 1) return false;
+            const uint8_t *cache = bytes + 76 + instruments * 68 + u16(bytes + 14) * 68 + i * 82;
+            if (node[0] == 1) {
+                const uint8_t *bank = bytes + metadata + metadata_header_size + instruments * 64 + mappings * 8 + i * 4;
+                if (u16(cache) != u16(node + 4) || std::memcmp(cache + 4, node + 6, 5)
+                    || u32(bank) != u32(node + 11)) return false;
+            } else if (node[0] == 4) {
+                if (u16(cache) != 65535 || cache[9] != 1 || cache[10] != node[4]) return false;
+            } else if (u16(cache) != 65535 || cache[9]) return false;
+        }
+        return true;
+    }
     static bool graphics_valid(const uint8_t *p, const Hardware &hardware) {
         return (p[0] == 255 ? u32(p + 12) && hardware.supports_font_asset(u32(p + 12), p[1])
                            : !u32(p + 12) && hardware.supports_font(p[0], p[1])) && !p[3]
@@ -312,6 +392,6 @@ private:
     const uint8_t *data_ = nullptr;
     unsigned length_ = 0, instruments_ = 0, categories_ = 0, patches_ = 0;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
-    unsigned actions_ = 0, action_count_ = 0;
+    unsigned graph_ = 0;
 };
 } // namespace cntrl

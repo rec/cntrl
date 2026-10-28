@@ -1,19 +1,23 @@
-# Actions module on MC6 Pro
+# Switches module on MC6 Pro
 
-The module implements the portable
-[momentary/latched action specification](../../../../plan/momentary-latched.md).
-See [configuration and controls](../../../../doc/momentary-latched.md).
-Open A+D, choose Actions, then use the configured A through E assignments. F begins
-cleanup; a second F explicitly abandons blocked cleanup with an unknown-state
-warning. Held entry switches rearm individually when released.
+Switches invokes the shared Patch executor for press, momentary and latched
+assignments. See [configuration and controls](../../../../doc/momentary-latched.md)
+and [Patch authoring](../../../../doc/patches.md). Open A+D, choose Switches,
+then use the configured A through E assignments. F begins cleanup; a second F
+abandons blocked cleanup with an unknown-state warning. Held entry switches
+rearm individually when released.
 
-`ACTIONS=1` is the default firmware build setting. `ACTIONS=0` removes the module,
-menu entry and owned-message storage. A host target profile with `max_actions=0`
-rejects configurations requiring the excluded module. The target adapter pauses
-the performance bridge while Actions is open and restores the setup preference
-after cleanup. Setup/asset replacement and stock-firmware requests are rejected
-until the module closes. Returning to the module menu performs cleanup before
-Panic or Original firmware can be entered.
+`SWITCHES=1` is the default Makefile setting and defines `CNTRL_SWITCHES=1`.
+`SWITCHES=0` excludes the module and menu entry. A host target profile with
+`max_switches=0` rejects setups requiring it. The target pauses the performance
+bridge while Switches is open and restores the runtime interface preference
+after cleanup. Configuration and asset replacement are locked while source data
+is pinned. A press Patch can visit stock firmware after other assignments have
+finished their required cleanup.
+
+The deployment evidence below describes the earlier Actions implementation and
+setup format 16. It does not qualify the current Patch-unity implementation or
+claim that its firmware has been flashed.
 
 ## Deployment: 2026-10-28
 

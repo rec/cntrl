@@ -27,7 +27,7 @@ public:
         };
         unsigned length = 0, overwrite = 0; unsigned long crc = 0; int end = 0;
         if (std::sscanf(line, "CNTRL SONGS BEGIN %u %lx %u%n", &length, &crc, &overwrite, &end) == 3
-            && end && !line[end] && length >= 12 && length <= 0xffffffffu - 20 && crc <= 0xfffffffful && overwrite <= 1) {
+            && end && !line[end] && length >= 16 && length <= 0xffffffffu - 20 && crc <= 0xfffffffful && overwrite <= 1) {
             if (receiving_) { songs_.import_abort(); receiving_ = false; }
             if (!overwrite && (songs_.invalid() || songs_.counts().songs || songs_.counts().sets)) return error();
             if (!songs_.import_begin(length)) return error();

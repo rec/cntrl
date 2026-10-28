@@ -132,8 +132,30 @@ def compile_inputs(
         errors.append('at least one setup data-file expression is required')
     result: dict[str, bytes] = {}
     seen: set[str] = set()
+    sources: dict[str, object] = {}
+    # Companion documents use the same logical names on the host and SD card.
+    # Load the whole dependency graph before compiling or opening a transport.
     for e in documents:
-        document = data_files.load(e, command.avoid_confict, errors)
+        sources[e.name] = data_files.load(e, command.avoid_confict, errors)
+    index = 0
+    while index < len(documents):
+        expression = documents[index]
+        index += 1
+        for name in document_references(sources[expression.name]):
+            if any(n.lower() == name.lower() for n in sources):
+                continue
+            try:
+                data_files.validate_name(name)
+            except ValueError as error:
+                errors.append(f'{expression.paths[0]}: {error}')
+                continue
+            companion = data_files.DataFile(
+                name=name, paths=[expression.paths[0].parent / f'{name}.toml']
+            )
+            sources[name] = data_files.load(companion, command.avoid_confict, errors)
+            documents.append(companion)
+    for e in documents:
+        document = sources[e.name]
         try:
             data_files.validate_name(e.name)
         except ValueError as error:
@@ -150,13 +172,31 @@ def compile_inputs(
                     table_data,
                     target,
                     fonts,
+                    sources,
                 )
                 if assets is not None:
                     assets[e.name] = fonts
             except compiler.CompilationError as error:
-                errors.extend(f'{e.name}: {x}' for x in error.errors)
+                errors.extend(f'{e.paths[0]} ({e.name}): {x}' for x in error.errors)
     if errors:
         raise compiler.CompilationError(errors)
+    return result
+
+
+def document_references(document: object) -> list[str]:
+    result: list[str] = []
+    pending = [document]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            if value.get('type') == 'reference' and isinstance(
+                name := value.get('document'), str
+            ):
+                if name not in result:
+                    result.append(name)
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
     return result
 
 

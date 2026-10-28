@@ -4,7 +4,9 @@ The portable C++ implementation is under `include/cntrl/`. It contains no
 Arduino headers or target pin numbers. `Hardware` accepts complete MIDI message
 sequences and semantic panes; `SetupStorage` provides named pairs of document
 slots and an application-owned persistent selection record.
-The controller owns navigation, gestures, Undo and layout. A board adapter owns
+`PatchExecutor` owns executable dispatch, ordered composition, pending delivery
+and source pinning. Switch timing, browser activation and songs all use it.
+The controller owns navigation, gestures, known program Undo and layout. A board adapter owns
 scanning, electrical debounce, pixels, output queues and storage access.
 
 Run host tests, including address and undefined-behavior sanitizers:
@@ -123,13 +125,13 @@ patch's own `display_name`. They recompile without the original library files.
 Font sizing and precomputed offsets use the final display label only; a hidden
 original name is preserved as UTF-8 metadata without display-character limits.
 
-Shorthand uses its first character as delimiter, with fields instrument,
-program, volume, pan, bank. Empty and omitted trailing optional fields are
-allowed. All-digit program fields are PC numbers; other text is a regex. Choose
-another delimiter or expanded fields if a field contains the delimiter. Separate
-fields can fill omissions, but duplicating a populated shorthand field is an
-error. Every patch is checked and errors are reported together before any binary
-is written. Display text is checked against target capabilities.
+Executable values require an explicit `type`. Named definitions use `patches`;
+ordered browser entries use `groups`. Delimiter shorthand, implicit string
+references and bare-list sequences are rejected. See
+[the Patch schema and format 17 authoring changes](../doc/patches.md) for MIDI,
+state, composition, switches and stable references. Independent authoring errors
+are reported together before any binary is written. Display text is checked
+against target capabilities.
 
 Volume is CC7, 0..127. Pan is CC10, -64..63 plus 64 on the wire. A send emits
 bank MSB, bank LSB, PC, volume and pan in that order, omitting unspecified values.
@@ -145,9 +147,11 @@ D E F
 A B C
 ```
 
-D/E wrap categories, retaining one cursor per category. A/B wrap patches within
-the category. Browsing only changes NEXT. C sends the candidate, records an Undo
-action and leaves NEXT unchanged. F undoes the latest action by restoring that
+D/E wrap groups, retaining one cursor per group. A/B wrap patches within
+the group. Browsing only changes NEXT. C executes the candidate and leaves NEXT
+unchanged. A simple program selection records a known program Undo entry.
+Composites and side effects clear unsafe program history rather than invent an
+inverse. F restores the latest known program selection by restoring that
 instrument's previous selection, leaving other instruments unchanged. If its
 previous selection is unknown, Undo pops the action without sending anything.
 
