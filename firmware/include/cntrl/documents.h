@@ -7,6 +7,7 @@
 namespace cntrl {
 struct Replies {
     virtual ~Replies() = default;
+    virtual bool reply_ready() const { return true; }
     virtual void reply(const char *text) = 0;
 };
 

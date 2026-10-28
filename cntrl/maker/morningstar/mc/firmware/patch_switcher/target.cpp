@@ -179,7 +179,7 @@ public:
     void error(const char *message) override {
         renderer_.error(message);
     }
-    bool reply_ready() const { return !response_[response_offset_]; }
+    bool reply_ready() const override { return !response_[response_offset_]; }
     void reply(const char *text) override {
         // Replies are bounded and only produced in response to host requests.
         std::snprintf(response_, sizeof(response_), "%s\n", text);
