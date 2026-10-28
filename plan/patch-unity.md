@@ -1,7 +1,9 @@
 # Patch unity
 
-Status: proposed. This document specifies an architectural replacement, not an
-implemented format or a compatibility layer.
+Status: implementation started. The existing setup and song selection models
+are renamed ProgramChange. Unified TOML authoring, Patch execution, switch
+handling and durable composite continuation are not implemented yet. The schema
+below remains a proposal until those paths are replaced together.
 
 ## Goal
 
@@ -257,9 +259,12 @@ patch; it does not mean reversing a previous patch or guessing remote state.
 
 Preserve accepted-work completion, required Off cleanup, entry-switch suppression,
 output backpressure and explicit abandonment behavior. Resolve resource ownership
-from the entire reachable patch, including referenced sequences. Give a specific
-error when an existing ownership guarantee cannot be met; do not treat arbitrary
-SysEx as though its affected controls were known. Firmware switching and leaving the switch-assignment context require special
+from the entire reachable patch, including referenced sequences. A momentary or latched assignment containing raw MIDI or SysEx reserves the
+whole destination output until its Off cleanup completes or the user explicitly
+abandons it. Other assignments cannot share that output, even on another
+channel. Apply this rule through sequences and references. Readable MIDI patches
+retain ownership of their identified controls. Do not treat arbitrary SysEx as
+though its affected controls were known. Firmware switching and leaving the switch-assignment context require special
 care: a momentary switch cannot receive its release while another firmware is
 running. Initially allow those operations only in `press` assignments and song
 positions, including their nested sequences. Reject them in either branch of a

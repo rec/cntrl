@@ -92,7 +92,7 @@ class FunctionPatch(StockFirmware, frozen=True):
     categories: list[str] = Field(default_factory=list)
 
 
-class Patch(BaseModel, frozen=True):
+class ProgramChange(BaseModel, frozen=True):
     instrument: str
     program: Annotated[int, Field(strict=True, ge=1, le=128)] | StrictStr
     volume: Annotated[int, Field(strict=True, ge=0, le=127)] | None = None
