@@ -661,3 +661,25 @@ On 2026-10-28, after A+F entry, the corrected firmware reported
 command completed successfully with no revisions listed, confirming that the
 revision-number parser accepts the live request. This was a read-only check;
 physical snapshot/restore behavior and MIDI latency remain unqualified.
+
+## C-button program-change brightness feedback
+
+On the performance page, C boosts the shared display backlight to maximum after
+an accepted send changes that instrument's last-sent program/bank. It stays at
+maximum while C is held and returns to the setup's brightness on release. There
+is no minimum flash duration. Repeated selections and name/volume-only patch
+differences do not boost brightness; rejected sends do not boost it either.
+The first accepted send counts as a change because previous state is unknown.
+Cancelling gestures, entering the module menu, deactivation and setup activation
+also clear the temporary boost.
+
+Portable tests cover hold/release, repeated selections, failed sends, duplicate
+press edges, undo, cancellation, setup activation/deactivation, same-program patch
+aliases, and brightness values 0 and 255. Native adapter tests and the combined
+firmware build pass. The combined image was flashed with upload_helper on
+2026-10-28, SHA-256
+`7d71d2f403cdb0517775d6c8b01dbd27ac6633a42839818ac2b5bbef3176c1ab`.
+An initial USB write error was followed by a successful retry of the same image.
+USB returned as stock firmware. Before upload, pman was selected with
+`CNTRL READY 14 34597 488beaf6`; post-A+F status and visible feedback verification
+remain pending.

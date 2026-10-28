@@ -485,7 +485,7 @@ void poll_target() {
                         if (events[i] & release_event) setup_ui.button(i, false, now);
                     }
                 } else {
-                    if ((events[i] & press_event) && controller.button(i, true, now) == cntrl::Chord::ad && splash_session.management_allowed()) module_menu.enter();
+                    if ((events[i] & press_event) && controller.button(i, true, now) == cntrl::Chord::ad && splash_session.management_allowed()) { controller.cancel_gesture(); module_menu.enter(); }
                     if (events[i] & release_event) controller.button(i, false, now);
                 }
             }

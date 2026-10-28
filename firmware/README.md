@@ -151,6 +151,13 @@ action and leaves NEXT unchanged. F undoes the latest action by restoring that
 instrument's previous selection, leaving other instruments unchanged. If its
 previous selection is unknown, Undo pops the action without sending anything.
 
+On the performance page, a successful C press that changes the instrument's
+last-sent program or bank sets all screens to maximum brightness until C is
+released. Release restores the configured brightness immediately, with no minimum
+flash duration. The first send counts as a change because previous state is
+unknown. Repeated program/bank selections and failed sends do not flash. Leaving
+the performance page or changing the active setup also ends the brightness boost.
+
 UNDO previews the next restoration target. SENT shows the last selected or
 restored patch. Screens contain only category and patch, not titles or instrument
 labels. Undo without a restoration leaves SENT unchanged

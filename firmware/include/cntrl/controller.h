@@ -8,10 +8,11 @@ enum class Chord { none, ab, ad, be, de };
 class Controller {
 public:
     explicit Controller(Hardware &hardware) : hardware_(hardware) {}
-    void deactivate() { document_ = Document(); held_ = 0; pending_ = -1; locked_ = false; }
-    void cancel_gesture() { held_ = 0; pending_ = -1; locked_ = false; }
+    void deactivate() { cancel_gesture(); document_ = Document(); }
+    void cancel_gesture() { release_c(); held_ = 0; pending_ = -1; locked_ = false; }
     void refresh() { cancel_gesture(); if (document_.valid()) render(); }
     void activate(const Document &document) {
+        cancel_gesture();
         document_ = document;
         hardware_.set_brightness(document.brightness());
         hardware_.set_usb_midi_interface(document.usb_midi_interface());
@@ -28,7 +29,12 @@ public:
     Chord button(unsigned button, bool pressed, uint32_t now) {
         if (button >= 6) return Chord::none;
         tick(now);
-        if (button == 2 || button == 5) {
+        if (button == 2) {
+            if (!pressed) release_c();
+            else if (!c_held_) { c_held_ = true; action(button); }
+            return Chord::none;
+        }
+        if (button == 5) {
             if (pressed) action(button);
             return Chord::none;
         }
@@ -80,7 +86,10 @@ public:
         } else if (button == 2) {
             unsigned p = candidate();
             unsigned instrument = u16(document_.patch(p));
+            int previous = last_sent_[instrument];
+            bool changed = previous < 0 || std::memcmp(document_.patch(p) + 4, document_.patch(unsigned(previous)) + 4, 3);
             if (!send(p)) return;
+            if (c_held_ && changed) { flashing_ = true; hardware_.set_brightness(255); }
             if (depth_ == history_capacity) {
                 for (unsigned i = 1; i < depth_; ++i) history_[i - 1] = history_[i];
                 --depth_;
@@ -115,7 +124,11 @@ private:
     unsigned selected_ = 0, depth_ = 0, held_ = 0;
     int center_ = -1, pending_ = -1;
     uint32_t since_ = 0;
-    bool locked_ = false;
+    bool locked_ = false, c_held_ = false, flashing_ = false;
+    void release_c() {
+        if (flashing_ && document_.valid()) hardware_.set_brightness(document_.brightness());
+        flashing_ = c_held_ = false;
+    }
     unsigned candidate() const { return u16(document_.category(selected_) + 64) + cursors_[selected_]; }
     bool send(unsigned index) {
         const uint8_t *p = document_.patch(index);

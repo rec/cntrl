@@ -51,6 +51,49 @@ void upload(cntrl::Documents &docs, const std::vector<uint8_t> &data, const char
     while (docs.busy()) docs.tick(1);
 }
 
+void test_program_change_brightness(const cntrl::Document &doc) {
+    Fake hw; cntrl::Controller app(hw); app.activate(doc);
+    const auto normal = doc.brightness();
+    app.button(2, true, 0); assert(hw.brightness == 255);
+    auto count = hw.sent.size();
+    app.button(2, true, 1); assert(hw.sent.size() == count);
+    app.tick(1000); assert(hw.brightness == 255);
+    app.button(2, false, 1001); assert(hw.brightness == normal);
+    app.button(2, true, 1002); assert(hw.brightness == normal);
+    app.button(2, false, 1003);
+    app.action(1); // Another program for the same instrument.
+    hw.available = false;
+    app.button(2, true, 1004); assert(hw.brightness == normal);
+    app.button(2, false, 1005); hw.available = true;
+    app.button(2, true, 1006); assert(hw.brightness == 255);
+    app.cancel_gesture(); assert(hw.brightness == normal);
+    app.button(2, false, 1007); assert(hw.brightness == normal);
+    app.action(5); // Undo changes the actual last-sent program.
+    app.button(2, true, 1008); assert(hw.brightness == 255);
+    app.activate(doc); assert(hw.brightness == normal);
+    app.button(2, true, 1009); assert(hw.brightness == 255);
+    app.deactivate(); assert(hw.brightness == normal);
+    app.button(2, true, 1010); assert(hw.brightness == normal);
+    app.button(2, false, 1011);
+    // A different patch name/volume using the same program and bank does not flash.
+    std::vector<uint8_t> aliases(doc.data(), doc.data() + doc.length());
+    auto first = unsigned(doc.patch(0) - doc.data()), second = unsigned(doc.patch(1) - doc.data());
+    std::memcpy(aliases.data() + second + 4, aliases.data() + first + 4, 3);
+    aliases[second + 7] = 64;
+    std::memcpy(aliases.data() + (doc.bank(1) - doc.data()), doc.bank(0), 4);
+    cntrl::put32(aliases.data() + 20, cntrl::checksum(aliases.data() + 28, unsigned(aliases.size()) - 28));
+    for (uint8_t brightness : {uint8_t(0), uint8_t(255)}) {
+        aliases[18] = brightness;
+        cntrl::Document same_program; assert(same_program.load(aliases.data(), unsigned(aliases.size()), hw));
+        app.activate(same_program);
+        app.button(2, true, 1100); assert(hw.brightness == 255);
+        app.button(2, false, 1101); assert(hw.brightness == brightness);
+        app.action(1);
+        app.button(2, true, 1102); assert(hw.brightness == brightness);
+        app.button(2, false, 1103); assert(hw.brightness == brightness);
+    }
+}
+
 void test_greyed_names(const cntrl::Document &doc) {
     Fake hw;
     cntrl::Controller app(hw);
@@ -365,6 +408,7 @@ int main(int argc, char **argv) {
         assert(!invalid_layout.load(scaled.data(), unsigned(scaled.size()), hw));
     }
     test_revision_history(bytes);
+    test_program_change_brightness(doc);
     test_greyed_names(doc);
     test_undo_restores_undone_candidate(doc);
     test_greyed_aliases(bytes);
