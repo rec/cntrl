@@ -21,5 +21,9 @@ int main() {
     if (!songs.boot()) return 1;
     cntrl::SongsTransfer transfer(songs, board);
     std::string line;
-    while (std::getline(std::cin, line)) transfer.command(line.c_str());
+    while (std::getline(std::cin, line)) {
+        transfer.command(line.c_str());
+        while (songs.busy()) { songs.tick(); transfer.poll(0); }
+        transfer.poll(0);
+    }
 }

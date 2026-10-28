@@ -5,8 +5,14 @@ namespace cntrl {
 class SongsTransfer {
 public:
     SongsTransfer(Songs &songs, Replies &replies) : songs_(songs), replies_(replies) {}
-    bool busy() const { return receiving_; }
+    bool busy() const { return receiving_ || processing_; }
     void poll(uint32_t now) {
+        if (processing_) {
+            if (!songs_.busy()) {
+                processing_ = false; replies_.reply(songs_.success() ? "CNTRL OK" : "CNTRL ERROR songs");
+            } else if (uint32_t(now - last_) >= 500) { last_ = now; replies_.reply("CNTRL WAIT"); }
+            return;
+        }
         if (receiving_ && uint32_t(now - last_) > 10000) {
             songs_.import_abort(); receiving_ = false; replies_.reply("CNTRL ERROR songs-timeout");
         }
@@ -14,6 +20,7 @@ public:
     bool command(const char *line, uint32_t now = 0) {
         last_ = now;
         if (std::strncmp(line, "CNTRL SONGS ", 12)) return false;
+        if (processing_) { replies_.reply("CNTRL ERROR songs-busy"); return true; }
         auto error = [&]() {
             if (receiving_) songs_.import_abort();
             receiving_ = false; replies_.reply("CNTRL ERROR songs"); return true;
@@ -42,7 +49,7 @@ public:
             if (!receiving_ || received_ != expected_) return error();
             receiving_ = false;
             if (!songs_.import_finish(expected_, expected_crc_)) return error();
-            replies_.reply("CNTRL OK"); return true;
+            processing_ = true; return true;
         }
         if (!std::strcmp(line, "CNTRL SONGS SIZE")) {
             if (songs_.invalid()) return error();
@@ -65,7 +72,7 @@ private:
     Songs &songs_; Replies &replies_;
     unsigned received_ = 0, expected_ = 0;
     uint32_t expected_crc_ = 0;
-    bool receiving_ = false;
+    bool receiving_ = false, processing_ = false;
     uint32_t last_ = 0;
 };
 } // namespace cntrl

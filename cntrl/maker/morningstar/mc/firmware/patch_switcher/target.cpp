@@ -793,6 +793,7 @@ void poll_target() {
     // continue while command input and reply-producing jobs wait for room.
     if (board.reply_ready()) serial_router.poll(now);
     if (board.reply_ready()) songs_transfer.poll(now);
+    songs.tick();
     if (board.reply_ready()) font_files.poll(now, board);
     board.poll();
     board.display(now, documents.busy() || feature_open());
