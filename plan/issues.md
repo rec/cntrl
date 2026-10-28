@@ -42,6 +42,10 @@ This is a null dereference, not a use-after-free.
 
 ### C2. P2: accepted malformed MIDI batches read past their storage
 
+**Resolved:** enqueue validates complete channel messages and data bytes before
+accepting any part of a batch. Native sanitizer tests cover truncation, invalid
+statuses/data and all seven channel-message types.
+
 **Evidence:** `firmware/include/cntrl/midi_bridge.h:110` (`pedal`) and
 `:141` (`service`), especially lines 153–159.
 
