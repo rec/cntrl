@@ -31,10 +31,16 @@ def compile_actions(
                 raise ValueError(
                     'action identities and names require 1..63 supported characters'
                 )
-        if not name or len(name.encode('utf-8')) > 63 or any(ord(c) < 32 or ord(c) == 127 for c in name):
+        if (
+            not name
+            or len(name.encode('utf-8')) > 63
+            or any(ord(c) < 32 or ord(c) == 127 for c in name)
+        ):
             raise ValueError('action names require 1..63 bytes of display text')
         if assignment.button in buttons:
             raise ValueError('duplicate action button')
+        if target.buttons and assignment.button not in target.buttons:
+            raise ValueError('action button is unavailable on this target')
         buttons.add(assignment.button)
         commands: list[bytes] = []
         patch_indices: list[int] = []

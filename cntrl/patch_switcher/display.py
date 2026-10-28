@@ -140,14 +140,23 @@ def compile_display(
             instances.append(lines)
             for j in lines:
                 code, text, style, pad, _, stipple = requests[j]
-                requests[j] = (code, text, style, pad, max(6 if 'action.name' in patch.values else 1, len(lines)), stipple)
-    from ..maker.morningstar.mc.font_assets import Preparation
+                requests[j] = (
+                    code,
+                    text,
+                    style,
+                    pad,
+                    max(6 if 'action.name' in patch.values else 1, len(lines)),
+                    stipple,
+                )
+    from ..maker.morningstar.mc.font_assets import ACTION_STATES, Preparation
 
     prepared = Preparation(show, target, requests, contexts)
     target = prepared.target
     choices = [
-        graphics.font_choice(s.font_name, [t], target, p, n)
-        for _, t, s, p, n, _ in requests
+        graphics.font_choice(
+            s.font_name, list(ACTION_STATES) if c == 22 else [t], target, p, n
+        )
+        for c, t, s, p, n, _ in requests
     ]
     for (code, text, _, _, _, _), (face, size) in zip(requests, choices, strict=True):
         prepared.use(face.name, size, code, text)

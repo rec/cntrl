@@ -91,3 +91,35 @@ def test_patch_reference_requires_unique_name() -> None:
     action['off'] = {'patch': 'absent'}
     with pytest.raises(ValueError, match='exactly one'):
         compile_actions({'alternate': action})
+
+
+def test_function_patch_before_midi_patch_preserves_action_indices() -> None:
+    root = Path(__file__).parents[1] / 'firmware/test'
+    show = compiler.read_document(root / 'show.json')
+    assert isinstance(show, dict)
+    patches = show['patches']
+    assert isinstance(patches, dict)
+    patches['functions'] = [
+        {'function': 'stock-firmware', 'exit_buttons': 'A+F', 'name': 'Original'}
+    ]
+    show['patches'] = {'functions': patches.pop('functions'), **patches}
+    show['actions'] = {
+        'alternate': {
+            'button': 'C',
+            'mode': 'momentary',
+            'on': {'patch': 'Sax'},
+            'off': {'patch': 'Flute'},
+        }
+    }
+    target = models.Target.model_validate(
+        compiler.read_document(root / 'target.json')
+    ).model_copy(update={'functions': ['stock-firmware'], 'buttons': list('ABCDEF')})
+    data = compiler.compile_show(
+        show, compiler.read_document(root / 'definitions.json'), [], target
+    )
+    assert tomlkit.parse(resolved.export(data)).unwrap()['actions'] == show['actions']
+    show['actions']['alternate']['on'] = {'patch': 'Original'}
+    with pytest.raises(ValueError):
+        compiler.compile_show(
+            show, compiler.read_document(root / 'definitions.json'), [], target
+        )
