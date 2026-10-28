@@ -6,12 +6,13 @@
 
 struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::SongCapture {
     unsigned sends = 0; bool missing = false, writable = true;
+    std::string feedback;
     bool send(const char *, const uint8_t *, unsigned) override { if (!writable) return false; ++sends; return true; }
     bool supports(const char *s) const override { return !std::strcmp(s, "din"); }
     bool supports_font(unsigned, unsigned) const override { return true; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
-    void show(unsigned, const cntrl::Pane &) override {}
+    void show(unsigned pane, const cntrl::Pane &view) override { if (!pane) feedback = view.lines[2].text; }
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
@@ -37,7 +38,25 @@ std::vector<uint8_t> snapshot(const cntrl::Songs &songs) {
     }
     return bytes;
 }
+void test_rename_read_failure_can_be_retried() {
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board, board);
+    assert(songs.boot());
+    assert(songs.save_song("A", Board::patch()));
+    assert(songs.save_song("B", Board::patch()));
+    cntrl::Song a, b; assert(songs.song_at(0, a)); assert(songs.song_at(1, b));
+    uint32_t set = songs.new_setlist(); assert(songs.insert(set, 0, b.id)); songs.choose(set);
+    cntrl::SongsUi ui(songs, board, board); ui.enter(); ui.poll(0);
+    ui.button(1, true); ui.button(1, true); ui.button(2, true); // Library.
+    ui.button(2, true); // A's actions; rendering Next caches B.
+    storage.fail_reads = true; ui.button(2, true);
+    assert(board.feedback == "Song read failed");
+    storage.fail_reads = false; ui.button(2, true); // Retry Rename.
+    ui.button(1, true); ui.button(2, true); // A becomes B, then save.
+    assert(songs.song_at(0, a) && !std::strcmp(a.name, "B"));
+    assert(board.sends == 0);
+}
 int main() {
+    test_rename_read_failure_can_be_retried();
     SongStorage storage; Board board; cntrl::Songs songs(storage, board, board);
     assert(songs.boot()); assert(songs.save_song("A", Board::patch()));
     assert(songs.save_song("B", Board::patch(), "source", "synth"));

@@ -50,7 +50,11 @@ public:
         } else if (mode_ == library && button == 2 && count) {
             ensure_picker(); song_id_ = picker_; mode_ = song_actions; cursor_ = 0;
         } else if (mode_ == song_actions && button == 2) {
-            if (!cursor_) begin_name(songs_.song(song_id_)->name, false);
+            if (!cursor_) {
+                const Song *song = songs_.song(song_id_);
+                if (song) begin_name(song->name, false);
+                else std::strcpy(feedback_, "Song read failed");
+            }
             else {
                 Song item;
                 if (!capture_.capture(item, false) || !songs_.change_song(song_id_, item.patch)) fail();
