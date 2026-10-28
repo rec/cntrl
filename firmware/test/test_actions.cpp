@@ -38,6 +38,9 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     Board board; cntrl::Document doc; assert(doc.load(bytes.data(), unsigned(bytes.size()), board)); assert(doc.actions() == 3);
     cntrl::Actions actions(board, board);
+    Board rearm_board; cntrl::Actions rearm(rearm_board, rearm_board); rearm.enter(doc, 3);
+    rearm.button(0, false); rearm.button(0, true); rearm.tick(); rearm_board.bridge.service(rearm_board, 0);
+    assert(rearm_board.sent.size() == 1 && rearm_board.sent.back().bytes[2] == 127); // B may remain held while A rearms.
     auto tick = [&]() { actions.tick(); board.bridge.service(board, 0); actions.tick(); };
     actions.enter(doc, 1); actions.button(0, true); tick(); assert(board.sent.empty());
     actions.button(0, false); actions.button(0, true); actions.button(0, true); tick();

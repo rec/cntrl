@@ -757,7 +757,7 @@ void poll_target() {
 #if CNTRL_ACTIONS
                     else if (selected == actions_module) {
                         if (!documents.busy() && !documents.dirty() && !songs_transfer.busy() && board.output_idle() && documents.document().valid()) {
-                            board.enter_actions(documents.document(), pressed); module_controls_locked = true;
+                            board.enter_actions(documents.document(), pressed);
                         } else module_menu.enter();
                     }
 #endif
