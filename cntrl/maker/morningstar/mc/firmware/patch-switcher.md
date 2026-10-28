@@ -705,5 +705,6 @@ Combined image SHA-256:
 `7deaa29ee65217f0d4237dda0f2d9096984fc4e9ada781361bb553601daedee5`.
 Flashed through upload_helper on 2026-10-28 after one initial USB write error and
 a successful retry. Stock USB returned after reset. The pre-flash setup status
-was unchanged at `CNTRL READY 14 34597 488beaf6`; A+F entry and user reproduction
-checks remain pending.
+was unchanged at `CNTRL READY 14 34597 488beaf6`. After A+F entry, the user confirmed
+that both held and quick presses work in the requested reproduction test. USB
+status remains `CNTRL READY 14 34597 488beaf6`, with pman still selected.
