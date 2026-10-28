@@ -7,13 +7,15 @@ from zlib import crc32
 
 import tomlkit
 import tyro
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import transport
 from .data_files import validate_name
+from .models import StockFirmware
 
 
 class Patch(BaseModel, frozen=True):
+    id: int | None = Field(default=None, gt=0, lt=0xFFFFFFFF)
     output: str
     channel: int = Field(ge=1, le=16)
     program: int = Field(ge=1, le=128)
@@ -25,6 +27,7 @@ class Patch(BaseModel, frozen=True):
 
 
 class Reference(BaseModel, frozen=True):
+    id: int | None = Field(default=None, gt=0, lt=0xFFFFFFFF)
     document: str
     instrument: str
     program: int = Field(ge=1, le=128)
@@ -32,18 +35,14 @@ class Reference(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class Function(StockFirmware, frozen=True):
+    id: int | None = Field(default=None, gt=0, lt=0xFFFFFFFF)
+
+
 class Song(BaseModel, frozen=True):
     id: int = Field(gt=0, lt=0xFFFFFFFF)
     name: str
-    patch: Patch | None = None
-    reference: Reference | None = None
-
-    @model_validator(mode='after')
-    def one_selection(self) -> 'Song':
-        if (self.patch is None) == (self.reference is None):
-            raise ValueError('supply exactly one of patch or reference')
-        return self
-
+    patches: list[Patch | Reference | Function] = Field(min_length=1)
     model_config = ConfigDict(extra='forbid')
 
 
@@ -97,38 +96,50 @@ def encode(library: Library) -> bytes:
         if library.next_id < next_id:
             raise ValueError('next_id must exceed all existing IDs')
         next_id = library.next_id
+    explicit = [p.id for s in library.songs for p in s.patches if p.id is not None]
+    if len(set(ids + explicit)) != len(ids + explicit):
+        raise ValueError('song, setlist and patch occurrence IDs must be unique')
+    if library.next_id is not None and library.next_id <= max(
+        ids + explicit, default=0
+    ):
+        raise ValueError('next_id must exceed all existing IDs')
+    next_id = max(next_id, max(explicit, default=0) + 1)
     records = []
     for s in library.songs:
-        if p := s.patch:
-            selection = PATCH.pack(
-                text(p.output, 32),
-                p.channel - 1,
-                p.program - 1,
-                255 if p.msb is None else p.msb,
-                255 if p.lsb is None else p.lsb,
-                255 if p.volume is None else p.volume,
-                255 if p.pan is None else p.pan + 64,
-            )
-            records.append(
-                SONG.pack(
-                    s.id, text(s.name, 64), bytes(64), bytes(32), selection, 0xFFFFFFFF
+        selections = []
+        for p in s.patches:
+            key = p.id
+            if key is None:
+                key = next_id
+                next_id += 1
+            document, instrument, bank = bytes(64), bytes(32), 0xFFFFFFFF
+            if isinstance(p, Reference):
+                validate_name(p.document)
+                document, instrument = text(p.document, 64), text(p.instrument, 32)
+                bank = 0xFFFFFFFF if p.bank is None else p.bank
+                midi = PATCH.pack(
+                    text('din', 32), 0, p.program - 1, 255, 255, 255, 255, 0, 0
                 )
-            )
-        elif r := s.reference:
-            validate_name(r.document)
-            selection = PATCH.pack(
-                text('din', 32), 0, r.program - 1, 255, 255, 255, 255
-            )
-            records.append(
-                SONG.pack(
-                    s.id,
-                    text(s.name, 64),
-                    text(r.document, 64),
-                    text(r.instrument, 32),
-                    selection,
-                    0xFFFFFFFF if r.bank is None else r.bank,
+            elif isinstance(p, Function):
+                midi = PATCH.pack(bytes(32), 0, 0, 255, 255, 255, 255, 1, p.button_mask)
+            else:
+                midi = PATCH.pack(
+                    text(p.output, 32),
+                    p.channel - 1,
+                    p.program - 1,
+                    255 if p.msb is None else p.msb,
+                    255 if p.lsb is None else p.lsb,
+                    255 if p.volume is None else p.volume,
+                    255 if p.pan is None else p.pan + 64,
+                    0,
+                    0,
                 )
-            )
+            selections.append(SELECTION.pack(document, instrument, midi, bank, key))
+        records.append(
+            selections[0]
+            + SONG.pack(s.id, text(s.name, 64), len(selections))
+            + b''.join(selections[1:])
+        )
     sets = []
     for s in library.setlists:
         entries = []
@@ -154,49 +165,77 @@ def decode(data: bytes) -> Library:
     if len(data) < 12:
         raise ValueError('invalid song library size')
     next_id, ns, nl = struct.unpack_from('<III', data)
-    if ns > (len(data) - 12) // SONG.size:
+    if ns > (len(data) - 12) // (SONG.size + SELECTION.size):
         raise ValueError('invalid song library counts')
 
     def string(value: bytes) -> str:
         return value.split(b'\0')[0].decode('ascii')
 
-    songs = []
-    for i in range(ns):
-        key, name, document, instrument, selection, bank = SONG.unpack_from(
-            data, 12 + i * SONG.size
+    def selection(offset: int) -> Patch | Reference | Function:
+        if offset + SELECTION.size > len(data):
+            raise ValueError('truncated song patch')
+        document, instrument, midi, bank, key = SELECTION.unpack_from(data, offset)
+        output, channel, program, msb, lsb, volume, pan, function, pair = PATCH.unpack(
+            midi
         )
-        output, channel, program, msb, lsb, volume, pan = PATCH.unpack(selection)
+        if function:
+            if (
+                function != 1
+                or document[0]
+                or instrument[0]
+                or output != bytes(32)
+                or channel
+                or program
+                or (msb, lsb, volume, pan) != (255, 255, 255, 255)
+                or bank != 0xFFFFFFFF
+                or pair >= 64
+            ):
+                raise ValueError('invalid function patch')
+            return Function(
+                id=key,
+                function='stock-firmware',
+                exit_buttons='+'.join(
+                    c for i, c in enumerate('ABCDEF') if pair & (1 << i)
+                ),
+            )
+        if pair:
+            raise ValueError('invalid MIDI patch')
         if document[0]:
-            songs.append(
-                Song(
-                    id=key,
-                    name=string(name),
-                    reference=Reference(
-                        document=string(document),
-                        instrument=string(instrument),
-                        program=program + 1,
-                        bank=None if bank == 0xFFFFFFFF else bank,
-                    ),
-                )
+            return Reference(
+                id=key,
+                document=string(document),
+                instrument=string(instrument),
+                program=program + 1,
+                bank=None if bank == 0xFFFFFFFF else bank,
             )
-        else:
-            songs.append(
-                Song(
-                    id=key,
-                    name=string(name),
-                    patch=Patch(
-                        output=string(output),
-                        channel=channel + 1,
-                        program=program + 1,
-                        msb=None if msb == 255 else msb,
-                        lsb=None if lsb == 255 else lsb,
-                        volume=None if volume == 255 else volume,
-                        pan=None if pan == 255 else pan - 64,
-                    ),
-                )
-            )
+        return Patch(
+            id=key,
+            output=string(output),
+            channel=channel + 1,
+            program=program + 1,
+            msb=None if msb == 255 else msb,
+            lsb=None if lsb == 255 else lsb,
+            volume=None if volume == 255 else volume,
+            pan=None if pan == 255 else pan - 64,
+        )
+
+    songs = []
+    offset = 12
+    for _ in range(ns):
+        first = selection(offset)
+        offset += SELECTION.size
+        if offset + SONG.size > len(data):
+            raise ValueError('truncated song')
+        key, name, count = SONG.unpack_from(data, offset)
+        offset += SONG.size
+        if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
+            raise ValueError('invalid song patch count')
+        patches = [first]
+        for _ in range(count - 1):
+            patches.append(selection(offset))
+            offset += SELECTION.size
+        songs.append(Song(id=key, name=string(name), patches=patches))
     sets = []
-    offset = 12 + ns * SONG.size
     for _ in range(nl):
         if offset + SET.size > len(data):
             raise ValueError('truncated setlist')
@@ -255,12 +294,18 @@ def run(command: Copy | Download) -> None:
             tomlkit.parse(command.document.read_text()).unwrap()
         )
         data = encode(library)
-        with transport.SerialConnection(command.port) as connection:
-            existing = decode(download(transport.SetupClient(connection)))
-        if not command.overwrite and (existing.songs or existing.setlists):
-            raise ValueError('song library exists; use --overwrite')
+        if not command.overwrite:
+            with transport.SerialConnection(command.port) as connection:
+                existing = decode(download(transport.SetupClient(connection)))
+            if existing.songs or existing.setlists:
+                raise ValueError('song library exists; use --overwrite')
         references = sorted(
-            {s.reference.document for s in library.songs if s.reference}
+            {
+                p.document
+                for s in library.songs
+                for p in s.patches
+                if isinstance(p, Reference)
+            }
         )
         if references:
             if command.target is None:
@@ -298,7 +343,12 @@ def run(command: Copy | Download) -> None:
         with transport.SerialConnection(command.port) as connection:
             library = decode(download(transport.SetupClient(connection)))
         references = sorted(
-            {s.reference.document for s in library.songs if s.reference}
+            {
+                p.document
+                for s in library.songs
+                for p in s.patches
+                if isinstance(p, Reference)
+            }
         )
         if references:
             cli.run_setup(
@@ -310,6 +360,7 @@ def run(command: Copy | Download) -> None:
         print(destination)
 
 
-PATCH = struct.Struct('<32s6B')
-SONG = struct.Struct('<I64s64s32s38sI')
+PATCH = struct.Struct('<32s8B')
+SELECTION = struct.Struct('<64s32s40sII')
+SONG = struct.Struct('<I64sI')
 SET = struct.Struct('<I64sI')

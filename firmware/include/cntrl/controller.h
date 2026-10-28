@@ -85,6 +85,10 @@ public:
             cursors_[selected_] = (cursors_[selected_] + count + (button == 0 ? -1 : 1)) % count;
         } else if (button == 2) {
             unsigned p = candidate();
+            if (u16(document_.patch(p)) == 65535) {
+                if (!hardware_.stock_firmware(document_.patch(p)[10])) hardware_.error("Firmware switch failed");
+                return;
+            }
             unsigned instrument = u16(document_.patch(p));
             int previous = last_sent_[instrument];
             bool changed = previous < 0 || std::memcmp(document_.patch(p) + 4, document_.patch(unsigned(previous)) + 4, 3);
@@ -159,7 +163,7 @@ private:
         view.graphics = document_.graphics(slot);
         if (index >= 0) {
             const uint8_t *p = document_.patch(unsigned(index));
-            int sent = last_sent_[u16(p)];
+            int sent = u16(p) == 65535 ? -1 : last_sent_[u16(p)];
             bool already_sent = slot == 2 && sent >= 0
                 && !std::memcmp(p + 4, document_.patch(unsigned(sent)) + 4, 3);
             document_.page(view, unsigned(index), slot, already_sent);

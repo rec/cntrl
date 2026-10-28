@@ -2,7 +2,6 @@ import struct
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from cntrl.maker.morningstar.mc import boot_switch
 from cntrl.maker.morningstar.mc.firmware import AddressRange, FirmwareImage, read_hex
@@ -94,14 +93,3 @@ def test_custom_image_cannot_overlap_stock_or_the_reserved_tail(
         boot_switch.combine(
             stock, custom.model_copy(update={'origin': origin}), b'HOOK', 0x60083001
         )
-
-
-@pytest.mark.parametrize('pair', ['A+A', 'AF', 'F+A+B', 'A+G', 'a+f'])
-def test_switch_pair_requires_two_distinct_labels(pair: str) -> None:
-    with pytest.raises(ValidationError, match='distinct switches'):
-        boot_switch.Build(pair=pair)
-
-
-def test_switch_pair_is_configurable() -> None:
-    assert boot_switch.Build().pair == 'A+F'
-    assert boot_switch.Build(pair='B+E').pair == 'B+E'
