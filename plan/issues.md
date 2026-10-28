@@ -187,6 +187,9 @@ Verify addition, removal and value replacement at root and nested locations.
 
 ### C9. P3: implementation-status statements are stale
 
+**Resolved:** status summaries now distinguish integration on main, inclusion in
+the combined firmware deployment and pending physical qualification.
+
 **Evidence:** the opening status paragraphs of `plan/songs-and-setlists.md`,
 `plan/formatting.md`, `plan/midi-interface.md` and `doc/feature-modules.md`.
 

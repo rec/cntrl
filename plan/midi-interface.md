@@ -1,7 +1,8 @@
 # USB MIDI interface module
 
 Status: implemented as a standalone module using the existing USB MIDI bridge.
-Not flashed; physical module verification remains pending.
+Included in the combined firmware deployment; physical module verification
+remains pending.
 
 ## Goal and existing foundation
 
