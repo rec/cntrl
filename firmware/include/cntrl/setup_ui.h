@@ -33,7 +33,13 @@ public:
     }
     void button(unsigned button, bool down, uint32_t now) {
         if (!down || locked_ || (mode_ == Mode::saving || mode_ == Mode::history_work)) return;
-        if (mode_ == Mode::failed) { if (button == 2 || button == 5) close(); return; }
+        if (mode_ == Mode::failed) {
+            if (button == 2 || button == 5) {
+                if (docs_.dirty()) { mode_ = Mode::decision; item_ = 0; render(); }
+                else close();
+            }
+            return;
+        }
         if (mode_ == Mode::catalogue) {
             if (button < 2) browse(button == 0);
             else if (button == 2 && name_[0]) { mode_ = Mode::action; item_ = 0; }
