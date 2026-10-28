@@ -46,7 +46,8 @@ struct Hardware {
     virtual unsigned display_height() const = 0;
     virtual void show(unsigned pane, const Pane &content) = 0;
     virtual void transition(bool undo, std::optional<unsigned> duration_ms) { (void)undo; (void)duration_ms; }
-    virtual void set_brightness(uint8_t value) = 0;
+    // Temporary performance feedback bypasses dimming; a normal call clears it.
+    virtual void set_brightness(uint8_t value, bool temporary = false) = 0;
     virtual void set_usb_midi_interface(bool) {}
     virtual void set_splash(bool enabled, uint32_t idle_ms) = 0;
     virtual void error(const char *message) = 0;

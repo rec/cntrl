@@ -138,8 +138,10 @@ public:
         renderer_.show(pane, content);
     }
     void transition(bool undo, std::optional<unsigned> duration_ms) override { renderer_.transition(undo, duration_ms); }
-    void set_brightness(uint8_t value) override {
-        brightness_ = value;
+    void set_brightness(uint8_t value, bool temporary = false) override {
+        brightness_ = value; brightness_feedback_ = temporary;
+        if (temporary) splash_session.stop();
+        apply_brightness(millis());
     }
     void set_splash(bool enabled, uint32_t idle_ms) override {
         splash_session.configure(enabled, idle_ms, millis());
@@ -217,13 +219,17 @@ public:
     void display(uint32_t now, bool transfer_busy) {
         ++display_count_;
         bool splash = splash_session.poll(now, renderer_.ready(), transfer_busy);
-        uint8_t brightness = splash_session.brightness(brightness_, now);
-        if (brightness != applied_brightness_) {
-            analogWrite(6, brightness); applied_brightness_ = brightness;
-        }
+        apply_brightness(now);
         if (!splash) draw();
     }
 private:
+    void apply_brightness(uint32_t now) {
+        uint8_t brightness = brightness_feedback_ ? brightness_ : splash_session.brightness(brightness_, now);
+        if (brightness != applied_brightness_) {
+            analogWrite(6, brightness); applied_brightness_ = brightness;
+        }
+    }
+    bool brightness_feedback_ = false;
     uint8_t brightness_ = 192;
     int applied_brightness_ = -1;
     cntrl::midi::Bridge bridge_;
@@ -431,7 +437,7 @@ void poll_target() {
             events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now);
             if (buttons[i].pressed) pressed |= 1u << i;
         }
-        bool consumed = splash_session.controls(pressed, now);
+        bool consumed = splash_session.controls(pressed, now, !feature_open() && pressed == (1u << 2));
         if (consumed) controller.cancel_gesture();
         setup_ui.poll(pressed);
         module_menu.poll(pressed);

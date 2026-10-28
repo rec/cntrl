@@ -230,7 +230,9 @@ show uses 3 seconds. Entry fades through black with 4,000 ms per half; waking
 uses 200 ms per half and performs the waking button's normal action immediately.
 Both transitions wait in black for a complete repaint. Held buttons prevent
 entry; presses and releases restart the timer. Startup dismissal and entry-fade
-cancellation consume their whole triggering gesture. A+D used for waking never
+cancellation consume their whole triggering gesture, except main-page C during
+idle entry, which cancels the fade and sends immediately. Its successful-send
+brightness feedback bypasses remaining fades until release. A+D used for waking never
 opens management; release it and press A+D a second time. Setup or asset transfers cancel playback and inhibit
 idle entry until they finish; ordinary USB queries do not count as physical input.
 
@@ -683,3 +685,25 @@ An initial USB write error was followed by a successful retry of the same image.
 USB returned as stock firmware. Before upload, pman was selected with
 `CNTRL READY 14 34597 488beaf6`. After A+F, USB reported the same status and pman
 remained selected. Visible brightness-feedback verification remains pending.
+
+### Idle-fade interaction correction
+
+The user's first-press report exposed an interaction with pman's three-second
+idle timeout: screensaver entry cancelled and consumed the first gesture, while
+temporary brightness still passed through fade scaling. Main-page C now cancels
+idle entry and performs its normal send. Temporary brightness is an explicit
+hardware override, bypasses fades, and updates PWM at the press/release edges;
+a successful change stops remaining idle/wake fading. Startup dismissal still
+consumes its gesture, other buttons retain their existing entry policy, and no
+minimum flash duration is added.
+
+Portable, adapter and splash/runtime tests pass. Regression coverage includes C
+during UI fade-out, animation painting and animation fade-in, short release and
+startup-dismissal isolation. The splash harness was updated to the current Pane
+and document-version interfaces so this interaction is exercised again.
+Combined image SHA-256:
+`7deaa29ee65217f0d4237dda0f2d9096984fc4e9ada781361bb553601daedee5`.
+Flashed through upload_helper on 2026-10-28 after one initial USB write error and
+a successful retry. Stock USB returned after reset. The pre-flash setup status
+was unchanged at `CNTRL READY 14 34597 488beaf6`; A+F entry and user reproduction
+checks remain pending.

@@ -32,7 +32,7 @@ struct Fake : cntrl::Hardware, cntrl::Replies {
     void transition(bool undo, std::optional<unsigned> duration_ms) override {
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
-    void set_brightness(uint8_t value) override { brightness = value; }
+    void set_brightness(uint8_t value, bool) override { brightness = value; }
     void set_usb_midi_interface(bool value) override { usb_midi_interface = value; }
     void set_splash(bool enabled, uint32_t) override { splash = enabled; }
     void error(const char *) override { ++errors; }

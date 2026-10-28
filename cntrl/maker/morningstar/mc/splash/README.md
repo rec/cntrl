@@ -42,9 +42,11 @@ Entry fades the UI out over four seconds, paints a complete first animation
 frame while dark, then fades the animation in over four seconds. Throughout
 these entry phases, any button cancels the transition immediately, stops the
 animation, restores the configured brightness and requests a full UI repaint.
-The cancelling press, other held buttons and the complete release are consumed:
-no MIDI message or navigation action is performed. Subsequent presses work
-normally, without waiting for another fade.
+Normally the cancelling press, other held buttons and the complete release are
+consumed without a MIDI or navigation action. Main-page C is the exception: it
+cancels idle entry and performs its send immediately. A successful program-change
+brightness boost stops any remaining fade and applies the backlight directly
+until release. Startup dismissal still consumes its complete gesture.
 
 Once entry has finished and the screensaver is fully running, pressing any button
 retains the fast wake transition: 200 ms out, complete UI repaint while dark,

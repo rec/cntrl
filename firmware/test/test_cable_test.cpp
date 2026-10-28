@@ -18,7 +18,7 @@ struct Hardware : cntrl::Hardware {
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned i, const cntrl::Pane &pane) override { panes[i] = pane; }
-    void set_brightness(uint8_t) override {}
+    void set_brightness(uint8_t, bool) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override { assert(false); }
 };

@@ -184,8 +184,11 @@ editor's original size. Labels and values occupy separate screens; long names
 wrap at 12 characters per line within the padding, without truncation.
 
 A+D used to wake the pedal does not open management. Release the complete wake
-gesture, then press A+D again. During screensaver entry, every button consumes
-the complete wake gesture and cancels the fade without a musical action.
+gesture, then press A+D again. During screensaver entry, buttons consume the
+complete wake gesture and cancel the fade without a musical action, except C
+on the performance page: C cancels the idle fade and sends normally. Successful
+program-change feedback bypasses fading and applies at the button edges, including
+a quick press/release. Startup-animation dismissal still consumes its gesture.
 
 ## Pages, windows and line styles
 

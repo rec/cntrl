@@ -89,7 +89,7 @@ public:
             int previous = last_sent_[instrument];
             bool changed = previous < 0 || std::memcmp(document_.patch(p) + 4, document_.patch(unsigned(previous)) + 4, 3);
             if (!send(p)) return;
-            if (c_held_ && changed) { flashing_ = true; hardware_.set_brightness(255); }
+            if (c_held_ && changed) { flashing_ = true; hardware_.set_brightness(255, true); }
             if (depth_ == history_capacity) {
                 for (unsigned i = 1; i < depth_; ++i) history_[i - 1] = history_[i];
                 --depth_;

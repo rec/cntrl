@@ -16,7 +16,7 @@ struct Hardware : cntrl::Hardware, cntrl::MidiInterfaceControl {
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned i, const cntrl::Pane &pane) override { panes[i] = pane; ++renders; }
-    void set_brightness(uint8_t) override { assert(false); }
+    void set_brightness(uint8_t, bool) override { assert(false); }
     void set_splash(bool, uint32_t) override { assert(false); }
     void error(const char *) override { assert(false); }
     bool lit(unsigned port) const { return panes[1].lines[3 + port].text[0] == '*'; }
