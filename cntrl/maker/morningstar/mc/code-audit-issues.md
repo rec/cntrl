@@ -26,6 +26,10 @@ This is a gap against the interrupted-SysEx and exclusive ownership contracts.
 
 ## M2. P1: a disconnected USB-host output can indefinitely block module entry
 
+**Resolved:** the target delivers USB-host connection changes to the bridge.
+Disconnect discards remaining host pedal batches and records the drops; reconnect
+cannot replay them. Native tests cover disconnect before and during submission.
+
 **Evidence:** `firmware/patch_switcher/target.cpp:119` (`send`), `:134`
 (`submit`), `:191` (`poll`), and the output-idle guards in `poll_target`;
 `firmware/usb-midi-interface.patch:156` makes `try_write_packed()` return false

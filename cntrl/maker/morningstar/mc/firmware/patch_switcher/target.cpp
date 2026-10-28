@@ -186,6 +186,7 @@ public:
     }
     void poll() {
         host.Task();
+        bridge_.host_connected(bool(host_midi));
         uint32_t begin = micros(), now = millis();
         bridge_.connected(usb_configuration != 0);
 #if CNTRL_MIDI_INTERFACE
