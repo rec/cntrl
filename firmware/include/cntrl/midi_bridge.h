@@ -155,13 +155,21 @@ public:
         }
         for (unsigned i = 0; i < p.size(); ++i) receive(route, p.bytes[i], now);
     }
+    bool handoff(Sink &sink) {
+        bool ready = true;
+        for (unsigned i = 0; i < destinations; ++i) {
+            if (routes_[i].terminate) terminate(i, sink);
+            if (routes_[i].terminate) ready = false;
+        }
+        return ready;
+    }
     void service(Sink &sink, uint32_t now) {
         for (unsigned i = 0; i < destinations; ++i) {
             unsigned index = (cursor_ + i) % destinations;
             auto &r = routes_[index];
             if (r.parser.sysex() && uint32_t(now - r.last_sysex) >= 1000) abort(index);
             if (r.terminate) {
-                if (sink.submit(index, {5, {0xf7, 0, 0}})) r.terminate = r.wire_sysex = false;
+                terminate(index, sink);
                 continue;
             }
             // A pedal batch is indivisible relative to ordinary bridge traffic.
@@ -190,6 +198,10 @@ public:
         cursor_ = (cursor_ + 1) % destinations;
     }
 private:
+    void terminate(unsigned index, Sink &sink) {
+        auto &r = routes_[index];
+        if (sink.submit(index, {5, {0xf7, 0, 0}})) r.terminate = r.wire_sysex = false;
+    }
     struct Batch { uint8_t bytes[14] = {}; unsigned size = 0; };
     struct Route {
         Packet queue[capacity]; Batch pedal[pedal_capacity]; Parser parser; Counters counts;
