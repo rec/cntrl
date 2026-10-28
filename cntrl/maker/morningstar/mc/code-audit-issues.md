@@ -85,6 +85,10 @@ hides a second protocol owner (`target.cpp:539`, `splash/router.h`).
 
 ## M5. P3: font staging repeats whole-file checksums and duplicates active data
 
+**Resolved:** staging checks capacity before allocation and verifies an asset once
+per transaction. Unchanged active faces are borrowed during preparation, acquire
+ownership on commit and remain owned by the active cache on rollback.
+
 **Evidence:** `firmware/patch_switcher/font_storage.h:15` (`stage`),
 `:106` (`verify`), `firmware/patch_switcher/font_asset.h` (`Cache`).
 

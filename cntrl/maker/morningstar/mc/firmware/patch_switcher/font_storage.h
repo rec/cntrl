@@ -21,7 +21,9 @@ public:
     bool stage(uint32_t key, unsigned size) {
         if (cache.contains(key, size)) return true;
         auto file = open(key); Entry entry; unsigned offset;
-        if (!file || !verify(file, key) || !find(file, size, entry, offset)) return false;
+        if (!file || !find(file, size, entry, offset) || !cache.fits(entry)
+            || (!cache.verified(key) && !verify(file, key))) return false;
+        if (cache.reuse(key, size)) return true;
         std::unique_ptr<uint8_t[]> data(new (std::nothrow) uint8_t[entry.length()]);
         return data && file.seekSet(offset) && file.read(data.get(), entry.length()) == int(entry.length())
             && cache.add(key, entry, std::move(data));

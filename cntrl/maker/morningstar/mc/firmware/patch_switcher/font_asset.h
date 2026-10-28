@@ -65,13 +65,32 @@ public:
         for (const auto &f : pending_) if (f.key == key && f.entry.size() == size) return true;
         return false;
     }
+    bool verified(uint32_t key) const {
+        for (const auto &f : pending_) if (f.key == key) return true;
+        return false;
+    }
+    bool fits(const Entry &entry) const { return count_ < max_fonts && entry.length() <= max_loaded - used_; }
+    bool reuse(uint32_t key, unsigned size) {
+        for (const auto &f : active_) if (f.key == key && f.entry.size() == size && fits(f.entry)) {
+            auto &p = pending_[count_++]; p.key = key; p.entry = f.entry; p.font = f.font;
+            used_ += f.entry.length(); return true;
+        }
+        return false;
+    }
     bool add(uint32_t key, const Entry &entry, std::unique_ptr<uint8_t[]> data) {
-        if (count_ == max_fonts || entry.length() > max_loaded - used_ || !valid_pixels(entry, data.get())) return false;
+        if (!fits(entry) || !valid_pixels(entry, data.get())) return false;
         auto &f = pending_[count_++]; f.key = key; f.entry = entry;
         f.data = std::move(data); f.font = entry.font(f.data.get()); used_ += entry.length(); return true;
     }
     void finish(bool commit) {
-        if (commit) for (unsigned i = 0; i < max_fonts; ++i) std::swap(active_[i], pending_[i]);
+        if (commit) {
+            // Borrowed pending faces acquire ownership before old faces are freed.
+            for (auto &p : pending_) if (p.key && !p.data)
+                for (auto &a : active_) if (a.key == p.key && a.entry.size() == p.entry.size()) {
+                    p.data = std::move(a.data); break;
+                }
+            for (unsigned i = 0; i < max_fonts; ++i) std::swap(active_[i], pending_[i]);
+        }
         begin();
     }
     const ILI9341_t3_font_t *get(uint32_t key, unsigned size) const {
