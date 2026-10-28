@@ -728,3 +728,26 @@ Flashed through upload_helper on 2026-10-28. USB enumerated directly as cntrl
 without an A+F press, confirming the fresh patch-mode default. Status remains
 `CNTRL READY 14 34597 488beaf6`, with pman selected. Combined image SHA-256:
 `eeaf97a0300a610cfd9f1372420b4226d89d81f25effb99bffdc7caf9bb9b49c`.
+
+## Panic module
+
+Panic is an optional module, enabled by default; `PANIC=0` excludes its code and
+menu entry. B starts Panic and holds maximum backlight brightness using the
+existing temporary feedback path. F cancels and goes Back. The center screen
+contains only Panic above B; the outer screens are black except for Back near F.
+
+Outputs are DIN, dedicated TRS, USB device cable 0 and the connected USB MIDI
+host device. Disconnected USB outputs are skipped. Omniports remain untouched.
+The module pauses the normal bridge while it owns the ports and restores the
+setup setting on exit. It does not edit the active setup or songs/setlists.
+See the [Panic behavior and test contract](../../../../../doc/panic.md).
+
+Panic was built and flashed on 2026-10-28 from the rebased main checkout,
+preserving the songs/setlists and Original firmware modules. Portable/native
+tests and PANIC-enabled/disabled builds pass. Combined image SHA-256:
+`a1a639f3bff6661770e82ff10bf49c0de2e1dc89991453b87eea11f1a86aa07f`.
+The running upload helper reported a USB write error on the first attempt. The
+same verified image reached reset on retry; the updater returned a disappearance
+error, then USB enumerated as cntrl. Post-flash status was
+`CNTRL READY 14 34597 488beaf6` and pman remained selected. No Panic messages were
+triggered by automation. Physical hold feedback and MIDI capture remain pending.
