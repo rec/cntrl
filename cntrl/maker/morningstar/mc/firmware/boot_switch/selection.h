@@ -4,7 +4,7 @@
 enum class BootChoice : uint32_t { stock = 0x53544b31, cntrl = 0x43545231 };
 
 struct BootSelection {
-    BootChoice choice = BootChoice::stock;
+    BootChoice choice = BootChoice::cntrl;
     unsigned next = 0;
 };
 
@@ -23,4 +23,9 @@ inline BootSelection inspect_boot_selection(const volatile uint32_t *words) {
     }
     if (result.next == selection_records) result.next = 0;
     return result;
+}
+
+// Reserve the following record for A+F to return from stock without erasing flash.
+inline bool can_enter_stock(const BootSelection &selection) {
+    return selection.next && selection.next < selection_records - 1;
 }

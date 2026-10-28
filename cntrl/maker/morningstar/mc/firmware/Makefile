@@ -14,6 +14,7 @@ PATCH_OUTPUT ?= $(ROOT)/build/patch-switcher.hex
 PATCH_LINKER ?=
 SWITCH_PAIR ?= A+F
 CABLE_TEST ?= 1
+ORIGINAL_FIRMWARE ?= 1
 MIDI_INTERFACE ?= 1
 ifneq ($(PATCH_LINKER),)
 PATCH_LINK_OPTION = --build-property 'build.flags.ld=-Wl,--gc-sections,--relax,--no-warn-rwx-segments -T$(PATCH_LINKER)'
@@ -101,7 +102,7 @@ patch-switcher: tools
 		--build-path "$(PATCH_BUILD)" \
 		$(PATCH_LINK_OPTION) \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -DCNTRL_USB_INTERFACE -I$(ROOT)/usb_probe' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_USB_INTERFACE -DCNTRL_CABLE_TEST=$(CABLE_TEST) -DCNTRL_MIDI_INTERFACE=$(MIDI_INTERFACE) -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_USB_INTERFACE -DCNTRL_CABLE_TEST=$(CABLE_TEST) -DCNTRL_ORIGINAL_FIRMWARE=$(ORIGINAL_FIRMWARE) -DCNTRL_MIDI_INTERFACE=$(MIDI_INTERFACE) -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/patch_switcher"
@@ -117,6 +118,10 @@ inspect-patch-switcher: patch-switcher
 	"$(ARM)-nm" -n -C "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" > "$(ROOT)/build/patch-switcher/symbols.txt"
 
 test: tools test-button-timing test-switch-gesture test-boot-selection
+	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(abspath $(ROOT)/../../../../..)/firmware/include" \
+		-fsanitize=address,undefined "$(ROOT)/test_original_firmware.cpp" -o "$(ROOT)/build/test_original_firmware"
+	"$(ROOT)/build/test_original_firmware"
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
 	"$(ROOT)/build/test_buttons"

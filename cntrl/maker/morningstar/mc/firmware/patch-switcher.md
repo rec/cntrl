@@ -708,3 +708,23 @@ a successful retry. Stock USB returned after reset. The pre-flash setup status
 was unchanged at `CNTRL READY 14 34597 488beaf6`. After A+F entry, the user confirmed
 that both held and quick presses work in the requested reproduction test. USB
 status remains `CNTRL READY 14 34597 488beaf6`, with pman still selected.
+
+## Patch-mode default and Original firmware module
+
+Fresh combined images boot directly into patch mode. A+D opens the module menu;
+select Original firmware, then C to commit the stock boot choice and reset into
+the manufacturer firmware. F leaves without switching. Stock retains its A+F
+50 ms/no-hold gesture to persist patch mode and reset back. Explicit firmware
+choices still persist across power cycles. The UI action is independent of setup
+selection, does not send MIDI and leaves SD data unchanged.
+
+The module uses the audited selection sector and append-only record format. It
+verifies the stock record before reset and preserves a slot for A+F's return.
+It can be excluded with `ORIGINAL_FIRMWARE=0`. Native tests cover fresh default,
+torn selections, explicit choices, journal capacity and the module's explicit
+start/failure/back behavior. Physical round-trip verification is pending.
+
+Flashed through upload_helper on 2026-10-28. USB enumerated directly as cntrl
+without an A+F press, confirming the fresh patch-mode default. Status remains
+`CNTRL READY 14 34597 488beaf6`, with pman selected. Combined image SHA-256:
+`eeaf97a0300a610cfd9f1372420b4226d89d81f25effb99bffdc7caf9bb9b49c`.

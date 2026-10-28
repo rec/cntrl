@@ -1,4 +1,9 @@
 #include "target.h"
+#if CNTRL_ORIGINAL_FIRMWARE
+#include "../original_firmware.h"
+#include "../boot_switch/selection.h"
+extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
+#endif
 #include <Arduino.h>
 #include <SD.h>
 #include <USBHost_t36.h>
@@ -338,6 +343,9 @@ cntrl::Controller controller(board);
 DMAMEM cntrl::Documents documents(card, board, controller, board);
 cntrl::SetupUi setup_ui(documents, board);
 enum ModuleIndex { setups_module,
+#if CNTRL_ORIGINAL_FIRMWARE
+    original_firmware_module,
+#endif
 #if CNTRL_CABLE_TEST
     cable_test_module,
 #endif
@@ -346,6 +354,9 @@ enum ModuleIndex { setups_module,
 #endif
 };
 const char *const module_names[] = {"Setups",
+#if CNTRL_ORIGINAL_FIRMWARE
+    "Original firmware",
+#endif
 #if CNTRL_CABLE_TEST
     "MIDI cable test",
 #endif
@@ -353,10 +364,30 @@ const char *const module_names[] = {"Setups",
     "MIDI interface",
 #endif
 };
+#if CNTRL_ORIGINAL_FIRMWARE
+bool start_original_firmware() {
+    if (documents.busy() || documents.dirty() || !board.output_idle()) return false;
+    auto words = reinterpret_cast<const volatile uint32_t *>(0x60084000);
+    auto selection = inspect_boot_selection(words);
+    if (!can_enter_stock(selection)) return false;
+    uint32_t record[] = {uint32_t(BootChoice::stock), ~uint32_t(BootChoice::stock)};
+    eepromemu_flash_write(reinterpret_cast<void *>(0x60084000 + selection.next * 8), record, sizeof(record));
+    if (inspect_boot_selection(words).choice != BootChoice::stock) return false;
+    // Use the same disconnect/reset sequence as stock's A+F return hook.
+    USB1_USBCMD = 2; USBPHY1_CTRL_SET = 0x80000000;
+    delay(100); __disable_irq(); SCB_AIRCR = 0x05fa0004;
+    __asm__ volatile("dsb" ::: "memory");
+    while (true) __asm__ volatile("wfi");
+}
+OriginalFirmware original_firmware(board, start_original_firmware);
+#endif
 cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof(module_names[0]));
 bool module_controls_locked = false;
 bool feature_open() {
     return module_menu.open() || setup_ui.open()
+#if CNTRL_ORIGINAL_FIRMWARE
+        || original_firmware.open()
+#endif
 #if CNTRL_CABLE_TEST
         || board.cable_test.open()
 #endif
@@ -452,6 +483,11 @@ void poll_target() {
                         if (documents.busy()) module_menu.enter();
                         else { setup_ui.enter(); module_controls_locked = true; }
                     }
+#if CNTRL_ORIGINAL_FIRMWARE
+                    else if (selected == original_firmware_module) {
+                        original_firmware.enter(); module_controls_locked = true;
+                    }
+#endif
 #if CNTRL_CABLE_TEST
                     else if (selected == cable_test_module) {
                         if (!documents.busy() && board.output_idle()) {
@@ -483,6 +519,13 @@ void poll_target() {
                         else if (i == 5) {
                             board.midi_interface.leave(); module_menu.enter(); module_controls_locked = true;
                         }
+                    }
+#endif
+#if CNTRL_ORIGINAL_FIRMWARE
+                } else if (original_firmware.open()) {
+                    if (events[i] & press_event) {
+                        if (i == 2) original_firmware.start();
+                        else if (i == 5) { original_firmware.leave(); module_menu.enter(); module_controls_locked = true; }
                     }
 #endif
                 } else if (setup_ui.open()) {

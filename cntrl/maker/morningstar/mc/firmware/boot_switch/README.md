@@ -1,16 +1,20 @@
 # Persistent firmware selection
 
-The combined image starts Morningstar firmware on a fresh installation. After
-releasing the configured switches once, press the pair within 50 ms to save the
-cntrl boot choice and restart into cntrl. Subsequent resets and power cycles
-start cntrl directly, without first running stock's normal application.
-The default is A+F, in either order, with no hold. The window includes exactly
-50 ms and measures presses after 15 ms of stable input.
+The combined image starts cntrl patch mode on a fresh installation or when no
+valid choice is stored. Explicit choices persist across resets and power cycles.
 
-The hook exists only in the stock image. Once cntrl starts, it uses its existing
-button-reading code without the switching gesture. Returning to stock through
-cntrl's UI is not implemented. Installing a new combined image initializes the
-selection sector to stock; update preservation remains outside this feature.
+From patch mode, open A+D, select **Original firmware**, then press C on its page
+to start stock, or F to go back. The module commits and verifies the stock choice
+in the existing selection journal, disconnects USB and resets. It sends no MIDI.
+While stock is running, release the configured pair once, then press A+F within
+50 ms (either order, no hold) to commit patch mode and reset back into cntrl.
+The window includes exactly 50 ms and measures presses after 15 ms of stable input.
+The pair remains build-time configurable.
+
+The gesture hook exists only in stock. cntrl's button reader has no A+F gesture.
+The Original firmware module is target-specific and can be excluded with
+`ORIGINAL_FIRMWARE=0` when building. Installing a combined image reinitializes
+the journal to the patch-mode default; update preservation remains outside scope.
 
 ## Build
 
@@ -93,7 +97,7 @@ it never erases or programs an unrecognized sector.
 
 The remaining 511 slots are eight-byte records: a 32-bit choice and its bitwise
 inverse. Stock is `0x53544b31`, cntrl is `0x43545231`. Empty, unknown and torn
-records do not change the last valid choice. No valid choice defaults to stock.
+records do not change the last valid choice. No valid choice defaults to cntrl patch mode.
 New records go after the last occupied slot, including interrupted writes.
 
 The stock wrapper programs its record from a RAM stack buffer through the
@@ -108,7 +112,14 @@ the pedal stays in stock. It does not switch with an uncommitted choice. The
 previous valid record survives an interrupted append. Reinitializing the
 journal is currently a firmware installation operation, not a normal switch.
 
-Updates and a return-to-stock UI are deliberately outside this implementation.
+The Original firmware module uses cntrl's ITCM-resident EEPROM flash writer to
+append a stock record, without touching the manufacturer's EEPROM region. It
+refuses to switch while setup storage is busy, edits are unsaved or performance
+MIDI sends are queued. It also reserves a following slot for the A+F return;
+there is no automatic journal erase or compaction. Failure leaves patch mode
+running and displays an error.
+
+Update handling remains outside this implementation.
 Stock's updater and external single-image uploads can replace the installation.
 
 ## Verification
