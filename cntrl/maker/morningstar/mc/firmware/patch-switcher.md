@@ -230,7 +230,9 @@ show uses 3 seconds. Entry fades through black with 4,000 ms per half; waking
 uses 200 ms per half and performs the waking button's normal action immediately.
 Both transitions wait in black for a complete repaint. Held buttons prevent
 entry; presses and releases restart the timer. Startup dismissal and entry-fade
-cancellation consume their whole triggering gesture. A+D used for waking never
+cancellation consume their whole triggering gesture, except main-page C during
+idle entry, which cancels the fade and sends immediately. Its successful-send
+brightness feedback bypasses remaining fades until release. A+D used for waking never
 opens management; release it and press A+D a second time. Setup or asset transfers cancel playback and inhibit
 idle entry until they finish; ordinary USB queries do not count as physical input.
 
@@ -661,3 +663,48 @@ On 2026-10-28, after A+F entry, the corrected firmware reported
 command completed successfully with no revisions listed, confirming that the
 revision-number parser accepts the live request. This was a read-only check;
 physical snapshot/restore behavior and MIDI latency remain unqualified.
+
+## C-button program-change brightness feedback
+
+On the performance page, C boosts the shared display backlight to maximum after
+an accepted send changes that instrument's last-sent program/bank. It stays at
+maximum while C is held and returns to the setup's brightness on release. There
+is no minimum flash duration. Repeated selections and name/volume-only patch
+differences do not boost brightness; rejected sends do not boost it either.
+The first accepted send counts as a change because previous state is unknown.
+Cancelling gestures, entering the module menu, deactivation and setup activation
+also clear the temporary boost.
+
+Portable tests cover hold/release, repeated selections, failed sends, duplicate
+press edges, undo, cancellation, setup activation/deactivation, same-program patch
+aliases, and brightness values 0 and 255. Native adapter tests and the combined
+firmware build pass. The combined image was flashed with upload_helper on
+2026-10-28, SHA-256
+`7d71d2f403cdb0517775d6c8b01dbd27ac6633a42839818ac2b5bbef3176c1ab`.
+An initial USB write error was followed by a successful retry of the same image.
+USB returned as stock firmware. Before upload, pman was selected with
+`CNTRL READY 14 34597 488beaf6`. After A+F, USB reported the same status and pman
+remained selected. Visible brightness-feedback verification remains pending.
+
+### Idle-fade interaction correction
+
+The user's first-press report exposed an interaction with pman's three-second
+idle timeout: screensaver entry cancelled and consumed the first gesture, while
+temporary brightness still passed through fade scaling. Main-page C now cancels
+idle entry and performs its normal send. Temporary brightness is an explicit
+hardware override, bypasses fades, and updates PWM at the press/release edges;
+a successful change stops remaining idle/wake fading. Startup dismissal still
+consumes its gesture, other buttons retain their existing entry policy, and no
+minimum flash duration is added.
+
+Portable, adapter and splash/runtime tests pass. Regression coverage includes C
+during UI fade-out, animation painting and animation fade-in, short release and
+startup-dismissal isolation. The splash harness was updated to the current Pane
+and document-version interfaces so this interaction is exercised again.
+Combined image SHA-256:
+`7deaa29ee65217f0d4237dda0f2d9096984fc4e9ada781361bb553601daedee5`.
+Flashed through upload_helper on 2026-10-28 after one initial USB write error and
+a successful retry. Stock USB returned after reset. The pre-flash setup status
+was unchanged at `CNTRL READY 14 34597 488beaf6`. After A+F entry, the user confirmed
+that both held and quick presses work in the requested reproduction test. USB
+status remains `CNTRL READY 14 34597 488beaf6`, with pman still selected.

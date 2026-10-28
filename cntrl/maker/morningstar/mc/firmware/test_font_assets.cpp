@@ -21,7 +21,7 @@ struct Peer : cntrl::Hardware, cntrl::Replies, TestStorage {
         for (const auto &line : pane.lines) if (line.text[0] && line.graphics.asset)
             assert(font_assets::cache.get(line.graphics.asset, line.graphics.size));
     }
-    void set_brightness(uint8_t) override {}
+    void set_brightness(uint8_t, bool) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
     void reply(const char *text) override { std::cout << text << std::endl; }

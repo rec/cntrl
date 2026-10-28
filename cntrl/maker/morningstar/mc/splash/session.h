@@ -17,7 +17,7 @@ public:
         fade_ = Fade::none; clock_started_ = false;
     }
     bool management_allowed() const { return !waking_gesture_ && !held_; }
-    bool controls(uint8_t pressed, uint32_t now) {
+    bool controls(uint8_t pressed, uint32_t now, bool perform_wake_action = false) {
         if (pressed && saver_) waking_gesture_ = true;
         if (!pressed) waking_gesture_ = false;
         if (pressed || pressed != pressed_) last_input_ = now;
@@ -35,9 +35,9 @@ public:
             return true; // Dismissal consumes the complete gesture.
         }
         if (saver_ && to_animation_ && fade_ != Fade::none && pressed) {
-            stop(); // Cancel entry without a wake fade or a musical action.
-            held_ = true;
-            return true;
+            stop(); // The performance C action may also proceed during idle entry.
+            held_ = !perform_wake_action;
+            return !perform_wake_action;
         }
         if (saver_ && pressed) wake(now, 200);
         return false; // Screensaver wake also performs the normal action.

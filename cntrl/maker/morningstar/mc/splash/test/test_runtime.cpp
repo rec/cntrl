@@ -17,7 +17,12 @@ struct Device : cntrl::Hardware, cntrl::Replies, cntrl::splash::Replies {
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned slot, const cntrl::Pane &pane) override { panes[slot] = pane; }
-    void set_brightness(uint8_t) override {}
+    uint8_t brightness = 0;
+    bool temporary = false;
+    void set_brightness(uint8_t value, bool feedback) override {
+        brightness = value; temporary = feedback;
+        if (feedback) session->stop();
+    }
     void set_splash(bool enabled, uint32_t idle_ms = 0) override { session->configure(enabled, idle_ms, 0); }
     void error(const char *) override {}
     void reply(const char *line) override { replies.emplace_back(line); }
@@ -35,6 +40,34 @@ void command(cntrl::splash::Router &router, const std::string &line) {
 int storage_queries = 0;
 int storage_scans = 0;
 void storage_info(bool scan) { ++storage_queries; if (scan) ++storage_scans; }
+
+void test_performance_c_during_idle_fade(cntrl::splash::Receiver &assets, const std::vector<uint8_t> &show) {
+    for (unsigned phase = 0; phase < 3; ++phase) {
+        Device device; Panels panels;
+        cntrl::splash::Player player(assets, panels);
+        cntrl::splash::Session session(assets, player); device.session = &session;
+        cntrl::Document document; assert(document.load(show.data(), unsigned(show.size()), device));
+        cntrl::Controller controller(device); controller.activate(document);
+        session.configure(false, 3000, 0); session.poll(0, true); session.poll(3000, true);
+        unsigned now = 5000;
+        if (phase) {
+            session.poll(7000);
+            for (unsigned i = 0; i < (phase == 1 ? 64u : 256u); ++i) session.poll(7000);
+            now = 9000; session.poll(now);
+        }
+        assert(!session.controls(1u << 2, now, true));
+        controller.button(2, true, now);
+        assert(device.sent == 1 && device.temporary && device.brightness == 255);
+        assert(!std::strcmp(device.panes[1].lines[1].text, "Flute"));
+        assert(!session.poll(now, true) && session.brightness(192, now) == 192);
+        assert(!session.controls(0, now + 18, false));
+        controller.button(2, false, now + 18);
+        assert(!device.temporary && device.brightness == document.brightness());
+        // Startup dismissal remains a consumed gesture, even for performance C.
+        session.configure(true, 0, now + 20);
+        assert(session.controls(1u << 2, now + 20, true));
+    }
+}
 
 void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<uint8_t> &show) {
     for (unsigned phase = 0; phase < 3; ++phase) for (unsigned button = 0; button < 6; ++button) {
@@ -65,14 +98,14 @@ void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<u
         unsigned rows = panels.rows;
         uint8_t mask = 1u << button, other = 1u << ((button + 1) % 6);
         if (!session.controls(mask, now)) controller.button(button, true, now);
-        assert(device.sent == 0 && !std::strcmp(device.panes[2].patch, "Flute"));
+        assert(device.sent == 0 && !std::strcmp(device.panes[2].lines[1].text, "Flute"));
         assert(session.brightness(192, now) == 192);
         assert(!session.poll(now, true) && session.take_redraw());
         assert(panels.rows == rows); // Stopped animation cannot paint over the UI.
         assert(session.controls(mask | other, now + 1));
         assert(session.controls(other, now + 2));
         if (!session.controls(0, now + 3)) controller.button(button, false, now + 3);
-        assert(device.sent == 0 && !std::strcmp(device.panes[2].patch, "Flute"));
+        assert(device.sent == 0 && !std::strcmp(device.panes[2].lines[1].text, "Flute"));
         assert(!session.controls(0, now + 4));
         assert(!session.controls(1u << 2, now + 5));
         controller.button(2, true, now + 5);
@@ -96,7 +129,7 @@ int main(int argc, char **argv) {
     assets.boot();
     while (!router.accepts_input()) router.poll(0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back() == "CNTRL READY 10 0 00000000");
+    assert(device.replies.back() == "CNTRL READY 14 0 00000000");
     command(router, "CNTRL STORAGE");
     assert(storage_queries == 1 && storage_scans == 0);
     command(router, "CNTRL STORAGE SCAN");
@@ -144,10 +177,11 @@ int main(int argc, char **argv) {
     assert(storage_queries == 2 && storage_scans == 1);
     assert(device.replies.back().find("CNTRL SPLASH DONE ") == 0);
     test_cancel_idle_entry(assets, show);
+    test_performance_c_during_idle_fade(assets, show);
     command(router, "CNTRL SPLASH STATUS");
     assert(device.replies.back().find("CNTRL SPLASH READY ") == 0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 10 ") == 0);
+    assert(device.replies.back().find("CNTRL READY 14 ") == 0);
 
     {
         Player boot_player(assets, panels);
@@ -236,23 +270,12 @@ int main(int argc, char **argv) {
     if (!session.controls(1u << 2, 2503)) controller.button(2, true, 2503);
     assert(device.sent == 1);
 
+    assert(device.temporary && device.brightness == 255);
     assert(!session.poll(3002, true));
-    assert(session.brightness(192, 3002) == 0);
+    assert(session.brightness(192, 3002) == 192);
     assert(session.take_redraw() && !session.take_redraw());
-    assert(!session.poll(3100) && session.brightness(192, 3100) == 0);
-    assert(!session.poll(3150, true));
-    assert(session.brightness(192, 3150) == 0);
-    assert(session.brightness(192, 3400) == 12);
-    assert(session.brightness(192, 3900) == 108);
-    previous = 0;
-    for (unsigned elapsed = 0; elapsed <= 1000; ++elapsed) {
-        unsigned brightness = session.brightness(255, 3150 + elapsed);
-        assert(brightness >= previous);
-        assert(brightness == 255u * elapsed * elapsed / 1000000);
-        previous = brightness;
-    }
-    assert(!session.poll(3650, true) && session.brightness(192, 3650) == 48);
-    assert(!session.poll(4150, true) && session.brightness(192, 4150) == 192);
+    controller.button(2, false, 3003);
+    assert(!device.temporary && device.brightness == documents.document().brightness());
 
     // Millisecond wraparound preserves startup and dismissal ramp timings.
     uint32_t start = 0xffffff00u;
@@ -274,7 +297,7 @@ int main(int argc, char **argv) {
     router.poll(10001); // Finish timed-out asset upload, leaving old slot available.
     assert(!assets.busy());
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 10 ") == 0);
+    assert(device.replies.back().find("CNTRL READY 14 ") == 0);
 
     session.configure(true, 0, 10002);
     assert(session.controls(1, 10002)); // A press during pending startup also cancels.
