@@ -79,5 +79,8 @@ struct SetupStorage : Storage {
     virtual bool available() const = 0;
     virtual void choose(const char *name) = 0;
     virtual bool next(const char *after, char *name) = 0;
+    virtual void catalogue_begin() = 0;
+    // Visit one directory entry. Empty name skips it; true closes the scan.
+    virtual bool catalogue_step(char *name) = 0;
 };
 } // namespace cntrl
