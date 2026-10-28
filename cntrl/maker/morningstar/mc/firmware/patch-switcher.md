@@ -741,3 +741,13 @@ host device. Disconnected USB outputs are skipped. Omniports remain untouched.
 The module pauses the normal bridge while it owns the ports and restores the
 setup setting on exit. It does not edit the active setup or songs/setlists.
 See the [Panic behavior and test contract](../../../../../doc/panic.md).
+
+Panic was built and flashed on 2026-10-28 from the rebased main checkout,
+preserving the songs/setlists and Original firmware modules. Portable/native
+tests and PANIC-enabled/disabled builds pass. Combined image SHA-256:
+`a1a639f3bff6661770e82ff10bf49c0de2e1dc89991453b87eea11f1a86aa07f`.
+The running upload helper reported a USB write error on the first attempt. The
+same verified image reached reset on retry; the updater returned a disappearance
+error, then USB enumerated as cntrl. Post-flash status was
+`CNTRL READY 14 34597 488beaf6` and pman remained selected. No Panic messages were
+triggered by automation. Physical hold feedback and MIDI capture remain pending.
