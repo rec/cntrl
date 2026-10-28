@@ -90,10 +90,9 @@ public:
                 return;
             }
             unsigned instrument = u16(document_.patch(p));
-            int previous = last_sent_[instrument];
-            bool changed = previous < 0 || std::memcmp(document_.patch(p) + 4, document_.patch(unsigned(previous)) + 4, 3);
+            if (already_sent(p)) return;
             if (!send(p)) return;
-            if (c_held_ && changed) { flashing_ = true; hardware_.set_brightness(255, true); }
+            if (c_held_) { flashing_ = true; hardware_.set_brightness(255, true); }
             if (depth_ == history_capacity) {
                 for (unsigned i = 1; i < depth_; ++i) history_[i - 1] = history_[i];
                 --depth_;
@@ -140,6 +139,12 @@ private:
         flashing_ = c_held_ = false;
     }
     unsigned candidate() const { return u16(document_.category(selected_) + 64) + cursors_[selected_]; }
+    bool already_sent(unsigned index) const {
+        const uint8_t *p = document_.patch(index);
+        if (u16(p) == 65535) return false;
+        int sent = last_sent_[u16(p)];
+        return sent >= 0 && !std::memcmp(p + 4, document_.patch(unsigned(sent)) + 4, 3);
+    }
     bool send(unsigned index) {
         const uint8_t *p = document_.patch(index);
         const uint8_t *i = document_.instrument(u16(p));
@@ -162,11 +167,7 @@ private:
         Pane view;
         view.graphics = document_.graphics(slot);
         if (index >= 0) {
-            const uint8_t *p = document_.patch(unsigned(index));
-            int sent = u16(p) == 65535 ? -1 : last_sent_[u16(p)];
-            bool already_sent = slot == 2 && sent >= 0
-                && !std::memcmp(p + 4, document_.patch(unsigned(sent)) + 4, 3);
-            document_.page(view, unsigned(index), slot, already_sent);
+            document_.page(view, unsigned(index), slot, slot == 2 && already_sent(unsigned(index)));
         }
         hardware_.show(slot, view);
     }

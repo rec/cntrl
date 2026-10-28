@@ -258,7 +258,8 @@ Navigation never sends MIDI. Undo pops the latest action and sends its recorded
 previous patch to the same instrument, if one is known, without pushing an entry.
 It never substitutes a different instrument's patch from the chronological
 stack. An empty stack does nothing; undoing an instrument's first send sends
-nothing. Repeated C presses still push repeated entries. After a restoration,
+nothing. Pressing C on an already-sent, greyed-out patch does nothing and never
+pushes a duplicate entry. After a restoration,
 C shows the restored patch's category and effective label, without an instrument
 name or title. After every send or Undo,
 derive L from the previous patch recorded by the top remaining action, or blank
@@ -267,8 +268,8 @@ while history remains; an empty history blanks C. R shows the undone patch even
 if browsing had moved to a different category or patch before Undo.
 
 Keep each patch's bank-select, PC and optional control messages in order on its
-route. Do not deduplicate sends or suppress repeated bank changes without a
-requirement. Define successful sending as acceptance by the local output queue,
+route. A greyed-out candidate is ignored before sending; distinct patch sends
+retain their complete message sequences. Define successful sending as acceptance by the local output queue,
 not acknowledgment from an instrument. Reserve space for the complete sequence
 before committing history; on local failure keep history unchanged and show an
 error. Undo similarly commits its history change only when any required resend
