@@ -109,6 +109,14 @@ public:
     }
     bool pedal(unsigned route, const uint8_t *bytes, unsigned size) {
         if (route >= destinations || !size || size > 14 || (route == 6 && !connected_)) return false;
+        for (unsigned offset = 0; offset < size;) {
+            unsigned kind = bytes[offset] >> 4;
+            if (kind < 8 || kind > 14) return false;
+            unsigned n = kind == 12 || kind == 13 ? 2 : 3;
+            if (n > size - offset) return false;
+            for (unsigned i = 1; i < n; ++i) if (bytes[offset + i] & 0x80) return false;
+            offset += n;
+        }
         auto &r = routes_[route];
         if (r.pedal_count == pedal_capacity) return false;
         auto &b = r.pedal[(r.pedal_head + r.pedal_count) % pedal_capacity];

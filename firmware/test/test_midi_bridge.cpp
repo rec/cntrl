@@ -138,7 +138,27 @@ void test_usb_sysex_resynchronizes_after_overflow() {
     assert((out.bytes[0] == std::vector<uint8_t>{0xf0, 0xf7}));
 }
 
+void test_malformed_pedal_batches_are_rejected_atomically() {
+    cntrl::midi::Bridge b; Output out;
+    const std::vector<std::vector<uint8_t>> invalid = {
+        {0xc0}, {0x90}, {0x90, 60}, {0xc0, 1, 0x90, 60},
+        {0xc0, 1, 0xf8}, {0x70, 1, 2}, {0xc0, 0x80}, {0x90, 60, 0x80},
+    };
+    for (const auto &bytes : invalid) {
+        assert(!b.pedal(0, bytes.data(), unsigned(bytes.size())));
+        b.service(out, 0);
+        assert(b.idle() && out.attempts == 0);
+    }
+    for (unsigned kind = 8; kind <= 14; ++kind) {
+        uint8_t bytes[] = {uint8_t(kind << 4), 1, 2};
+        unsigned n = kind == 12 || kind == 13 ? 2 : 3;
+        assert(b.pedal(0, bytes, n)); b.service(out, 0);
+        assert(b.idle());
+    }
+    assert(out.attempts == 7);
+}
 int main() {
+    test_malformed_pedal_batches_are_rejected_atomically();
     test_messages_and_running_status();
     test_independent_outputs_and_pedal_reservation();
     test_sysex_streaming_and_pedal_ownership();
