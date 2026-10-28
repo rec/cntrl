@@ -118,7 +118,7 @@ public:
         std::snprintf(record_name_, sizeof(record_name_), "%s", selected_);
         expected_ = document_.length(); expected_crc_ = checksum(staging_, expected_); quiet_ = true;
         if (!start_write(now)) return false;
-        dirty_ = false; return true;
+        return true;
     }
     void receive(uint8_t byte, uint32_t now) {
         if (history_action_ != HistoryAction::none || writing_ || erasing_) return;
@@ -152,14 +152,19 @@ public:
         done = storage_.finish() && done; writing_ = false;
         char name[64]; std::snprintf(name, sizeof(name), "%s", record_name_);
         uint32_t generation = generation_ + 1;
-        if (!done || !load(name) || generation_ != generation || length_ != expected_ || checksum(staging_, length_) != expected_crc_) { error("storage-verify"); return; }
+        // Read-back reuses staging. Keep editable bytes if verification fails.
+        if (dirty_) std::memcpy(history_data_, staging_, expected_);
+        if (!done || !load(name) || generation_ != generation || length_ != expected_ || checksum(staging_, length_) != expected_crc_) {
+            if (dirty_) std::memcpy(staging_, history_data_, expected_);
+            error("storage-verify"); return;
+        }
         if (!name_compare(name, selected_)) {
             Document candidate;
             if (!candidate.load(staging_, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { error("font-load"); return; }
             hardware_.finish_fonts(true); activate();
         }
         if (!quiet_) replies_.reply("CNTRL OK");
-        quiet_ = false;
+        quiet_ = false; dirty_ = false;
     }
     struct HistoryComparison { unsigned patches = 0, routes = 0; bool settings = false, formatting = false; };
     const Revision &history_revision() const { return history_revision_; }

@@ -107,6 +107,10 @@ as catalogue size grows. This is an execution issue, not a layout issue.
 
 ### C5. P2: failed edit saves discard the editable state too early
 
+**Resolved:** edits remain dirty until verified save success, read-back failures
+preserve their bytes, and the failure screen returns to Save/Discard/Cancel.
+Native persistence tests cover retry after an asynchronous history write failure.
+
 **Evidence:** `firmware/include/cntrl/documents.h:116` (`edit_save`),
 `:145` (write failure), `:218` (`history_complete`);
 `firmware/include/cntrl/setup_ui.h:27` and `:37`.

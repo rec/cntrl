@@ -234,9 +234,13 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     interrupted.remaining = 120;
     assert(recovered.edit_save(0)); // Failure is reported by the asynchronous job.
     while (recovered.busy()) recovered.tick(1);
+    assert(recovered.dirty() && recovered.edit_value(0, 0) == 3);
     interrupted.remaining = -1;
+    assert(recovered.edit_save(2));
+    while (recovered.busy()) recovered.tick(3);
+    assert(!recovered.dirty() && recovered.document().patch(0)[4] == 2);
     cntrl::Documents reboot(interrupted, hw, controller, hw); reboot.boot();
-    assert(reboot.document().valid() && reboot.document().patch(0)[4] == 1);
+    assert(reboot.document().valid() && reboot.document().patch(0)[4] == 2);
     // Corrupt selection records are not treated as an unset selection.
     card.files[""][0][0] ^= 1;
     cntrl::Documents bad_selection(card, hw, controller, hw); bad_selection.boot();
