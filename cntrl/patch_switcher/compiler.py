@@ -41,7 +41,7 @@ def read_document(path: Path) -> object:
     return document
 
 
-def normalize_patch(value: object) -> models.Patch:
+def normalize_patch(value: object) -> models.Patch | models.FunctionPatch:
     if not isinstance(value, dict):
         raise ValueError('patch must be a table/object')
     fields = dict(value)
@@ -65,6 +65,8 @@ def normalize_patch(value: object) -> models.Patch:
                 fields[name] = int(part)
             else:
                 fields[name] = part
+    if 'function' in fields:
+        return models.FunctionPatch.model_validate(fields)
     return models.Patch.model_validate(fields)
 
 
@@ -130,8 +132,6 @@ def compile_show(
                 instrument.channel - 1,
             )
         )
-    if not instruments:
-        errors.append('instruments: at least one instrument is required')
     if not show.patches:
         errors.append('patches: at least one category is required')
     categories: list[bytes] = []
@@ -157,6 +157,51 @@ def compile_show(
                 continue
             except ValueError as error:
                 errors.append(f'{context}: {error}')
+                continue
+            if isinstance(patch, models.FunctionPatch):
+                if patch.function not in target.functions or any(
+                    b not in target.buttons for b in patch.exit_buttons.split('+')
+                ):
+                    errors.append(
+                        f'{context}: function or exit buttons unavailable on target'
+                    )
+                    continue
+                label = patch.display_name or patch.name or patch.function
+                patches.append(
+                    struct.pack(
+                        '<HHBBBBBBBB64s',
+                        65535,
+                        len(categories),
+                        0,
+                        255,
+                        255,
+                        255,
+                        255,
+                        1,
+                        patch.button_mask,
+                        0,
+                        _text(label, 64, target, context + '.display_name', errors),
+                    )
+                )
+                display_patches.append(
+                    display.DisplayPatch(
+                        values={
+                            'group.name': category,
+                            'display_name': label,
+                            'name': patch.name,
+                        },
+                        style=patch.style,
+                        categories=patch.categories,
+                    )
+                )
+                logical_banks.append(0xFFFFFFFF)
+                for value in (patch.name, None, patch.display_name):
+                    encoded = value.encode('utf-8') if value is not None else None
+                    name_records.append(
+                        struct.pack('<H', 65535)
+                        if encoded is None
+                        else struct.pack('<H', len(encoded)) + encoded
+                    )
                 continue
             if patch.instrument not in instruments:
                 errors.append(
@@ -454,4 +499,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHH')
-DOCUMENT_VERSION = 14
+DOCUMENT_VERSION = 15

@@ -11,6 +11,7 @@ class SongsUi {
 public:
     SongsUi(Songs &songs, Hardware &hardware, SongCapture &capture) : songs_(songs), hardware_(hardware), capture_(capture) {}
     bool open() const { return mode_ != closed; }
+    void perform() { mode_ = performance; cursor_ = 0; locked_ = true; std::snprintf(feedback_, 64, "%s", songs_.last_error()); render(); }
     void enter() { mode_ = root; cursor_ = 0; locked_ = true; render(); }
     void poll(uint8_t held) { if (!held) locked_ = false; }
     void button(unsigned button, bool down) {
@@ -19,12 +20,12 @@ public:
         feedback_[0] = 0;
         if (mode_ == naming) { name_button(button); render(); return; }
         if (button == 5) {
-            mode_ = mode_ == root ? closed : mode_ == adding ? performance : root;
+            mode_ = mode_ == root ? closed : mode_ == adding ? performance : mode_ == patch_actions ? patches : mode_ == patches ? song_actions : root;
             cursor_ = 0; if (open()) render(); return;
         }
         unsigned count = mode_ == root ? 5 : mode_ == sets ? songs_.counts().sets + 1
             : mode_ == library || mode_ == adding ? songs_.counts().songs
-            : mode_ == editing ? 8 : mode_ == song_actions ? 2
+            : mode_ == editing ? 8 : mode_ == song_actions ? 3 : mode_ == patch_actions ? 5 : mode_ == patches ? (songs_.song(song_id_) ? songs_.song(song_id_)->count : 0)
             : mode_ == moving || mode_ == performance ? (current_set() ? current_set()->count : 0) : 0;
         if (button < 2 && (mode_ == library || mode_ == adding)) picker_ = songs_.browse(picker_, button == 0);
         else if (button < 2 && count) cursor_ = (cursor_ + count + (button == 0 ? -1 : 1)) % count;
@@ -55,11 +56,21 @@ public:
                 if (song) begin_name(song->name, false);
                 else std::strcpy(feedback_, "Song read failed");
             }
+            else if (cursor_ == 2) { mode_ = patches; cursor_ = 0; }
             else {
                 Song item;
                 if (!capture_.capture(item, false) || !songs_.change_song(song_id_, item.patch)) fail();
                 else { mode_ = library; cursor_ = 0; }
             }
+        } else if (mode_ == patches && button == 2 && count) {
+            patch_cursor_ = cursor_; mode_ = patch_actions; cursor_ = 0;
+        } else if (mode_ == patch_actions && button == 2) {
+            bool good = false; Song captured;
+            if (cursor_ < 2) {
+                if (capture_.capture(captured, false)) good = cursor_ == 0 ? songs_.replace_patch(song_id_, patch_cursor_, captured) : songs_.insert_patch(song_id_, patch_cursor_, captured);
+            } else if (cursor_ == 2) good = songs_.remove_patch(song_id_, patch_cursor_);
+            else good = songs_.move_patch(song_id_, patch_cursor_, cursor_ == 3);
+            if (!good) fail(); else { mode_ = patches; cursor_ = 0; }
         } else if (mode_ == adding && button == 2 && count) {
             ensure_picker(); const Song *found = songs_.song(picker_); if (!found) { fail(); render(); return; } Song item = *found;
             if (!songs_.insert(songs_.active_set(), insertion_, item.id)) fail();
@@ -84,9 +95,10 @@ public:
         render();
     }
 private:
-    enum Mode { closed, root, sets, library, song_actions, performance, editing, adding, moving, naming };
+    enum Mode { closed, root, sets, library, song_actions, performance, editing, adding, moving, naming, patches, patch_actions };
     Songs &songs_; Hardware &hardware_; SongCapture &capture_;
     Mode mode_ = closed, return_mode_ = root;
+    unsigned patch_cursor_ = 0;
     unsigned cursor_ = 0, entry_ = 0, insertion_ = 0, added_ = 0, character_ = 0;
     uint32_t song_id_ = 0;
     uint32_t picker_ = 0;
@@ -121,11 +133,22 @@ private:
         for (auto &p : panes) for (auto &line : p.lines) { line.graphics.size = line.graphics.line_height = 16; line.wrap = true; }
         auto text = [&](unsigned pane, unsigned line, const char *s) { std::snprintf(panes[pane].lines[line].text, 64, "%s", s); };
         text(0, 0, songs_.removed() ? "Current (removed)" : "Current"); text(0, 1, songs_.current_name());
+        SongSelection current_patch;
+        if (songs_.current_patch(current_patch)) {
+            if (current_patch.patch.function) text(0, 2, "Original firmware");
+            else std::snprintf(panes[0].lines[2].text, 64, "%.31s ch%u PC%u", current_patch.document[0] ? current_patch.document : current_patch.patch.output, unsigned(current_patch.patch.channel) + 1, unsigned(current_patch.patch.program) + 1);
+        }
         const Setlist *set = current_set(); unsigned next = songs_.next_position();
         text(2, 0, "Next");
         SongEntry next_entry;
         const Song *upcoming = set && next < set->count && songs_.entry(set->id, next, next_entry) ? songs_.song(next_entry.song) : nullptr;
         text(2, 1, upcoming ? upcoming->name : set && !set->count ? "Add songs" : "End of set");
+        SongSelection next_patch;
+        if (songs_.upcoming_patch(next_patch)) {
+            text(2, 0, "Next patch");
+            if (next_patch.patch.function) text(2, 1, "Original firmware");
+            else std::snprintf(panes[2].lines[1].text, 64, "%.31s PC%u", next_patch.document[0] ? next_patch.document : next_patch.patch.output, unsigned(next_patch.patch.program) + 1);
+        }
         static const char *roots[] = {"Perform setlist", "Setlists", "Songs", "Save as song", "Save reference"};
         static const char *edits[] = {"Add next", "Add to end", "Remove from setlist", "Move", "Rename setlist", "Undo edit", "Restart setlist", "Done"};
         text(1, 0, mode_ == root ? "Songs and setlists" : mode_ == naming ? "Rename" : set ? set->name : "Songs");
@@ -133,14 +156,21 @@ private:
         else if (mode_ == sets) { Setlist selected; text(1, 1, songs_.set_at(cursor_, selected) ? selected.name : "New setlist"); }
         else if (mode_ == editing) text(1, 1, edits[cursor_]);
         else if (mode_ == naming) { text(1, 1, name_); std::snprintf(panes[1].lines[2].text, 64, "Character %u", character_ + 1); }
-        else if (mode_ == song_actions) text(1, 1, cursor_ ? "Use selected patch" : "Rename song");
+        else if (mode_ == song_actions) { static const char *actions[] = {"Rename song", "Use selected patch", "Edit patches"}; text(1, 1, actions[cursor_]); }
+        else if (mode_ == patches) {
+            SongSelection selected;
+            if (songs_.patch_at(song_id_, cursor_, selected)) {
+                text(1, 1, selected.patch.function ? "Original firmware" : selected.document[0] ? selected.document : selected.patch.output);
+                std::snprintf(panes[1].lines[2].text, 64, "Patch %u/%lu", cursor_ + 1, (unsigned long)songs_.song(song_id_)->count);
+            }
+        } else if (mode_ == patch_actions) { static const char *actions[] = {"Replace with selected", "Insert selected after", "Remove patch", "Move earlier", "Move later"}; text(1, 1, actions[cursor_]); }
         else if (mode_ == library || mode_ == adding) {
             ensure_picker();
             if (!songs_.counts().songs) text(1, 1, "Save a song first");
             else {
                 const auto *found = songs_.song(picker_); if (!found) return; const Song s = *found;
                 text(1, 1, s.name);
-                std::snprintf(panes[1].lines[2].text, 64, "%.31s ch%u PC%u #%lu", s.document[0] ? s.document : s.patch.output, unsigned(s.patch.channel) + 1, unsigned(s.patch.program) + 1, (unsigned long)s.id);
+                std::snprintf(panes[1].lines[2].text, 64, "%lu patches #%lu", (unsigned long)s.count, (unsigned long)s.id);
             }
         } else if (set && set->count) {
             cursor_ %= set->count; SongEntry selected;

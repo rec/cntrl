@@ -1,6 +1,7 @@
 # Patch functions
 
-Status: proposed. Extend patches to perform functions on the pedal as well as
+Status: implemented on `codex/patch-functions`; built and tested, not flashed at
+the user's request. Physical qualification is pending. Extend patches to perform functions on the pedal as well as
 send MIDI. The first function is `stock-firmware`, with one argument identifying
 the button combination that returns to patch mode.
 

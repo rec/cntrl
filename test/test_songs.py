@@ -18,14 +18,16 @@ def library() -> songs.Library:
             songs.Song(
                 id=1,
                 name='Simple',
-                patch=songs.Patch(output='din', channel=2, program=34),
+                patches=[songs.Patch(id=10, output='din', channel=2, program=34)],
             ),
             songs.Song(
                 id=2,
                 name='Linked',
-                reference=songs.Reference(
-                    document='pman', instrument='pman', program=7, bank=0
-                ),
+                patches=[
+                    songs.Reference(
+                        id=11, document='pman', instrument='pman', program=7, bank=0
+                    )
+                ],
             ),
         ],
         setlists=[songs.Setlist(id=3, name='Tonight', songs=[1, 2, 1])],
@@ -56,8 +58,8 @@ def test_missing_songs_and_duplicate_identities_are_rejected() -> None:
         songs.encode(
             value.model_copy(update={'setlists': [songs.Setlist(id=1, name='Bad')]})
         )
-    with pytest.raises(ValueError, match='exactly one'):
-        songs.Song(id=1, name='Missing')
+    with pytest.raises(ValueError, match='patches'):
+        songs.Song.model_validate({'id': 1, 'name': 'Missing'})
 
 
 @pytest.mark.parametrize('large', [False, True])
@@ -90,7 +92,7 @@ def test_song_library_transfer_against_cpp_receiver(
                 songs.Song(
                     id=i + 1,
                     name=f'Song {i}',
-                    patch=songs.Patch(output='din', channel=1, program=1),
+                    patches=[songs.Patch(output='din', channel=1, program=1)],
                 )
                 for i in range(130)
             ],
@@ -118,12 +120,15 @@ def test_song_library_transfer_against_cpp_receiver(
                 for duplicate in (True, False):
                     malformed = bytearray(data)
                     if duplicate:
-                        struct.pack_into('<I', malformed, 12 + songs.SONG.size, 1)
+                        struct.pack_into('<I', malformed, 12 + songs.SELECTION.size, 2)
                     else:
                         struct.pack_into(
                             '<I',
                             malformed,
-                            12 + 2 * songs.SONG.size + songs.SET.size + 4,
+                            12
+                            + 2 * (songs.SONG.size + songs.SELECTION.size)
+                            + songs.SET.size
+                            + 4,
                             3,
                         )
                     client.ok(

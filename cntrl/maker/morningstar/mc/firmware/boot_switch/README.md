@@ -6,10 +6,10 @@ valid choice is stored. Explicit choices persist across resets and power cycles.
 From patch mode, open A+D, select **Original firmware**, then press C on its page
 to start stock, or F to go back. The module commits and verifies the stock choice
 in the existing selection journal, disconnects USB and resets. It sends no MIDI.
-While stock is running, release the configured pair once, then press A+F within
+While stock is running, release the configured pair once, then press it within
 50 ms (either order, no hold) to commit patch mode and reset back into cntrl.
 The window includes exactly 50 ms and measures presses after 15 ms of stable input.
-The pair remains build-time configurable.
+Function patches supply the exit pair per visit. The standalone module uses A+F.
 
 The gesture hook exists only in stock. cntrl's button reader has no A+F gesture.
 The Original firmware module is target-specific and can be excluded with
@@ -24,14 +24,8 @@ From the repository root, using the installed firmware toolchain:
 make -C cntrl/maker/morningstar/mc/firmware boot-switch
 ```
 
-Configure a different pair at build time:
-
-```bash
-make -C cntrl/maker/morningstar/mc/firmware boot-switch SWITCH_PAIR=B+E
-```
-
-The output is `../build/boot-switch/combined.hex`. Configuration requires a new
-combined build and upload; it is not a performance-setup field or runtime setting.
+The output is `../build/boot-switch/combined.hex`. Function patches configure the
+exit pair at runtime through their `exit_buttons` argument.
 Only the exact stock v3.14.0 HEX identified in the investigation is supported.
 The builder rejects a different input hash or unexpected bytes at a patch site.
 The original stock HEX is a local input and is not committed.
@@ -115,7 +109,7 @@ journal is currently a firmware installation operation, not a normal switch.
 The Original firmware module uses cntrl's ITCM-resident EEPROM flash writer to
 append a stock record, without touching the manufacturer's EEPROM region. It
 refuses to switch while setup storage is busy, edits are unsaved or performance
-MIDI sends are queued. It also reserves a following slot for the A+F return;
+MIDI sends are queued. It also reserves all records for the stock return and its consumption;
 there is no automatic journal erase or compaction. Failure leaves patch mode
 running and displays an error.
 
@@ -157,3 +151,37 @@ without another gesture. USB then returned `CNTRL READY 9 26866 36424cc1`,
 matching the setup length and checksum before this installation. Interrupted
 record writes were tested in simulation, not by removing power during an actual
 flash program operation.
+
+## Function visits (format 15)
+
+The journal keeps its eight-byte value/complement records. Config records use
+`0x46430000 | pair | song_flag`: pair is an A..F logical six-bit mask with exactly
+two bits set, and song_flag is `0x8000` for song continuation. The config slot is
+the visit token. `0x46520000 | token` marks a stock return;
+`0x46580000 | token` consumes it. Unknown or torn records remain ignored. Config
+records reset the preceding visit state. The default pair is A+F.
+
+Entry reserves five slots: config, stock choice, return marker, patch-mode choice
+and consumed marker. The stock hook translates logical A..F to the traced GPIO
+bits and retains its existing release-to-arm, 15 ms debounce and 50 ms/no-hold
+behavior. No patch-mode A+F handler is installed.
+
+For song visits, `/cntrl/firmware-visit.bin` stores a verified small record with
+setup identity/checksum, song library generation/checksum and occurrence IDs.
+The following referenced selection also carries its source document checksum.
+Write, sync, read-back, journal commit and return handling run as separate poll
+steps. No collection or full runtime snapshot is written. The old record is
+irrelevant unless a matching unconsumed stock-return token exists.
+
+Return waits for button release, validates the saved context, durably consumes
+the marker, then activates the next patch. Power loss after consumption can skip
+a recall but cannot replay it on the next boot. A module visit never resumes a
+song. Flash programming uses the existing ITCM writers; no sector erase or
+journal compaction occurs at runtime.
+
+The format-15 combined image builds successfully. Python and native tests cover
+function dispatch, song continuation, stale library detection, torn markers,
+consumption and journal capacity. It has not been flashed: the user requested
+finishing the branch without flashing after concurrent pedal work was detected.
+The image is in this worktree's `build/boot-switch/combined.hex`; its SHA-256 is
+`5792dfa70b1f3e96cddc364445c59b986de557f37e2bc4d691b072064753cddc`.

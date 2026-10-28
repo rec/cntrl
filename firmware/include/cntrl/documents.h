@@ -76,6 +76,7 @@ public:
     int64_t edit_value(unsigned patch, unsigned field) const {
         Document d; if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || patch >= d.patches()) return 0;
         const uint8_t *p = d.patch(patch);
+        if (u16(p) == 65535 && field <= 4) return -1;
         switch (field) {
         case 0: return p[4] + 1;
         case 1: return u32(d.bank(patch)) == 0xffffffffu ? int64_t(-1) : int64_t(u32(d.bank(patch)));
@@ -91,6 +92,7 @@ public:
         Document d;
         if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || patch >= d.patches() || field > 7) return false;
         uint8_t *p = staging_ + (d.patch(patch) - staging_);
+        if (u16(p) == 65535 && field <= 4) return false;
         int64_t old = edit_value(patch, field), value = old + delta;
         if (field == 0 && value >= 1 && value <= 128) p[4] = uint8_t(value - 1);
         else if (field == 1) {
