@@ -681,5 +681,5 @@ firmware build pass. The combined image was flashed with upload_helper on
 `7d71d2f403cdb0517775d6c8b01dbd27ac6633a42839818ac2b5bbef3176c1ab`.
 An initial USB write error was followed by a successful retry of the same image.
 USB returned as stock firmware. Before upload, pman was selected with
-`CNTRL READY 14 34597 488beaf6`; post-A+F status and visible feedback verification
-remain pending.
+`CNTRL READY 14 34597 488beaf6`. After A+F, USB reported the same status and pman
+remained selected. Visible brightness-feedback verification remains pending.
