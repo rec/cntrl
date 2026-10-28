@@ -29,6 +29,19 @@ struct Peer : cntrl::Hardware, cntrl::Replies, TestStorage {
 int main(int argc, char **argv) {
     if (argc != 2) return 1;
     SD.sdfs.root = argv[1]; Peer peer; peer.fonts.ready = true;
+    {
+        struct Replies : cntrl::Replies {
+            std::string last;
+            void reply(const char *text) override { last = text; }
+        } replies;
+        font_assets::Files files; files.ready = true;
+        assert(files.command("CNTRL FONT BEGIN 1 8", replies, 1) && files.busy());
+        files.poll(10002, replies);
+        assert(!files.busy() && replies.last == "CNTRL ERROR font-timeout");
+        assert(files.command("CNTRL FONT BEGIN 1 8", replies, 10003) && files.busy());
+        assert(files.command("CNTRL FONT DATA xx", replies, 10004));
+        assert(!files.busy() && replies.last == "CNTRL ERROR font-asset");
+    }
     cntrl::Controller controller(peer);
     cntrl::Documents documents(peer, peer, controller, peer); documents.boot();
     std::string line; char byte;

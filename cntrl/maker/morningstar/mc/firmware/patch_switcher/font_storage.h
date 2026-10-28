@@ -8,6 +8,12 @@ namespace font_assets {
 class Files {
 public:
     bool ready = false;
+    bool busy() const { return bool(writer_); }
+    void poll(uint32_t now, cntrl::Replies &replies) {
+        if (writer_ && uint32_t(now - last_) > 10000) {
+            writer_.close(); replies.reply("CNTRL ERROR font-timeout");
+        }
+    }
     bool supports(uint32_t key, unsigned size) const {
         auto file = open(key); Entry entry; unsigned offset;
         return file && find(file, size, entry, offset);
@@ -20,9 +26,10 @@ public:
         return data && file.seekSet(offset) && file.read(data.get(), entry.length()) == int(entry.length())
             && cache.add(key, entry, std::move(data));
     }
-    bool command(const char *line, cntrl::Replies &replies) {
+    bool command(const char *line, cntrl::Replies &replies, uint32_t now = 0) {
         if (std::strncmp(line, "CNTRL FONT ", 11)) return false;
-        auto error = [&]() { replies.reply("CNTRL ERROR font-asset"); return true; };
+        last_ = now;
+        auto error = [&]() { writer_.close(); replies.reply("CNTRL ERROR font-asset"); return true; };
         if (!ready) return error();
         unsigned long key = 0; unsigned length = 0; int end = 0;
         if (std::sscanf(line, "CNTRL FONT BEGIN %lx %u%n", &key, &length, &end) == 2 && end && !line[end]
@@ -79,6 +86,7 @@ private:
     FsFile writer_;
     unsigned expected_ = 0, received_ = 0;
     uint32_t key_ = 0;
+    uint32_t last_ = 0;
     const char *temporary_ = "/cntrl/fonts/upload.tmp";
     static void filename(uint32_t key, char *path) { std::snprintf(path, 48, "/cntrl/fonts/%08lx.cfont", (unsigned long)key); }
     FsFile open(uint32_t key) const {
