@@ -107,6 +107,15 @@ public:
             }
         }
     }
+    void host_connected(bool connected) {
+        if (host_connected_ == connected) return;
+        host_connected_ = connected;
+        if (!connected) {
+            auto &r = routes_[8];
+            r.counts.dropped += r.pedal_count;
+            r.pedal_count = r.pedal_head = r.pedal_offset = 0;
+        }
+    }
     bool pedal(unsigned route, const uint8_t *bytes, unsigned size) {
         if (route >= destinations || !size || size > 14 || (route == 6 && !connected_)) return false;
         for (unsigned offset = 0; offset < size;) {
@@ -188,7 +197,7 @@ private:
         uint32_t last_sysex = 0;
         bool wire_sysex = false, terminate = false;
     } routes_[destinations];
-    bool enabled_ = false, connected_ = false;
+    bool enabled_ = false, connected_ = false, host_connected_ = false;
     unsigned cursor_ = 0;
     static bool valid(const Packet &p, bool sysex) {
         unsigned n = p.size();

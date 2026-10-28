@@ -157,7 +157,21 @@ void test_malformed_pedal_batches_are_rejected_atomically() {
     }
     assert(out.attempts == 7);
 }
+void test_host_disconnect_discards_pending_selection() {
+    cntrl::midi::Bridge b; Output out;
+    uint8_t bytes[] = {0xb0, 0, 1, 0xc0, 2};
+    b.host_connected(true); assert(b.pedal(8, bytes, sizeof(bytes)));
+    b.service(out, 0); // Bank delivered; program still pending.
+    assert(!b.idle()); b.host_connected(false);
+    assert(b.idle() && b.counters(8).dropped == 1);
+    b.host_connected(true); b.service(out, 1);
+    assert((out.bytes[8] == std::vector<uint8_t>{0xb0, 0, 1}));
+    assert(b.pedal(8, bytes, sizeof(bytes))); out.blocked[8] = true;
+    b.service(out, 2); b.host_connected(false);
+    assert(b.idle() && b.counters(8).dropped == 2);
+}
 int main() {
+    test_host_disconnect_discards_pending_selection();
     test_malformed_pedal_batches_are_rejected_atomically();
     test_messages_and_running_status();
     test_independent_outputs_and_pedal_reservation();
