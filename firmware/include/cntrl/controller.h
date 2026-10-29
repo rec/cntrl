@@ -253,9 +253,9 @@ private:
                 depth_ = 0; center_ = -1;
                 for (auto &p : current_) p = -1;
                 for (auto &p : last_sent_) p = -1;
-                render();
-                if (executor_.status() == PatchExecutor::Status::unknown) hardware_.error("Remote state unknown");
-                else hardware_.error(executor_.error());
+                if (executor_.status() == PatchExecutor::Status::unknown) {
+                    render(); hardware_.error("Remote state unknown");
+                }
             }
             return;
         }
