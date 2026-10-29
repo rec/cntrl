@@ -1,0 +1,3386 @@
+chord_ms = 100
+brightness = 192
+splash = true
+usb_midi_interface = false
+screensaver_timeout = 3
+pad = 4
+contrast = 0.6
+
+[style]
+font_name = "classic"
+
+[windows.undo]
+page = "patch"
+
+[windows.undo.style]
+background_color = "0xF8FCF8"
+foreground_color = "0x000000"
+
+[windows.sent]
+page = "patch"
+
+[windows.sent.style]
+background_color = "0xF8FCF8"
+foreground_color = "0x000000"
+
+[windows.next]
+page = "patch"
+
+[windows.next.style]
+background_color = "0xF8FCF8"
+foreground_color = "0x000000"
+
+[pages.patch]
+fields = ["group.name", "display_name"]
+
+[pages.patch.line_styles]
+
+[categories]
+
+[parameters]
+
+[instruments.pman]
+instrument = "pman"
+setup = "default"
+channel = 1
+output = "din"
+
+[[definitions.setups]]
+instrument = "pman"
+name = "default"
+
+[definitions.setups.banks.0]
+msb = 33
+lsb = 0
+
+[definitions.setups.banks.1]
+msb = 33
+lsb = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 1
+name = "Trumpet"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 2
+name = "Maynard"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 3
+name = "Alpert"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 4
+name = "Chet Tpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 5
+name = "Lead Tpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 7
+name = "StrMtTpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 8
+name = "CupMtTpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 9
+name = "WahMtTpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 10
+name = "WaTptCC4"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 11
+name = "HrmMtTpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 12
+name = "Mute Tpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 13
+name = "Picc.Tpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 14
+name = "Cornet"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 15
+name = "Flugel"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 16
+name = "Mangione"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 6
+name = "ClassTpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 66
+name = "ClassFlt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 95
+name = "Clarinet"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 96
+name = "JazzClar"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 104
+name = "Flurinet"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 9
+name = "Clavinet"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 37
+name = "Clapton"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 52
+name = "SynClav"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 17
+name = "Trombone"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 18
+name = "Big Bone"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 19
+name = "BriteTbn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 20
+name = "ValveTbn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 21
+name = "Jam Bone"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 23
+name = "BcktMtTb"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 24
+name = "DorseyTb"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 61
+name = "BreathTb"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 22
+name = "Bass Tbn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 71
+name = "Bass Flt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 83
+name = "Bali Flt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 89
+name = "Bamboo"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 98
+name = "Bs.Clrnt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 99
+name = "BrtBsClr"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 126
+name = "Bow Bass"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 112
+name = "ElecBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 113
+name = "MotownBs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 114
+name = "SteinBas"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 115
+name = "FunkBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 116
+name = "PickBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 117
+name = "SnapBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 118
+name = "Thumb Bs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 119
+name = "TiteBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 120
+name = "JacoBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 121
+name = "StratoBs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 123
+name = "MuteBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 124
+name = "Ac Bass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 125
+name = "Juicy Bs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 126
+name = "GnarlyBs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 127
+name = "Moog Bs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 128
+name = "Bass1000"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 25
+name = "WX Horn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 26
+name = "BrassHrn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 27
+name = "BriteHrn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 28
+name = "ff Horn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 29
+name = "OrchHorn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 30
+name = "New Horn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 101
+name = "Eng.Horn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 104
+name = "BorgHorn"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 31
+name = "Euphnium"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 32
+name = "Tuba"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 33
+name = "SoprnoSx"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 34
+name = "KennyGee"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 35
+name = "HeyKenG."
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 36
+name = "Branford"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 37
+name = "TraneSop"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 38
+name = "BrtSopSx"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 40
+name = "Sanborn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 43
+name = "Desmond"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 45
+name = "Everette"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 49
+name = "MBrecker"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 52
+name = "RaspyTnr"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 53
+name = "Getz Tnr"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 54
+name = "JobimTnr"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 61
+name = "Sanford"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 64
+name = "Real Flt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 65
+name = "SilvrFlt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 72
+name = "Afri Flt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 73
+name = "PennyWhs"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 74
+name = "TinWhist"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 76
+name = "Inca Flt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 77
+name = "Noze Flt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 78
+name = "Quena"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 79
+name = "Quena x2"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 81
+name = "Andean"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 84
+name = "IndiaFlt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 85
+name = "Ambience"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 86
+name = "WetFone"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 87
+name = "Maya Flt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 90
+name = "PanPicol"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 91
+name = "Coca!!"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 92
+name = "Ocarina!"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 93
+name = "Lonely"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 94
+name = "Recorder"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 97
+name = "ClsClrnt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 102
+name = "SftEngHn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 105
+name = "Crumbon"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 106
+name = "Klarina"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 109
+name = "Digirdoo"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 114
+name = "YamaBotl"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 119
+name = "Fiddle"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 122
+name = "RosinVla"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 127
+name = "HiStrEns"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 128
+name = "Pizzicat"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 1
+name = "Harmonca"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 2
+name = "MouthHrp"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 3
+name = "BluesHrm"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 4
+name = "Stevie!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 5
+name = "Toots!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 6
+name = "Accordn."
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 7
+name = "Concrtna"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 8
+name = "Jazz B3"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 10
+name = "Funky"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 11
+name = "SteelDrm"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 12
+name = "VL Drums"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 13
+name = "Yangchin"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 14
+name = "Asia Plk"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 15
+name = "JapanPlk"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 16
+name = "Tambura"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 17
+name = "Sitar"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 18
+name = "ElecHarp"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 21
+name = "Flamenco"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 26
+name = "Joe Pass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 28
+name = "Lucille"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 29
+name = ">>PAT<<"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 30
+name = "EFXStrat"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 31
+name = "ClnStrat"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 39
+name = "Carlos"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 43
+name = "Wah Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 44
+name = "Wah Dist"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 46
+name = "Eddie4th"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 47
+name = "Feedback"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 48
+name = "Hendrix"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 49
+name = "TalkBox!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 50
+name = "!XTREME!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 51
+name = "Hercules"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 54
+name = "Theremin"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 55
+name = "Avalana"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 56
+name = "Voxanne"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 57
+name = "Beauty!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 58
+name = "SpaceOut"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 59
+name = "Ghost Ld"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 60
+name = "PtchNoiz"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 62
+name = "Air Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 63
+name = "Breezer"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 64
+name = "ZawiLead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 65
+name = "Voxofone"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 66
+name = "Whistler"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 67
+name = "Debussy"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 68
+name = "Sines()"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 69
+name = "SmoothLd"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 70
+name = "Slinky"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 71
+name = "AirStick"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 72
+name = "RotoFone"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 73
+name = "Vox Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 74
+name = "Squeezy"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 75
+name = "Lyricon"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 76
+name = "Ana.Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 77
+name = "Mobius"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 78
+name = "70s Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 79
+name = "Osc Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 80
+name = "Saw Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 81
+name = "SAWS/|/|"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 82
+name = "ResoSaws"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 83
+name = "EML Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 84
+name = "HPFilter"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 85
+name = "EWI ARP"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 86
+name = "EWI Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 87
+name = "Koz Lead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 88
+name = "MattLead"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 89
+name = "PATCHMAN"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 90
+name = "Taurus"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 91
+name = "Phaser-{"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 94
+name = "Winwood"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 95
+name = "Pulse Ld"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 96
+name = "Corea!!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 97
+name = "SquareLd"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 98
+name = "Korg Ld"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 99
+name = "LuckyMan"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 100
+name = "Lyle"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 101
+name = "Analog"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 102
+name = "Nyle"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 103
+name = "Floyd Ld"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 105
+name = "Freik"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 106
+name = "Fazar"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 107
+name = "Dungeon"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 108
+name = "NevrLand"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 109
+name = "Brekord1"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 110
+name = "Brekord2"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 111
+name = "Brekord3"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 122
+name = "Sticky!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 39
+name = "Alto Sax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 41
+name = "BirdAlto"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 42
+name = "ExprAlto"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 44
+name = "Koz Alto"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 46
+name = "NY Alto"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 47
+name = "NY Tenor"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 48
+name = "TenorSax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 50
+name = "PopTenor"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 51
+name = "SoulTenr"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 55
+name = "TenorSub"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 56
+name = "Bari Sax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 57
+name = "TiteBari"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 58
+name = "Sax Sect"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 59
+name = "Air Sax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 60
+name = "Saxual"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 113
+name = "CelloSax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 62
+name = "Piccolo"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 63
+name = "Flute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 67
+name = "Nz Flute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 68
+name = "VoxFlute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 69
+name = "AquaFlut"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 70
+name = "OakFlute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 75
+name = "Flutofon"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 80
+name = "PanFlute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 82
+name = "Pan Pipe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 88
+name = "Shakuhat"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 110
+name = "IslePipe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 111
+name = "SoftPipe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 112
+name = "LitePipe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 100
+name = "Oboe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 103
+name = "Bassoon"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 107
+name = "ThaiReed"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 108
+name = "Chanter"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 115
+name = "Solo Vln"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 116
+name = "DrkVioln"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 117
+name = "BrtVioln"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 118
+name = "SweetVln"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 120
+name = "Viola"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 121
+name = "SwtViola"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 123
+name = "Cello"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 124
+name = "SoloCell"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 125
+name = "DrkCello"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 19
+name = "SteelGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 20
+name = "AcGuitar"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 22
+name = "SpainGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 23
+name = "NylonGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 24
+name = "SwtNylGt"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 25
+name = "Les Gtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 27
+name = "FMGuitar"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 32
+name = "Surf Gtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 33
+name = "Mute Gtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 34
+name = "WahGtCC4"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 35
+name = "PatSynGt"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 36
+name = "BluesGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 38
+name = "PopODGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 40
+name = "TubeGtr!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 41
+name = "FET Guit"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 42
+name = "Dist.Gtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 45
+name = "GuitHero"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 53
+name = "Syncro!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 92
+name = "SynZilla"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 93
+name = "MegaSyn"
+bank = 1
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 1
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 2
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 3
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 4
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 5
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 7
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 8
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 9
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 10
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 11
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 12
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 13
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 14
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 15
+bank = 0
+type = "program-change"
+
+[[groups.trumpet]]
+instrument = "pman"
+program = 16
+bank = 0
+type = "program-change"
+
+[[groups.clarinet]]
+instrument = "pman"
+program = 6
+bank = 0
+type = "program-change"
+
+[[groups.clarinet]]
+instrument = "pman"
+program = 66
+bank = 0
+type = "program-change"
+
+[[groups.clarinet]]
+instrument = "pman"
+program = 95
+bank = 0
+type = "program-change"
+
+[[groups.clarinet]]
+instrument = "pman"
+program = 96
+bank = 0
+type = "program-change"
+
+[[groups.clarinet]]
+instrument = "pman"
+program = 104
+bank = 0
+type = "program-change"
+
+[[groups.clarinet]]
+instrument = "pman"
+program = 9
+bank = 1
+type = "program-change"
+
+[[groups.clarinet]]
+instrument = "pman"
+program = 37
+bank = 1
+type = "program-change"
+
+[[groups.clarinet]]
+instrument = "pman"
+program = 52
+bank = 1
+type = "program-change"
+
+[[groups.trombone]]
+instrument = "pman"
+program = 17
+bank = 0
+type = "program-change"
+
+[[groups.trombone]]
+instrument = "pman"
+program = 18
+bank = 0
+type = "program-change"
+
+[[groups.trombone]]
+instrument = "pman"
+program = 19
+bank = 0
+type = "program-change"
+
+[[groups.trombone]]
+instrument = "pman"
+program = 20
+bank = 0
+type = "program-change"
+
+[[groups.trombone]]
+instrument = "pman"
+program = 21
+bank = 0
+type = "program-change"
+
+[[groups.trombone]]
+instrument = "pman"
+program = 23
+bank = 0
+type = "program-change"
+
+[[groups.trombone]]
+instrument = "pman"
+program = 24
+bank = 0
+type = "program-change"
+
+[[groups.trombone]]
+instrument = "pman"
+program = 61
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 22
+bank = 0
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 71
+bank = 0
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 83
+bank = 0
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 89
+bank = 0
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 98
+bank = 0
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 99
+bank = 0
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 126
+bank = 0
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 112
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 113
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 114
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 115
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 116
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 117
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 118
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 119
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 120
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 121
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 123
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 124
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 125
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 126
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 127
+bank = 1
+type = "program-change"
+
+[[groups.bass]]
+instrument = "pman"
+program = 128
+bank = 1
+type = "program-change"
+
+[[groups.horn]]
+instrument = "pman"
+program = 25
+bank = 0
+type = "program-change"
+
+[[groups.horn]]
+instrument = "pman"
+program = 26
+bank = 0
+type = "program-change"
+
+[[groups.horn]]
+instrument = "pman"
+program = 27
+bank = 0
+type = "program-change"
+
+[[groups.horn]]
+instrument = "pman"
+program = 28
+bank = 0
+type = "program-change"
+
+[[groups.horn]]
+instrument = "pman"
+program = 29
+bank = 0
+type = "program-change"
+
+[[groups.horn]]
+instrument = "pman"
+program = 30
+bank = 0
+type = "program-change"
+
+[[groups.horn]]
+instrument = "pman"
+program = 101
+bank = 0
+type = "program-change"
+
+[[groups.horn]]
+instrument = "pman"
+program = 104
+bank = 1
+type = "program-change"
+
+[[groups.tuba]]
+instrument = "pman"
+program = 31
+bank = 0
+type = "program-change"
+
+[[groups.tuba]]
+instrument = "pman"
+program = 32
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 33
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 34
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 35
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 36
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 37
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 38
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 40
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 43
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 45
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 49
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 52
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 53
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 54
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 61
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 64
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 65
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 72
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 73
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 74
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 76
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 77
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 78
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 79
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 81
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 84
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 85
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 86
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 87
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 90
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 91
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 92
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 93
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 94
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 97
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 102
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 105
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 106
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 109
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 114
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 119
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 122
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 127
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 128
+bank = 0
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 1
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 2
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 3
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 4
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 5
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 6
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 7
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 8
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 10
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 11
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 12
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 13
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 14
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 15
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 16
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 17
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 18
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 21
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 26
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 28
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 29
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 30
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 31
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 39
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 43
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 44
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 46
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 47
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 48
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 49
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 50
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 51
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 54
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 55
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 56
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 57
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 58
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 59
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 60
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 62
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 63
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 64
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 65
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 66
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 67
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 68
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 69
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 70
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 71
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 72
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 73
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 74
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 75
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 76
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 77
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 78
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 79
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 80
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 81
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 82
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 83
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 84
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 85
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 86
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 87
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 88
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 89
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 90
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 91
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 94
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 95
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 96
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 97
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 98
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 99
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 100
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 101
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 102
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 103
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 105
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 106
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 107
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 108
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 109
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 110
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 111
+bank = 1
+type = "program-change"
+
+[[groups.none]]
+instrument = "pman"
+program = 122
+bank = 1
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 39
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 41
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 42
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 44
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 46
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 47
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 48
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 50
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 51
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 55
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 56
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 57
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 58
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 59
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 60
+bank = 0
+type = "program-change"
+
+[[groups.sax]]
+instrument = "pman"
+program = 113
+bank = 0
+type = "program-change"
+
+[[groups.flute]]
+instrument = "pman"
+program = 62
+bank = 0
+type = "program-change"
+
+[[groups.flute]]
+instrument = "pman"
+program = 63
+bank = 0
+type = "program-change"
+
+[[groups.flute]]
+instrument = "pman"
+program = 67
+bank = 0
+type = "program-change"
+
+[[groups.flute]]
+instrument = "pman"
+program = 68
+bank = 0
+type = "program-change"
+
+[[groups.flute]]
+instrument = "pman"
+program = 69
+bank = 0
+type = "program-change"
+
+[[groups.flute]]
+instrument = "pman"
+program = 70
+bank = 0
+type = "program-change"
+
+[[groups.flute]]
+instrument = "pman"
+program = 75
+bank = 0
+type = "program-change"
+
+[[groups.flute]]
+instrument = "pman"
+program = 80
+bank = 0
+type = "program-change"
+
+[[groups.pipe]]
+instrument = "pman"
+program = 82
+bank = 0
+type = "program-change"
+
+[[groups.pipe]]
+instrument = "pman"
+program = 88
+bank = 0
+type = "program-change"
+
+[[groups.pipe]]
+instrument = "pman"
+program = 110
+bank = 0
+type = "program-change"
+
+[[groups.pipe]]
+instrument = "pman"
+program = 111
+bank = 0
+type = "program-change"
+
+[[groups.pipe]]
+instrument = "pman"
+program = 112
+bank = 0
+type = "program-change"
+
+[[groups.reed]]
+instrument = "pman"
+program = 100
+bank = 0
+type = "program-change"
+
+[[groups.reed]]
+instrument = "pman"
+program = 103
+bank = 0
+type = "program-change"
+
+[[groups.reed]]
+instrument = "pman"
+program = 107
+bank = 0
+type = "program-change"
+
+[[groups.reed]]
+instrument = "pman"
+program = 108
+bank = 0
+type = "program-change"
+
+[[groups.violin]]
+instrument = "pman"
+program = 115
+bank = 0
+type = "program-change"
+
+[[groups.violin]]
+instrument = "pman"
+program = 116
+bank = 0
+type = "program-change"
+
+[[groups.violin]]
+instrument = "pman"
+program = 117
+bank = 0
+type = "program-change"
+
+[[groups.violin]]
+instrument = "pman"
+program = 118
+bank = 0
+type = "program-change"
+
+[[groups.violin]]
+instrument = "pman"
+program = 120
+bank = 0
+type = "program-change"
+
+[[groups.violin]]
+instrument = "pman"
+program = 121
+bank = 0
+type = "program-change"
+
+[[groups.cello]]
+instrument = "pman"
+program = 123
+bank = 0
+type = "program-change"
+
+[[groups.cello]]
+instrument = "pman"
+program = 124
+bank = 0
+type = "program-change"
+
+[[groups.cello]]
+instrument = "pman"
+program = 125
+bank = 0
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 19
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 20
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 22
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 23
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 24
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 25
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 27
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 32
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 33
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 34
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 35
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 36
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 38
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 40
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 41
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 42
+bank = 1
+type = "program-change"
+
+[[groups.guitar]]
+instrument = "pman"
+program = 45
+bank = 1
+type = "program-change"
+
+[[groups.synth]]
+instrument = "pman"
+program = 53
+bank = 1
+type = "program-change"
+
+[[groups.synth]]
+instrument = "pman"
+program = 92
+bank = 1
+type = "program-change"
+
+[[groups.synth]]
+instrument = "pman"
+program = 93
+bank = 1
+type = "program-change"
