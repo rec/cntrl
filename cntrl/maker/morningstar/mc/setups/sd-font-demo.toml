@@ -1,0 +1,75 @@
+chord_ms = 100
+brightness = 192
+splash = false
+usb_midi_interface = false
+screensaver_timeout = 0
+pad = 4
+contrast = 0.6
+
+[windows.undo]
+page = "patch"
+
+[windows.sent]
+page = "patch"
+
+[windows.next]
+page = "patch"
+
+[pages.patch]
+fields = ["handwriting_sample", "courier_sample", "courier_bold_sample"]
+
+[pages.patch.line_styles]
+
+[categories]
+
+[parameters.handwriting_sample]
+value = "Caveat Bold"
+
+[parameters.handwriting_sample.style]
+background_color = "0x000000"
+foreground_color = "0x00FFFF"
+font_name = "SDHandwriting"
+
+[parameters.courier_sample]
+value = "Courier"
+
+[parameters.courier_sample.style]
+background_color = "0x000000"
+foreground_color = "0xFFFF00"
+font_name = "SDCourier"
+
+[parameters.courier_bold_sample]
+value = "Courier"
+
+[parameters.courier_bold_sample.style]
+background_color = "0x000000"
+foreground_color = "0xFF4040"
+font_name = "SDCourierBold"
+
+[fonts]
+SDHandwriting = "../../../../fonts/caveat/Caveat-Bold.ttf"
+SDCourier = "../../../../fonts/courier-prime/CourierPrime-Regular.ttf"
+SDCourierBold = "../../../../fonts/courier-prime/CourierPrime-Bold.ttf"
+
+[instruments.pman]
+instrument = "pman"
+setup = "default"
+channel = 1
+output = "din"
+
+[[definitions.setups]]
+instrument = "pman"
+name = "default"
+
+[definitions.setups.banks]
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 1
+
+[[groups.fonts]]
+instrument = "pman"
+program = 1
+display_name = "Font demo"
+type = "program-change"

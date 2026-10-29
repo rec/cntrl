@@ -82,11 +82,12 @@ The setup catalogue was empty. The existing pman example was recompiled,
 copied with readback verification and selected; status then reported
 `CNTRL READY 7 23390 0718301d`.
 
-The repository's `instruments/pman.toml` currently mixes an initial
-`[[patches.pman.0]]` header with `[[patches]]` entries and lacks explicit setup
-fields. It was not edited for this task. Upload used a temporary copy with the
+At that deployment, `instruments/pman.toml` mixed an initial
+`[[patches.pman.0]]` header with `[[patches]]` entries and lacked explicit setup
+fields. It was not edited for that task. Upload used a temporary copy with the
 flat initial header and `setup = "default"` on each entry, matching the example's
 existing default-setup routing. No factory EEPROM or vendor backups were changed.
+The current repository table now uses the flat header and explicit default setup.
 Physical transition/splash/text verification remains pending user observation.
 
 The user subsequently confirmed that the original transition build looked

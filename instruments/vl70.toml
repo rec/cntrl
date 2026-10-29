@@ -1,4 +1,5 @@
 [[patches]]
+setup = 'default'
 program = 1
 bank = 0
 name = "Mad Tube"
@@ -7,6 +8,7 @@ description = "An extremely aggressive sound that lies between synth lead and di
 tags = ["fx"]
 
 [[patches]]
+setup = 'default'
 program = 2
 bank = 0
 name = "VintgLd"
@@ -15,6 +17,7 @@ description = "Multi-oscillator type synth lead."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 3
 bank = 0
 name = "SpaceZoo"
@@ -22,6 +25,7 @@ range = "***"
 description = "Try moving PB, MW, and AT in various ways."
 
 [[patches]]
+setup = 'default'
 program = 4
 bank = 0
 name = "GuitHero"
@@ -30,6 +34,7 @@ description = "A distortion guitar. Controlling the feedback with AT is particul
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 5
 bank = 0
 name = "StoneHng"
@@ -37,6 +42,7 @@ range = "F0 - G6"
 description = "MW produces a sustained sound."
 
 [[patches]]
+setup = 'default'
 program = 6
 bank = 0
 name = "Whizzer"
@@ -45,6 +51,7 @@ description = "Long sustaining synth tone similar to bass guitar harmonics."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 7
 bank = 0
 name = "SimpleBa"
@@ -53,6 +60,7 @@ description = "Straight ahead synth bass with some distortion."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 8
 bank = 0
 name = "ClavBass"
@@ -61,6 +69,7 @@ description = "Bass sound with both electric/acoustic and synthesizer qualities.
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 9
 bank = 0
 name = "SuperBas"
@@ -69,6 +78,7 @@ description = "DX7 style slapped bass."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 10
 bank = 0
 name = "New Slap"
@@ -77,6 +87,7 @@ description = "New type slap bass with punchy power."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 11
 bank = 0
 name = "RockPigs"
@@ -85,6 +96,7 @@ description = "Organ-type synth lead sound. AT produces a neighing effect."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 12
 bank = 0
 name = "Igneous"
@@ -93,6 +105,7 @@ description = "Feedbacked synth lead sound."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 13
 bank = 0
 name = "50 / 50"
@@ -101,6 +114,7 @@ description = "Simple Square wave synth lead."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 14
 bank = 0
 name = "Cybastrg"
@@ -108,6 +122,7 @@ range = "C-1 - C6"
 description = "Metallic driller killer sound."
 
 [[patches]]
+setup = 'default'
 program = 15
 bank = 0
 name = "Wynth"
@@ -116,6 +131,7 @@ description = "Filter wind synth with control from BC and velocity."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 16
 bank = 0
 name = "BuzzSaw"
@@ -123,6 +139,7 @@ range = "E-1 - C6"
 description = "Play with lots of MW filter control."
 
 [[patches]]
+setup = 'default'
 program = 17
 bank = 0
 name = "ZubZub"
@@ -131,6 +148,7 @@ description = "Biting analog synth sound. MW controls filter."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 18
 bank = 0
 name = "Blue"
@@ -139,6 +157,7 @@ description = "Fizzy synthesiser sound."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 19
 bank = 0
 name = "OsciLead"
@@ -147,6 +166,7 @@ description = "Octave synth lead sound."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 20
 bank = 0
 name = "SqrLead"
@@ -155,6 +175,7 @@ description = "Nice Square lead tone. Lowering FC (CC#4) closes filter."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 21
 bank = 0
 name = "Bigger"
@@ -163,6 +184,7 @@ description = "Big analog synth sound - velocity controls filter and volume."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 22
 bank = 0
 name = "AnaSquid"
@@ -171,6 +193,7 @@ description = "Analog synth type sound with MW filter control."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 23
 bank = 0
 name = "SharpSyn"
@@ -179,6 +202,7 @@ description = "Slightly mode unstable velocity sensitive sound."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 24
 bank = 0
 name = "AnaWave"
@@ -187,6 +211,7 @@ description = "Analog synth type sound with MW filter control."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 25
 bank = 0
 name = "AnaWurl"
@@ -194,6 +219,7 @@ range = "C0 - C6"
 description = "Velocity sensitive sound somewhat like a Vintage EP passed through aresonant filter."
 
 [[patches]]
+setup = 'default'
 program = 26
 bank = 0
 name = "Babalog"
@@ -202,6 +228,7 @@ description = "Velocity controlled synth wind sound."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 27
 bank = 0
 name = "FngerBass"
@@ -210,6 +237,7 @@ description = "Vigorous finger bass sound."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 28
 bank = 0
 name = "Upright"
@@ -218,6 +246,7 @@ description = "Simulation of accoustic bass."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 29
 bank = 0
 name = "Fnground"
@@ -226,6 +255,7 @@ description = "Finger bass with particular sound of rear pick up."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 30
 bank = 0
 name = "Birdland"
@@ -234,6 +264,7 @@ description = "Midway between an analog synth and an electric bass sound. The hi
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 31
 bank = 0
 name = "FlageoBs"
@@ -242,6 +273,7 @@ description = "Harmonics of a fingerd electric bass."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 32
 bank = 0
 name = "DampBass"
@@ -250,6 +282,7 @@ description = "Damped Pluck-Bass with a dry speaker sound."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 33
 bank = 0
 name = "Fretles!"
@@ -258,6 +291,7 @@ description = "Fretless bass usable for either rhythm or melody."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 34
 bank = 0
 name = "Frtles!2"
@@ -266,6 +300,7 @@ description = "Another fretless bass, good for melody play."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 35
 bank = 0
 name = "ThumBass"
@@ -274,6 +309,7 @@ description = "Thumped Bass."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 36
 bank = 0
 name = "RockBass"
@@ -282,6 +318,7 @@ description = "Heavy overdrive rock bass sound."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 37
 bank = 0
 name = "SmooBass"
@@ -290,6 +327,7 @@ description = "Expressive synth bass sound with filter control by velocity and �
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 38
 bank = 0
 name = "WarmBass"
@@ -298,6 +336,7 @@ description = "Warm electric Precision bass sound. Use FC (CC#4) to make sound b
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 39
 bank = 0
 name = "YamaBass"
@@ -306,6 +345,7 @@ description = "Yamaha 5-string electric bass with brand new strings and “studi
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 40
 bank = 0
 name = "Box Bass"
@@ -314,6 +354,7 @@ description = "Similar to FM synth bass with filter control on MW. Uses resonato
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 41
 bank = 0
 name = "BassCab"
@@ -322,6 +363,7 @@ description = "Slightly distorted electric bass with Resonator simulation of spe
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 42
 bank = 0
 name = "FruitBas"
@@ -330,6 +372,7 @@ description = "Fruity electric bass sound."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 43
 bank = 0
 name = "AcidBas!"
@@ -338,6 +381,7 @@ description = "Bass sound for acid jazz."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 44
 bank = 0
 name = "SqrBass!"
@@ -346,6 +390,7 @@ description = "Square wave synth bass."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 45
 bank = 0
 name = "PulsClav"
@@ -354,6 +399,7 @@ description = "Synth-Clavinet for funky licks."
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 46
 bank = 0
 name = "MogueBas"
@@ -362,6 +408,7 @@ description = "A classic synth bass sound."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 47
 bank = 0
 name = "BoppaBas"
@@ -370,6 +417,7 @@ description = "Synth bass with sub-octave undertone."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 48
 bank = 0
 name = "BuzzrBas"
@@ -378,6 +426,7 @@ description = "FM style, bright and buzzy electronic keyboard bass. For fast tem
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 49
 bank = 0
 name = "MuteHrBs"
@@ -386,6 +435,7 @@ description = "Upper register bass harmonic sound, with accentuated fingering �
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 50
 bank = 0
 name = "TekBass"
@@ -394,6 +444,7 @@ description = "Synth bass with sub-octave undertone."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 51
 bank = 0
 name = "TranzBas"
@@ -402,6 +453,7 @@ description = "TB303 style synth bass. For fast tempo trance, acid, house, and t
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 52
 bank = 0
 name = "Chamlion"
@@ -410,6 +462,7 @@ description = "Dry Synthbass."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 53
 bank = 0
 name = "ParaSyn"
@@ -418,6 +471,7 @@ description = "Strong, up-front synth bass, ideal for 70’s Jazz-Funk. If you l
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 54
 bank = 0
 name = "SteamBas"
@@ -426,6 +480,7 @@ description = "Use lots of PB (Embouchure) for finger slides. Gives greater tona
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 55
 bank = 0
 name = "BooBass"
@@ -434,6 +489,7 @@ description = "MW controls filter and gives sharper attack."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 56
 bank = 0
 name = "WhelkBas"
@@ -442,6 +498,7 @@ description = "Synth bass. MW controls filter as does velocity."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 57
 bank = 0
 name = "AtackSyn"
@@ -450,6 +507,7 @@ description = "Synth bass sound with strong attack."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 58
 bank = 0
 name = "Q.Klav"
@@ -457,6 +515,7 @@ range = "A-1 - C#4"
 description = "Deeply funky clav sound. Try with Phasing on in Chorus section, or alter low and upper mid with Equaliser in modifier section. Altering the Aural Exciter parameters will also have a big effect."
 
 [[patches]]
+setup = 'default'
 program = 59
 bank = 0
 name = "Sitar!"
@@ -464,6 +523,7 @@ range = "G0 - E4"
 description = "Simulation of Sitar."
 
 [[patches]]
+setup = 'default'
 program = 60
 bank = 0
 name = "India"
@@ -471,6 +531,7 @@ range = "F#0 - C6"
 description = "Sitar-type ethnic sound."
 
 [[patches]]
+setup = 'default'
 program = 61
 bank = 0
 name = "YamSteel"
@@ -478,6 +539,7 @@ range = "A2 - C6"
 description = "Steel drum-type ethnic sound."
 
 [[patches]]
+setup = 'default'
 program = 62
 bank = 0
 name = "StungSt"
@@ -486,6 +548,7 @@ description = "FM style, metallic overtone synth. Can use as lead or bass ."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 63
 bank = 0
 name = "Mu"
@@ -493,6 +556,7 @@ range = "***"
 description = "MW brings in noise. CC#13 can be used to modify the character of the noise."
 
 [[patches]]
+setup = 'default'
 program = 64
 bank = 0
 name = "Waterphn"
@@ -501,6 +565,7 @@ description = "Mysterious percussion instrument. Attack is softened with MW. Squ
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 65
 bank = 0
 name = "DinoPerc"
@@ -508,6 +573,7 @@ range = "***"
 description = "Use with different combinations of MW and PB to produce complex noise percussion."
 
 [[patches]]
+setup = 'default'
 program = 66
 bank = 0
 name = "Formula"
@@ -515,6 +581,7 @@ range = "***"
 description = "Engine-like sound effect."
 
 [[patches]]
+setup = 'default'
 program = 67
 bank = 0
 name = "Jurassic"
@@ -522,6 +589,7 @@ range = "***"
 description = "Use PB, MW, and CC#13 to produce the cries of various dinosaurs."
 
 [[patches]]
+setup = 'default'
 program = 68
 bank = 0
 name = "Devil"
@@ -529,6 +597,7 @@ range = "***"
 description = "A sound effect using extreme oscillation. Try moving PB, MW, and CC#13 in various ways."
 
 [[patches]]
+setup = 'default'
 program = 69
 bank = 0
 name = "SpcHorse"
@@ -536,6 +605,7 @@ range = "***"
 description = "While applying MW, add AT to create a neighing sound."
 
 [[patches]]
+setup = 'default'
 program = 70
 bank = 0
 name = "Jason"
@@ -543,6 +613,7 @@ range = "***"
 description = "Use the MW to turn this into a strongly noisy sound effect."
 
 [[patches]]
+setup = 'default'
 program = 71
 bank = 0
 name = "Suedhead"
@@ -550,6 +621,7 @@ range = "F-1 - C6"
 description = "Sound effect. Make liberal use of Pitch and MWs."
 
 [[patches]]
+setup = 'default'
 program = 72
 bank = 0
 name = "Spanish"
@@ -558,6 +630,7 @@ description = "Spanish type acoustic guitar."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 73
 bank = 0
 name = "JazzGtr!"
@@ -566,6 +639,7 @@ description = "Electric guitar suitable mainly for jazz."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 74
 bank = 0
 name = "JazzyGtr"
@@ -574,6 +648,7 @@ description = "Velocity dynamic jazz style sustaining guitar lead."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 75
 bank = 0
 name = "L7 Pluck"
@@ -581,6 +656,7 @@ range = "B-1 - E4"
 description = "A classic pluck sound."
 
 [[patches]]
+setup = 'default'
 program = 76
 bank = 0
 name = "WetPluck"
@@ -589,6 +665,7 @@ description = "A guitar sound that readily accepts effects such as flanging."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 77
 bank = 0
 name = "Comp Gtr"
@@ -597,6 +674,7 @@ description = "Compressed, clean electric strat guitar sound."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 78
 bank = 0
 name = "FunkyGtr"
@@ -605,6 +683,7 @@ description = "Snappy “70’s style” funk guitar, for rhythm and comping."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 79
 bank = 0
 name = "Thin Gtr"
@@ -613,6 +692,7 @@ description = "Clean uncompressed electric guitar with “thin gauge” new stri
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 80
 bank = 0
 name = "Carlos"
@@ -621,6 +701,7 @@ description = "Overdrive guitar, front pick up type."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 81
 bank = 0
 name = "Destiny"
@@ -629,6 +710,7 @@ description = "Distortion guitar made from a sustained sound with strong attack.
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 82
 bank = 0
 name = "Gonzo"
@@ -636,6 +718,7 @@ range = "B-1 - G5"
 description = "Velocity controlled. PB down controls noise effect."
 
 [[patches]]
+setup = 'default'
 program = 83
 bank = 0
 name = "Grunge"
@@ -644,6 +727,7 @@ description = "Dirty synth lead."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 84
 bank = 0
 name = "Ossyncro"
@@ -652,6 +736,7 @@ description = "Cross modulation-type synth lead."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 85
 bank = 0
 name = "Talk Box"
@@ -660,6 +745,7 @@ description = "Voicy Lead, somehow like a guitar-Talkbox."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 86
 bank = 0
 name = "SyncLed"
@@ -668,6 +754,7 @@ description = "Sync type lead tone. Use with Exp or BC - with no pressure sound 
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 87
 bank = 0
 name = "Old Mini"
@@ -676,6 +763,7 @@ description = "A classic analog synth solo sound."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 88
 bank = 0
 name = "Fat Mini"
@@ -684,6 +772,7 @@ description = "A classic analog synth solo sound with fatter timbre."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 89
 bank = 0
 name = "Parlopho"
@@ -692,6 +781,7 @@ description = "If it was possible to mix an accordion with a trumpet it might so
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 90
 bank = 0
 name = "SimpleSy"
@@ -700,6 +790,7 @@ description = "Breath controlled filter synth sound."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 91
 bank = 0
 name = "Choronic"
@@ -708,6 +799,7 @@ description = "Synth brass solo sound."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 92
 bank = 0
 name = "SlitMinu"
@@ -715,6 +807,7 @@ range = "F0 - C6"
 description = "AT control of Rotor Speed of FX."
 
 [[patches]]
+setup = 'default'
 program = 93
 bank = 0
 name = "SynHarmo"
@@ -723,6 +816,7 @@ description = "Filter changed by velocity."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 94
 bank = 0
 name = "Flaggoot"
@@ -730,6 +824,7 @@ range = "C0 - D4"
 description = "Vibrato will cause sound to drop an octave except in lower range."
 
 [[patches]]
+setup = 'default'
 program = 95
 bank = 0
 name = "SynSkex"
@@ -738,6 +833,7 @@ description = "Analog/acoustic hybrid lead sound with resonant filter."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 96
 bank = 0
 name = "ResoSqr"
@@ -746,6 +842,7 @@ description = "Lowering FC (CC#4) opens filter."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 97
 bank = 0
 name = "WurliLd"
@@ -754,6 +851,7 @@ description = "Dark, reed electric piano style synth lead."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 98
 bank = 0
 name = "FlatLead"
@@ -761,6 +859,7 @@ range = "G#1 - G5"
 description = "Analog / digital lead with thick, fat non-dynamic character."
 
 [[patches]]
+setup = 'default'
 program = 99
 bank = 0
 name = "PhilTur"
@@ -769,6 +868,7 @@ description = "Bright, resonant synth brass lead with accentuated filter dynamic
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 100
 bank = 0
 name = "ChalPuls"
@@ -777,6 +877,7 @@ description = "Synth lead with an indefinably “acoustic” atmosphere."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 101
 bank = 0
 name = "Pluck Ld"
@@ -785,6 +886,7 @@ description = "Speedy Synthlead with Guitarlike attack."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 102
 bank = 0
 name = "Brassyn"
@@ -793,6 +895,7 @@ description = "Bright analog synthbrass."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 103
 bank = 0
 name = "AcoSynLd"
@@ -801,6 +904,7 @@ description = "Analog synth lead-type sound with an acoustic flavor."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 104
 bank = 0
 name = "Moby"
@@ -808,6 +912,7 @@ range = "G-1 - F5"
 description = "A strange sound in which gradual application of AT increases the fundamental. The key lies in how you use AT."
 
 [[patches]]
+setup = 'default'
 program = 105
 bank = 0
 name = "Digitrn"
@@ -816,6 +921,7 @@ description = "Digital wavetable style wind controller synth lead."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 106
 bank = 0
 name = "LyricOff"
@@ -824,6 +930,7 @@ description = "Pulse wave style analog wind controller synth lead."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 107
 bank = 0
 name = "Rezzawi"
@@ -832,6 +939,7 @@ description = "Bright, resonant sawtooth style analog wind controller synth lead
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 108
 bank = 0
 name = "Macro"
@@ -839,6 +947,7 @@ range = "B-1 - C6"
 description = "Assignable Controller(CC#16) control of harmonic enhancer gives a variety oftimbres."
 
 [[patches]]
+setup = 'default'
 program = 109
 bank = 0
 name = "Claribo"
@@ -847,6 +956,7 @@ description = "AT controls brightness"
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 110
 bank = 0
 name = "Binaphon"
@@ -855,6 +965,7 @@ description = "New acoustic model. Clarinet style voice."
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 111
 bank = 0
 name = "MokoPipe"
@@ -863,6 +974,7 @@ description = "Somewhere around Uillean pipes."
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 112
 bank = 0
 name = "AliBaba"
@@ -871,6 +983,7 @@ description = "Play with lots of PB. Try controlling vibrato from Pitch Wheel."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 113
 bank = 0
 name = "Persinet"
@@ -879,6 +992,7 @@ description = "Single reed new acoustic model."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 114
 bank = 0
 name = "PicoPipe"
@@ -887,6 +1001,7 @@ description = "Try using lots of PB embouchure control."
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 115
 bank = 0
 name = "Gertrude"
@@ -894,6 +1009,7 @@ range = "C0 - C6"
 description = "Ethnic wood wind sound."
 
 [[patches]]
+setup = 'default'
 program = 116
 bank = 0
 name = "Xynth"
@@ -902,6 +1018,7 @@ description = "Woodwind guitar synth thing."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 117
 bank = 0
 name = "Duality"
@@ -910,6 +1027,7 @@ description = "Synth wind instrument."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 118
 bank = 0
 name = "AltKwek"
@@ -918,6 +1036,7 @@ description = "New hybrid, double reed driven cynlindrical metal woodwind (oboe 
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 119
 bank = 0
 name = "Softblow"
@@ -926,6 +1045,7 @@ description = "Gentle sax type sound."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 120
 bank = 0
 name = "AlbaPipe"
@@ -934,6 +1054,7 @@ description = "Boxy sounding double reed with additional lower octave undertone.
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 121
 bank = 0
 name = "Electrum"
@@ -941,6 +1062,7 @@ range = "C0 - C6"
 description = "Expressive brass like sound."
 
 [[patches]]
+setup = 'default'
 program = 122
 bank = 0
 name = "Edgeopho"
@@ -949,6 +1071,7 @@ description = "Somewhere between a ’30s saxophone and distorted blues harmonic
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 123
 bank = 0
 name = "BassCla!"
@@ -957,6 +1080,7 @@ description = "A simulation of Bass Clarinet."
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 124
 bank = 0
 name = "WX Clari"
@@ -965,6 +1089,7 @@ description = "Clarinet sound suitable for performance with a wind controller."
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 125
 bank = 0
 name = "WX Oboe"
@@ -973,6 +1098,7 @@ description = "Oboe sound suitable for performance with a wind controller."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 126
 bank = 0
 name = "WX J Gtr"
@@ -981,6 +1107,7 @@ description = "Jazz guitar sound suitable for performance with a wind controller
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 127
 bank = 0
 name = "Shakuha!"
@@ -989,6 +1116,7 @@ description = "A shakuhachi simulation. Moving CC#13 produces the upper (falsett
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 128
 bank = 0
 name = "LipClari"
@@ -997,6 +1125,7 @@ description = "LipClari Imaginary instrument simulating a trumpet mouthpiece blo
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 1
 bank = 1
 name = "Vento"
@@ -1005,6 +1134,7 @@ description = "High noise content in this flute type sound."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 2
 bank = 1
 name = "Floboe"
@@ -1013,6 +1143,7 @@ description = "Imaginary instrument combining a flute and oboe."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 3
 bank = 1
 name = "Sintax"
@@ -1021,6 +1152,7 @@ description = "Synthetic sax type sound."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 4
 bank = 1
 name = "Eastern"
@@ -1029,6 +1161,7 @@ description = "In conjunction with mode shift from PB can be used for “classic
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 5
 bank = 1
 name = "Trumpet!"
@@ -1037,6 +1170,7 @@ description = "Simulation of Trumpet."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 6
 bank = 1
 name = "SoprSax!"
@@ -1045,6 +1179,7 @@ description = "Simulation of Soprano sax."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 7
 bank = 1
 name = "LiteAlto"
@@ -1053,6 +1188,7 @@ description = "Light-feeling alto sax with significant noise component."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 8
 bank = 1
 name = "Trmbone!"
@@ -1061,6 +1197,7 @@ description = "Simulation of a trombone."
 tags = ["trombone"]
 
 [[patches]]
+setup = 'default'
 program = 9
 bank = 1
 name = "BtlFlute"
@@ -1069,6 +1206,7 @@ description = "Flute sound similar to a softly blown bottle."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 10
 bank = 1
 name = "Air Sax"
@@ -1077,6 +1215,7 @@ description = "A sax-type instrument that could not exist in reality, produceabl
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 11
 bank = 1
 name = "TenrSax!"
@@ -1085,6 +1224,7 @@ description = "Simulation of Tenor sax."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 12
 bank = 1
 name = "Coca"
@@ -1093,6 +1233,7 @@ description = "Pan flute sort of thing. Vibrato using pressure (BC) is particula
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 13
 bank = 1
 name = "JetLpBow"
@@ -1101,6 +1242,7 @@ description = "A subtle sound with a violin-like attack, combining a reed (oboe 
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 14
 bank = 1
 name = "Viol Inn"
@@ -1109,6 +1251,7 @@ description = "A new acoustic sound based on bowed string instruments. Quite usa
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 15
 bank = 1
 name = "MuteCone"
@@ -1117,6 +1260,7 @@ description = "Muted trumpet with PB “mode” effect."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 16
 bank = 1
 name = "BrethBow"
@@ -1125,6 +1269,7 @@ description = "A sound somewhere between strings and a blown feel."
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 17
 bank = 1
 name = "Trumpt!2"
@@ -1133,6 +1278,7 @@ description = "Trumpet sound."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 18
 bank = 1
 name = "FluglHr!"
@@ -1141,6 +1287,7 @@ description = "Simulation of Flugelhorn"
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 19
 bank = 1
 name = "Cornet"
@@ -1149,6 +1296,7 @@ description = "Cornet sound suitable for classical music."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 20
 bank = 1
 name = "JzTrump"
@@ -1157,6 +1305,7 @@ description = "Trumpet sound suitable for jazz."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 21
 bank = 1
 name = "JzTrump2"
@@ -1165,6 +1314,7 @@ description = "Bright trumpet. PB can be used to imitate a lip slur."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 22
 bank = 1
 name = "Flumpet"
@@ -1173,6 +1323,7 @@ description = "Resonant trumpet/flugely thing. PB controlls embouchure and pitch
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 23
 bank = 1
 name = "WXTrumpt"
@@ -1181,6 +1332,7 @@ description = "Trumpet sound suitable for performance with a wind controller."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 24
 bank = 1
 name = "MuteTp!"
@@ -1189,6 +1341,7 @@ description = "Simulation of Mute trumpet."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 25
 bank = 1
 name = "MuteTp!2"
@@ -1197,6 +1350,7 @@ description = "Another Mute trumpet."
 tags = ["trumpet"]
 
 [[patches]]
+setup = 'default'
 program = 26
 bank = 1
 name = "Melwbone"
@@ -1205,6 +1359,7 @@ description = "Mellow Trombone sound."
 tags = ["trombone"]
 
 [[patches]]
+setup = 'default'
 program = 27
 bank = 1
 name = "NerzoBr"
@@ -1213,6 +1368,7 @@ description = "Bright synthetic brass with PB “shake” effect."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 28
 bank = 1
 name = "Horn!"
@@ -1221,6 +1377,7 @@ description = "Simulation of Horn."
 tags = ["horn"]
 
 [[patches]]
+setup = 'default'
 program = 29
 bank = 1
 name = "Horn!2"
@@ -1229,6 +1386,7 @@ description = "Another Horn."
 tags = ["horn"]
 
 [[patches]]
+setup = 'default'
 program = 30
 bank = 1
 name = "NuHorne"
@@ -1237,6 +1395,7 @@ description = "Mellow french horn with PB “shake” effect."
 tags = ["horn"]
 
 [[patches]]
+setup = 'default'
 program = 31
 bank = 1
 name = "WX Horn"
@@ -1245,6 +1404,7 @@ description = "Horn sound suitable for performance with a wind controller."
 tags = ["horn"]
 
 [[patches]]
+setup = 'default'
 program = 32
 bank = 1
 name = "Tuba!"
@@ -1253,6 +1413,7 @@ description = "Tuba simulation."
 tags = ["tuba"]
 
 [[patches]]
+setup = 'default'
 program = 33
 bank = 1
 name = "NuViolin"
@@ -1261,6 +1422,7 @@ description = "A light violin sound."
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 34
 bank = 1
 name = "C Violin"
@@ -1269,6 +1431,7 @@ description = "Violin sound suitable for classical music."
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 35
 bank = 1
 name = "BrtVioln"
@@ -1277,6 +1440,7 @@ description = "A bright violin sound."
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 36
 bank = 1
 name = "MuteViol"
@@ -1285,6 +1449,7 @@ description = "The sound of a violin with an attached mute."
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 37
 bank = 1
 name = "BrtViola"
@@ -1293,6 +1458,7 @@ description = "A bright viola sound, extending from cello range to violin range.
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 38
 bank = 1
 name = "ViolOutt"
@@ -1301,6 +1467,7 @@ description = "Bowed-string sound with a sliding feel to the bow."
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 39
 bank = 1
 name = "Cello!"
@@ -1309,6 +1476,7 @@ description = "Cello simulation."
 tags = ["cello"]
 
 [[patches]]
+setup = 'default'
 program = 40
 bank = 1
 name = "Eleanor"
@@ -1317,6 +1485,7 @@ description = "The sound of a cello being played in the center of the string. Be
 tags = ["cello"]
 
 [[patches]]
+setup = 'default'
 program = 41
 bank = 1
 name = "Nu Cello"
@@ -1325,6 +1494,7 @@ description = "Cello variation sound."
 tags = ["cello"]
 
 [[patches]]
+setup = 'default'
 program = 42
 bank = 1
 name = "Contrair"
@@ -1333,6 +1503,7 @@ description = "String bass simulation."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 43
 bank = 1
 name = "DoublBow"
@@ -1341,6 +1512,7 @@ description = "A string bass that is fairly close to a wind instrument."
 tags = ["bass"]
 
 [[patches]]
+setup = 'default'
 program = 44
 bank = 1
 name = "Piccolo!"
@@ -1349,6 +1521,7 @@ description = "Simulaton of piccolo."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 45
 bank = 1
 name = "Piccol!2"
@@ -1357,6 +1530,7 @@ description = "Another piccolo."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 46
 bank = 1
 name = "BowPicol"
@@ -1365,6 +1539,7 @@ description = "A piccolo flute sound with a bowed string flavor."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 47
 bank = 1
 name = "C Flute"
@@ -1373,6 +1548,7 @@ description = "Flute simulation. Editing the controller settings to increase the
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 48
 bank = 1
 name = "C Flute2"
@@ -1381,6 +1557,7 @@ description = "Another flute simulation."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 49
 bank = 1
 name = "JazFlute"
@@ -1389,6 +1566,7 @@ description = "Flute sound suitable for jazz."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 50
 bank = 1
 name = "OakFlute"
@@ -1397,6 +1575,7 @@ description = "Flute sound with hard wooden resonance."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 51
 bank = 1
 name = "BtlFlut2"
@@ -1405,6 +1584,7 @@ description = "Flute-type bottle sound."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 52
 bank = 1
 name = "RzdeFlt"
@@ -1413,6 +1593,7 @@ description = "Expressive resonant flutey sound."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 53
 bank = 1
 name = "Flutuen"
@@ -1421,6 +1602,7 @@ description = "Heavily filtered, synth flute/woodwind lead."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 54
 bank = 1
 name = "Nz Flute"
@@ -1429,6 +1611,7 @@ description = "Flute sound with large noise component."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 55
 bank = 1
 name = "WX Shaku"
@@ -1437,6 +1620,7 @@ description = "Shakuhachi sound suitable for performance with a wind controller.
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 56
 bank = 1
 name = "Pan Pipe"
@@ -1445,6 +1629,7 @@ description = "Pan flute simulation. It is effective to edit the controller sett
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 57
 bank = 1
 name = "PanPicol"
@@ -1453,6 +1638,7 @@ description = "Another pan flute sound with a beautiful high register."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 58
 bank = 1
 name = "Bamboo"
@@ -1461,6 +1647,7 @@ description = "The sound of a bamboo pipe."
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 59
 bank = 1
 name = "Andean"
@@ -1469,6 +1656,7 @@ description = "The sound of a wooden or bamboo flute such as the quena."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 60
 bank = 1
 name = "Flurinet"
@@ -1477,6 +1665,7 @@ description = "Clarinet with flute mouthpiece."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 61
 bank = 1
 name = "SoftReed"
@@ -1485,6 +1674,7 @@ description = "A sound that mixes oboe with soprano sax, but having a unique fee
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 62
 bank = 1
 name = "Flurmod"
@@ -1493,6 +1683,7 @@ description = "New hybrid, woody reed flute. Keep high breath pressure and hard 
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 63
 bank = 1
 name = "Jhopali"
@@ -1500,6 +1691,7 @@ range = "G0 - C5"
 description = "New accordion/hurdy gurdy hybrid with unique AT controlled fifth’s undertone. Play ethnic style melodies, playing with hard finger pressure to bounce off the aftertouch sensor to emphasize selected notes with the fifth undertone."
 
 [[patches]]
+setup = 'default'
 program = 64
 bank = 1
 name = "Baroquen"
@@ -1508,6 +1700,7 @@ description = "A nostalgic sound combining a flute and reed instrument. Try a sl
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 65
 bank = 1
 name = "SquealAT"
@@ -1516,6 +1709,7 @@ description = "Pipe-type synth-lead sound. Try using AT to create extreme perfor
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 66
 bank = 1
 name = "NuSopSax"
@@ -1524,6 +1718,7 @@ description = "Mellow pop/fusion style soprano sax. Use (-) PB for “scoop” e
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 67
 bank = 1
 name = "CvSopSax"
@@ -1532,6 +1727,7 @@ description = "Simulation of a curved body-type soprano sax."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 68
 bank = 1
 name = "SoprPipe"
@@ -1540,6 +1736,7 @@ description = "Soprano sax sound close to a clarinet."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 69
 bank = 1
 name = "LiteSopr"
@@ -1548,6 +1745,7 @@ description = "Light feeling sax sound in the soprano-alto range."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 70
 bank = 1
 name = "AnaSoprn"
@@ -1556,6 +1754,7 @@ description = "Mid-way between a graceful analog synth sound and a soprano sax."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 71
 bank = 1
 name = "NuAltSax"
@@ -1564,6 +1763,7 @@ description = "Bright pop/rock/fusion style alto sax. Use (-) PB for “scoop”
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 72
 bank = 1
 name = "SweetAlt"
@@ -1572,6 +1772,7 @@ description = "Sweet-sounding alto sax simulation."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 73
 bank = 1
 name = "AltoSax!"
@@ -1580,6 +1781,7 @@ description = "Simulation of a conventional alto sax."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 74
 bank = 1
 name = "HarpAlto"
@@ -1588,6 +1790,7 @@ description = "Strongly processed sax sound, with harmonica-like formants."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 75
 bank = 1
 name = "HarpAlt2"
@@ -1596,6 +1799,7 @@ description = "Sax sound with different processing."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 76
 bank = 1
 name = "GlassAlt"
@@ -1604,6 +1808,7 @@ description = "Alto sax sound with emphasized glass-like resonance."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 77
 bank = 1
 name = "AcidSax"
@@ -1612,6 +1817,7 @@ description = "Distorted acid sax - use BC for attack, FC (CC#4) controlls Tongu
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 78
 bank = 1
 name = "WackSax"
@@ -1620,6 +1826,7 @@ description = "Bizarre tenor sax - BC heavily affects characteristics of tone. P
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 79
 bank = 1
 name = "NuTenrSx"
@@ -1628,6 +1835,7 @@ description = "Bright pop/rock/fusion style breathy tenor sax. Use (-) PB for �
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 80
 bank = 1
 name = "MildTenr"
@@ -1636,6 +1844,7 @@ description = "A conventional tenor sax sound."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 81
 bank = 1
 name = "Jazz Sax"
@@ -1644,6 +1853,7 @@ description = "Sax sound suitable for jazz."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 82
 bank = 1
 name = "TenorSub"
@@ -1652,6 +1862,7 @@ description = "Sax sound with a sub-tone, suitable for blues."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 83
 bank = 1
 name = "BellMike"
@@ -1660,6 +1871,7 @@ description = "The sound of a sax recorded by a mic near the bell."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 84
 bank = 1
 name = "GlasTenr"
@@ -1668,6 +1880,7 @@ description = "Tenor sax sound with emphasized glass-like resonance."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 85
 bank = 1
 name = "FnkyTenr"
@@ -1676,6 +1889,7 @@ description = "An unstable tenor sax sound suitable for funky solos. Assign the 
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 86
 bank = 1
 name = "OldTenor"
@@ -1684,6 +1898,7 @@ description = "The kind of tenor sax sound heard on old jazz records."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 87
 bank = 1
 name = "BrtTenor"
@@ -1692,6 +1907,7 @@ description = "Bright and tight tenor sax sound. Suitable for performance with a
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 88
 bank = 1
 name = "BariSax!"
@@ -1700,6 +1916,7 @@ description = "Simulation of Baritone sax"
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 89
 bank = 1
 name = "VoxoSaxo"
@@ -1708,6 +1925,7 @@ description = "Breathy, vocal character, synthetic saxophone-like woodwind."
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 90
 bank = 1
 name = "Oboe!"
@@ -1716,6 +1934,7 @@ description = "Simulation of Oboe."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 91
 bank = 1
 name = "Oboe!2"
@@ -1724,6 +1943,7 @@ description = "Another oboe."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 92
 bank = 1
 name = "Noboe"
@@ -1732,6 +1952,7 @@ description = "New hybrid/synthetic double reed."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 93
 bank = 1
 name = "OboeWhi"
@@ -1740,6 +1961,7 @@ description = "Oboe/whistle mix. PB up raises embouchure - all the way up is one
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 94
 bank = 1
 name = "DblReedy"
@@ -1748,6 +1970,7 @@ description = "Mysterious sound mixing a double-reed instrument with a “kokyu�
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 95
 bank = 1
 name = "TripleRd"
@@ -1756,6 +1979,7 @@ description = "New syncoustic reed, with hybrid Oboe and Harmonica character."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 96
 bank = 1
 name = "EngHorn!"
@@ -1764,6 +1988,7 @@ description = "Simulation of English horn"
 tags = ["horn"]
 
 [[patches]]
+setup = 'default'
 program = 97
 bank = 1
 name = "Loboe"
@@ -1772,6 +1997,7 @@ description = "New double reed — a contrabass oboe !"
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 98
 bank = 1
 name = "Bassoon!"
@@ -1780,6 +2006,7 @@ description = "Simulation of Bassoon."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 99
 bank = 1
 name = "Clarint!"
@@ -1788,6 +2015,7 @@ description = "Simulation of Clarinet."
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 100
 bank = 1
 name = "LitePipe"
@@ -1796,6 +2024,7 @@ description = "Light-feeling synth lead sound close to a sax or clarinet"
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 101
 bank = 1
 name = "HyperCla"
@@ -1804,6 +2033,7 @@ description = "A sound combining characteristics of synth lead, clarinet, sax, e
 tags = ["sax"]
 
 [[patches]]
+setup = 'default'
 program = 102
 bank = 1
 name = "Clarint2"
@@ -1812,6 +2042,7 @@ description = "Jazz / big band solo clarinet with AT “scoop” effect."
 tags = ["clarinet"]
 
 [[patches]]
+setup = 'default'
 program = 103
 bank = 1
 name = "IslePipe"
@@ -1820,6 +2051,7 @@ description = "New wooden ethnic flute."
 tags = ["flute"]
 
 [[patches]]
+setup = 'default'
 program = 104
 bank = 1
 name = "Chanter"
@@ -1828,6 +2060,7 @@ description = "A simulation of a bagpipe’s melodic note."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 105
 bank = 1
 name = "ThaiReed"
@@ -1836,6 +2069,7 @@ description = "A simulation of a south-east Asian (mainly Thai) flute."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 106
 bank = 1
 name = "Recordr!"
@@ -1843,6 +2077,7 @@ range = "C0 - A5"
 description = "Recorder simulation."
 
 [[patches]]
+setup = 'default'
 program = 107
 bank = 1
 name = "Claricrd"
@@ -1851,6 +2086,7 @@ description = "Basically the sound of a medieval reed instrument (like the clari
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 108
 bank = 1
 name = "SoftPipe"
@@ -1859,6 +2095,7 @@ description = "A soft-toned recorder."
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 109
 bank = 1
 name = "BowdSaw"
@@ -1867,6 +2104,7 @@ description = "The sound of a bowed saw, with a character like the Ondes Marteno
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 110
 bank = 1
 name = "Ocarina!"
@@ -1874,6 +2112,7 @@ range = "F0 - C7"
 description = "Ocarina simulation."
 
 [[patches]]
+setup = 'default'
 program = 111
 bank = 1
 name = "Lonely"
@@ -1882,6 +2121,7 @@ description = "Synth lead-like woodwind instrument with few overtones."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 112
 bank = 1
 name = "Ophelia"
@@ -1890,6 +2130,7 @@ description = "Gentle synth lead with mellow sound. Suitable for performance wit
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 113
 bank = 1
 name = "Maysbe?"
@@ -1898,6 +2139,7 @@ description = "Synth lead with brass character in the attack."
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 114
 bank = 1
 name = "MizuHorn"
@@ -1906,6 +2148,7 @@ description = "Synth lead sound with brass character."
 tags = ["horn"]
 
 [[patches]]
+setup = 'default'
 program = 115
 bank = 1
 name = "PicoStrg"
@@ -1914,6 +2157,7 @@ description = "Stringy pipe sound."
 tags = ["pipe"]
 
 [[patches]]
+setup = 'default'
 program = 116
 bank = 1
 name = "Sylophon"
@@ -1921,6 +2165,7 @@ range = "C0 - C5"
 description = "Bright, nasal sound with Eastern influences."
 
 [[patches]]
+setup = 'default'
 program = 117
 bank = 1
 name = "BowLead"
@@ -1929,6 +2174,7 @@ description = "Violinesque lead sound - velocity controls embouchure and damping
 tags = ["violin"]
 
 [[patches]]
+setup = 'default'
 program = 118
 bank = 1
 name = "Squeeze"
@@ -1936,6 +2182,7 @@ range = "C0 - C6"
 description = "Accordion simulation."
 
 [[patches]]
+setup = 'default'
 program = 119
 bank = 1
 name = "MouthKey"
@@ -1944,6 +2191,7 @@ description = "Simulation of a reed-type wind instrument with a keyboard."
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 120
 bank = 1
 name = "AmpdHarp"
@@ -1952,6 +2200,7 @@ description = "Simulation of a miked blues harp played through a guitar amp."
 tags = ["guitar"]
 
 [[patches]]
+setup = 'default'
 program = 121
 bank = 1
 name = "CromHarp"
@@ -1959,6 +2208,7 @@ range = "A-1 - C6"
 description = "Chromatic harmonica simulation."
 
 [[patches]]
+setup = 'default'
 program = 122
 bank = 1
 name = "WahUpHp"
@@ -1966,6 +2216,7 @@ range = "B-1 - C6"
 description = "Funky harmonica with breath control wah."
 
 [[patches]]
+setup = 'default'
 program = 123
 bank = 1
 name = "YamaBotl"
@@ -1973,6 +2224,7 @@ range = "A#1 - C6"
 description = "Bottle-type sound with metallic resonance."
 
 [[patches]]
+setup = 'default'
 program = 124
 bank = 1
 name = "Blowsoo"
@@ -1981,6 +2233,7 @@ description = "Bright, resonant synth brass lead with accentuated filter dynamic
 tags = ["synth"]
 
 [[patches]]
+setup = 'default'
 program = 125
 bank = 1
 name = "Brappo"
@@ -1989,6 +2242,7 @@ description = "The sound of playing a tuba mouthpiece."
 tags = ["tuba"]
 
 [[patches]]
+setup = 'default'
 program = 126
 bank = 1
 name = "Crumbon"
@@ -1997,6 +2251,7 @@ description = "Mellow and warm new hybrid double reed (blend of crumhorm, trombo
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 127
 bank = 1
 name = "Klarina"
@@ -2005,6 +2260,7 @@ description = "New hybrid single reed driven pan pipes. Use (-) PB for “scoop�
 tags = ["reed"]
 
 [[patches]]
+setup = 'default'
 program = 128
 bank = 1
 name = "ReedWin"
