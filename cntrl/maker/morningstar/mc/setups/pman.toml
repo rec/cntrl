@@ -95,6 +95,13 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 6
+name = "ClassTpt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 7
 name = "StrMtTpt"
 bank = 0
@@ -165,62 +172,6 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
-program = 6
-name = "ClassTpt"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 66
-name = "ClassFlt"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 95
-name = "Clarinet"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 96
-name = "JazzClar"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 104
-name = "Flurinet"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 9
-name = "Clavinet"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 37
-name = "Clapton"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 52
-name = "SynClav"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
 program = 17
 name = "Trombone"
 bank = 0
@@ -256,6 +207,13 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 22
+name = "Bass Tbn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 23
 name = "BcktMtTb"
 bank = 0
@@ -266,174 +224,6 @@ setup = "default"
 program = 24
 name = "DorseyTb"
 bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 61
-name = "BreathTb"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 22
-name = "Bass Tbn"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 71
-name = "Bass Flt"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 83
-name = "Bali Flt"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 89
-name = "Bamboo"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 98
-name = "Bs.Clrnt"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 99
-name = "BrtBsClr"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 126
-name = "Bow Bass"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 112
-name = "ElecBass"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 113
-name = "MotownBs"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 114
-name = "SteinBas"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 115
-name = "FunkBass"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 116
-name = "PickBass"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 117
-name = "SnapBass"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 118
-name = "Thumb Bs"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 119
-name = "TiteBass"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 120
-name = "JacoBass"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 121
-name = "StratoBs"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 123
-name = "MuteBass"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 124
-name = "Ac Bass"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 125
-name = "Juicy Bs"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 126
-name = "GnarlyBs"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 127
-name = "Moog Bs"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 128
-name = "Bass1000"
-bank = 1
 
 [[definitions.programs]]
 instrument = "pman"
@@ -476,20 +266,6 @@ setup = "default"
 program = 30
 name = "New Horn"
 bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 101
-name = "Eng.Horn"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 104
-name = "BorgHorn"
-bank = 1
 
 [[definitions.programs]]
 instrument = "pman"
@@ -550,8 +326,29 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 39
+name = "Alto Sax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 40
 name = "Sanborn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 41
+name = "BirdAlto"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 42
+name = "ExprAlto"
 bank = 0
 
 [[definitions.programs]]
@@ -564,6 +361,13 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 44
+name = "Koz Alto"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 45
 name = "Everette"
 bank = 0
@@ -571,8 +375,43 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 46
+name = "NY Alto"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 47
+name = "NY Tenor"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 48
+name = "TenorSax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 49
 name = "MBrecker"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 50
+name = "PopTenor"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 51
+name = "SoulTenr"
 bank = 0
 
 [[definitions.programs]]
@@ -599,8 +438,64 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 55
+name = "TenorSub"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 56
+name = "Bari Sax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 57
+name = "TiteBari"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 58
+name = "Sax Sect"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 59
+name = "Air Sax"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 60
+name = "Saxual"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 61
 name = "Sanford"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 62
+name = "Piccolo"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 63
+name = "Flute"
 bank = 0
 
 [[definitions.programs]]
@@ -615,6 +510,48 @@ instrument = "pman"
 setup = "default"
 program = 65
 name = "SilvrFlt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 66
+name = "ClassFlt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 67
+name = "Nz Flute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 68
+name = "VoxFlute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 69
+name = "AquaFlut"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 70
+name = "OakFlute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 71
+name = "Bass Flt"
 bank = 0
 
 [[definitions.programs]]
@@ -636,6 +573,13 @@ instrument = "pman"
 setup = "default"
 program = 74
 name = "TinWhist"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 75
+name = "Flutofon"
 bank = 0
 
 [[definitions.programs]]
@@ -669,8 +613,29 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 80
+name = "PanFlute"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 81
 name = "Andean"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 82
+name = "Pan Pipe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 83
+name = "Bali Flt"
 bank = 0
 
 [[definitions.programs]]
@@ -699,6 +664,20 @@ instrument = "pman"
 setup = "default"
 program = 87
 name = "Maya Flt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 88
+name = "Shakuhat"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 89
+name = "Bamboo"
 bank = 0
 
 [[definitions.programs]]
@@ -739,6 +718,20 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 95
+name = "Clarinet"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 96
+name = "JazzClar"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 97
 name = "ClsClrnt"
 bank = 0
@@ -746,8 +739,50 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 98
+name = "Bs.Clrnt"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 99
+name = "BrtBsClr"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 100
+name = "Oboe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 101
+name = "Eng.Horn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 102
 name = "SftEngHn"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 103
+name = "Bassoon"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 104
+name = "Flurinet"
 bank = 0
 
 [[definitions.programs]]
@@ -767,8 +802,50 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 107
+name = "ThaiReed"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 108
+name = "Chanter"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 109
 name = "Digirdoo"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 110
+name = "IslePipe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 111
+name = "SoftPipe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 112
+name = "LitePipe"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 113
+name = "CelloSax"
 bank = 0
 
 [[definitions.programs]]
@@ -781,6 +858,34 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 115
+name = "Solo Vln"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 116
+name = "DrkVioln"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 117
+name = "BrtVioln"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 118
+name = "SweetVln"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 119
 name = "Fiddle"
 bank = 0
@@ -788,8 +893,50 @@ bank = 0
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 120
+name = "Viola"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 121
+name = "SwtViola"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 122
 name = "RosinVla"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 123
+name = "Cello"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 124
+name = "SoloCell"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 125
+name = "DrkCello"
+bank = 0
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 126
+name = "Bow Bass"
 bank = 0
 
 [[definitions.programs]]
@@ -865,6 +1012,13 @@ bank = 1
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 9
+name = "Clavinet"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 10
 name = "Funky"
 bank = 1
@@ -928,6 +1082,20 @@ bank = 1
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 19
+name = "SteelGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 20
+name = "AcGuitar"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 21
 name = "Flamenco"
 bank = 1
@@ -935,8 +1103,43 @@ bank = 1
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 22
+name = "SpainGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 23
+name = "NylonGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 24
+name = "SwtNylGt"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 25
+name = "Les Gtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 26
 name = "Joe Pass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 27
+name = "FMGuitar"
 bank = 1
 
 [[definitions.programs]]
@@ -970,8 +1173,78 @@ bank = 1
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 32
+name = "Surf Gtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 33
+name = "Mute Gtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 34
+name = "WahGtCC4"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 35
+name = "PatSynGt"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 36
+name = "BluesGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 37
+name = "Clapton"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 38
+name = "PopODGtr"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 39
 name = "Carlos"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 40
+name = "TubeGtr!"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 41
+name = "FET Guit"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 42
+name = "Dist.Gtr"
 bank = 1
 
 [[definitions.programs]]
@@ -986,6 +1259,13 @@ instrument = "pman"
 setup = "default"
 program = 44
 name = "Wah Dist"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 45
+name = "GuitHero"
 bank = 1
 
 [[definitions.programs]]
@@ -1028,6 +1308,20 @@ instrument = "pman"
 setup = "default"
 program = 51
 name = "Hercules"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 52
+name = "SynClav"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 53
+name = "Syncro!"
 bank = 1
 
 [[definitions.programs]]
@@ -1077,6 +1371,13 @@ instrument = "pman"
 setup = "default"
 program = 60
 name = "PtchNoiz"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 61
+name = "BreathTb"
 bank = 1
 
 [[definitions.programs]]
@@ -1292,6 +1593,20 @@ bank = 1
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 92
+name = "SynZilla"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 93
+name = "MegaSyn"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 94
 name = "Winwood"
 bank = 1
@@ -1362,6 +1677,13 @@ bank = 1
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 104
+name = "BorgHorn"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 105
 name = "Freik"
 bank = 1
@@ -1411,6 +1733,76 @@ bank = 1
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
+program = 112
+name = "ElecBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 113
+name = "MotownBs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 114
+name = "SteinBas"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 115
+name = "FunkBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 116
+name = "PickBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 117
+name = "SnapBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 118
+name = "Thumb Bs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 119
+name = "TiteBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 120
+name = "JacoBass"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
+program = 121
+name = "StratoBs"
+bank = 1
+
+[[definitions.programs]]
+instrument = "pman"
+setup = "default"
 program = 122
 name = "Sticky!"
 bank = 1
@@ -1418,435 +1810,43 @@ bank = 1
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
-program = 39
-name = "Alto Sax"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 41
-name = "BirdAlto"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 42
-name = "ExprAlto"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 44
-name = "Koz Alto"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 46
-name = "NY Alto"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 47
-name = "NY Tenor"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 48
-name = "TenorSax"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 50
-name = "PopTenor"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 51
-name = "SoulTenr"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 55
-name = "TenorSub"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 56
-name = "Bari Sax"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 57
-name = "TiteBari"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 58
-name = "Sax Sect"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 59
-name = "Air Sax"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 60
-name = "Saxual"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 113
-name = "CelloSax"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 62
-name = "Piccolo"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 63
-name = "Flute"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 67
-name = "Nz Flute"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 68
-name = "VoxFlute"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 69
-name = "AquaFlut"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 70
-name = "OakFlute"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 75
-name = "Flutofon"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 80
-name = "PanFlute"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 82
-name = "Pan Pipe"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 88
-name = "Shakuhat"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 110
-name = "IslePipe"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 111
-name = "SoftPipe"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 112
-name = "LitePipe"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 100
-name = "Oboe"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 103
-name = "Bassoon"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 107
-name = "ThaiReed"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 108
-name = "Chanter"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 115
-name = "Solo Vln"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 116
-name = "DrkVioln"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 117
-name = "BrtVioln"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 118
-name = "SweetVln"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 120
-name = "Viola"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 121
-name = "SwtViola"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
 program = 123
-name = "Cello"
-bank = 0
+name = "MuteBass"
+bank = 1
 
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
 program = 124
-name = "SoloCell"
-bank = 0
+name = "Ac Bass"
+bank = 1
 
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
 program = 125
-name = "DrkCello"
-bank = 0
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 19
-name = "SteelGtr"
+name = "Juicy Bs"
 bank = 1
 
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
-program = 20
-name = "AcGuitar"
+program = 126
+name = "GnarlyBs"
 bank = 1
 
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
-program = 22
-name = "SpainGtr"
+program = 127
+name = "Moog Bs"
 bank = 1
 
 [[definitions.programs]]
 instrument = "pman"
 setup = "default"
-program = 23
-name = "NylonGtr"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 24
-name = "SwtNylGt"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 25
-name = "Les Gtr"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 27
-name = "FMGuitar"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 32
-name = "Surf Gtr"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 33
-name = "Mute Gtr"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 34
-name = "WahGtCC4"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 35
-name = "PatSynGt"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 36
-name = "BluesGtr"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 38
-name = "PopODGtr"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 40
-name = "TubeGtr!"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 41
-name = "FET Guit"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 42
-name = "Dist.Gtr"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 45
-name = "GuitHero"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 53
-name = "Syncro!"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 92
-name = "SynZilla"
-bank = 1
-
-[[definitions.programs]]
-instrument = "pman"
-setup = "default"
-program = 93
-name = "MegaSyn"
+program = 128
+name = "Bass1000"
 bank = 1
 
 [[patch_lists.trumpet]]
