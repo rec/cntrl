@@ -272,7 +272,7 @@ def test_invalid_shorthand_is_rejected(value: object) -> None:
 def test_reports_errors_across_all_patch_entries(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [
             {
                 'type': 'program-change',
@@ -305,7 +305,7 @@ def test_zero_matches_always_fail(
     take_first: bool,
 ) -> None:
     show['take_first_match'] = take_first
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'absent'}]
     }
     with pytest.raises(compiler.CompilationError, match='no patch matches'):
@@ -332,7 +332,7 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
             },
         ]
     }
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'Flute'}]
     }
     with pytest.raises(compiler.CompilationError, match='multiple matches'):
@@ -342,13 +342,13 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
     patch_offset = 76 + 2 * 68 + 68
     assert data[patch_offset + 4 : patch_offset + 7] == bytes([8, 1, 2])
     show['take_first_match'] = False
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [
             {'bank': 0, 'type': 'program-change', 'instrument': 'a', 'program': 'Flute'}
         ]
     }
     assert compiler.compile_show(show, definitions, [table], target) == data
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': '^Flute$'}]
     }
     with pytest.raises(compiler.CompilationError, match='no patch matches'):
@@ -385,7 +385,7 @@ def test_display_name_precedence_preserves_original_and_round_trips(
             }
         ]
     }
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [
             {
                 'type': 'program-change',
@@ -403,7 +403,7 @@ def test_display_name_precedence_preserves_original_and_round_trips(
     program = exported['definitions']['programs'][0]
     assert program['name'] == 'Trumpet 2'
     assert program.get('display_name') == program_label
-    assert exported['groups']['wind'][0].get('display_name') == patch_label
+    assert exported['patch_lists']['wind'][0].get('display_name') == patch_label
     assert compiler.compile_show(exported, {'setups': []}, [], target) == data
 
 
@@ -423,7 +423,7 @@ def test_two_show_labels_share_one_program_description(
             }
         ],
     )
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [
             {
                 'display_name': 'Opening solo',
@@ -442,12 +442,12 @@ def test_two_show_labels_share_one_program_description(
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert len(exported['definitions']['programs']) == 1
-    assert [p['display_name'] for p in exported['groups']['wind']] == [
+    assert [p['display_name'] for p in exported['patch_lists']['wind']] == [
         'Opening solo',
         'Encore',
     ]
     assert compiler.compile_show(exported, {}, [], target) == data
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [
             {'type': 'program-change', 'instrument': 'a', 'program': 'Muted Trumpet'}
         ]
@@ -471,7 +471,7 @@ def test_display_override_does_not_require_rendering_original_name(
             }
         ]
     }
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 1}]
     }
     data = compiler.compile_show(show, definitions, [table], target)
@@ -488,7 +488,7 @@ def test_name_cannot_override_known_synthesizer_name(
             {'instrument': 'synth', 'setup': 'stock', 'program': 1, 'name': 'Trumpet 2'}
         ]
     }
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [
             {
                 'name': 'Opening solo',
@@ -506,7 +506,7 @@ def test_table_conflicts_are_collected_and_missing_metadata_is_filled(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
     base = {'instrument': 'synth', 'setup': 'stock', 'program': 1}
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'Flute'}]
     }
     first = {'patches': [dict(base, tags=['wind'])]}
@@ -523,14 +523,14 @@ def test_table_conflicts_are_collected_and_missing_metadata_is_filled(
 def test_bankless_pc_is_not_bank_zero_and_omission_sends_no_bank(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 12}]
     }
     data = compiler.compile_show(show, definitions, [], target)
     offset = 76 + 2 * 68 + 68
     assert data[offset + 4 : offset + 9] == bytes([11, 255, 255, 255, 255])
     assert data[offset + 12 : offset + 17] == b'PC 12'
-    show['groups'] = {
+    show['patch_lists'] = {
         'wind': [
             {'type': 'program-change', 'instrument': 'a', 'program': 12, 'bank': 0}
         ]
@@ -543,8 +543,8 @@ def test_bankless_pc_is_not_bank_zero_and_omission_sends_no_bank(
 def test_capacity_and_all_display_fields_are_checked(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['groups'] = {
-        'bad\ncategory': [
+    show['patch_lists'] = {
+        'bad\ntag': [
             {
                 'type': 'program-change',
                 'instrument': 'a',
@@ -570,17 +570,17 @@ def test_setup_sysex_files_are_not_read_or_encoded(
     )
 
 
-def test_bad_category_does_not_hide_errors_in_other_categories(
+def test_bad_tag_does_not_hide_errors_in_other_tags(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['groups'] = {
+    show['patch_lists'] = {
         'bad': 1,
         'wind': [{'type': 'program-change', 'instrument': 'missing', 'program': 12}],
     }
     with pytest.raises(compiler.CompilationError) as failure:
         compiler.compile_show(show, definitions, [], target)
-    assert 'groups.bad' in str(failure.value)
-    assert 'groups.wind[0]' in str(failure.value)
+    assert 'patch_lists.bad' in str(failure.value)
+    assert 'patch_lists.wind[0]' in str(failure.value)
 
 
 def test_cli_compiles_and_reports_counts_and_routes(
@@ -605,7 +605,7 @@ def test_cli_compiles_and_reports_counts_and_routes(
     cli.main()
     assert output.read_bytes().hex() == (FIXTURES / 'show.golden').read_text().strip()
     report = capsys.readouterr().out
-    assert '2 instruments, 2 categories, 4 patches' in report
+    assert '2 instruments, 2 patch lists, 4 patches' in report
     assert 'a: channel 1 to din' in report and 'b: channel 2 to trs' in report
 
 
@@ -615,8 +615,8 @@ def test_cli_does_not_write_binary_when_patches_have_errors(
     document = tmp_path / 'invalid.toml'
     document.write_text(
         '[instruments.a]\ninstrument="synth"\nsetup="stock"\nchannel=1\noutput="din"\n'
-        '[[groups.wind]]\ntype="program-change"\ninstrument="a"\nprogram=0\n'
-        '[[groups.wind]]\ntype="program-change"\ninstrument="a"\nprogram=129\n'
+        '[[patch_lists.wind]]\ntype="program-change"\ninstrument="a"\nprogram=0\n'
+        '[[patch_lists.wind]]\ntype="program-change"\ninstrument="a"\nprogram=129\n'
     )
     output = tmp_path / 'show.bin'
     monkeypatch.setattr(

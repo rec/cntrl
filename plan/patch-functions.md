@@ -8,7 +8,7 @@ the button combination that returns to patch mode.
 ## Patch representation
 
 Keep the existing MIDI patch representation. Add a function patch as a second
-typed alternative, sharing the existing name, display name, categories and style
+typed alternative, sharing the existing name, display name, tags and style
 properties. A function patch has no instrument, program, bank, volume or pan.
 Reject definitions that mix those MIDI properties with a function.
 
@@ -33,7 +33,7 @@ mixtures belong in the song's patch list, not in a second action-list mechanism.
 
 Browsing, displaying and editing a function patch never execute it. The normal
 patch activation action dispatches either MIDI or the pedal function. Use the
-same display and category/style resolution as other patches; fields requiring
+same display and tag/style resolution as other patches; fields requiring
 a MIDI program are empty for function patches.
 
 A failed function leaves the current performance position unchanged and reports

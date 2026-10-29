@@ -71,7 +71,7 @@ replaced configuration or staging bytes. Storage and memory limits are actual
 resource limits; there is no separate short-message command buffer or fixed
 sequence-depth restriction.
 
-Live On/Off state is never persisted. This configuration uses setup format 17
+Live On/Off state is never persisted. This configuration uses setup format 18
 and the tagged authoring schema. Older setups need conversion and recompilation;
 there is no legacy firmware decoder. See [Patch authoring](patches.md) for the
 complete schema and required authoring changes. Exports after pedal program edits

@@ -1,7 +1,12 @@
 # Patches, switches and songs
 
+`patch_lists` maps names to ordered lists of patches. A tag classifies a program
+or patch independently of those lists. Items use a `tags` list; the setup's
+optional `[tags.NAME.style]` tables define styles for selected tags. Tags do not
+need a declaration to be used.
+
 A Patch is an executable table with a required `type`. The same table works in a
-named definition, a browser group, a switch assignment, a song position or a
+named definition, a browser patch list, a switch assignment, a song position or a
 sequence. A sequence executes all its children on one activation. A song advances
 one position at a time.
 
@@ -30,7 +35,7 @@ patches = [
     {type = 'control-change', output = 'trs', channel = 2, controller = 11, value = 100},
 ]
 
-[groups]
+[patch_lists]
 Live = [{type = 'reference', patch = 'intro'}]
 
 [switches.intro]
@@ -39,9 +44,9 @@ on = {type = 'reference', patch = 'intro'}
 ```
 
 Instrument declarations and their bank mappings retain their existing meaning.
-Switch-only setups can omit instruments, definitions, named patches and groups
+Switch-only setups can omit instruments, definitions, named patches and patch lists
 when their patches do not use them. Named definitions have stable keys; their
-dictionary order does not define the browser order. `groups` supplies that order.
+dictionary order does not define the browser order. `patch_lists` supplies that order.
 
 ## Patch types
 
@@ -58,7 +63,7 @@ dictionary order does not define the browser order. `groups` supplies that order
 | `sequence` | `patches`, a list of Patch tables | None |
 | `reference` | `patch`, a stable definition key | `document` |
 
-Every type can have `name`, `display_name`, `style` and `categories` presentation
+Every type can have `name`, `display_name`, `style` and `tags` presentation
 metadata. Named definitions default their label to their key. Inline patches use
 a description of the operation. References inherit the target's presentation;
 metadata on the reference occurrence overrides it. Children of a sequence do not
@@ -68,7 +73,7 @@ Channels are 1..16. Programs use 1..128 or the existing program-name regular
 expression lookup. Volume, CC controllers and CC values use 0..127; pan uses
 -64..63. Pitch bend uses -8192..8191, with zero centered. NRPN parameters and values
 use 0..16383. Program selections send bank MSB, bank LSB, program, optional volume
-and optional pan, in that order. NRPN sends CC 99, 98, 6 and 38 as one ordered group
+and optional pan, in that order. NRPN sends CC 99, 98, 6 and 38 as one ordered patch list
 on its output, allowing MIDI real-time traffic to interleave.
 
 SysEx `data` contains 0..127 payload bytes, without F0/F7; the compiler adds those
@@ -83,8 +88,8 @@ must support the named output; this format adds no output drivers.
 | --- | --- | --- |
 | `brightness` | `value`, integer 0..255 | Set active screen brightness |
 | `usb-midi-interface` | `value`, Boolean | Set the active USB MIDI bridge preference |
-| `next-patch`, `previous-patch` | None | Move the preview within its current group |
-| `next-group`, `previous-group` | None | Move the browser to another group |
+| `next-patch`, `previous-patch` | None | Move the preview within its current patch list |
+| `next-patch-list`, `previous-patch-list` | None | Move the browser to another patch list |
 | `activate-selection` | None | Execute the selected Patch through the same executor |
 | `undo` | None | Restore a known previous program selection, when available |
 | `menu` | None | Return to the module menu after the invocation and required cleanup |
@@ -131,7 +136,7 @@ and pinned before execution. Missing references and cycles fail before effects;
 pending work prevents replacement of its source data.
 
 Song libraries have optional `instruments`, `definitions`, `patches`, `fonts` and
-`categories` context using the same authoring models. Each song's `patches` list
+`tags` context using the same authoring models. Each song's `patches` list
 contains ordinary Patch tables, with an optional `id` for the position's persistent
 occurrence identity. A nonempty library is compiled with `--target`; companion
 setups and font assets follow the existing copy/download workflow. Inline captures
@@ -157,7 +162,7 @@ unknown, rather than risk sending it twice.
 
 ## Required authoring and format changes
 
-Setup format 17 and song records CSG4 replace the preceding formats. Recompile and
+Setup format 18 and song records CSG4 replace the preceding formats. Recompile and
 upload matching setup and song documents together before using this firmware.
 Existing binary documents are rejected; no migration or dual execution path is
 provided. Keep backups before replacing existing device data.
@@ -165,8 +170,11 @@ Exports after on-pedal program or bank edits preserve the current MIDI values
 and displayed labels while canonicalizing their source metadata. Further
 export/recompile cycles are stable.
 
-- Move the old category-to-patch-list dictionary from `patches` to `groups`.
+- Move the old browser-list dictionary from `patches` to `patch_lists`.
   `patches` now holds reusable named Patch tables.
+- Rename `groups` to `patch_lists`, `group.name` to `patch_list.name`, and
+  `categories` membership and style definitions to `tags`. Program catalogues
+  use the same `tags` membership field as patches.
 - Add `type` to every executable table. Replace delimiter shorthand with explicit
   program fields; strings are not references and bare lists are not sequences.
 - Replace `function = 'stock-firmware'` with `type = 'stock-firmware'`.

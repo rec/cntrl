@@ -1,6 +1,6 @@
 # Patch unity
 
-Status: implemented in setup format 17 and song format CSG4. Authoring, compilation,
+Status: implemented in setup format 18 and song format CSG4. Authoring, compilation,
 switches, browser activation and songs use the tagged Patch graph and shared
 executor. Durable stock continuation resumes a composite before advancing its
 song. See [configuration and required authoring changes](../doc/patches.md).
@@ -112,7 +112,7 @@ on = { type = 'reference', patch = 'both' }
 A definition's table key is its stable identity. References use that key, never
 a display label or an instrument/program match. Labels default to the key for
 named patches and to a useful description for inline patches. Existing `name`,
-`display_name`, `style` and category/style tags remain optional presentation
+`display_name`, `style` and tag/style tags remain optional presentation
 metadata; authors need none of them to execute a patch. Sequence children do not
 replace the parent patch's performance display while they run. A reference uses
 the referenced presentation unless explicitly overridden at that occurrence.
@@ -154,7 +154,7 @@ data = [0x7D, 1, 2] # Example noncommercial payload; F0/F7 are added.
 ```
 
 NRPN expands into CC 99, CC 98, CC 6 and CC 38, in that order. Do not add an
-unrequested parameter reset. Keep this group together relative to other ordinary
+unrequested parameter reset. Keep this patch list together relative to other ordinary
 messages on the same output; MIDI real-time traffic may interleave. Merely
 placing each CC in an independent queue would not preserve the parameter/value
 relationship under competing traffic.
@@ -277,14 +277,14 @@ ownership, inferred inverses or rollback as part of this unification.
 
 ## Optional catalogue, songs and references
 
-Simple switch-only setups need neither a catalogue nor groups. For setups that
+Simple switch-only setups need neither a catalogue nor patch lists. For setups that
 use the existing patch browser, a dictionary of named patches is a catalogue,
 not a performance order. Replace
-the old category-to-patches dictionary with `groups`, whose ordered entries are
+the old tag-to-patches dictionary with `patch_lists`, whose ordered entries are
 Patch values. For example:
 
 ```toml
-[groups]
+[patch_lists]
 Live = [
     { type = 'reference', patch = 'clean' },
     { type = 'reference', patch = 'both' },

@@ -12,19 +12,19 @@ def test_comparison_reports_configuration_paths_and_preserves_order() -> None:
     before = bytes.fromhex((root / 'show.golden').read_text())
     source = tomlkit.parse(resolved.export(before)).unwrap()
     source['brightness'] = 23
-    source['groups']['wind'].reverse()
+    source['patch_lists']['wind'].reverse()
     target = models.Target.model_validate(compiler.read_document(root / 'target.json'))
     after = compiler.compile_show(source, {}, [], target)
     changes = history.compare(before, after)
     assert any(c.path == 'brightness' and c.after == 23 for c in changes)
-    assert any('groups.wind[' in c.path for c in changes)
+    assert any('patch_lists.wind[' in c.path for c in changes)
     assert history.compare(before, before) == []
-    source['groups']['wind'].pop()
+    source['patch_lists']['wind'].pop()
     shortened = compiler.compile_show(source, {}, [], target)
     for old, new in ((before, shortened), (shortened, before)):
         changes = history.compare(old, new)
         assert any(
-            'groups.wind[' in c.path and (c.before is None or c.after is None)
+            'patch_lists.wind[' in c.path and (c.before is None or c.after is None)
             for c in changes
         )
         assert all(not c.path.startswith('.') for c in changes)

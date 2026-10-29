@@ -22,7 +22,7 @@ the previous scene's known selections.
 ### Favorites and recent selections
 
 Keep a small favorites list and a list of recently used patches across setups.
-Allow quick access without traversing the full category list. Store the patch's
+Allow quick access without traversing the full collection of patch lists. Store the patch's
 instrument identity alongside its name so similarly named sounds remain distinct.
 
 ## Controls and expression

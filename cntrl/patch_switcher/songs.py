@@ -63,7 +63,7 @@ class Library(BaseModel, frozen=True):
     definitions: models.Definitions | None = None
     patches: dict[str, object] = Field(default_factory=dict)
     fonts: dict[str, str] = Field(default_factory=dict)
-    categories: dict[str, models.Category] = Field(default_factory=dict)
+    tags: dict[str, models.Tag] = Field(default_factory=dict)
     songs: list[Song] = Field(default_factory=list)
     setlists: list[Setlist] = Field(default_factory=list)
     model_config = ConfigDict(extra='forbid')
@@ -152,11 +152,10 @@ def encode(
         context: dict[str, object] = {
             'instruments': library.instruments,
             'patches': library.patches,
-            'groups': {'Songs': values_for_source} if values_for_source else {},
+            'patch_lists': {'Songs': values_for_source} if values_for_source else {},
             'fonts': library.fonts,
-            'categories': {
-                k: v.model_dump(exclude_none=True)
-                for k, v in library.categories.items()
+            'tags': {
+                k: v.model_dump(exclude_none=True) for k, v in library.tags.items()
             },
         }
         if library.definitions is not None:
@@ -166,7 +165,9 @@ def encode(
         except compiler.CompilationError as error:
             messages = error.errors
             for index, path in enumerate(paths):
-                messages = [m.replace(f'groups.Songs[{index}]', path) for m in messages]
+                messages = [
+                    m.replace(f'patch_lists.Songs[{index}]', path) for m in messages
+                ]
             raise compiler.CompilationError(messages) from error
         graph = resolved.graph_offset(source)
         _, _, count, _, _, _ = compiler.GRAPH.unpack_from(source, graph)
@@ -293,18 +294,18 @@ def decode(data: bytes) -> Library:
     programs: list[object] = []
     fonts: dict[str, str] = {}
     source_fonts: list[dict[str, str]] = []
-    categories: dict[str, object] = {}
-    source_categories: list[set[str]] = []
+    tags: dict[str, object] = {}
+    source_tags: list[set[str]] = []
     for index, source in enumerate(sources):
         exported = tomlkit.parse(resolved.export(source)).unwrap()
         prefix = f'source-{index}-' if len(sources) > 1 else ''
         renamed = {k: prefix + k for k in exported.get('fonts', {})}
         source_fonts.append(renamed)
         fonts.update({renamed[k]: v for k, v in exported.get('fonts', {}).items()})
-        category_names = set(exported.get('categories', {}))
-        source_categories.append(category_names)
-        for key, value in exported.get('categories', {}).items():
-            categories[prefix + key] = _rebind(value, prefix, renamed, category_names)
+        tag_names = set(exported.get('tags', {}))
+        source_tags.append(tag_names)
+        for key, value in exported.get('tags', {}).items():
+            tags[prefix + key] = _rebind(value, prefix, renamed, tag_names)
         for key, value in exported.get('instruments', {}).items():
             value = dict(value)
             value['instrument'] = _qualified(prefix, value['instrument'], 31)
@@ -316,15 +317,15 @@ def decode(data: bytes) -> Library:
         for value in exported.get('definitions', {}).get('programs', []):
             value = dict(value)
             value['instrument'] = _qualified(prefix, value['instrument'], 31)
-            programs.append(_rebind(value, prefix, renamed, category_names))
+            programs.append(_rebind(value, prefix, renamed, tag_names))
         for key, value in exported.get('patches', {}).items():
             definitions[_qualified(prefix, key, 63)] = _rebind(
-                value, prefix, renamed, category_names
+                value, prefix, renamed, tag_names
             )
     context['instruments'] = instruments
     context['patches'] = definitions
     context['fonts'] = fonts
-    context['categories'] = categories
+    context['tags'] = tags
     if sources:
         context['definitions'] = {'setups': setups, 'programs': programs}
     songs = []
@@ -349,7 +350,7 @@ def decode(data: bytes) -> Library:
                     value,
                     f'source-{source}-' if len(sources) > 1 else '',
                     source_fonts[source],
-                    source_categories[source],
+                    source_tags[source],
                 )
             value['id'] = occurrence
             patches.append(value)
@@ -365,7 +366,10 @@ def _string(value: bytes) -> str:
 
 
 def _rebind(
-    value: dict[str, object], prefix: str, fonts: dict[str, str], categories: set[str]
+    value: dict[str, object],
+    prefix: str,
+    fonts: dict[str, str],
+    declared_tags: set[str],
 ) -> dict[str, object]:
     result = deepcopy(value)
     work = [result]
@@ -378,10 +382,10 @@ def _rebind(
         children = item.get('patches', [])
         if isinstance(children, list):
             work.extend(c for c in children if isinstance(c, dict))
-        tags = item.get('categories')
+        tags = item.get('tags')
         if isinstance(tags, list):
-            item['categories'] = [
-                prefix + c if isinstance(c, str) and c in categories else c
+            item['tags'] = [
+                prefix + c if isinstance(c, str) and c in declared_tags else c
                 for c in tags
             ]
         style = item.get('style')

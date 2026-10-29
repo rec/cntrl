@@ -9,14 +9,14 @@ replaces the CSS proposal and updates
 
 Keep formatting in the existing TOML configuration. Simplify the current style
 model and make its precedence explicit. Reuse object-attached partial styles,
-page fields, category membership and host-side compilation.
+page fields, tag membership and host-side compilation.
 
 Authors choose colors and font names. Text always fits automatically. No CSS
 parser, selector language or additional dependency is required.
 
 ## Styles
 
-Use the same optional `style` structure on shows, windows, pages, categories,
+Use the same optional `style` structure on shows, windows, pages, tags,
 programs, patches and shared parameters. Keep page-specific field overrides in
 `pages.PAGE.line_styles.FIELD`.
 
@@ -47,16 +47,16 @@ foreground_color = 'black'
 background_color = 'white'
 font_name = 'Arial'
 
-[categories.sax.style]
+[tags.sax.style]
 foreground_color = '0xD08000'
 
-[categories.whole-system.style]
+[tags.whole-system.style]
 font_name = 'CourierPrimeBold'
 
 [pages.patch]
-fields = ['group.name', 'display_name']
+fields = ['patch_list.name', 'display_name']
 
-[pages.patch.line_styles.'group.name']
+[pages.patch.line_styles.'patch_list.name']
 foreground_color = 'blue'
 
 [windows.next]
@@ -77,44 +77,44 @@ Resolve each property from lowest to highest precedence:
 2. Show style.
 3. Window style.
 4. Page style.
-5. Applicable category styles, in the order described below.
+5. Applicable tag styles, in the order described below.
 6. Program style, for patch-content fields.
 7. Patch style, for patch-content fields.
 8. Shared parameter style, for that parameter's field.
 9. Page-specific field style.
 
-Only consult sources belonging to the displayed field. The `categories` field
-uses category styles but not program or patch styles. Navigation headings such
-as `group.name` use show, window, page and field styles. Global fields do not
-acquire the current patch's categories or appearance.
+Only consult sources belonging to the displayed field. The `tags` field
+uses tag styles but not program or patch styles. Navigation headings such
+as `patch_list.name` use show, window, page and field styles. Global fields do not
+acquire the current patch's tags or appearance.
 
 The same page resolves against each window's own data item. Background color
 follows the same partial-override rules as foreground color and font name.
 There is no separate transparency model or CSS inheritance behavior.
 
-## Ordered categories
+## Tag membership and style precedence
 
-Programs and patches retain independently authored category lists. Category
-membership does not change MIDI behavior or navigation groups.
+Programs and patches retain independently authored tag lists. Tag
+membership does not change MIDI behavior or navigation patch lists.
 
-Apply the program's categories in listed order, followed by the patch's own
-categories in listed order. Within these category layers, a later explicit
+Apply the program's tags in listed order, followed by the patch's own
+tags in listed order. Within these tag layers, a later explicit
 property wins. Registry declaration order has no effect. Remove integer
 `priority` and the errors for conflicting values at equal priority.
 
-For example, program categories `['sax', 'bright']` apply sax then bright.
-Patch categories `['whole-system']` apply afterward. A category that only changes
+For example, program tags `['sax', 'bright']` apply sax then bright.
+Patch tags `['whole-system']` apply afterward. A tag that only changes
 the font leaves the earlier foreground color intact. Explicit program and patch
-styles still take precedence over all category styles, as listed above.
+styles still take precedence over all tag styles, as listed above.
 
-A category repeated in the patch's own list applies again at that later position;
+A tag repeated in the patch's own list applies again at that later position;
 otherwise deduplication would prevent the local ordering from taking effect.
-The displayed category names remain unique, in their existing first-occurrence
+The displayed tag names remain unique, in their existing first-occurrence
 order. Distinguish that membership list from the ordered style application.
 
 Preserve the explicit lists separately through download/recompile. Do not store
-a flattened inherited list as the patch's own categories. Unknown category
-references remain configuration errors.
+a flattened inherited list as the patch's own tags. Tags do not require style
+declarations; an undeclared tag contributes no style properties.
 
 ## Automatic text fitting and painting
 
@@ -146,7 +146,7 @@ there is no extra style color or `half` setting.
 Every style may include an optional `icon` image-file reference, for example
 `icon = 'images/sax.png'`. It follows the same property override order as colors
 and font names. Omission inherits; `icon = ''` explicitly suppresses an inherited
-icon. Programs, patches and categories have no separate direct icon property.
+icon. Programs, patches and tags have no separate direct icon property.
 Preserve partial styles, including empty icon strings, through download/recompile.
 
 Image loading, path resolution, conversion, embedding, layout and rendering remain
@@ -155,17 +155,17 @@ future work. Resolving the reference does not display an icon yet.
 ## Implementation and verification
 
 1. Reduce the existing style model to the four properties above. Remove
-   category priorities and authored sizing controls, including obsolete export
+   tag priorities and authored sizing controls, including obsolete export
    metadata and configuration paths.
-2. Reuse the existing property merge logic with the documented category order.
+2. Reuse the existing property merge logic with the documented tag order.
    Convert repository examples and update the current display documentation.
 3. Make independent automatic fitting unconditional. Continue compiling resolved
    pages and styles on the host into bounded firmware records. Preserve partial
-   styles, explicit category lists and icon references in source metadata.
+   styles, explicit tag lists and icon references in source metadata.
 4. Update the compiled format contract as required and require source
    recompilation. Do not add a legacy decoder or automatic configuration migration.
-5. Test partial overrides at each applicable layer, category ordering and repeated
-   inherited/local categories. Verify unrelated headings and global fields are
+5. Test partial overrides at each applicable layer, tag ordering and repeated
+   inherited/local tags. Verify unrelated headings and global fields are
    unaffected. Test export/recompile without flattening authored information.
 6. Test short and long labels, mixed families, multiple lines, background bands,
    stippling and transition destinations. Preserve MIDI/send/undo behavior.

@@ -85,7 +85,7 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
             ]
         },
         'patches': patches,
-        'groups': {'Live': [{'type': 'reference', 'patch': n} for n in patches]},
+        'patch_lists': {'Live': [{'type': 'reference', 'patch': n} for n in patches]},
     }
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
@@ -93,7 +93,7 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
     assert exported['patches']['nrpn'] == patches['nrpn']
     assert exported['patches']['sysex']['data'] == patches['sysex']['data']
     assert exported['patches']['stock']['exit_buttons'] == 'A+F'
-    assert len(exported['groups']['Live']) == len(patches)
+    assert len(exported['patch_lists']['Live']) == len(patches)
 
 
 def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
@@ -299,11 +299,11 @@ def test_nrpn_compiles_as_one_ordered_group(target: models.Target) -> None:
     )
 
 
-def test_composite_inherits_child_categories_but_keeps_parent_label(
+def test_composite_inherits_child_tags_but_keeps_parent_label(
     target: models.Target,
 ) -> None:
     show = {
-        'categories': {'sax': {}, 'whole-system': {}},
+        'tags': {'sax': {}, 'whole-system': {}},
         'patches': {
             'child': {
                 'type': 'control-change',
@@ -311,17 +311,17 @@ def test_composite_inherits_child_categories_but_keeps_parent_label(
                 'channel': 1,
                 'controller': 1,
                 'value': 2,
-                'categories': ['sax'],
+                'tags': ['sax'],
             },
             'parent': {
                 'type': 'sequence',
                 'name': 'Parent',
-                'categories': ['whole-system'],
+                'tags': ['whole-system'],
                 'patches': [{'type': 'reference', 'patch': 'child'}],
             },
         },
-        'groups': {'Live': [{'type': 'reference', 'patch': 'parent'}]},
-        'pages': {'patch': {'fields': ['display_name', 'categories']}},
+        'patch_lists': {'Live': [{'type': 'reference', 'patch': 'parent'}]},
+        'pages': {'patch': {'fields': ['display_name', 'tags']}},
     }
     data = compiler.compile_show(show, {}, [], target)
     assert b'Parent\0' in data and b'sax, whole-system\0' in data
@@ -431,8 +431,8 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
     definitions = compiler.read_document(Path('firmware/test/definitions.json'))
     assert isinstance(source, dict)
     if reference_override:
-        source['patches'] = {'clean': source['groups']['wind'][0]}
-        source['groups']['wind'][0] = {
+        source['patches'] = {'clean': source['patch_lists']['wind'][0]}
+        source['patch_lists']['wind'][0] = {
             'type': 'reference',
             'patch': 'clean',
             'name': 'Special',
@@ -448,10 +448,10 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
     if reference_override:
         root = 0
         node = offset + struct.unpack_from('<I', data, offset + compiler.GRAPH.size)[0]
-    _, _, _, _, instruments, groups, patches, _, _, _ = compiler.HEADER.unpack_from(
-        data
+    _, _, _, _, instruments, patch_lists, patches, _, _, _ = (
+        compiler.HEADER.unpack_from(data)
     )
-    cache = 76 + instruments * 68 + groups * 68
+    cache = 76 + instruments * 68 + patch_lists * 68
     meta = cache + patches * 82
     mappings = struct.unpack_from('<H', data, meta + 4)[0]
     bank = meta + compiler.METADATA.size + instruments * 64 + mappings * 8
@@ -477,11 +477,11 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
         == data[node + 4 : node + 15]
     )
     assert recompiled[cache + 12 : cache + 76] == data[cache + 12 : cache + 76]
-    assert restored['groups']['wind'][0]['display_name'] == (
+    assert restored['patch_lists']['wind'][0]['display_name'] == (
         'Special' if reference_override else 'Flute'
     )
     if reference_override:
         assert restored['patches']['clean']['program'] == 2
     else:
-        assert restored['groups']['wind'][0]['program'] == 2
+        assert restored['patch_lists']['wind'][0]['program'] == 2
     assert compiler.compile_show(restored, {}, [], target) == recompiled

@@ -277,7 +277,7 @@ def test_unicode_labels_compile_transfer_and_export(
 ) -> None:
     source = compiler.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
-    source['groups'] = {
+    source['patch_lists'] = {
         'Été': [
             {
                 'type': 'program-change',
@@ -295,7 +295,7 @@ def test_unicode_labels_compile_transfer_and_export(
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
     if function:
-        source['groups']['Été'].append(
+        source['patch_lists']['Été'].append(
             {
                 'exit_buttons': 'A+F',
                 'display_name': 'Été original',
@@ -334,7 +334,7 @@ def test_unicode_labels_compile_transfer_and_export(
 def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
     source = compiler.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
-    source['groups'] = {
+    source['patch_lists'] = {
         'Group': [
             {'type': 'program-change', 'instrument': 'a', 'program': 1, 'name': '☃☂'},
             {'type': 'program-change', 'instrument': 'a', 'program': 2, 'name': '♠'},
@@ -371,8 +371,8 @@ def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
         'U+2602',
         'U+2660',
         'U+2663',
-        'groups.Group[1]',
-        'groups.Group[0]',
+        'patch_lists.Group[1]',
+        'patch_lists.Group[0]',
         'field other',
         'field display_name',
     ]:
@@ -398,7 +398,7 @@ def test_adding_text_requires_the_original_outline(
     path = tmp_path / 'subset.cfont'
     path.write_bytes(bitmap)
     show = models.Show.model_validate(
-        {'instruments': {}, 'groups': {}, 'fonts': {'Custom': str(path)}}
+        {'instruments': {}, 'patch_lists': {}, 'fonts': {'Custom': str(path)}}
     )
     with pytest.raises(ValueError, match='original font file'):
         font_assets.Preparation(
@@ -421,7 +421,11 @@ def test_bundled_outline_fonts_use_sparse_unicode_assets() -> None:
     assets: dict[int, bytes] = {}
     _, _, block = display.compile_display(
         show,
-        [display.DisplayPatch(values={'group.name': 'Été', 'display_name': 'Café'})],
+        [
+            display.DisplayPatch(
+                values={'patch_list.name': 'Été', 'display_name': 'Café'}
+            )
+        ],
         target,
         assets,
     )
@@ -439,11 +443,11 @@ def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
     show = models.Show.model_validate(
-        {'instruments': {}, 'groups': {}, 'pages': {'patch': {'fields': []}}}
+        {'instruments': {}, 'patch_lists': {}, 'pages': {'patch': {'fields': []}}}
     )
     windows, _, _ = display.compile_display(
         show,
-        [display.DisplayPatch(values={'group.name': '☃', 'display_name': '雪'})],
+        [display.DisplayPatch(values={'patch_list.name': '☃', 'display_name': '雪'})],
         target,
     )
     assert all(w[0:2] == bytes([0, 8]) for w in windows)

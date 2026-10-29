@@ -6,7 +6,7 @@
 namespace cntrl {
 constexpr unsigned max_document = 65536;
 constexpr unsigned max_instruments = 32;
-constexpr unsigned max_categories = 128;
+constexpr unsigned max_patch_lists = 128;
 constexpr unsigned history_capacity = 128;
 constexpr unsigned max_lines = 16;
 
