@@ -110,27 +110,29 @@ def compile_show(
         _text(key, 64, target, f'patches.{key}', errors)
         if (index := compiler.parse(raw, f'patches.{key}', key)) is not None:
             named[key] = index
-    categories: list[bytes] = []
+    patch_lists: list[bytes] = []
     records: list[bytes] = []
     banks: list[int] = []
     names: list[bytes] = []
     roots: list[int] = []
     views: list[display.DisplayPatch] = []
-    for category, raw in show.groups.items():
-        label = _text(category, 64, target, f'groups.{category}', errors, unicode=True)
+    for patch_list, raw in show.patch_lists.items():
+        label = _text(
+            patch_list, 64, target, f'patch_lists.{patch_list}', errors, unicode=True
+        )
         if not isinstance(raw, list):
-            errors.append(f'groups.{category}: expected a list of Patch values')
+            errors.append(f'patch_lists.{patch_list}: expected a list of Patch values')
             continue
         if not raw:
-            errors.append(f'groups.{category}: group is empty')
+            errors.append(f'patch_lists.{patch_list}: patch list is empty')
         start = len(roots)
         for i, value in enumerate(raw):
-            path = f'groups.{category}[{i}]'
+            path = f'patch_lists.{patch_list}[{i}]'
             if (index := compiler.parse(value, path)) is None:
                 continue
             roots.append(index)
-            compiler.browser.append((index, category, path))
-        categories.append(
+            compiler.browser.append((index, patch_list, path))
+        patch_lists.append(
             struct.pack(
                 '<64sHH', label, min(start, 65535), min(len(roots) - start, 65535)
             )
@@ -173,7 +175,7 @@ def compile_show(
             display.DisplayPatch(
                 context=path,
                 values={
-                    'group.name': 'Switches',
+                    'patch_list.name': 'Switches',
                     'display_name': name,
                     'switch.name': f'{assignment.button}: {name}',
                     'switch.mode': assignment.mode,
@@ -185,13 +187,13 @@ def compile_show(
         )
     compiler.named = named
     compiler.validate(assignments)
-    for index, category, path in compiler.browser:
+    for index, patch_list, path in compiler.browser:
         patch, presentation = compiler.presentation(index)
         label = presentation.display_name or presentation.name or compiler.labels[patch]
         view = display.DisplayPatch(
             context=path,
             values={
-                'group.name': category,
+                'patch_list.name': patch_list,
                 'display_name': label,
                 'name': presentation.name,
                 'program': None,
@@ -201,19 +203,19 @@ def compile_show(
                 'instrument': None,
             },
             style=presentation.style,
-            categories=presentation.categories,
+            tags=presentation.tags,
         )
         program = compiler.programs.get(patch)
         if program is not None:
             record, bank, name, program_name, program_view = program
             record = bytearray(record)
-            # Group index is presentation data; node execution does not read it.
-            group_index = next(
+            # Patch list index is presentation data; node execution does not read it.
+            patch_list_index = next(
                 i
-                for i, c in enumerate(categories)
-                if c[:64].split(b'\0')[0].decode('utf-8') == category
+                for i, c in enumerate(patch_lists)
+                if c[:64].split(b'\0')[0].decode('utf-8') == patch_list
             )
-            struct.pack_into('<H', record, 2, group_index)
+            struct.pack_into('<H', record, 2, patch_list_index)
             record[12:76] = _text(
                 label, 64, target, path + '.display_name', errors, unicode=True
             ).ljust(64, b'\0')
@@ -221,9 +223,9 @@ def compile_show(
                 update={
                     'context': path,
                     'style': presentation.style,
-                    'categories': presentation.categories,
+                    'tags': presentation.tags,
                     'values': program_view.values
-                    | {'group.name': category, 'display_name': label},
+                    | {'patch_list.name': patch_list, 'display_name': label},
                 }
             )
             records.append(bytes(record))
@@ -238,8 +240,8 @@ def compile_show(
                     65535,
                     next(
                         i
-                        for i, c in enumerate(categories)
-                        if c[:64].split(b'\0')[0].decode('utf-8') == category
+                        for i, c in enumerate(patch_lists)
+                        if c[:64].split(b'\0')[0].decode('utf-8') == patch_list
                     ),
                     0,
                     255,
@@ -260,7 +262,7 @@ def compile_show(
         views.append(view)
     for label, count, maximum in (
         ('instruments', len(instruments), target.max_instruments),
-        ('groups', len(categories), target.max_categories),
+        ('patch_lists', len(patch_lists), target.max_patch_lists),
         ('patches', len(roots), target.max_patches),
         ('switches', len(assignments), target.max_switches),
     ):
@@ -335,7 +337,7 @@ def compile_show(
     metadata = METADATA.pack(
         b'CMTA', min(len(mappings), 65535), show.transition_ms or 0
     )
-    body = b''.join(screen_records + instrument_records + categories + records)
+    body = b''.join(screen_records + instrument_records + patch_lists + records)
     body += (
         metadata
         + b''.join(identities + mappings)
@@ -361,7 +363,7 @@ def compile_show(
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
-            len(categories),
+            len(patch_lists),
             len(roots),
             show.brightness | int(show.splash) << 8 | int(show.usb_midi_interface) << 9,
             crc32(body),
@@ -420,10 +422,6 @@ class PatchCompiler:
                 _text(
                     text, 64, self.target, path + '.' + key, self.errors, unicode=True
                 )
-        if unknown := set(value.categories) - set(self.show.categories):
-            self.errors.append(
-                f'{path}.categories: unknown categories {sorted(unknown)}'
-            )
         index = len(self.nodes)
         self.nodes.append(b'')
         self.values.append(value)
@@ -571,10 +569,6 @@ class PatchCompiler:
                 ),
                 None,
             )
-        if matched and (unknown := set(matched.categories) - set(self.show.categories)):
-            self.errors.append(
-                f'{path}.program.categories: unknown categories {sorted(unknown)}'
-            )
         mapping = setup.banks.get(bank) if bank is not None else None
         if bank is not None and mapping is None:
             self.errors.append(f'{path}.bank: bank {bank} has no mapping in this setup')
@@ -597,7 +591,7 @@ class PatchCompiler:
                 'style': matched.style.model_dump(exclude_none=True)
                 if matched and matched.style
                 else None,
-                'categories': matched.categories if matched else [],
+                'tags': matched.tags if matched else [],
             }.items()
             if v is not None
         }
@@ -647,7 +641,7 @@ class PatchCompiler:
         view = display.DisplayPatch(
             context=path,
             values={
-                'group.name': '',
+                'patch_list.name': '',
                 'display_name': label,
                 'name': name,
                 'program': program,
@@ -658,16 +652,14 @@ class PatchCompiler:
             },
             style=patch.style,
             program_style=matched.style if matched else None,
-            categories=patch.categories,
-            program_categories=matched.categories if matched else [],
+            tags=patch.tags,
+            program_tags=matched.tags if matched else [],
         )
         logical_bank = 0xFFFFFFFF if bank is None else min(bank, 0xFFFFFFFF)
         self.programs[index] = record, logical_bank, name, program_name, view
         return struct.pack('<HBBBBBI', *values, logical_bank)
 
-    def inherited_categories(
-        self, index: int, seen: set[int] | None = None
-    ) -> list[str]:
+    def inherited_tags(self, index: int, seen: set[int] | None = None) -> list[str]:
         seen = set() if seen is None else seen
         if index in seen:
             return []
@@ -675,11 +667,11 @@ class PatchCompiler:
         inherited = [
             c
             for i in self.reachable_children(index)
-            for c in self.inherited_categories(i, seen)
+            for c in self.inherited_tags(i, seen)
         ]
         if index in self.programs:
-            inherited += self.programs[index][4].program_categories
-        return list(dict.fromkeys(inherited + self.values[index].categories))
+            inherited += self.programs[index][4].program_tags
+        return list(dict.fromkeys(inherited + self.values[index].tags))
 
     def presentation(
         self, index: int, seen: set[int] | None = None
@@ -709,7 +701,7 @@ class PatchCompiler:
             return target, models.Presentation.model_validate(fields)
         fields = {k: getattr(value, k) for k in models.Presentation.model_fields}
         if isinstance(value, models.Sequence):
-            fields['categories'] = self.inherited_categories(index)
+            fields['tags'] = self.inherited_tags(index)
         elif isinstance(value, models.Reference) and value.document:
             documents = {k.casefold(): v for k, v in self.documents.items()}
             raw = documents.get(value.document.casefold())
@@ -989,8 +981,8 @@ STATE_OPERATIONS = {
             'usb-midi-interface',
             'next-patch',
             'previous-patch',
-            'next-group',
-            'previous-group',
+            'next-patch-list',
+            'previous-patch-list',
             'activate-selection',
             'undo',
             'menu',
@@ -1026,9 +1018,6 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                 continue
             merged = previous.model_dump()
             merged['tags'] = list(dict.fromkeys(previous.tags + entry.tags))
-            merged['categories'] = list(
-                dict.fromkeys(previous.categories + entry.categories)
-            )
             for field in (
                 'name',
                 'display_name',
@@ -1079,4 +1068,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHH')
-DOCUMENT_VERSION = 17
+DOCUMENT_VERSION = 18

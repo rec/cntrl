@@ -20,7 +20,7 @@ fields = ["handwriting_sample", "courier_sample", "courier_bold_sample"]
 
 [pages.patch.line_styles]
 
-[categories]
+[tags]
 
 [parameters.handwriting_sample]
 value = "Caveat Bold"
@@ -68,7 +68,7 @@ instrument = "pman"
 setup = "default"
 program = 1
 
-[[groups.fonts]]
+[[patch_lists.fonts]]
 instrument = "pman"
 program = 1
 display_name = "Font demo"

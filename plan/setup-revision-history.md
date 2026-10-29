@@ -97,7 +97,7 @@ from the comparison view; browsing must never activate a historical setup.
 
 Compute comparison from decoded documents on demand. Compare user-visible
 configuration values, including routing, programs/banks, patch order and names,
-controls, pages, styles and category assignments. Exclude record bookkeeping,
+controls, pages, styles and tag assignments. Exclude record bookkeeping,
 checksums and compiler-generated layout details. Keep list order significant.
 Use existing export/decoding logic rather than maintaining a second interpreter
 for the compiled format.

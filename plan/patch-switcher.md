@@ -105,16 +105,16 @@ implementation measurement task, not an open user preference.
    Supplying a field both in shorthand and separately is an error, even if
    their values agree. Include duplicate-field errors in the accumulated report.
 6. **Candidate display (resolved).** Treat `N` in the issue as `R`. Changing
-   category updates R to show the new category and its remembered patch.
-   Changing patch updates only R's patch within the selected category. L and C
+   patch list updates R to show the new patch list and its remembered patch.
+   Changing patch updates only R's patch within the selected patch list. L and C
    remain unchanged during either navigation action; navigation sends no MIDI.
 7. **Undo display semantics (resolved).** Popping the only history
    entry blanks L and C, shows the undone patch in R and sends no MIDI. The instrument
    retains its last patch even though the history displays are blank. Undo
-   selects the undone patch's category and cursor for R. When Undo restores a patch, C shows that patch
-   with its category and effective patch label, even if another instrument
+   selects the undone patch's patch list and cursor for R. When Undo restores a patch, C shows that patch
+   with its patch list and effective patch label, even if another instrument
    still has a more recent remaining history entry. L shows the patch that the
-   next Undo would restore, using its category and effective patch label. L is blank when the
+   next Undo would restore, using its patch list and effective patch label. L is blank when the
    action stack is empty or its top action has no known previous patch. When
    undoing an instrument's first send sends no MIDI and other history remains,
    C stays unchanged. Emptying the entire history blanks C.
@@ -129,7 +129,7 @@ implementation measurement task, not an open user preference.
    push another action or send all-notes-off.
 9. **Capacity and text (policy resolved; limits deferred to measurement).** When history is full, adding a
    new action discards the oldest action, so sending patches can continue
-   (resolved). Set maximum document size, category/patch counts, text lengths
+   (resolved). Set maximum document size, patch list/patch counts, text lengths
    and history depth after measuring storage and RAM use in the implementation;
    do not choose arbitrary limits in advance. Record the measured limits and
    the implemented font's supported characters in the target capabilities
@@ -154,7 +154,7 @@ implementation measurement task, not an open user preference.
 The application package is `cntrl/patch_switcher/`,
 with typed Pydantic models, compilation, binary encoding and a tyro CLI.
 Use existing dependencies. TOML and JSON describe the same schema; TOML uses
-tomlkit. Keep category and patch declaration order through compilation.
+tomlkit. Keep patch list and patch declaration order through compilation.
 
 Separate three inputs:
 
@@ -166,7 +166,7 @@ Separate three inputs:
   description, and zero or more tags. A repeated table flag joins base tables
   with personal metadata using the agreed identity and conflict rules.
 - Show document: routing aliases, setup references, channels and output IDs;
-  ordered categories containing expanded or shorthand patch entries.
+  ordered patch lists containing expanded or shorthand patch entries.
 
 The linked [VL70 table](https://github.com/rec/midi/blob/main/vl70/all-vl70.json)
 is a source example, not the schema: it nests setups, banks and numbered entries
@@ -180,8 +180,8 @@ Compilation pipeline:
 1. Parse and validate documents and table identities; normalize shorthand.
 2. Resolve aliases, setups, numeric addresses and regex matches.
 3. Validate MIDI ranges, output availability and target capacity. Reject empty
-   shows/categories and unresolved or conflicting entries with source context.
-4. Resolve each patch to its display name, category, output and ordered MIDI
+   shows/patch lists and unresolved or conflicting entries with source context.
+4. Resolve each patch to its display name, patch list, output and ordered MIDI
    message bytes. Prefer the show patch's `display_name`, then the program's
    `display_name`, then the original synthesizer `name`. Lookup always uses
    the original name. If none is available, display `PC 12`, or `Bank 3 / PC 12` when a bank is specified, using
@@ -196,7 +196,7 @@ Compilation pipeline:
 Validation must not stop at the first invalid patch. Check all patch entries,
 collecting schema, shorthand, reference, regex and MIDI-value errors wherever
 the document can be parsed. Report the accumulated errors together, identifying
-each category and patch entry, then terminate with a nonzero exit status. Avoid
+each patch list and patch entry, then terminate with a nonzero exit status. Avoid
 dependent checks whose inputs are invalid, but continue checking other fields
 and entries. Do not produce or upload a binary when any errors remain.
 
@@ -241,16 +241,16 @@ maintaining a second patch-switcher implementation inside the diagnostic sketch.
 
 ## Runtime state and actions
 
-Maintain the active document, selected category, one cursor per category and a
+Maintain the active document, selected patch list, one cursor per patch list and a
 bounded chronological action stack. Each send records the instrument, selected
 patch and its previous patch, if known. Track the latest remaining selection per
 instrument. Runtime cursors and history live in RAM, not in persistent storage.
 
 | Action | Behavior |
 | --- | --- |
-| Startup | Empty history; L/C blank; R first patch of first category; no MIDI |
-| D / E | Previous/next category, wrapping; restore its remembered cursor |
-| A / B | Previous/next patch in current category, wrapping |
+| Startup | Empty history; L/C blank; R first patch of first patch list; no MIDI |
+| D / E | Previous/next patch list, wrapping; restore its remembered cursor |
+| A / B | Previous/next patch in current patch list, wrapping |
 | C | Send candidate; push it to history; update L/C; leave R unchanged |
 | F | Empty history: no-op; otherwise pop latest action, restore that instrument's preceding patch if known, and select the undone patch in R |
 
@@ -260,12 +260,12 @@ It never substitutes a different instrument's patch from the chronological
 stack. An empty stack does nothing; undoing an instrument's first send sends
 nothing. Pressing C on an already-sent, greyed-out patch does nothing and never
 pushes a duplicate entry. After a restoration,
-C shows the restored patch's category and effective label, without an instrument
+C shows the restored patch's patch list and effective label, without an instrument
 name or title. After every send or Undo,
 derive L from the previous patch recorded by the top remaining action, or blank
 it if no restoration target exists. If Undo sends nothing, C stays unchanged
 while history remains; an empty history blanks C. R shows the undone patch even
-if browsing had moved to a different category or patch before Undo.
+if browsing had moved to a different patch list or patch before Undo.
 
 Keep each patch's bank-select, PC and optional control messages in order on its
 route. A greyed-out candidate is ignored before sending; distinct patch sends
@@ -324,7 +324,7 @@ authentication.
 
 Activation behavior (resolved): after successful durable commit, immediately
 activate the new show, discard old cursors and history, select the first patch
-of the first category, blank L/C and send no MIDI. Retain the
+of the first patch list, blank L/C and send no MIDI. Retain the
 old active document on validation or transfer failure. At boot, load the latest valid generation of the persistently selected named
 setup, choosing alphabetically only when no selection has ever been stored.
 If none exists, display an explicit no-document/error
@@ -334,7 +334,7 @@ durable commit and verify the document identity again after reboot.
 ## Implementation sequence and acceptance gates
 
 1. **Resolve semantics and write fixtures.** Settle the decisions above and
-   define a small two-instrument, multi-category example in TOML and JSON,
+   define a small two-instrument, multi-patch list example in TOML and JSON,
    including a supplementary tags table and shorthand. Agree on expected MIDI
    bytes, screens and history for a short action sequence.
 2. **Build the portable core.** Define the API, fake hardware and host C++ test

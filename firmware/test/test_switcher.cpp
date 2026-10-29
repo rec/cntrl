@@ -643,7 +643,7 @@ int main(int argc, char **argv) {
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
     assert(io.sent.empty() && !std::strcmp(io.panes[2].lines[1].text, "Flute"));
-    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 17 ") == 0);
+    command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY 18 ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
     reboot.boot(); assert(!std::strcmp(io.panes[2].lines[1].text, "Flute"));
     auto new_show = bytes;

@@ -1,4 +1,4 @@
-"""Legacy conversion preserves addresses, metadata and category membership."""
+"""Legacy conversion preserves addresses, metadata and tag membership."""
 
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -18,7 +18,7 @@ def importer() -> ModuleType:
     return module
 
 
-def test_converts_two_instruments_and_joins_categories_by_address(
+def test_converts_two_instruments_and_joins_tags_by_address(
     importer: ModuleType,
 ) -> None:
     tables = importer.convert_instruments(
@@ -52,7 +52,7 @@ def test_converts_two_instruments_and_joins_categories_by_address(
     assert tables['pman'][1].tags == []
 
 
-def test_rejects_dangling_category_references(importer: ModuleType) -> None:
+def test_rejects_dangling_tag_references(importer: ModuleType) -> None:
     with pytest.raises(KeyError):
         importer.convert_instruments(
             {'stock': {'A': {}}}, {'wind': ['stock:A:001: Flute']}
@@ -66,10 +66,10 @@ def test_emits_valid_files_without_inventing_routing(
     instruments.write_text(
         '{"stock":{"A":{"001":["Flute"]}},"patchman":{"B":{"128":["Bass"]}}}'
     )
-    categories = tmp_path / 'categories.json'
-    categories.write_text('{"wind":["stock:A:001: Flute"]}')
+    tags = tmp_path / 'tags.json'
+    tags.write_text('{"wind":["stock:A:001: Flute"]}')
     monkeypatch.setattr(importer, 'INSTRUMENTS_PATH', instruments)
-    monkeypatch.setattr(importer, 'CATEGORIES_PATH', categories)
+    monkeypatch.setattr(importer, 'TAGS_PATH', tags)
     output = tmp_path / 'output'
     importer.import_instruments(output)
     definitions = models.Definitions.model_validate(

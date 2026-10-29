@@ -14,7 +14,7 @@ output = 'din'
 instrument = 'pman'
 name = 'default'
 
-[[groups.fonts]]
+[[patch_lists.fonts]]
 type = 'program-change'
 instrument = 'pman'
 program = 1

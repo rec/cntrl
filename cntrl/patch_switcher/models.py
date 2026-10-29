@@ -55,7 +55,7 @@ class Style(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Category(BaseModel, frozen=True):
+class Tag(BaseModel, frozen=True):
     style: Style | None = None
 
     model_config = ConfigDict(extra='forbid')
@@ -65,7 +65,7 @@ class Presentation(BaseModel, frozen=True):
     name: str | None = None
     display_name: str | None = None
     style: Style | None = None
-    categories: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -131,8 +131,8 @@ class Navigation(Presentation, frozen=True):
     operation: Literal[
         'next-patch',
         'previous-patch',
-        'next-group',
-        'previous-group',
+        'next-patch-list',
+        'previous-patch-list',
         'activate-selection',
         'undo',
         'menu',
@@ -202,9 +202,8 @@ class TablePatch(BaseModel, frozen=True):
     display_name: str | None = None
     range: str | None = None
     description: str | None = None
-    tags: list[str] = Field(default_factory=list)
     style: Style | None = None
-    categories: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -217,7 +216,9 @@ class Definitions(BaseModel, frozen=True):
 
 
 class Page(BaseModel, frozen=True):
-    fields: list[str] = Field(default_factory=lambda: ['group.name', 'display_name'])
+    fields: list[str] = Field(
+        default_factory=lambda: ['patch_list.name', 'display_name']
+    )
     style: Style | None = None
     line_styles: dict[str, Style] = Field(default_factory=dict)
 
@@ -300,7 +301,7 @@ class Show(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
     patches: dict[str, object] = Field(default_factory=dict)
-    groups: dict[str, object] = Field(default_factory=dict)
+    patch_lists: dict[str, object] = Field(default_factory=dict)
     definitions: Definitions | None = None
     fonts: dict[str, str] = Field(default_factory=dict)
     take_first_match: Annotated[bool, Field(strict=True)] = False
@@ -338,7 +339,7 @@ class Show(BaseModel, frozen=True):
     ] = 0.6
     windows: Windows = Field(default_factory=Windows)
     pages: dict[str, Page] = Field(default_factory=lambda: {'patch': Page()})
-    categories: dict[str, Category] = Field(default_factory=dict)
+    tags: dict[str, Tag] = Field(default_factory=dict)
     parameters: dict[str, Parameter] = Field(default_factory=dict)
     switches: dict[str, object] = Field(default_factory=dict)
 
@@ -355,7 +356,7 @@ class Target(BaseModel, frozen=True):
     outputs: list[str]
     max_document_bytes: units.Bytes = Field(gt=24, le=65536)
     max_instruments: int = Field(gt=0, le=32)
-    max_categories: int = Field(gt=0, le=128)
+    max_patch_lists: int = Field(gt=0, le=128)
     max_patches: int = Field(gt=0, le=65535)
     history_depth: int = Field(gt=0)
     characters: str

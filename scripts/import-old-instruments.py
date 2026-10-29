@@ -1,4 +1,4 @@
-"""Import the legacy VL70/Patchman tables and category tags.
+"""Import the legacy VL70/Patchman tables and tag assignments.
 
 Run from the repository root with uv run scripts/import-old-instruments.py.
 Inputs are deliberately fixed; an optional positional argument selects output.
@@ -27,17 +27,17 @@ class ImportOldInstruments(BaseModel, frozen=True):
 
 def convert_instruments(
     instruments: dict[str, dict[str, dict[str, list[str]]]],
-    categories: dict[str, list[str]],
+    tags: dict[str, list[str]],
 ) -> dict[str, list[models.TablePatch]]:
-    tags: dict[tuple[str, str, int], list[str]] = {}
-    for category, references in categories.items():
+    memberships: dict[tuple[str, str, int], list[str]] = {}
+    for tag, references in tags.items():
         for reference in references:
             instrument, bank, program, _ = reference.split(':', 3)
             # The address, not the duplicated display name, identifies the patch.
             instruments[instrument][bank][f'{int(program):03}']
-            assigned = tags.setdefault((instrument, bank, int(program)), [])
-            if category not in assigned:
-                assigned.append(category)
+            assigned = memberships.setdefault((instrument, bank, int(program)), [])
+            if tag not in assigned:
+                assigned.append(tag)
     tables: dict[str, list[models.TablePatch]] = {}
     for instrument, banks in instruments.items():
         name = INSTRUMENT_IDS[instrument]
@@ -53,7 +53,7 @@ def convert_instruments(
                         name=values[0],
                         range=values[1] if len(values) > 1 else None,
                         description=values[2] if len(values) > 2 else None,
-                        tags=tags.get((instrument, bank, int(program)), []),
+                        tags=memberships.get((instrument, bank, int(program)), []),
                     )
                 )
         tables[name] = entries
@@ -64,10 +64,8 @@ def import_instruments(output: Path) -> None:
     instruments = TypeAdapter(dict[str, dict[str, dict[str, list[str]]]]).validate_json(
         INSTRUMENTS_PATH.read_bytes()
     )
-    categories = TypeAdapter(dict[str, list[str]]).validate_json(
-        CATEGORIES_PATH.read_bytes()
-    )
-    tables = convert_instruments(instruments, categories)
+    tags = TypeAdapter(dict[str, list[str]]).validate_json(TAGS_PATH.read_bytes())
+    tables = convert_instruments(instruments, tags)
     definitions = models.Definitions(
         setups=[
             models.Setup(
@@ -96,7 +94,7 @@ def import_instruments(output: Path) -> None:
 
 
 INSTRUMENTS_PATH = Path('/Users/tom/code/midi/vl70/all-vl70.json')
-CATEGORIES_PATH = Path('/Users/tom/code/midi/vl70/categories.json')
+TAGS_PATH = Path('/Users/tom/code/midi/vl70/categories.json')
 INSTRUMENT_IDS = {'stock': 'vl70', 'patchman': 'pman'}
 BANK_IDS = {'A': 0, 'B': 1}
 

@@ -65,9 +65,9 @@ def export(data: bytes) -> str:
     source = read_source(data, offset)
     metadata = cast(dict[str, object], source.pop('patch_metadata', {}))
     source.pop('program_styles', None)
-    source.pop('program_categories', None)
+    source.pop('program_tags', None)
     source.pop('patch_styles', None)
-    source.pop('patch_categories', None)
+    source.pop('patch_tags', None)
     authored_switches = cast(dict[str, object], source.pop('switches', {}))
     result: dict[str, object] = {
         'chord_ms': chord,
@@ -123,7 +123,7 @@ def export(data: bytes) -> str:
         named_nodes[identity] = index
         named[identity] = _patch(data, offset, index, metadata, set())
     result['patches'] = named
-    groups: dict[str, object] = {}
+    patch_lists: dict[str, object] = {}
     for i in range(nc):
         address = 76 + ni * 68 + i * 68
         start, count = struct.unpack_from('<HH', data, address + 64)
@@ -137,8 +137,8 @@ def export(data: bytes) -> str:
                 cache = 76 + ni * 68 + nc * 68 + position * 82
                 value['display_name'] = _text(data, cache + 12, 64)
             values.append(value)
-        groups[_text(data, address, 64)] = values
-    result['groups'] = groups
+        patch_lists[_text(data, address, 64)] = values
+    result['patch_lists'] = patch_lists
     switches: dict[str, object] = {}
     keys = list(authored_switches)
     for i in range(ns):

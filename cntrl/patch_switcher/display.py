@@ -14,12 +14,12 @@ class DisplayPatch(BaseModel, frozen=True):
     values: dict[str, str | int | bool | None]
     style: models.Style | None = None
     program_style: models.Style | None = None
-    categories: list[str] = Field(default_factory=list)
-    program_categories: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    program_tags: list[str] = Field(default_factory=list)
 
     @cached_property
-    def effective_categories(self) -> list[str]:
-        return list(dict.fromkeys(self.program_categories + self.categories))
+    def effective_tags(self) -> list[str]:
+        return list(dict.fromkeys(self.program_tags + self.tags))
 
 
 def compile_display(
@@ -57,9 +57,7 @@ def compile_display(
     instances: list[list[int]] = []
     contexts: list[str] = []
     for patch in patches:
-        category = category_style(
-            patch.program_categories + patch.categories, show.categories
-        )
+        tag = tag_style(patch.program_tags + patch.tags, show.tags)
         for window in windows:
             page = (
                 show.pages.get(
@@ -95,8 +93,8 @@ def compile_display(
                 value = (
                     parameter.value
                     if parameter
-                    else ', '.join(patch.effective_categories)
-                    if name == 'categories'
+                    else ', '.join(patch.effective_tags)
+                    if name == 'tags'
                     else field_value(name, patch, show)
                 )
                 if (value is None or value == '') and code not in DYNAMIC_FIELDS:
@@ -120,7 +118,7 @@ def compile_display(
                     base,
                     window.style,
                     page.style,
-                    category if content or name == 'categories' else None,
+                    tag if content or name == 'tags' else None,
                     patch.program_style if content else None,
                     patch.style if content else None,
                     parameter.style if parameter else None,
@@ -256,13 +254,9 @@ def compile_display(
         for i, p in enumerate(patches)
         if p.program_style is not None
     }
-    source['patch_categories'] = {
-        str(i): p.categories for i, p in enumerate(patches) if p.categories
-    }
-    source['program_categories'] = {
-        str(i): p.program_categories
-        for i, p in enumerate(patches)
-        if p.program_categories
+    source['patch_tags'] = {str(i): p.tags for i, p in enumerate(patches) if p.tags}
+    source['program_tags'] = {
+        str(i): p.program_tags for i, p in enumerate(patches) if p.program_tags
     }
     authored = tomlkit.dumps(source).encode('utf-8')
     text_data = b''.join(struct.pack('<H', len(t)) + t for t in texts)
@@ -286,12 +280,8 @@ def merge_style(*styles: models.Style | None) -> models.Style:
     return models.Style.model_validate(values)
 
 
-def category_style(
-    names: list[str], categories: dict[str, models.Category]
-) -> models.Style:
-    if unknown := set(names) - set(categories):
-        raise ValueError(f'unknown categories: {sorted(unknown)}')
-    return merge_style(*(categories[n].style for n in names))
+def tag_style(names: list[str], tags: dict[str, models.Tag]) -> models.Style:
+    return merge_style(*(tags[n].style for n in names if n in tags))
 
 
 def field_value(
@@ -344,8 +334,8 @@ FIELDS = {
     'switch.mode': 255,
     'switch.button': 255,
     'switch.state': 22,
-    'group.name': 0,
-    'categories': CONSTANT,
+    'patch_list.name': 0,
+    'tags': CONSTANT,
     'display_name': 1,
     'program': 2,
     'bank': 3,
@@ -367,6 +357,6 @@ SOURCE_FIELDS = (
     'contrast',
     'windows',
     'pages',
-    'categories',
+    'tags',
     'parameters',
 )
