@@ -171,11 +171,7 @@ def test_personal_tags_join_without_modifying_documented_catalogues(
         not isinstance(p, dict) or 'tags' not in p for v in programs.values() for p in v
     )
     tags = compiler.read_document(Path('instruments/tags.toml'))
-    expected = {
-        (p['bank'], p['program']): p['tags']
-        for p in tags['patches']
-        if p['instrument'] == instrument
-    }
+    groups = tags['instruments'][instrument]['tags']
     show = {
         'instruments': {instrument: {'channel': 1, 'output': 'din'}},
         'patch_lists': {
@@ -195,4 +191,51 @@ def test_personal_tags_join_without_modifying_documented_catalogues(
     data = compiler.compile_show(show, definitions, [catalogue, tags], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     for p in exported['definitions']['programs']:
-        assert p['tags'] == expected.get((p['bank'], p['program']), [])
+        assert p['tags'] == [t for t, v in groups.items() if p['name'] in v]
+
+
+@pytest.mark.parametrize('tags', [{'wind': ['Unknown']}, {'wind': 'Flute'}, ['wind']])
+def test_tag_groups_reject_unknown_names_and_invalid_lists(
+    show: dict[str, object], target: models.Target, tags: object
+) -> None:
+    show['instruments']['synth']['tags'] = tags
+    with pytest.raises(compiler.CompilationError, match='tags'):
+        compiler.compile_show(show, {}, [], target)
+
+
+def test_tag_groups_resolve_after_catalogues_regardless_of_file_order(
+    target: models.Target,
+) -> None:
+    catalogue = {'instruments': {'synth': {'programs': ['Flute']}}}
+    tags = {'instruments': {'synth': {'tags': {'wind': ['Flute', 'Flute']}}}}
+    show = {
+        'instruments': {'synth': {'channel': 1, 'output': 'din'}},
+        'patch_lists': {'Live': ['Flute']},
+    }
+    first = compiler.compile_show(show, {}, [tags, catalogue], target)
+    second = compiler.compile_show(show, {}, [catalogue, tags], target)
+    assert first == second
+    exported = tomlkit.parse(resolved.export(first)).unwrap()
+    assert exported['definitions']['programs'][0]['tags'] == ['wind']
+
+
+def test_name_tags_classify_copies_across_banks(target: models.Target) -> None:
+    show = {
+        'instruments': {
+            'synth': {
+                'channel': 1,
+                'output': 'din',
+                'programs': {'0': ['Flute'], '3': ['Flute']},
+                'tags': {'wind': ['Flute']},
+            }
+        },
+        'patch_lists': {'Live': [{'name': 'Flute', 'bank': 3}]},
+    }
+    definitions = {
+        'setups': [
+            {'instrument': 'synth', 'name': 'default', 'banks': {'3': {'lsb': 3}}}
+        ]
+    }
+    data = compiler.compile_show(show, definitions, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['definitions']['programs'][0]['tags'] == ['wind']

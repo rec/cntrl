@@ -47,7 +47,6 @@ def convert_instruments(
                 entries.append(
                     models.TablePatch(
                         instrument=name,
-                        setup='default',
                         program=int(program),
                         bank=BANK_IDS[bank],
                         name=values[0],
@@ -81,22 +80,18 @@ def import_instruments(output: Path) -> None:
     )
     documents: dict[str, dict[str, object]] = {
         'definitions.toml': definitions.model_dump(mode='json', exclude_none=True),
-        'tags.toml': {
-            'patches': [
-                p.model_dump(
-                    include={'instrument', 'setup', 'bank', 'program', 'tags'},
-                    exclude_none=True,
-                )
-                for e in tables.values()
-                for p in e
-                if p.tags
-            ]
-        },
     }
+    tag_instruments: dict[str, object] = {}
     for instrument, entries in tables.items():
         banks: dict[str, list[object]] = {}
+        tags: dict[str, list[str]] = {}
         for entry in entries:
             assert entry.bank is not None
+            for tag in entry.tags:
+                assert entry.name is not None
+                names = tags.setdefault(tag, [])
+                if entry.name not in names:
+                    names.append(entry.name)
             programs = banks.setdefault(str(entry.bank), [])
             while len(programs) < entry.program:
                 programs.append(tomlkit.inline_table())
@@ -113,6 +108,9 @@ def import_instruments(output: Path) -> None:
         documents[f'{instrument}.toml'] = {
             'instruments': {instrument: {'programs': banks}}
         }
+        if tags:
+            tag_instruments[instrument] = {'tags': tags}
+    documents['tags.toml'] = {'instruments': tag_instruments}
     output.mkdir(parents=True, exist_ok=True)
     for name, document in documents.items():
         path = output / name

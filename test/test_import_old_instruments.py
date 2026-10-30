@@ -37,7 +37,6 @@ def test_converts_two_instruments_and_joins_tags_by_address(
     assert list(tables) == ['vl70m', 'patchman']
     assert tables['vl70m'][0] == models.TablePatch(
         instrument='vl70m',
-        setup='default',
         program=1,
         bank=0,
         name='Flute',
@@ -87,15 +86,7 @@ def test_emits_valid_files_without_inventing_routing(
     stock = compiler.read_document(output / 'vl70m.toml')
     assert stock['instruments']['vl70m']['programs']['0'] == ['Flute']
     tags = compiler.read_document(output / 'tags.toml')
-    assert tags['patches'] == [
-        {
-            'instrument': 'vl70m',
-            'setup': 'default',
-            'bank': 0,
-            'program': 1,
-            'tags': ['wind'],
-        }
-    ]
+    assert tags == {'instruments': {'vl70m': {'tags': {'wind': ['Flute']}}}}
     assert sorted(p.name for p in output.iterdir()) == [
         'definitions.toml',
         'patchman.toml',

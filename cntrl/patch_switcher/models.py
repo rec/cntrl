@@ -205,7 +205,7 @@ patch_adapter = TypeAdapter(Patch)
 
 class TablePatch(BaseModel, frozen=True):
     instrument: str
-    setup: str
+    setup: str = 'default'
     program: Annotated[int, Field(strict=True, ge=1, le=128)]
     bank: Annotated[int, Field(strict=True, ge=0)] | None = None
     name: str | None = None

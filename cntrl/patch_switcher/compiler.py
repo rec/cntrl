@@ -1096,12 +1096,57 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                 elif new is not None and old != new:
                     errors.append(f'{context}: conflicting {field} for {key}')
             entries[key] = models.TablePatch.model_validate(merged)
+    for table in tables:
+        if not isinstance(table, dict):
+            continue
+        instruments = table.get('instruments', {})
+        if not isinstance(instruments, dict):
+            continue
+        for alias, instrument in instruments.items():
+            if not isinstance(instrument, dict) or 'tags' not in instrument:
+                continue
+            context = f'instruments.{alias}.tags'
+            tags = instrument['tags']
+            if not isinstance(tags, dict):
+                errors.append(
+                    f'{context}: expected tag names mapped to program-name lists'
+                )
+                continue
+            candidates = [
+                k
+                for k in entries
+                if k[:2]
+                == (
+                    instrument.get('instrument', alias),
+                    instrument.get('setup', 'default'),
+                )
+            ]
+            for tag, names in tags.items():
+                if (
+                    not isinstance(tag, str)
+                    or not isinstance(names, list)
+                    or any(not isinstance(n, str) for n in names)
+                ):
+                    errors.append(f'{context}.{tag}: expected a list of program names')
+                    continue
+                # A shared tags file can classify catalogues not loaded in this show.
+                if not candidates:
+                    continue
+                for name in names:
+                    matches = [k for k in candidates if entries[k].name == name]
+                    if not matches:
+                        errors.append(f'{context}.{tag}: unknown program name {name!r}')
+                    for key in matches:
+                        entry = entries[key]
+                        entries[key] = entry.model_copy(
+                            update={'tags': list(dict.fromkeys(entry.tags + [tag]))}
+                        )
     return list(entries.values())
 
 
 def _instrument(alias: str, raw: object) -> models.Instrument:
     if isinstance(raw, dict):
-        raw = {k: v for k, v in raw.items() if k != 'programs'}
+        raw = {k: v for k, v in raw.items() if k not in ('programs', 'tags')}
         raw.setdefault('instrument', alias)
     return models.Instrument.model_validate(raw)
 
