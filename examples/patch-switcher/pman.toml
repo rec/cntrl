@@ -14,7 +14,7 @@ page = 'patch'
 page = 'patch'
 
 [instruments.pman]
-instrument = "pman"
+instrument = "patchman"
 setup = "default"
 channel = 1
 output = "din"

@@ -6,71 +6,263 @@
 
 [instruments.patchman.programs]
 0 = [  # Preset 1
-  'Trumpet', 'Maynard', 'Alpert', 'Chet Tpt',  # 001-004
-  'Lead Tpt', 'ClassTpt', 'StrMtTpt', 'CupMtTpt',  # 005-008
-  'WahMtTpt', 'WaTptCC4', 'HrmMtTpt', 'Mute Tpt',  # 009-012
-  'Picc.Tpt', 'Cornet', 'Flugel', 'Mangione',  # 013-016
-  'Trombone', 'Big Bone', 'BriteTbn', 'ValveTbn',  # 017-020
-  'Jam Bone', 'Bass Tbn', 'BcktMtTb', 'DorseyTb',  # 021-024
-  'WX Horn', 'BrassHrn', 'BriteHrn', 'ff Horn',  # 025-028
-  'OrchHorn', 'New Horn', 'Euphnium', 'Tuba',  # 029-032
-  'SoprnoSx', 'KennyGee', 'HeyKenG.', 'Branford',  # 033-036
-  'TraneSop', 'BrtSopSx', 'Alto Sax', 'Sanborn',  # 037-040
-  'BirdAlto', 'ExprAlto', 'Desmond', 'Koz Alto',  # 041-044
-  'Everette', 'NY Alto', 'NY Tenor', 'TenorSax',  # 045-048
-  'MBrecker', 'PopTenor', 'SoulTenr', 'RaspyTnr',  # 049-052
-  'Getz Tnr', 'JobimTnr', 'TenorSub', 'Bari Sax',  # 053-056
-  'TiteBari', 'Sax Sect', 'Air Sax', 'Saxual',  # 057-060
-  'Sanford', 'Piccolo', 'Flute', 'Real Flt',  # 061-064
-  'SilvrFlt', 'ClassFlt', 'Nz Flute', 'VoxFlute',  # 065-068
-  'AquaFlut', 'OakFlute', 'Bass Flt', 'Afri Flt',  # 069-072
-  'PennyWhs', 'TinWhist', 'Flutofon', 'Inca Flt',  # 073-076
-  'Noze Flt', 'Quena', 'Quena x2', 'PanFlute',  # 077-080
-  'Andean', 'Pan Pipe', 'Bali Flt', 'IndiaFlt',  # 081-084
-  'Ambience', 'WetFone', 'Maya Flt', 'Shakuhat',  # 085-088
-  'Bamboo', 'PanPicol', 'Coca!!', 'Ocarina!',  # 089-092
-  'Lonely', 'Recorder', 'Clarinet', 'JazzClar',  # 093-096
-  'ClsClrnt', 'Bs.Clrnt', 'BrtBsClr', 'Oboe',  # 097-100
-  'Eng.Horn', 'SftEngHn', 'Bassoon', 'Flurinet',  # 101-104
-  'Crumbon', 'Klarina', 'ThaiReed', 'Chanter',  # 105-108
-  'Digirdoo', 'IslePipe', 'SoftPipe', 'LitePipe',  # 109-112
-  'CelloSax', 'YamaBotl', 'Solo Vln', 'DrkVioln',  # 113-116
-  'BrtVioln', 'SweetVln', 'Fiddle', 'Viola',  # 117-120
-  'SwtViola', 'RosinVla', 'Cello', 'SoloCell',  # 121-124
-  'DrkCello', 'Bow Bass', 'HiStrEns', 'Pizzicat',  # 125-128
+  {name = "Trumpet", tags = ["trumpet"]},  # 001
+  {name = "Maynard", tags = ["trumpet"]},  # 002
+  {name = "Alpert", tags = ["trumpet"]},  # 003
+  {name = "Chet Tpt", tags = ["trumpet"]},  # 004
+  {name = "Lead Tpt", tags = ["trumpet"]},  # 005
+  {name = "ClassTpt", tags = ["clarinet"]},  # 006
+  {name = "StrMtTpt", tags = ["trumpet"]},  # 007
+  {name = "CupMtTpt", tags = ["trumpet"]},  # 008
+  {name = "WahMtTpt", tags = ["trumpet"]},  # 009
+  {name = "WaTptCC4", tags = ["trumpet"]},  # 010
+  {name = "HrmMtTpt", tags = ["trumpet"]},  # 011
+  {name = "Mute Tpt", tags = ["trumpet"]},  # 012
+  {name = "Picc.Tpt", tags = ["trumpet"]},  # 013
+  {name = "Cornet", tags = ["trumpet"]},  # 014
+  {name = "Flugel", tags = ["trumpet"]},  # 015
+  {name = "Mangione", tags = ["trumpet"]},  # 016
+  {name = "Trombone", tags = ["trombone"]},  # 017
+  {name = "Big Bone", tags = ["trombone"]},  # 018
+  {name = "BriteTbn", tags = ["trombone"]},  # 019
+  {name = "ValveTbn", tags = ["trombone"]},  # 020
+  {name = "Jam Bone", tags = ["trombone"]},  # 021
+  {name = "Bass Tbn", tags = ["bass"]},  # 022
+  {name = "BcktMtTb", tags = ["trombone"]},  # 023
+  {name = "DorseyTb", tags = ["trombone"]},  # 024
+  {name = "WX Horn", tags = ["horn"]},  # 025
+  {name = "BrassHrn", tags = ["horn"]},  # 026
+  {name = "BriteHrn", tags = ["horn"]},  # 027
+  {name = "ff Horn", tags = ["horn"]},  # 028
+  {name = "OrchHorn", tags = ["horn"]},  # 029
+  {name = "New Horn", tags = ["horn"]},  # 030
+  {name = "Euphnium", tags = ["tuba"]},  # 031
+  {name = "Tuba", tags = ["tuba"]},  # 032
+  "SoprnoSx",  # 033
+  "KennyGee",  # 034
+  "HeyKenG.",  # 035
+  "Branford",  # 036
+  "TraneSop",  # 037
+  "BrtSopSx",  # 038
+  {name = "Alto Sax", tags = ["sax"]},  # 039
+  "Sanborn",  # 040
+  {name = "BirdAlto", tags = ["sax"]},  # 041
+  {name = "ExprAlto", tags = ["sax"]},  # 042
+  "Desmond",  # 043
+  {name = "Koz Alto", tags = ["sax"]},  # 044
+  "Everette",  # 045
+  {name = "NY Alto", tags = ["sax"]},  # 046
+  {name = "NY Tenor", tags = ["sax"]},  # 047
+  {name = "TenorSax", tags = ["sax"]},  # 048
+  "MBrecker",  # 049
+  {name = "PopTenor", tags = ["sax"]},  # 050
+  {name = "SoulTenr", tags = ["sax"]},  # 051
+  "RaspyTnr",  # 052
+  "Getz Tnr",  # 053
+  "JobimTnr",  # 054
+  {name = "TenorSub", tags = ["sax"]},  # 055
+  {name = "Bari Sax", tags = ["sax"]},  # 056
+  {name = "TiteBari", tags = ["sax"]},  # 057
+  {name = "Sax Sect", tags = ["sax"]},  # 058
+  {name = "Air Sax", tags = ["sax"]},  # 059
+  {name = "Saxual", tags = ["sax"]},  # 060
+  "Sanford",  # 061
+  {name = "Piccolo", tags = ["flute"]},  # 062
+  {name = "Flute", tags = ["flute"]},  # 063
+  "Real Flt",  # 064
+  "SilvrFlt",  # 065
+  {name = "ClassFlt", tags = ["clarinet"]},  # 066
+  {name = "Nz Flute", tags = ["flute"]},  # 067
+  {name = "VoxFlute", tags = ["flute"]},  # 068
+  {name = "AquaFlut", tags = ["flute"]},  # 069
+  {name = "OakFlute", tags = ["flute"]},  # 070
+  {name = "Bass Flt", tags = ["bass"]},  # 071
+  "Afri Flt",  # 072
+  "PennyWhs",  # 073
+  "TinWhist",  # 074
+  {name = "Flutofon", tags = ["flute"]},  # 075
+  "Inca Flt",  # 076
+  "Noze Flt",  # 077
+  "Quena",  # 078
+  "Quena x2",  # 079
+  {name = "PanFlute", tags = ["flute"]},  # 080
+  "Andean",  # 081
+  {name = "Pan Pipe", tags = ["pipe"]},  # 082
+  {name = "Bali Flt", tags = ["bass"]},  # 083
+  "IndiaFlt",  # 084
+  "Ambience",  # 085
+  "WetFone",  # 086
+  "Maya Flt",  # 087
+  {name = "Shakuhat", tags = ["pipe"]},  # 088
+  {name = "Bamboo", tags = ["bass"]},  # 089
+  "PanPicol",  # 090
+  "Coca!!",  # 091
+  "Ocarina!",  # 092
+  "Lonely",  # 093
+  "Recorder",  # 094
+  {name = "Clarinet", tags = ["clarinet"]},  # 095
+  {name = "JazzClar", tags = ["clarinet"]},  # 096
+  "ClsClrnt",  # 097
+  {name = "Bs.Clrnt", tags = ["bass"]},  # 098
+  {name = "BrtBsClr", tags = ["bass"]},  # 099
+  {name = "Oboe", tags = ["reed"]},  # 100
+  {name = "Eng.Horn", tags = ["horn"]},  # 101
+  "SftEngHn",  # 102
+  {name = "Bassoon", tags = ["reed"]},  # 103
+  {name = "Flurinet", tags = ["clarinet"]},  # 104
+  "Crumbon",  # 105
+  "Klarina",  # 106
+  {name = "ThaiReed", tags = ["reed"]},  # 107
+  {name = "Chanter", tags = ["reed"]},  # 108
+  "Digirdoo",  # 109
+  {name = "IslePipe", tags = ["pipe"]},  # 110
+  {name = "SoftPipe", tags = ["pipe"]},  # 111
+  {name = "LitePipe", tags = ["pipe"]},  # 112
+  {name = "CelloSax", tags = ["sax"]},  # 113
+  "YamaBotl",  # 114
+  {name = "Solo Vln", tags = ["violin"]},  # 115
+  {name = "DrkVioln", tags = ["violin"]},  # 116
+  {name = "BrtVioln", tags = ["violin"]},  # 117
+  {name = "SweetVln", tags = ["violin"]},  # 118
+  "Fiddle",  # 119
+  {name = "Viola", tags = ["violin"]},  # 120
+  {name = "SwtViola", tags = ["violin"]},  # 121
+  "RosinVla",  # 122
+  {name = "Cello", tags = ["cello"]},  # 123
+  {name = "SoloCell", tags = ["cello"]},  # 124
+  {name = "DrkCello", tags = ["cello"]},  # 125
+  {name = "Bow Bass", tags = ["bass"]},  # 126
+  "HiStrEns",  # 127
+  "Pizzicat",  # 128
 ]
 
 1 = [  # Preset 2
-  'Harmonca', 'MouthHrp', 'BluesHrm', 'Stevie!',  # 001-004
-  'Toots!', 'Accordn.', 'Concrtna', 'Jazz B3',  # 005-008
-  'Clavinet', 'Funky', 'SteelDrm', 'VL Drums',  # 009-012
-  'Yangchin', 'Asia Plk', 'JapanPlk', 'Tambura',  # 013-016
-  'Sitar', 'ElecHarp', 'SteelGtr', 'AcGuitar',  # 017-020
-  'Flamenco', 'SpainGtr', 'NylonGtr', 'SwtNylGt',  # 021-024
-  'Les Gtr', 'Joe Pass', 'FMGuitar', 'Lucille',  # 025-028
-  '>>PAT<<', 'EFXStrat', 'ClnStrat', 'Surf Gtr',  # 029-032
-  'Mute Gtr', 'WahGtCC4', 'PatSynGt', 'BluesGtr',  # 033-036
-  'Clapton', 'PopODGtr', 'Carlos', 'TubeGtr!',  # 037-040
-  'FET Guit', 'Dist.Gtr', 'Wah Lead', 'Wah Dist',  # 041-044
-  'GuitHero', 'Eddie4th', 'Feedback', 'Hendrix',  # 045-048
-  'TalkBox!', '!XTREME!', 'Hercules', 'SynClav',  # 049-052
-  'Syncro!', 'Theremin', 'Avalana', 'Voxanne',  # 053-056
-  'Beauty!', 'SpaceOut', 'Ghost Ld', 'PtchNoiz',  # 057-060
-  'BreathTb', 'Air Lead', 'Breezer', 'ZawiLead',  # 061-064
-  'Voxofone', 'Whistler', 'Debussy', 'Sines()',  # 065-068
-  'SmoothLd', 'Slinky', 'AirStick', 'RotoFone',  # 069-072
-  'Vox Lead', 'Squeezy', 'Lyricon', 'Ana.Lead',  # 073-076
-  'Mobius', '70s Lead', 'Osc Lead', 'Saw Lead',  # 077-080
-  'SAWS/|/|', 'ResoSaws', 'EML Lead', 'HPFilter',  # 081-084
-  'EWI ARP', 'EWI Lead', 'Koz Lead', 'MattLead',  # 085-088
-  'PATCHMAN', 'Taurus', 'Phaser-{', 'SynZilla',  # 089-092
-  'MegaSyn', 'Winwood', 'Pulse Ld', 'Corea!!',  # 093-096
-  'SquareLd', 'Korg Ld', 'LuckyMan', 'Lyle',  # 097-100
-  'Analog', 'Nyle', 'Floyd Ld', 'BorgHorn',  # 101-104
-  'Freik', 'Fazar', 'Dungeon', 'NevrLand',  # 105-108
-  'Brekord1', 'Brekord2', 'Brekord3', 'ElecBass',  # 109-112
-  'MotownBs', 'SteinBas', 'FunkBass', 'PickBass',  # 113-116
-  'SnapBass', 'Thumb Bs', 'TiteBass', 'JacoBass',  # 117-120
-  'StratoBs', 'Sticky!', 'MuteBass', 'Ac Bass',  # 121-124
-  'Juicy Bs', 'GnarlyBs', 'Moog Bs', 'Bass1000',  # 125-128
+  "Harmonca",  # 001
+  "MouthHrp",  # 002
+  "BluesHrm",  # 003
+  "Stevie!",  # 004
+  "Toots!",  # 005
+  "Accordn.",  # 006
+  "Concrtna",  # 007
+  "Jazz B3",  # 008
+  {name = "Clavinet", tags = ["clarinet"]},  # 009
+  "Funky",  # 010
+  "SteelDrm",  # 011
+  "VL Drums",  # 012
+  "Yangchin",  # 013
+  "Asia Plk",  # 014
+  "JapanPlk",  # 015
+  "Tambura",  # 016
+  "Sitar",  # 017
+  "ElecHarp",  # 018
+  {name = "SteelGtr", tags = ["guitar"]},  # 019
+  {name = "AcGuitar", tags = ["guitar"]},  # 020
+  "Flamenco",  # 021
+  {name = "SpainGtr", tags = ["guitar"]},  # 022
+  {name = "NylonGtr", tags = ["guitar"]},  # 023
+  {name = "SwtNylGt", tags = ["guitar"]},  # 024
+  {name = "Les Gtr", tags = ["guitar"]},  # 025
+  "Joe Pass",  # 026
+  {name = "FMGuitar", tags = ["guitar"]},  # 027
+  "Lucille",  # 028
+  ">>PAT<<",  # 029
+  "EFXStrat",  # 030
+  "ClnStrat",  # 031
+  {name = "Surf Gtr", tags = ["guitar"]},  # 032
+  {name = "Mute Gtr", tags = ["guitar"]},  # 033
+  {name = "WahGtCC4", tags = ["guitar"]},  # 034
+  {name = "PatSynGt", tags = ["guitar"]},  # 035
+  {name = "BluesGtr", tags = ["guitar"]},  # 036
+  {name = "Clapton", tags = ["clarinet"]},  # 037
+  {name = "PopODGtr", tags = ["guitar"]},  # 038
+  "Carlos",  # 039
+  {name = "TubeGtr!", tags = ["guitar"]},  # 040
+  {name = "FET Guit", tags = ["guitar"]},  # 041
+  {name = "Dist.Gtr", tags = ["guitar"]},  # 042
+  "Wah Lead",  # 043
+  "Wah Dist",  # 044
+  {name = "GuitHero", tags = ["guitar"]},  # 045
+  "Eddie4th",  # 046
+  "Feedback",  # 047
+  "Hendrix",  # 048
+  "TalkBox!",  # 049
+  "!XTREME!",  # 050
+  "Hercules",  # 051
+  {name = "SynClav", tags = ["clarinet"]},  # 052
+  {name = "Syncro!", tags = ["synth"]},  # 053
+  "Theremin",  # 054
+  "Avalana",  # 055
+  "Voxanne",  # 056
+  "Beauty!",  # 057
+  "SpaceOut",  # 058
+  "Ghost Ld",  # 059
+  "PtchNoiz",  # 060
+  {name = "BreathTb", tags = ["trombone"]},  # 061
+  "Air Lead",  # 062
+  "Breezer",  # 063
+  "ZawiLead",  # 064
+  "Voxofone",  # 065
+  "Whistler",  # 066
+  "Debussy",  # 067
+  "Sines()",  # 068
+  "SmoothLd",  # 069
+  "Slinky",  # 070
+  "AirStick",  # 071
+  "RotoFone",  # 072
+  "Vox Lead",  # 073
+  "Squeezy",  # 074
+  "Lyricon",  # 075
+  "Ana.Lead",  # 076
+  "Mobius",  # 077
+  "70s Lead",  # 078
+  "Osc Lead",  # 079
+  "Saw Lead",  # 080
+  "SAWS/|/|",  # 081
+  "ResoSaws",  # 082
+  "EML Lead",  # 083
+  "HPFilter",  # 084
+  "EWI ARP",  # 085
+  "EWI Lead",  # 086
+  "Koz Lead",  # 087
+  "MattLead",  # 088
+  "PATCHMAN",  # 089
+  "Taurus",  # 090
+  "Phaser-{",  # 091
+  {name = "SynZilla", tags = ["synth"]},  # 092
+  {name = "MegaSyn", tags = ["synth"]},  # 093
+  "Winwood",  # 094
+  "Pulse Ld",  # 095
+  "Corea!!",  # 096
+  "SquareLd",  # 097
+  "Korg Ld",  # 098
+  "LuckyMan",  # 099
+  "Lyle",  # 100
+  "Analog",  # 101
+  "Nyle",  # 102
+  "Floyd Ld",  # 103
+  {name = "BorgHorn", tags = ["horn"]},  # 104
+  "Freik",  # 105
+  "Fazar",  # 106
+  "Dungeon",  # 107
+  "NevrLand",  # 108
+  "Brekord1",  # 109
+  "Brekord2",  # 110
+  "Brekord3",  # 111
+  {name = "ElecBass", tags = ["bass"]},  # 112
+  {name = "MotownBs", tags = ["bass"]},  # 113
+  {name = "SteinBas", tags = ["bass"]},  # 114
+  {name = "FunkBass", tags = ["bass"]},  # 115
+  {name = "PickBass", tags = ["bass"]},  # 116
+  {name = "SnapBass", tags = ["bass"]},  # 117
+  {name = "Thumb Bs", tags = ["bass"]},  # 118
+  {name = "TiteBass", tags = ["bass"]},  # 119
+  {name = "JacoBass", tags = ["bass"]},  # 120
+  {name = "StratoBs", tags = ["bass"]},  # 121
+  "Sticky!",  # 122
+  {name = "MuteBass", tags = ["bass"]},  # 123
+  {name = "Ac Bass", tags = ["bass"]},  # 124
+  {name = "Juicy Bs", tags = ["bass"]},  # 125
+  {name = "GnarlyBs", tags = ["bass"]},  # 126
+  {name = "Moog Bs", tags = ["bass"]},  # 127
+  {name = "Bass1000", tags = ["bass"]},  # 128
 ]

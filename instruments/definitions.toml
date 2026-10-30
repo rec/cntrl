@@ -1,5 +1,5 @@
 [[setups]]
-instrument = "vl70"
+instrument = "vl70m"
 name = "default"
 sysex = []
 
@@ -12,7 +12,7 @@ msb = 33
 lsb = 1
 
 [[setups]]
-instrument = "pman"
+instrument = "patchman"
 name = "default"
 sysex = []
 

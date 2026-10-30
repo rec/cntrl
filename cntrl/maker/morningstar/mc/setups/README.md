@@ -27,6 +27,6 @@ Use the same command with `font-demo` or `sd-font-demo` to compile either font
 setup. Font assets are written beside the compiled setup in `fonts/`.
 
 The generic examples remain under `examples/patch-switcher/`; their pman example
-uses `instruments/definitions.toml` and `instruments/pman.toml`. Instrument tables
-are program descriptions, so they retain the flat `[[patches]]` table format and
-explicit setup names. They are not executable Patch values.
+uses `instruments/definitions.toml` and `instruments/patchman.toml`. Instrument
+catalogues use numbered bank tables containing ordered program names and metadata.
+They are program descriptions, not executable Patch values.

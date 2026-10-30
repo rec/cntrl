@@ -81,11 +81,28 @@ def import_instruments(output: Path) -> None:
     )
     documents: dict[str, dict[str, object]] = {
         'definitions.toml': definitions.model_dump(mode='json', exclude_none=True),
-        **{
-            f'{i}.toml': {'patches': [p.model_dump(exclude_none=True) for p in e]}
-            for i, e in tables.items()
-        },
     }
+    for instrument, entries in tables.items():
+        banks: dict[str, list[object]] = {}
+        for entry in entries:
+            assert entry.bank is not None
+            programs = banks.setdefault(str(entry.bank), [])
+            while len(programs) < entry.program:
+                programs.append(tomlkit.inline_table())
+            metadata = entry.model_dump(
+                exclude={'instrument', 'setup', 'bank', 'program'}, exclude_none=True
+            )
+            if not metadata['tags']:
+                del metadata['tags']
+            if list(metadata) == ['name']:
+                programs[entry.program - 1] = metadata['name']
+            else:
+                value = tomlkit.inline_table()
+                value.update(metadata)
+                programs[entry.program - 1] = value
+        documents[f'{instrument}.toml'] = {
+            'instruments': {instrument: {'programs': banks}}
+        }
     output.mkdir(parents=True, exist_ok=True)
     for name, document in documents.items():
         path = output / name
@@ -95,7 +112,7 @@ def import_instruments(output: Path) -> None:
 
 INSTRUMENTS_PATH = Path('/Users/tom/code/midi/vl70/all-vl70.json')
 TAGS_PATH = Path('/Users/tom/code/midi/vl70/categories.json')
-INSTRUMENT_IDS = {'stock': 'vl70', 'patchman': 'pman'}
+INSTRUMENT_IDS = {'stock': 'vl70m', 'patchman': 'patchman'}
 BANK_IDS = {'A': 0, 'B': 1}
 
 
