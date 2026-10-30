@@ -4,20 +4,20 @@
 # This review document does not change tags.toml automatically.
 
 [exceptions.5]
-vl70m = {name = "BowdSaw", tags = ["violin"]}  # Internal label: BowedSaw
+vl70m = {name = "BowdSaw", tags = ["synth"]}  # Internal label: BowedSaw
 patchman = {name = "Theremin", tags = ["synth"]}
 
 [exceptions.10]
-vl70m = {name = "MuteHrBs", tags = ["guitar"]}
+vl70m = {name = "MuteHrBs", tags = ["bass"]}
 patchman = {name = "GnarlyBs", tags = ["bass"]}
 
 [exceptions.16]
 vl70m = {name = "BassCla!", tags = ["clarinet"]}
-patchman = {name = "Bs.Clrnt", tags = ["bass"]}
+patchman = {name = "Bs.Clrnt", tags = ["clarinet"]}
 
 [exceptions.18]
 vl70m = {name = "DblReedy", tags = ["reed"]}
-patchman = {name = "Eng.Horn", tags = ["horn"]}
+patchman = {name = "Eng.Horn", tags = ["reed"]}
 
 [exceptions.21]
 vl70m = {name = "WahUpHp", tags = ["harmonica"]}
@@ -25,22 +25,22 @@ patchman = {name = "ThaiReed", tags = ["reed"]}
 
 [exceptions.25]
 vl70m = {name = "Flutuen", tags = ["flute"]}
-patchman = {name = "Bass Flt", tags = ["bass"]}
+patchman = {name = "Bass Flt", tags = ["flute"]}
 
 [exceptions.28]
-vl70m = {name = "India", tags = ["sitar"]}
-patchman = {name = "Tambura", tags = ["strings"]}
+vl70m = {name = "India", tags = ["world"]}
+patchman = {name = "Tambura", tags = ["world"]}
 
 [exceptions.46]
-vl70m = {name = "PicoStrg", tags = ["pipe"]}
+vl70m = {name = "PicoStrg", tags = ["strings"]}
 patchman = {name = "Pizzicat", tags = ["strings"]}
 
 [exceptions.50]
 vl70m = {name = "OsciLead", tags = ["synth"]}
-patchman = {name = "SynClav", tags = ["clarinet"]}
+patchman = {name = "SynClav", tags = ["synth"]}
 
 [exceptions.51]
-vl70m = {name = "Babalog", tags = ["bass"]}
+vl70m = {name = "Babalog", tags = ["synth"]}
 patchman = {name = "Syncro!", tags = ["synth"]}
 
 [exceptions.52]
@@ -48,11 +48,11 @@ vl70m = {name = "Q.Klav", tags = ["keyboard"]}
 patchman = {name = "Theremin", tags = ["synth"]}
 
 [exceptions.54]
-vl70m = {name = "Talk Box", tags = ["guitar"]}
+vl70m = {name = "Talk Box", tags = ["synth"]}
 patchman = {name = "Voxanne", tags = ["synth"]}
 
 [exceptions.56]
-vl70m = {name = "WahUpHp", tags = ["harmonica"]}
+vl70m = {name = "WahUpHp", tags = ["synth"]}
 patchman = {name = "SpaceOut", tags = ["synth"]}
 
 [exceptions.57]
@@ -60,7 +60,7 @@ vl70m = {name = "Mad Tube", tags = ["fx"]}
 patchman = {name = "Squeezy", tags = ["synth"]}
 
 [exceptions.58]
-vl70m = {name = "YamSteel", tags = ["percussion"]}
+vl70m = {name = "YamSteel", tags = ["guitar"]}
 patchman = {name = "Lyricon", tags = ["synth"]}
 
 [exceptions.59]
