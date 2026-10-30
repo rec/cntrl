@@ -1,78 +1,79 @@
 # Yamaha VL70-m factory preset voices. List Book, printed pages 1-8; MIDI p. 26.
 # Source: https://data.yamaha.com/files/download/other_assets/5/317955/VL70mE2.pdf
-# Array positions give bank numbers (0-based) and program numbers (1-based).
+# Table keys give bank numbers; array positions give program numbers (1-based).
 # Preset addressing: CC 0 value 33; CC 32 value is the bank number.
 # Custom and Internal user memories are not included.
 
 [instruments.vl70m]
 instrument = 'vl70m'
-programs = [
-  [  # Bank 0: Preset 1
-    'Mad Tube', 'VintgLd', 'SpaceZoo', 'GuitHero',  # 001-004
-    'StoneHng', 'Whizzer', 'SimpleBa', 'ClavBass',  # 005-008
-    'SuperBas', 'New Slap', 'RockPigs', 'Igneous',  # 009-012
-    '50 / 50', 'Cybastrg', 'Wynth', 'BuzzSaw',  # 013-016
-    'ZubZub', 'Blue', 'OsciLead', 'SqrLead',  # 017-020
-    'Bigger', 'AnaSquid', 'SharpSyn', 'AnaWave',  # 021-024
-    'AnaWurl', 'Babalog', 'FngerBass', 'Upright',  # 025-028
-    'Fnground', 'Birdland', 'FlageoBs', 'DampBass',  # 029-032
-    'Fretles!', 'Frtles!2', 'ThumBass', 'RockBass',  # 033-036
-    'SmooBass', 'WarmBass', 'YamaBass', 'Box Bass',  # 037-040
-    'BassCab', 'FruitBas', 'AcidBas!', 'SqrBass!',  # 041-044
-    'PulsClav', 'MogueBas', 'BoppaBas', 'BuzzrBas',  # 045-048
-    'MuteHrBs', 'TekBass', 'TranzBas', 'Chamlion',  # 049-052
-    'ParaSyn', 'SteamBas', 'BooBass', 'WhelkBas',  # 053-056
-    'AtackSyn', 'Q.Klav', 'Sitar!', 'India',  # 057-060
-    'YamSteel', 'StungSt', 'Mu', 'Waterphn',  # 061-064
-    'DinoPerc', 'Formula', 'Jurassic', 'Devil',  # 065-068
-    'SpcHorse', 'Jason', 'Suedhead', 'Spanish',  # 069-072
-    'JazzGtr!', 'JazzyGtr', 'L7 Pluck', 'WetPluck',  # 073-076
-    'Comp Gtr', 'FunkyGtr', 'Thin Gtr', 'Carlos',  # 077-080
-    'Destiny', 'Gonzo', 'Grunge', 'Ossyncro',  # 081-084
-    'Talk Box', 'SyncLed', 'Old Mini', 'Fat Mini',  # 085-088
-    'Parlopho', 'SimpleSy', 'Choronic', 'SlitMinu',  # 089-092
-    'SynHarmo', 'Flaggoot', 'SynSkex', 'ResoSqr',  # 093-096
-    'WurliLd', 'FlatLead', 'PhilTur', 'ChalPuls',  # 097-100
-    'Pluck Ld', 'Brassyn', 'AcoSynLd', 'Moby',  # 101-104
-    'Digitrn', 'LyricOff', 'Rezzawi', 'Macro',  # 105-108
-    'Claribo', 'Binaphon', 'MokoPipe', 'AliBaba',  # 109-112
-    'Persinet', 'PicoPipe', 'Gertrude', 'Xynth',  # 113-116
-    'Duality', 'AltKwek', 'Softblow', 'AlbaPipe',  # 117-120
-    'Electrum', 'Edgeopho', 'BassCla!', 'WX Clari',  # 121-124
-    'WX Oboe', 'WX J Gtr', 'Shakuha!', 'LipClari',  # 125-128
-  ],
-  [  # Bank 1: Preset 2
-    'Vento', 'Floboe', 'Sintax', 'Eastern',  # 001-004
-    'Trumpet!', 'SoprSax!', 'LiteAlto', 'Trmbone!',  # 005-008
-    'BtlFlute', 'Air Sax', 'TenrSax!', 'Coca',  # 009-012
-    'JetLpBow', 'Viol Inn', 'MuteCone', 'BrethBow',  # 013-016
-    'Trumpt!2', 'FluglHr!', 'Cornet', 'JzTrump',  # 017-020
-    'JzTrump2', 'Flumpet', 'WXTrumpt', 'MuteTp!',  # 021-024
-    'MuteTp!2', 'Melwbone', 'NerzoBr', 'Horn!',  # 025-028
-    'Horn!2', 'NuHorne', 'WX Horn', 'Tuba!',  # 029-032
-    'NuViolin', 'C Violin', 'BrtVioln', 'MuteViol',  # 033-036
-    'BrtViola', 'ViolOutt', 'Cello!', 'Eleanor',  # 037-040
-    'Nu Cello', 'Contrair', 'DoublBow', 'Piccolo!',  # 041-044
-    'Piccol!2', 'BowPicol', 'C Flute', 'C Flute2',  # 045-048
-    'JazFlute', 'OakFlute', 'BtlFlut2', 'RzdeFlt',  # 049-052
-    'Flutuen', 'Nz Flute', 'WX Shaku', 'Pan Pipe',  # 053-056
-    'PanPicol', 'Bamboo', 'Andean', 'Flurinet',  # 057-060
-    'SoftReed', 'Flurmod', 'Jhopali', 'Baroquen',  # 061-064
-    'SquealAT', 'NuSopSax', 'CvSopSax', 'SoprPipe',  # 065-068
-    'LiteSopr', 'AnaSoprn', 'NuAltSax', 'SweetAlt',  # 069-072
-    'AltoSax!', 'HarpAlto', 'HarpAlt2', 'GlassAlt',  # 073-076
-    'AcidSax', 'WackSax', 'NuTenrSx', 'MildTenr',  # 077-080
-    'Jazz Sax', 'TenorSub', 'BellMike', 'GlasTenr',  # 081-084
-    'FnkyTenr', 'OldTenor', 'BrtTenor', 'BariSax!',  # 085-088
-    'VoxoSaxo', 'Oboe!', 'Oboe!2', 'Noboe',  # 089-092
-    'OboeWhi', 'DblReedy', 'TripleRd', 'EngHorn!',  # 093-096
-    'Loboe', 'Bassoon!', 'Clarint!', 'LitePipe',  # 097-100
-    'HyperCla', 'Clarint2', 'IslePipe', 'Chanter',  # 101-104
-    'ThaiReed', 'Recordr!', 'Claricrd', 'SoftPipe',  # 105-108
-    'BowdSaw', 'Ocarina!', 'Lonely', 'Ophelia',  # 109-112
-    'Maysbe?', 'MizuHorn', 'PicoStrg', 'Sylophon',  # 113-116
-    'BowLead', 'Squeeze', 'MouthKey', 'AmpdHarp',  # 117-120
-    'CromHarp', 'WahUpHp', 'YamaBotl', 'Blowsoo',  # 121-124
-    'Brappo', 'Crumbon', 'Klarina', 'ReedWin',  # 125-128
-  ],
+
+[instruments.vl70m.programs]
+0 = [  # Preset 1
+  'Mad Tube', 'VintgLd', 'SpaceZoo', 'GuitHero',  # 001-004
+  'StoneHng', 'Whizzer', 'SimpleBa', 'ClavBass',  # 005-008
+  'SuperBas', 'New Slap', 'RockPigs', 'Igneous',  # 009-012
+  '50 / 50', 'Cybastrg', 'Wynth', 'BuzzSaw',  # 013-016
+  'ZubZub', 'Blue', 'OsciLead', 'SqrLead',  # 017-020
+  'Bigger', 'AnaSquid', 'SharpSyn', 'AnaWave',  # 021-024
+  'AnaWurl', 'Babalog', 'FngerBass', 'Upright',  # 025-028
+  'Fnground', 'Birdland', 'FlageoBs', 'DampBass',  # 029-032
+  'Fretles!', 'Frtles!2', 'ThumBass', 'RockBass',  # 033-036
+  'SmooBass', 'WarmBass', 'YamaBass', 'Box Bass',  # 037-040
+  'BassCab', 'FruitBas', 'AcidBas!', 'SqrBass!',  # 041-044
+  'PulsClav', 'MogueBas', 'BoppaBas', 'BuzzrBas',  # 045-048
+  'MuteHrBs', 'TekBass', 'TranzBas', 'Chamlion',  # 049-052
+  'ParaSyn', 'SteamBas', 'BooBass', 'WhelkBas',  # 053-056
+  'AtackSyn', 'Q.Klav', 'Sitar!', 'India',  # 057-060
+  'YamSteel', 'StungSt', 'Mu', 'Waterphn',  # 061-064
+  'DinoPerc', 'Formula', 'Jurassic', 'Devil',  # 065-068
+  'SpcHorse', 'Jason', 'Suedhead', 'Spanish',  # 069-072
+  'JazzGtr!', 'JazzyGtr', 'L7 Pluck', 'WetPluck',  # 073-076
+  'Comp Gtr', 'FunkyGtr', 'Thin Gtr', 'Carlos',  # 077-080
+  'Destiny', 'Gonzo', 'Grunge', 'Ossyncro',  # 081-084
+  'Talk Box', 'SyncLed', 'Old Mini', 'Fat Mini',  # 085-088
+  'Parlopho', 'SimpleSy', 'Choronic', 'SlitMinu',  # 089-092
+  'SynHarmo', 'Flaggoot', 'SynSkex', 'ResoSqr',  # 093-096
+  'WurliLd', 'FlatLead', 'PhilTur', 'ChalPuls',  # 097-100
+  'Pluck Ld', 'Brassyn', 'AcoSynLd', 'Moby',  # 101-104
+  'Digitrn', 'LyricOff', 'Rezzawi', 'Macro',  # 105-108
+  'Claribo', 'Binaphon', 'MokoPipe', 'AliBaba',  # 109-112
+  'Persinet', 'PicoPipe', 'Gertrude', 'Xynth',  # 113-116
+  'Duality', 'AltKwek', 'Softblow', 'AlbaPipe',  # 117-120
+  'Electrum', 'Edgeopho', 'BassCla!', 'WX Clari',  # 121-124
+  'WX Oboe', 'WX J Gtr', 'Shakuha!', 'LipClari',  # 125-128
+]
+
+1 = [  # Preset 2
+  'Vento', 'Floboe', 'Sintax', 'Eastern',  # 001-004
+  'Trumpet!', 'SoprSax!', 'LiteAlto', 'Trmbone!',  # 005-008
+  'BtlFlute', 'Air Sax', 'TenrSax!', 'Coca',  # 009-012
+  'JetLpBow', 'Viol Inn', 'MuteCone', 'BrethBow',  # 013-016
+  'Trumpt!2', 'FluglHr!', 'Cornet', 'JzTrump',  # 017-020
+  'JzTrump2', 'Flumpet', 'WXTrumpt', 'MuteTp!',  # 021-024
+  'MuteTp!2', 'Melwbone', 'NerzoBr', 'Horn!',  # 025-028
+  'Horn!2', 'NuHorne', 'WX Horn', 'Tuba!',  # 029-032
+  'NuViolin', 'C Violin', 'BrtVioln', 'MuteViol',  # 033-036
+  'BrtViola', 'ViolOutt', 'Cello!', 'Eleanor',  # 037-040
+  'Nu Cello', 'Contrair', 'DoublBow', 'Piccolo!',  # 041-044
+  'Piccol!2', 'BowPicol', 'C Flute', 'C Flute2',  # 045-048
+  'JazFlute', 'OakFlute', 'BtlFlut2', 'RzdeFlt',  # 049-052
+  'Flutuen', 'Nz Flute', 'WX Shaku', 'Pan Pipe',  # 053-056
+  'PanPicol', 'Bamboo', 'Andean', 'Flurinet',  # 057-060
+  'SoftReed', 'Flurmod', 'Jhopali', 'Baroquen',  # 061-064
+  'SquealAT', 'NuSopSax', 'CvSopSax', 'SoprPipe',  # 065-068
+  'LiteSopr', 'AnaSoprn', 'NuAltSax', 'SweetAlt',  # 069-072
+  'AltoSax!', 'HarpAlto', 'HarpAlt2', 'GlassAlt',  # 073-076
+  'AcidSax', 'WackSax', 'NuTenrSx', 'MildTenr',  # 077-080
+  'Jazz Sax', 'TenorSub', 'BellMike', 'GlasTenr',  # 081-084
+  'FnkyTenr', 'OldTenor', 'BrtTenor', 'BariSax!',  # 085-088
+  'VoxoSaxo', 'Oboe!', 'Oboe!2', 'Noboe',  # 089-092
+  'OboeWhi', 'DblReedy', 'TripleRd', 'EngHorn!',  # 093-096
+  'Loboe', 'Bassoon!', 'Clarint!', 'LitePipe',  # 097-100
+  'HyperCla', 'Clarint2', 'IslePipe', 'Chanter',  # 101-104
+  'ThaiReed', 'Recordr!', 'Claricrd', 'SoftPipe',  # 105-108
+  'BowdSaw', 'Ocarina!', 'Lonely', 'Ophelia',  # 109-112
+  'Maysbe?', 'MizuHorn', 'PicoStrg', 'Sylophon',  # 113-116
+  'BowLead', 'Squeeze', 'MouthKey', 'AmpdHarp',  # 117-120
+  'CromHarp', 'WahUpHp', 'YamaBotl', 'Blowsoo',  # 121-124
+  'Brappo', 'Crumbon', 'Klarina', 'ReedWin',  # 125-128
 ]

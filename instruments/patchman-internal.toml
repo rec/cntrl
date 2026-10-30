@@ -1,100 +1,97 @@
 # Yamaha VL70-m Internal voices: patchman.
 # Source: ~/code/sysexy/syx/prog.txt
-# Array positions give bank numbers (0-based) and program numbers (1-based).
+# Table keys give bank numbers; array positions give program numbers (1-based).
 # Internal addressing: CC 0 value 33; CC 32 value 3.
 # A/B comments identify source presets in Preset 1/2, not MIDI destinations.
 
 [instruments.patchman]
 instrument = 'patchman'
-programs = [
-  [],  # Bank 0: Preset 1 omitted
-  [],  # Bank 1: Preset 2 omitted
-  [],  # Bank 2: Custom omitted
-  [  # Bank 3: Internal
-    # 0. first 5
-    'GuitHero',  # 001; source B:045
-    '!XTREME!',  # 002; source B:050
-    'ElecBass',  # 003; source B:112
-    'Clarinet',  # 004; source A:095
-    'Theremin',  # 005; source B:054
 
-    # 1. bass
-    'SnapBass',  # 006; source B:117
-    'PickBass',  # 007; source B:116
-    'JacoBass',  # 008; source B:120
-    'StratoBs',  # 009; source B:121
-    'GnarlyBs',  # 010; source B:126
+[instruments.patchman.programs]
+3 = [  # Internal
+  # 0. first 5
+  'GuitHero',  # 001; source B:045
+  '!XTREME!',  # 002; source B:050
+  'ElecBass',  # 003; source B:112
+  'Clarinet',  # 004; source A:095
+  'Theremin',  # 005; source B:054
 
-    # 2. sax
-    'SoprnoSx',  # 011; source A:033
-    'Alto Sax',  # 012; source A:039
-    'NY Tenor',  # 013; source A:047
-    'RaspyTnr',  # 014; source A:052
-    'Bari Sax',  # 015; source A:056
+  # 1. bass
+  'SnapBass',  # 006; source B:117
+  'PickBass',  # 007; source B:116
+  'JacoBass',  # 008; source B:120
+  'StratoBs',  # 009; source B:121
+  'GnarlyBs',  # 010; source B:126
 
-    # 3. reeds
-    'Bs.Clrnt',  # 016; source A:098
-    'Oboe',  # 017; source A:100
-    'Eng.Horn',  # 018; source A:101
-    'Bassoon',  # 019; source A:103
-    'Chanter',  # 020; source A:108
-    'ThaiReed',  # 021; source A:107
+  # 2. sax
+  'SoprnoSx',  # 011; source A:033
+  'Alto Sax',  # 012; source A:039
+  'NY Tenor',  # 013; source A:047
+  'RaspyTnr',  # 014; source A:052
+  'Bari Sax',  # 015; source A:056
 
-    # 4. flutes
-    'Real Flt',  # 022; source A:064
-    'Piccolo',  # 023; source A:062
-    'VoxFlute',  # 024; source A:068
-    'Bass Flt',  # 025; source A:071
-    'Afri Flt',  # 026; source A:072
+  # 3. reeds
+  'Bs.Clrnt',  # 016; source A:098
+  'Oboe',  # 017; source A:100
+  'Eng.Horn',  # 018; source A:101
+  'Bassoon',  # 019; source A:103
+  'Chanter',  # 020; source A:108
+  'ThaiReed',  # 021; source A:107
 
-    # 5. world
-    'Sitar',  # 027; source B:017
-    'Tambura',  # 028; source B:016
-    'SoftPipe',  # 029; source A:111
-    'Shakuhat',  # 030; source A:088
-    'Andean',  # 031; source A:081
+  # 4. flutes
+  'Real Flt',  # 022; source A:064
+  'Piccolo',  # 023; source A:062
+  'VoxFlute',  # 024; source A:068
+  'Bass Flt',  # 025; source A:071
+  'Afri Flt',  # 026; source A:072
 
-    # 6. brass
-    'Trombone',  # 032; source A:017
-    'Mangione',  # 033; source A:016
-    'Trumpet',  # 034; source A:001
-    'WahMtTpt',  # 035; source A:009
-    'Tuba',  # 036; source A:032
+  # 5. world
+  'Sitar',  # 027; source B:017
+  'Tambura',  # 028; source B:016
+  'SoftPipe',  # 029; source A:111
+  'Shakuhat',  # 030; source A:088
+  'Andean',  # 031; source A:081
 
-    # 7. guitar
-    'Les Gtr',  # 037; source B:025
-    'Wah Lead',  # 038; source B:043
-    'Eddie4th',  # 039; source B:046
-    'Feedback',  # 040; source B:047
-    'Hendrix',  # 041; source B:048
+  # 6. brass
+  'Trombone',  # 032; source A:017
+  'Mangione',  # 033; source A:016
+  'Trumpet',  # 034; source A:001
+  'WahMtTpt',  # 035; source A:009
+  'Tuba',  # 036; source A:032
 
-    # 8. string
-    'SwtViola',  # 042; source A:121
-    'Solo Vln',  # 043; source A:115
-    'SoloCell',  # 044; source A:124
-    'Bow Bass',  # 045; source A:126
-    'Pizzicat',  # 046; source A:128
+  # 7. guitar
+  'Les Gtr',  # 037; source B:025
+  'Wah Lead',  # 038; source B:043
+  'Eddie4th',  # 039; source B:046
+  'Feedback',  # 040; source B:047
+  'Hendrix',  # 041; source B:048
 
-    # 9. synth and keys
-    'TalkBox!',  # 047; source B:049
-    '!XTREME!',  # 048; source B:050
-    'Hercules',  # 049; source B:051
-    'SynClav',  # 050; source B:052
-    'Syncro!',  # 051; source B:053
-    'Theremin',  # 052; source B:054
-    'Avalana',  # 053; source B:055
-    'Voxanne',  # 054; source B:056
-    'Beauty!',  # 055; source B:057
-    'SpaceOut',  # 056; source B:058
+  # 8. string
+  'SwtViola',  # 042; source A:121
+  'Solo Vln',  # 043; source A:115
+  'SoloCell',  # 044; source A:124
+  'Bow Bass',  # 045; source A:126
+  'Pizzicat',  # 046; source A:128
 
-    # 10. fx and perc
-    'Squeezy',  # 057; source B:074
-    'Lyricon',  # 058; source B:075
-    'Ana.Lead',  # 059; source B:076
-    'Mobius',  # 060; source B:077
-    '70s Lead',  # 061; source B:078
-    'Osc Lead',  # 062; source B:079
-    'Saw Lead',  # 063; source B:080
-    'SAWS/|/|',  # 064; source B:081
-  ],
+  # 9. synth and keys
+  'TalkBox!',  # 047; source B:049
+  '!XTREME!',  # 048; source B:050
+  'Hercules',  # 049; source B:051
+  'SynClav',  # 050; source B:052
+  'Syncro!',  # 051; source B:053
+  'Theremin',  # 052; source B:054
+  'Avalana',  # 053; source B:055
+  'Voxanne',  # 054; source B:056
+  'Beauty!',  # 055; source B:057
+  'SpaceOut',  # 056; source B:058
+
+  # 10. fx and perc
+  'Squeezy',  # 057; source B:074
+  'Lyricon',  # 058; source B:075
+  'Ana.Lead',  # 059; source B:076
+  'Mobius',  # 060; source B:077
+  '70s Lead',  # 061; source B:078
+  'Osc Lead',  # 062; source B:079
+  'Saw Lead',  # 063; source B:080
+  'SAWS/|/|',  # 064; source B:081
 ]
