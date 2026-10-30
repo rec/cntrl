@@ -98,6 +98,7 @@ def import_instruments(output: Path) -> None:
             metadata = entry.model_dump(
                 exclude={'instrument', 'setup', 'bank', 'program', 'tags'},
                 exclude_none=True,
+                exclude_defaults=True,
             )
             if list(metadata) == ['name']:
                 programs[entry.program - 1] = metadata['name']

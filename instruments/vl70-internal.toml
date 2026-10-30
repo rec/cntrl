@@ -1,22 +1,17 @@
 # Yamaha VL70-m Internal voices: vl70m.
 # Source: ~/code/sysexy/syx/vl70.txt
-# Array positions give bank numbers (0-based) and program numbers (1-based).
+# Table keys give bank numbers; array positions give program numbers (1-based).
 # Internal addressing: CC 0 value 33; CC 32 value 3.
 # A/B comments identify source presets in Preset 1/2, not MIDI destinations.
 
-[instruments.vl70m]
-instrument = 'vl70m'
-programs = [
-  [],  # Bank 0: Preset 1 omitted
-  [],  # Bank 1: Preset 2 omitted
-  [],  # Bank 2: Custom omitted
-  [  # Bank 3: Internal
+[instruments.vl70m.programs]
+3 = [  # Internal
     # 0. first 5
     'GuitHero',  # 001; source A:004
     'Igneous',  # 002; source A:012
     'YamaBass',  # 003; source A:039
     'WX Clari',  # 004; source A:124
-    'BowedSaw',  # 005; source B:109
+    'BowdSaw',  # 005; source B:109
 
     # 1. bass
     'New Slap',  # 006; source A:010
@@ -96,5 +91,4 @@ programs = [
     'Formula',  # 062; source A:066
     'Jurassic',  # 063; source A:067
     'Devil',  # 064; source A:068
-  ],
 ]

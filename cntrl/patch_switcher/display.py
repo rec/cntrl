@@ -29,13 +29,14 @@ def compile_display(
     assets: dict[int, bytes] | None = None,
     patch_metadata: dict[str, object] | None = None,
 ) -> tuple[list[bytes], list[list[int]], bytes]:
-    overlap = set(show.parameters) & set(FIELDS)
+    named_fields = {k for p in patches for k in p.values if k.startswith('names.')}
+    overlap = set(show.parameters) & (set(FIELDS) | named_fields)
     if overlap:
         raise ValueError(f'duplicate field definitions: {sorted(overlap)}')
     for name, page in show.pages.items():
         if len(page.fields) > MAX_LINES:
             raise ValueError(f'pages.{name}: at most {MAX_LINES} fields are supported')
-        unknown = set(page.fields) - set(FIELDS) - set(show.parameters)
+        unknown = set(page.fields) - set(FIELDS) - named_fields - set(show.parameters)
         if unknown:
             raise ValueError(f'pages.{name}: unknown fields {sorted(unknown)}')
     windows = [getattr(show.windows, n) for n in WINDOW_NAMES]
@@ -113,7 +114,7 @@ def compile_display(
                         f'field {name}: display text must contain at most '
                         '63 UTF-8 bytes and no control characters'
                     )
-                content = name in PATCH_FIELDS or name.startswith('switch.')
+                content = name in PATCH_FIELDS or name.startswith(('switch.', 'names.'))
                 style = merge_style(
                     base,
                     window.style,
@@ -133,7 +134,7 @@ def compile_display(
                         style,
                         pad,
                         max(1, len(page.fields)),
-                        int(name == 'display_name'),
+                        int(name == 'display_name' or name.startswith('names.')),
                     )
                 )
             instances.append(lines)
@@ -286,6 +287,8 @@ def field_value(
 ) -> str | int | bool | None:
     if name in patch.values:
         return patch.values[name]
+    if name.startswith('names.'):
+        return None
     return getattr(show, name)
 
 

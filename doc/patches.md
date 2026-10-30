@@ -102,6 +102,51 @@ Tag-table order determines tag order when a program belongs to multiple tags.
 If a nondefault setup is needed, declare `setup` once in the instrument table.
 Changing a classification does not require editing the documented catalogue.
 
+## Several catalogues on one MIDI destination
+
+When two instruments receive the same Program Change, describe the route once
+and attach their aligned sound catalogues:
+
+```toml
+[instruments.both]
+output = 'din'
+channel = 1
+catalogues = ['vl70-internal.toml', 'patchman-internal.toml']
+
+[pages.patch]
+fields = ['patch_cycle.name', 'names.vl70m', 'names.patchman']
+
+[patch_cycles]
+Live = [1, 2, 3, 4, 5]
+```
+
+Paths are relative to the file containing the declaration. Each catalogue must
+describe one distinct instrument and one nonempty bank, with the same number of
+named program slots as the other catalogues. Slots align by program number.
+The catalogue bank describes the sounds; it does not request bank-selection
+messages. Set the hardware to the desired bank before using this configuration.
+
+Each activation sends one Program Change to the configured destination, regardless
+of the number of attached catalogues. Numeric cycle entries require exactly one
+configured destination; with several destinations, use explicit typed patches.
+Do not also supply `programs` on a declaration that uses `catalogues`.
+
+The `names.INSTRUMENT` fields expose the documented sound names independently.
+They use the same fitting, spacing, styling and already-sent stippling as the
+ordinary patch name. `display_name` remains available and defaults to the two
+names joined with ` / `, omitting identical duplicates. Exports retain both names
+inside the program metadata and are self-contained; they do not need the original
+catalogue files to recompile.
+
+Loading `--table instruments/tags.toml` applies each underlying sound's tags to the
+shared program. The effective tags are their union, plus any tags on the patch.
+Unselected sounds in those source instruments are ignored when only the shared
+catalogue is loaded. This allows differently tagged sounds to share one action
+without changing the classifications of either sound.
+
+`examples/patch-switcher/dual-internal.toml` represents all 64 paired Internal
+slots for the stock VL70-m and Patchman units on channel 1.
+
 ## Explicit patches
 
 ```toml
