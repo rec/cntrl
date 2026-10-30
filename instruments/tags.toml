@@ -12,20 +12,20 @@ synth = [
   'ResoSqr', 'PhilTur', 'ChalPuls', 'Brassyn', 'AcoSynLd', 'Digitrn', 'LyricOff',
   'Rezzawi', 'Duality', 'NerzoBr', 'Lonely', 'Ophelia', 'Maysbe?', 'Blowsoo',
   'StoneHng', 'BuzzSaw', 'SlitMinu', 'Flaggoot', 'FlatLead', 'Moby', 'Macro',
-  'Sylophon',
+  'Sylophon', 'BowdSaw', 'Babalog', 'Talk Box', 'WahUpHp',
 ]
 guitar = [
-  'GuitHero', 'Whizzer', 'MuteHrBs', 'Spanish', 'JazzGtr!', 'JazzyGtr', 'WetPluck',
-  'Comp Gtr', 'FunkyGtr', 'Thin Gtr', 'Carlos', 'Destiny', 'Talk Box', 'Pluck Ld',
-  'Xynth', 'WX J Gtr', 'AmpdHarp', 'L7 Pluck', 'Gonzo',
+  'GuitHero', 'Whizzer', 'Spanish', 'JazzGtr!', 'JazzyGtr', 'WetPluck', 'Comp Gtr',
+  'FunkyGtr', 'Thin Gtr', 'Carlos', 'Destiny', 'Pluck Ld', 'Xynth', 'WX J Gtr',
+  'AmpdHarp', 'L7 Pluck', 'Gonzo', 'YamSteel',
 ]
 bass = [
-  'SimpleBa', 'SuperBas', 'New Slap', 'Babalog', 'FngerBass', 'Upright', 'Fnground',
-  'Birdland', 'FlageoBs', 'DampBass', 'Fretles!', 'Frtles!2', 'ThumBass', 'RockBass',
-  'SmooBass', 'WarmBass', 'YamaBass', 'Box Bass', 'FruitBas', 'AcidBas!', 'SqrBass!',
-  'MogueBas', 'BoppaBas', 'BuzzrBas', 'TekBass', 'TranzBas', 'Chamlion', 'ParaSyn',
-  'SteamBas', 'BooBass', 'WhelkBas', 'AtackSyn', 'StungSt', 'AliBaba', 'Contrair',
-  'DoublBow',
+  'SimpleBa', 'SuperBas', 'New Slap', 'FngerBass', 'Upright', 'Fnground', 'Birdland',
+  'FlageoBs', 'DampBass', 'Fretles!', 'Frtles!2', 'ThumBass', 'RockBass', 'SmooBass',
+  'WarmBass', 'YamaBass', 'Box Bass', 'FruitBas', 'AcidBas!', 'SqrBass!', 'MogueBas',
+  'BoppaBas', 'BuzzrBas', 'TekBass', 'TranzBas', 'Chamlion', 'ParaSyn', 'SteamBas',
+  'BooBass', 'WhelkBas', 'AtackSyn', 'StungSt', 'AliBaba', 'Contrair', 'DoublBow',
+  'MuteHrBs',
 ]
 clarinet = [
   'ClavBass', 'BassCab', 'PulsClav', 'Claribo', 'Binaphon', 'BassCla!', 'WX Clari',
@@ -33,7 +33,7 @@ clarinet = [
 ]
 violin = [
   'Waterphn', 'Viol Inn', 'BrethBow', 'NuViolin', 'C Violin', 'BrtVioln', 'MuteViol',
-  'BrtViola', 'ViolOutt', 'BowdSaw', 'BowLead',
+  'BrtViola', 'ViolOutt', 'BowLead',
 ]
 trumpet = [
   'Parlopho', 'Trumpet!', 'MuteCone', 'Trumpt!2', 'FluglHr!', 'Cornet', 'JzTrump',
@@ -47,7 +47,7 @@ reed = [
 ]
 pipe = [
   'MokoPipe', 'PicoPipe', 'Shakuha!', 'Eastern', 'WX Shaku', 'Bamboo', 'SquealAT',
-  'SoftPipe', 'PicoStrg', 'Gertrude',
+  'SoftPipe', 'Gertrude',
 ]
 sax = [
   'Softblow', 'Edgeopho', 'Sintax', 'SoprSax!', 'LiteAlto', 'Air Sax', 'TenrSax!',
@@ -67,11 +67,13 @@ horn = ['Horn!', 'Horn!2', 'NuHorne', 'WX Horn', 'EngHorn!', 'MizuHorn']
 tuba = ['Tuba!', 'Brappo']
 cello = ['Cello!', 'Eleanor', 'Nu Cello']
 keyboard = ['AnaWurl', 'Q.Klav']
-sitar = ['Sitar!', 'India']
-percussion = ['YamSteel']
+sitar = ['Sitar!']
+percussion = []
 brass = ['Electrum']
 accordion = ['Jhopali', 'Squeeze']
-harmonica = ['CromHarp', 'WahUpHp']
+harmonica = ['CromHarp']
+world = ['India']
+strings = ['PicoStrg']
 
 [instruments.patchman.tags]
 trumpet = [
@@ -81,21 +83,20 @@ trumpet = [
 ]
 clarinet = [
   'ClassTpt', 'ClassFlt', 'Clarinet', 'JazzClar', 'Flurinet', 'Clavinet', 'Clapton',
-  'SynClav', 'ClsClrnt',
+  'ClsClrnt', 'Bs.Clrnt',
 ]
 trombone = [
   'Trombone', 'Big Bone', 'BriteTbn', 'ValveTbn', 'Jam Bone', 'BcktMtTb', 'DorseyTb',
   'BreathTb',
 ]
 bass = [
-  'Bass Tbn', 'Bass Flt', 'Bali Flt', 'Bamboo', 'Bs.Clrnt', 'BrtBsClr', 'Bow Bass',
-  'ElecBass', 'MotownBs', 'SteinBas', 'FunkBass', 'PickBass', 'SnapBass', 'Thumb Bs',
-  'TiteBass', 'JacoBass', 'StratoBs', 'MuteBass', 'Ac Bass', 'Juicy Bs', 'GnarlyBs',
-  'Moog Bs', 'Bass1000', 'Sticky!',
+  'Bass Tbn', 'Bali Flt', 'Bamboo', 'BrtBsClr', 'Bow Bass', 'ElecBass', 'MotownBs',
+  'SteinBas', 'FunkBass', 'PickBass', 'SnapBass', 'Thumb Bs', 'TiteBass', 'JacoBass',
+  'StratoBs', 'MuteBass', 'Ac Bass', 'Juicy Bs', 'GnarlyBs', 'Moog Bs', 'Bass1000',
+  'Sticky!',
 ]
 horn = [
-  'WX Horn', 'BrassHrn', 'BriteHrn', 'ff Horn', 'OrchHorn', 'New Horn', 'Eng.Horn',
-  'BorgHorn',
+  'WX Horn', 'BrassHrn', 'BriteHrn', 'ff Horn', 'OrchHorn', 'New Horn', 'BorgHorn',
 ]
 tuba = ['Euphnium', 'Tuba']
 sax = [
@@ -110,9 +111,13 @@ flute = [
   'PanFlute', 'Real Flt', 'SilvrFlt', 'Afri Flt', 'PennyWhs', 'TinWhist', 'Inca Flt',
   'Noze Flt', 'Quena', 'Quena x2', 'Andean', 'IndiaFlt', 'Ambience', 'WetFone',
   'Maya Flt', 'PanPicol', 'Coca!!', 'Ocarina!', 'Lonely', 'Recorder', 'YamaBotl',
+  'Bass Flt',
 ]
 pipe = ['Pan Pipe', 'Shakuhat', 'IslePipe', 'SoftPipe', 'LitePipe', 'Digirdoo']
-reed = ['Oboe', 'Bassoon', 'ThaiReed', 'Chanter', 'SftEngHn', 'Crumbon', 'Klarina']
+reed = [
+  'Oboe', 'Bassoon', 'ThaiReed', 'Chanter', 'SftEngHn', 'Crumbon', 'Klarina',
+  'Eng.Horn',
+]
 violin = [
   'Solo Vln', 'DrkVioln', 'BrtVioln', 'SweetVln', 'Viola', 'SwtViola', 'Fiddle',
   'RosinVla',
@@ -134,9 +139,9 @@ synth = [
   'HPFilter', 'EWI ARP', 'EWI Lead', 'Koz Lead', 'MattLead', 'PATCHMAN', 'Taurus',
   'Phaser-{', 'Winwood', 'Pulse Ld', 'Corea!!', 'SquareLd', 'Korg Ld', 'LuckyMan',
   'Lyle', 'Analog', 'Nyle', 'Floyd Ld', 'Freik', 'Fazar', 'Dungeon', 'NevrLand',
-  'Brekord1', 'Brekord2', 'Brekord3',
+  'Brekord1', 'Brekord2', 'Brekord3', 'SynClav',
 ]
-strings = ['HiStrEns', 'Pizzicat', 'Asia Plk', 'JapanPlk', 'Tambura']
+strings = ['HiStrEns', 'Pizzicat', 'Asia Plk', 'JapanPlk']
 harmonica = ['Harmonca', 'MouthHrp', 'BluesHrm', 'Stevie!', 'Toots!']
 accordion = ['Accordn.', 'Concrtna']
 organ = ['Jazz B3']
@@ -145,3 +150,4 @@ percussion = ['SteelDrm', 'VL Drums', 'Yangchin']
 sitar = ['Sitar']
 harp = ['ElecHarp']
 fx = ['PtchNoiz', 'Phaser-{']
+world = ['Tambura']
