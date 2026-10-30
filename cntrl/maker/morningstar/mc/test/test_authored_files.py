@@ -24,6 +24,11 @@ from cntrl.patch_switcher.cli import save_font
             'instruments/definitions.toml',
             ['instruments/patchman.toml', 'instruments/tags.toml'],
         ),
+        (
+            'examples/patch-switcher/dual-internal.toml',
+            None,
+            ['instruments/tags.toml'],
+        ),
         ('cntrl/maker/morningstar/mc/font-demo.toml', None, []),
         ('cntrl/maker/morningstar/mc/patch-functions-demo.toml', None, []),
         ('cntrl/maker/morningstar/mc/setups/pman.toml', None, []),

@@ -20,7 +20,10 @@ class CompilationError(ValueError):
         )
 
 
-def read_document(path: Path) -> object:
+def read_document(path: Path, *, _ancestors: tuple[Path, ...] = ()) -> object:
+    resolved = path.resolve()
+    if resolved in _ancestors:
+        raise ValueError(f'{path}: catalogue reference cycle')
     with path.open() as source:
         if path.suffix == '.json':
             document = json.load(source)
@@ -38,6 +41,19 @@ def read_document(path: Path) -> object:
         for n, f in fonts.items():
             if isinstance(f, str):
                 fonts[n] = str((path.parent / f).resolve())
+    if isinstance(document, dict) and isinstance(
+        instruments := document.get('instruments'), dict
+    ):
+        for alias, instrument in instruments.items():
+            if not isinstance(instrument, dict) or 'catalogues' not in instrument:
+                continue
+            if 'programs' in instrument:
+                raise ValueError(
+                    f'instruments.{alias}: specify catalogues or programs, not both'
+                )
+            instrument['programs'] = _shared_programs(
+                instrument.pop('catalogues'), path, _ancestors + (resolved,)
+            )
     return document
 
 
@@ -421,6 +437,17 @@ class PatchCompiler:
         ] = {}
 
     def parse(self, raw: object, path: str, name: str | None = None) -> int | None:
+        if path.startswith('patch_cycles.') and type(raw) is int:
+            if len(self.instruments) != 1:
+                self.errors.append(
+                    f'{path}: a numeric program requires exactly one instrument'
+                )
+                return None
+            raw = {
+                'type': 'program-change',
+                'instrument': next(iter(self.instruments)),
+                'program': raw,
+            }
         if path.startswith('patch_cycles.') and isinstance(raw, str):
             raw = {'name': raw}
         if (
@@ -636,6 +663,7 @@ class PatchCompiler:
                 'bank': bank,
                 'name': name,
                 'display_name': program_name,
+                'names': matched.names if matched and matched.names else None,
                 'style': matched.style.model_dump(exclude_none=True)
                 if matched and matched.style
                 else None,
@@ -697,6 +725,11 @@ class PatchCompiler:
                 'volume': patch.volume,
                 'pan': patch.pan,
                 'instrument': patch.instrument,
+                **(
+                    {f'names.{k}': v for k, v in matched.names.items()}
+                    if matched
+                    else {}
+                ),
             },
             style=patch.style,
             program_style=matched.style if matched else None,
@@ -1088,14 +1121,15 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
             for field in (
                 'name',
                 'display_name',
+                'names',
                 'range',
                 'description',
                 'style',
             ):
                 old, new = getattr(previous, field), getattr(entry, field)
-                if old is None:
+                if old is None or old == {}:
                     merged[field] = new
-                elif new is not None and old != new:
+                elif new is not None and new != {} and old != new:
                     errors.append(f'{context}: conflicting {field} for {key}')
             entries[key] = models.TablePatch.model_validate(merged)
     for table in tables:
@@ -1123,6 +1157,11 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                     instrument.get('setup', 'default'),
                 )
             ]
+            shared = [
+                k
+                for k, v in entries.items()
+                if instrument.get('instrument', alias) in v.names
+            ]
             for tag, names in tags.items():
                 if (
                     not isinstance(tag, str)
@@ -1132,11 +1171,21 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                     errors.append(f'{context}.{tag}: expected a list of program names')
                     continue
                 # A shared tags file can classify catalogues not loaded in this show.
-                if not candidates:
+                if not candidates and not shared:
                     continue
                 for name in names:
-                    matches = [k for k in candidates if entries[k].name == name]
-                    if not matches:
+                    matches = list(
+                        dict.fromkeys(
+                            [k for k in candidates if entries[k].name == name]
+                            + [
+                                k
+                                for k in shared
+                                if entries[k].names[instrument.get('instrument', alias)]
+                                == name
+                            ]
+                        )
+                    )
+                    if not matches and candidates:
                         errors.append(f'{context}.{tag}: unknown program name {name!r}')
                     for key in matches:
                         entry = entries[key]
@@ -1151,6 +1200,63 @@ def _instrument(alias: str, raw: object) -> models.Instrument:
         raw = {k: v for k, v in raw.items() if k not in ('programs', 'tags')}
         raw.setdefault('instrument', alias)
     return models.Instrument.model_validate(raw)
+
+
+def _shared_programs(
+    references: object, source: Path, ancestors: tuple[Path, ...]
+) -> list[object]:
+    if (
+        not isinstance(references, list)
+        or not references
+        or any(not isinstance(p, str) for p in references)
+    ):
+        raise ValueError(f'{source}: catalogues must be a nonempty list of file paths')
+    catalogues: dict[str, list[object]] = {}
+    for reference in references:
+        path = source.parent / reference
+        document = read_document(path, _ancestors=ancestors)
+        if (
+            not isinstance(document, dict)
+            or not isinstance(instruments := document.get('instruments'), dict)
+            or len(instruments) != 1
+        ):
+            raise ValueError(
+                f'{path}: a shared catalogue must describe exactly one instrument'
+            )
+        alias, instrument = next(iter(instruments.items()))
+        if not isinstance(instrument, dict):
+            raise ValueError(f'{path}: invalid instrument catalogue')
+        identity = instrument.get('instrument', alias)
+        if not isinstance(identity, str) or identity in catalogues:
+            raise ValueError(f'{path}: catalogue instrument names must be distinct')
+        programs = instrument.get('programs')
+        if isinstance(programs, dict) and len(programs) == 1:
+            programs = next(iter(programs.values()))
+        if not isinstance(programs, list) or not 1 <= len(programs) <= 128:
+            raise ValueError(
+                f'{path}: select a single nonempty bank of at most 128 programs'
+            )
+        catalogues[identity] = programs
+    counts = {len(v) for v in catalogues.values()}
+    if len(counts) != 1:
+        raise ValueError(
+            f'{source}: shared catalogues must have the same program count'
+        )
+    combined: list[object] = []
+    for number in range(next(iter(counts))):
+        names: dict[str, str] = {}
+        for identity, programs in catalogues.items():
+            entry = programs[number]
+            name = entry.get('name') if isinstance(entry, dict) else entry
+            if not isinstance(name, str) or not name:
+                raise ValueError(
+                    f'{source}: {identity} program {number + 1} needs a name'
+                )
+            names[identity] = name
+        combined.append(
+            {'name': ' / '.join(dict.fromkeys(names.values())), 'names': names}
+        )
+    return combined
 
 
 def _catalogue_rows(table: dict[str, object], errors: list[str]) -> list[object]:

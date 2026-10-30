@@ -33,3 +33,14 @@ catalogues use numbered bank tables containing ordered program names and metadat
 They are program descriptions, not executable Patch values.
 The documented program catalogues contain fixed voice information; personal tag
 assignments live separately in `instruments/tags.toml`.
+
+The shared channel-1 Internal-bank setup is in
+`examples/patch-switcher/dual-internal.toml`. It sends one Program Change per
+activation and shows both instruments' sound names. Both units must already be
+set to Internal. From the repository root:
+
+```sh
+uv run --frozen cntrl compile examples/patch-switcher/dual-internal.toml \
+  --target cntrl/maker/morningstar/mc/patch-switcher-target.json \
+  --table instruments/tags.toml --output /tmp/dual-internal.bin
+```

@@ -210,6 +210,7 @@ class TablePatch(BaseModel, frozen=True):
     bank: Annotated[int, Field(strict=True, ge=0)] | None = None
     name: str | None = None
     display_name: str | None = None
+    names: dict[str, str] = Field(default_factory=dict)
     range: str | None = None
     description: str | None = None
     style: Style | None = None
