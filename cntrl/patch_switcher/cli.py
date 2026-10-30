@@ -391,7 +391,7 @@ def main() -> None:
             ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
             print(
                 f'{command.output}: {len(data)} bytes; '
-                f'{ni} instruments, {nc} patch lists, {np} patches'
+                f'{ni} instruments, {nc} patch cycles, {np} patches'
             )
             # Report the actual compiled routes, including composition overrides.
             for i in range(ni):

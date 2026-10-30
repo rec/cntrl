@@ -20,7 +20,7 @@ def patch() -> display.DisplayPatch:
     return display.DisplayPatch(
         values={
             'type': 'program-change',
-            'patch_list.name': 'wind',
+            'patch_cycle.name': 'wind',
             'display_name': 'Flute',
             'name': 'Flute',
             'program': 1,
@@ -80,10 +80,10 @@ def test_a_window_can_select_a_different_page(target: models.Target) -> None:
     show = models.Show.model_validate(
         {
             'instruments': {},
-            'patch_lists': {},
+            'patch_cycles': {},
             'pages': {
                 'patch': {'fields': ['display_name']},
-                'tag': {'fields': ['patch_list.name']},
+                'tag': {'fields': ['patch_cycle.name']},
             },
             'windows': {'sent': {'page': 'tag', 'pad': 12}},
         }
@@ -98,7 +98,7 @@ def test_each_line_autoscales_independently(target: models.Target) -> None:
     value = patch().model_copy(
         update={
             'values': patch().values
-            | {'patch_list.name': 'A', 'display_name': 'W' * 11}
+            | {'patch_cycle.name': 'A', 'display_name': 'W' * 11}
         }
     )
     _, refs, block = display.compile_display(
@@ -111,7 +111,7 @@ def test_each_line_autoscales_independently(target: models.Target) -> None:
     assert (second[1][1], second[2]) == (16, 14)
 
 
-def test_styles_merge_per_property_and_patch_list_heading_excludes_content(
+def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
     target: models.Target,
 ) -> None:
     value = patch().model_copy(
@@ -124,7 +124,7 @@ def test_styles_merge_per_property_and_patch_list_heading_excludes_content(
     show = models.Show.model_validate(
         {
             'instruments': {},
-            'patch_lists': {'wind': []},
+            'patch_cycles': {'wind': []},
             'windows': {'next': {'style': {'background_color': 'blue'}}},
             'pages': {
                 'patch': {
@@ -147,7 +147,7 @@ def test_page_fields_use_window_data_and_global_parameters(
     show = models.Show.model_validate(
         {
             'instruments': {},
-            'patch_lists': {},
+            'patch_cycles': {},
             'parameters': {
                 'tempo': {'value': 120},
                 'off': {'value': False},
@@ -185,7 +185,7 @@ def test_ambiguous_or_unknown_references_are_rejected(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         show = models.Show.model_validate(
-            {'instruments': {}, 'patch_lists': {}} | config
+            {'instruments': {}, 'patch_cycles': {}} | config
         )
         display.compile_display(show, [patch()], target)
 
@@ -194,7 +194,7 @@ def test_window_errors_are_reported_together(target: models.Target) -> None:
     show = models.Show.model_validate(
         {
             'instruments': {},
-            'patch_lists': {},
+            'patch_cycles': {},
             'windows': {
                 n: {'style': {'foreground_color': 'unknown'}}
                 for n in display.WINDOW_NAMES
@@ -212,13 +212,13 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
     show['contrast'] = 0.5
     show['pages'] = {
         'patch': {
-            'fields': ['patch_list.name', 'display_name', 'brightness'],
+            'fields': ['patch_cycle.name', 'display_name', 'brightness'],
             'line_styles': {'brightness': {'foreground_color': 'blue'}},
         }
     }
     show['tags'] = {'wind': {'style': {'foreground_color': 'red'}}}
     show['windows'] = {'next': {'pad': '8 px', 'style': {'background_color': 'black'}}}
-    show['patch_lists']['wind'][0]['style'] = {'background_color': 'white'}
+    show['patch_cycles']['wind'][0]['style'] = {'background_color': 'white'}
     definitions = compiler.read_document(FIXTURES / 'definitions.json')
     assert isinstance(definitions, dict)
     definitions['programs'] = [
@@ -234,7 +234,7 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert 'font_size' not in exported and 'font_name' not in exported
-    assert exported['patch_lists']['wind'][0]['style'] == {'background_color': 'white'}
+    assert exported['patch_cycles']['wind'][0]['style'] == {'background_color': 'white'}
     assert (
         exported['definitions']['programs'][0]['style']
         == definitions['programs'][0]['style']

@@ -63,7 +63,7 @@ instrument = "pman"
 setup = "default"
 program = 1
 
-[[patch_lists.fonts]]
+[[patch_cycles.fonts]]
 instrument = "pman"
 program = 1
 display_name = "Font demo"

@@ -11,20 +11,20 @@ setup = 'stock'
 channel = 1
 output = 'din'
 
-[[patch_lists.wind]]
+[[patch_cycles.wind]]
 type = 'program-change'
 instrument = 'keys'
 program = 'Flute'
 volume = 100
 pan = 0
 
-[[patch_lists.synth]]
+[[patch_cycles.synth]]
 type = 'program-change'
 instrument = 'keys'
 program = 'Soft pad'
 display_name = 'Evening pad'
 
-[[patch_lists.synth]]
+[[patch_cycles.synth]]
 type = 'program-change'
 instrument = 'keys'
 program = 12

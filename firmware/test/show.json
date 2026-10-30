@@ -13,7 +13,7 @@
       "output": "trs"
     }
   },
-  "patch_lists": {
+  "patch_cycles": {
     "wind": [
       {
         "instrument": "a",

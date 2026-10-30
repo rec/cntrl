@@ -5,7 +5,7 @@ setup = 'stock'
 channel = 1
 output = 'din'
 
-[[patch_lists.wind]]
+[[patch_cycles.wind]]
 type = 'program-change'
 instrument = 'a'
 program = 1

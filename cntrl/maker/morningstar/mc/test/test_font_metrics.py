@@ -15,7 +15,7 @@ def test_page_lines_select_different_native_font_families() -> None:
     show = models.Show.model_validate(
         {
             'instruments': {},
-            'patch_lists': {},
+            'patch_cycles': {},
             'style': {'font_name': 'Arial'},
             'pages': {
                 'patch': {'line_styles': {'display_name': {'font_name': 'ComicSansMS'}}}
@@ -23,7 +23,7 @@ def test_page_lines_select_different_native_font_families() -> None:
         }
     )
     value = display.DisplayPatch(
-        values={'patch_list.name': 'Brass', 'display_name': 'Trumpet'}
+        values={'patch_cycle.name': 'Brass', 'display_name': 'Trumpet'}
     )
     _, _, block = display.compile_display(show, [value], target)
     assert graphics.SCREEN.unpack_from(block, display.HEADER.size)[0] == 1

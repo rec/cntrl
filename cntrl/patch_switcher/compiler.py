@@ -120,29 +120,31 @@ def compile_show(
         _text(key, 64, target, f'patches.{key}', errors)
         if (index := compiler.parse(raw, f'patches.{key}', key)) is not None:
             named[key] = index
-    patch_lists: list[bytes] = []
+    patch_cycles: list[bytes] = []
     records: list[bytes] = []
     banks: list[int] = []
     names: list[bytes] = []
     roots: list[int] = []
     views: list[display.DisplayPatch] = []
-    for patch_list, raw in show.patch_lists.items():
+    for patch_cycle, raw in show.patch_cycles.items():
         label = _text(
-            patch_list, 64, target, f'patch_lists.{patch_list}', errors, unicode=True
+            patch_cycle, 64, target, f'patch_cycles.{patch_cycle}', errors, unicode=True
         )
         if not isinstance(raw, list):
-            errors.append(f'patch_lists.{patch_list}: expected a list of Patch values')
+            errors.append(
+                f'patch_cycles.{patch_cycle}: expected a list of Patch values'
+            )
             continue
         if not raw:
-            errors.append(f'patch_lists.{patch_list}: patch list is empty')
+            errors.append(f'patch_cycles.{patch_cycle}: patch cycle is empty')
         start = len(roots)
         for i, value in enumerate(raw):
-            path = f'patch_lists.{patch_list}[{i}]'
+            path = f'patch_cycles.{patch_cycle}[{i}]'
             if (index := compiler.parse(value, path)) is None:
                 continue
             roots.append(index)
-            compiler.browser.append((index, patch_list, path))
-        patch_lists.append(
+            compiler.browser.append((index, patch_cycle, path))
+        patch_cycles.append(
             struct.pack(
                 '<64sHH', label, min(start, 65535), min(len(roots) - start, 65535)
             )
@@ -185,7 +187,7 @@ def compile_show(
             display.DisplayPatch(
                 context=path,
                 values={
-                    'patch_list.name': 'Switches',
+                    'patch_cycle.name': 'Switches',
                     'display_name': name,
                     'switch.name': f'{assignment.button}: {name}',
                     'switch.mode': assignment.mode,
@@ -197,13 +199,13 @@ def compile_show(
         )
     compiler.named = named
     compiler.validate(assignments)
-    for index, patch_list, path in compiler.browser:
+    for index, patch_cycle, path in compiler.browser:
         patch, presentation = compiler.presentation(index)
         label = presentation.display_name or presentation.name or compiler.labels[patch]
         view = display.DisplayPatch(
             context=path,
             values={
-                'patch_list.name': patch_list,
+                'patch_cycle.name': patch_cycle,
                 'display_name': label,
                 'name': presentation.name,
                 'program': None,
@@ -219,13 +221,13 @@ def compile_show(
         if program is not None:
             record, bank, name, program_name, program_view = program
             record = bytearray(record)
-            # Patch list index is presentation data; node execution does not read it.
-            patch_list_index = next(
+            # Patch cycle index is presentation data; node execution does not read it.
+            patch_cycle_index = next(
                 i
-                for i, c in enumerate(patch_lists)
-                if c[:64].split(b'\0')[0].decode('utf-8') == patch_list
+                for i, c in enumerate(patch_cycles)
+                if c[:64].split(b'\0')[0].decode('utf-8') == patch_cycle
             )
-            struct.pack_into('<H', record, 2, patch_list_index)
+            struct.pack_into('<H', record, 2, patch_cycle_index)
             record[12:76] = _text(
                 label, 64, target, path + '.display_name', errors, unicode=True
             ).ljust(64, b'\0')
@@ -235,7 +237,7 @@ def compile_show(
                     'style': presentation.style,
                     'tags': presentation.tags,
                     'values': program_view.values
-                    | {'patch_list.name': patch_list, 'display_name': label},
+                    | {'patch_cycle.name': patch_cycle, 'display_name': label},
                 }
             )
             records.append(bytes(record))
@@ -250,8 +252,8 @@ def compile_show(
                     65535,
                     next(
                         i
-                        for i, c in enumerate(patch_lists)
-                        if c[:64].split(b'\0')[0].decode('utf-8') == patch_list
+                        for i, c in enumerate(patch_cycles)
+                        if c[:64].split(b'\0')[0].decode('utf-8') == patch_cycle
                     ),
                     0,
                     255,
@@ -272,7 +274,7 @@ def compile_show(
         views.append(view)
     for label, count, maximum in (
         ('instruments', len(instruments), target.max_instruments),
-        ('patch_lists', len(patch_lists), target.max_patch_lists),
+        ('patch_cycles', len(patch_cycles), target.max_patch_cycles),
         ('patches', len(roots), target.max_patches),
         ('switches', len(assignments), target.max_switches),
     ):
@@ -347,7 +349,7 @@ def compile_show(
     metadata = METADATA.pack(
         b'CMTA', min(len(mappings), 65535), show.transition_ms or 0
     )
-    body = b''.join(screen_records + instrument_records + patch_lists + records)
+    body = b''.join(screen_records + instrument_records + patch_cycles + records)
     body += (
         metadata
         + b''.join(identities + mappings)
@@ -373,7 +375,7 @@ def compile_show(
             show.chord_ms,
             HEADER.size + len(body),
             len(instruments),
-            len(patch_lists),
+            len(patch_cycles),
             len(roots),
             show.brightness | int(show.splash) << 8 | int(show.usb_midi_interface) << 9,
             crc32(body),
@@ -419,10 +421,10 @@ class PatchCompiler:
         ] = {}
 
     def parse(self, raw: object, path: str, name: str | None = None) -> int | None:
-        if path.startswith('patch_lists.') and isinstance(raw, str):
+        if path.startswith('patch_cycles.') and isinstance(raw, str):
             raw = {'name': raw}
         if (
-            path.startswith('patch_lists.')
+            path.startswith('patch_cycles.')
             and isinstance(raw, dict)
             and 'type' not in raw
             and 'name' in raw
@@ -687,7 +689,7 @@ class PatchCompiler:
         view = display.DisplayPatch(
             context=path,
             values={
-                'patch_list.name': '',
+                'patch_cycle.name': '',
                 'display_name': label,
                 'name': name,
                 'program': program,
@@ -1040,8 +1042,8 @@ STATE_OPERATIONS = {
             'usb-midi-interface',
             'next-patch',
             'previous-patch',
-            'next-patch-list',
-            'previous-patch-list',
+            'next-patch-cycle',
+            'previous-patch-cycle',
             'activate-selection',
             'undo',
             'menu',
@@ -1242,4 +1244,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHH')
-DOCUMENT_VERSION = 18
+DOCUMENT_VERSION = 19

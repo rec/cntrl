@@ -141,8 +141,8 @@ class Navigation(Presentation, frozen=True):
     operation: Literal[
         'next-patch',
         'previous-patch',
-        'next-patch-list',
-        'previous-patch-list',
+        'next-patch-cycle',
+        'previous-patch-cycle',
         'activate-selection',
         'undo',
         'menu',
@@ -229,7 +229,7 @@ class Definitions(BaseModel, frozen=True):
 
 class Page(BaseModel, frozen=True):
     fields: list[str] = Field(
-        default_factory=lambda: ['patch_list.name', 'display_name']
+        default_factory=lambda: ['patch_cycle.name', 'display_name']
     )
     style: Style | None = None
     line_styles: dict[str, Style] = Field(default_factory=dict)
@@ -313,7 +313,7 @@ class Show(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
     patches: dict[str, object] = Field(default_factory=dict)
-    patch_lists: dict[str, object] = Field(default_factory=dict)
+    patch_cycles: dict[str, object] = Field(default_factory=dict)
     definitions: Definitions | None = None
     fonts: dict[str, str] = Field(default_factory=dict)
     take_first_match: Annotated[bool, Field(strict=True)] = False
@@ -368,7 +368,7 @@ class Target(BaseModel, frozen=True):
     outputs: list[str]
     max_document_bytes: units.Bytes = Field(gt=24, le=65536)
     max_instruments: int = Field(gt=0, le=32)
-    max_patch_lists: int = Field(gt=0, le=128)
+    max_patch_cycles: int = Field(gt=0, le=128)
     max_patches: int = Field(gt=0, le=65535)
     history_depth: int = Field(gt=0)
     characters: str

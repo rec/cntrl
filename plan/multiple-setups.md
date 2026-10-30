@@ -16,7 +16,7 @@ them to the pedal, select them persistently, download them, and edit them from
 the pedal itself.
 
 A **performance setup** is what the existing application calls a show/config:
-instrument routes, patch lists, tags, patches and display/behavior settings. It is not
+instrument routes, patch cycles, tags, patches and display/behavior settings. It is not
 the existing instrument-level `setup` field, which identifies instrument bank
 addressing rules. Do not rename or conflate that field as part of this feature.
 

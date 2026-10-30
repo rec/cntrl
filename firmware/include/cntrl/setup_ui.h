@@ -137,7 +137,7 @@ private:
         char number[64] = {};
         if (mode_ == Mode::action) { title = name_; value = item_ == 2 ? "History" : item_ ? "Edit" : "Select"; }
         else if (mode_ == Mode::patch) {
-            title = reinterpret_cast<const char *>(docs_.document().patch_list(u16(docs_.document().patch(patch_) + 2)));
+            title = reinterpret_cast<const char *>(docs_.document().patch_cycle(u16(docs_.document().patch(patch_) + 2)));
             value = reinterpret_cast<const char *>(docs_.document().patch(patch_) + 12);
             value_label = "Patch";
         }
@@ -190,7 +190,7 @@ private:
             std::snprintf(views[2].lines[0].text, 64, "Setup menu");
             std::snprintf(views[2].lines[1].text, 64, "No MIDI sent");
         } else {
-            std::snprintf(views[1].lines[0].text, 64, "%s", mode_ == Mode::action ? "Setup" : mode_ == Mode::patch ? "Patch list" : "Field");
+            std::snprintf(views[1].lines[0].text, 64, "%s", mode_ == Mode::action ? "Setup" : mode_ == Mode::patch ? "Patch cycle" : "Field");
             std::snprintf(views[1].lines[1].text, 64, "%s", title);
             std::snprintf(views[2].lines[0].text, 64, "%s", value_label);
             std::snprintf(views[2].lines[1].text, 64, "%s", value);

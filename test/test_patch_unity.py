@@ -85,7 +85,7 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
             ]
         },
         'patches': patches,
-        'patch_lists': {'Live': [{'type': 'reference', 'patch': n} for n in patches]},
+        'patch_cycles': {'Live': [{'type': 'reference', 'patch': n} for n in patches]},
     }
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
@@ -93,7 +93,7 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
     assert exported['patches']['nrpn'] == patches['nrpn']
     assert exported['patches']['sysex']['data'] == patches['sysex']['data']
     assert exported['patches']['stock']['exit_buttons'] == 'A+F'
-    assert len(exported['patch_lists']['Live']) == len(patches)
+    assert len(exported['patch_cycles']['Live']) == len(patches)
 
 
 def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
@@ -320,7 +320,7 @@ def test_composite_inherits_child_tags_but_keeps_parent_label(
                 'patches': [{'type': 'reference', 'patch': 'child'}],
             },
         },
-        'patch_lists': {'Live': [{'type': 'reference', 'patch': 'parent'}]},
+        'patch_cycles': {'Live': [{'type': 'reference', 'patch': 'parent'}]},
         'pages': {'patch': {'fields': ['display_name', 'tags']}},
     }
     data = compiler.compile_show(show, {}, [], target)
@@ -431,8 +431,8 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
     definitions = compiler.read_document(Path('firmware/test/definitions.json'))
     assert isinstance(source, dict)
     if reference_override:
-        source['patches'] = {'clean': source['patch_lists']['wind'][0]}
-        source['patch_lists']['wind'][0] = {
+        source['patches'] = {'clean': source['patch_cycles']['wind'][0]}
+        source['patch_cycles']['wind'][0] = {
             'type': 'reference',
             'patch': 'clean',
             'name': 'Special',
@@ -448,10 +448,10 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
     if reference_override:
         root = 0
         node = offset + struct.unpack_from('<I', data, offset + compiler.GRAPH.size)[0]
-    _, _, _, _, instruments, patch_lists, patches, _, _, _ = (
+    _, _, _, _, instruments, patch_cycles, patches, _, _, _ = (
         compiler.HEADER.unpack_from(data)
     )
-    cache = 76 + instruments * 68 + patch_lists * 68
+    cache = 76 + instruments * 68 + patch_cycles * 68
     meta = cache + patches * 82
     mappings = struct.unpack_from('<H', data, meta + 4)[0]
     bank = meta + compiler.METADATA.size + instruments * 64 + mappings * 8
@@ -477,11 +477,11 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
         == data[node + 4 : node + 15]
     )
     assert recompiled[cache + 12 : cache + 76] == data[cache + 12 : cache + 76]
-    assert restored['patch_lists']['wind'][0]['display_name'] == (
+    assert restored['patch_cycles']['wind'][0]['display_name'] == (
         'Special' if reference_override else 'Flute'
     )
     if reference_override:
         assert restored['patches']['clean']['program'] == 2
     else:
-        assert restored['patch_lists']['wind'][0]['program'] == 2
+        assert restored['patch_cycles']['wind'][0]['program'] == 2
     assert compiler.compile_show(restored, {}, [], target) == recompiled

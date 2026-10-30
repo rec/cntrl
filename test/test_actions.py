@@ -12,9 +12,9 @@ def compile_switches(assignments: dict[str, object], capacity: int = 5) -> bytes
     root = Path(__file__).parents[1] / 'firmware/test'
     show = compiler.read_document(root / 'show.json')
     assert isinstance(show, dict)
-    patch_lists = show['patch_lists']
-    assert isinstance(patch_lists, dict)
-    show['patches'] = {p['name']: p for v in patch_lists.values() for p in v}
+    patch_cycles = show['patch_cycles']
+    assert isinstance(patch_cycles, dict)
+    show['patches'] = {p['name']: p for v in patch_cycles.values() for p in v}
     show['switches'] = assignments
     target = models.Target.model_validate(
         compiler.read_document(root / 'target.json')
