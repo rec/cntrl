@@ -1,0 +1,78 @@
+# Patchman Music TURBO VL ROM preset voices for the Yamaha VL70-m.
+# Source: https://www.patchmanmusic.com/turbovl.html
+# Array positions give bank numbers (0-based) and program numbers (1-based).
+# Preset addressing: CC 0 value 33; CC 32 value is the bank number.
+# Custom and Internal user memories are not included.
+
+[instruments.patchman]
+instrument = 'patchman'
+programs = [
+  [  # Bank 0: Preset 1
+    'Trumpet', 'Maynard', 'Alpert', 'Chet Tpt',  # 001-004
+    'Lead Tpt', 'ClassTpt', 'StrMtTpt', 'CupMtTpt',  # 005-008
+    'WahMtTpt', 'WaTptCC4', 'HrmMtTpt', 'Mute Tpt',  # 009-012
+    'Picc.Tpt', 'Cornet', 'Flugel', 'Mangione',  # 013-016
+    'Trombone', 'Big Bone', 'BriteTbn', 'ValveTbn',  # 017-020
+    'Jam Bone', 'Bass Tbn', 'BcktMtTb', 'DorseyTb',  # 021-024
+    'WX Horn', 'BrassHrn', 'BriteHrn', 'ff Horn',  # 025-028
+    'OrchHorn', 'New Horn', 'Euphnium', 'Tuba',  # 029-032
+    'SoprnoSx', 'KennyGee', 'HeyKenG.', 'Branford',  # 033-036
+    'TraneSop', 'BrtSopSx', 'Alto Sax', 'Sanborn',  # 037-040
+    'BirdAlto', 'ExprAlto', 'Desmond', 'Koz Alto',  # 041-044
+    'Everette', 'NY Alto', 'NY Tenor', 'TenorSax',  # 045-048
+    'MBrecker', 'PopTenor', 'SoulTenr', 'RaspyTnr',  # 049-052
+    'Getz Tnr', 'JobimTnr', 'TenorSub', 'Bari Sax',  # 053-056
+    'TiteBari', 'Sax Sect', 'Air Sax', 'Saxual',  # 057-060
+    'Sanford', 'Piccolo', 'Flute', 'Real Flt',  # 061-064
+    'SilvrFlt', 'ClassFlt', 'Nz Flute', 'VoxFlute',  # 065-068
+    'AquaFlut', 'OakFlute', 'Bass Flt', 'Afri Flt',  # 069-072
+    'PennyWhs', 'TinWhist', 'Flutofon', 'Inca Flt',  # 073-076
+    'Noze Flt', 'Quena', 'Quena x2', 'PanFlute',  # 077-080
+    'Andean', 'Pan Pipe', 'Bali Flt', 'IndiaFlt',  # 081-084
+    'Ambience', 'WetFone', 'Maya Flt', 'Shakuhat',  # 085-088
+    'Bamboo', 'PanPicol', 'Coca!!', 'Ocarina!',  # 089-092
+    'Lonely', 'Recorder', 'Clarinet', 'JazzClar',  # 093-096
+    'ClsClrnt', 'Bs.Clrnt', 'BrtBsClr', 'Oboe',  # 097-100
+    'Eng.Horn', 'SftEngHn', 'Bassoon', 'Flurinet',  # 101-104
+    'Crumbon', 'Klarina', 'ThaiReed', 'Chanter',  # 105-108
+    'Digirdoo', 'IslePipe', 'SoftPipe', 'LitePipe',  # 109-112
+    'CelloSax', 'YamaBotl', 'Solo Vln', 'DrkVioln',  # 113-116
+    'BrtVioln', 'SweetVln', 'Fiddle', 'Viola',  # 117-120
+    'SwtViola', 'RosinVla', 'Cello', 'SoloCell',  # 121-124
+    'DrkCello', 'Bow Bass', 'HiStrEns', 'Pizzicat',  # 125-128
+  ],
+  [  # Bank 1: Preset 2
+    'Harmonca', 'MouthHrp', 'BluesHrm', 'Stevie!',  # 001-004
+    'Toots!', 'Accordn.', 'Concrtna', 'Jazz B3',  # 005-008
+    'Clavinet', 'Funky', 'SteelDrm', 'VL Drums',  # 009-012
+    'Yangchin', 'Asia Plk', 'JapanPlk', 'Tambura',  # 013-016
+    'Sitar', 'ElecHarp', 'SteelGtr', 'AcGuitar',  # 017-020
+    'Flamenco', 'SpainGtr', 'NylonGtr', 'SwtNylGt',  # 021-024
+    'Les Gtr', 'Joe Pass', 'FMGuitar', 'Lucille',  # 025-028
+    '>>PAT<<', 'EFXStrat', 'ClnStrat', 'Surf Gtr',  # 029-032
+    'Mute Gtr', 'WahGtCC4', 'PatSynGt', 'BluesGtr',  # 033-036
+    'Clapton', 'PopODGtr', 'Carlos', 'TubeGtr!',  # 037-040
+    'FET Guit', 'Dist.Gtr', 'Wah Lead', 'Wah Dist',  # 041-044
+    'GuitHero', 'Eddie4th', 'Feedback', 'Hendrix',  # 045-048
+    'TalkBox!', '!XTREME!', 'Hercules', 'SynClav',  # 049-052
+    'Syncro!', 'Theremin', 'Avalana', 'Voxanne',  # 053-056
+    'Beauty!', 'SpaceOut', 'Ghost Ld', 'PtchNoiz',  # 057-060
+    'BreathTb', 'Air Lead', 'Breezer', 'ZawiLead',  # 061-064
+    'Voxofone', 'Whistler', 'Debussy', 'Sines()',  # 065-068
+    'SmoothLd', 'Slinky', 'AirStick', 'RotoFone',  # 069-072
+    'Vox Lead', 'Squeezy', 'Lyricon', 'Ana.Lead',  # 073-076
+    'Mobius', '70s Lead', 'Osc Lead', 'Saw Lead',  # 077-080
+    'SAWS/|/|', 'ResoSaws', 'EML Lead', 'HPFilter',  # 081-084
+    'EWI ARP', 'EWI Lead', 'Koz Lead', 'MattLead',  # 085-088
+    'PATCHMAN', 'Taurus', 'Phaser-{', 'SynZilla',  # 089-092
+    'MegaSyn', 'Winwood', 'Pulse Ld', 'Corea!!',  # 093-096
+    'SquareLd', 'Korg Ld', 'LuckyMan', 'Lyle',  # 097-100
+    'Analog', 'Nyle', 'Floyd Ld', 'BorgHorn',  # 101-104
+    'Freik', 'Fazar', 'Dungeon', 'NevrLand',  # 105-108
+    'Brekord1', 'Brekord2', 'Brekord3', 'ElecBass',  # 109-112
+    'MotownBs', 'SteinBas', 'FunkBass', 'PickBass',  # 113-116
+    'SnapBass', 'Thumb Bs', 'TiteBass', 'JacoBass',  # 117-120
+    'StratoBs', 'Sticky!', 'MuteBass', 'Ac Bass',  # 121-124
+    'Juicy Bs', 'GnarlyBs', 'Moog Bs', 'Bass1000',  # 125-128
+  ],
+]
