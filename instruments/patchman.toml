@@ -4,9 +4,6 @@
 # Preset addressing: CC 0 value 33; CC 32 value is the bank number.
 # Custom and Internal user memories are not included.
 
-[instruments.patchman]
-instrument = 'patchman'
-
 [instruments.patchman.programs]
 0 = [  # Preset 1
   'Trumpet', 'Maynard', 'Alpert', 'Chet Tpt',  # 001-004

@@ -4,9 +4,6 @@
 # Internal addressing: CC 0 value 33; CC 32 value 3.
 # A/B comments identify source presets in Preset 1/2, not MIDI destinations.
 
-[instruments.patchman]
-instrument = 'patchman'
-
 [instruments.patchman.programs]
 3 = [  # Internal
   # 0. first 5

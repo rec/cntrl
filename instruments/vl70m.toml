@@ -4,9 +4,6 @@
 # Preset addressing: CC 0 value 33; CC 32 value is the bank number.
 # Custom and Internal user memories are not included.
 
-[instruments.vl70m]
-instrument = 'vl70m'
-
 [instruments.vl70m.programs]
 0 = [  # Preset 1
   'Mad Tube', 'VintgLd', 'SpaceZoo', 'GuitHero',  # 001-004
