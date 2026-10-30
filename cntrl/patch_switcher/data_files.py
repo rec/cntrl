@@ -124,12 +124,21 @@ def _merge(
             origins[path] = source
             continue
         old = result[key]
+        positional_programs = path.startswith('instruments.') and (
+            key == 'programs' or prefix.endswith('.programs')
+        )
         if isinstance(old, dict) and isinstance(new, dict):
             _merge(old, new, origins, source, path, avoid_confict, errors)
         elif type(old) is not type(new):
             errors.append(
                 f'{origins[path]} and {source}: {path}: incompatible value types'
             )
+        elif positional_programs and isinstance(old, list) and isinstance(new, list):
+            if old != new:
+                errors.append(
+                    f'{origins[path]} and {source}: {path}: '
+                    'conflicting program positions'
+                )
         elif isinstance(old, list) and isinstance(new, list) and avoid_confict:
             old.extend(deepcopy(new))
             origins[path] = source

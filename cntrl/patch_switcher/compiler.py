@@ -75,18 +75,28 @@ def compile_show(
         if any(b < 0 for b in s.banks):
             errors.append(f'definitions: negative bank in {key}')
     entries = _join_tables(
-        [{'patches': [p.model_dump() for p in parsed.programs]}, *tables], errors
+        [
+            {'patches': [p.model_dump() for p in parsed.programs]},
+            {'instruments': show.instruments},
+            *tables,
+        ],
+        errors,
     )
     instruments: dict[str, models.Instrument] = {}
     instrument_records: list[bytes] = []
     for alias, raw in show.instruments.items():
         try:
-            instrument = models.Instrument.model_validate(raw)
+            instrument = _instrument(alias, raw)
         except ValidationError as error:
             errors.extend(_validation_errors(f'instruments.{alias}', error))
             continue
         if (instrument.instrument, instrument.setup) not in setups:
-            errors.append(f'instruments.{alias}: unknown instrument/setup')
+            if instrument.setup == 'default':
+                setups[instrument.instrument, instrument.setup] = models.Setup(
+                    instrument=instrument.instrument, name=instrument.setup
+                )
+            else:
+                errors.append(f'instruments.{alias}: unknown instrument/setup')
         if instrument.output not in target.outputs:
             errors.append(
                 f'instruments.{alias}: unavailable output {instrument.output!r}'
@@ -409,6 +419,42 @@ class PatchCompiler:
         ] = {}
 
     def parse(self, raw: object, path: str, name: str | None = None) -> int | None:
+        if path.startswith('patch_lists.') and isinstance(raw, str):
+            raw = {'name': raw}
+        if (
+            path.startswith('patch_lists.')
+            and isinstance(raw, dict)
+            and 'type' not in raw
+            and 'name' in raw
+        ):
+            if 'program' in raw:
+                self.errors.append(
+                    f'{path}: specify a program name or number, not both'
+                )
+                return None
+            matches = [
+                (a, e)
+                for a, i in self.instruments.items()
+                for e in self.entries
+                if e.instrument == i.instrument
+                and e.setup == i.setup
+                and e.name == raw['name']
+                and ('instrument' not in raw or raw['instrument'] == a)
+                and ('bank' not in raw or raw['bank'] == e.bank)
+            ]
+            if len(matches) != 1:
+                self.errors.append(
+                    f'{path}: expected one exact program match for {raw["name"]!r}, '
+                    f'found {len(matches)}; qualify with instrument and bank'
+                )
+                return None
+            alias, entry = matches[0]
+            raw = raw | {
+                'type': 'program-change',
+                'instrument': alias,
+                'program': entry.program,
+                'bank': entry.bank,
+            }
         try:
             value = normalize_patch(raw)
         except ValidationError as error:
@@ -808,10 +854,23 @@ class PatchCompiler:
                 ],
                 self.errors,
             )
+        entries = _join_tables(
+            [
+                {'patches': [e.model_dump() for e in entries]},
+                {'instruments': source.instruments},
+            ],
+            self.errors,
+        )
         instruments: dict[str, models.Instrument] = {}
         for key, raw in source.instruments.items():
             try:
-                instruments[key] = models.Instrument.model_validate(raw)
+                instrument = _instrument(key, raw)
+                instruments[key] = instrument
+                if instrument.setup == 'default':
+                    setups.setdefault(
+                        (instrument.instrument, instrument.setup),
+                        models.Setup(instrument=instrument.instrument, name='default'),
+                    )
             except ValidationError as error:
                 self.errors.extend(_validation_errors(f'instruments.{key}', error))
         result = PatchCompiler(
@@ -1002,10 +1061,16 @@ def _validation_errors(context: str, error: ValidationError) -> list[str]:
 def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePatch]:
     entries: dict[tuple[str, str, int, int | None], models.TablePatch] = {}
     for index, table in enumerate(tables):
-        if not isinstance(table, dict) or not isinstance(table.get('patches'), list):
+        if not isinstance(table, dict) or not (
+            isinstance(table.get('patches'), list)
+            or isinstance(table.get('instruments'), dict)
+        ):
             errors.append(f'table[{index + 1}]: expected a patches list')
             continue
-        for row, raw in enumerate(table['patches']):
+        rows = table.get('patches', [])
+        rows = rows if isinstance(rows, list) else []
+        rows = rows + _catalogue_rows(table, errors)
+        for row, raw in enumerate(rows):
             context = f'table[{index + 1}].patches[{row + 1}]'
             try:
                 entry = models.TablePatch.model_validate(raw)
@@ -1032,6 +1097,70 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                     errors.append(f'{context}: conflicting {field} for {key}')
             entries[key] = models.TablePatch.model_validate(merged)
     return list(entries.values())
+
+
+def _instrument(alias: str, raw: object) -> models.Instrument:
+    if isinstance(raw, dict):
+        raw = {k: v for k, v in raw.items() if k != 'programs'}
+        raw.setdefault('instrument', alias)
+    return models.Instrument.model_validate(raw)
+
+
+def _catalogue_rows(table: dict[str, object], errors: list[str]) -> list[object]:
+    rows: list[object] = []
+    instruments = table.get('instruments', {})
+    if not isinstance(instruments, dict):
+        return rows
+    for alias, instrument in instruments.items():
+        if not isinstance(instrument, dict) or 'programs' not in instrument:
+            continue
+        programs = instrument['programs']
+        if isinstance(programs, list):
+            banks = {None: programs}
+        elif isinstance(programs, dict):
+            banks = programs
+        else:
+            errors.append(
+                f'instruments.{alias}.programs: expected an array or bank table'
+            )
+            continue
+        for bank, values in banks.items():
+            context = f'instruments.{alias}.programs'
+            if bank is not None:
+                context += f'.{bank}'
+                if (
+                    not isinstance(bank, str)
+                    or not bank.isascii()
+                    or not bank.isdecimal()
+                ):
+                    errors.append(f'{context}: bank key must be a nonnegative integer')
+                    continue
+            if not isinstance(values, list) or len(values) > 128:
+                errors.append(f'{context}: expected an array of at most 128 programs')
+                continue
+            for number, value in enumerate(values, 1):
+                if value == {}:
+                    continue
+                if isinstance(value, str):
+                    value = {'name': value}
+                if not isinstance(value, dict):
+                    errors.append(
+                        f'{context}[{number}]: expected a name or metadata table'
+                    )
+                    continue
+                address = {
+                    'instrument': instrument.get('instrument', alias),
+                    'setup': instrument.get('setup', 'default'),
+                    'program': number,
+                    'bank': int(bank) if bank is not None else None,
+                }
+                if any(k in value for k in address):
+                    errors.append(
+                        f'{context}[{number}]: program address comes from its position'
+                    )
+                    continue
+                rows.append(value | address)
+    return rows
 
 
 def _text(

@@ -1,0 +1,13 @@
+# Start the synthesizer in the desired bank. This setup sends Program Change only.
+[instruments.synth]
+output = 'din'
+channel = 1
+programs = [
+    'Piano',
+    {name = 'Flute', tags = 'woodwind,solo'},
+    {},  # Unknown program 3; later programs keep their numbers.
+    'Strings',
+]
+
+[patch_lists]
+Live = ['Piano', 'Flute', 'Strings']

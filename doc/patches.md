@@ -5,10 +5,85 @@ or patch independently of those lists. Items use a `tags` list; the setup's
 optional `[tags.NAME.style]` tables define styles for selected tags. Tags do not
 need a declaration to be used.
 
-A Patch is an executable table with a required `type`. The same table works in a
+A fully specified Patch is an executable table with a required `type`. The same table works in a
 named definition, a browser patch list, a switch assignment, a song position or a
 sequence. A sequence executes all its children on one activation. A song advances
 one position at a time.
+
+## Simple program lists
+
+For an instrument that stays in one bank, list its program names in order:
+
+```toml
+[instruments.synth]
+channel = 1
+output = 'din'
+programs = ['Piano', 'Flute', {}, 'Strings']
+
+[patch_lists]
+Live = ['Piano', 'Flute', 'Strings']
+```
+
+Array positions are program numbers 1 through 128. An empty table `{}` leaves
+that position unnamed without moving subsequent programs. A flat array sends
+Program Change only: it does not select bank 0 or send either bank-select
+controller. Select the desired bank on the instrument before using the setup.
+
+An entry can also be a metadata table, for example
+`{name = 'Flute', tags = 'woodwind,solo'}`. Tags accept a list of strings or a
+string separated by commas or colons. Program numbers and instrument identities
+come from the containing structure and cannot be repeated inside these entries.
+
+In a patch list, a string looks up an exact program name. If a name occurs more
+than once, qualify it with `{name = 'Flute', instrument = 'synth', bank = 3}`,
+using whichever qualifiers are needed to select one program. These shorthand
+entries can include presentation properties, volume and pan. Named patches,
+switch assignments, sequences and songs continue to use explicit typed Patches.
+
+For explicit banks, use a table whose keys are bank numbers:
+
+```toml
+[instruments.synth]
+channel = 1
+output = 'din'
+
+[instruments.synth.programs]
+0 = ['Piano', 'Flute']
+3 = ['Lead', 'Strings']
+
+[[definitions.setups]]
+instrument = 'synth'
+name = 'default'
+
+[definitions.setups.banks.0]
+lsb = 0
+
+[definitions.setups.banks.3]
+lsb = 3
+
+[patch_lists]
+Live = ['Piano', 'Lead']
+```
+
+Explicit banks need mappings in the setup definition. `msb` is the value sent on
+CC 0; `lsb` is the value sent on CC 32. Only the configured controllers are sent.
+The example configures CC 32 alone. The compiler does not guess a device's bank
+mapping from its name or a catalogue's bank numbers.
+
+The instrument identity defaults to its table key, and `setup` defaults to
+`'default'`. A setup with no bank mappings or initialization data needs no
+definition. Routing still requires `channel` and `output`. Catalogues containing
+only names and metadata can be supplied as `--table` files; routing then belongs
+in the show file.
+
+When files are combined with `+`, different bank keys merge without changing
+program numbers. Equal program arrays are retained once; conflicting arrays are
+errors even with conflict avoidance enabled. Flat and bank-keyed catalogues for
+the same instrument cannot be mixed. Existing explicit configurations and
+examples remain supported. See `examples/patch-switcher/program-changes.toml`
+for a complete flat-list example.
+
+## Explicit patches
 
 ```toml
 [instruments.piano]

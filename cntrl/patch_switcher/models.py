@@ -1,10 +1,12 @@
 """Show and instrument-table formats, separate from hardware catalogues."""
 
+import re
 from functools import cached_property
 from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StrictStr,
@@ -13,6 +15,12 @@ from pydantic import (
     model_validator,
 )
 from reccy.configuration import units
+
+
+def parse_tags(value: object) -> object:
+    if isinstance(value, str):
+        return [t.strip() for t in re.split('[,:]', value) if t.strip()]
+    return value
 
 
 class Bank(BaseModel, frozen=True):
@@ -39,7 +47,7 @@ class Setup(BaseModel, frozen=True):
 
 class Instrument(BaseModel, frozen=True):
     instrument: str
-    setup: str
+    setup: str = 'default'
     channel: Annotated[int, Field(strict=True, ge=1, le=16)]
     output: str
 
@@ -65,7 +73,9 @@ class Presentation(BaseModel, frozen=True):
     name: str | None = None
     display_name: str | None = None
     style: Style | None = None
-    tags: list[str] = Field(default_factory=list)
+    tags: Annotated[list[str], BeforeValidator(parse_tags)] = Field(
+        default_factory=list
+    )
 
     model_config = ConfigDict(extra='forbid')
 
@@ -203,7 +213,9 @@ class TablePatch(BaseModel, frozen=True):
     range: str | None = None
     description: str | None = None
     style: Style | None = None
-    tags: list[str] = Field(default_factory=list)
+    tags: Annotated[list[str], BeforeValidator(parse_tags)] = Field(
+        default_factory=list
+    )
 
     model_config = ConfigDict(extra='forbid')
 
