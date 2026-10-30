@@ -1,0 +1,28 @@
+# Both instruments receive channel 1 and are already set to Internal.
+# Each activation sends one Program Change through DIN, without bank selection.
+
+[instruments.both]
+output = 'din'
+channel = 1
+catalogues = [
+    'instruments/vl70-internal.toml',
+    'instruments/patchman-internal.toml',
+]
+
+[pages.patch]
+fields = ['patch_cycle.name', 'names.vl70m', 'names.patchman']
+
+[patch_cycles]
+# Programs 1-5 are selected directly on the instruments and are omitted here.
+bass = [6, 7, 8, 9, 10]
+sax = [11, 12, 13, 14, 15]
+reed = [16, 17, 18, 19, 20, 21]
+flute = [22, 23, 24, 25, 26]
+world = [27, 28, 29, 30, 31]
+brass = [32, 33, 34, 35, 36]
+guitar = [37, 38, 39, 40, 41]
+strings = [42, 43, 44, 45, 46]
+# Two groups of five, kept together as one cycle.
+synth = [47, 48, 49, 50, 51, 52, 53, 54, 55, 56]
+# VL70-m effects/percussion paired with Patchman synth sounds.
+fx = [57, 58, 59, 60, 61, 62, 63, 64]
