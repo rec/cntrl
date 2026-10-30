@@ -1,18 +1,23 @@
 # Personal program tags, independent of the documented catalogues.
 
 [instruments.vl70m.tags]
-fx = ['Mad Tube']
+fx = [
+  'Mad Tube', 'SpaceZoo', 'Cybastrg', 'Mu', 'Formula', 'Jurassic', 'Devil', 'SpcHorse',
+  'Jason', 'Suedhead', 'DinoPerc',
+]
 synth = [
   'VintgLd', 'RockPigs', 'Igneous', '50 / 50', 'Wynth', 'ZubZub', 'Blue', 'OsciLead',
   'SqrLead', 'Bigger', 'AnaSquid', 'SharpSyn', 'AnaWave', 'Grunge', 'Ossyncro',
   'SyncLed', 'Old Mini', 'Fat Mini', 'SimpleSy', 'Choronic', 'SynHarmo', 'SynSkex',
   'ResoSqr', 'PhilTur', 'ChalPuls', 'Brassyn', 'AcoSynLd', 'Digitrn', 'LyricOff',
   'Rezzawi', 'Duality', 'NerzoBr', 'Lonely', 'Ophelia', 'Maysbe?', 'Blowsoo',
+  'StoneHng', 'BuzzSaw', 'SlitMinu', 'Flaggoot', 'FlatLead', 'Moby', 'Macro',
+  'Sylophon',
 ]
 guitar = [
   'GuitHero', 'Whizzer', 'MuteHrBs', 'Spanish', 'JazzGtr!', 'JazzyGtr', 'WetPluck',
   'Comp Gtr', 'FunkyGtr', 'Thin Gtr', 'Carlos', 'Destiny', 'Talk Box', 'Pluck Ld',
-  'Xynth', 'WX J Gtr', 'AmpdHarp',
+  'Xynth', 'WX J Gtr', 'AmpdHarp', 'L7 Pluck', 'Gonzo',
 ]
 bass = [
   'SimpleBa', 'SuperBas', 'New Slap', 'Babalog', 'FngerBass', 'Upright', 'Fnground',
@@ -42,7 +47,7 @@ reed = [
 ]
 pipe = [
   'MokoPipe', 'PicoPipe', 'Shakuha!', 'Eastern', 'WX Shaku', 'Bamboo', 'SquealAT',
-  'SoftPipe', 'PicoStrg',
+  'SoftPipe', 'PicoStrg', 'Gertrude',
 ]
 sax = [
   'Softblow', 'Edgeopho', 'Sintax', 'SoprSax!', 'LiteAlto', 'Air Sax', 'TenrSax!',
@@ -54,12 +59,19 @@ sax = [
 flute = [
   'Vento', 'BtlFlute', 'Coca', 'Piccolo!', 'Piccol!2', 'BowPicol', 'C Flute',
   'C Flute2', 'JazFlute', 'OakFlute', 'BtlFlut2', 'RzdeFlt', 'Flutuen', 'Nz Flute',
-  'Pan Pipe', 'PanPicol', 'Andean', 'Flurinet', 'IslePipe',
+  'Pan Pipe', 'PanPicol', 'Andean', 'Flurinet', 'IslePipe', 'Recordr!', 'Ocarina!',
+  'YamaBotl',
 ]
 trombone = ['Trmbone!', 'Melwbone']
 horn = ['Horn!', 'Horn!2', 'NuHorne', 'WX Horn', 'EngHorn!', 'MizuHorn']
 tuba = ['Tuba!', 'Brappo']
 cello = ['Cello!', 'Eleanor', 'Nu Cello']
+keyboard = ['AnaWurl', 'Q.Klav']
+sitar = ['Sitar!', 'India']
+percussion = ['YamSteel']
+brass = ['Electrum']
+accordion = ['Jhopali', 'Squeeze']
+harmonica = ['CromHarp', 'WahUpHp']
 
 [instruments.patchman.tags]
 trumpet = [
@@ -69,7 +81,7 @@ trumpet = [
 ]
 clarinet = [
   'ClassTpt', 'ClassFlt', 'Clarinet', 'JazzClar', 'Flurinet', 'Clavinet', 'Clapton',
-  'SynClav',
+  'SynClav', 'ClsClrnt',
 ]
 trombone = [
   'Trombone', 'Big Bone', 'BriteTbn', 'ValveTbn', 'Jam Bone', 'BcktMtTb', 'DorseyTb',
@@ -79,7 +91,7 @@ bass = [
   'Bass Tbn', 'Bass Flt', 'Bali Flt', 'Bamboo', 'Bs.Clrnt', 'BrtBsClr', 'Bow Bass',
   'ElecBass', 'MotownBs', 'SteinBas', 'FunkBass', 'PickBass', 'SnapBass', 'Thumb Bs',
   'TiteBass', 'JacoBass', 'StratoBs', 'MuteBass', 'Ac Bass', 'Juicy Bs', 'GnarlyBs',
-  'Moog Bs', 'Bass1000',
+  'Moog Bs', 'Bass1000', 'Sticky!',
 ]
 horn = [
   'WX Horn', 'BrassHrn', 'BriteHrn', 'ff Horn', 'OrchHorn', 'New Horn', 'Eng.Horn',
@@ -89,19 +101,47 @@ tuba = ['Euphnium', 'Tuba']
 sax = [
   'Alto Sax', 'BirdAlto', 'ExprAlto', 'Koz Alto', 'NY Alto', 'NY Tenor', 'TenorSax',
   'PopTenor', 'SoulTenr', 'TenorSub', 'Bari Sax', 'TiteBari', 'Sax Sect', 'Air Sax',
-  'Saxual', 'CelloSax',
+  'Saxual', 'CelloSax', 'SoprnoSx', 'KennyGee', 'HeyKenG.', 'Branford', 'TraneSop',
+  'BrtSopSx', 'Sanborn', 'Desmond', 'Everette', 'MBrecker', 'RaspyTnr', 'Getz Tnr',
+  'JobimTnr', 'Sanford',
 ]
 flute = [
   'Piccolo', 'Flute', 'Nz Flute', 'VoxFlute', 'AquaFlut', 'OakFlute', 'Flutofon',
-  'PanFlute',
+  'PanFlute', 'Real Flt', 'SilvrFlt', 'Afri Flt', 'PennyWhs', 'TinWhist', 'Inca Flt',
+  'Noze Flt', 'Quena', 'Quena x2', 'Andean', 'IndiaFlt', 'Ambience', 'WetFone',
+  'Maya Flt', 'PanPicol', 'Coca!!', 'Ocarina!', 'Lonely', 'Recorder', 'YamaBotl',
 ]
-pipe = ['Pan Pipe', 'Shakuhat', 'IslePipe', 'SoftPipe', 'LitePipe']
-reed = ['Oboe', 'Bassoon', 'ThaiReed', 'Chanter']
-violin = ['Solo Vln', 'DrkVioln', 'BrtVioln', 'SweetVln', 'Viola', 'SwtViola']
+pipe = ['Pan Pipe', 'Shakuhat', 'IslePipe', 'SoftPipe', 'LitePipe', 'Digirdoo']
+reed = ['Oboe', 'Bassoon', 'ThaiReed', 'Chanter', 'SftEngHn', 'Crumbon', 'Klarina']
+violin = [
+  'Solo Vln', 'DrkVioln', 'BrtVioln', 'SweetVln', 'Viola', 'SwtViola', 'Fiddle',
+  'RosinVla',
+]
 cello = ['Cello', 'SoloCell', 'DrkCello']
 guitar = [
   'SteelGtr', 'AcGuitar', 'SpainGtr', 'NylonGtr', 'SwtNylGt', 'Les Gtr', 'FMGuitar',
   'Surf Gtr', 'Mute Gtr', 'WahGtCC4', 'PatSynGt', 'BluesGtr', 'PopODGtr', 'TubeGtr!',
-  'FET Guit', 'Dist.Gtr', 'GuitHero',
+  'FET Guit', 'Dist.Gtr', 'GuitHero', 'Flamenco', 'Joe Pass', 'Lucille', '>>PAT<<',
+  'EFXStrat', 'ClnStrat', 'Carlos', 'Wah Lead', 'Wah Dist', 'Eddie4th', 'Feedback',
+  'Hendrix',
 ]
-synth = ['Syncro!', 'SynZilla', 'MegaSyn']
+synth = [
+  'Syncro!', 'SynZilla', 'MegaSyn', 'TalkBox!', '!XTREME!', 'Hercules', 'Theremin',
+  'Avalana', 'Voxanne', 'Beauty!', 'SpaceOut', 'Ghost Ld', 'PtchNoiz', 'Air Lead',
+  'Breezer', 'ZawiLead', 'Voxofone', 'Whistler', 'Debussy', 'Sines()', 'SmoothLd',
+  'Slinky', 'AirStick', 'RotoFone', 'Vox Lead', 'Squeezy', 'Lyricon', 'Ana.Lead',
+  'Mobius', '70s Lead', 'Osc Lead', 'Saw Lead', 'SAWS/|/|', 'ResoSaws', 'EML Lead',
+  'HPFilter', 'EWI ARP', 'EWI Lead', 'Koz Lead', 'MattLead', 'PATCHMAN', 'Taurus',
+  'Phaser-{', 'Winwood', 'Pulse Ld', 'Corea!!', 'SquareLd', 'Korg Ld', 'LuckyMan',
+  'Lyle', 'Analog', 'Nyle', 'Floyd Ld', 'Freik', 'Fazar', 'Dungeon', 'NevrLand',
+  'Brekord1', 'Brekord2', 'Brekord3',
+]
+strings = ['HiStrEns', 'Pizzicat', 'Asia Plk', 'JapanPlk', 'Tambura']
+harmonica = ['Harmonca', 'MouthHrp', 'BluesHrm', 'Stevie!', 'Toots!']
+accordion = ['Accordn.', 'Concrtna']
+organ = ['Jazz B3']
+keyboard = ['Funky']
+percussion = ['SteelDrm', 'VL Drums', 'Yangchin']
+sitar = ['Sitar']
+harp = ['ElecHarp']
+fx = ['PtchNoiz', 'Phaser-{']

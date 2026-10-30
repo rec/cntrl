@@ -255,9 +255,6 @@ def compile_display(
         if p.program_style is not None
     }
     source['patch_tags'] = {str(i): p.tags for i, p in enumerate(patches) if p.tags}
-    source['program_tags'] = {
-        str(i): p.program_tags for i, p in enumerate(patches) if p.program_tags
-    }
     authored = tomlkit.dumps(source).encode('utf-8')
     text_data = b''.join(struct.pack('<H', len(t)) + t for t in texts)
     page_data = b''.join(pages)
