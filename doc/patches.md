@@ -83,6 +83,25 @@ the same instrument cannot be mixed. Existing explicit configurations and
 examples remain supported. See `examples/patch-switcher/program-changes.toml`
 for a complete flat-list example.
 
+The documented VL70-m and Patchman catalogues keep their fixed program information
+in `instruments/vl70m.toml` and `instruments/patchman.toml`. Personal classifications
+are in `instruments/tags.toml`. Load the relevant catalogue and the tags file as
+separate `--table` arguments, or combine them with `+`. The tags file groups exact
+program names under each instrument:
+
+```toml
+[instruments.patchman.tags]
+trumpet = ['Trumpet', 'Maynard', 'Alpert']
+sax = ['Alto Sax', 'TenorSax', 'Bari Sax']
+```
+
+Each tag applies to every matching program name in that instrument's loaded
+catalogue. Missing names in a loaded catalogue are errors. Instruments whose
+catalogues are not loaded are ignored, so one tags file can serve several shows.
+Tag-table order determines tag order when a program belongs to multiple tags.
+If a nondefault setup is needed, declare `setup` once in the instrument table.
+Changing a classification does not require editing the documented catalogue.
+
 ## Explicit patches
 
 ```toml
