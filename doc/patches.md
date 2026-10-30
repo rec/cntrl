@@ -83,6 +83,12 @@ the same instrument cannot be mixed. Existing explicit configurations and
 examples remain supported. See `examples/patch-switcher/program-changes.toml`
 for a complete flat-list example.
 
+The documented VL70-m and Patchman catalogues keep their fixed program information
+in `instruments/vl70m.toml` and `instruments/patchman.toml`. Personal classifications
+are in `instruments/tags.toml`. Load the relevant catalogue and the tags file as
+separate `--table` arguments. Tags are matched by instrument, setup, bank and
+program number; changing a classification does not require editing the catalogue.
+
 ## Explicit patches
 
 ```toml

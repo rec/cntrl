@@ -103,6 +103,8 @@ preserved. The current catalogues, `instruments/vl70m.toml` and
 by bank key and array position. Tables join in command-line
 order, filling missing metadata, combining tags in first-seen order, and
 reporting conflicts. SysEx references are never read or included in the binary.
+Personal program tags are separate from these documented catalogues: also supply
+`--table instruments/tags.toml` to include those classifications.
 
 Regexes search within original synthesizer `name` values, never display labels.
 Zero matches always fails; multiple matches fails

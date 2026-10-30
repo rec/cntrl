@@ -22,7 +22,7 @@ from cntrl.patch_switcher.cli import save_font
         (
             'examples/patch-switcher/pman.toml',
             'instruments/definitions.toml',
-            ['instruments/patchman.toml'],
+            ['instruments/patchman.toml', 'instruments/tags.toml'],
         ),
         ('cntrl/maker/morningstar/mc/font-demo.toml', None, []),
         ('cntrl/maker/morningstar/mc/patch-functions-demo.toml', None, []),

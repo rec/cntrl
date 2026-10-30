@@ -159,3 +159,40 @@ def test_preset_and_internal_catalogues_merge_by_bank() -> None:
 def test_flat_example_compiles(target: models.Target) -> None:
     show = compiler.read_document(Path('examples/patch-switcher/program-changes.toml'))
     compiler.compile_show(show, {}, [], target)
+
+
+@pytest.mark.parametrize('instrument', ['vl70m', 'patchman'])
+def test_personal_tags_join_without_modifying_documented_catalogues(
+    instrument: str, target: models.Target
+) -> None:
+    catalogue = compiler.read_document(Path('instruments') / f'{instrument}.toml')
+    programs = catalogue['instruments'][instrument]['programs']
+    assert all(
+        not isinstance(p, dict) or 'tags' not in p for v in programs.values() for p in v
+    )
+    tags = compiler.read_document(Path('instruments/tags.toml'))
+    expected = {
+        (p['bank'], p['program']): p['tags']
+        for p in tags['patches']
+        if p['instrument'] == instrument
+    }
+    show = {
+        'instruments': {instrument: {'channel': 1, 'output': 'din'}},
+        'patch_lists': {
+            'All': [
+                {
+                    'type': 'program-change',
+                    'instrument': instrument,
+                    'bank': int(b),
+                    'program': n,
+                }
+                for b, v in programs.items()
+                for n, _ in enumerate(v, 1)
+            ]
+        },
+    }
+    definitions = compiler.read_document(Path('instruments/definitions.toml'))
+    data = compiler.compile_show(show, definitions, [catalogue, tags], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    for p in exported['definitions']['programs']:
+        assert p['tags'] == expected.get((p['bank'], p['program']), [])

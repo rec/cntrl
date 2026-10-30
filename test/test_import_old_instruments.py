@@ -85,12 +85,21 @@ def test_emits_valid_files_without_inventing_routing(
     programs = table['instruments']['patchman']['programs']['1']
     assert programs == [{}] * 127 + ['Bass']
     stock = compiler.read_document(output / 'vl70m.toml')
-    assert stock['instruments']['vl70m']['programs']['0'] == [
-        {'name': 'Flute', 'tags': ['wind']}
+    assert stock['instruments']['vl70m']['programs']['0'] == ['Flute']
+    tags = compiler.read_document(output / 'tags.toml')
+    assert tags['patches'] == [
+        {
+            'instrument': 'vl70m',
+            'setup': 'default',
+            'bank': 0,
+            'program': 1,
+            'tags': ['wind'],
+        }
     ]
     assert sorted(p.name for p in output.iterdir()) == [
         'definitions.toml',
         'patchman.toml',
+        'tags.toml',
         'vl70m.toml',
     ]
 

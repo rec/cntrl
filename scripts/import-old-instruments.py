@@ -81,6 +81,17 @@ def import_instruments(output: Path) -> None:
     )
     documents: dict[str, dict[str, object]] = {
         'definitions.toml': definitions.model_dump(mode='json', exclude_none=True),
+        'tags.toml': {
+            'patches': [
+                p.model_dump(
+                    include={'instrument', 'setup', 'bank', 'program', 'tags'},
+                    exclude_none=True,
+                )
+                for e in tables.values()
+                for p in e
+                if p.tags
+            ]
+        },
     }
     for instrument, entries in tables.items():
         banks: dict[str, list[object]] = {}
@@ -90,10 +101,9 @@ def import_instruments(output: Path) -> None:
             while len(programs) < entry.program:
                 programs.append(tomlkit.inline_table())
             metadata = entry.model_dump(
-                exclude={'instrument', 'setup', 'bank', 'program'}, exclude_none=True
+                exclude={'instrument', 'setup', 'bank', 'program', 'tags'},
+                exclude_none=True,
             )
-            if not metadata['tags']:
-                del metadata['tags']
             if list(metadata) == ['name']:
                 programs[entry.program - 1] = metadata['name']
             else:
