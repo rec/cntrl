@@ -6,7 +6,7 @@
 
 namespace cntrl {
 constexpr unsigned metadata_header_size = 8;
-constexpr unsigned document_version = 18;
+constexpr unsigned document_version = 19;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -64,7 +64,7 @@ public:
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 68 + np * 82;
-        if (ni > max_instruments || nc > max_patch_lists || bool(nc) != bool(np)
+        if (ni > max_instruments || nc > max_patch_cycles || bool(nc) != bool(np)
             || meta + metadata_header_size + ni * 64 + np * 4 > length
             || std::memcmp(bytes + meta, "CMTA", 4)) return false;
         unsigned nb = u16(bytes + meta + 4);
@@ -173,7 +173,7 @@ public:
             next += count;
         }
         if (next != np) return false;
-        data_ = bytes; length_ = length; instruments_ = ni; patch_lists_ = nc; patches_ = np;
+        data_ = bytes; length_ = length; instruments_ = ni; patch_cycles_ = nc; patches_ = np;
         styles_ = styles; pages_ = page_start; texts_ = texts;
         graph_ = graph;
         return true;
@@ -195,7 +195,7 @@ public:
     unsigned display_metadata() const { return graph_ + u32(data_ + graph_ + 4); }
     unsigned length() const { return length_; }
     const uint8_t *data() const { return data_; }
-    unsigned patch_lists() const { return patch_lists_; }
+    unsigned patch_cycles() const { return patch_cycles_; }
     unsigned instruments() const { return instruments_; }
     unsigned patches() const { return patches_; }
     unsigned chord_ms() const { return u16(data_ + 6); }
@@ -240,9 +240,9 @@ public:
         }
     }
     const uint8_t *instrument(unsigned i) const { return data_ + 76 + i * 68; }
-    const uint8_t *patch_list(unsigned i) const { return data_ + 76 + instruments_ * 68 + i * 68; }
-    const uint8_t *patch(unsigned i) const { return data_ + 76 + instruments_ * 68 + patch_lists_ * 68 + i * 82; }
-    unsigned metadata() const { return 76 + instruments_ * 68 + patch_lists_ * 68 + patches_ * 82; }
+    const uint8_t *patch_cycle(unsigned i) const { return data_ + 76 + instruments_ * 68 + i * 68; }
+    const uint8_t *patch(unsigned i) const { return data_ + 76 + instruments_ * 68 + patch_cycles_ * 68 + i * 82; }
+    unsigned metadata() const { return 76 + instruments_ * 68 + patch_cycles_ * 68 + patches_ * 82; }
     unsigned mappings() const { return u16(data_ + metadata() + 4); }
     const uint8_t *mapping(unsigned i) const { return data_ + metadata() + metadata_header_size + instruments_ * 64 + i * 8; }
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
@@ -374,7 +374,7 @@ private:
         source += 2;
         if (u16(p) == 65535 && code >= 2 && code <= 6) return;
         switch (code) {
-        case 0: source = patch_list(u16(p + 2)); break;
+        case 0: source = patch_cycle(u16(p + 2)); break;
         case 1: source = p + 12; break;
         case 6: if (u16(p) == 65535) return; source = instrument(u16(p)); break;
         case 2: std::snprintf(text, size, "%u", unsigned(p[4]) + 1); return;
@@ -390,7 +390,7 @@ private:
         std::snprintf(text, size, "%s", reinterpret_cast<const char *>(source));
     }
     const uint8_t *data_ = nullptr;
-    unsigned length_ = 0, instruments_ = 0, patch_lists_ = 0, patches_ = 0;
+    unsigned length_ = 0, instruments_ = 0, patch_cycles_ = 0, patches_ = 0;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
     unsigned graph_ = 0;
 };

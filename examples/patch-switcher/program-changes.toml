@@ -9,5 +9,5 @@ programs = [
     'Strings',
 ]
 
-[patch_lists]
+[patch_cycles]
 Live = ['Piano', 'Flute', 'Strings']

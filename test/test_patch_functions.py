@@ -16,7 +16,7 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
     ).model_copy(update={'functions': ['stock-firmware'], 'buttons': list('ABCDEF')})
     show = {
         'instruments': {},
-        'patch_lists': {
+        'patch_cycles': {
             'Functions': [
                 {
                     'exit_buttons': 'F+A',
@@ -29,7 +29,7 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
     }
     data = compiler.compile_show(show, {'setups': []}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['patch_lists']['Functions'][0]['exit_buttons'] == 'A+F'
+    assert exported['patch_cycles']['Functions'][0]['exit_buttons'] == 'A+F'
     assert compiler.compile_show(exported, {'setups': []}, [], target) == data
     with pytest.raises(compiler.CompilationError, match='unavailable'):
         compiler.compile_show(

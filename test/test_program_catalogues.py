@@ -30,7 +30,7 @@ def show() -> dict[str, object]:
                 ],
             }
         },
-        'patch_lists': {'Live': ['Flute', 'Lead']},
+        'patch_cycles': {'Live': ['Flute', 'Lead']},
     }
 
 
@@ -54,7 +54,7 @@ def test_keyed_bank_uses_configured_controller_mapping(target: models.Target) ->
         'instruments': {
             'synth': {'channel': 1, 'output': 'din', 'programs': {'3': ['Flute']}}
         },
-        'patch_lists': {'Live': ['Flute']},
+        'patch_cycles': {'Live': ['Flute']},
     }
     definitions = {
         'setups': [
@@ -78,10 +78,10 @@ def test_name_lookup_is_exact_and_qualifies_ambiguous_instruments(
     }
     with pytest.raises(compiler.CompilationError, match='found 2'):
         compiler.compile_show(show, {}, [], target)
-    show['patch_lists'] = {'Live': [{'name': 'Flute', 'instrument': 'other'}]}
+    show['patch_cycles'] = {'Live': [{'name': 'Flute', 'instrument': 'other'}]}
     data = compiler.compile_show(show, {}, [], target)
     assert resolved.patch(data, 0)['instrument'] == 'other'
-    show['patch_lists'] = {'Live': ['Flut']}
+    show['patch_cycles'] = {'Live': ['Flut']}
     with pytest.raises(compiler.CompilationError, match='found 0'):
         compiler.compile_show(show, {}, [], target)
 
@@ -125,7 +125,7 @@ def test_compact_catalogue_can_be_loaded_as_an_external_table(
 ) -> None:
     show = {
         'instruments': {'patchman': {'channel': 1, 'output': 'din'}},
-        'patch_lists': {'Live': ['GuitHero']},
+        'patch_cycles': {'Live': ['GuitHero']},
     }
     definitions = {
         'setups': [
@@ -174,7 +174,7 @@ def test_personal_tags_join_without_modifying_documented_catalogues(
     groups = tags['instruments'][instrument]['tags']
     show = {
         'instruments': {instrument: {'channel': 1, 'output': 'din'}},
-        'patch_lists': {
+        'patch_cycles': {
             'All': [
                 {
                     'type': 'program-change',
@@ -210,7 +210,7 @@ def test_tag_groups_resolve_after_catalogues_regardless_of_file_order(
     tags = {'instruments': {'synth': {'tags': {'wind': ['Flute', 'Flute']}}}}
     show = {
         'instruments': {'synth': {'channel': 1, 'output': 'din'}},
-        'patch_lists': {'Live': ['Flute']},
+        'patch_cycles': {'Live': ['Flute']},
     }
     first = compiler.compile_show(show, {}, [tags, catalogue], target)
     second = compiler.compile_show(show, {}, [catalogue, tags], target)
@@ -229,7 +229,7 @@ def test_name_tags_classify_copies_across_banks(target: models.Target) -> None:
                 'tags': {'wind': ['Flute']},
             }
         },
-        'patch_lists': {'Live': [{'name': 'Flute', 'bank': 3}]},
+        'patch_cycles': {'Live': [{'name': 'Flute', 'bank': 3}]},
     }
     definitions = {
         'setups': [

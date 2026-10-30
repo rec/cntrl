@@ -54,9 +54,9 @@ foreground_color = '0xD08000'
 font_name = 'CourierPrimeBold'
 
 [pages.patch]
-fields = ['patch_list.name', 'display_name']
+fields = ['patch_cycle.name', 'display_name']
 
-[pages.patch.line_styles.'patch_list.name']
+[pages.patch.line_styles.'patch_cycle.name']
 foreground_color = 'blue'
 
 [windows.next]
@@ -85,7 +85,7 @@ Resolve each property from lowest to highest precedence:
 
 Only consult sources belonging to the displayed field. The `tags` field
 uses tag styles but not program or patch styles. Navigation headings such
-as `patch_list.name` use show, window, page and field styles. Global fields do not
+as `patch_cycle.name` use show, window, page and field styles. Global fields do not
 acquire the current patch's tags or appearance.
 
 The same page resolves against each window's own data item. Background color
@@ -95,7 +95,7 @@ There is no separate transparency model or CSS inheritance behavior.
 ## Tag membership and style precedence
 
 Programs and patches retain independently authored tag lists. Tag
-membership does not change MIDI behavior or navigation patch lists.
+membership does not change MIDI behavior or navigation patch cycles.
 
 Apply the program's tags in listed order, followed by the patch's own
 tags in listed order. Within these tag layers, a later explicit

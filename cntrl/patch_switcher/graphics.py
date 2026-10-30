@@ -148,7 +148,7 @@ def font_choice(
         selected = next((s for s in sizes if fits(s)), None)
     if selected is None:
         raise ValueError(
-            f'{face.name}: patch list and patch names do not fit the padded display'
+            f'{face.name}: patch cycle and patch names do not fit the padded display'
         )
     return face, selected
 

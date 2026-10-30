@@ -331,7 +331,7 @@ FIELDS = {
     'switch.mode': 255,
     'switch.button': 255,
     'switch.state': 22,
-    'patch_list.name': 0,
+    'patch_cycle.name': 0,
     'tags': CONSTANT,
     'display_name': 1,
     'program': 2,

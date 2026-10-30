@@ -27,7 +27,7 @@ when compiling. Unknown functions and unsupported target capabilities are errors
 Use explicit typed function definitions and a small dispatch switch. Do not add
 scripts, arbitrary command strings, a plugin loader or a generic argument bag.
 This first version allows one MIDI selection or one function per patch. Ordered
-mixtures belong in the song's patch list, not in a second action-list mechanism.
+mixtures belong in the song's patch cycle, not in a second action-list mechanism.
 
 ## Activation
 

@@ -130,9 +130,9 @@ Font sizing and precomputed offsets use the final display label only; a hidden
 original name is preserved as UTF-8 metadata without display-character limits.
 
 Executable values require an explicit `type`. Named definitions use `patches`;
-ordered browser entries use `patch_lists`. Delimiter shorthand, implicit string
+ordered browser entries use `patch_cycles`. Delimiter shorthand, implicit string
 references and bare-list sequences are rejected. See
-[the Patch schema and format 18 authoring changes](../doc/patches.md) for MIDI,
+[the Patch schema and format 19 authoring changes](../doc/patches.md) for MIDI,
 state, composition, switches and stable references. Independent authoring errors
 are reported together before any binary is written. Display text is checked
 against target capabilities.
@@ -151,8 +151,8 @@ D E F
 A B C
 ```
 
-D/E wrap patch lists, retaining one cursor per patch list. A/B wrap patches within
-the patch list. Browsing only changes NEXT. C executes the candidate and leaves NEXT
+D/E wrap patch cycles, retaining one cursor per patch cycle. A/B wrap patches within
+the patch cycle. Browsing only changes NEXT. C executes the candidate and leaves NEXT
 unchanged. A simple program selection records a known program Undo entry.
 Composites and side effects clear unsafe program history rather than invent an
 inverse. F restores the latest known program selection by restoring that
@@ -167,7 +167,7 @@ unknown. Repeated program/bank selections and failed sends do not flash. Leaving
 the performance page or changing the active setup also ends the brightness boost.
 
 UNDO previews the next restoration target. SENT shows the last selected or
-restored patch. Screens contain only patch list and patch, not titles or instrument
+restored patch. Screens contain only patch cycle and patch, not titles or instrument
 labels. Undo without a restoration leaves SENT unchanged
 while history remains; emptying history blanks UNDO and SENT. A new show and
 startup both clear history and select the first candidate without sending MIDI.
@@ -200,7 +200,7 @@ a quick press/release. Startup-animation dismissal still consumes its gesture.
 
 ## Pages, windows and line styles
 
-The default `patch` page reproduces the patch list and patch-name display. Undo,
+The default `patch` page reproduces the patch cycle and patch-name display. Undo,
 sent and next supply their own patch to that page. The same generic text-line
 renderer also draws management, empty-state and error messages.
 
@@ -212,7 +212,7 @@ pad = 4
 font_name = 'Arial'
 
 [pages.patch]
-fields = ['patch_list.name', 'display_name']
+fields = ['patch_cycle.name', 'display_name']
 
 [windows.undo]
 page = 'patch'
@@ -230,7 +230,7 @@ page = 'patch'
 # font_name = 'ComicSansMS'
 ```
 
-Field names share one namespace. Built-in patch attributes are `patch_list.name`, `tags`,
+Field names share one namespace. Built-in patch attributes are `patch_cycle.name`, `tags`,
 `display_name`, `name`, `program`, `bank`, `volume`, `pan` and `instrument` (the
 routing alias). Built-in global settings are `brightness`, `splash`,
 `usb_midi_interface`, `screensaver_timeout`, `chord_ms` and `transition_ms`.
@@ -277,14 +277,14 @@ program = 1
 name = 'Sax'
 tags = ['sax']
 
-[[patch_lists.'Song 1']]
+[[patch_cycles.'Song 1']]
 type = 'program-change'
 instrument = 'synth'
 program = 1
 tags = ['whole-system']
 
 [pages.patch]
-fields = ['patch_list.name', 'tags', 'display_name']
+fields = ['patch_cycle.name', 'tags', 'display_name']
 ```
 
 The default font is `classic`, default padding is 4, and default colors are
@@ -386,11 +386,11 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (14), u16 chord milliseconds, u32 total bytes, u16 instrument/patch list/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (14), u16 chord milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
-| Navigation patch list, 68 bytes | name[64], u16 first patch, u16 count |
-| Patch, 82 bytes | u16 instrument, u16 navigation patch list, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (undo/sent/next) |
+| Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
+| Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (undo/sent/next) |
 | Metadata header, 8 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified) |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
@@ -402,8 +402,8 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Literal text | u16 byte count including the final NUL, followed by ASCII text; at most 64 bytes |
 | Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, shared tag definitions, explicit program/patch tags, global parameter values, show style, padding and icon references within partial styles |
 
-The existing firmware tag counters and target `max_patch_lists` limit refer
-to navigation patch lists. Classification tags are resolved by the host and
+The existing firmware tag counters and target `max_patch_cycles` limit refer
+to navigation patch cycles. Classification tags are resolved by the host and
 stored in authored display metadata; they do not change navigation records.
 
 Records occur in the order header, screens (undo/sent/next), instruments,
@@ -419,7 +419,7 @@ nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 12 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 19 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 Names in commands are hex-encoded ASCII, never paths. Requests are:

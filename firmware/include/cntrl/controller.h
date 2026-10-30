@@ -9,7 +9,7 @@ class Controller {
 public:
     struct ProgramHistory { uint16_t patch; int previous; };
     struct NavigationState {
-        uint16_t selected = 0, cursors[max_patch_lists] = {};
+        uint16_t selected = 0, cursors[max_patch_cycles] = {};
         unsigned depth = 0;
         ProgramHistory history[history_capacity] = {};
         int current[max_instruments] = {}, last_sent[max_instruments] = {}, center = -1;
@@ -22,10 +22,10 @@ public:
         std::memcpy(state.last_sent, last_sent_, sizeof(last_sent_)); return state;
     }
     bool navigation(const NavigationState &state) {
-        if (state.selected >= document_.patch_lists() && (document_.patch_lists() || state.selected)) return false;
+        if (state.selected >= document_.patch_cycles() && (document_.patch_cycles() || state.selected)) return false;
         if (state.depth > history_capacity || state.center < -1 || (state.center >= 0 && unsigned(state.center) >= document_.patches())) return false;
-        for (unsigned i = 0; i < document_.patch_lists(); ++i)
-            if (state.cursors[i] >= u16(document_.patch_list(i) + 66)) return false;
+        for (unsigned i = 0; i < document_.patch_cycles(); ++i)
+            if (state.cursors[i] >= u16(document_.patch_cycle(i) + 66)) return false;
         for (unsigned i = 0; i < state.depth; ++i) {
             const ProgramHistory &a = state.history[i];
             if (a.patch >= document_.patches() || u16(document_.patch(a.patch)) >= document_.instruments()
@@ -65,7 +65,7 @@ public:
             if (!document_.patches()) return false;
             unsigned selected = previewing_ ? preview_selected_ : selected_;
             const uint16_t *cursors = previewing_ ? preview_cursors_ : cursors_;
-            unsigned p = u16(document_.patch_list(selected) + 64) + cursors[selected];
+            unsigned p = u16(document_.patch_cycle(selected) + 64) + cursors[selected];
             node = document_.browser_root(p); return true;
         }
         unsigned depth = previewing_ ? preview_depth_ : depth_;
@@ -74,7 +74,7 @@ public:
         node = a.previous < 0 ? 65535 : document_.browser_root(unsigned(a.previous));
         if (previewing_) {
             --preview_depth_; preview_selected_ = u16(document_.patch(a.patch) + 2);
-            preview_cursors_[preview_selected_] = a.patch - u16(document_.patch_list(preview_selected_) + 64);
+            preview_cursors_[preview_selected_] = a.patch - u16(document_.patch_cycle(preview_selected_) + 64);
         }
         return true;
     }
@@ -85,7 +85,7 @@ public:
         current_[instrument] = a.previous;
         if (a.previous >= 0) last_sent_[instrument] = a.previous;
         selected_ = u16(document_.patch(a.patch) + 2);
-        cursors_[selected_] = a.patch - u16(document_.patch_list(selected_) + 64);
+        cursors_[selected_] = a.patch - u16(document_.patch_cycle(selected_) + 64);
         --depth_;
     }
     void cancel_gesture() { release_c(); held_ = 0; pending_ = -1; locked_ = false; }
@@ -168,11 +168,11 @@ public:
         if (button < 6) executor_.invoke(StatePatch{operations[button]});
     }
     bool navigate(unsigned operation) {
-        if (!document_.valid() || !document_.patch_lists()) return false;
+        if (!document_.valid() || !document_.patch_cycles()) return false;
         if (operation == 5 || operation == 6) {
-            selected_ = (selected_ + document_.patch_lists() + (operation == 6 ? -1 : 1)) % document_.patch_lists();
+            selected_ = (selected_ + document_.patch_cycles() + (operation == 6 ? -1 : 1)) % document_.patch_cycles();
         } else if (operation == 3 || operation == 4) {
-            unsigned count = u16(document_.patch_list(selected_) + 66);
+            unsigned count = u16(document_.patch_cycle(selected_) + 66);
             cursors_[selected_] = (cursors_[selected_] + count + (operation == 4 ? -1 : 1)) % count;
         } else if (operation == 7) {
             if (executor_.busy()) return false;
@@ -211,8 +211,8 @@ private:
     PatchExecutor executor_;
     Document document_;
     ProgramHistory history_[history_capacity] = {};
-    uint16_t cursors_[max_patch_lists] = {};
-    uint16_t preview_cursors_[max_patch_lists] = {};
+    uint16_t cursors_[max_patch_cycles] = {};
+    uint16_t preview_cursors_[max_patch_cycles] = {};
     int current_[max_instruments] = {};
     // Unlike undo state, this changes only after a successful MIDI send.
     int last_sent_[max_instruments] = {};
@@ -224,11 +224,11 @@ private:
     bool locked_ = false, c_held_ = false, flashing_ = false, undoing_ = false, previewing_ = false;
     uint8_t brightness_ = 192;
     bool move(unsigned operation, unsigned &selected, uint16_t *cursors) const {
-        if (!document_.valid() || !document_.patch_lists()) return false;
+        if (!document_.valid() || !document_.patch_cycles()) return false;
         if (operation == 5 || operation == 6)
-            selected = (selected + document_.patch_lists() + (operation == 6 ? -1 : 1)) % document_.patch_lists();
+            selected = (selected + document_.patch_cycles() + (operation == 6 ? -1 : 1)) % document_.patch_cycles();
         else if (operation == 3 || operation == 4) {
-            unsigned count = u16(document_.patch_list(selected) + 66);
+            unsigned count = u16(document_.patch_cycle(selected) + 66);
             cursors[selected] = (cursors[selected] + count + (operation == 4 ? -1 : 1)) % count;
         } else return false;
         return true;
@@ -237,7 +237,7 @@ private:
         if (flashing_ && document_.valid()) hardware_.set_brightness(brightness_);
         flashing_ = c_held_ = false;
     }
-    unsigned candidate() const { return document_.patch_lists() ? u16(document_.patch_list(selected_) + 64) + cursors_[selected_] : 0; }
+    unsigned candidate() const { return document_.patch_cycles() ? u16(document_.patch_cycle(selected_) + 64) + cursors_[selected_] : 0; }
     bool already_sent(unsigned index) const {
         const uint8_t *p = document_.patch(index);
         if (u16(p) == 65535) return false;
@@ -278,7 +278,7 @@ private:
         current_[instrument] = a.previous;
         if (a.previous >= 0) { center_ = a.previous; last_sent_[instrument] = a.previous; }
         selected_ = u16(document_.patch(a.patch) + 2);
-        cursors_[selected_] = a.patch - u16(document_.patch_list(selected_) + 64);
+        cursors_[selected_] = a.patch - u16(document_.patch_cycle(selected_) + 64);
         if (!--depth_) center_ = -1;
         sending_ = -1; hardware_.transition(true, document_.transition_ms());
     }

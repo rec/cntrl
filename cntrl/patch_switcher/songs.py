@@ -152,7 +152,7 @@ def encode(
         context: dict[str, object] = {
             'instruments': library.instruments,
             'patches': library.patches,
-            'patch_lists': {'Songs': values_for_source} if values_for_source else {},
+            'patch_cycles': {'Songs': values_for_source} if values_for_source else {},
             'fonts': library.fonts,
             'tags': {
                 k: v.model_dump(exclude_none=True) for k, v in library.tags.items()
@@ -166,7 +166,7 @@ def encode(
             messages = error.errors
             for index, path in enumerate(paths):
                 messages = [
-                    m.replace(f'patch_lists.Songs[{index}]', path) for m in messages
+                    m.replace(f'patch_cycles.Songs[{index}]', path) for m in messages
                 ]
             raise compiler.CompilationError(messages) from error
         graph = resolved.graph_offset(source)

@@ -38,7 +38,7 @@ def show() -> dict[str, object]:
                 ),
             ],
         ),
-        patch_lists={
+        patch_cycles={
             'Song 1': [
                 {
                     'type': 'program-change',
@@ -51,22 +51,22 @@ def show() -> dict[str, object]:
         },
         tags={'sax': models.Tag(), 'whole-system': models.Tag()},
         pages={
-            'patch': models.Page(fields=['patch_list.name', 'tags', 'display_name'])
+            'patch': models.Page(fields=['patch_cycle.name', 'tags', 'display_name'])
         },
     ).model_dump(exclude_none=True)
 
 
-def test_patch_inherits_program_tags_without_changing_patch_lists(
+def test_patch_inherits_program_tags_without_changing_patch_cycles(
     show: dict[str, object], target: models.Target
 ) -> None:
     data = compiler.compile_show(show, {}, [], target)
     assert b'sax, whole-system\0' in data
     assert b'sax\0' in data
     exported = models.Show.model_validate(tomlkit.parse(resolved.export(data)).unwrap())
-    assert list(exported.patch_lists) == ['Song 1']
+    assert list(exported.patch_cycles) == ['Song 1']
     assert exported.definitions is not None
     assert exported.definitions.programs[0].tags == ['sax']
-    raw = exported.patch_lists['Song 1']
+    raw = exported.patch_cycles['Song 1']
     assert isinstance(raw, list)
     patches = [models.ProgramChange.model_validate(p) for p in raw]
     assert [p.tags for p in patches] == [['whole-system'], []]
@@ -114,7 +114,7 @@ def test_unstyled_tags_survive_without_declarations(
     entry = (
         document['definitions']['programs'][0]
         if owner == 'program'
-        else document['patch_lists']['Song 1'][0]
+        else document['patch_cycles']['Song 1'][0]
     )
     entry['tags'] = ['absent']
     data = compiler.compile_show(document, {}, [], target)
@@ -122,7 +122,7 @@ def test_unstyled_tags_survive_without_declarations(
     membership = (
         exported['definitions']['programs'][0]['tags']
         if owner == 'program'
-        else exported['patch_lists']['Song 1'][0]['tags']
+        else exported['patch_cycles']['Song 1'][0]['tags']
     )
     assert membership == ['absent']
     assert compiler.compile_show(exported, {}, [], target) == data
@@ -154,15 +154,15 @@ def test_icons_preserve_explicit_owners_through_recompilation(
     show = models.Show.model_validate(show).model_dump(exclude_none=True)
     show['tags']['sax']['style'] = {'icon': 'images/sax.png'}
     show['definitions']['programs'][0]['style'] = {'icon': 'images/program.png'}
-    show['patch_lists']['Song 1'][0]['style'] = {'icon': icon}
+    show['patch_cycles']['Song 1'][0]['style'] = {'icon': icon}
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['tags']['sax']['style'] == {'icon': 'images/sax.png'}
     assert exported['definitions']['programs'][0]['style'] == {
         'icon': 'images/program.png'
     }
-    assert exported['patch_lists']['Song 1'][0]['style'] == {'icon': icon}
-    assert 'style' not in exported['patch_lists']['Song 1'][1]
+    assert exported['patch_cycles']['Song 1'][0]['style'] == {'icon': icon}
+    assert 'style' not in exported['patch_cycles']['Song 1'][1]
     assert compiler.compile_show(exported, {}, [], target) == data
 
 

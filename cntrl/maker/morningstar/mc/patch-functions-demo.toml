@@ -3,7 +3,7 @@ screensaver_timeout = 0
 
 [instruments]
 
-[patch_lists]
+[patch_cycles]
 Functions = [
     {type = 'stock-firmware', exit_buttons = 'A+F', display_name = 'Stock A+F'},
     {type = 'stock-firmware', exit_buttons = 'B+E', display_name = 'Stock B+E'},
