@@ -6,8 +6,8 @@
 
 [instruments.vl70m.tags]
 fx = [
-  'SpaceZoo', 'StoneHng', 'Cybastrg', 'Mu', 'Formula', 'Jurassic', 'Devil',
-  'SpcHorse', 'Jason', 'Suedhead', 'Moby',
+  'SpaceZoo', 'Cybastrg', 'Mu', 'Formula', 'Jurassic', 'Devil',
+  'SpcHorse', 'Jason', 'Suedhead', 'DinoPerc',
 ]
 # Broad synth suggestions; SlitMinu, Flaggoot, Macro and Sylophon are tentative
 # because their descriptions do not identify a conventional instrument family.
@@ -17,7 +17,7 @@ synth = [
 ]
 keyboard = ['AnaWurl', 'Q.Klav']
 sitar = ['Sitar!', 'India']
-percussion = ['YamSteel', 'DinoPerc']
+percussion = ['YamSteel']
 # L7 Pluck is in Yamaha's guitar group. Gonzo is a tentative guitar suggestion
 # based on its position among the guitar presets and its noise-control behavior.
 guitar = ['L7 Pluck', 'Gonzo']
