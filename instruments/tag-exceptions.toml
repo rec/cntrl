@@ -1,0 +1,88 @@
+# Internal program pairs whose current tags differ. Edit the tags lists here.
+# Section numbers are Internal program numbers (1-64).
+# Names are the documented source preset names used by tags.toml.
+# This review document does not change tags.toml automatically.
+
+[exceptions.5]
+vl70m = {name = "BowdSaw", tags = ["violin"]}  # Internal label: BowedSaw
+patchman = {name = "Theremin", tags = ["synth"]}
+
+[exceptions.10]
+vl70m = {name = "MuteHrBs", tags = ["guitar"]}
+patchman = {name = "GnarlyBs", tags = ["bass"]}
+
+[exceptions.16]
+vl70m = {name = "BassCla!", tags = ["clarinet"]}
+patchman = {name = "Bs.Clrnt", tags = ["bass"]}
+
+[exceptions.18]
+vl70m = {name = "DblReedy", tags = ["reed"]}
+patchman = {name = "Eng.Horn", tags = ["horn"]}
+
+[exceptions.21]
+vl70m = {name = "WahUpHp", tags = ["harmonica"]}
+patchman = {name = "ThaiReed", tags = ["reed"]}
+
+[exceptions.25]
+vl70m = {name = "Flutuen", tags = ["flute"]}
+patchman = {name = "Bass Flt", tags = ["bass"]}
+
+[exceptions.28]
+vl70m = {name = "India", tags = ["sitar"]}
+patchman = {name = "Tambura", tags = ["strings"]}
+
+[exceptions.46]
+vl70m = {name = "PicoStrg", tags = ["pipe"]}
+patchman = {name = "Pizzicat", tags = ["strings"]}
+
+[exceptions.50]
+vl70m = {name = "OsciLead", tags = ["synth"]}
+patchman = {name = "SynClav", tags = ["clarinet"]}
+
+[exceptions.51]
+vl70m = {name = "Babalog", tags = ["bass"]}
+patchman = {name = "Syncro!", tags = ["synth"]}
+
+[exceptions.52]
+vl70m = {name = "Q.Klav", tags = ["keyboard"]}
+patchman = {name = "Theremin", tags = ["synth"]}
+
+[exceptions.54]
+vl70m = {name = "Talk Box", tags = ["guitar"]}
+patchman = {name = "Voxanne", tags = ["synth"]}
+
+[exceptions.56]
+vl70m = {name = "WahUpHp", tags = ["harmonica"]}
+patchman = {name = "SpaceOut", tags = ["synth"]}
+
+[exceptions.57]
+vl70m = {name = "Mad Tube", tags = ["fx"]}
+patchman = {name = "Squeezy", tags = ["synth"]}
+
+[exceptions.58]
+vl70m = {name = "YamSteel", tags = ["percussion"]}
+patchman = {name = "Lyricon", tags = ["synth"]}
+
+[exceptions.59]
+vl70m = {name = "StungSt", tags = ["bass"]}
+patchman = {name = "Ana.Lead", tags = ["synth"]}
+
+[exceptions.60]
+vl70m = {name = "Waterphn", tags = ["violin"]}
+patchman = {name = "Mobius", tags = ["synth"]}
+
+[exceptions.61]
+vl70m = {name = "DinoPerc", tags = ["fx"]}
+patchman = {name = "70s Lead", tags = ["synth"]}
+
+[exceptions.62]
+vl70m = {name = "Formula", tags = ["fx"]}
+patchman = {name = "Osc Lead", tags = ["synth"]}
+
+[exceptions.63]
+vl70m = {name = "Jurassic", tags = ["fx"]}
+patchman = {name = "Saw Lead", tags = ["synth"]}
+
+[exceptions.64]
+vl70m = {name = "Devil", tags = ["fx"]}
+patchman = {name = "SAWS/|/|", tags = ["synth"]}
