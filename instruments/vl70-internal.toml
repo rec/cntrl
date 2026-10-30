@@ -1,94 +1,100 @@
 # Yamaha VL70-m Internal voices: vl70m.
 # Source: ~/code/sysexy/syx/vl70.txt
-# Table keys give bank numbers; array positions give program numbers (1-based).
+# Array positions give bank numbers (0-based) and program numbers (1-based).
 # Internal addressing: CC 0 value 33; CC 32 value 3.
 # A/B comments identify source presets in Preset 1/2, not MIDI destinations.
 
-[instruments.vl70m.programs]
-3 = [  # Internal
-  # 0. first 5
-  'GuitHero',  # 001; source A:004
-  'Igneous',  # 002; source A:012
-  'YamaBass',  # 003; source A:039
-  'WX Clari',  # 004; source A:124
-  'BowedSaw',  # 005; source B:109
+[instruments.vl70m]
+instrument = 'vl70m'
+programs = [
+  [],  # Bank 0: Preset 1 omitted
+  [],  # Bank 1: Preset 2 omitted
+  [],  # Bank 2: Custom omitted
+  [  # Bank 3: Internal
+    # 0. first 5
+    'GuitHero',  # 001; source A:004
+    'Igneous',  # 002; source A:012
+    'YamaBass',  # 003; source A:039
+    'WX Clari',  # 004; source A:124
+    'BowedSaw',  # 005; source B:109
 
-  # 1. bass
-  'New Slap',  # 006; source A:010
-  'Upright',  # 007; source A:028
-  'Fnground',  # 008; source A:029
-  'Birdland',  # 009; source A:030
-  'MuteHrBs',  # 010; source A:049
+    # 1. bass
+    'New Slap',  # 006; source A:010
+    'Upright',  # 007; source A:028
+    'Fnground',  # 008; source A:029
+    'Birdland',  # 009; source A:030
+    'MuteHrBs',  # 010; source A:049
 
-  # 2. sax
-  'SoprSax!',  # 011; source B:006
-  'NuAltSax',  # 012; source B:071
-  'AltoSax!',  # 013; source B:073
-  'FnkyTenr',  # 014; source B:085
-  'BariSax!',  # 015; source B:088
+    # 2. sax
+    'SoprSax!',  # 011; source B:006
+    'NuAltSax',  # 012; source B:071
+    'AltoSax!',  # 013; source B:073
+    'FnkyTenr',  # 014; source B:085
+    'BariSax!',  # 015; source B:088
 
-  # 3. reeds
-  'BassCla!',  # 016; source A:123
-  'WX Oboe',  # 017; source A:125
-  'DblReedy',  # 018; source B:094
-  'Bassoon!',  # 019; source B:098
-  'Chanter',  # 020; source B:104
-  'WahUpHp',  # 021; source B:122
+    # 3. reeds
+    'BassCla!',  # 016; source A:123
+    'WX Oboe',  # 017; source A:125
+    'DblReedy',  # 018; source B:094
+    'Bassoon!',  # 019; source B:098
+    'Chanter',  # 020; source B:104
+    'WahUpHp',  # 021; source B:122
 
-  # 4. flutes
-  'Vento',  # 022; source B:001
-  'Piccol!2',  # 023; source B:045
-  'JazFlute',  # 024; source B:049
-  'Flutuen',  # 025; source B:053
-  'Nz Flute',  # 026; source B:054
+    # 4. flutes
+    'Vento',  # 022; source B:001
+    'Piccol!2',  # 023; source B:045
+    'JazFlute',  # 024; source B:049
+    'Flutuen',  # 025; source B:053
+    'Nz Flute',  # 026; source B:054
 
-  # 5. world
-  'Sitar!',  # 027; source A:059
-  'India',  # 028; source A:060
-  'MokoPipe',  # 029; source A:111
-  'WX Shaku',  # 030; source B:055
-  'Andean',  # 031; source B:059
+    # 5. world
+    'Sitar!',  # 027; source A:059
+    'India',  # 028; source A:060
+    'MokoPipe',  # 029; source A:111
+    'WX Shaku',  # 030; source B:055
+    'Andean',  # 031; source B:059
 
-  # 6. brass
-  'Trmbone!',  # 032; source B:008
-  'FluglHr!',  # 033; source B:018
-  'WXTrumpt',  # 034; source B:023
-  'MuteTp!',  # 035; source B:024
-  'Tuba!',  # 036; source B:032
+    # 6. brass
+    'Trmbone!',  # 032; source B:008
+    'FluglHr!',  # 033; source B:018
+    'WXTrumpt',  # 034; source B:023
+    'MuteTp!',  # 035; source B:024
+    'Tuba!',  # 036; source B:032
 
-  # 7. guitar
-  'Spanish',  # 037; source A:072
-  'WetPluck',  # 038; source A:076
-  'Comp Gtr',  # 039; source A:077
-  'FunkyGtr',  # 040; source A:078
-  'WX J Gtr',  # 041; source A:126
+    # 7. guitar
+    'Spanish',  # 037; source A:072
+    'WetPluck',  # 038; source A:076
+    'Comp Gtr',  # 039; source A:077
+    'FunkyGtr',  # 040; source A:078
+    'WX J Gtr',  # 041; source A:126
 
-  # 8. string
-  'BrtViola',  # 042; source B:037
-  'ViolOutt',  # 043; source B:038
-  'Cello!',  # 044; source B:039
-  'DoublBow',  # 045; source B:043
-  'PicoStrg',  # 046; source B:115
+    # 8. string
+    'BrtViola',  # 042; source B:037
+    'ViolOutt',  # 043; source B:038
+    'Cello!',  # 044; source B:039
+    'DoublBow',  # 045; source B:043
+    'PicoStrg',  # 046; source B:115
 
-  # 9. synth and keys
-  'Igneous',  # 047; source A:012
-  'Wynth',  # 048; source A:015
-  'Blue',  # 049; source A:018
-  'OsciLead',  # 050; source A:019
-  'Babalog',  # 051; source A:026
-  'Q.Klav',  # 052; source A:058
-  'Ossyncro',  # 053; source A:084
-  'Talk Box',  # 054; source A:085
-  'SimpleSy',  # 055; source A:090
-  'WahUpHp',  # 056; source B:122
+    # 9. synth and keys
+    'Igneous',  # 047; source A:012
+    'Wynth',  # 048; source A:015
+    'Blue',  # 049; source A:018
+    'OsciLead',  # 050; source A:019
+    'Babalog',  # 051; source A:026
+    'Q.Klav',  # 052; source A:058
+    'Ossyncro',  # 053; source A:084
+    'Talk Box',  # 054; source A:085
+    'SimpleSy',  # 055; source A:090
+    'WahUpHp',  # 056; source B:122
 
-  # 10. fx and perc
-  'Mad Tube',  # 057; source A:001
-  'YamSteel',  # 058; source A:061
-  'StungSt',  # 059; source A:062
-  'Waterphn',  # 060; source A:064
-  'DinoPerc',  # 061; source A:065
-  'Formula',  # 062; source A:066
-  'Jurassic',  # 063; source A:067
-  'Devil',  # 064; source A:068
+    # 10. fx and perc
+    'Mad Tube',  # 057; source A:001
+    'YamSteel',  # 058; source A:061
+    'StungSt',  # 059; source A:062
+    'Waterphn',  # 060; source A:064
+    'DinoPerc',  # 061; source A:065
+    'Formula',  # 062; source A:066
+    'Jurassic',  # 063; source A:067
+    'Devil',  # 064; source A:068
+  ],
 ]

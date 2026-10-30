@@ -7,312 +7,71 @@ pad = 4
 contrast = 0.6
 
 [style]
-font_name = "classic"
+font_name = 'classic'
 
 [windows.undo]
-page = "patch"
+page = 'patch'
 
 [windows.undo.style]
-background_color = "0xF8FCF8"
-foreground_color = "0x000000"
+background_color = '0xF8FCF8'
+foreground_color = '0x000000'
 
 [windows.sent]
-page = "patch"
+page = 'patch'
 
 [windows.sent.style]
-background_color = "0xF8FCF8"
-foreground_color = "0x000000"
+background_color = '0xF8FCF8'
+foreground_color = '0x000000'
 
 [windows.next]
-page = "patch"
+page = 'patch'
 
 [windows.next.style]
-background_color = "0xF8FCF8"
-foreground_color = "0x000000"
+background_color = '0xF8FCF8'
+foreground_color = '0x000000'
 
 [pages.patch]
-fields = ["patch_list.name", "display_name"]
+fields = ['patch_list.name', 'display_name']
 
 [instruments.pman]
-instrument = "pman"
+instrument = 'pman'
 channel = 1
-output = "din"
+output = 'din'
+# banks = []  # Not needed, because
 programs = [
-  [
-    "Trumpet",
-    "Maynard",
-    "Alpert",
-    "Chet Tpt",
-    "Lead Tpt",
-    "ClassTpt",
-    "StrMtTpt",
-    "CupMtTpt",
-    "WahMtTpt",
-    "WaTptCC4",
-    "HrmMtTpt",
-    "Mute Tpt",
-    "Picc.Tpt",
-    "Cornet",
-    "Flugel",
-    "Mangione",
-    "Trombone",
-    "Big Bone",
-    "BriteTbn",
-    "ValveTbn",
-    "Jam Bone",
-    "Bass Tbn",
-    "BcktMtTb",
-    "DorseyTb",
-    "WX Horn",
-    "BrassHrn",
-    "BriteHrn",
-    "ff Horn",
-    "OrchHorn",
-    "New Horn",
-    "Euphnium",
-    "Tuba",
-    "SoprnoSx",
-    "KennyGee",
-    "HeyKenG.",
-    "Branford",
-    "TraneSop",
-    "BrtSopSx",
-    "Alto Sax",
-    "Sanborn",
-    "BirdAlto",
-    "ExprAlto",
-    "Desmond",
-    "Koz Alto",
-    "Everette",
-    "NY Alto",
-    "NY Tenor",
-    "TenorSax",
-    "MBrecker",
-    "PopTenor",
-    "SoulTenr",
-    "RaspyTnr",
-    "Getz Tnr",
-    "JobimTnr",
-    "TenorSub",
-    "Bari Sax",
-    "TiteBari",
-    "Sax Sect",
-    "Air Sax",
-    "Saxual",
-    "Sanford",
-    "Piccolo",
-    "Flute",
-    "Real Flt",
-    "SilvrFlt",
-    "ClassFlt",
-    "Nz Flute",
-    "VoxFlute",
-    "AquaFlut",
-    "OakFlute",
-    "Bass Flt",
-    "Afri Flt",
-    "PennyWhs",
-    "TinWhist",
-    "Flutofon",
-    "Inca Flt",
-    "Noze Flt",
-    "Quena",
-    "Quena x2",
-    "PanFlute",
-    "Andean",
-    "Pan Pipe",
-    "Bali Flt",
-    "IndiaFlt",
-    "Ambience",
-    "WetFone",
-    "Maya Flt",
-    "Shakuhat",
-    "Bamboo",
-    "PanPicol",
-    "Coca!!",
-    "Ocarina!",
-    "Lonely",
-    "Recorder",
-    "Clarinet",
-    "JazzClar",
-    "ClsClrnt",
-    "Bs.Clrnt",
-    "BrtBsClr",
-    "Oboe",
-    "Eng.Horn",
-    "SftEngHn",
-    "Bassoon",
-    "Flurinet",
-    "Crumbon",
-    "Klarina",
-    "ThaiReed",
-    "Chanter",
-    "Digirdoo",
-    "IslePipe",
-    "SoftPipe",
-    "LitePipe",
-    "CelloSax",
-    "YamaBotl",
-    "Solo Vln",
-    "DrkVioln",
-    "BrtVioln",
-    "SweetVln",
-    "Fiddle",
-    "Viola",
-    "SwtViola",
-    "RosinVla",
-    "Cello",
-    "SoloCell",
-    "DrkCello",
-    "Bow Bass",
-    "HiStrEns",
-    "Pizzicat",
+  [  # bank 0
+    'Trumpet',  # program 1
+
+    # Add a tag 'trumpet'. `tags` can be a list, or a string
+    # that is split on commas or colons.
+    {name = 'Maynard', tags = 'trumpet'},
+
+    'Alpert',
+    {},  # Means 'no information' for this program number
+    'Lead Tpt',
+    'ClassTpt',
+    # ...
+    'DrkCello',
+    'Bow Bass',
+    'HiStrEns',
+    'Pizzicat',
   ],
-  [
-    "Harmonca",
-    "MouthHrp",
-    "BluesHrm",
-    "Stevie!",
-    "Toots!",
-    "Accordn.",
-    "Concrtna",
-    "Jazz B3",
-    "Clavinet",
-    "Funky",
-    "SteelDrm",
-    "VL Drums",
-    "Yangchin",
-    "Asia Plk",
-    "JapanPlk",
-    "Tambura",
-    "Sitar",
-    "ElecHarp",
-    "SteelGtr",
-    "AcGuitar",
-    "Flamenco",
-    "SpainGtr",
-    "NylonGtr",
-    "SwtNylGt",
-    "Les Gtr",
-    "Joe Pass",
-    "FMGuitar",
-    "Lucille",
-    ">>PAT<<",
-    "EFXStrat",
-    "ClnStrat",
-    "Surf Gtr",
-    "Mute Gtr",
-    "WahGtCC4",
-    "PatSynGt",
-    "BluesGtr",
-    "Clapton",
-    "PopODGtr",
-    "Carlos",
-    "TubeGtr!",
-    "FET Guit",
-    "Dist.Gtr",
-    "Wah Lead",
-    "Wah Dist",
-    "GuitHero",
-    "Eddie4th",
-    "Feedback",
-    "Hendrix",
-    "TalkBox!",
-    "!XTREME!",
-    "Hercules",
-    "SynClav",
-    "Syncro!",
-    "Theremin",
-    "Avalana",
-    "Voxanne",
-    "Beauty!",
-    "SpaceOut",
-    "Ghost Ld",
-    "PtchNoiz",
-    "BreathTb",
-    "Air Lead",
-    "Breezer",
-    "ZawiLead",
-    "Voxofone",
-    "Whistler",
-    "Debussy",
-    "Sines()",
-    "SmoothLd",
-    "Slinky",
-    "AirStick",
-    "RotoFone",
-    "Vox Lead",
-    "Squeezy",
-    "Lyricon",
-    "Ana.Lead",
-    "Mobius",
-    "70s Lead",
-    "Osc Lead",
-    "Saw Lead",
-    "SAWS/|/|",
-    "ResoSaws",
-    "EML Lead",
-    "HPFilter",
-    "EWI ARP",
-    "EWI Lead",
-    "Koz Lead",
-    "MattLead",
-    "PATCHMAN",
-    "Taurus",
-    "Phaser-{",
-    "SynZilla",
-    "MegaSyn",
-    "Winwood",
-    "Pulse Ld",
-    "Corea!!",
-    "SquareLd",
-    "Korg Ld",
-    "LuckyMan",
-    "Lyle",
-    "Analog",
-    "Nyle",
-    "Floyd Ld",
-    "BorgHorn",
-    "Freik",
-    "Fazar",
-    "Dungeon",
-    "NevrLand",
-    "Brekord1",
-    "Brekord2",
-    "Brekord3",
-    "ElecBass",
-    "MotownBs",
-    "SteinBas",
-    "FunkBass",
-    "PickBass",
-    "SnapBass",
-    "Thumb Bs",
-    "TiteBass",
-    "JacoBass",
-    "StratoBs",
-    "Sticky!",
-    "MuteBass",
-    "Ac Bass",
-    "Juicy Bs",
-    "GnarlyBs",
-    "Moog Bs",
-    "Bass1000",
+  [  # bank 1
+    'Harmonca',
+    'MouthHrp',
+    'BluesHrm',
+    # ...
   ]
 ]
 
 [patch_lists]
 trumpet = [
-  "Trumpet",
-  "Maynard",
-  "Alpert",
-  "Chet Tpt",
-  "Lead Tpt",
-]
-# works because these are unambiguous.
-
-# to disambiguate:
-oboe = [
-  {name = 'Oboe', instrument = 'pman'},  # or bank, channel, etc
+  'Trumpet',
+  {name = 'Maynard', instrument = 'pman'},
+  'Alpert',
+  'Chet Tpt',
+  'Lead Tpt',
 ]
 
-# NO "none" tag or patch_list!!
+
+# NO 'none' tag or patch_list!!
