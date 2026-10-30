@@ -97,8 +97,10 @@ at startup. Changing it requires a show upload, not a firmware rebuild.
 Program numbers use 1..128 and channels 1..16. Definitions associate each
 instrument/setup pair with explicit bank mappings. Table entries identify
 `instrument`, `setup`, `program` and optional `bank`. When a table record omits
-`instrument`, loading the file supplies its filename stem (`pman.toml` supplies
-`pman`). Explicit values are preserved. Tables join in command-line
+`instrument`, loading the file supplies its filename stem. Explicit values are
+preserved. The current catalogues, `instruments/vl70m.toml` and
+`instruments/patchman.toml`, instead identify instruments by table key and programs
+by bank key and array position. Tables join in command-line
 order, filling missing metadata, combining tags in first-seen order, and
 reporting conflicts. SysEx references are never read or included in the binary.
 

@@ -34,9 +34,9 @@ def test_converts_two_instruments_and_joins_tags_by_address(
             'flute': ['stock:A:001: Flute'],
         },
     )
-    assert list(tables) == ['vl70', 'pman']
-    assert tables['vl70'][0] == models.TablePatch(
-        instrument='vl70',
+    assert list(tables) == ['vl70m', 'patchman']
+    assert tables['vl70m'][0] == models.TablePatch(
+        instrument='vl70m',
         setup='default',
         program=1,
         bank=0,
@@ -45,11 +45,11 @@ def test_converts_two_instruments_and_joins_tags_by_address(
         description='A description',
         tags=['wind', 'flute'],
     )
-    assert tables['vl70'][1].program == 128 and tables['vl70'][1].bank == 1
-    assert tables['vl70'][1].range == '***'
-    assert tables['pman'][0].description is None
-    assert tables['pman'][0].tags == ['wind']
-    assert tables['pman'][1].tags == []
+    assert tables['vl70m'][1].program == 128 and tables['vl70m'][1].bank == 1
+    assert tables['vl70m'][1].range == '***'
+    assert tables['patchman'][0].description is None
+    assert tables['patchman'][0].tags == ['wind']
+    assert tables['patchman'][1].tags == []
 
 
 def test_rejects_dangling_tag_references(importer: ModuleType) -> None:
@@ -76,17 +76,22 @@ def test_emits_valid_files_without_inventing_routing(
         compiler.read_document(output / 'definitions.toml')
     )
     assert [(s.instrument, s.name) for s in definitions.setups] == [
-        ('vl70', 'default'),
-        ('pman', 'default'),
+        ('vl70m', 'default'),
+        ('patchman', 'default'),
     ]
     assert definitions.setups[0].banks[0] == models.Bank(msb=33, lsb=0)
-    table = compiler.read_document(output / 'pman.toml')
+    table = compiler.read_document(output / 'patchman.toml')
     assert isinstance(table, dict)
-    assert models.TablePatch.model_validate(table['patches'][0]).program == 128
+    programs = table['instruments']['patchman']['programs']['1']
+    assert programs == [{}] * 127 + ['Bass']
+    stock = compiler.read_document(output / 'vl70m.toml')
+    assert stock['instruments']['vl70m']['programs']['0'] == [
+        {'name': 'Flute', 'tags': ['wind']}
+    ]
     assert sorted(p.name for p in output.iterdir()) == [
         'definitions.toml',
-        'pman.toml',
-        'vl70.toml',
+        'patchman.toml',
+        'vl70m.toml',
     ]
 
 

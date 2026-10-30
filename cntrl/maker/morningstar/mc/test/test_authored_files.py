@@ -22,7 +22,7 @@ from cntrl.patch_switcher.cli import save_font
         (
             'examples/patch-switcher/pman.toml',
             'instruments/definitions.toml',
-            ['instruments/pman.toml'],
+            ['instruments/patchman.toml'],
         ),
         ('cntrl/maker/morningstar/mc/font-demo.toml', None, []),
         ('cntrl/maker/morningstar/mc/patch-functions-demo.toml', None, []),
@@ -65,14 +65,26 @@ def test_authored_song_library_compiles_and_round_trips(path: str) -> None:
     assert songs.encode(songs.decode(data), target) == data
 
 
-@pytest.mark.parametrize('instrument', ['pman', 'vl70'])
+@pytest.mark.parametrize('instrument', ['patchman', 'vl70m'])
 def test_instrument_catalogues_match_declared_setups(instrument: str) -> None:
     definitions = models.Definitions.model_validate(
         compiler.read_document(Path('instruments/definitions.toml'))
     )
     table = compiler.read_document(Path('instruments') / f'{instrument}.toml')
     assert isinstance(table, dict)
-    patches = [models.TablePatch.model_validate(p) for p in table['patches']]
+    patches = [
+        models.TablePatch.model_validate(
+            (p if isinstance(p, dict) else {'name': p})
+            | {
+                'instrument': instrument,
+                'setup': 'default',
+                'bank': int(b),
+                'program': n,
+            }
+        )
+        for b, v in table['instruments'][instrument]['programs'].items()
+        for n, p in enumerate(v, 1)
+    ]
     assert patches
     for patch in patches:
         setup = next(
