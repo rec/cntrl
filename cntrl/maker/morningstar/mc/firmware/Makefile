@@ -120,6 +120,10 @@ inspect-patch-switcher: patch-switcher
 
 test: tools test-button-timing test-switch-gesture test-boot-selection
 	mkdir -p "$(ROOT)/build"
+	$(CC) -c "$(CORE)/libraries/ST7735_t3/src/glcdfont.c" -o "$(ROOT)/build/timing-font.o"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+		"$(ROOT)/test_scroll_timing.cpp" "$(ROOT)/build/timing-font.o" -o "$(ROOT)/build/test_scroll_timing"
+	"$(ROOT)/build/test_scroll_timing"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(abspath $(ROOT)/../../../../..)/firmware/include" \
 		-fsanitize=address,undefined "$(ROOT)/test_original_firmware.cpp" -o "$(ROOT)/build/test_original_firmware"
 	"$(ROOT)/build/test_original_firmware"
