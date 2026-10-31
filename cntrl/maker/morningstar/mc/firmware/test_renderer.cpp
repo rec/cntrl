@@ -119,6 +119,8 @@ int main() {
     }
     std::memset(screens, 123, sizeof(screens));
     DisplayRenderer renderer;
+    assert(ShowGraphics::native_font(0, 32) == &Arial_32);
+    assert(!ShowGraphics::supports_font(0, 56)); // No invented, magnified size.
     assert(!renderer.ready());
     cntrl::Pane empty;
     drain(renderer);
@@ -133,13 +135,13 @@ int main() {
     renderer.show(0, empty); drain(renderer);
     cntrl::Pane editor;
     editor.lines[0].graphics.size = editor.lines[0].graphics.line_height = 16;
-    editor.lines[1].graphics.size = editor.lines[1].graphics.line_height = 16;
+    editor.lines[1].graphics.size = 12; editor.lines[1].graphics.line_height = 16;
     editor.lines[1].wrap = true;
     std::strcpy(editor.lines[0].text, "Patch");
     std::memset(editor.lines[1].text, 'X', 63); editor.lines[1].text[63] = 0;
     renderer.show(0, editor); drain(renderer);
-    for (unsigned y : {21u, 38u, 56u, 73u, 90u, 107u}) assert(screens[0][y][4] == 0);
-    assert(screens[0][107][40] == 0xffff); // Last row has only three characters.
+    for (unsigned y : {6u, 26u, 46u, 66u, 86u, 106u}) assert(screens[0][y][4] == 0);
+    assert(screens[0][106][150] == 0xffff); // Final row ends before the right edge.
     padding(0, 4, 0xffff);
     renderer.show(0, empty); drain(renderer);
     unsigned before = writes;
@@ -255,7 +257,7 @@ int main() {
     assert(!ShowGraphics::supports_font(5, 32));
     assert(!ShowGraphics::supports_font(8, 24)); // Shows use sparse SD assets.
     assert(!ShowGraphics::supports_font(10, 24));
-    assert(!ShowGraphics::supports_font(0, 13) && !ShowGraphics::supports_font(1, 15));
+    assert(ShowGraphics::supports_font(0, 13) && !ShowGraphics::supports_font(1, 15));
 
     // A complete send shifts C/R left and introduces the new grey candidate.
     for (unsigned i = 0; i < 3; ++i) {

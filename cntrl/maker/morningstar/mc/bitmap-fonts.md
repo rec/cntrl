@@ -62,6 +62,19 @@ use this same sparse path automatically. Classic, Arial and ComicSansMS remain
 built-in ASCII fonts for the UI and shows that select them. StillTime at size
 28 remains built in for the fixed cable-test title; show text uses its SD subset.
 
+`classic` uses the same native-size Arial bitmaps and proportional metrics as
+`Arial`, keeping face ID 0 for existing configurations. It no longer enlarges the
+5x7 built-in bitmap. Automatic fitting selects a real available size; each font
+pixel maps to one display pixel. Recompile and copy existing setups so their
+widths, line heights and selected sizes match the new classic metrics. Wrapped
+classic UI text uses actual glyph advances instead of fixed character columns.
+
+The native classic fix was built and flashed through upload_helper on 2026-10-31.
+The active `simple-setup` was backed up, recompiled, copied with read-back
+verification and selected again. Device status is `CNTRL READY 20 21411 fa5ba7e8`.
+The 449 Python tests, native renderer tests, production type check and firmware
+build pass; visual confirmation on the pedal is pending.
+
 Display labels and static page fields accept Unicode supported by the selected
 outline font. UTF-8 labels are limited to 63 bytes by the existing display
 buffers. Identifiers, routing names and the on-pedal editing UI retain their

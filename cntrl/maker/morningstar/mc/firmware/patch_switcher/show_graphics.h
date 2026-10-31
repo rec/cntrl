@@ -9,6 +9,7 @@
 class ShowGraphics : public Graphics {
 public:
     static const ILI9341_t3_font_t *native_font(unsigned face, unsigned size) {
+        if (face == 0) face = 1; // Classic uses native-size Arial bitmaps.
         // The cable-test title is fixed UI text. Show families use SD subsets.
         if (face >= 3) return face == 5 && size == 28 ? &StillTime_28 : nullptr;
         if (face != 1 && face != 2) return nullptr;
@@ -36,8 +37,7 @@ public:
     }
 
     static bool supports_font(unsigned face, unsigned size) {
-        return face == 0 ? size >= 8 && size <= 96 && size % 8 == 0
-                         : native_font(face, size) != nullptr;
+        return native_font(face, size) != nullptr;
     }
 
     void configure(const cntrl::ScreenGraphics &settings) {
@@ -48,11 +48,33 @@ public:
         setTextColor(settings.foreground);
     }
     void select_font(unsigned face, unsigned size, uint32_t = 0) {
-        setTextSize(face == 0 ? size / 8 : 1);
-        if (face == 0) setFont();
-        else if (face == 255) {
+        setTextSize(1);
+        if (face == 255) {
             setFont();
         } else setFont(*native_font(face, size));
+    }
+    struct WrappedPosition { unsigned x = 0, row = 0; };
+    static WrappedPosition wrapped_position(const cntrl::TextLine &line, unsigned index) {
+        const auto *font = native_font(line.graphics.font, line.graphics.size);
+        WrappedPosition position;
+        if (!font) return position;
+        auto bits = [](const uint8_t *data, unsigned start, unsigned count) {
+            unsigned value = 0;
+            for (unsigned i = start; i < start + count; ++i) value = (value << 1) | ((data[i / 8] >> (7 - i % 8)) & 1);
+            return value;
+        };
+        unsigned available = 160 - line.graphics.pad - line.x;
+        for (unsigned i = 0; i <= index && line.text[i]; ++i) {
+            unsigned c = uint8_t(line.text[i]);
+            if (c < font->index1_first || c > font->index1_last) continue;
+            unsigned start = bits(font->index, (c - font->index1_first) * font->bits_index, font->bits_index) * 8;
+            unsigned offset = start + 3 + font->bits_width + font->bits_height + font->bits_xoffset + font->bits_yoffset;
+            unsigned advance = bits(font->data, offset, font->bits_delta);
+            if (position.x && position.x + advance > available) { position.x = 0; ++position.row; }
+            if (i == index) return position;
+            position.x += advance;
+        }
+        return position;
     }
     bool sparse_letter(const cntrl::ScreenGraphics &settings, const char *text, unsigned index, int x, int y, bool centered) {
         const auto *font = font_assets::cache.get(settings.asset, settings.size);

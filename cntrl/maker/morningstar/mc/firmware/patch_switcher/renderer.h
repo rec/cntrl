@@ -79,9 +79,8 @@ public:
                         text_y(field_, 0));
                 }
                 if (line.wrap && settings.font == 0) {
-                    unsigned columns = (160 - 2 * settings.pad) / (6 * (settings.size / 8));
-                    if (columns && letter_ % columns == 0)
-                        graphics_.setCursor(line.x, text_y(field_, letter_ / columns));
+                    auto position = ShowGraphics::wrapped_position(line, letter_);
+                    graphics_.setCursor(line.x + position.x, text_y(field_, position.row));
                 }
                 graphics_.write(uint8_t(text[letter_++]));
             } else {
@@ -134,9 +133,9 @@ private:
             + line.graphics.top;
     }
     unsigned line_rows(const cntrl::TextLine &line) const {
-        const auto &g = line.graphics;
-        unsigned columns = line.wrap && g.font == 0 ? (160 - 2 * painting_.graphics.pad) / (6 * (g.size / 8)) : 0;
-        return columns ? (std::strlen(line.text) + columns - 1) / columns : 1;
+        unsigned length = unsigned(std::strlen(line.text));
+        return line.wrap && line.graphics.font == 0 && length
+            ? ShowGraphics::wrapped_position(line, length - 1).row + 1 : 1;
     }
     void backgrounds(bool preserve_text = false) {
         unsigned start = painting_.graphics.pad;
