@@ -136,6 +136,11 @@ int main() {
     drain(renderer);
     assert(writes == 480 && pixels_sent == 3 * 160 * 128);
     for (unsigned i = 0; i < 3; ++i) blank(i);
+    cntrl::Pane empty_sparse;
+    empty_sparse.graphics.background = 0;
+    empty_sparse.lines[0].graphics.font = 255;
+    renderer.show(0, empty_sparse); drain(renderer); blank(0, 0);
+    renderer.show(0, empty); drain(renderer); blank(0);
     cntrl::Pane corner_text;
     corner_text.graphics.pad = corner_text.lines[0].graphics.pad = 0;
     corner_text.graphics.background = 0x07e0;
