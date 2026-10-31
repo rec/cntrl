@@ -195,7 +195,8 @@ private:
             write_display_column(panel, (ring_ + x) % display_ram_columns, pixels);
         }
         // The incoming column is hidden at the current offset. Reveal it only
-        // after all three panels are staged; never overwrite an outgoing edge.
+        // after all three panels are staged. This is relative to the last
+        // commanded offset; physical scanout application time is not known.
         scroll_display_panorama(ring_);
         if (progress_ != display_pitch) return;
         // The moved bitmaps may use a different pane's font/colors. Record what

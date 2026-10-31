@@ -41,6 +41,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 
 namespace {
 ScrollTimingProbe scroll_timing;
+extern cntrl::Documents documents;
 extern cntrl::splash::Session splash_session;
 extern cntrl::splash::Panels splash_panels;
 font_assets::Files font_files;
@@ -254,9 +255,13 @@ public:
     }
     void transition(bool undo, std::optional<unsigned> duration_ms) override { renderer_.transition(undo, duration_ms); }
     void timing_mode(bool enabled) {
-        if (enabled) scroll_timing.arm();
+        if (enabled) {
+            scroll_timing.arm(renderer_);
+            analogWrite(6, runtime.brightness);
+        }
         else {
             scroll_timing.stop(); renderer_.invalidate();
+            documents.redraw();
             analogWrite(6, applied_brightness_);
         }
     }
@@ -356,7 +361,7 @@ public:
     }
     void display(uint32_t now, bool transfer_busy) {
         ++display_count_;
-        if (scroll_timing.active()) { scroll_timing.poll(micros()); return; }
+        if (scroll_timing.active()) { scroll_timing.poll(millis(), renderer_); return; }
         bool splash = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
         if (!splash) draw();

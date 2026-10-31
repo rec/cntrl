@@ -237,6 +237,68 @@ MADCTL changes, or a nominal refresh-period calculation. A connection to one
 panel would also need qualification before being used to schedule the other
 two independently initialized panels.
 
+## Production batch audit and replacement fixture
+
+The follow-up audit exercises `DisplayRenderer` directly. Four patterned
+panes are rendered separately, then copied into a literal panorama with
+72-column black gaps. That reference does not use `panorama_sample()`.
+Every animation write is compared with the incoming reference column, and
+every visible RAM pixel is checked after each commanded offset. Each offset
+must follow exactly three writes in panel order 0, 1, 2. The initially hidden
+columns are poisoned so exposing one without writing it fails the comparison.
+
+Four complete 500 ms transitions pass: left from ring 0, left from 70,
+right from 140, right from 70. Each has 232 one-column steps in 30 time
+batches: eight batches of seven steps and 22 batches of eight steps. Tests
+drive eight renderer polls per simulated millisecond; this checks scheduling
+logic, not actual MCU throughput. Font rendering is the existing host test
+double, so these are column/source checks rather than real glyph qualification.
+
+Representative trace, logical RAM columns before the driver's native mapping:
+
+| Direction / initial ring | Step | Written column on all panels | New commanded ring |
+| --- | ---: | ---: | ---: |
+| Left / 0 | 1 | 160 | 1 |
+| Left / 0 | 2 | 161 | 2 |
+| Left / 0 | 3 | 0 | 3 |
+| Left / 0 | 7 | 4 | 7 |
+| Left / 0 | 162 | 159 | 0 |
+| Left / 0 | 163 | 160 | 1 |
+| Left / 0 | 232 | 67 | 70 |
+| Right / 140 | 1 | 139 | 139 |
+| Right / 140 | 2 | 138 | 138 |
+| Right / 140 | 3 | 137 | 137 |
+| Right / 140 | 7 | 133 | 133 |
+| Right / 140 | 162 | 140 | 140 |
+| Right / 140 | 163 | 139 | 139 |
+| Right / 140 | 232 | 70 | 70 |
+
+The driver maps a logical RAM column to RASET `(column + 1) % 162`, and
+the commanded ring to SSA `(162 - ring) % 162`. Existing bus tests check
+these boundaries separately. A step stages 267 bytes per panel, then sends
+three 3-byte scroll commands: 810 bytes total, or a wire-only minimum of
+810 microseconds at the configured 8 MHz. Computation, GPIO, transaction
+overhead and other work add time; no new physical timing measurement was made.
+
+No wrong source column, unprepared commanded image, or wrap error was found
+in these cases. This does not prove physical scanout safety: the test's panel
+model applies each command immediately. Within a seven-step batch, five
+rewritten columns belonged to the visible image at the batch's starting
+offset; an eight-step batch reuses six. That is safe only if the earlier
+scroll commands have displaced those columns before their writes become
+visible. The old renderer comment claiming outgoing edges were never
+overwritten has been qualified to refer to the last commanded offset.
+
+The replacement [optical fixture](firmware/scroll-timing.md) uses the actual
+renderer and its normal ordering, unlike the preceding pointer-jump test.
+It provides pane/band identity and initially hidden four-pixel stripes, with
+constant illumination. It does not change the normal animation algorithm.
+Native tests pass, including the fixture's eight transitions and timer wrap.
+The next physical recording is still required to determine whether the
+reported artifact reproduces with these identifiable patterns and which
+data appears at the wrong edge. These results do not establish a hardware
+fault or the need for a hardware modification.
+
 The working probe image SHA-256 was
 `86f057907103f692a26d92984dc9c040e85ac7180dd091adca1d5af91fa53e18`.
 An initial image rejected the diagnostic command because its router had not

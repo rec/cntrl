@@ -1,4 +1,5 @@
 #include "patch_switcher/renderer.h"
+#include "patch_switcher/scroll_timing.h"
 #include <cassert>
 #include <algorithm>
 #include <cstring>
@@ -11,6 +12,14 @@ static unsigned checked_progress = 0;
 static unsigned writes = 0, pixels_sent = 0;
 static unsigned scroll_updates = 0;
 static bool patch_only = false;
+static bool audit_motion = false, audit_undo = false;
+static unsigned audit_step = 0, audit_panel = 0, audit_origin = 0;
+static uint16_t audit_strip[128][4 * 232];
+
+static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
+    unsigned start = panel * 232 + (audit_undo ? 232 - step : step);
+    return audit_strip[y][start + x];
+}
 
 static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
     // Expected discrete 8-pixel arc, independent of the renderer's circle test.
@@ -20,6 +29,20 @@ static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
 }
 
 void scroll_display_panorama(unsigned offset) {
+    if (audit_motion) {
+        assert(audit_panel == 3); // All three writes must precede this command.
+        ++audit_step; audit_panel = 0;
+        assert(offset == (audit_origin + (audit_undo ? 324 - audit_step : audit_step)) % 162);
+        if (audit_step <= 3 || audit_step == 7 || audit_step == 8
+            || audit_step == 161 || audit_step == 162 || audit_step == 163 || audit_step == 232)
+            std::printf("audit %s origin=%u step=%u write=%u offset=%u\n",
+                audit_undo ? "right" : "left", audit_origin, audit_step,
+                (offset + (audit_undo ? 0 : 159)) % 162, offset);
+        for (unsigned panel = 0; panel < 3; ++panel)
+            for (unsigned y = 0; y < 128; ++y)
+                for (unsigned x = 0; x < 160; ++x)
+                    assert(ram[panel][y][(offset + x) % 162] == audit_pixel(panel, x, y, audit_step));
+    }
     ++scroll_updates;
     if (check_motion) checked_progress += check_undo ? (ring + display_ram_columns - offset) % display_ram_columns : (offset + display_ram_columns - ring) % display_ram_columns;
     ring = offset;
@@ -43,6 +66,12 @@ void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels
     assert(panel < 3 && column < display_ram_columns);
     ++writes; pixels_sent += 128;
     unsigned x = (column + display_ram_columns - ring) % display_ram_columns;
+    if (audit_motion) {
+        assert(panel == audit_panel++ && x == (audit_undo ? 161 : 160));
+        for (unsigned y = 0; y < 128; ++y)
+            assert((unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1])
+                == audit_pixel(panel, audit_undo ? 0 : 159, y, audit_step + 1));
+    }
     // Column writes happen before the scroll register update. Updating a
     // visible column here produces the wrong-image sliver at the outgoing edge.
     if (check_motion && checked_progress < display_pitch) assert(x >= 160);
@@ -65,6 +94,66 @@ static void drain(DisplayRenderer &renderer) {
         assert(writes == before || ST7735_t3::glyphs == glyphs);
     }
     assert(renderer.ready());
+}
+
+static void audit_animation_batches() {
+    DisplayRenderer renderer;
+    drain(renderer);
+    // Build a literal four-pane panorama from independently rendered snapshots.
+    // The reference deliberately does not call panorama_sample().
+    for (unsigned identity = 0; identity < 4; ++identity) {
+        renderer.show(0, ScrollTimingProbe::pane(identity)); drain(renderer);
+        for (unsigned y = 0; y < 128; ++y)
+            for (unsigned x = 0; x < 160; ++x)
+                audit_strip[y][identity * 232 + x] = screens[0][y][x];
+    }
+    for (bool undo : {false, false, true, true}) {
+        for (unsigned panel = 0; panel < 3; ++panel)
+            renderer.show(panel, ScrollTimingProbe::pane(panel + unsigned(undo)));
+        drain(renderer);
+        // A newly exposed, unwritten column must fail the pixel comparison.
+        for (unsigned panel = 0; panel < 3; ++panel)
+            for (unsigned y = 0; y < 128; ++y)
+                for (unsigned x = 160; x < 162; ++x) ram[panel][y][(ring + x) % 162] = 0xdead;
+        audit_origin = ring; audit_undo = undo; audit_step = audit_panel = 0;
+        renderer.transition(undo, 500);
+        for (unsigned panel = 0; panel < 3; ++panel)
+            renderer.show(panel, ScrollTimingProbe::pane(panel + unsigned(!undo)));
+        for (unsigned i = 0; i < 1600; ++i) renderer.draw(0);
+        audit_motion = true;
+        unsigned batches7 = 0, batches8 = 0;
+        for (unsigned now = 1; now <= 500; ++now) {
+            unsigned before = audit_step;
+            for (unsigned work = 0; work < 8; ++work) {
+                renderer.draw(now);
+                if (audit_step == 232) break;
+            }
+            unsigned steps = audit_step - before;
+            assert(steps == 0 || steps == 7 || steps == 8);
+            batches7 += steps == 7; batches8 += steps == 8;
+        }
+        assert(audit_step == 232 && audit_panel == 0 && batches7 == 8 && batches8 == 22);
+        audit_motion = false; drain(renderer);
+    }
+
+    ScrollTimingProbe probe;
+    unsigned before = scroll_updates;
+    probe.poll(0, renderer); assert(scroll_updates == before);
+    probe.arm(renderer);
+    for (unsigned i = 0; i < 1600; ++i) probe.poll(0, renderer);
+    before = scroll_updates;
+    probe.poll(10000, renderer); assert(scroll_updates == before);
+    probe.start();
+    // Exercise the fixture through millis rollover, with the real renderer.
+    for (uint32_t elapsed = 0; elapsed < 20000; ++elapsed)
+        for (unsigned work = 0; work < 8; ++work)
+            probe.poll(UINT32_MAX - 1000 + elapsed, renderer);
+    assert(scroll_updates == before + 8 * 232 && renderer.ready());
+    probe.start();
+    for (unsigned i = 0; i < 2000; ++i) probe.poll(30000, renderer);
+    probe.stop(); before = scroll_updates;
+    probe.poll(31000, renderer);
+    assert(!probe.active() && scroll_updates == before);
 }
 
 static void blank(unsigned panel, uint16_t background = 0xffff) {
@@ -356,4 +445,5 @@ int main() {
         auto right = panorama_sample(panel, x, display_pitch, true);
         assert(right.pane == int(panel) - 1 && right.x == x);
     }
+    audit_animation_batches();
 }
