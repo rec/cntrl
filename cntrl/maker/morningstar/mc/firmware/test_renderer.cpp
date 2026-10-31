@@ -3,6 +3,7 @@
 #include <cassert>
 #include <algorithm>
 #include <cstring>
+#include <vector>
 
 static uint16_t screens[3][128][160];
 static uint16_t ram[3][128][display_ram_columns];
@@ -15,6 +16,11 @@ static bool patch_only = false;
 static bool audit_motion = false, audit_undo = false;
 static unsigned audit_step = 0, audit_panel = 0, audit_origin = 0;
 static uint16_t audit_strip[128][4 * 232];
+struct ScrollStep {
+    unsigned column = 0, offset = 0;
+    uint16_t pixels[3][128] = {};
+};
+static std::vector<ScrollStep> scroll_trace;
 
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
     unsigned start = panel * 232 + (audit_undo ? 232 - step : step);
@@ -32,6 +38,7 @@ void scroll_display_panorama(unsigned offset) {
     if (audit_motion) {
         assert(audit_panel == 3); // All three writes must precede this command.
         ++audit_step; audit_panel = 0;
+        scroll_trace.back().offset = offset;
         assert(offset == (audit_origin + (audit_undo ? 324 - audit_step : audit_step)) % 162);
         if (audit_step <= 3 || audit_step == 7 || audit_step == 8
             || audit_step == 161 || audit_step == 162 || audit_step == 163 || audit_step == 232)
@@ -67,6 +74,10 @@ void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels
     ++writes; pixels_sent += 128;
     unsigned x = (column + display_ram_columns - ring) % display_ram_columns;
     if (audit_motion) {
+        if (!panel) { scroll_trace.emplace_back(); scroll_trace.back().column = column; }
+        assert(scroll_trace.back().column == column);
+        for (unsigned y = 0; y < 128; ++y)
+            scroll_trace.back().pixels[panel][y] = unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1];
         assert(panel == audit_panel++ && x == (audit_undo ? 161 : 160));
         for (unsigned y = 0; y < 128; ++y)
             assert((unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1])
@@ -96,6 +107,95 @@ static void drain(DisplayRenderer &renderer) {
     assert(renderer.ready());
 }
 
+// Hypothetical panel: commands latch at frame boundaries, while RAM writes
+// become visible immediately. This is a falsifiable model, not measured timing.
+static void replay_delayed_offsets() {
+    enum Schedule { batches, even, command_first, slow_control };
+    struct Result { unsigned overwritten = 0, incoming = 0, unprepared = 0, edge_width = 0; };
+    for (unsigned period : {0u, 17000u}) for (auto schedule : {batches, even, command_first, slow_control}) {
+        Result total;
+        unsigned phases = period ? 17 : 1;
+        for (unsigned phase = 0; phase < phases; ++phase) {
+            unsigned incoming_before = total.incoming;
+            uint16_t memory[3][128][162] = {};
+            for (unsigned panel = 0; panel < 3; ++panel)
+                for (unsigned y = 0; y < 128; ++y)
+                    for (unsigned x = 0; x < 162; ++x)
+                        memory[panel][y][(audit_origin + x) % 162] = x < 160
+                            ? audit_pixel(panel, x, y, 0) : 0xdead;
+            unsigned visible = audit_origin, requested = audit_origin;
+            unsigned visible_step = 0, requested_step = 0;
+            unsigned next_frame = phase * 1000, clock = 0;
+            auto latch = [&]() {
+                visible = requested; visible_step = requested_step;
+                for (unsigned panel = 0; panel < 3; ++panel)
+                    for (unsigned x = 0; x < 160; ++x) {
+                        bool wrong = false;
+                        for (unsigned y = 0; y < 128; ++y)
+                            wrong |= memory[panel][y][(visible + x) % 162]
+                                != audit_pixel(panel, x, y, visible_step);
+                        total.unprepared += wrong;
+                    }
+            };
+            auto advance = [&](unsigned deadline) {
+                // A frame exactly at an event timestamp precedes that event.
+                while (period && next_frame <= deadline) { latch(); next_frame += period; }
+                clock = deadline;
+            };
+            unsigned batch_ms = 0;
+            for (unsigned step = 0; step < scroll_trace.size(); ++step) {
+                const auto &event = scroll_trace[step];
+                while (transition_progress(batch_ms, 500) < step + 1) ++batch_ms;
+                unsigned deadline = schedule == even ? (step + 1) * 500000 / 232
+                    : schedule == slow_control ? (step + 1) * 20000 : batch_ms * 1000;
+                advance(std::max(clock, deadline));
+                auto command = [&]() {
+                    advance(clock + 9); // Three 3-byte SSA commands at 8 MHz.
+                    requested = event.offset; requested_step = step + 1;
+                    if (!period) latch();
+                };
+                if (schedule == command_first) command();
+                for (unsigned panel = 0; panel < 3; ++panel) {
+                    advance(clock + 267); // CASET, RASET, RAMWR and 128 pixels.
+                    unsigned x = (event.column + 162 - visible) % 162;
+                    bool wrong = false, incoming = false;
+                    for (unsigned y = 0; y < 128; ++y) {
+                        uint16_t pixel = event.pixels[panel][y];
+                        if (x < 160 && pixel != audit_pixel(panel, x, y, visible_step)) {
+                            wrong = true;
+                            incoming |= pixel != 0; // Exclude black gap-only damage.
+                        }
+                        memory[panel][y][event.column] = pixel;
+                    }
+                    total.overwritten += wrong; total.incoming += incoming;
+                    if (wrong) {
+                        unsigned width = audit_undo ? 160 - x : x + 1;
+                        total.edge_width = std::max(total.edge_width, width);
+                        assert(width <= 16); // Confined to the outgoing edge.
+                    }
+                }
+                if (schedule != command_first) command();
+            }
+            advance(clock + 2 * period);
+            assert(visible_step == 232);
+            if (period && (schedule == batches || schedule == even))
+                assert(total.incoming > incoming_before); // Every sampled phase fails.
+            for (unsigned panel = 0; panel < 3; ++panel)
+                for (unsigned x = 0; x < 160; ++x)
+                    for (unsigned y = 0; y < 128; ++y)
+                        assert(memory[panel][y][(visible + x) % 162] == audit_pixel(panel, x, y, 232));
+        }
+        const char *names[] = {"batches", "even", "command-first", "slow-control"};
+        std::printf("lag-model %s origin=%u period=%u schedule=%s phases=%u overwritten=%u incoming=%u unprepared=%u edge-width=%u\n",
+            audit_undo ? "right" : "left", audit_origin, period, names[schedule], phases,
+            total.overwritten, total.incoming, total.unprepared, total.edge_width);
+        if (schedule == command_first) assert(total.unprepared > 0);
+        else if (!period || schedule == slow_control)
+            assert(total.overwritten == 0 && total.unprepared == 0);
+        else assert(total.overwritten > 0 && total.incoming > 0);
+    }
+}
+
 static void audit_animation_batches() {
     DisplayRenderer renderer;
     drain(renderer);
@@ -116,6 +216,7 @@ static void audit_animation_batches() {
             for (unsigned y = 0; y < 128; ++y)
                 for (unsigned x = 160; x < 162; ++x) ram[panel][y][(ring + x) % 162] = 0xdead;
         audit_origin = ring; audit_undo = undo; audit_step = audit_panel = 0;
+        scroll_trace.clear();
         renderer.transition(undo, 500);
         for (unsigned panel = 0; panel < 3; ++panel)
             renderer.show(panel, ScrollTimingProbe::pane(panel + unsigned(!undo)));
@@ -133,7 +234,9 @@ static void audit_animation_batches() {
             batches7 += steps == 7; batches8 += steps == 8;
         }
         assert(audit_step == 232 && audit_panel == 0 && batches7 == 8 && batches8 == 22);
-        audit_motion = false; drain(renderer);
+        audit_motion = false;
+        replay_delayed_offsets();
+        drain(renderer);
     }
 
     ScrollTimingProbe probe;

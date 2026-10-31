@@ -299,6 +299,71 @@ reported artifact reproduces with these identifiable patterns and which
 data appears at the wrong edge. These results do not establish a hardware
 fault or the need for a hardware modification.
 
+## Production recording and delayed-offset replay
+
+`signal-2026-10-31-19-46-49-065.mp4` reproduces incoming-pattern fragments
+at the outgoing edge using the production renderer. At approximately
+55.5-57 seconds, the centre panel's narrow left-edge fragments match the
+incoming bright bands on the right, including heights where the outgoing
+pane is dark. At approximately 73.3 seconds the reverse transition shows
+matching incoming-pattern fragments at the right edge. These examples support
+premature reuse of still-visible memory rather than exposure of the initially
+seeded fine-stripe pattern. They do not rule out other artifacts elsewhere.
+The file has 3,586 video frames over 183.833 seconds with nonuniform timing;
+nominal 30 fps metadata must not be used to infer physical scan timing.
+
+`test_renderer.cpp` now records each real renderer step's three column payloads,
+RAM address and offset, and replays those exact data through separate commanded
+and visible offsets. The existing immediate-offset pixel checks remain in place.
+The replay covers both directions from the four audited starting rings.
+
+Explicit model assumptions:
+
+- Either commands apply immediately, or the latest requested offset applies
+  at hypothetical 17 ms frame boundaries. Seventeen starting phases spaced
+  1 ms apart are tested. This period and phase grid are not measurements.
+- RAM writes take effect immediately at the end of a whole column transfer.
+  A column takes the wire-only 267 microseconds; the three scroll commands
+  are grouped as one 9-microsecond event. CPU and GPIO costs are omitted.
+- All three panels share the model phase. Separate physical panel oscillators,
+  per-row scanning, byte-by-byte RAM updates, LCD response and camera exposure
+  are not simulated. The replay models memory visibility hazards, not optical
+  image formation or an exact reconstruction of the video.
+- Frame boundaries at an event timestamp occur before that event. Source
+  bitmaps are the same independent four-pane panorama as the immediate audit.
+
+Compared schedules:
+
+| Replay schedule | Immediate offsets | Hypothetical delayed offsets |
+| --- | --- | --- |
+| Current 60 Hz progress batches | Clean | Incoming data overwrites still-visible outgoing columns |
+| Same 232 steps evenly spaced over 500 ms | Clean | Still produces outgoing-edge overwrites |
+| Scroll command before each step's three writes | Exposes unprepared columns | Both outgoing overwrites and unprepared images occur |
+| One step every 20 ms, write then scroll | Clean | Clean, but approximately 4.6 seconds long |
+
+The tests require current and evenly spaced schedules to produce nonblack
+incoming-pattern corruption at every sampled delayed phase, with all corrupting
+writes confined to the outgoing edge. They separately count wrong columns
+when an offset becomes visible, catching the command-first tradeoff. Every
+replay must settle to the correct complete final image. The immediate and
+slow schedules are controls that must remain clean, not proposed remedies.
+
+All four starting-ring/direction cases produced the same aggregate counts
+across the 17 delayed phases. Current batches had 8,974 corrupting panel-column
+writes, including 6,258 with nonblack incoming pixels, reaching at most eight
+columns into the outgoing edge. Even pacing had 8,943 / 6,220 respectively,
+reaching seven columns. Command-first had 8,464 / 5,901 plus 344 wrong
+panel-columns at offset-latch events. These are repeated model event counts,
+not distinct pixels, camera-frame counts or measured artifact widths.
+
+This reproduces the observed kind of failure under a specific assumption and
+filters out simple scheduling candidates under that assumption. It does not
+validate the assumption, establish a hardware fault, or prove that all smooth
+firmware schedules are impossible. A successful candidate must satisfy both
+correct incoming preparation and safe outgoing reuse, and then pass a physical
+test. No production scheduling change or firmware upload accompanies this
+host-only experiment.
+
 The working probe image SHA-256 was
 `86f057907103f692a26d92984dc9c040e85ac7180dd091adca1d5af91fa53e18`.
 An initial image rejected the diagnostic command because its router had not
