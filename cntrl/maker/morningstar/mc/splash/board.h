@@ -45,7 +45,12 @@ private:
 // The two identical outer rows share a single physical pixel transfer.
 class Panels : public Output {
 public:
+    void set_color_cycle(bool enabled) { color_cycle_ = enabled; }
     void row(uint8_t panels, unsigned y, const uint8_t *pixels) override {
+        if (!color_cycle_) {
+            write_display_group(panels, 0, y, pixels, width);
+            return;
+        }
         // Sample both walks at the same frame boundary; hold them across rows.
         if (panels == 0b101 && y == 0) {
             uint32_t now = millis();
@@ -62,6 +67,7 @@ public:
         write_display_group(panels, 0, y, colored, width);
     }
 private:
+    bool color_cycle_ = false;
     Tint tints_[2] = {{63, 63, 63}, {63, 63, 63}};
     ColorWalk walks_[2] = {ColorWalk(0x9e3779b9), ColorWalk(0x243f6a89)};
 };

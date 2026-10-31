@@ -393,7 +393,10 @@ def compile_show(
             len(instruments),
             len(patch_cycles),
             len(roots),
-            show.brightness | int(show.splash) << 8 | int(show.usb_midi_interface) << 9,
+            show.brightness
+            | int(show.splash) << 8
+            | int(show.usb_midi_interface) << 9
+            | int(show.animation_color_cycle) << 10,
             crc32(body),
             show.screensaver_timeout * 1000,
         )
@@ -1350,4 +1353,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHH')
-DOCUMENT_VERSION = 19
+DOCUMENT_VERSION = 20

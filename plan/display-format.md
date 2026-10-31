@@ -2,7 +2,7 @@
 
 The current TOML formatting contract is documented in
 [formatting.md](formatting.md). It replaces this earlier design, including
-tag priorities and authored font sizing. Compiled document format 19 uses
+tag priorities and authored font sizing. Compiled document format 20 uses
 independently fitted lines and preserves partial styles, tag assignments
 and optional icon references. These changes have not been deployed to the pedal.
 

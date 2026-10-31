@@ -97,6 +97,7 @@ public:
         hardware_.set_brightness(document.brightness());
         brightness_ = document.brightness();
         hardware_.set_usb_midi_interface(document.usb_midi_interface());
+        hardware_.set_animation_color_cycle(document.animation_color_cycle());
         hardware_.set_splash(document.splash(), document.screensaver_timeout());
         selected_ = depth_ = 0;
         for (auto &c : cursors_) c = 0;
