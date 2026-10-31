@@ -21,7 +21,10 @@ public:
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
     }
     void transition(bool undo, std::optional<unsigned> duration_ms) {
-        if (!ready() || !valid_[0] || !valid_[1] || !valid_[2]) return;
+        if (preparing_ || animating_ || !valid_[0] || !valid_[1] || !valid_[2]) return;
+        // Browsing may still be repainting the candidate. Animate from the
+        // pixels already on screen instead of silently dropping the transition.
+        drawing_ = -1; rendering_ = false;
         std::memcpy(previous_, cache_, sizeof(cache_));
         undo_ = undo; duration_ms_ = duration_ms.value_or(DEFAULT_TRANSITION_MS); preparing_ = true;
         for (auto &dirty : dirty_) dirty = true;

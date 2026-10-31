@@ -9,6 +9,7 @@ static unsigned ring = 0;
 static bool check_motion = false, check_undo = false;
 static unsigned checked_progress = 0;
 static unsigned writes = 0, pixels_sent = 0;
+static unsigned scroll_updates = 0;
 static bool patch_only = false;
 
 static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
@@ -19,6 +20,7 @@ static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
 }
 
 void scroll_display_panorama(unsigned offset) {
+    ++scroll_updates;
     if (check_motion) checked_progress += check_undo ? (ring + display_ram_columns - offset) % display_ram_columns : (offset + display_ram_columns - ring) % display_ram_columns;
     ring = offset;
     for (unsigned panel = 0; panel < 3; ++panel)
@@ -332,6 +334,19 @@ int main() {
         for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
     assert(renderer.ready());
     assert(transition_progress(1000, 2000) == display_pitch / 2);
+    // A fast send after browsing must animate even during a candidate repaint.
+    cntrl::Pane browsing;
+    browsing.graphics.background = 0xf800;
+    renderer.show(2, browsing); renderer.draw();
+    assert(!renderer.ready());
+    unsigned before_scroll = scroll_updates;
+    renderer.transition(false, 500);
+    browsing.graphics.background = 0x001f;
+    renderer.show(1, browsing);
+    for (unsigned now = 5250; now < 6250; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    assert(renderer.ready() && scroll_updates > before_scroll);
+    blank(1, 0x001f); blank(2, 0xf800);
     assert(transition_progress(1999, 2000) < display_pitch);
     assert(transition_progress(2000, 2000) == display_pitch);
     assert(transition_progress(500, 500) == display_pitch);
