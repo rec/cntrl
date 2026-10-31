@@ -89,6 +89,20 @@ def test_native_metrics_are_proportional_and_fit_selected_sizes() -> None:
         )
 
 
+def test_classic_uses_native_arial_metrics_instead_of_enlarged_pixels() -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
+    )
+    classic = next(f for f in target.fonts if f.name == 'classic')
+    arial = next(f for f in target.fonts if f.name == 'Arial')
+    assert classic.id == 0 and classic.sizes == arial.sizes
+    assert 56 not in classic.sizes
+    assert (
+        graphics.bounds('WWWW', classic.sizes[32])[1]
+        > graphics.bounds('iiii', classic.sizes[32])[1]
+    )
+
+
 def test_bit_reader_crosses_bytes_and_decodes_signed_offsets() -> None:
     assert build_font_metrics.read_bits(bytes.fromhex('ab80'), 4, 8) == 184
     assert build_font_metrics.read_bits(bytes.fromhex('f0'), 0, 4, True) == -1

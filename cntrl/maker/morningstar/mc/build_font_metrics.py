@@ -96,16 +96,9 @@ def native_face(source: str, name: str, identifier: int) -> models.FontFace:
 
 def main() -> None:
     options = tyro.cli(Options)
-    classic = models.FontFace(
-        name='classic',
-        id=0,
-        sizes={
-            8 * s: models.FontMetrics(
-                line_height=8 * s, glyphs=bytes([6 * s, 0, 6 * s] * 95).hex()
-            )
-            for s in range(1, 13)
-        },
-    )
+    classic = native_face(
+        (options.source / 'st7735_t3_font_Arial.c').read_text(), 'Arial', 0
+    ).model_copy(update={'name': 'classic'})
     faces = [classic] + [
         native_face((options.source / f'st7735_t3_font_{n}.c').read_text(), n, i)
         for i, n in enumerate(['Arial', 'ComicSansMS'], 1)
