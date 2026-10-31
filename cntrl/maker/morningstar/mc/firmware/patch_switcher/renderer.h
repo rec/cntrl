@@ -7,6 +7,7 @@
 #include "panorama.h"
 
 constexpr unsigned DEFAULT_TRANSITION_MS = 500;
+constexpr unsigned WINDOW_CORNER_RADIUS = 8;
 
 // One glyph/column per repaint poll; one three-panel column step per animation poll.
 class DisplayRenderer {
@@ -89,6 +90,7 @@ public:
                     // Mask after composing all glyphs so italic overlaps keep
                     // the same checkerboard phase across the whole line.
                     backgrounds(true);
+                    round_corners();
                     rendering_ = false;
                 }
             }
@@ -111,6 +113,19 @@ public:
         }
     }
 private:
+    void round_corners() {
+        auto *pixels = graphics_.getFrameBuffer();
+        constexpr unsigned diameter = 2 * WINDOW_CORNER_RADIUS;
+        for (unsigned y = 0; y < WINDOW_CORNER_RADIUS; ++y)
+            for (unsigned x = 0; x < WINDOW_CORNER_RADIUS; ++x) {
+                unsigned dx = diameter - 2 * x - 1, dy = diameter - 2 * y - 1;
+                if (dx * dx + dy * dy <= diameter * diameter) continue;
+                // Mask after text and backgrounds so every window has the
+                // same silhouette, including styled lines and error pages.
+                pixels[y * 160 + x] = pixels[y * 160 + 159 - x] = 0;
+                pixels[(127 - y) * 160 + x] = pixels[(127 - y) * 160 + 159 - x] = 0;
+            }
+    }
     unsigned text_y(unsigned field, unsigned row) const {
         const auto &positioned = painting_.lines[field];
         if (positioned.y >= 0) return unsigned(positioned.y) + row * positioned.graphics.line_height + positioned.graphics.top;
