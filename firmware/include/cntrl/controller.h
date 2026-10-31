@@ -289,6 +289,9 @@ private:
         if (index >= 0) {
             document_.page(view, unsigned(index), slot, slot == 2 && already_sent(unsigned(index)));
         }
+        bool has_text = false;
+        for (const auto &line : view.lines) if (line.text[0]) has_text = true;
+        if (!has_text) view.graphics.background = 0;
         hardware_.show(slot, view);
     }
     void render() {
