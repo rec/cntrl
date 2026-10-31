@@ -47,30 +47,27 @@ empty undo stack do not request animation. There is no MIDI delay waiting for
 graphics, and no persistent history or graphics-format change.
 
 The screen pitch is 232 pixels: 160 visible plus a 72-pixel physical-gap
-estimate. Over a show-configured duration targeting 30 Hz (default 500 ms after preparation), the
+estimate. Over a show-configured duration at 60 Hz (default 1 second after preparation), the
 old panes move left on C and right on F. The new R candidate is rendered using
 the existing grey-name rule before entering from the right. On F, the next
 undo target, or a blank pane, enters from the left. Virtual gaps are black.
 
 The RAM-only library still renders fonts. Preparing destination bitmaps is
 incremental and leaves the old screen contents visible. Native ST7735 column
-writes use 8 MHz SPI and `MADCTL=0x88`. Animation keeps the RAM origin fixed:
-each poll compares one column across the three panels with the last completed
-frame and sends only changed vertical spans, bridging gaps of at most five
-unchanged pixels when cheaper than another address command. Pixels use blocking
-16-bit transfers; commands remain byte-wise. Button scans, USB and queued MIDI
-output run between polls. Each frame finishes before another target position is
-selected. Destination screen-specific styling is reconciled afterward.
+writes use the tested 8 MHz byte-wise protocol and `MADCTL=0x88`; each animation
+poll advances at most one pixel and writes one column per panel. Button scans,
+USB and queued MIDI output run between these polls. Scroll commands are issued
+at frame targets. Destination screen-specific styling is reconciled afterward.
 The target duration is not a hard real-time guarantee under SD/USB stalls.
 
-Ordinary UI repainting also uses native columns at the fixed origin.
-Splash output switches back to landscape row addressing and resets the
+Ordinary UI repainting also uses native columns and retains the current ring
+offset. Splash output switches back to landscape row addressing and resets the
 scroll offset. On return, renderer invalidation restores native mode and
 repaints behind the existing first-image/blackout gate. New actions during an
 animation retain their MIDI/history effects and coalesce into the latest pending
 view; they do not build an unbounded animation queue.
 
-Original 2026-10-24 verification: 194 Python tests, the sanitizer-enabled portable controller suite,
+Verification: 194 Python tests, the sanitizer-enabled portable controller suite,
 and native button/display/renderer tests passed. New tests cover forward/reverse
 pane mapping, nonzero ring offsets, the native-column protocol and return to
 splash addressing. Controller tests cover browsing away before undo and exclude

@@ -126,8 +126,15 @@ and is not an isolated measurement of the transfer optimization.
 
 Native sanitizer tests and the ARM build/image checks pass. No Python source or
 Python-consumed data changed, so the Python checks were not run. The candidate
-has not been uploaded or visually qualified; no fixed-rate or tear-free claim
-is established by these tests.
+was subsequently uploaded through the existing helper. The first upload hit
+a USB write error; after confirming HalfKay again, the retry completed and
+reset the pedal. The saved setup returned `CNTRL READY 20 21411 fa5ba7e8`.
+
+The user confirmed that the edge strips disappeared, but reported painfully
+jerky motion. The candidate is rejected: the wire-only budget did not establish
+acceptable physical smoothness. Commit `31a0458` is reverted, restoring the
+previous hardware-scrolling implementation and its tests. The underlying
+scrolling issue remains unresolved.
 
 Candidate image: `firmware/build/patch-switcher.hex`, SHA-256
 `19d9f3b80f5910c9b74904fc8fdbee4e446368cb65f5453db239948faeff4c32`.
@@ -135,3 +142,10 @@ The build reports 21,984 bytes of RAM1 free for local variables and 292,064
 bytes of RAM2 free for allocation. Test and build logs from this session are
 `/private/tmp/cntrl-scroll-fix-native.log` and
 `/private/tmp/cntrl-scroll-fix-build.log`; these temporary files may not persist.
+
+The restored hardware-scroll sources match `4ea3253` exactly. Native tests and
+ARM build/image checks passed again. Restored image SHA-256:
+`dca55d0cbfe3be31cd24b47ccf9c54c4baef3759376ad79f4f411f614ed76d20`.
+It was uploaded through the helper, reset successfully, and returned
+`CNTRL READY 20 21411 fa5ba7e8`. This confirms setup loading after restoration;
+the original moving-edge artifact remains unresolved.

@@ -4,7 +4,12 @@
 #include <cstring>
 
 static uint16_t screens[3][128][160];
+static uint16_t ram[3][128][display_ram_columns];
+static unsigned ring = 0;
+static bool check_motion = false, check_undo = false;
+static unsigned checked_progress = 0;
 static unsigned writes = 0, pixels_sent = 0;
+static unsigned scroll_updates = 0;
 static bool patch_only = false;
 
 static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
@@ -14,19 +19,41 @@ static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
     return edge < 5 && std::min(x, 159 - x) < cut[edge] ? 0 : color;
 }
 
-void initialize_display_panorama() {}
+void scroll_display_panorama(unsigned offset) {
+    ++scroll_updates;
+    if (check_motion) checked_progress += check_undo ? (ring + display_ram_columns - offset) % display_ram_columns : (offset + display_ram_columns - ring) % display_ram_columns;
+    ring = offset;
+    for (unsigned panel = 0; panel < 3; ++panel)
+        for (unsigned y = 0; y < 128; ++y)
+                for (unsigned x = 0; x < 160; ++x) screens[panel][y][x] = ram[panel][y][(ring + x) % display_ram_columns];
+    if (check_motion) {
+        assert(checked_progress <= display_pitch);
+        for (unsigned panel = 0; panel < 3; ++panel) for (unsigned x = 0; x < 160; ++x) {
+            auto sample = panorama_sample(panel, x, checked_progress, check_undo);
+            uint16_t expected = sample.x >= 160 ? 0 : uint16_t(0x1111 * (sample.pane + (check_undo ? 2 : 1)));
+            for (unsigned y = 0; y < 128; ++y)
+                assert(screens[panel][y][x] == (sample.x >= 160 ? 0 : rounded_background(sample.x, y, expected)));
+        }
+    }
+}
 
-void write_display_column(unsigned panel, unsigned x, const uint8_t *pixels, unsigned first, unsigned count) {
-    assert(panel < 3 && x < 160 && first < 128 && count && count <= 128 - first);
-    ++writes; pixels_sent += count;
-    for (unsigned y = first; y < first + count; ++y) {
-        unsigned i = 2 * (y - first);
-        uint16_t pixel = uint16_t(pixels[i]) << 8 | pixels[i + 1];
+void initialize_display_panorama() { scroll_display_panorama(0); }
+
+void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels) {
+    assert(panel < 3 && column < display_ram_columns);
+    ++writes; pixels_sent += 128;
+    unsigned x = (column + display_ram_columns - ring) % display_ram_columns;
+    // Column writes happen before the scroll register update. Updating a
+    // visible column here produces the wrong-image sliver at the outgoing edge.
+    if (check_motion && checked_progress < display_pitch) assert(x >= 160);
+    for (unsigned y = 0; y < 128; ++y) {
+        uint16_t pixel = uint16_t(pixels[2 * y]) << 8 | pixels[2 * y + 1];
         if (patch_only) {
             assert(panel == 2);
             if (y < 90 || y >= 98) assert(screens[panel][y][x] == pixel);
         }
-        screens[panel][y][x] = pixel;
+        ram[panel][y][column] = pixel;
+        if (x < 160) screens[panel][y][x] = pixel;
     }
 }
 
@@ -43,22 +70,6 @@ static void drain(DisplayRenderer &renderer) {
 static void blank(unsigned panel, uint16_t background = 0xffff) {
     for (unsigned y = 0; y < 128; ++y) for (unsigned x = 0; x < 160; ++x)
         assert(screens[panel][y][x] == rounded_background(x, y, background));
-}
-
-static void moving_frame(unsigned progress, bool undo) {
-    // Independently walk the four source panes and their 72-pixel gaps.
-    for (unsigned panel = 0; panel < 3; ++panel)
-        for (unsigned x = 0; x < 160; ++x) {
-            int world = int(panel * 232 + x) + (undo ? -int(progress) : int(progress));
-            int pane = 0;
-            while (world < 0) { world += 232; --pane; }
-            while (world >= 232) { world -= 232; ++pane; }
-            for (unsigned y = 0; y < 128; ++y) {
-                uint16_t expected = world >= 160 ? 0 : rounded_background(unsigned(world), y,
-                    uint16_t(0x1111 * (pane + (undo ? 2 : 1))));
-                assert(screens[panel][y][x] == expected);
-            }
-        }
 }
 
 static void padding(unsigned panel, unsigned pad, uint16_t color) {
@@ -106,75 +117,6 @@ static void sparse_text() {
     assert(!cntrl::label_valid(reinterpret_cast<const uint8_t *>("\xc0\xaf"), 3));
     assert(!cntrl::label_valid(reinterpret_cast<const uint8_t *>("\xed\xa0\x80"), 4));
     font_assets::cache.begin(); font_assets::cache.finish(true);
-}
-
-static void patterned_transitions() {
-    DisplayRenderer renderer;
-    cntrl::Pane panes[2][3];
-    uint16_t images[2][3][128][160];
-    for (unsigned version = 0; version < 2; ++version) {
-        for (unsigned panel = 0; panel < 3; ++panel) {
-            auto &pane = panes[version][panel];
-            pane.graphics.background = uint16_t(0x1111 * (1 + panel + version));
-            pane.graphics.pad = 3;
-            for (unsigned line = 0; line < 3; ++line) {
-                auto &text = pane.lines[line];
-                text.graphics = pane.graphics;
-                text.graphics.background = uint16_t(0x2222 * (line + 1));
-                text.graphics.foreground = uint16_t(0xf800 + version * 31);
-                text.graphics.line_height = 22;
-                text.x = 4 + 7 * panel + 2 * line;
-                text.stippled = line == 1;
-                std::strcpy(text.text, version ? "New Slap" : "Gnarly Bass");
-            }
-            renderer.show(panel, pane);
-        }
-        drain(renderer);
-        std::memcpy(images[version], screens, sizeof(screens));
-    }
-    for (bool undo : {false, true}) {
-        unsigned source = undo ? 1 : 0, target = 1 - source;
-        for (unsigned panel = 0; panel < 3; ++panel) renderer.show(panel, panes[source][panel]);
-        drain(renderer);
-        unsigned duration = undo ? 1000 : 500;
-        renderer.transition(undo, duration);
-        for (unsigned panel = 0; panel < 3; ++panel) renderer.show(panel, panes[target][panel]);
-        // Also exercise millis() rollover while animating.
-        uint32_t started = UINT32_MAX - 50;
-        for (unsigned work = 0; work < 1536; ++work) renderer.draw(started);
-        for (unsigned elapsed = duration / 5; elapsed <= duration; elapsed += duration / 5) {
-            for (unsigned work = 0; work < 160; ++work)
-                renderer.draw(started + elapsed + work / 4);
-            unsigned progress = elapsed * 232 / duration;
-            for (unsigned panel = 0; panel < 3; ++panel)
-                for (unsigned x = 0; x < 160; ++x) {
-                    int world = int(panel * 232 + x) + (undo ? -int(progress) : int(progress));
-                    int pane = 0;
-                    while (world < 0) { world += 232; --pane; }
-                    while (world >= 232) { world -= 232; ++pane; }
-                    for (unsigned y = 0; y < 128; ++y) {
-                        uint16_t expected = world >= 160 ? 0 : pane < 0 ? images[target][0][y][world]
-                            : pane == 3 ? images[target][2][y][world] : images[source][pane][y][world];
-                        assert(screens[panel][y][x] == expected);
-                    }
-                }
-        }
-        drain(renderer);
-        assert(!std::memcmp(screens, images[target], sizeof(screens)));
-    }
-    // Cancellation must repaint from the current request, even mid-frame.
-    renderer.transition(false, 500);
-    for (unsigned panel = 0; panel < 3; ++panel) renderer.show(panel, panes[1][panel]);
-    for (unsigned work = 0; work < 1536; ++work) renderer.draw(0);
-    for (unsigned work = 0; work < 73; ++work) renderer.draw(100);
-    renderer.invalidate();
-    drain(renderer);
-    assert(!std::memcmp(screens, images[1], sizeof(screens)));
-    renderer.transition(true, 0);
-    for (unsigned panel = 0; panel < 3; ++panel) renderer.show(panel, panes[0][panel]);
-    for (unsigned work = 0; work < 3072; ++work) renderer.draw(0);
-    assert(renderer.ready());
-    assert(!std::memcmp(screens, images[0], sizeof(screens)));
 }
 
 int main() {
@@ -357,46 +299,31 @@ int main() {
         renderer.show(i, pane);
     }
     drain(renderer);
-    renderer.transition(false, 500);
+    renderer.transition(false, 2000);
+    check_motion = true; checked_progress = 0;
     for (unsigned i = 0; i < 3; ++i) {
         cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 2));
         renderer.show(i, pane);
     }
-    for (unsigned work = 0; work < 1536; ++work) renderer.draw(0);
-    moving_frame(0, false);
-    unsigned animation_pixels = pixels_sent, animation_writes = writes;
-    for (unsigned frame = 1; frame <= 15; ++frame) {
-        unsigned frame_pixels = pixels_sent, frame_writes = writes;
-        unsigned now = (frame * 1000 + 29) / 30;
-        // A stalled poll must not change the target halfway through a frame.
-        renderer.draw(now);
-        for (unsigned work = 1; work < 160; ++work) renderer.draw(now + 17);
-        moving_frame(frame * 232 / 15, false);
-        // Necessary wire budget for 30 Hz at 8 MHz, excluding CPU/SPI gaps.
-        assert(2 * (pixels_sent - frame_pixels) + 11 * (writes - frame_writes) < 33333);
-        unsigned after = writes;
-        if (frame != 15) {
-            renderer.draw(now + 17);
-            assert(writes == after);
-        }
-    }
-    unsigned wire_bytes = 2 * (pixels_sent - animation_pixels) + 11 * (writes - animation_writes);
-    std::printf("Forward 15-frame animation: %u wire bytes at 8 MHz\n", wire_bytes);
-    drain(renderer);
+    for (unsigned now = 0; now < 1000; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    assert(!renderer.ready() && checked_progress < display_pitch);
+    for (unsigned now = 1000; now < 3000; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    assert(renderer.ready());
+    check_motion = false; assert(checked_progress == display_pitch);
     for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 2)));
+    assert(ring == display_pitch % display_ram_columns);
     renderer.transition(true, 500);
+    check_motion = check_undo = true; checked_progress = 0;
     for (unsigned i = 0; i < 3; ++i) {
         cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
         renderer.show(i, pane);
     }
-    for (unsigned work = 0; work < 1536; ++work) renderer.draw(3000);
-    moving_frame(0, true);
-    for (unsigned frame = 1; frame <= 15; ++frame) {
-        unsigned now = 3000 + (frame * 1000 + 29) / 30;
-        for (unsigned work = 0; work < 160; ++work) renderer.draw(now);
-        moving_frame(frame * 232 / 15, true);
-    }
-    drain(renderer);
+    for (unsigned now = 3000; now < 4500; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    assert(renderer.ready() && ring == 0);
+    check_motion = false; assert(checked_progress == display_pitch);
     for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 1)));
     // An unspecified duration uses the renderer default, even after an explicit one.
     renderer.transition(false, std::nullopt);
@@ -412,13 +339,13 @@ int main() {
     browsing.graphics.background = 0xf800;
     renderer.show(2, browsing); renderer.draw();
     assert(!renderer.ready());
-    unsigned before_writes = writes;
+    unsigned before_scroll = scroll_updates;
     renderer.transition(false, 500);
     browsing.graphics.background = 0x001f;
     renderer.show(1, browsing);
     for (unsigned now = 5250; now < 6250; ++now)
         for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
-    assert(renderer.ready() && writes > before_writes);
+    assert(renderer.ready() && scroll_updates > before_scroll);
     blank(1, 0x001f); blank(2, 0xf800);
     assert(transition_progress(1999, 2000) < display_pitch);
     assert(transition_progress(2000, 2000) == display_pitch);
@@ -429,5 +356,4 @@ int main() {
         auto right = panorama_sample(panel, x, display_pitch, true);
         assert(right.pane == int(panel) - 1 && right.x == x);
     }
-    patterned_transitions();
 }
