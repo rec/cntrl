@@ -12,7 +12,9 @@ public:
     }
     void stop() {
         player_.stop();
-        if (running_ || fade_ != Fade::none) redraw_ = true;
+        // Fading the UI alone does not change its pixels. Invalidating it when
+        // a performance action cancels that fade would also cancel its scroll.
+        if (running_) redraw_ = true;
         running_ = pending_ = saver_ = false;
         fade_ = Fade::none; clock_started_ = false;
     }
