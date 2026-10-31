@@ -25,7 +25,8 @@ public:
         if (overflow_) replies_.reply("CNTRL ERROR command-too-long");
         else {
             line_[used_] = 0;
-            if (asset_command_ && (!std::strncmp(line_, "CNTRL FONT ", 11) || !std::strncmp(line_, "CNTRL SONGS ", 12))) {
+            if (asset_command_ && (!std::strncmp(line_, "CNTRL FONT ", 11) || !std::strncmp(line_, "CNTRL SONGS ", 12)
+                || !std::strcmp(line_, "CNTRL DISPLAY EDGE") || !std::strcmp(line_, "CNTRL DISPLAY EDGE END"))) {
                 session_.stop(); asset_command_(line_); used_ = 0; overflow_ = false; return;
             }
             if (midi_status_ && !std::strcmp(line_, "CNTRL MIDI RESET")) {

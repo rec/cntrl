@@ -42,6 +42,16 @@ void scroll_display_panorama(unsigned offset) {
     end_transfer();
 }
 
+void timing_scroll_panel(unsigned index, unsigned offset) {
+    if (index >= 3) return;
+    const uint8_t start[] = {0, uint8_t((162 - offset % 162) % 162)};
+    begin_transfer();
+    command(panorama_panels[index], 0x37, start, 2);
+    end_transfer();
+}
+
+void timing_backlight(unsigned value) { analogWrite(6, value); }
+
 void write_display_group(uint8_t selected, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
     if (native_mode) {
         const uint8_t mode[] = {0xa8}, area[] = {0, 1, 0, 160, 0, 1}, start[] = {0, 1};
