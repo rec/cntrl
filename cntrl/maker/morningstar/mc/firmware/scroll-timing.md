@@ -1,4 +1,59 @@
-# Optical scroll timing diagnostic
+# Production-sequence scroll diagnostic
+
+The current `CNTRL DISPLAY EDGE` fixture uses the actual `DisplayRenderer`,
+including its normal one-step-per-poll writes, 60 Hz progress batches, 500 ms
+duration, 72-column gap and three-panel scroll commands. It replaces the
+single-jump/delayed-write experiment documented below. Normal scrolling code
+is unchanged apart from correcting a comment that overstated scanout safety.
+
+Arm over USB, wait for the three patterned panes A/B/C to finish painting,
+then record at 240 fps and press C. There is no `PRESS C` label in this version.
+It performs four left/right pairs, holding each completed image for 1.5 seconds.
+Allow approximately 20 seconds, until A/B/C remain still. C repeats; F or
+`CNTRL DISPLAY EDGE END` exits and redraws the saved setup. Buttons are consumed
+by the fixture. It does not send patches or write saved configuration.
+
+Keep all three displays and their edges visible. Preserve the whole recording's
+slow-motion section. The backlight stays at the configured brightness throughout
+the test; there are no optical brightness markers, fades or blanking.
+
+Each pane has a distinct arrangement of 16-pixel horizontal light/dark bands
+and repeated column digits. A leftward transition moves A/B/C to B/C/D;
+rightward reverses that change. Before the first transition only, both hidden
+RAM columns on each panel are seeded with contrasting four-pixel stripes.
+Every subsequent transition runs without resetting the ring offset or reseeding.
+
+Interpretation:
+
+- Four-pixel stripes appearing on the first transition identify exposure of
+  the initial hidden RAM without replacement by the expected staged column.
+- A fragment with the incoming pane's band pattern at the outgoing edge
+  identifies incoming data visible on the wrong side. An early black cut into
+  an outgoing band can similarly identify a gap write, but must be compared
+  against the expected moving boundary.
+- Pane identity, column digits and frame-to-frame motion must be considered
+  together. Camera scan/exposure and LCD response can mix adjacent states;
+  a single ambiguous edge fragment is not enough to assign a cause.
+
+Native tests use the real renderer and a literal four-pane reference panorama,
+not its coordinate helper. They check every incoming pixel, all three writes
+before each offset command, all visible pixels after each command, poisoned
+hidden columns, consecutive transitions through ring wrap, and the 30 batches
+(eight of seven steps, 22 of eight steps). Fixture tests cover eight transitions,
+idle arming, restart, stop and millis rollover. The host model still applies
+offset commands immediately, so passing it does not establish scanout safety.
+
+Installed and armed with image SHA-256
+`961409bf3e9536c22f4ddd6dc5a280a7a4da207bfde385a814c3a853d8ac6e36`.
+The ARM build passed binary/HEX comparison and the stock flash-header check.
+After upload/reset, USB returned `CNTRL READY 20 21411 fa5ba7e8` and
+`CNTRL EDGE ARMED`. The sequence is waiting for C; no physical recording
+of this fixture has yet been inspected.
+
+## Historical single-jump timing diagnostic
+
+The following describes the earlier firmware and its recordings, not the
+current `CNTRL DISPLAY EDGE` sequence.
 
 Enter with `CNTRL DISPLAY EDGE` over USB serial. Once `PRESS C` is visible,
 record at 240 fps and press C once. Keep the left label and both edges of the
