@@ -1,6 +1,60 @@
-# Production-sequence scroll diagnostic
+# Scroll-only diagnostic
 
-The current `CNTRL DISPLAY EDGE` fixture uses the actual `DisplayRenderer`,
+The current `CNTRL DISPLAY EDGE` experiment preloads all 162 RAM columns on
+each panel, then changes only the scroll offset during motion. It replaces
+the production-sequence fixture described below. There are no pixel writes,
+repaints, backlight changes or RAM resets during the sequence or a C-triggered
+repeat. Normal patch scrolling is unchanged.
+
+The stationary pattern has broad horizontal bands and narrow vertical rulers.
+Each panel has three differently phased 54-column zones across its 162-column
+RAM ring. The two initially hidden columns are deliberately filled too, using
+the same pattern. There are no A/B/C labels or `PRESS C` prompt in this version.
+
+When ready to record:
+
+1. Keep all three patterned displays, including both edges, sharp and in view.
+2. Record at 240 fps and press C once.
+3. Allow 20 seconds for four left/right pairs and their 1.5-second holds.
+4. Stop once the original pattern stays still. C repeats without repainting;
+   F or `CNTRL DISPLAY EDGE END` exits and redraws the saved setup.
+
+Each motion uses the production 500 ms / 60 Hz progress targets, one-column
+offset steps, and 232 steps. Offset commands are spaced at least 1 ms apart
+to avoid compressing each batch after removing the three column transfers.
+This spacing approximates the removed work; it is not measured production
+timing. The final batch can extend a few milliseconds beyond the 500 ms target.
+The full sequence takes approximately 16 seconds, with 20 seconds allowing
+recording margin. It remains armed indefinitely awaiting C.
+
+This is circular motion of the preloaded pattern, not replacement of panes
+across the virtual 72-column gaps. Rulers and band boundaries legitimately
+wrap from one edge to the other. Inspect whether the *whole pattern* translates
+consistently, rather than treating any narrow feature at an edge as a defect.
+A fixed-edge fragment that disagrees with the translating pattern is the
+relevant observation.
+
+If a matching defect persists, it has been reproduced without concurrent RAM
+writes. If it disappears, the write interaction remains a candidate, but the
+different data pattern and changed inter-command timing are also variables.
+Neither outcome alone proves the precise controller timing or a hardware fault.
+
+Native tests assert exactly 486 preload column writes, check all pattern pixels
+including hidden RAM, then forbid writes during two complete eight-transition
+sequences. They check each offset, minimum step spacing, immutable RAM, return
+to offset zero, indefinite idle, C repeat, stop and micros rollover.
+
+Installed and armed on 2026-10-31 with image SHA-256
+`1449ff6eaaffd015c23fc10bd64dc08e9172fec756f5a63cb5928dce10486a00`.
+Native tests, ARM compilation, binary/HEX comparison and the stock flash-header
+check passed. After upload/reset, USB returned `CNTRL READY 20 21411 fa5ba7e8`
+and `CNTRL EDGE ARMED`. No motion was triggered from the host. Visual results
+remain pending the user's recording. A power cycle clears diagnostic mode;
+the same USB command rearms it.
+
+## Previous production-sequence diagnostic
+
+The preceding `CNTRL DISPLAY EDGE` fixture used the actual `DisplayRenderer`,
 including its normal one-step-per-poll writes, 60 Hz progress batches, 500 ms
 duration, 72-column gap and three-panel scroll commands. It replaces the
 single-jump/delayed-write experiment documented below. Normal scrolling code

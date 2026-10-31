@@ -256,7 +256,7 @@ public:
     void transition(bool undo, std::optional<unsigned> duration_ms) override { renderer_.transition(undo, duration_ms); }
     void timing_mode(bool enabled) {
         if (enabled) {
-            scroll_timing.arm(renderer_);
+            scroll_timing.arm();
             analogWrite(6, runtime.brightness);
         }
         else {
@@ -361,7 +361,7 @@ public:
     }
     void display(uint32_t now, bool transfer_busy) {
         ++display_count_;
-        if (scroll_timing.active()) { scroll_timing.poll(millis(), renderer_); return; }
+        if (scroll_timing.active()) { scroll_timing.poll(micros()); return; }
         bool splash = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
         if (!splash) draw();

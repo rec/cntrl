@@ -21,6 +21,10 @@ struct ScrollStep {
     uint16_t pixels[3][128] = {};
 };
 static std::vector<ScrollStep> scroll_trace;
+static bool scroll_only = false;
+static uint32_t probe_now = 0, probe_last = 0;
+static unsigned probe_steps = 0;
+static uint16_t probe_ram[3][128][162];
 
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
     unsigned start = panel * 232 + (audit_undo ? 232 - step : step);
@@ -35,6 +39,13 @@ static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
 }
 
 void scroll_display_panorama(unsigned offset) {
+    if (scroll_only) {
+        assert(std::memcmp(probe_ram, ram, sizeof(ram)) == 0);
+        bool undo = (probe_steps / 232) % 2;
+        assert(offset == (ring + (undo ? 161 : 1)) % 162);
+        if (probe_steps) assert(uint32_t(probe_now - probe_last) >= 1000);
+        probe_last = probe_now; ++probe_steps;
+    }
     if (audit_motion) {
         assert(audit_panel == 3); // All three writes must precede this command.
         ++audit_step; audit_panel = 0;
@@ -70,6 +81,7 @@ void scroll_display_panorama(unsigned offset) {
 void initialize_display_panorama() { scroll_display_panorama(0); }
 
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels) {
+    assert(!scroll_only); // No RAMWR is allowed after the diagnostic is ready.
     assert(panel < 3 && column < display_ram_columns);
     ++writes; pixels_sent += 128;
     unsigned x = (column + display_ram_columns - ring) % display_ram_columns;
@@ -231,20 +243,36 @@ static void replay_delayed_offsets() {
     }
 }
 
+static cntrl::Pane audit_pane(unsigned identity) {
+    cntrl::Pane view;
+    view.graphics.pad = 0;
+    view.graphics.background = 0;
+    for (unsigned band = 0; band < 8; ++band) {
+        auto &line = view.lines[band];
+        line.graphics.pad = 0;
+        line.graphics.background = ((identity + band) % 4 < 2) ? 0xffff : 0x4208;
+        line.graphics.foreground = 0;
+        line.graphics.line_height = 16;
+        line.x = 0; line.y = int16_t(band * 16);
+        std::snprintf(line.text, sizeof(line.text), "%c01234567890123456789012345", 'A' + identity);
+    }
+    return view;
+}
+
 static void audit_animation_batches() {
     DisplayRenderer renderer;
     drain(renderer);
     // Build a literal four-pane panorama from independently rendered snapshots.
     // The reference deliberately does not call panorama_sample().
     for (unsigned identity = 0; identity < 4; ++identity) {
-        renderer.show(0, ScrollTimingProbe::pane(identity)); drain(renderer);
+        renderer.show(0, audit_pane(identity)); drain(renderer);
         for (unsigned y = 0; y < 128; ++y)
             for (unsigned x = 0; x < 160; ++x)
                 audit_strip[identity * 232 + x][y] = screens[0][y][x];
     }
     for (bool undo : {false, false, true, true}) {
         for (unsigned panel = 0; panel < 3; ++panel)
-            renderer.show(panel, ScrollTimingProbe::pane(panel + unsigned(undo)));
+            renderer.show(panel, audit_pane(panel + unsigned(undo)));
         drain(renderer);
         // A newly exposed, unwritten column must fail the pixel comparison.
         for (unsigned panel = 0; panel < 3; ++panel)
@@ -254,7 +282,7 @@ static void audit_animation_batches() {
         scroll_trace.clear();
         renderer.transition(undo, 500);
         for (unsigned panel = 0; panel < 3; ++panel)
-            renderer.show(panel, ScrollTimingProbe::pane(panel + unsigned(!undo)));
+            renderer.show(panel, audit_pane(panel + unsigned(!undo)));
         for (unsigned i = 0; i < 1600; ++i) renderer.draw(0);
         audit_motion = true;
         unsigned batches7 = 0, batches8 = 0;
@@ -276,22 +304,40 @@ static void audit_animation_batches() {
 
     ScrollTimingProbe probe;
     unsigned before = scroll_updates;
-    probe.poll(0, renderer); assert(scroll_updates == before);
-    probe.arm(renderer);
-    for (unsigned i = 0; i < 1600; ++i) probe.poll(0, renderer);
+    probe.poll(0); assert(scroll_updates == before);
+    probe.arm();
+    unsigned initial_writes = writes;
+    for (unsigned i = 0; i < 486; ++i) {
+        unsigned previous = writes;
+        probe.poll(0); assert(writes == previous + 1);
+    }
+    assert(writes == initial_writes + 486 && ring == 0);
+    // Check visible and hidden RAM, including every band and ruler boundary.
+    constexpr uint16_t bands[] = {0xffff, 0xffff, 0x4208, 0x4208};
+    for (unsigned panel = 0; panel < 3; ++panel)
+        for (unsigned x = 0; x < 162; ++x)
+            for (unsigned y = 0; y < 128; ++y) {
+                unsigned zone = x < 54 ? 0 : x < 108 ? 1 : 2;
+                assert(ram[panel][y][x] == (x % 18 < 2 ? 0 : bands[(panel + zone + y / 16) % 4]));
+            }
+    std::memcpy(probe_ram, ram, sizeof(ram));
+    scroll_only = true; probe_steps = 0;
     before = scroll_updates;
-    probe.poll(10000, renderer); assert(scroll_updates == before);
-    probe.start();
-    // Exercise the fixture through millis rollover, with the real renderer.
-    for (uint32_t elapsed = 0; elapsed < 20000; ++elapsed)
-        for (unsigned work = 0; work < 8; ++work)
-            probe.poll(UINT32_MAX - 1000 + elapsed, renderer);
-    assert(scroll_updates == before + 8 * 232 && renderer.ready());
-    probe.start();
-    for (unsigned i = 0; i < 2000; ++i) probe.poll(30000, renderer);
+    probe.poll(10000); assert(scroll_updates == before);
+    for (unsigned repetition = 0; repetition < 2; ++repetition) {
+        probe.start();
+        // Exercise micros rollover and a complete C-triggered repeat.
+        for (uint32_t elapsed = 0; elapsed < 18000000; elapsed += 100) {
+            probe_now = UINT32_MAX - 500000 + repetition * 18000000 + elapsed;
+            probe.poll(probe_now);
+        }
+        assert(scroll_updates == before + (repetition + 1) * 8 * 232 && ring == 0);
+    }
+    probe.start(); probe.poll(probe_now);
     probe.stop(); before = scroll_updates;
-    probe.poll(31000, renderer);
+    probe.poll(probe_now + 1000000);
     assert(!probe.active() && scroll_updates == before);
+    scroll_only = false;
 }
 
 static void blank(unsigned panel, uint16_t background = 0xffff) {
