@@ -132,7 +132,7 @@ original name is preserved as UTF-8 metadata without display-character limits.
 Executable values require an explicit `type`. Named definitions use `patches`;
 ordered browser entries use `patch_cycles`. Delimiter shorthand, implicit string
 references and bare-list sequences are rejected. See
-[the Patch schema and format 19 authoring changes](../doc/patches.md) for MIDI,
+[the Patch schema and format 20 authoring changes](../doc/patches.md) for MIDI,
 state, composition, switches and stable references. Independent authoring errors
 are reported together before any binary is written. Display text is checked
 against target capabilities.
@@ -419,7 +419,7 @@ nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 19 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 20 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 Names in commands are hex-encoded ASCII, never paths. Requests are:

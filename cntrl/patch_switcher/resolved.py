@@ -26,7 +26,7 @@ def graph_offset(data: bytes) -> int:
     if (
         magic != b'CSW1'
         or version != DOCUMENT_VERSION
-        or flags >> 10
+        or flags >> 11
         or length != len(data)
         or crc32(data[28:]) != crc
     ):
@@ -73,6 +73,7 @@ def export(data: bytes) -> str:
         'chord_ms': chord,
         'brightness': flags & 255,
         'splash': bool(flags & 256),
+        'animation_color_cycle': bool(flags & 1024),
         'usb_midi_interface': bool(flags & 512),
         'screensaver_timeout': timeout // 1000,
     }

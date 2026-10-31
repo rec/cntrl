@@ -1,5 +1,6 @@
 # Both instruments receive channel 1 and are already set to Internal.
 # Each activation sends one Program Change through DIN, without bank selection.
+animation_color_cycle = false
 
 [instruments.both]
 output = 'din'

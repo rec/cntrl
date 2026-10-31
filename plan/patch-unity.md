@@ -1,6 +1,6 @@
 # Patch unity
 
-Status: implemented in setup format 19 and song format CSG4. Authoring, compilation,
+Status: implemented in setup format 20 and song format CSG4. Authoring, compilation,
 switches, browser activation and songs use the tagged Patch graph and shared
 executor. Durable stock continuation resumes a composite before advancing its
 song. See [configuration and required authoring changes](../doc/patches.md).

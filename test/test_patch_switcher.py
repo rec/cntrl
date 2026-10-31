@@ -163,6 +163,32 @@ def test_usb_midi_switch_rejects_non_booleans(
         compiler.compile_show(show, definitions, [], target)
 
 
+@pytest.mark.parametrize('enabled', [None, False, True])
+def test_animation_color_cycle_round_trips_independently_of_splash(
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    enabled: bool | None,
+) -> None:
+    if enabled is not None:
+        show['animation_color_cycle'] = enabled
+    data = compiler.compile_show(show, definitions, [], target)
+    assert bool(compiler.HEADER.unpack_from(data)[7] & 1024) is bool(enabled)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['animation_color_cycle'] is bool(enabled)
+    assert exported['splash'] is True
+    assert compiler.compile_show(exported, {}, [], target) == data
+
+
+@pytest.mark.parametrize('value', [1, 'false', None])
+def test_animation_color_cycle_rejects_non_booleans(
+    show: dict[str, object], definitions: object, target: models.Target, value: object
+) -> None:
+    show['animation_color_cycle'] = value
+    with pytest.raises(compiler.CompilationError, match='animation_color_cycle'):
+        compiler.compile_show(show, definitions, [], target)
+
+
 @pytest.mark.parametrize('brightness', [0, 32, 255])
 def test_brightness_is_encoded_in_show(
     show: dict[str, object], definitions: object, target: models.Target, brightness: int

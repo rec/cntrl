@@ -40,6 +40,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 
 namespace {
 extern cntrl::splash::Session splash_session;
+extern cntrl::splash::Panels splash_panels;
 font_assets::Files font_files;
 USBHost host;
 MIDIDevice host_midi(host);
@@ -259,6 +260,9 @@ public:
     }
     void set_splash(bool enabled, uint32_t idle_ms) override {
         splash_session.configure(enabled, idle_ms, millis());
+    }
+    void set_animation_color_cycle(bool enabled) override {
+        splash_panels.set_color_cycle(enabled);
     }
     void error(const char *message) override {
         renderer_.error(message);

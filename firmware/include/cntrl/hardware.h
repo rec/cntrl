@@ -59,6 +59,7 @@ struct Hardware {
     virtual void set_brightness(uint8_t value, bool temporary = false) = 0;
     virtual void set_usb_midi_interface(bool) {}
     virtual void set_splash(bool enabled, uint32_t idle_ms) = 0;
+    virtual void set_animation_color_cycle(bool) {}
     virtual void error(const char *message) = 0;
 };
 

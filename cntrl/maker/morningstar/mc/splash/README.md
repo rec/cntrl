@@ -130,7 +130,13 @@ Both tints are sampled together at the first outer-screen row and held for the
 complete frame. The outer screens still share a single
 broadcast transfer. One 320-byte temporary row is transformed before sending;
 stored assets, checksums, geometry, frame timing and backlight fades are unchanged.
-The effect is limited to splash/screensaver output, not the main UI.
+The effect is limited to splash/screensaver output, not the main UI. It is now
+optional: the setup setting `animation_color_cycle` defaults to `false`.
+When disabled, original asset pixels are sent directly without the tint transform
+or color-walk calculations. Set it to `true` to enable the independent centre/outer
+color walks. This controls both startup and idle animation and does not change
+GIF motion, frame timing, or backlight fades. The current `simple-setup.toml`
+explicitly sets it to `false`. This setting requires setup format 20 firmware.
 
 `color_cycle.h` implements the walk and pure integer RGB565 transform. The walk
 uses distinct seeds mixed with the first frame's uptime, continues between animation loops and

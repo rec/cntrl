@@ -1,7 +1,7 @@
 # Saved pedal setups
 
 These are the three saved pedal setups from the October 28, 2026 backup,
-converted to setup format 19 authoring. The saved selection was `pman`. The
+converted to setup format 20 authoring. The saved selection was `pman`. The
 original backup files in `/private/tmp/cntrl-actions-device-backup` are preserved.
 These files have not been compared with a fresh read-back from the pedal.
 

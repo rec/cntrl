@@ -19,6 +19,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     unsigned errors = 0;
     uint8_t brightness = 0;
     bool splash = false;
+    bool animation_color_cycle = false;
     bool usb_midi_interface = false;
     bool send(const char *route, const uint8_t *data, unsigned n) override {
         if (!connected) return false;
@@ -37,6 +38,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     void set_brightness(uint8_t value, bool) override { brightness = value; }
     void set_usb_midi_interface(bool value) override { usb_midi_interface = value; }
     void set_splash(bool enabled, uint32_t) override { splash = enabled; }
+    void set_animation_color_cycle(bool enabled) override { animation_color_cycle = enabled; }
     void error(const char *) override { ++errors; }
     void reply(const char *s) override { replies.emplace_back(s); }
 };
@@ -551,7 +553,7 @@ int main(int argc, char **argv) {
         app.activate(settings);
         assert(hw.brightness == value && hw.sent.empty());
     }
-    corrupt = bytes; corrupt[19] = 4;
+    corrupt = bytes; corrupt[19] = 8;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     corrupt = bytes; cntrl::put32(corrupt.data() + 24, 0x80000000u);
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
@@ -560,6 +562,15 @@ int main(int argc, char **argv) {
     app.activate(doc);
     assert(hw.brightness == 192);
     assert(hw.splash);
+    assert(!hw.animation_color_cycle);
+    auto cycling = bytes;
+    cycling[19] |= 4;
+    cntrl::Document colors;
+    assert(colors.load(cycling.data(), unsigned(cycling.size()), hw));
+    app.activate(colors);
+    assert(hw.animation_color_cycle && hw.splash && hw.sent.empty());
+    app.activate(doc);
+    assert(!hw.animation_color_cycle && hw.splash);
     auto no_animation = bytes;
     no_animation[19] = 0;
     cntrl::Document disabled;

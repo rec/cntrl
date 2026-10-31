@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
     assets.boot();
     while (!router.accepts_input()) router.poll(0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back() == "CNTRL READY 14 0 00000000");
+    assert(device.replies.back() == "CNTRL READY " + std::to_string(cntrl::document_version) + " 0 00000000");
     command(router, "CNTRL STORAGE");
     assert(storage_queries == 1 && storage_scans == 0);
     command(router, "CNTRL STORAGE SCAN");
@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
     command(router, "CNTRL SPLASH STATUS");
     assert(device.replies.back().find("CNTRL SPLASH READY ") == 0);
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 14 ") == 0);
+    assert(device.replies.back().find("CNTRL READY " + std::to_string(cntrl::document_version) + " ") == 0);
 
     {
         Player boot_player(assets, panels);
@@ -298,7 +298,7 @@ int main(int argc, char **argv) {
     router.poll(10001); // Finish timed-out asset upload, leaving old slot available.
     assert(!assets.busy());
     command(router, "CNTRL STATUS");
-    assert(device.replies.back().find("CNTRL READY 14 ") == 0);
+    assert(device.replies.back().find("CNTRL READY " + std::to_string(cntrl::document_version) + " ") == 0);
 
     session.configure(true, 0, 10002);
     assert(session.controls(1, 10002)); // A press during pending startup also cancels.
@@ -332,8 +332,9 @@ int main(int argc, char **argv) {
     assert(session.poll(60000) && session.brightness(192, 60000) == 48);
     assert(session.poll(62000) && session.brightness(192, 62000) == 192);
     unsigned sent_before_wake = device.sent;
-    if (!session.controls(1u << 2, 62001)) controller.button(2, true, 62001);
-    assert(device.sent == sent_before_wake + 1); // Wake sends now, not after the fade.
+    // Ordinary navigation wakes with a fade; performance C bypass is tested above.
+    if (!session.controls(1u << 1, 62001)) controller.button(1, true, 62001);
+    assert(device.sent == sent_before_wake);
     assert(!session.management_allowed());
     assert(!session.controls(9, 62001) && !session.management_allowed());
     assert(!session.controls(8, 62002) && !session.management_allowed());

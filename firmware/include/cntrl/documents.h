@@ -463,6 +463,7 @@ private:
             if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
         settings = old.chord_ms() != current.chord_ms() || old.brightness() != current.brightness()
             || old.splash() != current.splash() || old.usb_midi_interface() != current.usb_midi_interface()
+            || old.animation_color_cycle() != current.animation_color_cycle()
             || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();
         auto names_end = [](const Document &d) {
             unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + 4;
@@ -491,6 +492,7 @@ private:
         hardware_.begin_fonts(); hardware_.finish_fonts(true);
         hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
         hardware_.set_usb_midi_interface(false);
+        hardware_.set_animation_color_cycle(false);
         Pane view; view.lines[1].centered = true;
         view.lines[1].graphics.size = view.lines[1].graphics.line_height = 16;
         std::snprintf(view.lines[1].text, sizeof(view.lines[1].text), "No setups");
