@@ -1,5 +1,6 @@
 #include "patch_switcher/renderer.h"
 #include <cassert>
+#include <algorithm>
 #include <cstring>
 
 static uint16_t screens[3][128][160];
@@ -9,6 +10,13 @@ static bool check_motion = false, check_undo = false;
 static unsigned checked_progress = 0;
 static unsigned writes = 0, pixels_sent = 0;
 static bool patch_only = false;
+
+static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
+    // Expected discrete 8-pixel arc, independent of the renderer's circle test.
+    constexpr unsigned cut[] = {5, 3, 2, 1, 1};
+    unsigned edge = std::min(y, 127 - y);
+    return edge < 5 && std::min(x, 159 - x) < cut[edge] ? 0 : color;
+}
 
 void scroll_display_panorama(unsigned offset) {
     if (check_motion) checked_progress += check_undo ? (ring + 160 - offset) % 160 : (offset + 160 - ring) % 160;
@@ -21,7 +29,8 @@ void scroll_display_panorama(unsigned offset) {
         for (unsigned panel = 0; panel < 3; ++panel) for (unsigned x = 0; x < 160; ++x) {
             auto sample = panorama_sample(panel, x, checked_progress, check_undo);
             uint16_t expected = sample.x >= 160 ? 0 : uint16_t(0x1111 * (sample.pane + (check_undo ? 2 : 1)));
-            for (unsigned y = 0; y < 128; ++y) assert(screens[panel][y][x] == expected);
+            for (unsigned y = 0; y < 128; ++y)
+                assert(screens[panel][y][x] == (sample.x >= 160 ? 0 : rounded_background(sample.x, y, expected)));
         }
     }
 }
@@ -53,13 +62,14 @@ static void drain(DisplayRenderer &renderer) {
 }
 
 static void blank(unsigned panel, uint16_t background = 0xffff) {
-    for (const auto &row : screens[panel]) for (uint16_t pixel : row) assert(pixel == background);
+    for (unsigned y = 0; y < 128; ++y) for (unsigned x = 0; x < 160; ++x)
+        assert(screens[panel][y][x] == rounded_background(x, y, background));
 }
 
 static void padding(unsigned panel, unsigned pad, uint16_t color) {
     for (unsigned y = 0; y < 128; ++y) for (unsigned x = 0; x < 160; ++x)
         if (x < pad || y < pad || x >= 160 - pad || y >= 128 - pad)
-            assert(screens[panel][y][x] == color);
+            assert(screens[panel][y][x] == rounded_background(x, y, color));
 }
 
 static void sparse_text() {
@@ -126,6 +136,19 @@ int main() {
     drain(renderer);
     assert(writes == 480 && pixels_sent == 3 * 160 * 128);
     for (unsigned i = 0; i < 3; ++i) blank(i);
+    cntrl::Pane corner_text;
+    corner_text.graphics.pad = corner_text.lines[0].graphics.pad = 0;
+    corner_text.graphics.background = 0x07e0;
+    corner_text.lines[0].graphics.background = 0x001f;
+    corner_text.lines[0].graphics.foreground = 0xf800;
+    corner_text.lines[0].x = 0; corner_text.lines[0].y = 0;
+    std::strcpy(corner_text.lines[0].text, "A");
+    renderer.show(0, corner_text); drain(renderer);
+    assert(screens[0][0][0] == 0 && screens[0][4][0] == 0);
+    assert(screens[0][1][4] == 0xf800); // Text inside the arc survives.
+    assert(screens[0][0][5] == 0x001f && screens[0][64][80] == 0x001f);
+    assert(screens[0][127][159] == 0 && screens[0][127][154] == 0x001f);
+    renderer.show(0, empty); drain(renderer); blank(0);
     cntrl::Pane no_setups;
     no_setups.lines[1].centered = true;
     no_setups.lines[1].graphics.size = no_setups.lines[1].graphics.line_height = 16;
