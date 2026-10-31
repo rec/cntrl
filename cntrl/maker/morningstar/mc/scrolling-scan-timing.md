@@ -364,6 +364,59 @@ correct incoming preparation and safe outgoing reuse, and then pass a physical
 test. No production scheduling change or firmware upload accompanies this
 host-only experiment.
 
+## Progressive scanout replay
+
+The same replay now also samples one visible column at a time, comparing all
+128 pixels against the independent panorama only when that column is scanned.
+Writes to a column that has already been scanned do not alter that frame's
+observed result. The old immediate and whole-image snapshot cases remain as
+controls, with their original event counts preserved.
+
+The progressive cases retain the hypothetical 17 ms frame period and the
+17 starting phases. They test both fixed screen-space scan directions and
+two active windows: 17 ms with no blank interval, and 10 ms followed by 7 ms
+without scanning. The latest requested offset latches immediately before the
+first visible column is sampled. These timings and the relationship between
+latching and the first visible column are assumptions, not measurements.
+The final image must be fully and correctly scanned after writes finish.
+
+All four schedules still depend only on step number, elapsed time and modeled
+bus occupancy. They do not receive the simulated frame phase or scan position.
+The replay compares all 128 pixels per column with contiguous column arrays
+and byte comparisons to keep the expanded phase sweep practical.
+
+For current batches and evenly spaced 500 ms steps, both active windows give:
+
+| Fixed screen-space scan order | Leftward scroll | Rightward scroll |
+| --- | --- | --- |
+| Left edge first | Clean at all 17 sampled phases | Corrupt at all 17 sampled phases |
+| Right edge first | Corrupt at all 17 sampled phases | Clean at all 17 sampled phases |
+
+Command-first also fails with the outgoing edge scanned last. The 20 ms/step
+slow control remains clean in both scan directions. None of the tested fast
+schedules is clean for both motion directions with one fixed scan order.
+
+This materially qualifies the preceding snapshot-model conclusions: its
+potential RAM overwrite counts are not observed scanout damage counts. In
+the progressive model, thousands of those writes can occur after the affected
+edge has already been read, producing no incorrect sampled pixels.
+
+More importantly, this simplest progressive model does not reproduce the
+production recording's strips in both directions on the same panel with a
+single fixed scan order. That is a limitation of the model, not evidence
+against the recording. The relationship between SSA application, visible
+scan order and RAM reads remains unresolved. A clean case here is insufficient
+justification for a firmware change, including another scan-direction change:
+the earlier compensated MADCTL trial already failed on the device (see
+`plan/scrolling-bug.md`, refresh-order retry with settling and readback).
+
+Native tests assert both the already-scanned clean cases and corruption at
+every sampled phase when the outgoing edge is scanned last, as well as clean
+slow controls and complete final frames. This remains a host-only experiment;
+the installed production-sequence diagnostic and scrolling algorithm are
+unchanged. No new physical timing measurement or hardware-fault conclusion
+follows from this model.
+
 The working probe image SHA-256 was
 `86f057907103f692a26d92984dc9c040e85ac7180dd091adca1d5af91fa53e18`.
 An initial image rejected the diagnostic command because its router had not

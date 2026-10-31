@@ -15,7 +15,7 @@ static unsigned scroll_updates = 0;
 static bool patch_only = false;
 static bool audit_motion = false, audit_undo = false;
 static unsigned audit_step = 0, audit_panel = 0, audit_origin = 0;
-static uint16_t audit_strip[128][4 * 232];
+static uint16_t audit_strip[4 * 232][128];
 struct ScrollStep {
     unsigned column = 0, offset = 0;
     uint16_t pixels[3][128] = {};
@@ -24,7 +24,7 @@ static std::vector<ScrollStep> scroll_trace;
 
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
     unsigned start = panel * 232 + (audit_undo ? 232 - step : step);
-    return audit_strip[y][start + x];
+    return audit_strip[start + x][y];
 }
 
 static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
@@ -107,39 +107,63 @@ static void drain(DisplayRenderer &renderer) {
     assert(renderer.ready());
 }
 
-// Hypothetical panel: commands latch at frame boundaries, while RAM writes
-// become visible immediately. This is a falsifiable model, not measured timing.
+// Hypothetical panels, not measured timing. Scan state is private to the replay:
+// schedules below depend only on step number, elapsed time and bus occupancy.
 static void replay_delayed_offsets() {
     enum Schedule { batches, even, command_first, slow_control };
-    struct Result { unsigned overwritten = 0, incoming = 0, unprepared = 0, edge_width = 0; };
-    for (unsigned period : {0u, 17000u}) for (auto schedule : {batches, even, command_first, slow_control}) {
+    struct Model { unsigned period, active; int direction; };
+    struct Result {
+        unsigned overwritten = 0, incoming = 0, unprepared = 0, edge_width = 0;
+        unsigned scanned_wrong = 0, failing_phases = 0;
+    };
+    const Model models[] = {{0, 0, 0}, {17000, 0, 0},
+        {17000, 17000, 1}, {17000, 17000, -1},
+        {17000, 10000, 1}, {17000, 10000, -1}};
+    for (auto model : models) for (auto schedule : {batches, even, command_first, slow_control}) {
+        const unsigned period = model.period;
         Result total;
         unsigned phases = period ? 17 : 1;
         for (unsigned phase = 0; phase < phases; ++phase) {
             unsigned incoming_before = total.incoming;
-            uint16_t memory[3][128][162] = {};
+            unsigned scanned_before = total.scanned_wrong, final_scanned = 0;
+            bool final_check = false;
+            uint16_t memory[3][162][128] = {};
             for (unsigned panel = 0; panel < 3; ++panel)
                 for (unsigned y = 0; y < 128; ++y)
                     for (unsigned x = 0; x < 162; ++x)
-                        memory[panel][y][(audit_origin + x) % 162] = x < 160
+                        memory[panel][(audit_origin + x) % 162][y] = x < 160
                             ? audit_pixel(panel, x, y, 0) : 0xdead;
             unsigned visible = audit_origin, requested = audit_origin;
             unsigned visible_step = 0, requested_step = 0;
-            unsigned next_frame = phase * 1000, clock = 0;
+            unsigned frame_start = phase * 1000, next_scan = frame_start, line = 0, clock = 0;
             auto latch = [&]() {
                 visible = requested; visible_step = requested_step;
+                if (model.direction) return;
                 for (unsigned panel = 0; panel < 3; ++panel)
                     for (unsigned x = 0; x < 160; ++x) {
-                        bool wrong = false;
-                        for (unsigned y = 0; y < 128; ++y)
-                            wrong |= memory[panel][y][(visible + x) % 162]
-                                != audit_pixel(panel, x, y, visible_step);
+                        unsigned source = panel * 232 + (audit_undo ? 232 - visible_step : visible_step) + x;
+                        bool wrong = std::memcmp(memory[panel][(visible + x) % 162], audit_strip[source], 256) != 0;
                         total.unprepared += wrong;
                     }
             };
             auto advance = [&](unsigned deadline) {
-                // A frame exactly at an event timestamp precedes that event.
-                while (period && next_frame <= deadline) { latch(); next_frame += period; }
+                // Scan/latch events tied with a bus event happen first.
+                while (period && next_scan <= deadline) {
+                    if (!line) latch();
+                    if (model.direction) {
+                        unsigned x = model.direction > 0 ? line : 159 - line;
+                        for (unsigned panel = 0; panel < 3; ++panel) {
+                            unsigned source = panel * 232 + (audit_undo ? 232 - visible_step : visible_step) + x;
+                            bool wrong = std::memcmp(memory[panel][(visible + x) % 162], audit_strip[source], 256) != 0;
+                            total.scanned_wrong += wrong;
+                            if (final_check && visible_step == 232) { assert(!wrong); ++final_scanned; }
+                        }
+                    }
+                    if (!model.direction || ++line == 160) {
+                        line = 0; frame_start += period;
+                    }
+                    next_scan = frame_start + line * model.active / 160;
+                }
                 clock = deadline;
             };
             unsigned batch_ms = 0;
@@ -165,7 +189,7 @@ static void replay_delayed_offsets() {
                             wrong = true;
                             incoming |= pixel != 0; // Exclude black gap-only damage.
                         }
-                        memory[panel][y][event.column] = pixel;
+                        memory[panel][event.column][y] = pixel;
                     }
                     total.overwritten += wrong; total.incoming += incoming;
                     if (wrong) {
@@ -176,20 +200,31 @@ static void replay_delayed_offsets() {
                 }
                 if (schedule != command_first) command();
             }
+            final_check = true;
             advance(clock + 2 * period);
             assert(visible_step == 232);
+            if (model.direction) {
+                assert(final_scanned >= 3 * 160);
+                total.failing_phases += total.scanned_wrong > scanned_before;
+            }
             if (period && (schedule == batches || schedule == even))
-                assert(total.incoming > incoming_before); // Every sampled phase fails.
+                assert(total.incoming > incoming_before); // Potential damage; scan may already have passed.
             for (unsigned panel = 0; panel < 3; ++panel)
                 for (unsigned x = 0; x < 160; ++x)
                     for (unsigned y = 0; y < 128; ++y)
-                        assert(memory[panel][y][(visible + x) % 162] == audit_pixel(panel, x, y, 232));
+                        assert(memory[panel][(visible + x) % 162][y] == audit_pixel(panel, x, y, 232));
         }
         const char *names[] = {"batches", "even", "command-first", "slow-control"};
-        std::printf("lag-model %s origin=%u period=%u schedule=%s phases=%u overwritten=%u incoming=%u unprepared=%u edge-width=%u\n",
-            audit_undo ? "right" : "left", audit_origin, period, names[schedule], phases,
-            total.overwritten, total.incoming, total.unprepared, total.edge_width);
-        if (schedule == command_first) assert(total.unprepared > 0);
+        std::printf("lag-model %s origin=%u period=%u scan=%d active=%u schedule=%s phases=%u overwritten=%u incoming=%u unprepared=%u edge-width=%u scanned-wrong=%u failing-phases=%u\n",
+            audit_undo ? "right" : "left", audit_origin, period, model.direction, model.active, names[schedule], phases,
+            total.overwritten, total.incoming, total.unprepared, total.edge_width, total.scanned_wrong, total.failing_phases);
+        if (model.direction) {
+            if (schedule == slow_control) assert(total.scanned_wrong == 0);
+            else if ((model.direction > 0) != audit_undo && schedule != command_first)
+                assert(total.scanned_wrong == 0); // Outgoing edge was already scanned.
+            else if ((model.direction > 0) == audit_undo)
+                assert(total.scanned_wrong > 0 && total.failing_phases == phases);
+        } else if (schedule == command_first) assert(total.unprepared > 0);
         else if (!period || schedule == slow_control)
             assert(total.overwritten == 0 && total.unprepared == 0);
         else assert(total.overwritten > 0 && total.incoming > 0);
@@ -205,7 +240,7 @@ static void audit_animation_batches() {
         renderer.show(0, ScrollTimingProbe::pane(identity)); drain(renderer);
         for (unsigned y = 0; y < 128; ++y)
             for (unsigned x = 0; x < 160; ++x)
-                audit_strip[y][identity * 232 + x] = screens[0][y][x];
+                audit_strip[identity * 232 + x][y] = screens[0][y][x];
     }
     for (bool undo : {false, false, true, true}) {
         for (unsigned panel = 0; panel < 3; ++panel)
