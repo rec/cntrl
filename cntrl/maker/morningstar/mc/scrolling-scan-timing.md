@@ -149,3 +149,30 @@ ARM build/image checks passed again. Restored image SHA-256:
 It was uploaded through the helper, reset successfully, and returned
 `CNTRL READY 20 21411 fa5ba7e8`. This confirms setup loading after restoration;
 the original moving-edge artifact remains unresolved.
+
+## Existing switch-input route checked for TE
+
+A temporary command enabled vertical-blank TE output (35h, parameter 00h)
+on one panel at a time, with a disabled baseline and TEOFF on all panels when
+finished. It sampled only the existing eight-bit switch reader, without
+configuring unidentified GPIOs or changing the scrolling algorithm. Each of
+five trials had four 100 ms windows: disabled, left, centre, right. Each window
+returned 1,832 samples. Every raw sample was 3Fh; neither unknown bit 6 nor 7
+had an edge. No buttons were pressed during the measurements.
+
+This supplies no TE timing reference through the tested reader inputs. It
+does not prove that the TE command took effect, that TE is disconnected, or
+that no other MCU connection exists. Register readback was not part of this
+probe. It does not establish a scanout bound or fix the moving strip.
+
+The working probe image SHA-256 was
+`86f057907103f692a26d92984dc9c040e85ac7180dd091adca1d5af91fa53e18`.
+An initial image rejected the diagnostic command because its router had not
+been extended; it produced no timing measurements. The corrected image's ARM
+build and flash configuration/HEX-ELF checks passed. The probe was then removed
+from the sources rather than retained as a production command.
+
+The baseline native tests and ARM image checks passed after removing the probe.
+The normal hardware-scrolling image, SHA-256
+`dca55d0cbfe3be31cd24b47ccf9c54c4baef3759376ad79f4f411f614ed76d20`,
+was restored on the pedal and returned `CNTRL READY 20 21411 fa5ba7e8`.
