@@ -22,18 +22,24 @@ void initialize_display_panorama() {
     end_transfer(); native_mode = true;
 }
 
-void write_display_column(unsigned index, unsigned column, const uint8_t *pixels, unsigned first, unsigned count) {
-    if (index >= 3 || column >= 160 || first >= 128 || !count || count > 128 - first) return;
+void write_display_column(unsigned index, unsigned column, const uint8_t *pixels) {
+    if (index >= 3 || column >= display_ram_columns) return;
     const auto &panel = panorama_panels[index];
-    const uint8_t columns[] = {0, uint8_t(first + 2), 0, uint8_t(first + count + 1)};
-    const uint8_t row[] = {0, uint8_t(column + 1), 0, uint8_t(column + 1)};
+    const uint8_t columns[] = {0, 2, 0, 129};
+    const uint8_t row[] = {0, uint8_t((column + 1) % display_ram_columns), 0, uint8_t((column + 1) % display_ram_columns)};
     begin_transfer();
     command(panel, 0x2a, columns, 4); command(panel, 0x2b, row, 4);
     digitalWrite(panel.dc, LOW); digitalWrite(panel.cs, LOW);
     send_byte(0x2c); digitalWrite(panel.dc, HIGH);
-    for (unsigned i = 0; i < count * 2; i += 2)
-        SPI.transfer16(uint16_t(pixels[i]) << 8 | pixels[i + 1]);
+    for (unsigned i = 0; i < 256; ++i) send_byte(pixels[i]);
     digitalWrite(panel.cs, HIGH); end_transfer();
+}
+
+void scroll_display_panorama(unsigned offset) {
+    const uint8_t start[] = {0, uint8_t((display_ram_columns - offset % display_ram_columns) % display_ram_columns)};
+    begin_transfer();
+    for (const auto &panel : panorama_panels) command(panel, 0x37, start, 2);
+    end_transfer();
 }
 
 void write_display_group(uint8_t selected, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {

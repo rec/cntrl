@@ -9,7 +9,7 @@
 constexpr unsigned DEFAULT_TRANSITION_MS = 500;
 constexpr unsigned WINDOW_CORNER_RADIUS = 8;
 
-// One glyph/column per repaint poll; one column across three panels per animation poll.
+// One glyph/column per repaint poll; one three-panel column step per animation poll.
 class DisplayRenderer {
 public:
     bool ready() const {
@@ -17,7 +17,7 @@ public:
     }
     void invalidate() {
         drawing_ = -1; rendering_ = false;
-        preparing_ = animating_ = native_ready_ = false;
+        preparing_ = animating_ = native_ready_ = false; ring_ = 0;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
     }
     void transition(bool undo, std::optional<unsigned> duration_ms) {
@@ -57,7 +57,7 @@ public:
         if (drawing_ < 0) {
             if (preparing_) {
                 preparing_ = false; animating_ = true;
-                progress_ = frame_progress_ = frame_column_ = 0; started_ = now;
+                progress_ = 0; started_ = now;
             }
             return;
         }
@@ -109,7 +109,7 @@ public:
             cache_[drawing_][index] = pixel;
         }
         if (changed && !preparing_)
-            write_display_column(unsigned(drawing_), y_, pixels);
+            write_display_column(unsigned(drawing_), (ring_ + y_) % display_ram_columns, pixels);
         if (++y_ == 160) {
             valid_[drawing_] = true;
             drawing_ = -1;
@@ -181,37 +181,22 @@ private:
         return previous_[sample.pane][y * 160 + sample.x];
     }
     void animate(uint32_t now) {
-        if (!frame_column_) {
-            frame_progress_ = transition_progress(uint32_t(now - started_), duration_ms_);
-            if (progress_ >= frame_progress_) return;
-        }
-        // Keep RAM addresses stationary. A scroll-register write is not an
-        // acknowledgement that scanout has stopped reading the outgoing RAM.
-        // Finish this frame before sampling another position, even if late.
-        unsigned x = frame_column_;
+        unsigned goal = transition_progress(uint32_t(now - started_), duration_ms_);
+        if (progress_ >= goal) return;
+        ++progress_;
+        ring_ = (ring_ + (undo_ ? display_ram_columns - 1 : 1)) % display_ram_columns;
+        unsigned x = undo_ ? 0 : 159;
         uint8_t pixels[256];
-        bool changed[128];
         for (unsigned panel = 0; panel < 3; ++panel) {
             for (unsigned y = 0; y < 128; ++y) {
-                uint16_t pixel = moving_pixel(panel, x, y, frame_progress_);
+                uint16_t pixel = moving_pixel(panel, x, y, progress_);
                 pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
-                changed[y] = pixel != moving_pixel(panel, x, y, progress_);
             }
-            for (unsigned y = 0; y < 128;) {
-                if (!changed[y]) { ++y; continue; }
-                unsigned first = y, last = y++;
-                // Eleven command bytes cost more than at most five unchanged
-                // RGB565 pixels. Bridge only those short gaps between spans.
-                while (y < 128 && y - last <= 6) {
-                    if (changed[y]) last = y;
-                    ++y;
-                }
-                write_display_column(panel, x, pixels + 2 * first, first, last - first + 1);
-            }
+            write_display_column(panel, (ring_ + x) % display_ram_columns, pixels);
         }
-        if (++frame_column_ != 160) return;
-        frame_column_ = 0;
-        progress_ = frame_progress_;
+        // The incoming column is hidden at the current offset. Reveal it only
+        // after all three panels are staged; never overwrite an outgoing edge.
+        scroll_display_panorama(ring_);
         if (progress_ != display_pitch) return;
         // The moved bitmaps may use a different pane's font/colors. Record what
         // is actually visible before normal rendering applies destination styles.
@@ -227,7 +212,7 @@ private:
     uint16_t cache_[3][160 * 128] = {};
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
-    unsigned progress_ = 0, frame_progress_ = 0, frame_column_ = 0;
+    unsigned ring_ = 0, progress_ = 0;
     unsigned duration_ms_ = 0;
     uint32_t started_ = 0;
     bool dirty_[3] = {true, true, true};
