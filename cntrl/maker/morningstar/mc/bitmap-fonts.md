@@ -73,7 +73,7 @@ The native classic fix was built and flashed through upload_helper on 2026-10-31
 The active `simple-setup` was backed up, recompiled, copied with read-back
 verification and selected again. Device status is `CNTRL READY 20 21411 fa5ba7e8`.
 The 449 Python tests, native renderer tests, production type check and firmware
-build pass; visual confirmation on the pedal is pending.
+build pass. The user confirmed that the fonts now look sharp on the pedal.
 
 Display labels and static page fields accept Unicode supported by the selected
 outline font. UTF-8 labels are limited to 63 bytes by the existing display
