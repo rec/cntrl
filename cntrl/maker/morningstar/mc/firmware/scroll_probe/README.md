@@ -281,12 +281,16 @@ comparison. Saved card data remains untouched.
 
 ## Patch-switcher edge staging, 2026-10-31
 
+Historical trial, superseded by the fixed-origin renderer candidate described
+in [the timing investigation](../../scrolling-scan-timing.md). The standalone
+probe remains unchanged.
+
 The production patch switcher previously replaced outgoing, still-visible RAM
 columns with incoming pixels, then advanced the scroll register after a batch.
 This exposed a wrong-image strip on the left during sends and on the right
 during undo. Black empty windows made the contrast more apparent.
 
-The patch switcher now scrolls across all 162 controller rows, retaining the
+That patch-switcher version scrolled across all 162 controller rows, retaining the
 160-column visible window and staging each incoming column in hidden RAM. It
 writes all three panels before advancing the offset by one column. Native mode
 uses scroll area `0,162,0`, with zero as its neutral start; writes retain the
