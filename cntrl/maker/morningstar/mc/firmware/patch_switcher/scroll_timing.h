@@ -27,7 +27,7 @@ public:
             uint8_t pixels[256];
             char label[24];
             if (stage_ == 0) std::snprintf(label, sizeof(label), "PRESS C");
-            else if (panel == 0) std::snprintf(label, sizeof(label), "%s %u MS", trial_ < 6 ? "LEFT" : "RIGHT", delay_ms());
+            else if (panel == 0) std::snprintf(label, sizeof(label), "%c %uMS R%u", trial_ < 16 ? 'L' : 'R', delay_ms(), trial_ % 16 / 2 + 1);
             else std::snprintf(label, sizeof(label), "F EXITS");
             for (unsigned y = 0; y < 128; ++y) {
                 uint16_t pixel = panel == 1 ? baseline(x, y) : text_pixel(label, x, y);
@@ -37,11 +37,11 @@ public:
             if (++column_ == 486) { column_ = 0; since_ = now; stage_ = stage_ == 0 ? 1 : 3; }
             return;
         }
-        if (stage_ == 3 && uint32_t(now - since_) >= 800000 + trial_ * 1373) {
+        if (stage_ == 3 && uint32_t(now - since_) >= 800000 + trial_ * 1999) {
             // The backlight step is an optical command-time reference. Its
             // circuit/camera latency is unknown; it is not a TE acknowledgement.
             timing_backlight(192);
-            timing_scroll_panel(1, trial_ < 6 ? 3 : 159);
+            timing_scroll_panel(1, trial_ < 16 ? 3 : 159);
             stage_ = 4; since_ = now;
             if (delay_ms()) return;
         }
@@ -51,18 +51,17 @@ public:
                 uint16_t pixel = y % 16 < 12 ? 0xffff : 0;
                 pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
             }
-            write_display_column(1, trial_ < 6 ? 0 : 159, pixels);
+            write_display_column(1, trial_ < 16 ? 0 : 159, pixels);
             stage_ = 5;
         }
         if (stage_ == 5 && uint32_t(now - since_) >= 700000) {
-            if (++trial_ == 12) { stage_ = 0; trial_ = 0; }
+            if (++trial_ == 32) { stage_ = 0; trial_ = 0; }
             else stage_ = 2;
         }
     }
 private:
     unsigned delay_ms() const {
-        constexpr unsigned delays[] = {0, 2, 5, 10, 15, 20};
-        return delays[trial_ % 6];
+        return trial_ % 2 ? 5 : 2;
     }
     static uint16_t baseline(unsigned x, unsigned y) {
         // Dark reused edges and two black hidden columns. Interior ticks

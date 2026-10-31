@@ -38,16 +38,16 @@ int main() {
     assert(probe.active());
     probe.poll(now + 2000000); assert(offsets.empty());
     probe.start();
-    constexpr unsigned delays[] = {0, 2000, 5000, 10000, 15000, 20000};
-    for (unsigned trial = 0; trial < 12; ++trial) {
+    constexpr unsigned delays[] = {2000, 5000};
+    for (unsigned trial = 0; trial < 32; ++trial) {
         paint(probe);
         unsigned before = writes;
-        uint32_t trigger = now + 800000 + trial * 1373;
-        measure = true; expected_column = trial < 6 ? 0 : 159;
+        uint32_t trigger = now + 800000 + trial * 1999;
+        measure = true; expected_column = trial < 16 ? 0 : 159;
         probe.poll(trigger - 1); assert(offsets.size() == trial && writes == before);
         probe.poll(trigger);
-        assert(offsets.size() == trial + 1 && offsets.back() == (trial < 6 ? 3 : 159));
-        unsigned delay = delays[trial % 6];
+        assert(offsets.size() == trial + 1 && offsets.back() == (trial < 16 ? 3 : 159));
+        unsigned delay = delays[trial % 2];
         if (delay) {
             assert(writes == before);
             probe.poll(trigger + delay - 1); assert(writes == before);
@@ -59,7 +59,7 @@ int main() {
         measure = false;
     }
     paint(probe); // Return to PRESS C, ready for another recording.
-    assert(initialized == 14);
+    assert(initialized == 34);
     unsigned before = writes;
     probe.poll(now + 2000000); assert(writes == before);
     probe.start(); paint(probe);
