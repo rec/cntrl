@@ -106,7 +106,7 @@ public:
             cache_[drawing_][index] = pixel;
         }
         if (changed && !preparing_)
-            write_display_column(unsigned(drawing_), (ring_ + y_) % 160, pixels);
+            write_display_column(unsigned(drawing_), (ring_ + y_) % display_ram_columns, pixels);
         if (++y_ == 160) {
             valid_[drawing_] = true;
             drawing_ = -1;
@@ -181,7 +181,7 @@ private:
         unsigned goal = transition_progress(uint32_t(now - started_), duration_ms_);
         if (progress_ >= goal) return;
         ++progress_;
-        ring_ = (ring_ + (undo_ ? 159 : 1)) % 160;
+        ring_ = (ring_ + (undo_ ? display_ram_columns - 1 : 1)) % display_ram_columns;
         unsigned x = undo_ ? 0 : 159;
         uint8_t pixels[256];
         for (unsigned panel = 0; panel < 3; ++panel) {
@@ -189,9 +189,11 @@ private:
                 uint16_t pixel = moving_pixel(panel, x, y, progress_);
                 pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
             }
-            write_display_column(panel, (ring_ + x) % 160, pixels);
+            write_display_column(panel, (ring_ + x) % display_ram_columns, pixels);
         }
-        if (progress_ == goal) scroll_display_panorama(ring_);
+        // The incoming column is hidden at the current offset. Reveal it only
+        // after all three panels are staged; never overwrite an outgoing edge.
+        scroll_display_panorama(ring_);
         if (progress_ != display_pitch) return;
         // The moved bitmaps may use a different pane's font/colors. Record what
         // is actually visible before normal rendering applies destination styles.

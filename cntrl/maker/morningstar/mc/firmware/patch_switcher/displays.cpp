@@ -12,7 +12,7 @@ const Panel panorama_panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
 }
 
 void initialize_display_panorama() {
-    const uint8_t mode[] = {0x88}, area[] = {0, 1, 0, 160, 0, 1}, start[] = {0, 1};
+    const uint8_t mode[] = {0x88}, area[] = {0, 0, 0, display_ram_columns, 0, 0}, start[] = {0, 0};
     begin_transfer();
     for (const auto &panel : panorama_panels) {
         command(panel, 0x36, mode, 1);
@@ -23,10 +23,10 @@ void initialize_display_panorama() {
 }
 
 void write_display_column(unsigned index, unsigned column, const uint8_t *pixels) {
-    if (index >= 3 || column >= 160) return;
+    if (index >= 3 || column >= display_ram_columns) return;
     const auto &panel = panorama_panels[index];
     const uint8_t columns[] = {0, 2, 0, 129};
-    const uint8_t row[] = {0, uint8_t(column + 1), 0, uint8_t(column + 1)};
+    const uint8_t row[] = {0, uint8_t((column + 1) % display_ram_columns), 0, uint8_t((column + 1) % display_ram_columns)};
     begin_transfer();
     command(panel, 0x2a, columns, 4); command(panel, 0x2b, row, 4);
     digitalWrite(panel.dc, LOW); digitalWrite(panel.cs, LOW);
@@ -36,7 +36,7 @@ void write_display_column(unsigned index, unsigned column, const uint8_t *pixels
 }
 
 void scroll_display_panorama(unsigned offset) {
-    const uint8_t start[] = {0, uint8_t(1 + (160 - offset % 160) % 160)};
+    const uint8_t start[] = {0, uint8_t((display_ram_columns - offset % display_ram_columns) % display_ram_columns)};
     begin_transfer();
     for (const auto &panel : panorama_panels) command(panel, 0x37, start, 2);
     end_transfer();
@@ -44,9 +44,10 @@ void scroll_display_panorama(unsigned offset) {
 
 void write_display_group(uint8_t selected, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
     if (native_mode) {
-        const uint8_t mode[] = {0xa8}, start[] = {0, 1};
+        const uint8_t mode[] = {0xa8}, area[] = {0, 1, 0, 160, 0, 1}, start[] = {0, 1};
         begin_transfer();
         for (const auto &panel : panorama_panels) {
+            command(panel, 0x33, area, 6);
             command(panel, 0x37, start, 2); command(panel, 0x36, mode, 1);
         }
         end_transfer(); native_mode = false;

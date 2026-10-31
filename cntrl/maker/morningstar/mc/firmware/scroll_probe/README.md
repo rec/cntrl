@@ -278,3 +278,27 @@ In this initial observation the longest period exceeded the 16,667-microsecond
 target by 53 microseconds, not a full update interval. This is not a correlation
 with a visibly observed jump. The effect of changing rates awaits physical
 comparison. Saved card data remains untouched.
+
+## Patch-switcher edge staging, 2026-10-31
+
+The production patch switcher previously replaced outgoing, still-visible RAM
+columns with incoming pixels, then advanced the scroll register after a batch.
+This exposed a wrong-image strip on the left during sends and on the right
+during undo. Black empty windows made the contrast more apparent.
+
+The patch switcher now scrolls across all 162 controller rows, retaining the
+160-column visible window and staging each incoming column in hidden RAM. It
+writes all three panels before advancing the offset by one column. Native mode
+uses scroll area `0,162,0`, with zero as its neutral start; writes retain the
+one-row panel origin and wrap through addresses 161 and 0. Splash output restores
+the previous `1,160,1` landscape area and start 1. The standalone diagnostic
+probe above retains its original geometry.
+
+The mapping follows the MY row-address reversal and scroll-area/start commands
+in the [ST7735S datasheet](https://www.orientdisplay.com/wp-content/uploads/2020/11/ST7735S.pdf),
+sections 9.11.3, 10.1.26 and 10.1.30. No new MCU image buffers are required.
+
+Native tests check the image after every scroll step in both directions and
+reject writes to currently visible columns before scrolling. Bus tests check
+the hidden-row addresses, wraparound, neutral start and splash restoration.
+Physical confirmation of the edge correction is pending.

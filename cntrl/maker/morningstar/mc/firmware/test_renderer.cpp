@@ -4,7 +4,7 @@
 #include <cstring>
 
 static uint16_t screens[3][128][160];
-static uint16_t ram[3][128][160];
+static uint16_t ram[3][128][display_ram_columns];
 static unsigned ring = 0;
 static bool check_motion = false, check_undo = false;
 static unsigned checked_progress = 0;
@@ -19,11 +19,11 @@ static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
 }
 
 void scroll_display_panorama(unsigned offset) {
-    if (check_motion) checked_progress += check_undo ? (ring + 160 - offset) % 160 : (offset + 160 - ring) % 160;
+    if (check_motion) checked_progress += check_undo ? (ring + display_ram_columns - offset) % display_ram_columns : (offset + display_ram_columns - ring) % display_ram_columns;
     ring = offset;
     for (unsigned panel = 0; panel < 3; ++panel)
         for (unsigned y = 0; y < 128; ++y)
-            for (unsigned x = 0; x < 160; ++x) screens[panel][y][x] = ram[panel][y][(ring + x) % 160];
+                for (unsigned x = 0; x < 160; ++x) screens[panel][y][x] = ram[panel][y][(ring + x) % display_ram_columns];
     if (check_motion) {
         assert(checked_progress <= display_pitch);
         for (unsigned panel = 0; panel < 3; ++panel) for (unsigned x = 0; x < 160; ++x) {
@@ -38,16 +38,20 @@ void scroll_display_panorama(unsigned offset) {
 void initialize_display_panorama() { scroll_display_panorama(0); }
 
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels) {
-    assert(panel < 3 && column < 160);
+    assert(panel < 3 && column < display_ram_columns);
     ++writes; pixels_sent += 128;
-    unsigned x = (column + 160 - ring) % 160;
+    unsigned x = (column + display_ram_columns - ring) % display_ram_columns;
+    // Column writes happen before the scroll register update. Updating a
+    // visible column here produces the wrong-image sliver at the outgoing edge.
+    if (check_motion && checked_progress < display_pitch) assert(x >= 160);
     for (unsigned y = 0; y < 128; ++y) {
         uint16_t pixel = uint16_t(pixels[2 * y]) << 8 | pixels[2 * y + 1];
         if (patch_only) {
             assert(panel == 2);
             if (y < 90 || y >= 98) assert(screens[panel][y][x] == pixel);
         }
-        ram[panel][y][column] = screens[panel][y][x] = pixel;
+        ram[panel][y][column] = pixel;
+        if (x < 160) screens[panel][y][x] = pixel;
     }
 }
 
@@ -307,7 +311,7 @@ int main() {
     assert(renderer.ready());
     check_motion = false; assert(checked_progress == display_pitch);
     for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 2)));
-    assert(ring == display_pitch % 160);
+    assert(ring == display_pitch % display_ram_columns);
     renderer.transition(true, 500);
     check_motion = check_undo = true; checked_progress = 0;
     for (unsigned i = 0; i < 3; ++i) {
