@@ -64,7 +64,7 @@ public:
             unsigned length = std::strlen(text);
             const auto &settings = line.graphics;
             bool sparse = settings.font == 255;
-            bool painted = sparse && graphics_.sparse_letter(settings, text, letter_, line.x, text_y(field_, 0), line.centered);
+            bool painted = sparse && length && graphics_.sparse_letter(settings, text, letter_, line.x, text_y(field_, 0), line.centered);
             if (painted) { ++letter_; }
             else if (!sparse && letter_ < length) {
                 if (!letter_) {

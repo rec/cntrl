@@ -64,6 +64,38 @@ void sync_program(std::vector<uint8_t> &bytes, const cntrl::Document &document, 
     std::memcpy(node + 11, bytes.data() + (document.bank(index) - document.data()), 4);
 }
 
+void test_empty_patch_windows_are_black(const std::vector<uint8_t> &source) {
+    auto bytes = source;
+    for (unsigned slot = 0; slot < 3; ++slot) {
+        bytes[28 + slot * 16 + 6] = 0xe0; bytes[28 + slot * 16 + 7] = 0x07;
+    }
+    cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size()) - 28));
+    Fake hw; cntrl::Document doc;
+    assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+    TestController app(hw); app.activate(doc);
+    assert(hw.panes[0].graphics.background == 0 && hw.panes[1].graphics.background == 0);
+    assert(hw.panes[2].graphics.background == 0x07e0);
+    app.action(2);
+    assert(hw.panes[0].graphics.background == 0 && hw.panes[1].graphics.background == 0x07e0);
+    app.action(5);
+    assert(hw.panes[0].graphics.background == 0 && hw.panes[1].graphics.background == 0);
+
+    // A selected patch can also have a page whose fields all resolve to empty.
+    unsigned display = doc.display_metadata();
+    unsigned page = display + 16 + cntrl::u16(bytes.data() + display + 4) * 16;
+    for (unsigned i = 0; i < cntrl::u16(bytes.data() + display + 6); ++i) {
+        unsigned count = bytes[page++];
+        for (unsigned j = 0; j < count; ++j, page += 8) bytes[page] = 22; // No switch state in patch windows.
+    }
+    cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size()) - 28));
+    assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+    app.activate(doc);
+    for (const auto &view : hw.panes) {
+        for (const auto &line : view.lines) assert(!line.text[0]);
+        assert(view.graphics.background == 0);
+    }
+}
+
 void test_program_change_brightness(const cntrl::Document &doc) {
     Fake hw; TestController app(hw); app.activate(doc);
     const auto normal = doc.brightness();
@@ -422,6 +454,7 @@ int main(int argc, char **argv) {
     test_catalogue_jobs_are_bounded_and_preserve_order(bytes);
     cntrl::Document doc;
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+    test_empty_patch_windows_are_black(bytes);
     {
         std::ifstream display_file(argv[2]);
         std::string display_hex; display_file >> display_hex;
