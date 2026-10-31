@@ -59,6 +59,9 @@ void test_performance_c_during_idle_fade(cntrl::splash::Receiver &assets, const 
         assert(!session.controls(1u << 2, now, true));
         controller.button(2, true, now);
         assert(device.sent == 1 && device.temporary && device.brightness == 255);
+        // Before splash painting starts, the UI is still intact. A redraw
+        // request here would invalidate and cancel the newly started transition.
+        assert(session.take_redraw() == (phase != 0));
         assert(!std::strcmp(device.panes[1].lines[1].text, "Flute"));
         assert(!session.poll(now, true) && session.brightness(192, now) == 192);
         assert(!session.controls(0, now + 18, false));
@@ -101,7 +104,8 @@ void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<u
         if (!session.controls(mask, now)) controller.button(button, true, now);
         assert(device.sent == 0 && !std::strcmp(device.panes[2].lines[1].text, "Flute"));
         assert(session.brightness(192, now) == 192);
-        assert(!session.poll(now, true) && session.take_redraw());
+        assert(!session.poll(now, true));
+        assert(session.take_redraw() == (phase != 0));
         assert(panels.rows == rows); // Stopped animation cannot paint over the UI.
         assert(session.controls(mask | other, now + 1));
         assert(session.controls(other, now + 2));
@@ -290,7 +294,7 @@ int main(int argc, char **argv) {
     assert(!session.poll(start + 3100, true));
     assert(session.brightness(192, start + 3600) == 48);
     session.stop(); // Upload cancellation restores the configured brightness.
-    assert(session.brightness(192, start + 3600) == 192 && session.take_redraw());
+    assert(session.brightness(192, start + 3600) == 192 && !session.take_redraw());
 
     device.set_splash(true); assert(session.poll(5));
     command(router, "CNTRL SPLASH STATUS"); assert(session.poll(6)); // Queries do not dismiss.
@@ -317,7 +321,7 @@ int main(int argc, char **argv) {
     assert(!session.poll(45001) && session.brightness(192, 45001) == 48);
     assert(session.controls(1u << 2, 45001)); // Entry cancellation consumes the press.
     assert(session.brightness(192, 45001) == 192);
-    assert(!session.poll(45001) && session.take_redraw());
+    assert(!session.poll(45001) && !session.take_redraw());
     assert(session.controls(0, 45002));
     assert(!session.controls(0, 45003));
     assert(!session.poll(45500, true) && session.brightness(192, 45500) == 192);
