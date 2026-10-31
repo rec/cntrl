@@ -60,6 +60,12 @@ uint8_t SPIClass::transfer(uint8_t value) {
     return 0;
 }
 
+uint16_t SPIClass::transfer16(uint16_t value) {
+    transfer(uint8_t(value >> 8));
+    transfer(uint8_t(value));
+    return 0;
+}
+
 void SPIClass::endTransaction() {
     assert(spi_active && !levels[13] && bits == 0);
     for (uint8_t pin : chip_selects) assert(levels[pin]);
@@ -279,17 +285,20 @@ int main() {
     write_display_column(2, 159, column);
     assert((transfers[2][4].bytes == std::vector<uint8_t>{0x2b, 0, 160, 0, 160}));
     for (unsigned i = 0; i < 256; ++i) assert(transfers[2].back().bytes[i + 1] == column[i]);
-    scroll_display_panorama(72);
-    for (const auto &panel : transfers)
-        assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 90}));
+    write_display_column(0, 7, column, 13, 2);
+    assert((transfers[0][3].bytes == std::vector<uint8_t>{0x2a, 0, 15, 0, 16}));
+    assert((transfers[0][4].bytes == std::vector<uint8_t>{0x2b, 0, 8, 0, 8}));
+    assert((transfers[0][5].bytes == std::vector<uint8_t>{0x2c, 0, 1, 2, 3}));
+    write_display_column(0, 0, column, 127, 1);
+    assert((transfers[0][6].bytes == std::vector<uint8_t>{0x2a, 0, 129, 0, 129}));
+    before = transactions;
+    write_display_column(0, 0, column, 127, 2);
+    write_display_column(0, 0, column, 128, 1);
+    write_display_column(0, 0, column, 0, 0);
     write_display_column(0, 160, column);
-    assert((transfers[0][transfers[0].size() - 2].bytes == std::vector<uint8_t>{0x2b, 0, 161, 0, 161}));
-    write_display_column(0, 161, column);
-    assert((transfers[0][transfers[0].size() - 2].bytes == std::vector<uint8_t>{0x2b, 0, 0, 0, 0}));
-    scroll_display_panorama(1);
-    for (const auto &panel : transfers)
-        assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 161}));
-    // Splash output must restore landscape addressing and remove scroll offset.
+    write_display_column(3, 0, column);
+    assert(transactions == before);
+    // Splash output must restore landscape addressing and its native origin.
     write_display_group(7, 0, 0, column, 1);
     for (const auto &panel : transfers) {
         unsigned n = panel.size();

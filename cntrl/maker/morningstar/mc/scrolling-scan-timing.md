@@ -1,6 +1,8 @@
 # Scroll pointer application and RAM reuse
 
-Investigation follow-up, 2026-10-31. No firmware change or physical test.
+Investigation follow-up, 2026-10-31. The initial analysis below describes the
+hardware-scroll baseline; later video evidence and a replacement candidate are
+recorded at the end.
 Read alongside [the experiment record](../../../../plan/scrolling-bug.md).
 The leftward sliver remains unresolved.
 
@@ -17,7 +19,7 @@ This supports deferred pointer application, but does not specify a complete
 cycle-level RAM-fetch model or prove that these particular panels implement it.
 The exact controller revision remains unconfirmed.
 
-## What the current code assumes
+## What the hardware-scroll baseline assumes
 
 `firmware/patch_switcher/renderer.h`, in `animate()`, increments `ring_`, stages
 three incoming columns, and sends the new pointer. Its comment that this never
@@ -75,7 +77,61 @@ phases; a single clean delay is not a bound.
 
 A verified accessible TE signal would supply a better direct timing reference,
 but no such connection is established. Register receipt is not that reference.
-Neither experiment has been implemented or authorized for device execution.
+Neither experiment was implemented at the time of this initial analysis.
 
 Validation here was source inspection and independent arithmetic. No application,
 device command, firmware upload, Python test suite, or hardware measurement ran.
+
+## Slow-motion video and fixed-origin candidate
+
+The supplied `signal-2026-10-31-17-02-13-890.mp4` was inspected from
+`/Users/tom/Desktop/`. It contains 2,792 frames at 1280x720, approximately
+30 playback fps and 93.06 seconds. Its middle sections are visibly slowed.
+The user selected 240 fps capture, but the exported file alone does not prove
+that every source frame survived or establish the capture-time scale.
+
+After rotating the image upright, consecutive frames around playback 55-56 s
+show a left-edge strip on the initially blank centre display during C. Its
+contents change while the main window enters from the right. Around 77.7-78.2 s,
+Undo also has a narrow, broken strip at the right edge of the rightmost display,
+separated from the main window by a dark gap. Thus the new video does not
+support treating Undo as completely artifact-free. This strengthens the
+two-direction RAM-reuse hypothesis, without proving a common physical cause.
+
+The candidate replaces hardware offset changes in both directions with writes
+at fixed display addresses. It preserves the existing renderer lifecycle,
+panorama geometry, bitmap buffers, default 500 ms duration and final repaint.
+It targets 30 completed frames per second, skips obsolete frame targets when
+late, and never switches target partway through a frame. This removes dependence
+on scanout acknowledging an offset before RAM is reused at the opposite edge.
+Ordinary scanout tearing and LCD response time are still possible.
+
+Compared with the earlier rejected software trial, the candidate splits changed
+vertical spans, joins only gaps cheaper than another command, and uses blocking
+16-bit pixel transfers at the existing 8 MHz clock. It does not use the bulk
+buffer transfer previously associated with a stall, DMA, or another framebuffer.
+The 30 Hz target is deliberate headroom for software rendering, not a measured
+panel or firmware rate. Physical smoothness remains the acceptance criterion.
+
+Native tests verify every pixel of all 15 coloured-pane frames in both
+directions, patterned frames with stippled bands, delayed polls during a frame,
+clock rollover, custom duration, cancellation, zero-duration transitions,
+candidate repaint interruption and final destination styling. Bus tests verify
+partial-column addresses, pixel byte order and splash mode restoration.
+The coloured forward transition sends 263,580 bytes including commands, giving
+a 263.58 ms wire-only lower bound at 8 MHz; each frame fits its 33.33 ms wire
+budget. Host fonts are test doubles, so this is not a real-font benchmark.
+The older 395.814 ms software-trial wire figure used a different frame schedule
+and is not an isolated measurement of the transfer optimization.
+
+Native sanitizer tests and the ARM build/image checks pass. No Python source or
+Python-consumed data changed, so the Python checks were not run. The candidate
+has not been uploaded or visually qualified; no fixed-rate or tear-free claim
+is established by these tests.
+
+Candidate image: `firmware/build/patch-switcher.hex`, SHA-256
+`19d9f3b80f5910c9b74904fc8fdbee4e446368cb65f5453db239948faeff4c32`.
+The build reports 21,984 bytes of RAM1 free for local variables and 292,064
+bytes of RAM2 free for allocation. Test and build logs from this session are
+`/private/tmp/cntrl-scroll-fix-native.log` and
+`/private/tmp/cntrl-scroll-fix-build.log`; these temporary files may not persist.

@@ -15,6 +15,7 @@ struct SPIClass {
     void begin();
     void beginTransaction(SPISettings settings);
     uint8_t transfer(uint8_t value);
+    uint16_t transfer16(uint16_t value);
     void endTransaction();
 };
 
