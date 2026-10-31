@@ -165,6 +165,78 @@ does not prove that the TE command took effect, that TE is disconnected, or
 that no other MCU connection exists. Register readback was not part of this
 probe. It does not establish a scanout bound or fix the moving strip.
 
+## TE readback and passive MCU input search, 2026-10-31
+
+The preceding repeated optical recording,
+`signal-2026-10-31-19-17-59-393.mp4`, showed a wrong-edge marker at the
+5 ms delay in leftward repetitions 5 through 8. In particular, the frame at
+45.733 seconds shows the L 5MS R5 label and the old left-edge marker during
+onset, rather than during the later reset. A fixed 5 ms delay is therefore
+not safe. The exported video contains speed changes, so playback-frame
+spacing must not be treated as uniform capture timing.
+
+A further temporary diagnostic closed the missing TE-enable readback check.
+It reused the previously hardware-verified bidirectional SDA read routine,
+enabled vertical-blank TE with 35h/00h, and read RDDSM (0Eh). All three panels
+returned raw `80000000` while enabled and `00000000` after TEOFF (34h).
+The [ST7735S datasheet](https://www.orientdisplay.com/wp-content/uploads/2020/11/ST7735S.pdf),
+section 10.1.9, defines the leading bit as TE enable. This verifies the
+controller setting, not a voltage waveform at its TE output.
+
+The probe sampled `digitalRead(0..54)` without changing unknown pins' mux,
+direction or pull configuration. Each run had seven 200 ms phases: all off,
+left on/off, centre on/off, right on/off. Each phase performed 56,414 or
+56,415 complete pin sweeps; the largest measured interval between sweep
+starts was 5 microseconds. No pin transitions were observed. Interrupts
+remained enabled; normal display rendering and switch polling were paused
+during each synchronous capture. Reported intervals are firmware measurements,
+not an independently measured acquisition bandwidth.
+
+Four runs covered both read-back MADCTL A8h (initial landscape state) and
+88h (native scrolling state). The final two added a positive control:
+with all displays deselected, driving the established shared clock pin 13
+high then low read back 1 then 0 in every phase. They also repeated the
+existing switch-reader capture with TE enabled on the selected panel:
+3,657 samples per 200 ms capture, final value 3Fh, and zero changes in all
+eight bits. There were seven such captures per run, with panels 0/1/2
+sampled three/two/two times respectively. This strengthens the earlier
+negative switch-input result; it does not measure the TE output electrically.
+
+Mux inventory, hexadecimal values:
+
+- Peripheral mux 2: pins 0, 1, 6, 7, 8.
+- Peripheral mux 0: pins 42 through 47 (SD interface).
+- Mux 13h: pin 11 at the initial inventory, before bit-banged readback.
+- GPIO mux 15h: pins 12, 13, 15, 20 through 25, 27 through 29, and 34.
+- GPIO mux 5: all remaining logical pins. Their GPIO direction bits were input.
+
+The non-GPIO mux readings cannot be treated as observations of those physical
+pads. Even for GPIO inputs this is a software sampling result, not continuity
+evidence. Pins outside the Teensy-style 55-entry map were not examined.
+Nothing was remuxed to search for signals; in particular, peripheral and
+unknown board connections were not repurposed.
+
+Initial probe image SHA-256:
+`ca540ad280886aa999b7e6236abaa193722353367900f9666ea8ffa0e65697da`.
+Probe with positive control and switch capture:
+`ba90296716925d7bb79b2ff1cd9fce1d9071138fa8de461302cec122a13f3cd9`.
+Both ARM builds passed binary/HEX comparison and the stock flash-header check.
+Local raw captures are `/private/tmp/cntrl-frame-probe-{1,2,3,4}.txt`;
+temporary source is `/private/tmp/cntrl-frame-probe.h` and the associated diff
+is `/private/tmp/cntrl-frame-probe.patch`. These local artifacts are not durable
+repository fixtures. The temporary diagnostic was removed after testing.
+The rebuilt previous firmware reproduced SHA-256
+`7aeb13b8401ee11b9b32785ea4d181ddd3e860f4a878b47fbfddd6863eb4ef37`.
+
+No usable frame reference has been found. The next discriminating evidence is
+the display module/flex identification and continuity of its TE contact, if
+exposed, to the board. The controller datasheet describes TE as a separate
+output; register readback reports its configuration, not its live level.
+Do not infer a frame boundary from successful TE enable, immediately readable
+MADCTL changes, or a nominal refresh-period calculation. A connection to one
+panel would also need qualification before being used to schedule the other
+two independently initialized panels.
+
 The working probe image SHA-256 was
 `86f057907103f692a26d92984dc9c040e85ac7180dd091adca1d5af91fa53e18`.
 An initial image rejected the diagnostic command because its router had not
