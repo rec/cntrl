@@ -1,4 +1,5 @@
 #pragma once
+#ifdef CNTRL_DIAGNOSTICS
 #include "panorama.h"
 
 // Isolate scroll application with a single jump followed by a delayed RAM write.
@@ -101,3 +102,5 @@ private:
     bool running_ = false;
     static constexpr uint32_t delays_[] = {5000, 10000, 15000, 20000, 30000};
 };
+
+#endif

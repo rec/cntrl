@@ -476,6 +476,7 @@ static void audit_animation_batches() {
         drain(renderer);
     }
 
+#ifdef CNTRL_DIAGNOSTICS
     ScrollTimingProbe probe;
     uint32_t now = UINT32_MAX - 500000;
     auto load = [&]() {
@@ -552,6 +553,8 @@ static void audit_animation_batches() {
     load();
     picture(-1, -1);
     probe.stop();
+#endif
+
 }
 
 static void blank(unsigned panel, uint16_t background = 0xffff) {

@@ -22,6 +22,29 @@ superseded firmware, not alternative current modes.
 
 ## User-selected directional fallback
 
+### Compile-time debug gate
+
+Temporary scrolling probes are compiled only with `CNTRL_DIAGNOSTICS` defined.
+Normal patch-switcher builds leave it undefined. To build them deliberately,
+use `make -C cntrl/maker/morningstar/mc/firmware DIAGNOSTICS=1 inspect-patch-switcher`.
+Without that flag, the probe class/state, timing-mode methods, display/button
+hooks and `CNTRL DISPLAY EDGE` / `END` command routing are excluded. The commands
+are rejected as invalid rather than silently stopping the splash or consuming C/F.
+
+This gate does not disable the user-facing Cable Test module, storage inspection
+or MIDI status/reset commands. Their existing product behaviour and feature
+flags are retained. Standalone bench sketches are separate, explicitly selected
+build targets, not linked into the patch-switcher image. Native renderer and
+router checks cover both modes; built ELF inspection verifies the scrolling
+debug command strings are absent normally and present in the opt-in image.
+
+The default, debug-excluded image SHA-256 is
+`400fd0de53cc744f94a6c7169867050675d3c9cd021101d6604d012a49bdb174`.
+It was uploaded after the direction change. USB returned the same saved-setup
+status and rejected `CNTRL DISPLAY EDGE` with `CNTRL ERROR invalid-command`.
+
+### Behaviour
+
 The user chose to put the frequently used send action on the cleaner rightward
 motion and the rarely used undo action on leftward motion. This is an accepted
 visual tradeoff, not a root-cause fix or a guarantee that rightward motion is
@@ -91,8 +114,9 @@ No model yet explains all observations, including changing directional results.
 
 ## Current diagnostic: repeated single-jump delays
 
-This diagnostic remains available through explicit `CNTRL DISPLAY EDGE`
-arming. It is not armed by the normal application startup. The instructions
+This diagnostic is available only in a `DIAGNOSTICS=1` build, through explicit
+`CNTRL DISPLAY EDGE` arming. Normal builds exclude that command entirely.
+It is not armed by diagnostic-build startup either. The instructions
 below apply inside that mode; in the normal patch UI C sends and F undoes.
 
 Press C once and record for **90 seconds**, preferably in slow motion. There

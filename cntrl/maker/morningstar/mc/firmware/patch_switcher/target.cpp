@@ -31,7 +31,9 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include "displays.h"
 #include "switches.h"
 #include "renderer.h"
+#ifdef CNTRL_DIAGNOSTICS
 #include "scroll_timing.h"
+#endif
 #include "storage_listing.h"
 #include "font_storage.h"
 #include "../../splash/board.h"
@@ -40,7 +42,9 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 // Library graphics draw into RAM; only our bounded driver touches panel pins.
 
 namespace {
+#ifdef CNTRL_DIAGNOSTICS
 ScrollTimingProbe scroll_timing;
+#endif
 extern cntrl::Documents documents;
 extern cntrl::splash::Session splash_session;
 extern cntrl::splash::Panels splash_panels;
@@ -254,6 +258,7 @@ public:
         renderer_.show(pane, content);
     }
     void transition(bool undo, std::optional<unsigned> duration_ms) override { renderer_.transition(undo, duration_ms); }
+#ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
         if (enabled) {
             scroll_timing.arm();
@@ -265,6 +270,8 @@ public:
             analogWrite(6, applied_brightness_);
         }
     }
+
+#endif
     void set_brightness(uint8_t value, bool temporary = false) override {
         brightness_feedback_ = temporary;
         if (temporary) feedback_brightness_ = value;
@@ -361,7 +368,9 @@ public:
     }
     void display(uint32_t now, bool transfer_busy) {
         ++display_count_;
+#ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) { scroll_timing.poll(micros()); return; }
+#endif
         bool splash = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
         if (!splash) draw();
@@ -1009,6 +1018,7 @@ void storage_info(bool scan) {
 void midi_status(unsigned route) { board.midi_status(route); }
 bool asset_command(const char *line) {
     if (board.configuration_locked()) { board.reply("CNTRL ERROR close-switches-first"); return true; }
+#ifdef CNTRL_DIAGNOSTICS
     if (!std::strcmp(line, "CNTRL DISPLAY EDGE")) {
         if (feature_open() || documents.busy()) { board.reply("CNTRL ERROR busy"); return true; }
         board.timing_mode(true); board.reply("CNTRL EDGE ARMED"); return true;
@@ -1016,6 +1026,8 @@ bool asset_command(const char *line) {
     if (!std::strcmp(line, "CNTRL DISPLAY EDGE END")) {
         board.timing_mode(false); board.reply("CNTRL OK"); return true;
     }
+
+#endif
     if (!std::strncmp(line, "CNTRL SONGS ", 12)) {
         if (songs_ui.open()) { board.reply("CNTRL ERROR close-song-editor"); return true; }
         return songs_transfer.command(line, millis());
@@ -1053,11 +1065,14 @@ void poll_target() {
         }
         held_controls = pressed;
         bool consumed = splash_session.controls(pressed, now, !feature_open() && pressed == (1u << 2));
+#ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) {
             if (events[5] & press_event) board.timing_mode(false);
             else if (events[2] & press_event) scroll_timing.start();
             consumed = true;
         }
+
+#endif
         if (consumed) controller.cancel_gesture();
         setup_ui.poll(pressed);
         module_menu.poll(pressed);

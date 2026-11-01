@@ -11,6 +11,10 @@ reference for analysis, current diagnostic instructions, deployment provenance
 and historical scrolling experiments. The [plan](../../../../../plan/scrolling-bug.md)
 remains separate.
 
+Temporary scrolling-debug code is excluded from normal builds. Explicit
+`DIAGNOSTICS=1` defines `CNTRL_DIAGNOSTICS` to include it. User-facing Cable Test,
+storage inspection and MIDI status commands retain their existing behaviour.
+
 ## Historical deployment, 2026-10-25
 
 - Deployed source: `48b2693` (`Add display_name overrides to patch_switcher`),

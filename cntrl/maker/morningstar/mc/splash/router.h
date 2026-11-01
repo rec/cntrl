@@ -26,7 +26,10 @@ public:
         else {
             line_[used_] = 0;
             if (asset_command_ && (!std::strncmp(line_, "CNTRL FONT ", 11) || !std::strncmp(line_, "CNTRL SONGS ", 12)
-                || !std::strcmp(line_, "CNTRL DISPLAY EDGE") || !std::strcmp(line_, "CNTRL DISPLAY EDGE END"))) {
+#ifdef CNTRL_DIAGNOSTICS
+                || !std::strcmp(line_, "CNTRL DISPLAY EDGE") || !std::strcmp(line_, "CNTRL DISPLAY EDGE END")
+#endif
+                )) {
                 session_.stop(); asset_command_(line_); used_ = 0; overflow_ = false; return;
             }
             if (midi_status_ && !std::strcmp(line_, "CNTRL MIDI RESET")) {

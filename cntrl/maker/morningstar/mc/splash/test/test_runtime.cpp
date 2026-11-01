@@ -41,6 +41,12 @@ void command(cntrl::splash::Router &router, const std::string &line) {
 int storage_queries = 0;
 int storage_scans = 0;
 void storage_info(bool scan) { ++storage_queries; if (scan) ++storage_scans; }
+unsigned display_diagnostics = 0;
+bool diagnostic_command(const char *line) {
+    assert(std::string(line) == "CNTRL DISPLAY EDGE");
+    ++display_diagnostics;
+    return true;
+}
 
 void test_performance_c_during_idle_fade(cntrl::splash::Receiver &assets, const std::vector<uint8_t> &show) {
     for (unsigned phase = 0; phase < 3; ++phase) {
@@ -129,7 +135,7 @@ int main(int argc, char **argv) {
     cntrl::splash::Receiver assets(asset_card, device);
     cntrl::splash::Player player(assets, panels);
     cntrl::splash::Session session(assets, player);
-    cntrl::splash::Router router(documents, assets, session, device, storage_info);
+    cntrl::splash::Router router(documents, assets, session, device, storage_info, nullptr, diagnostic_command);
     device.session = &session;
     assets.boot();
     while (!router.accepts_input()) router.poll(0);
@@ -141,6 +147,12 @@ int main(int argc, char **argv) {
     assert(storage_queries == 2 && storage_scans == 1);
     command(router, "CNTRL STORAGE unknown");
     assert(storage_queries == 2 && device.replies.back() == "CNTRL ERROR invalid-command");
+    command(router, "CNTRL DISPLAY EDGE");
+#ifdef CNTRL_DIAGNOSTICS
+    assert(display_diagnostics == 1);
+#else
+    assert(display_diagnostics == 0 && device.replies.back() == "CNTRL ERROR invalid-command");
+#endif
 
     std::ifstream input(argv[1]);
     std::string hex; input >> hex;
