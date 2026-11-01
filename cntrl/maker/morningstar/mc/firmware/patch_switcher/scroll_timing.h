@@ -1,7 +1,7 @@
 #pragma once
 #include "panorama.h"
 
-// Repeat offset horizontal-stripe transitions at four target speeds.
+// Two-column batches, spaced across a nominal 500 ms transition.
 class ScrollTimingProbe {
 public:
     bool active() const { return stage_ != 0; }
@@ -16,18 +16,23 @@ public:
             write_pattern(panel, x, false);
             if (++column_ == 3 * 162) { since_ = now; stage_ = running_ ? 7 : 2; }
         } else if (stage_ == 3) {
-            since_ = now; progress_ = 0; stage_ = 4;
+            since_ = batch_since_ = last_step_ = now;
+            progress_ = batch_left_ = 0; stage_ = 4;
         } else if (stage_ == 4) {
-            const unsigned durations[] = {1000, 1250, 1500, 1750};
-            unsigned goal = transition_progress(uint32_t(now - since_) / 1000, durations[trial_ / 4]);
-            if (progress_ >= goal) return;
+            if (!batch_left_) {
+                // 116 batches * 4311 us = 500076 us. Never catch up by
+                // immediately issuing another batch after a scheduling delay.
+                if (uint32_t(now - batch_since_) < 4311 || uint32_t(now - last_step_) < 1000) return;
+                batch_since_ = now; batch_left_ = 2;
+            }
             ring_ = (ring_ + (trial_ % 2 ? 161 : 1)) % 162;
             unsigned column = (ring_ + (trial_ % 2 ? 0 : 159)) % 162;
             for (unsigned panel = 0; panel < 3; ++panel) write_pattern(panel, column, true);
             scroll_display_panorama(ring_);
+            --batch_left_; last_step_ = now;
             if (++progress_ == 232) { since_ = now; stage_ = 5; }
         } else if (stage_ == 5 && uint32_t(now - since_) >= 1000000) {
-            if (++trial_ == 16) { running_ = false; trial_ = 0; }
+            if (++trial_ == 8) { running_ = false; trial_ = 0; }
             column_ = 0; stage_ = 1;
         } else if (stage_ == 7 && uint32_t(now - since_) >= 500000) {
             stage_ = 3;
@@ -43,7 +48,7 @@ private:
         }
         write_display_column(panel, x, pixels);
     }
-    unsigned stage_ = 0, column_ = 0, trial_ = 0, ring_ = 0, progress_ = 0;
-    uint32_t since_ = 0;
+    unsigned stage_ = 0, column_ = 0, trial_ = 0, ring_ = 0, progress_ = 0, batch_left_ = 0;
+    uint32_t since_ = 0, batch_since_ = 0, last_step_ = 0;
     bool running_ = false;
 };

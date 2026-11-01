@@ -1,4 +1,39 @@
-# Horizontal-stripe speed sweep
+# Two-column batches at a 0.5-second target
+
+The current `CNTRL DISPLAY EDGE` diagnostic keeps the horizontal grey baseline
+and offset white incoming stripes, but changes scheduling to 116 two-column
+batches. Batch starts are spaced at least 4,311 microseconds apart, targeting
+500,076 microseconds for 232 steps. Each step still writes one incoming column
+on all three panels, then issues the three scroll commands. One step runs per
+poll, so other pedal work can run between the two steps in a batch.
+
+There is no 60 Hz progress backlog in this experiment. A delayed poll does not
+trigger multiple overdue batches. After a delayed second step, a new batch
+also waits at least 1 ms from that step's start. Actual transfer and polling
+costs may stretch the nominal half-second transition. This is a bounded batch
+size, not an acknowledgement that the panel has applied the preceding offsets.
+It does not establish that two-column batching alone is safe.
+
+Press C once for four left/right pairs, all using the same half-second target.
+Allow **25 seconds** including resets and recording margin. Every movement
+starts with a fully restored baseline. Completed movements hold for one second;
+the next baseline settles for 500 ms. C repeats; F restores the saved UI.
+Inspect the outgoing left edge during leftward motion and the outgoing right
+edge during rightward motion, excluding reset/repaint frames.
+
+Native tests check two steps per batch, batch-start spacing, inter-batch quiet
+time, the approximately 500 ms target at 100 us polling, exact addresses and
+payloads, all eight transitions, resets, repeat and micros rollover. A delayed
+second-step case verifies that an overdue batch is not started immediately.
+Normal patch scrolling is unchanged pending this physical experiment.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
+Native tests and ARM image checks passed; USB returned the saved-setup status
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. Physical results and
+the actual on-device transition duration remain unmeasured.
+
+## Previous horizontal-stripe speed sweep
 
 The current `CNTRL DISPLAY EDGE` experiment uses only horizontal stripes.
 The baseline has eight-pixel-high grey stripes separated by eight black rows.

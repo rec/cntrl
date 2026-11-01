@@ -23,6 +23,7 @@ struct ScrollStep {
 static std::vector<ScrollStep> scroll_trace;
 static bool scroll_only = false;
 static uint32_t probe_now = 0, probe_last = 0;
+static uint32_t probe_batch = 0, probe_previous = 0;
 static unsigned probe_steps = 0;
 static unsigned probe_writes = 0;
 static uint16_t probe_ram[3][128][162];
@@ -50,12 +51,17 @@ void scroll_display_panorama(unsigned offset) {
         probe_writes = 0;
         assert(offset == (ring + (undo ? 161 : 1)) % 162);
         if (probe_steps % 232 == 0) probe_last = probe_now;
+        if (probe_steps % 2 == 0) {
+            if (probe_steps % 232) {
+                assert(uint32_t(probe_now - probe_batch) >= 4311);
+                assert(uint32_t(probe_now - probe_previous) >= 1000);
+            }
+            probe_batch = probe_now;
+        }
+        probe_previous = probe_now;
         if (probe_steps % 232 == 231) {
-            const unsigned durations[] = {1000, 1250, 1500, 1750};
-            unsigned duration = durations[(probe_steps / (4 * 232)) % 4] * 1000;
-            // Each target duration advances on the first 60 Hz target frame.
-            assert(uint32_t(probe_now - probe_last) >= duration - 17000);
-            assert(uint32_t(probe_now - probe_last) <= duration);
+            assert(uint32_t(probe_now - probe_last) >= 495000);
+            assert(uint32_t(probe_now - probe_last) <= 520000);
         }
         ++probe_steps;
     }
@@ -362,14 +368,20 @@ static void audit_animation_batches() {
     for (unsigned repetition = 0; repetition < 2; ++repetition) {
         probe.start();
         // Exercise micros rollover and a complete C-triggered repeat.
-        for (uint32_t elapsed = 0; elapsed < 65000000; elapsed += 100) {
-            probe_now = UINT32_MAX - 500000 + repetition * 65000000 + elapsed;
+        for (uint32_t elapsed = 0; elapsed < 22000000; elapsed += 100) {
+            probe_now = UINT32_MAX - 500000 + repetition * 22000000 + elapsed;
             probe.poll(probe_now);
         }
-        assert(scroll_updates == before + (repetition + 1) * (16 * 232 + 16) && ring == 0);
-        assert(writes == initial_writes + 486 + (repetition + 1) * (16 * 232 * 3 + 16 * 486));
+        assert(scroll_updates == before + (repetition + 1) * (8 * 232 + 8) && ring == 0);
+        assert(writes == initial_writes + 486 + (repetition + 1) * (8 * 232 * 3 + 8 * 486));
     }
     probe.start(); probe.poll(probe_now);
+    probe_now += 4400; probe.poll(probe_now); // First column of a batch.
+    unsigned after_first = scroll_updates;
+    probe_now += 20000; probe.poll(probe_now); // Delayed second column.
+    assert(scroll_updates == after_first + 1);
+    probe_now += 100; probe.poll(probe_now);
+    assert(scroll_updates == after_first + 1); // No immediate catch-up batch.
     probe.stop(); before = scroll_updates;
     probe.poll(probe_now + 1000000);
     assert(!probe.active() && scroll_updates == before);
