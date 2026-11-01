@@ -1,5 +1,7 @@
 #include "patch_switcher/renderer.h"
 #include "patch_switcher/scroll_timing.h"
+#include <array>
+#include <map>
 #include <cassert>
 #include <algorithm>
 #include <cstring>
@@ -232,6 +234,171 @@ static void replay_delayed_offsets() {
     }
 }
 
+// Separate latch and fetch times; this is a host-only schedule search.
+static void search_scroll_schedules() {
+    struct Event {
+        unsigned time, panel, step, column, pixels;
+        bool command;
+    };
+    struct Model { unsigned active, gap; int direction; };
+    struct Result {
+        unsigned outgoing = 0, incoming = 0, failing = 0, worst = 0;
+    };
+    // Intern exact 128-pixel columns, preserving equal black/patterned columns.
+    std::map<std::array<uint16_t, 128>, unsigned> columns;
+    auto intern = [&](const uint16_t *pixels) {
+        std::array<uint16_t, 128> value;
+        std::copy(pixels, pixels + 128, value.begin());
+        return columns.emplace(value, unsigned(columns.size()) + 1).first->second;
+    };
+    unsigned reference[4 * 232];
+    for (unsigned x = 0; x < 4 * 232; ++x) {
+        reference[x] = intern(audit_strip[x]);
+    }
+    unsigned payload[232][3];
+    for (unsigned step = 0; step < 232; ++step) {
+        for (unsigned panel = 0; panel < 3; ++panel) {
+            payload[step][panel] = intern(scroll_trace[step].pixels[panel]);
+        }
+    }
+    auto expected = [&](unsigned panel, unsigned step, unsigned x) {
+        return reference[panel * 232 + (audit_undo ? 232 - step : step) + x];
+    };
+    auto schedule = [&](unsigned delay, bool reverse_writes, bool slow) {
+        std::vector<Event> events;
+        unsigned clock = 0, previous = 0;
+        const unsigned batches = slow ? 232 : 30;
+        for (unsigned batch = 0; batch < batches; ++batch) {
+            const unsigned target = slow ? batch + 1 : (batch + 1) * 232 / 30;
+            clock = std::max(clock, slow ? (batch + 1) * 20000 : batch * 500000 / 30);
+            auto command = [&]() {
+                for (unsigned panel = 0; panel < 3; ++panel) {
+                    clock += 3;
+                    events.push_back({clock, panel, target, 0, 0, true});
+                }
+            };
+            if (!slow) {
+                command();
+                clock += delay;
+            }
+            for (unsigned n = 0; n < target - previous; ++n) {
+                const unsigned step = reverse_writes ? target - 1 - n : previous + n;
+                for (unsigned panel = 0; panel < 3; ++panel) {
+                    clock += 267;
+                    events.push_back({clock, panel, step + 1, scroll_trace[step].column,
+                        payload[step][panel], false});
+                }
+            }
+            if (slow) {
+                command();
+            }
+            previous = target;
+        }
+        return events;
+    };
+    auto replay = [&](const std::vector<Event> &events, Model model, unsigned phase, unsigned panel, bool poison) {
+        unsigned memory[162] = {};
+        for (unsigned x = 0; x < 160; ++x) {
+            memory[(audit_origin + x) % 162] = expected(panel, 0, x);
+        }
+        if (poison) {
+            memory[(audit_origin + 80) % 162] = 0;
+        }
+        unsigned requested = 0, visible = 0, frame = phase, line = 0;
+        unsigned next_latch = phase, next_scan = phase + model.gap;
+        unsigned final_samples = 0;
+        const unsigned end = events.empty() ? 0 : events.back().time;
+        Result result;
+        auto advance = [&](unsigned deadline) {
+            // Latch, scan, then bus completion on timestamp ties.
+            while (std::min(next_latch, next_scan) <= deadline) {
+                if (next_latch <= next_scan) {
+                    visible = requested;
+                    frame = next_latch;
+                    next_latch += 17000;
+                } else {
+                    const unsigned x = model.direction > 0 ? line : 159 - line;
+                    const unsigned offset = (audit_origin + (audit_undo ? 324 - visible : visible)) % 162;
+                    const bool wrong = memory[(offset + x) % 162] != expected(panel, visible, x);
+                    if (wrong) {
+                        if ((x < 80) != audit_undo) {
+                            ++result.outgoing;
+                        } else {
+                            ++result.incoming;
+                        }
+                    }
+                    if (!events.empty() && frame > end && visible == 232) {
+                        assert(!wrong);
+                        ++final_samples;
+                    }
+                    if (++line == 160) {
+                        line = 0;
+                        next_scan = next_latch + model.gap;
+                    } else {
+                        next_scan = frame + model.gap + line * model.active / 160;
+                    }
+                }
+            }
+        };
+        for (const auto &event : events) {
+            if (event.panel != panel) {
+                continue;
+            }
+            advance(event.time);
+            if (event.command) {
+                requested = event.step;
+            } else {
+                memory[event.column] = event.pixels;
+            }
+        }
+        advance(end + 34000);
+        if (!events.empty()) {
+            assert(requested == 232 && visible == 232 && final_samples >= 160);
+        }
+        result.worst = result.outgoing + result.incoming;
+        result.failing = result.worst != 0;
+        return result;
+    };
+    const Model models[] = {
+        {17000, 0, 1}, {17000, 0, -1}, {10000, 0, 1}, {10000, 0, -1},
+        {10000, 1000, 1}, {10000, 1000, -1},
+        {10000, 3500, 1}, {10000, 3500, -1},
+        {10000, 7000, 1}, {10000, 7000, -1},
+    };
+    const auto slow = schedule(0, false, true);
+    for (auto model : models) {
+        assert(replay({}, model, 0, 0, false).worst == 0);
+        assert(replay({}, model, 0, 0, true).worst > 0);
+        for (unsigned phase = 0; phase < 17000; phase += 1000) {
+            for (unsigned panel = 0; panel < 3; ++panel) {
+                assert(replay(slow, model, phase, panel, false).worst == 0);
+            }
+        }
+    }
+    for (bool reverse_writes : {false, true}) {
+        for (unsigned delay = 0; delay <= 17000; delay += 1000) {
+            const auto events = schedule(delay, reverse_writes, false);
+            const unsigned finish = events.back().time;
+            for (auto model : models) {
+                Result total;
+                for (unsigned phase = 0; phase < 17000; phase += 1000) {
+                    for (unsigned panel = 0; panel < 3; ++panel) {
+                        const auto result = replay(events, model, phase, panel, false);
+                        total.outgoing += result.outgoing;
+                        total.incoming += result.incoming;
+                        total.failing += result.failing;
+                        total.worst = std::max(total.worst, result.worst);
+                    }
+                }
+                std::printf("schedule-search motion=%s origin=%u scan=%d active=%u gap=%u delay=%u reverse=%u finish=%u within-budget=%u failing=%u/51 worst=%u outgoing=%u incoming=%u\n",
+                    audit_undo ? "right" : "left", audit_origin, model.direction, model.active, model.gap,
+                    delay, unsigned(reverse_writes), finish, unsigned(finish <= 500000), total.failing,
+                    total.worst, total.outgoing, total.incoming);
+            }
+        }
+    }
+}
+
 static cntrl::Pane audit_pane(unsigned identity) {
     cntrl::Pane view;
     view.graphics.pad = 0;
@@ -288,6 +455,7 @@ static void audit_animation_batches() {
         assert(audit_step == 232 && audit_panel == 0 && batches7 == 8 && batches8 == 22);
         audit_motion = false;
         replay_delayed_offsets();
+        search_scroll_schedules();
         drain(renderer);
     }
 

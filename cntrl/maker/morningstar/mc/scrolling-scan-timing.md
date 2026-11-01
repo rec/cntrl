@@ -21,8 +21,18 @@ superseded firmware, not alternative current modes.
 
 ## Current evidence and limits
 
-The current diagnostic is the repeated single-jump delay comparison below;
-optical results are pending. The user confirmed that the static hidden-column
+The installed diagnostic remains the repeated single-jump delay comparison below.
+The recording `signal-2026-11-01-17-13-52-667.mp4` captures all forty trials.
+Wrong-edge top-half markers appear at playback 8.10 s on the left panel and
+15.60 s on all panels, in the second and fourth leftward 5 ms trials. The
+unwanted lines disappear in the next exported frame. No clear corresponding
+flashes were found in the inspected 10/15/20/30 ms onset frames or rightward
+trials. These negative observations are not safe-delay bounds; the export
+changes playback speed and cannot establish preservation of all capture samples.
+
+The host-only larger-step schedule search below found no candidate clean in
+both directions with a fixed modeled scan geometry. No new firmware was built
+or uploaded for that search. The user confirmed that the static hidden-column
 test (`223dbce`) behaved exactly as described: no signal during stationary
 hidden writes, followed by correct distinct marker reveals at both edges for
 all three offsets. This supports the tested static mapping and writable hidden
@@ -101,7 +111,8 @@ Image SHA-256:
 Uploaded through the existing helper on 2026-11-01. The updater reported
 reset/disappearance with status 1; USB subsequently returned
 `CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic is waiting
-for C; no trials were triggered from the host. Optical results remain pending.
+for C at installation; no trials were triggered from the host. Subsequent
+video findings appear in Current evidence and limits.
 
 ## Additional documented evidence
 
@@ -531,6 +542,92 @@ slow controls and complete final frames. This remains a host-only experiment;
 the diagnostic and normal scrolling algorithm were unchanged by that model
 commit. No new physical timing measurement or hardware-fault conclusion
 follows from this model.
+
+## Host-only larger-step schedule search, 2026-11-01
+
+**Result: no credible candidate in the searched family.** This does not prove
+that all possible hardware-scrolling schedules are impossible. It rejects the
+specific phase-independent, command-first batch schedules below under the
+stated scan models. No firmware or on-device diagnostic changed.
+
+`search_scroll_schedules()` in `firmware/test_renderer.cpp` reuses the actual
+232-step renderer payload traces and independent literal panorama from the
+existing audit. Exact 128-pixel columns are interned into equality IDs so that
+unchanged black or patterned columns are not falsely reported as damage.
+Initially hidden columns have a distinct poison ID.
+
+### Schedules and timing assumptions
+
+- Thirty seven/eight-column batches cover 232 columns. Batch starts target
+  `batch * 500000 / 30` microseconds, beginning at zero. Each batch requests its
+  complete new offset on all three panels, waits, then writes its incoming
+  columns. If work runs late, the next batch starts only after it finishes.
+- Delays range from 0 through 17 ms in 1 ms increments. Both normal and reversed
+  column write order are tested; each column still writes panels 0, 1, 2.
+- SSA takes 3 us per panel and a column takes 267 us at 8 MHz. Commands complete
+  separately for each panel. Column RAM changes atomically at transfer completion.
+  CPU overhead, within-column pixel transfers and LCD/camera response are omitted.
+- Offset requests latch every hypothetical 17 ms. Scanning starts separately,
+  after a gap of 0, 1, 3.5 or 7 ms, and lasts 10 ms. A fifth geometry scans for
+  17 ms with zero gap. Both physical scan directions are tested for each.
+- Seventeen phases spaced 1 ms apart are tested separately on each panel.
+  Since schedules never consult panel state and scanout does not affect the bus,
+  independent panel phases can be checked individually rather than enumerating
+  their Cartesian product. This remains a finite phase grid, not a measurement.
+- At tied timestamps the order is latch, scan, then bus completion. A sample is
+  compared with the exact panorama at that panel's latched progress. Any wrong
+  sample fails the run, whether it is near the outgoing or incoming edge.
+- Traces cover leftward motion from offsets 0 and 70, and rightward from 140
+  and 70. Completion must leave a fully correct subsequently scanned frame.
+
+The search evaluates 36 delay/order combinations across ten scan models,
+four traces and 51 panel/phase cases: **73,440 replay cases**, plus controls.
+Every geometry passes an unchanged-image control and detects a deliberately
+poisoned visible column. The 20 ms-per-step write-before-scroll control remains
+clean across all modeled gaps, directions, phases and traces.
+
+### Results
+
+Even allowing different delay/order choices for each motion direction, no fixed
+scan geometry has a clean candidate for both. Normal write order supplied the
+best results in the table below. Counts are the minimum, over in-budget
+candidates, of the worst single-panel/phase count, taking both starting offsets
+into account. Each count is wrong column samples accumulated over a transition,
+not simultaneous fringe width or a physical pixel measurement.
+
+| Active scan | Latch-to-scan gap | Best delay when outgoing edge is scanned last | Worst wrong samples, best candidate | Both motion directions clean? |
+| --- | --- | --- | --- | --- |
+| 17 ms | 0 ms | 0 ms | 169 | No |
+| 10 ms | 0 ms | 0 ms | 149 | No |
+| 10 ms | 1 ms | 0 ms | 146 | No |
+| 10 ms | 3.5 ms | 2 ms | 145 | No |
+| 10 ms | 7 ms | 6 ms | 146 | No |
+
+When the outgoing edge is scanned first, a clean candidate exists for each
+geometry at these same best delays. With left-edge-first scanning this is
+leftward movement; with right-edge-first scanning it is rightward movement.
+For the opposite motion, the best candidates have wrong samples on both screen
+halves: reducing outgoing damage does not eliminate incoming errors. The log's
+`outgoing` and `incoming` counters classify samples by screen half relative to
+motion; they do not independently identify the causal age of the wrong data.
+
+Delays 0..10 ms complete bus work in 489,750..499,750 us. Larger delays exceed
+500 ms even without CPU overhead. The budget checks transfer completion, not
+the time when the final image has been physically displayed.
+
+No candidate is recommended for a physical trial. The failure is conditional
+on this schedule family and latch/fetch model; it does not exclude other batch
+sizes, finer delay choices, interleaved schedules, or scheduling from an actual
+scan reference. The model still does not identify the real panel controller's
+latch point or fetch sequence. Earlier compensated scan-direction changes
+failed on the hardware, so the modeled clean direction is not a newly verified
+firmware remedy.
+
+Validation: `make -C cntrl/maker/morningstar/mc/firmware test` passed, including
+address/undefined-behavior sanitizers for the renderer. Re-running it reproduces
+the `schedule-search` rows. The session log is
+`/private/tmp/cntrl-schedule-search.log` and may not persist. No Python source or
+Python-consumed data changed, so Python checks were not run.
 
 ## Later optical comparisons and speed sweeps, 2026-11-01
 
