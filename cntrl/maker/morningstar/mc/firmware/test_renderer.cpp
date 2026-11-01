@@ -30,6 +30,11 @@ static uint16_t probe_ram[3][128][162];
 static uint16_t probe_baseline[3][128][162];
 static bool probe_loading = false;
 static unsigned probe_preloads = 0;
+static std::vector<std::pair<uint8_t, uint8_t>> probe_porches;
+
+void set_display_porches(uint8_t front, uint8_t back) {
+    probe_porches.emplace_back(front, back);
+}
 
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
     unsigned start = panel * 232 + (audit_undo ? 232 - step : step);
@@ -368,13 +373,21 @@ static void audit_animation_batches() {
     for (unsigned repetition = 0; repetition < 2; ++repetition) {
         probe.start();
         // Exercise micros rollover and a complete C-triggered repeat.
-        for (uint32_t elapsed = 0; elapsed < 22000000; elapsed += 100) {
-            probe_now = UINT32_MAX - 500000 + repetition * 22000000 + elapsed;
+        for (uint32_t elapsed = 0; elapsed < 32000000; elapsed += 100) {
+            probe_now = UINT32_MAX - 500000 + repetition * 32000000 + elapsed;
             probe.poll(probe_now);
         }
-        assert(scroll_updates == before + (repetition + 1) * (8 * 232 + 8) && ring == 0);
-        assert(writes == initial_writes + 486 + (repetition + 1) * (8 * 232 * 3 + 8 * 486));
+        assert(scroll_updates == before + (repetition + 1) * (12 * 232 + 12) && ring == 0);
+        assert(writes == initial_writes + 486 + (repetition + 1) * (12 * 232 * 3 + 12 * 486));
     }
+    const std::pair<uint8_t, uint8_t> expected_porches[] = {
+        {60, 60}, {16, 16}, {1, 31}, {31, 1}, {16, 16}, {60, 60},
+    };
+    assert(probe_porches.size() == 25);
+    for (unsigned i = 0; i < 24; ++i) {
+        assert(probe_porches[i] == expected_porches[(i % 12) / 2]);
+    }
+    assert(probe_porches.back() == expected_porches[0]);
     probe.start(); probe.poll(probe_now);
     probe_now += 4400; probe.poll(probe_now); // First column of a batch.
     unsigned after_first = scroll_updates;
@@ -382,7 +395,10 @@ static void audit_animation_batches() {
     assert(scroll_updates == after_first + 1);
     probe_now += 100; probe.poll(probe_now);
     assert(scroll_updates == after_first + 1); // No immediate catch-up batch.
+    // Exit must restore stock timing even from a shortened-porch setting.
+    set_display_porches(1, 31);
     probe.stop(); before = scroll_updates;
+    assert(probe_porches.back() == expected_porches[0]);
     probe.poll(probe_now + 1000000);
     assert(!probe.active() && scroll_updates == before);
     scroll_only = false;

@@ -22,6 +22,15 @@ void initialize_display_panorama() {
     end_transfer(); native_mode = true;
 }
 
+void set_display_porches(uint8_t front, uint8_t back) {
+    const uint8_t timing[] = {5, front, back};
+    begin_transfer();
+    for (const auto &panel : panorama_panels) {
+        command(panel, 0xb1, timing, sizeof(timing));
+    }
+    end_transfer();
+}
+
 void write_display_column(unsigned index, unsigned column, const uint8_t *pixels) {
     if (index >= 3 || column >= display_ram_columns) return;
     const auto &panel = panorama_panels[index];

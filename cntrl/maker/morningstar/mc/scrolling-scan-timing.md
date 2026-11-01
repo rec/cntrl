@@ -11,7 +11,7 @@ superseded firmware, not alternative current modes.
 ## Document map
 
 - [Current evidence and limits](#current-evidence-and-limits)
-- [Current diagnostic and controls](#current-diagnostic-two-column-half-second-test)
+- [Current diagnostic and controls](#current-diagnostic-panel-porch-comparison)
 - [Baseline mapping and timing assumptions](#what-the-hardware-scroll-baseline-assumes)
 - [Host progressive-scan model](#progressive-scanout-replay)
 - [Video comparisons, speed sweeps and conclusions](#later-optical-comparisons-and-speed-sweeps-2026-11-01)
@@ -21,14 +21,11 @@ superseded firmware, not alternative current modes.
 
 ## Current evidence and limits
 
-The installed diagnostic is the two-column, nominal 500 ms horizontal-stripe
-trial from `77bdc62`, image SHA-256
-`be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
-The user reports a clearly visible fringe in all leftward passes and none
-visible in rightward passes. The latest trial therefore rejects two columns
-per batch as a sufficient remedy. It is a diagnostic result, not a change to
-normal patch scrolling. No on-device duration measurement or inspected video
-of this latest trial is available.
+The current diagnostic is the panel-porch comparison described below. Its optical
+result is pending. The preceding two-column, nominal 500 ms trial from `77bdc62`
+produced a clearly visible fringe in all leftward passes and none visible in
+rightward passes according to the user. Two-column batching alone is therefore
+not a sufficient remedy. Normal patch scrolling is unchanged.
 
 The evidence increasingly points to changed pixels reaching the outgoing edge
 while scrolling, but neither exact SSA application timing nor the RAM fetch
@@ -45,46 +42,53 @@ assumptions. Potential visible-region overwrites are not automatically optical
 damage: an already-scanned column can be overwritten without changing that frame.
 No model yet explains all observations, including changing directional results.
 
-## Current diagnostic: two-column half-second test
+## Current diagnostic: panel porch comparison
 
-The current `CNTRL DISPLAY EDGE` diagnostic keeps the horizontal grey baseline
-and offset white incoming stripes, but changes scheduling to 116 two-column
-batches. Batch starts are spaced at least 4,311 microseconds apart, targeting
-500,076 microseconds for 232 steps. Each step still writes one incoming column
-on all three panels, then issues the three scroll commands. One step runs per
-poll, so other pedal work can run between the two steps in a batch.
+This experiment changes only B1h panel timing while retaining the preceding
+horizontal stripes, 232 steps, two-column batches, 4,311 us batch spacing and
+nominal 500 ms motion. RTNA remains 5; SPI remains 8 MHz. Each pair moves left
+then right. All three panels receive the same setting before baseline repaint,
+followed by the existing 500 ms settle between movements.
 
-There is no 60 Hz progress backlog in this experiment. A delayed poll does not
-trigger multiple overdue batches. After a delayed second step, a new batch
-also waits at least 1 ms from that step's start. Actual transfer and polling
-costs may stretch the nominal half-second transition. This is a bounded batch
-size, not an acknowledgement that the panel has applied the preceding offsets.
-It does not establish that two-column batching alone is safe.
+| Pair | Front porch | Back porch | Purpose |
+| --- | --- | --- | --- |
+| 1 | 60 | 60 | Original timing control |
+| 2 | 16 | 16 | Shorter equal porches |
+| 3 | 1 | 31 | Short front porch, same total as pair 2 |
+| 4 | 31 | 1 | Short back porch, same total as pair 2 |
+| 5 | 16 | 16 | Repeat shorter equal porches |
+| 6 | 60 | 60 | Repeat original timing control |
 
-**Observed result, 2026-11-01:** the user reports the fringe clearly visible in
-all leftward passes and completely invisible in rightward passes. This rejects
-two-column batching as a complete fix at the nominal half-second speed. No
-video of this latest trial or actual on-device duration has been measured.
-See [the consolidated evidence and limitations](#later-optical-comparisons-and-speed-sweeps-2026-11-01).
+Press C once and record all twelve movements, allowing **35 seconds**. Inspect
+the outgoing edge during motion, excluding baseline repaints. Count pairs in
+the order above; no labels are drawn over the stripes. C repeats the sequence;
+F exits and restores the saved UI. Original 60/60 timing is restored on exit
+and after completion. Brightness stays constant.
 
-Press C once for four left/right pairs, all using the same half-second target.
-Allow **25 seconds** including resets and recording margin. Every movement
-starts with a fully restored baseline. Completed movements hold for one second;
-the next baseline settles for 500 ms. C repeats; F restores the saved UI.
-Inspect the outgoing left edge during leftward motion and the outgoing right
-edge during rightward motion, excluding reset/repaint frames.
+The alternative hypothesis is an interval between SSA latching and the first
+visible RAM fetch. The progressive replay currently makes these simultaneous;
+a blank interval after latching could allow reuse to reach even the edge
+scanned first. This is a hypothesis, not a documented latch phase. At the
+nominal 850 kHz oscillator, the datasheet formula estimates approximately
+60 Hz for 60/60 and 87 Hz for all three shortened settings (LINE=160..162).
+Actual refresh and movement duration are unmeasured. Shortening porches changes
+both blanking time and refresh rate; comparing 16/16, 1/31 and 31/1 holds the
+nominal frame period constant while changing the distribution.
 
-Native tests check two steps per batch, batch-start spacing, inter-batch quiet
-time, the approximately 500 ms target at 100 us polling, exact addresses and
-payloads, all eight transitions, resets, repeat and micros rollover. A delayed
-second-step case verifies that an overdue batch is not started immediately.
-Normal patch scrolling is unchanged; this remains an unsuccessful diagnostic candidate.
+Native tests cover the full twelve-movement sequence and repeat, exact porch
+settings, pixel payloads, two-column pacing, delayed polling, timer rollover,
+completion restoration and exit restoration. Bus tests verify B1h payloads on
+all panels and SPI/GPIO handoff. Native tests and ARM build/image inspection
+passed. No Python source or Python-consumed data changed.
 
-Installed and armed on 2026-11-01 with image SHA-256
-`be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
-Native tests and ARM image checks passed; USB returned the saved-setup status
-`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The user observation
-above follows that upload; actual on-device transition duration remains unmeasured.
+Diagnostic image SHA-256:
+`561bc292a8de481dbe8ca8984639314968568f153cc429b395a3557ff019dbd1`.
+Uploaded through the existing helper on 2026-11-01. The updater reported
+reset/disappearance with status 1; subsequent USB responses were
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic is waiting
+for C; no motion was triggered from the host. Optical results remain pending.
+This experiment does not include the separately suggested static hidden-column
+test.
 
 ## Additional documented evidence
 
@@ -552,7 +556,7 @@ For the normal 60 Hz progression, the exact software batch counts are:
 | 2 s | 8 of 1, 112 of 2 |
 
 The apparent clean 2 s observation coincided with a maximum batch size of two,
-matching the two hidden RAM columns. That motivated the latest 500 ms experiment:
+matching the two hidden RAM columns. That motivated the preceding 500 ms experiment:
 116 two-column batches with starts at least 4,311 us apart, without 60 Hz catch-up
 bursts. A delayed second step also prevents a new batch for at least 1 ms from
 that step's start. All three panel columns are written before each scroll command.
@@ -616,8 +620,50 @@ the user's readability request. This documentation update does not refactor code
 
 ## Historical diagnostic protocols
 
+### Previous two-column half-second test
+
+The previous `CNTRL DISPLAY EDGE` diagnostic keeps the horizontal grey baseline
+and offset white incoming stripes, but changes scheduling to 116 two-column
+batches. Batch starts are spaced at least 4,311 microseconds apart, targeting
+500,076 microseconds for 232 steps. Each step still writes one incoming column
+on all three panels, then issues the three scroll commands. One step runs per
+poll, so other pedal work can run between the two steps in a batch.
+
+There is no 60 Hz progress backlog in this experiment. A delayed poll does not
+trigger multiple overdue batches. After a delayed second step, a new batch
+also waits at least 1 ms from that step's start. Actual transfer and polling
+costs may stretch the nominal half-second transition. This is a bounded batch
+size, not an acknowledgement that the panel has applied the preceding offsets.
+It does not establish that two-column batching alone is safe.
+
+**Observed result, 2026-11-01:** the user reports the fringe clearly visible in
+all leftward passes and completely invisible in rightward passes. This rejects
+two-column batching as a complete fix at the nominal half-second speed. No
+video of that trial or actual on-device duration has been measured.
+See [the consolidated evidence and limitations](#later-optical-comparisons-and-speed-sweeps-2026-11-01).
+
+Press C once for four left/right pairs, all using the same half-second target.
+Allow **25 seconds** including resets and recording margin. Every movement
+starts with a fully restored baseline. Completed movements hold for one second;
+the next baseline settles for 500 ms. C repeats; F restores the saved UI.
+Inspect the outgoing left edge during leftward motion and the outgoing right
+edge during rightward motion, excluding reset/repaint frames.
+
+Native tests check two steps per batch, batch-start spacing, inter-batch quiet
+time, the approximately 500 ms target at 100 us polling, exact addresses and
+payloads, all eight transitions, resets, repeat and micros rollover. A delayed
+second-step case verifies that an overdue batch is not started immediately.
+Normal patch scrolling is unchanged; this remains an unsuccessful diagnostic candidate.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
+Native tests and ARM image checks passed; USB returned the saved-setup status
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The user observation
+above follows that upload; actual on-device transition duration remains unmeasured.
+
+
 These protocols preserve image provenance, controls and test conditions. They
-are superseded by the current two-column diagnostic. Their result statements
+are superseded by the current panel-porch diagnostic. Their result statements
 are dated observations, not current device-state checks.
 
 ### Previous horizontal-stripe speed sweep

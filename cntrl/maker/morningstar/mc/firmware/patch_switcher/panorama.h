@@ -12,6 +12,7 @@ constexpr unsigned transition_progress(uint32_t elapsed_ms, unsigned duration_ms
 }
 
 void initialize_display_panorama();
+void set_display_porches(uint8_t front, uint8_t back);
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels);
 void scroll_display_panorama(unsigned offset);
 

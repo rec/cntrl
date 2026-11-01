@@ -1,17 +1,27 @@
 #pragma once
 #include "panorama.h"
 
-// Two-column batches, spaced across a nominal 500 ms transition.
+// Compare panel porches with unchanged two-column, nominal 500 ms motion.
 class ScrollTimingProbe {
 public:
     bool active() const { return stage_ != 0; }
     void arm() { stage_ = 1; column_ = trial_ = ring_ = 0; running_ = false; }
-    void stop() { stage_ = 0; }
+    void stop() {
+        if (active()) {
+            set_display_porches(60, 60);
+        }
+        stage_ = 0;
+    }
     void start() { if (stage_ == 2) { running_ = true; stage_ = 3; } }
     void poll(uint32_t now) {
         if (!active()) return;
         if (stage_ == 1) {
-            if (!column_) { initialize_display_panorama(); ring_ = 0; }
+            if (!column_) {
+                initialize_display_panorama();
+                const auto &porches = porches_[trial_ / 2];
+                set_display_porches(porches[0], porches[1]);
+                ring_ = 0;
+            }
             unsigned panel = column_ / 162, x = column_ % 162;
             write_pattern(panel, x, false);
             if (++column_ == 3 * 162) { since_ = now; stage_ = running_ ? 7 : 2; }
@@ -32,7 +42,10 @@ public:
             --batch_left_; last_step_ = now;
             if (++progress_ == 232) { since_ = now; stage_ = 5; }
         } else if (stage_ == 5 && uint32_t(now - since_) >= 1000000) {
-            if (++trial_ == 8) { running_ = false; trial_ = 0; }
+            if (++trial_ == 12) {
+                running_ = false;
+                trial_ = 0;
+            }
             column_ = 0; stage_ = 1;
         } else if (stage_ == 7 && uint32_t(now - since_) >= 500000) {
             stage_ = 3;
@@ -51,4 +64,7 @@ private:
     unsigned stage_ = 0, column_ = 0, trial_ = 0, ring_ = 0, progress_ = 0, batch_left_ = 0;
     uint32_t since_ = 0, batch_since_ = 0, last_step_ = 0;
     bool running_ = false;
+    static constexpr uint8_t porches_[6][2] = {
+        {60, 60}, {16, 16}, {1, 31}, {31, 1}, {16, 16}, {60, 60},
+    };
 };
