@@ -288,6 +288,8 @@ private:
         view.graphics = document_.graphics(slot);
         if (index >= 0) {
             document_.page(view, unsigned(index), slot, slot == 2 && already_sent(unsigned(index)));
+            // The target displays history (logical slot 0) on the right.
+            if (slot == 0) for (auto &line : view.lines) line.stippled = true;
         }
         bool has_text = false;
         for (const auto &line : view.lines) if (line.text[0]) has_text = true;

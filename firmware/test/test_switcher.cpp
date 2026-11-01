@@ -158,6 +158,8 @@ void test_greyed_names(const cntrl::Document &doc) {
     app.action(0); // B:Strings has not been sent.
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2);
+    assert(!hw.panes[1].lines[0].stippled && !hw.panes[1].lines[1].stippled);
+    assert(!hw.panes[2].lines[0].stippled);
     app.action(1); // Back to A:Flute, although B was sent more recently.
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     auto sends = hw.sent.size(), transitions = hw.transitions.size();
@@ -166,6 +168,9 @@ void test_greyed_names(const cntrl::Document &doc) {
     app.action(1); // A:Sax is different from A's last send.
     assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     app.action(2);
+    // Logical history slot 0 maps to the physical rightmost display.
+    assert(hw.panes[0].lines[0].text[0] && hw.panes[0].lines[1].text[0]);
+    for (const auto &line : hw.panes[0].lines) if (line.text[0]) assert(line.stippled);
     assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
     hw.connected = false;
     app.action(5); // Failed undo leaves A:Sax selected.
