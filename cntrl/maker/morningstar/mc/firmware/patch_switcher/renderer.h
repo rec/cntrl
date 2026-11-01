@@ -174,23 +174,32 @@ private:
         }
     }
     uint16_t moving_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
-        auto sample = panorama_sample(panel, x, progress, undo_);
-        if (sample.x >= 160) return 0; // Empty virtual space between displays.
-        if (sample.pane == -1) return cache_[0][y * 160 + sample.x];
-        if (sample.pane == 3) return cache_[2][y * 160 + sample.x];
-        return previous_[sample.pane][y * 160 + sample.x];
+        // Send moves right, undo moves left. Each panel keeps its logical
+        // destination, independent of the direction of the visual transition.
+        int source = int(x) + (undo_ ? int(progress) : -int(progress));
+        if (source >= 0 && source < 160) {
+            return previous_[panel][y * 160 + unsigned(source)];
+        }
+        source += undo_ ? -int(display_pitch) : int(display_pitch);
+        if (source >= 0 && source < 160) {
+            return cache_[panel][y * 160 + unsigned(source)];
+        }
+        return 0;
     }
     void animate(uint32_t now) {
         unsigned goal = transition_progress(uint32_t(now - started_), duration_ms_);
-        if (progress_ >= goal) return;
+        if (progress_ >= goal) {
+            return;
+        }
         ++progress_;
-        ring_ = (ring_ + (undo_ ? display_ram_columns - 1 : 1)) % display_ram_columns;
-        unsigned x = undo_ ? 0 : 159;
+        ring_ = (ring_ + (undo_ ? 1 : display_ram_columns - 1)) % display_ram_columns;
+        unsigned x = undo_ ? 159 : 0;
         uint8_t pixels[256];
         for (unsigned panel = 0; panel < 3; ++panel) {
             for (unsigned y = 0; y < 128; ++y) {
                 uint16_t pixel = moving_pixel(panel, x, y, progress_);
-                pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
+                pixels[2 * y] = uint8_t(pixel >> 8);
+                pixels[2 * y + 1] = uint8_t(pixel);
             }
             write_display_column(panel, (ring_ + x) % display_ram_columns, pixels);
         }
@@ -198,15 +207,14 @@ private:
         // after all three panels are staged. This is relative to the last
         // commanded offset; physical scanout application time is not known.
         scroll_display_panorama(ring_);
-        if (progress_ != display_pitch) return;
-        // The moved bitmaps may use a different pane's font/colors. Record what
-        // is actually visible before normal rendering applies destination styles.
-        for (unsigned panel = 0; panel < 3; ++panel)
-            for (unsigned y = 0; y < 128; ++y)
-                for (unsigned x = 0; x < 160; ++x)
-                    cache_[panel][y * 160 + x] = moving_pixel(panel, x, y, display_pitch);
+        if (progress_ != display_pitch) {
+            return;
+        }
+        // Each panel has arrived at its prepared destination bitmap in cache_.
         animating_ = false;
-        for (auto &dirty : dirty_) dirty = true;
+        for (auto &dirty : dirty_) {
+            dirty = true;
+        }
     }
     cntrl::Pane requested_[3], painting_;
     ShowGraphics graphics_;

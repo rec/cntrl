@@ -15,16 +15,17 @@ static unsigned checked_progress = 0;
 static unsigned writes = 0, pixels_sent = 0;
 static unsigned scroll_updates = 0;
 static bool patch_only = false;
-static bool audit_motion = false, audit_undo = false;
+static bool audit_motion = false, audit_right = false;
 static unsigned audit_step = 0, audit_panel = 0, audit_origin = 0;
-static uint16_t audit_strip[4 * 232][128];
+static uint16_t audit_strip[3 * 464][128];
+static uint16_t audit_images[4][160][128];
 struct ScrollStep {
     unsigned column = 0, offset = 0;
     uint16_t pixels[3][128] = {};
 };
 static std::vector<ScrollStep> scroll_trace;
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
-    unsigned start = panel * 232 + (audit_undo ? 232 - step : step);
+    unsigned start = panel * 464 + (audit_right ? 232 - step : step);
     return audit_strip[start + x][y];
 }
 
@@ -40,19 +41,19 @@ void scroll_display_panorama(unsigned offset) {
         assert(audit_panel == 3); // All three writes must precede this command.
         ++audit_step; audit_panel = 0;
         scroll_trace.back().offset = offset;
-        assert(offset == (audit_origin + (audit_undo ? 324 - audit_step : audit_step)) % 162);
+        assert(offset == (audit_origin + (audit_right ? 324 - audit_step : audit_step)) % 162);
         if (audit_step <= 3 || audit_step == 7 || audit_step == 8
             || audit_step == 161 || audit_step == 162 || audit_step == 163 || audit_step == 232)
             std::printf("audit %s origin=%u step=%u write=%u offset=%u\n",
-                audit_undo ? "right" : "left", audit_origin, audit_step,
-                (offset + (audit_undo ? 0 : 159)) % 162, offset);
+                audit_right ? "right" : "left", audit_origin, audit_step,
+                (offset + (audit_right ? 0 : 159)) % 162, offset);
         for (unsigned panel = 0; panel < 3; ++panel)
             for (unsigned y = 0; y < 128; ++y)
                 for (unsigned x = 0; x < 160; ++x)
                     assert(ram[panel][y][(offset + x) % 162] == audit_pixel(panel, x, y, audit_step));
     }
     ++scroll_updates;
-    if (check_motion) checked_progress += check_undo ? (ring + display_ram_columns - offset) % display_ram_columns : (offset + display_ram_columns - ring) % display_ram_columns;
+    if (check_motion) checked_progress += !check_undo ? (ring + display_ram_columns - offset) % display_ram_columns : (offset + display_ram_columns - ring) % display_ram_columns;
     ring = offset;
     for (unsigned panel = 0; panel < 3; ++panel)
         for (unsigned y = 0; y < 128; ++y)
@@ -60,10 +61,17 @@ void scroll_display_panorama(unsigned offset) {
     if (check_motion) {
         assert(checked_progress <= display_pitch);
         for (unsigned panel = 0; panel < 3; ++panel) for (unsigned x = 0; x < 160; ++x) {
-            auto sample = panorama_sample(panel, x, checked_progress, check_undo);
-            uint16_t expected = sample.x >= 160 ? 0 : uint16_t(0x1111 * (sample.pane + (check_undo ? 2 : 1)));
-            for (unsigned y = 0; y < 128; ++y)
-                assert(screens[panel][y][x] == (sample.x >= 160 ? 0 : rounded_background(sample.x, y, expected)));
+            int source = int(x) + (check_undo ? int(checked_progress) : -int(checked_progress));
+            unsigned identity = panel + (check_undo ? 2 : 1);
+            if (source < 0 || source >= 160) {
+                source += check_undo ? -232 : 232;
+                identity = panel + (check_undo ? 1 : 2);
+            }
+            for (unsigned y = 0; y < 128; ++y) {
+                uint16_t expected = source < 0 || source >= 160 ? 0
+                    : rounded_background(unsigned(source), y, uint16_t(0x1111 * identity));
+                assert(screens[panel][y][x] == expected);
+            }
         }
     }
 }
@@ -81,10 +89,10 @@ void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels
         assert(scroll_trace.back().column == column);
         for (unsigned y = 0; y < 128; ++y)
             scroll_trace.back().pixels[panel][y] = unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1];
-        assert(panel == audit_panel++ && x == (audit_undo ? 161 : 160));
+        assert(panel == audit_panel++ && x == (audit_right ? 161 : 160));
         for (unsigned y = 0; y < 128; ++y)
             assert((unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1])
-                == audit_pixel(panel, audit_undo ? 0 : 159, y, audit_step + 1));
+                == audit_pixel(panel, audit_right ? 0 : 159, y, audit_step + 1));
     }
     // Column writes happen before the scroll register update. Updating a
     // visible column here produces the wrong-image sliver at the outgoing edge.
@@ -144,7 +152,7 @@ static void replay_delayed_offsets() {
                 if (model.direction) return;
                 for (unsigned panel = 0; panel < 3; ++panel)
                     for (unsigned x = 0; x < 160; ++x) {
-                        unsigned source = panel * 232 + (audit_undo ? 232 - visible_step : visible_step) + x;
+                        unsigned source = panel * 464 + (audit_right ? 232 - visible_step : visible_step) + x;
                         bool wrong = std::memcmp(memory[panel][(visible + x) % 162], audit_strip[source], 256) != 0;
                         total.unprepared += wrong;
                     }
@@ -156,7 +164,7 @@ static void replay_delayed_offsets() {
                     if (model.direction) {
                         unsigned x = model.direction > 0 ? line : 159 - line;
                         for (unsigned panel = 0; panel < 3; ++panel) {
-                            unsigned source = panel * 232 + (audit_undo ? 232 - visible_step : visible_step) + x;
+                            unsigned source = panel * 464 + (audit_right ? 232 - visible_step : visible_step) + x;
                             bool wrong = std::memcmp(memory[panel][(visible + x) % 162], audit_strip[source], 256) != 0;
                             total.scanned_wrong += wrong;
                             if (final_check && visible_step == 232) { assert(!wrong); ++final_scanned; }
@@ -196,7 +204,7 @@ static void replay_delayed_offsets() {
                     }
                     total.overwritten += wrong; total.incoming += incoming;
                     if (wrong) {
-                        unsigned width = audit_undo ? 160 - x : x + 1;
+                        unsigned width = audit_right ? 160 - x : x + 1;
                         total.edge_width = std::max(total.edge_width, width);
                         assert(width <= 16); // Confined to the outgoing edge.
                     }
@@ -219,13 +227,13 @@ static void replay_delayed_offsets() {
         }
         const char *names[] = {"batches", "even", "command-first", "slow-control"};
         std::printf("lag-model %s origin=%u period=%u scan=%d active=%u schedule=%s phases=%u overwritten=%u incoming=%u unprepared=%u edge-width=%u scanned-wrong=%u failing-phases=%u\n",
-            audit_undo ? "right" : "left", audit_origin, period, model.direction, model.active, names[schedule], phases,
+            audit_right ? "right" : "left", audit_origin, period, model.direction, model.active, names[schedule], phases,
             total.overwritten, total.incoming, total.unprepared, total.edge_width, total.scanned_wrong, total.failing_phases);
         if (model.direction) {
             if (schedule == slow_control) assert(total.scanned_wrong == 0);
-            else if ((model.direction > 0) != audit_undo && schedule != command_first)
+            else if ((model.direction > 0) != audit_right && schedule != command_first)
                 assert(total.scanned_wrong == 0); // Outgoing edge was already scanned.
-            else if ((model.direction > 0) == audit_undo)
+            else if ((model.direction > 0) == audit_right)
                 assert(total.scanned_wrong > 0 && total.failing_phases == phases);
         } else if (schedule == command_first) assert(total.unprepared > 0);
         else if (!period || schedule == slow_control)
@@ -251,8 +259,8 @@ static void search_scroll_schedules() {
         std::copy(pixels, pixels + 128, value.begin());
         return columns.emplace(value, unsigned(columns.size()) + 1).first->second;
     };
-    unsigned reference[4 * 232];
-    for (unsigned x = 0; x < 4 * 232; ++x) {
+    unsigned reference[3 * 464];
+    for (unsigned x = 0; x < 3 * 464; ++x) {
         reference[x] = intern(audit_strip[x]);
     }
     unsigned payload[232][3];
@@ -262,7 +270,7 @@ static void search_scroll_schedules() {
         }
     }
     auto expected = [&](unsigned panel, unsigned step, unsigned x) {
-        return reference[panel * 232 + (audit_undo ? 232 - step : step) + x];
+        return reference[panel * 464 + (audit_right ? 232 - step : step) + x];
     };
     auto schedule = [&](unsigned delay, bool reverse_writes, bool slow) {
         std::vector<Event> events;
@@ -318,10 +326,10 @@ static void search_scroll_schedules() {
                     next_latch += 17000;
                 } else {
                     const unsigned x = model.direction > 0 ? line : 159 - line;
-                    const unsigned offset = (audit_origin + (audit_undo ? 324 - visible : visible)) % 162;
+                    const unsigned offset = (audit_origin + (audit_right ? 324 - visible : visible)) % 162;
                     const bool wrong = memory[(offset + x) % 162] != expected(panel, visible, x);
                     if (wrong) {
-                        if ((x < 80) != audit_undo) {
+                        if ((x < 80) != audit_right) {
                             ++result.outgoing;
                         } else {
                             ++result.incoming;
@@ -391,7 +399,7 @@ static void search_scroll_schedules() {
                     }
                 }
                 std::printf("schedule-search motion=%s origin=%u scan=%d active=%u gap=%u delay=%u reverse=%u finish=%u within-budget=%u failing=%u/51 worst=%u outgoing=%u incoming=%u\n",
-                    audit_undo ? "right" : "left", audit_origin, model.direction, model.active, model.gap,
+                    audit_right ? "right" : "left", audit_origin, model.direction, model.active, model.gap,
                     delay, unsigned(reverse_writes), finish, unsigned(finish <= 500000), total.failing,
                     total.worst, total.outgoing, total.incoming);
             }
@@ -418,13 +426,12 @@ static cntrl::Pane audit_pane(unsigned identity) {
 static void audit_animation_batches() {
     DisplayRenderer renderer;
     drain(renderer);
-    // Build a literal four-pane panorama from independently rendered snapshots.
-    // The reference deliberately does not call panorama_sample().
+    // Build independent snapshots, then literal old/gap/new strips per panel.
     for (unsigned identity = 0; identity < 4; ++identity) {
         renderer.show(0, audit_pane(identity)); drain(renderer);
         for (unsigned y = 0; y < 128; ++y)
             for (unsigned x = 0; x < 160; ++x)
-                audit_strip[identity * 232 + x][y] = screens[0][y][x];
+                audit_images[identity][x][y] = screens[0][y][x];
     }
     for (bool undo : {false, false, true, true}) {
         for (unsigned panel = 0; panel < 3; ++panel)
@@ -434,7 +441,17 @@ static void audit_animation_batches() {
         for (unsigned panel = 0; panel < 3; ++panel)
             for (unsigned y = 0; y < 128; ++y)
                 for (unsigned x = 160; x < 162; ++x) ram[panel][y][(ring + x) % 162] = 0xdead;
-        audit_origin = ring; audit_undo = undo; audit_step = audit_panel = 0;
+        audit_origin = ring;
+        audit_right = !undo; // Physical rightward motion, independently of undo semantics.
+        audit_step = audit_panel = 0;
+        for (unsigned panel = 0; panel < 3; ++panel) {
+            for (unsigned x = 0; x < 160; ++x) {
+                for (unsigned y = 0; y < 128; ++y) {
+                    audit_strip[panel * 464 + (audit_right ? 232 : 0) + x][y] = audit_images[panel + unsigned(undo)][x][y];
+                    audit_strip[panel * 464 + (audit_right ? 0 : 232) + x][y] = audit_images[panel + unsigned(!undo)][x][y];
+                }
+            }
+        }
         scroll_trace.clear();
         renderer.transition(undo, 500);
         for (unsigned panel = 0; panel < 3; ++panel)
@@ -763,7 +780,7 @@ int main() {
     assert(!ShowGraphics::supports_font(10, 24));
     assert(ShowGraphics::supports_font(0, 13) && !ShowGraphics::supports_font(1, 15));
 
-    // A complete send shifts C/R left and introduces the new grey candidate.
+    // Send moves right while preserving each pane's logical destination.
     for (unsigned i = 0; i < 3; ++i) {
         cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
         renderer.show(i, pane);
@@ -783,7 +800,7 @@ int main() {
     assert(renderer.ready());
     check_motion = false; assert(checked_progress == display_pitch);
     for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 2)));
-    assert(ring == display_pitch % display_ram_columns);
+    assert(ring == (display_ram_columns - display_pitch % display_ram_columns) % display_ram_columns);
     renderer.transition(true, 500);
     check_motion = check_undo = true; checked_progress = 0;
     for (unsigned i = 0; i < 3; ++i) {
@@ -820,11 +837,5 @@ int main() {
     assert(transition_progress(1999, 2000) < display_pitch);
     assert(transition_progress(2000, 2000) == display_pitch);
     assert(transition_progress(500, 500) == display_pitch);
-    for (unsigned panel = 0; panel < 3; ++panel) for (unsigned x = 0; x < 160; ++x) {
-        auto left = panorama_sample(panel, x, display_pitch, false);
-        assert(left.pane == int(panel) + 1 && left.x == x);
-        auto right = panorama_sample(panel, x, display_pitch, true);
-        assert(right.pane == int(panel) - 1 && right.x == x);
-    }
     audit_animation_batches();
 }

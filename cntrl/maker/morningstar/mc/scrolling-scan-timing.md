@@ -10,6 +10,7 @@ superseded firmware, not alternative current modes.
 
 ## Document map
 
+- [User-selected directional fallback](#user-selected-directional-fallback)
 - [Current evidence and limits](#current-evidence-and-limits)
 - [Current diagnostic and controls](#current-diagnostic-repeated-single-jump-delays)
 - [Baseline mapping and timing assumptions](#what-the-hardware-scroll-baseline-assumes)
@@ -19,9 +20,37 @@ superseded firmware, not alternative current modes.
 - [Standalone diagnostic archive](#standalone-diagnostic-archive)
 - [Original patch-switcher transition history](#original-patch-switcher-transition-history)
 
+## User-selected directional fallback
+
+The user chose to put the frequently used send action on the cleaner rightward
+motion and the rarely used undo action on leftward motion. This is an accepted
+visual tradeoff, not a root-cause fix or a guarantee that rightward motion is
+artifact-free. The preceding diagnostic and experimental evidence are retained.
+
+Normal `DisplayRenderer` now slides each panel's outgoing bitmap toward the
+right for send and toward the left for undo. Each panel receives its own
+prepared destination bitmap from `cache_`, separated by the existing 72-column
+gap. The logical patch/pane destinations, MIDI actions and history order stay
+the same. This avoids reversing patch navigation merely to reverse the animation.
+The default remains 500 ms, with configured durations respected. No pixels are
+mirrored, display edges masked or backlight blanking introduced.
+
+The old cross-panel panorama sampling helper is replaced by per-panel
+outgoing/destination sampling. Tests use independently rendered snapshots and
+literal per-panel strips, checking both physical directions, every staged pixel,
+offsets, final panes and wraparound. Historical model counts below describe
+the earlier renderer/fixtures, not physical qualification of this fallback.
+
+Fallback image SHA-256:
+`868d598d305dc129891d510762d9c4ec518778766b7d01c3bda58ae0d22769ce`.
+Native renderer/driver tests and the ARM binary/HEX and flash-header checks
+passed. The normal UI is restored after upload, without arming the diagnostic.
+Visual qualification of actual patch transitions remains with the user.
+
 ## Current evidence and limits
 
-The installed diagnostic remains the repeated single-jump delay comparison below.
+Before the directional fallback, the installed diagnostic was the repeated
+single-jump delay comparison below.
 The recording `signal-2026-11-01-17-13-52-667.mp4` captures all forty trials.
 Wrong-edge top-half markers appear at playback 8.10 s on the left panel and
 15.60 s on all panels, in the second and fourth leftward 5 ms trials. The
@@ -42,7 +71,8 @@ The preceding panel-porch comparison (`b4b6f24`) did not visibly improve the
 left-edge sliver in any setting across repeated runs. A tiny rightmost-pixel
 disturbance during an initial rightward pass could not be reproduced after
 rearming; retain it as an intermittent observation. The earlier two-column
-trial likewise did not fix the fringe. Normal patch scrolling is unchanged.
+trial likewise did not fix the fringe. Those investigation trials left normal
+scrolling unchanged; the later user-selected fallback reverses its visual direction.
 
 The evidence increasingly points to changed pixels reaching the outgoing edge
 while scrolling, but neither exact SSA application timing nor the RAM fetch
@@ -60,6 +90,10 @@ damage: an already-scanned column can be overwritten without changing that frame
 No model yet explains all observations, including changing directional results.
 
 ## Current diagnostic: repeated single-jump delays
+
+This diagnostic remains available through explicit `CNTRL DISPLAY EDGE`
+arming. It is not armed by the normal application startup. The instructions
+below apply inside that mode; in the normal patch UI C sends and F undoes.
 
 Press C once and record for **90 seconds**, preferably in slow motion. There
 are 20 left/right pairs, four pairs per programmed delay in this order:
@@ -716,7 +750,7 @@ a next step. No specific smooth, safe update schedule has been verified.
 
 - Current diagnostic: [scroll_timing.h](firmware/patch_switcher/scroll_timing.h).
 - Normal animation and MCU source buffers: [renderer.h](firmware/patch_switcher/renderer.h), `animate()` and `moving_pixel()`.
-- Normal progress and source coordinates: [panorama.h](firmware/patch_switcher/panorama.h).
+- Normal progress and ring geometry: [panorama.h](firmware/patch_switcher/panorama.h). Current pixel-source selection is in `renderer.h`; the former cross-panel sampler was removed for the directional fallback.
 - Native column writes and SSA command 37h: [displays.cpp](firmware/patch_switcher/displays.cpp).
 - Actual-payload audits and hypothetical scan replays: [test_renderer.cpp](firmware/test_renderer.cpp).
 

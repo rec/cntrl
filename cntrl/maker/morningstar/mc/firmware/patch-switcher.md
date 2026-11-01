@@ -47,7 +47,7 @@ on the pedal; successful boot and read-back are not a visual test.
 
 ## Sliding send/undo panes
 
-C sends a patch and requests a leftward transition; F performs undo and
+C sends a patch and requests a rightward transition; F performs undo and
 requests the reverse transition. Animation does not delay MIDI/history actions.
 For scrolling behaviour, evidence, deployment hashes and limitations, see the
 [scrolling investigation](../scrolling-scan-timing.md) and its
