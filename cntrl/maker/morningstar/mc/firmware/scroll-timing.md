@@ -1,6 +1,53 @@
-# Scroll-only diagnostic
+# Unchanged-pixel rewrite comparison
 
-The current `CNTRL DISPLAY EDGE` experiment preloads all 162 RAM columns on
+The current `CNTRL DISPLAY EDGE` sequence alternates two conditions using the
+same preloaded 162-column pattern. No labels are repainted during the test.
+Brightness remains constant. Each pair consists of one leftward and one
+rightward scroll:
+
+| Pair | Condition |
+| --- | --- |
+| 1 | Scroll commands only |
+| 2 | Rewrite existing pixels before every scroll step |
+| 3 | Scroll commands only |
+| 4 | Rewrite existing pixels before every scroll step |
+
+Press C once and watch the four pairs, approximately 16-17 seconds overall.
+The 1.5-second holds separate individual movements. Allow 20 seconds if recording.
+C repeats all four pairs; F or `CNTRL DISPLAY EDGE END` restores the saved UI.
+If a power cycle clears diagnostic mode, rearm with `CNTRL DISPLAY EDGE`.
+
+Both conditions keep the production 500 ms / 60 Hz progress targets. Each step
+reserves 1.5 ms from step start to its scroll command. The rewrite condition
+uses that interval for the usual three panel-column writes, in panel order,
+at the production incoming-column addresses. Every pixel written is regenerated
+from its fixed RAM coordinate and exactly matches what was preloaded there.
+The control condition waits through the same interval without writing pixels.
+If the actual writes take longer than 1.5 ms, the command runs late; equality
+of physical timings has not been measured. This spacing replaces the preceding
+scroll-only diagnostic's 1 ms minimum between commands.
+
+Native tests check the expected write/no-write pair order, all three addresses
+and payloads at every step, zero RAM changes, minimum command spacing, all
+eight offset sequences, repeat, stopping and micros rollover. The original
+preload pattern and the normal patch-scrolling algorithm are unchanged.
+
+A repeatable visible difference between control and rewrite pairs is useful
+without a slow-motion camera. Corruption during same-pixel rewrites would
+reproduce a write-operation interaction without changing the RAM image.
+Clean rewrite pairs would strengthen the changed-content hypothesis, subject
+to the different pattern and unmeasured timing. A visually clean result is
+provisional until the later slow-motion recording.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`6a172d08c0dc517ce93e5d582fe06305bbbec61ab1052de8a03876be6d134145`.
+Native tests and ARM image checks passed. After upload/reset, USB returned
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The sequence awaits C;
+visual comparison remains pending.
+
+## Previous scroll-only diagnostic
+
+The preceding `CNTRL DISPLAY EDGE` experiment preloaded all 162 RAM columns on
 each panel, then changes only the scroll offset during motion. It replaces
 the production-sequence fixture described below. There are no pixel writes,
 repaints, backlight changes or RAM resets during the sequence or a C-triggered

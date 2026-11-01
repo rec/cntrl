@@ -24,6 +24,7 @@ static std::vector<ScrollStep> scroll_trace;
 static bool scroll_only = false;
 static uint32_t probe_now = 0, probe_last = 0;
 static unsigned probe_steps = 0;
+static unsigned probe_writes = 0;
 static uint16_t probe_ram[3][128][162];
 
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
@@ -42,8 +43,11 @@ void scroll_display_panorama(unsigned offset) {
     if (scroll_only) {
         assert(std::memcmp(probe_ram, ram, sizeof(ram)) == 0);
         bool undo = (probe_steps / 232) % 2;
+        bool rewrite = (probe_steps / (2 * 232)) % 2;
+        assert(probe_writes == (rewrite ? 3u : 0u));
+        probe_writes = 0;
         assert(offset == (ring + (undo ? 161 : 1)) % 162);
-        if (probe_steps) assert(uint32_t(probe_now - probe_last) >= 1000);
+        if (probe_steps) assert(uint32_t(probe_now - probe_last) >= 1500);
         probe_last = probe_now; ++probe_steps;
     }
     if (audit_motion) {
@@ -81,7 +85,15 @@ void scroll_display_panorama(unsigned offset) {
 void initialize_display_panorama() { scroll_display_panorama(0); }
 
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels) {
-    assert(!scroll_only); // No RAMWR is allowed after the diagnostic is ready.
+    if (scroll_only) {
+        assert((probe_steps / (2 * 232)) % 2); // Only the rewrite pair may write.
+        bool undo = (probe_steps / 232) % 2;
+        assert(panel == probe_writes++);
+        unsigned next = (ring + (undo ? 161 : 1)) % 162;
+        assert(column == (next + (undo ? 0 : 159)) % 162);
+        for (unsigned y = 0; y < 128; ++y)
+            assert((unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1]) == probe_ram[panel][y][column]);
+    }
     assert(panel < 3 && column < display_ram_columns);
     ++writes; pixels_sent += 128;
     unsigned x = (column + display_ram_columns - ring) % display_ram_columns;
@@ -332,6 +344,7 @@ static void audit_animation_batches() {
             probe.poll(probe_now);
         }
         assert(scroll_updates == before + (repetition + 1) * 8 * 232 && ring == 0);
+        assert(writes == initial_writes + 486 + (repetition + 1) * 4 * 232 * 3);
     }
     probe.start(); probe.poll(probe_now);
     probe.stop(); before = scroll_updates;
