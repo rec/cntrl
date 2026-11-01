@@ -317,6 +317,18 @@ class Show(BaseModel, frozen=True):
     patch_cycles: dict[str, object] = Field(default_factory=dict)
     definitions: Definitions | None = None
     fonts: dict[str, str] = Field(default_factory=dict)
+    seed: Annotated[int, Field(strict=True)] | None = 0
+    fill_in_styles: Annotated[bool, Field(strict=True)] = True
+    background_colors: Annotated[list[str], Field(min_length=1)] = Field(
+        default_factory=lambda: [
+            '0xFFFFE8',
+            '0xFFF8E8',
+            '0xFFF0E0',
+            '0xFFF4D8',
+            '0xFFFADC',
+            '0xFFEEDC',
+        ]
+    )
     take_first_match: Annotated[bool, Field(strict=True)] = False
     chord_ms: Annotated[
         int, Field(strict=True, ge=1, le=65535), units.unit_validator('millisecond')

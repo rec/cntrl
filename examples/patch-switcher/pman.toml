@@ -1,4 +1,7 @@
 splash = true
+# Keep this full-catalogue example's original appearance. Placeholder names
+# contain punctuation that some decorative font families do not support.
+fill_in_styles = false
 screensaver_timeout = 3
 
 [pages.patch]

@@ -150,6 +150,8 @@ def encode(
                 'song patches require --target to compile their setup context'
             )
         context: dict[str, object] = {
+            # This is an execution container, not an authored browser cycle.
+            'fill_in_styles': False,
             'instruments': library.instruments,
             'patches': library.patches,
             'patch_cycles': {'Songs': values_for_source} if values_for_source else {},

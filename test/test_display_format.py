@@ -53,9 +53,9 @@ def lines(block: bytes, page: int) -> list[tuple[int, tuple[int, ...], int, str]
     ]
 
 
-def test_default_page_reproduces_tag_and_patch_ui(target: models.Target) -> None:
+def test_disabled_style_filling_preserves_plain_page(target: models.Target) -> None:
     windows, references, block = display.compile_display(
-        models.Show(instruments={}, patches={}), [patch()], target
+        models.Show(fill_in_styles=False), [patch()], target
     )
     expected = [
         (0, (0, 48, 4, 0, 0, 65535, 48, 0), 8, 'wind'),

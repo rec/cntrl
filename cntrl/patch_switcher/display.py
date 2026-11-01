@@ -2,11 +2,12 @@
 
 import struct
 from functools import cached_property
+from random import Random
 
 import tomlkit
 from pydantic import BaseModel, Field
 
-from . import graphics, models
+from . import formatting, graphics, models
 
 
 class DisplayPatch(BaseModel, frozen=True):
@@ -29,6 +30,18 @@ def compile_display(
     assets: dict[int, bytes] | None = None,
     patch_metadata: dict[str, object] | None = None,
 ) -> tuple[list[bytes], list[list[int]], bytes]:
+    if show.fill_in_styles and show.seed is None:
+        # Persist the one-time choice so downloaded configurations recompile to
+        # the same appearance, even when the original input requested randomness.
+        show = show.model_copy(update={'seed': Random().getrandbits(63)})
+    cycles = list(
+        dict.fromkeys(
+            str(p.values['patch_cycle.name'])
+            for p in patches
+            if p.values.get('patch_cycle.name')
+        )
+    )
+    generated_styles = formatting.cycle_styles(show, cycles, target)
     named_fields = {k for p in patches for k in p.values if k.startswith('names.')}
     overlap = set(show.parameters) & (set(FIELDS) | named_fields)
     if overlap:
@@ -116,6 +129,9 @@ def compile_display(
                     )
                 content = name in PATCH_FIELDS or name.startswith(('switch.', 'names.'))
                 style = merge_style(
+                    generated_styles.get(str(patch.values.get('patch_cycle.name')))
+                    if content or name in ('patch_cycle.name', 'tags')
+                    else None,
                     base,
                     window.style,
                     page.style,
@@ -351,6 +367,9 @@ FIELDS = {
     'transition_ms': 21,
 }
 SOURCE_FIELDS = (
+    'seed',
+    'fill_in_styles',
+    'background_colors',
     'switches',
     'style',
     'pad',

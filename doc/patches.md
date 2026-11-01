@@ -10,6 +10,44 @@ named definition, a browser patch cycle, a switch assignment, a song position or
 sequence. A sequence executes all its children on one activation. A song advances
 one position at a time.
 
+## Automatic cycle styles
+
+Setup-level `fill_in_styles = true` (the default) fills missing formatting for
+each cycle and its program lines. Explicit show, window, page, tag, program,
+patch and field styles still override these generated defaults per property.
+Global parameter and switch fields keep their existing formatting.
+
+```toml
+seed = 0
+fill_in_styles = true
+background_colors = [
+    '0xFFFFE8', '0xFFF8E8', '0xFFF0E0',
+    '0xFFF4D8', '0xFFFADC', '0xFFEEDC',
+]
+```
+
+The six pale yellow/orange colors above are the default background palette.
+Every cycle randomly chooses one background; repeats are allowed. Each cycle
+also gets a random available font, shared with its programs. All available font
+families are used before repeating, with adjacent repeats avoided when possible.
+Available families include target fonts and configured `[fonts]` entries.
+
+For N cycles, foreground generation starts with the average RGB color of the
+configured background palette as an anchor. It greedily chooses N other colors,
+maximizing each new color's minimum squared RGB distance from the anchor and
+earlier choices. Candidates are a bounded RGB grid with channel values
+0, 32, 64, 96, 128, 160, 192, 224 and 255. This is a farthest-point heuristic,
+not a guarantee of the global optimum. The N foregrounds are distinct; the
+background anchor is not assigned to a cycle. Existing contrast warnings remain.
+
+One local random generator controls all these choices. Integer `seed` defaults
+to 0, making repeated compilation deterministic. Python callers may pass
+`seed=None` for a fresh one-time seed; TOML has no null literal. The compiled
+setup records that chosen seed, so downloading and recompiling preserves the
+appearance. Set `fill_in_styles = false` to retain only authored styling and
+application defaults. Styles are generated during compilation, with no pedal
+random generator or new firmware record format.
+
 ## Simple program lists
 
 For an instrument that stays in one bank, list its program names in order:
