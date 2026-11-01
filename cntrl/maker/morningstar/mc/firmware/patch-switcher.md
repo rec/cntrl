@@ -51,8 +51,12 @@ on the pedal; successful boot and read-back are not a visual test.
 
 ## Sliding send/undo panes
 
-C sends a patch and requests a rightward transition; F performs undo and
-requests the reverse transition. Animation does not delay MIDI/history actions.
+The performance panes are candidate (left), current (centre), history (right).
+A sends a patch: candidate moves right into current, and current into history.
+D undoes along the reverse path. Performance button columns are mirrored:
+A/C and D/F exchange functions; B/E retain theirs. C+F opens the module menu.
+Utility modules keep their existing controls and displayed instructions.
+Animation does not delay MIDI/history actions.
 For scrolling behaviour, evidence, deployment hashes and limitations, see the
 [scrolling investigation](../scrolling-scan-timing.md) and its
 [original transition history](../scrolling-scan-timing.md#original-patch-switcher-transition-history).
@@ -136,7 +140,7 @@ The complete generated report is saved locally as
 
 Historically, show format version 9 included shared top-level `font_name`/`font_size`/`pad` and
 `screens.undo`, `screens.sent`, `screens.next` colors. Current firmware uses
-foreground-color stippling for the rightmost patch name when it matches the last
+foreground-color stippling for the candidate patch name when it matches the last
 successful send for its instrument (program and bank select, not label/category).
 It also retains instrument identities, logical banks and bank mappings for
 self-contained editable downloads. Version 9 preserves original synthesizer
@@ -161,10 +165,10 @@ show uses 3 seconds. Entry fades through black with 4,000 ms per half; waking
 uses 200 ms per half and performs the waking button's normal action immediately.
 Both transitions wait in black for a complete repaint. Held buttons prevent
 entry; presses and releases restart the timer. Startup dismissal and entry-fade
-cancellation consume their whole triggering gesture, except main-page C during
+cancellation consume their whole triggering gesture, except main-page A during
 idle entry, which cancels the fade and sends immediately. Its successful-send
-brightness feedback bypasses remaining fades until release. A+D used for waking never
-opens management; release it and press A+D a second time. Setup or asset transfers cancel playback and inhibit
+brightness feedback bypasses remaining fades until release. C+F used for waking never
+opens management; release it and press C+F a second time. Setup or asset transfers cancel playback and inhibit
 idle entry until they finish; ordinary USB queries do not count as physical input.
 
 USB exposes Serial + MIDI, using the public core's development VID/PID and the
@@ -444,8 +448,8 @@ single-show slots were not read for migration, modified or removed. No MIDI
 messages were requested by these tests. The final state intentionally has no
 active setup, following the agreed no-automatic-migration policy.
 
-A+D opens the module menu even without a valid setup; choose Setups for management. A/B browse, C confirms, F
-goes back. A+D used to wake the screen is consumed; a second A+D after release
+C+F opens the module menu even without a valid setup; choose Setups for management. A/B browse, C confirms, F
+goes back. C+F used to wake the screen is consumed; a second C+F after release
 opens management. The numeric editor and this wake gate have native test
 coverage. Physical display centering, pedal-operated editing and cold-power
 persistence still need user confirmation; no physical interrupted-SD-write
@@ -513,7 +517,7 @@ User confirmation of the visible appearance remains pending.
 
 ## MIDI cable-test module
 
-A+D now opens the module menu. A/B choose Setups or MIDI cable test, C opens the
+C+F opens the module menu. A/B choose Setups or MIDI cable test, C opens the
 selection, and F returns to performance. On the test page, B toggles transmission
 and F stops the test and returns to the module menu. Every entry starts Off.
 The center display shows the Still Time title, DIN and TRS result rows, and
@@ -600,11 +604,11 @@ command completed successfully with no revisions listed, confirming that the
 revision-number parser accepts the live request. This was a read-only check;
 physical snapshot/restore behavior and MIDI latency remain unqualified.
 
-## C-button program-change brightness feedback
+## Send-button program-change brightness feedback
 
-On the performance page, C boosts the shared display backlight to maximum after
+On the performance page, A boosts the shared display backlight to maximum after
 an accepted send changes that instrument's last-sent program/bank. It stays at
-maximum while C is held and returns to the setup's brightness on release. There
+maximum while A is held and returns to the setup's brightness on release. There
 is no minimum flash duration. Repeated selections and name/volume-only patch
 differences do not boost brightness; rejected sends do not boost it either.
 The first accepted send counts as a change because previous state is unknown.

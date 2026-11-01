@@ -64,6 +64,7 @@ enum class UiOperation : unsigned {
 bool state_ui(UiOperation operation);
 bool patch_stock(uint8_t pair, cntrl::PatchExecutor &invocation);
 bool patch_work_pending();
+bool feature_open();
 DMAMEM cntrl::Controller::NavigationState invocation_navigation[6];
 bool restoring_invocation = false;
 unsigned pending_ui_operation = 0;
@@ -255,7 +256,7 @@ public:
         ++scan_count_;
     }
     void show(unsigned pane, const cntrl::Pane &content) override {
-        renderer_.show(pane, content);
+        renderer_.show(feature_open() ? pane : 2 - pane, content);
     }
     void transition(bool undo, std::optional<unsigned> duration_ms) override { renderer_.transition(undo, duration_ms); }
 #ifdef CNTRL_DIAGNOSTICS
@@ -364,7 +365,7 @@ public:
     }
     void draw() {
         if (splash_session.take_redraw()) renderer_.invalidate();
-        renderer_.draw(millis());
+        renderer_.draw(micros());
     }
     void display(uint32_t now, bool transfer_busy) {
         ++display_count_;
@@ -1064,7 +1065,7 @@ void poll_target() {
             if (buttons[i].pressed) pressed |= 1u << i;
         }
         held_controls = pressed;
-        bool consumed = splash_session.controls(pressed, now, !feature_open() && pressed == (1u << 2));
+        bool consumed = splash_session.controls(pressed, now, !feature_open() && pressed == (1u << 0));
 #ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) {
             if (events[5] & press_event) board.timing_mode(false);
@@ -1143,11 +1144,11 @@ void poll_target() {
                         else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_back)});
                     }
                 } else {
-                    if ((events[i] & press_event) && controller.button(i, true, now) == cntrl::Chord::ad
+                    if ((events[i] & press_event) && controller.button(mirrored_button(i), true, now) == cntrl::Chord::ad
                         && !patch_work_pending() && splash_session.management_allowed()) {
                         controller.cancel_gesture(); controller.executor().invoke(cntrl::StatePatch{9});
                     }
-                    if (events[i] & release_event) controller.button(i, false, now);
+                    if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
                 }
             }
         }

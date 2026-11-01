@@ -17,6 +17,7 @@ static unsigned scroll_updates = 0;
 static bool patch_only = false;
 static bool audit_motion = false, audit_right = false;
 static unsigned audit_step = 0, audit_panel = 0, audit_origin = 0;
+static uint32_t audit_now = 0, audit_last_scroll = 0;
 static uint16_t audit_strip[3 * 464][128];
 static uint16_t audit_images[4][160][128];
 struct ScrollStep {
@@ -45,8 +46,9 @@ static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
 
 void scroll_display_panorama(unsigned offset) {
     if (audit_motion) {
-        assert(audit_panel == 3); // All three writes must precede this command.
-        ++audit_step; audit_panel = 0;
+        assert(audit_panel == 6); // Two columns on all panels before revealing either.
+        audit_step += 2; audit_panel = 0;
+        audit_last_scroll = audit_now;
         scroll_trace.back().offset = offset;
         assert(offset == (audit_origin + (audit_right ? 324 - audit_step : audit_step)) % 162);
         if (audit_step <= 3 || audit_step == 7 || audit_step == 8
@@ -69,10 +71,10 @@ void scroll_display_panorama(unsigned offset) {
         assert(checked_progress <= display_pitch);
         for (unsigned panel = 0; panel < 3; ++panel) for (unsigned x = 0; x < 160; ++x) {
             int source = int(x) + (check_undo ? int(checked_progress) : -int(checked_progress));
-            unsigned identity = panel + (check_undo ? 2 : 1);
+            unsigned identity = panel + (check_undo ? 1 : 2);
             if (source < 0 || source >= 160) {
                 source += check_undo ? -232 : 232;
-                identity = panel + (check_undo ? 1 : 2);
+                identity = panel + (check_undo ? 2 : 1);
             }
             for (unsigned y = 0; y < 128; ++y) {
                 uint16_t expected = source < 0 || source >= 160 ? 0
@@ -96,10 +98,16 @@ void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels
         assert(scroll_trace.back().column == column);
         for (unsigned y = 0; y < 128; ++y)
             scroll_trace.back().pixels[panel][y] = unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1];
-        assert(panel == audit_panel++ && x == (audit_right ? 161 : 160));
+        if (audit_panel == 0 && audit_step) {
+            assert(uint32_t(audit_now - audit_last_scroll) >= 500);
+        }
+        const unsigned staged = audit_panel / 3;
+        assert(panel == audit_panel % 3 && x == (audit_right ? 161 - staged : 160 + staged));
+        ++audit_panel;
+        scroll_trace.back().offset = (audit_origin + (audit_right ? 324 - audit_step - staged - 1 : audit_step + staged + 1)) % 162;
         for (unsigned y = 0; y < 128; ++y)
             assert((unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1])
-                == audit_pixel(panel, audit_right ? 0 : 159, y, audit_step + 1));
+                == audit_pixel(panel, audit_right ? 0 : 159, y, audit_step + staged + 1));
     }
     // Column writes happen before the scroll register update. Updating a
     // visible column here produces the wrong-image sliver at the outgoing edge.
@@ -431,6 +439,10 @@ static cntrl::Pane audit_pane(unsigned identity) {
 }
 
 static void audit_animation_batches() {
+    constexpr unsigned expected_buttons[] = {2, 1, 0, 5, 4, 3};
+    for (unsigned i = 0; i < 6; ++i) {
+        assert(mirrored_button(i) == expected_buttons[i]);
+    }
     DisplayRenderer renderer;
     drain(renderer);
     // Build independent snapshots, then literal old/gap/new strips per panel.
@@ -442,7 +454,7 @@ static void audit_animation_batches() {
     }
     for (bool undo : {false, false, true, true}) {
         for (unsigned panel = 0; panel < 3; ++panel)
-            renderer.show(panel, audit_pane(panel + unsigned(undo)));
+            renderer.show(panel, audit_pane(panel + unsigned(!undo)));
         drain(renderer);
         // A newly exposed, unwritten column must fail the pixel comparison.
         for (unsigned panel = 0; panel < 3; ++panel)
@@ -454,29 +466,33 @@ static void audit_animation_batches() {
         for (unsigned panel = 0; panel < 3; ++panel) {
             for (unsigned x = 0; x < 160; ++x) {
                 for (unsigned y = 0; y < 128; ++y) {
-                    audit_strip[panel * 464 + (audit_right ? 232 : 0) + x][y] = audit_images[panel + unsigned(undo)][x][y];
-                    audit_strip[panel * 464 + (audit_right ? 0 : 232) + x][y] = audit_images[panel + unsigned(!undo)][x][y];
+                    audit_strip[panel * 464 + (audit_right ? 232 : 0) + x][y] = audit_images[panel + unsigned(!undo)][x][y];
+                    audit_strip[panel * 464 + (audit_right ? 0 : 232) + x][y] = audit_images[panel + unsigned(undo)][x][y];
                 }
             }
         }
         scroll_trace.clear();
         renderer.transition(undo, 500);
         for (unsigned panel = 0; panel < 3; ++panel)
-            renderer.show(panel, audit_pane(panel + unsigned(!undo)));
-        for (unsigned i = 0; i < 1600; ++i) renderer.draw(0);
+            renderer.show(panel, audit_pane(panel + unsigned(undo)));
+        const uint32_t start = UINT32_MAX - 200000;
+        for (unsigned i = 0; i < 1600; ++i) renderer.draw(start);
         audit_motion = true;
-        unsigned batches7 = 0, batches8 = 0;
-        for (unsigned now = 1; now <= 500; ++now) {
+        unsigned batches = 0;
+        for (unsigned elapsed = 1; elapsed <= 2000; ++elapsed) {
+            audit_now = start + elapsed * 1000;
             unsigned before = audit_step;
             for (unsigned work = 0; work < 8; ++work) {
-                renderer.draw(now);
-                if (audit_step == 232) break;
+                renderer.draw(audit_now);
             }
             unsigned steps = audit_step - before;
-            assert(steps == 0 || steps == 7 || steps == 8);
-            batches7 += steps == 7; batches8 += steps == 8;
+            assert(steps == 0 || steps == 2);
+            batches += steps == 2;
+            if (renderer.ready()) {
+                break;
+            }
         }
-        assert(audit_step == 232 && audit_panel == 0 && batches7 == 8 && batches8 == 22);
+        assert(audit_step == 232 && audit_panel == 0 && batches == 116);
         audit_motion = false;
         replay_delayed_offsets();
         search_scroll_schedules();
@@ -802,45 +818,51 @@ int main() {
     assert(!ShowGraphics::supports_font(10, 24));
     assert(ShowGraphics::supports_font(0, 13) && !ShowGraphics::supports_font(1, 15));
 
-    // Send moves right while preserving each pane's logical destination.
+    // Send moves the left card into the centre and the centre card right.
     for (unsigned i = 0; i < 3; ++i) {
-        cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
+        cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 2));
         renderer.show(i, pane);
     }
     drain(renderer);
     renderer.transition(false, 2000);
     check_motion = true; checked_progress = 0;
     for (unsigned i = 0; i < 3; ++i) {
-        cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 2));
+        // Destination styling differs from the travelling card on inner panes.
+        cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i ? i + 4 : 1));
         renderer.show(i, pane);
     }
     for (unsigned now = 0; now < 1000; ++now)
-        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
     assert(!renderer.ready() && checked_progress < display_pitch);
     for (unsigned now = 1000; now < 3000; ++now)
-        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
     assert(renderer.ready());
     check_motion = false; assert(checked_progress == display_pitch);
-    for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 2)));
+    for (unsigned i = 0; i < 3; ++i) {
+        blank(i, uint16_t(0x1111 * (i ? i + 4 : 1)));
+        cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
+        renderer.show(i, pane);
+    }
+    drain(renderer);
     assert(ring == (display_ram_columns - display_pitch % display_ram_columns) % display_ram_columns);
     renderer.transition(true, 500);
     check_motion = check_undo = true; checked_progress = 0;
     for (unsigned i = 0; i < 3; ++i) {
-        cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
+        cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 2));
         renderer.show(i, pane);
     }
-    for (unsigned now = 3000; now < 4500; ++now)
-        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    for (unsigned now = 3000; now < 5000; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
     assert(renderer.ready() && ring == 0);
     check_motion = false; assert(checked_progress == display_pitch);
-    for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 1)));
+    for (unsigned i = 0; i < 3; ++i) blank(i, uint16_t(0x1111 * (i + 2)));
     // An unspecified duration uses the renderer default, even after an explicit one.
     renderer.transition(false, std::nullopt);
-    for (unsigned now = 4500; now < 4750; ++now)
-        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    for (unsigned now = 5000; now < 5100; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
     assert(!renderer.ready());
-    for (unsigned now = 4750; now < 5250; ++now)
-        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    for (unsigned now = 5100; now < 5300; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
     assert(renderer.ready());
     assert(transition_progress(1000, 2000) == display_pitch / 2);
     // A fast send after browsing must animate even during a candidate repaint.
@@ -852,8 +874,8 @@ int main() {
     renderer.transition(false, 500);
     browsing.graphics.background = 0x001f;
     renderer.show(1, browsing);
-    for (unsigned now = 5250; now < 6250; ++now)
-        for (unsigned work = 0; work < 8; ++work) renderer.draw(now);
+    for (unsigned now = 7000; now < 9000; ++now)
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
     assert(renderer.ready() && scroll_updates > before_scroll);
     blank(1, 0x001f); blank(2, 0xf800);
     assert(transition_progress(1999, 2000) < display_pitch);

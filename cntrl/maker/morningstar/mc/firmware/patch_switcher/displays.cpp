@@ -20,9 +20,9 @@ void initialize_display_panorama() {
         command(panel, 0x37, start, 2);
     }
     end_transfer(); native_mode = true;
+    set_display_fast_refresh(true);
 }
 
-#ifdef CNTRL_DIAGNOSTICS
 void set_display_fast_refresh(bool enabled) {
     const uint8_t fast[] = {0, 1, 1};
     const uint8_t stock[] = {5, 60, 60};
@@ -32,7 +32,6 @@ void set_display_fast_refresh(bool enabled) {
     }
     end_transfer();
 }
-#endif
 
 void write_display_column(unsigned index, unsigned column, const uint8_t *pixels) {
     if (index >= 3 || column >= display_ram_columns) return;
@@ -56,6 +55,7 @@ void scroll_display_panorama(unsigned offset) {
 
 void write_display_group(uint8_t selected, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
     if (native_mode) {
+        set_display_fast_refresh(false);
         const uint8_t mode[] = {0xa8}, area[] = {0, 1, 0, 160, 0, 1}, start[] = {0, 1};
         begin_transfer();
         for (const auto &panel : panorama_panels) {

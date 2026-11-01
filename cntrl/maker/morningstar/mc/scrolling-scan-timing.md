@@ -3,7 +3,8 @@
 Investigation follow-up, updated 2026-11-01. The current findings below supersede
 earlier proposed experiments and historical deployment statements in this file.
 Read alongside [the experiment record](../../../../plan/scrolling-bug.md).
-The leftward sliver remains unresolved. This is the single analysis and
+The faster-refresh diagnostic was visually clean in both directions; normal
+patch transitions now use its pacing, pending user verification. This is the single analysis and
 experiment reference. The [plan](../../../../plan/scrolling-bug.md) remains
 separate. Current instructions appear below; archived protocols describe
 superseded firmware, not alternative current modes.
@@ -27,7 +28,7 @@ superseded firmware, not alternative current modes.
 Temporary scrolling probes are compiled only with `CNTRL_DIAGNOSTICS` defined.
 Normal patch-switcher builds leave it undefined. To build them deliberately,
 use `make -C cntrl/maker/morningstar/mc/firmware DIAGNOSTICS=1 inspect-patch-switcher`.
-Without that flag, the probe class/state, timing-mode methods, display/button
+Without that flag, the probe class/state, display/button
 hooks and `CNTRL DISPLAY EDGE` / `END` command routing are excluded. The commands
 are rejected as invalid rather than silently stopping the splash or consuming C/F.
 
@@ -38,7 +39,7 @@ build targets, not linked into the patch-switcher image. Native renderer and
 router checks cover both modes; built ELF inspection verifies the scrolling
 debug command strings are absent normally and present in the opt-in image.
 
-The default, debug-excluded image SHA-256 is
+The preceding default, debug-excluded image SHA-256 was
 `400fd0de53cc744f94a6c7169867050675d3c9cd021101d6604d012a49bdb174`.
 It was uploaded after the direction change. USB returned the same saved-setup
 status and rejected `CNTRL DISPLAY EDGE` with `CNTRL ERROR invalid-command`.
@@ -50,20 +51,37 @@ motion and the rarely used undo action on leftward motion. This is an accepted
 visual tradeoff, not a root-cause fix or a guarantee that rightward motion is
 artifact-free. The preceding diagnostic and experimental evidence are retained.
 
-Normal `DisplayRenderer` now slides each panel's outgoing bitmap toward the
-right for send and toward the left for undo. Each panel receives its own
-prepared destination bitmap from `cache_`, separated by the existing 72-column
-gap. The logical patch/pane destinations, MIDI actions and history order stay
-the same. This avoids reversing patch navigation merely to reverse the animation.
-The default remains 500 ms, with configured durations respected. No pixels are
-mirrored, display edges masked or backlight blanking introduced.
+The initial direction-only attempt (`85f67d1`) was rejected: a card left one
+window and reappeared two windows away. The corrected performance layout mirrors
+the complete patch interaction: candidate left, current centre, history right.
+Send moves the candidate into the centre and the current card into history to
+the right; Undo reverses that path. Pixel sampling follows one panorama across
+the physical 72-column gaps, retaining the outgoing card's pixels until it lands.
+Destination styling is reconciled afterward.
 
-The old cross-panel panorama sampling helper is replaced by per-panel
-outgoing/destination sampling. Tests use independently rendered snapshots and
-literal per-panel strips, checking both physical directions, every staged pixel,
-offsets, final panes and wraparound. Historical model counts below describe
-the earlier renderer/fixtures, not physical qualification of this fallback.
+Performance controls are mirrored by column: A/C and D/F exchange functions;
+B/E retain theirs. A sends (including held-send brightness feedback), D undoes,
+C/F take the former A/D browsing functions, and C+F opens the module menu.
+Other performance chords are mirrored too. Utility modules retain their own
+pane layouts, button mappings and displayed instructions. MIDI/history
+semantics and stored setup data remain unchanged.
 
+The default movement target is now 75 ms with a 0.5 ms quiet interval, following
+the user-approved speed trial. Two-column batches and faster panel refresh from
+`2354765` are retained. Shorter settling may reintroduce fringes; actual movement
+time includes transfer and polling overhead. Normal builds exclude temporary diagnostics. Native
+tests compare every scroll step with independently rendered card strips in
+both directions, including wraparound, and distinguish travelling card pixels
+from the destination's final styling. Physical appearance still needs checking.
+
+The preceding 1400 ms / 10 ms mirrored-layout image SHA-256 is
+`9e4c676acf78b15e9817090abcd2f9c6cd740caa85f68ad080ed4a0c5bdf911f`.
+Native firmware tests, the ARM build, HEX/ELF comparison and stock flash-header
+check passed. Upload reached the reset command; after reboot USB returned
+`CNTRL READY 20 21411 fa5ba7e8`, matching the saved setup before upload.
+Temporary scrolling diagnostics were excluded and were not armed.
+
+The following hash records the superseded direction-only image.
 Fallback image SHA-256:
 `868d598d305dc129891d510762d9c4ec518778766b7d01c3bda58ae0d22769ce`.
 Native renderer/driver tests and the ARM binary/HEX and flash-header checks
@@ -117,7 +135,8 @@ No model yet explains all observations, including changing directional results.
 
 This opt-in `DIAGNOSTICS=1` trial preserves the newer per-panel renderer and the
 user-selected send-right/undo-left fallback. Only the explicitly armed probe
-changes panel timing. Normal builds exclude the probe and its timing setter.
+selects the comparison timing. Normal builds exclude the probe; the refresh
+setter is now shared with normal display initialization.
 
 Press C once for three left/right pairs, allowing **20 seconds**:
 
@@ -772,7 +791,7 @@ a next step. No specific smooth, safe update schedule has been verified.
 
 - Current diagnostic: [scroll_timing.h](firmware/patch_switcher/scroll_timing.h).
 - Normal animation and MCU source buffers: [renderer.h](firmware/patch_switcher/renderer.h), `animate()` and `moving_pixel()`.
-- Normal progress and ring geometry: [panorama.h](firmware/patch_switcher/panorama.h). Current pixel-source selection is in `renderer.h`; the former cross-panel sampler was removed for the directional fallback.
+- Normal progress and ring geometry: [panorama.h](firmware/patch_switcher/panorama.h). Current pixel-source selection is in `renderer.h`; the cross-panel sampler preserves continuous card travel in the mirrored layout.
 - Native column writes and SSA command 37h: [displays.cpp](firmware/patch_switcher/displays.cpp).
 - Actual-payload audits and hypothetical scan replays: [test_renderer.cpp](firmware/test_renderer.cpp).
 
@@ -791,7 +810,7 @@ the user's readability request. This documentation update does not refactor code
 This diagnostic is available only in a `DIAGNOSTICS=1` build, through explicit
 `CNTRL DISPLAY EDGE` arming. Normal builds exclude that command entirely.
 It is not armed by diagnostic-build startup either. The instructions
-below apply inside that mode; in the normal patch UI C sends and F undoes.
+below apply inside that mode; in the normal patch UI A sends and D undoes.
 
 Press C once and record for **90 seconds**, preferably in slow motion. There
 are 20 left/right pairs, four pairs per programmed delay in this order:
@@ -1709,7 +1728,7 @@ boot-verified. A subsequent fixup sets the default to 1000 ms (one second);
 explicit `transition_ms` values still take precedence.
 The current implementation keeps an omitted duration unspecified through the
 model, compiled metadata (zero), and firmware (`std::nullopt`). The renderer
-alone resolves it to `DEFAULT_TRANSITION_MS`, currently 500 ms for both send
+alone resolves it to `DEFAULT_TRANSITION_MS`, now 1400 ms for both send
 and undo, when starting a transition.
 Resolved TOML omits unspecified durations; explicit values, including 1000,
 remain explicit throughout.
@@ -1764,4 +1783,123 @@ produced a reliable half-second schedule.
 The leading explanation is therefore a timing mismatch between requested
 scrolling and actual panel reads, rather than an incorrect static address
 mapping. It is not yet a complete explanation of the controller's behavior,
-and there is no verified smooth fix.
+and that summary preceded the successful faster-refresh trial below.
+
+## Faster-refresh result and normal transitions, 2026-11-01
+
+The user reported the stock/faster-refresh comparison as "visually perfect".
+This qualifies that observed diagnostic run, not every image or panel condition.
+The normal renderer now adopts the faster setting, B1h `00 01 01`, and the
+same conservative two-column schedule. Send still moves right and undo left.
+
+Each pair prepares both hidden RAM columns before issuing one scroll command.
+The following poll anchors a minimum 10 ms quiet interval, after the blocking
+command transfers have completed. Delayed polling cannot consume that interval
+or cause several pairs to run without pauses. The final reveal also settles
+before the destination repaint begins. Renderer timestamps use microseconds,
+including unsigned wraparound handling.
+
+The default movement target is 1400 ms; explicit slower durations spread the
+pairs over their requested time. Shorter targets cannot bypass the waits and
+therefore stretch. Transfers, polling, preparation and final repaint add time;
+actual normal-transition duration has not been measured. Native display entry
+enables faster refresh and returning to the splash restores stock timing.
+
+Native renderer and display-driver tests pass, covering both directions,
+hidden-column payloads, two-column reveals, minimum spacing, timer wraparound,
+configured/default durations and restoration of stock splash timing. The ARM
+build, HEX/ELF comparison and stock flash-configuration check pass. Historical
+host scheduling models still replay their explicitly selected old schedules;
+their results do not model or qualify this faster-refresh implementation.
+Normal patch-transition visual verification remains pending user observation.
+
+Uploaded normal-image SHA-256:
+`1c88133de0060466371f26bfa0502079ffc0813c2e3eb497d098691779a8d905`.
+ELF inspection found neither `ScrollTimingProbe` nor `CNTRL DISPLAY EDGE`.
+After the uploader reported reset/disappearance, USB returned
+`CNTRL READY 20 21411 fa5ba7e8`, unchanged from before upload. The diagnostic
+was not armed; normal patch controls are active.
+
+
+## Faster mirrored-layout trial, 2026-11-01
+
+After observing the mirrored interface, the user requested scrolling four times
+faster and approved reducing the settling interval. The default movement target
+changes from 1400 ms to 350 ms; the minimum quiet time after each two-column
+reveal changes from 10 ms to 2 ms. Explicitly configured durations still control
+the target, subject to transfer, polling and settling overhead. Preparation and
+final styling reconciliation add time outside the movement target.
+
+The mirrored panes, button mapping, continuous card path and faster panel refresh
+are retained. This is a visual trial: the shorter quiet time may reintroduce edge
+fringes. Native checks verify the shortened wait and that an unspecified duration
+completes within the faster window, while preserving explicit slower timing and
+the pixel-by-pixel motion checks. Temporary diagnostics remain excluded.
+
+Native firmware tests, the ARM build, HEX/ELF comparison and stock flash-header
+check passed. Uploaded image SHA-256:
+`e4ce1856b173ea0d73e767b102c78e6922a8f2796986978d427db73652bf8d43`.
+Upload reached the reset command; after reboot USB returned
+`CNTRL READY 20 21411 fa5ba7e8`, unchanged from before upload. Visual speed and
+fringe visibility await user observation.
+
+
+## 250 ms mirrored-layout target, 2026-11-01
+
+The user observed a fringe only during Undo with the 350 ms / 2 ms build and
+requested a 250 ms movement target. The default is reduced to 250 ms; the 2 ms
+settling interval, faster panel refresh, two-column batches and mirrored card
+path remain unchanged. Transfer and polling overhead can stretch the movement
+beyond the target. Explicit setup durations retain their existing meaning.
+The native default-duration regression now checks completion within a shorter
+window. Physical appearance at this new speed remains to be observed.
+
+Native firmware tests, the ARM build, HEX/ELF comparison and stock flash-header
+check passed. Uploaded image SHA-256:
+`ce3f0a5eb8ec7e0572724b51a3037055c08c50f457fc37a3f2eae200d4d2b05d`.
+After the upload/reset, USB returned `CNTRL READY 20 21411 fa5ba7e8`, matching
+the saved setup before upload. Temporary diagnostics remain excluded.
+
+
+## 150 ms mirrored-layout target, 2026-11-01
+
+At the user's request, the default movement target is reduced from 250 ms to
+150 ms. The 2 ms settling interval, two-column batches, faster panel refresh and
+mirrored card path are retained. The 116 settling intervals alone require at
+least 232 ms, so actual movement cannot reach 150 ms with this schedule; transfers
+and polling add further time. This trial changes the target only. Existing native
+checks still cover the settling floor, explicit slower durations, default
+completion window and every scroll-step pixel. Visual results remain unverified.
+
+Native firmware tests, ARM compilation, HEX/ELF comparison and stock flash-header
+checks passed. Uploaded image SHA-256:
+`48cb4747f9634163a95d8919085402582e0b22f78db422c7a0f446e1a7470960`.
+After reset the pedal returned `CNTRL READY 20 21411 fa5ba7e8`, preserving the
+saved setup. Temporary diagnostics remain excluded.
+
+
+## 75 ms target with shorter settling, 2026-11-01
+
+The user reported no apparent speed change at the 150 ms target. The 116 waits
+of 2 ms explain a minimum 232 ms movement time even before bus/polling overhead,
+so reducing only the default target could not remove that limit. The earlier
+upload logs show image transfer followed by reset and disappearance, with exit
+status 1; the returned setup status confirms a running pedal and saved setup,
+but does not identify the running firmware image.
+
+The user approved a 75 ms target with a 0.5 ms minimum settling interval. The
+wait floor is now 58 ms, before transfer and polling overhead. Two-column batches,
+faster refresh, mirrored panes and controls, and the continuous card path remain.
+The shorter wait may worsen Undo fringes. Native checks retain per-step pixel,
+wraparound and explicit-duration coverage, update the minimum-wait assertion,
+and require default completion in a shorter simulated window. Temporary
+scrolling diagnostics remain excluded.
+
+The 75 ms / 0.5 ms image SHA-256 is
+`81a7478ad325b3da9304a8748dd17a30ac11bc47b0e4b20f7aa02bae03dc8195`.
+Native tests, ARM compilation, HEX/ELF comparison and flash-header checks passed.
+The upload helper validated that image and selected the pedal in HalfKay mode.
+The uploader reached "Sending reset command", then returned exit status 1 with
+"Board ... has disappeared". The pedal subsequently returned
+`CNTRL READY 20 21411 fa5ba7e8`. This confirms it is responding with the same
+saved setup, but does not independently verify the installed firmware image.

@@ -273,11 +273,12 @@ int main() {
         assert((panel[0].bytes == std::vector<uint8_t>{0x36, 0x88}));
         assert((panel[1].bytes == std::vector<uint8_t>{0x33, 0, 0, 0, 162, 0, 0}));
         assert((panel[2].bytes == std::vector<uint8_t>{0x37, 0, 0}));
+        assert((panel[3].bytes == std::vector<uint8_t>{0xb1, 0, 1, 1}));
     }
     uint8_t column[256];
     for (unsigned i = 0; i < 256; ++i) column[i] = uint8_t(i);
     write_display_column(2, 159, column);
-    assert((transfers[2][4].bytes == std::vector<uint8_t>{0x2b, 0, 160, 0, 160}));
+    assert((transfers[2][5].bytes == std::vector<uint8_t>{0x2b, 0, 160, 0, 160}));
     for (unsigned i = 0; i < 256; ++i) assert(transfers[2].back().bytes[i + 1] == column[i]);
     scroll_display_panorama(72);
     for (const auto &panel : transfers)
@@ -289,7 +290,6 @@ int main() {
     scroll_display_panorama(1);
     for (const auto &panel : transfers)
         assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 161}));
-#ifdef CNTRL_DIAGNOSTICS
     set_display_fast_refresh(true);
     for (const auto &panel : transfers) {
         assert((panel.back().bytes == std::vector<uint8_t>{0xb1, 0, 1, 1}));
@@ -299,11 +299,11 @@ int main() {
     for (const auto &panel : transfers) {
         assert((panel.back().bytes == std::vector<uint8_t>{0xb1, 5, 60, 60}));
     }
-#endif
     // Splash output must restore landscape addressing and remove scroll offset.
     write_display_group(7, 0, 0, column, 1);
     for (const auto &panel : transfers) {
         unsigned n = panel.size();
+        assert((panel[n - 7].bytes == std::vector<uint8_t>{0xb1, 5, 60, 60}));
         assert((panel[n - 6].bytes == std::vector<uint8_t>{0x33, 0, 1, 0, 160, 0, 1}));
         assert((panel[n - 5].bytes == std::vector<uint8_t>{0x37, 0, 1}));
         assert((panel[n - 4].bytes == std::vector<uint8_t>{0x36, 0xa8}));

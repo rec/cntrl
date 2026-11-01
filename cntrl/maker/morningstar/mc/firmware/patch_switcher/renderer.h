@@ -6,7 +6,7 @@
 #include "show_graphics.h"
 #include "panorama.h"
 
-constexpr unsigned DEFAULT_TRANSITION_MS = 500;
+constexpr unsigned DEFAULT_TRANSITION_MS = 75;
 constexpr unsigned WINDOW_CORNER_RADIUS = 8;
 
 // One glyph/column per repaint poll; one three-panel column step per animation poll.
@@ -44,6 +44,7 @@ public:
         std::snprintf(view.lines[0].text, sizeof(view.lines[0].text), "%s", message);
         show(1, view);
     }
+    // now is a microsecond timestamp, sampled before this bounded poll.
     void draw(uint32_t now = 0) {
         if (!native_ready_) { initialize_display_panorama(); native_ready_ = true; }
         if (animating_) { animate(now); return; }
@@ -57,7 +58,7 @@ public:
         if (drawing_ < 0) {
             if (preparing_) {
                 preparing_ = false; animating_ = true;
-                progress_ = 0; started_ = now;
+                progress_ = 0; started_ = now; anchor_ = waiting_ = false;
             }
             return;
         }
@@ -174,22 +175,62 @@ private:
         }
     }
     uint16_t moving_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
-        // Send moves right, undo moves left. Each panel keeps its logical
-        // destination, independent of the direction of the visual transition.
-        int source = int(x) + (undo_ ? int(progress) : -int(progress));
-        if (source >= 0 && source < 160) {
-            return previous_[panel][y * 160 + unsigned(source)];
+        // Sample one continuous panorama, including the physical gaps.
+        // Send carries candidate -> current -> history to the right.
+        int source = int(panel * display_pitch + x)
+            + (undo_ ? int(progress) : -int(progress));
+        int pane = source / int(display_pitch);
+        int column = source % int(display_pitch);
+        if (column < 0) {
+            column += display_pitch;
+            --pane;
         }
-        source += undo_ ? -int(display_pitch) : int(display_pitch);
-        if (source >= 0 && source < 160) {
-            return cache_[panel][y * 160 + unsigned(source)];
+        if (column >= 160) {
+            return 0;
         }
-        return 0;
+        unsigned index = y * 160 + unsigned(column);
+        if (pane < 0) {
+            return cache_[0][index];
+        }
+        if (pane > 2) {
+            return cache_[2][index];
+        }
+        return previous_[pane][index];
     }
     void animate(uint32_t now) {
-        unsigned goal = transition_progress(uint32_t(now - started_), duration_ms_);
-        if (progress_ >= goal) {
+        if (anchor_) {
+            // Sample on the poll after the blocking scroll commands return.
+            quiet_since_ = now;
+            anchor_ = false;
+            waiting_ = true;
             return;
+        }
+        if (waiting_) {
+            if (uint32_t(now - quiet_since_) < 500) {
+                return;
+            }
+            waiting_ = false;
+        }
+        if (progress_ == display_pitch) {
+            // Do not reconcile the final image until the final offset settles.
+            for (unsigned panel = 0; panel < 3; ++panel) {
+                for (unsigned y = 0; y < 128; ++y) {
+                    for (unsigned x = 0; x < 160; ++x) {
+                        cache_[panel][y * 160 + x] = moving_pixel(panel, x, y, progress_);
+                    }
+                }
+            }
+            animating_ = false;
+            for (auto &dirty : dirty_) {
+                dirty = true;
+            }
+            return;
+        }
+        if (progress_ % 2 == 0) {
+            const uint64_t deadline = uint64_t(progress_ / 2 + 1) * duration_ms_ * 1000 / (display_pitch / 2);
+            if (uint32_t(now - started_) < deadline) {
+                return;
+            }
         }
         ++progress_;
         ring_ = (ring_ + (undo_ ? 1 : display_ram_columns - 1)) % display_ram_columns;
@@ -203,17 +244,10 @@ private:
             }
             write_display_column(panel, (ring_ + x) % display_ram_columns, pixels);
         }
-        // The incoming column is hidden at the current offset. Reveal it only
-        // after all three panels are staged. This is relative to the last
-        // commanded offset; physical scanout application time is not known.
-        scroll_display_panorama(ring_);
-        if (progress_ != display_pitch) {
-            return;
-        }
-        // Each panel has arrived at its prepared destination bitmap in cache_.
-        animating_ = false;
-        for (auto &dirty : dirty_) {
-            dirty = true;
+        if (progress_ % 2 == 0) {
+            // Both hidden columns are prepared before the two-column reveal.
+            scroll_display_panorama(ring_);
+            anchor_ = true;
         }
     }
     cntrl::Pane requested_[3], painting_;
@@ -223,7 +257,8 @@ private:
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
     unsigned ring_ = 0, progress_ = 0;
     unsigned duration_ms_ = 0;
-    uint32_t started_ = 0;
+    uint32_t started_ = 0, quiet_since_ = 0;
+    bool anchor_ = false, waiting_ = false;
     bool dirty_[3] = {true, true, true};
     bool valid_[3] = {};
     int drawing_ = -1;
