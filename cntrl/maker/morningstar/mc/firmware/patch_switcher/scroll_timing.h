@@ -2,7 +2,7 @@
 #ifdef CNTRL_DIAGNOSTICS
 #include "panorama.h"
 
-// Isolate scroll application with a single jump followed by a delayed RAM write.
+// Compare conservative two-column updates at stock and faster panel refresh.
 class ScrollTimingProbe {
 public:
     bool active() const { return stage_ != Stage::off; }
@@ -11,7 +11,12 @@ public:
         column_ = trial_ = 0;
         running_ = false;
     }
-    void stop() { stage_ = Stage::off; }
+    void stop() {
+        if (active()) {
+            set_display_fast_refresh(false);
+        }
+        stage_ = Stage::off;
+    }
     void start() {
         if (stage_ == Stage::waiting) {
             running_ = true;
@@ -22,10 +27,11 @@ public:
         if (stage_ == Stage::loading) {
             if (column_ == 0) {
                 initialize_display_panorama();
+                set_display_fast_refresh(trial_ >= 2);
+                ring_ = progress_ = staged_ = 0;
             }
-            write_pattern(column_ / 162, column_ % 162, 0);
+            write_pattern(column_ / 162, column_ % 162, false);
             if (++column_ == 486) {
-                scroll_display_panorama(0);
                 since_ = now;
                 stage_ = running_ ? Stage::settling : Stage::waiting;
             }
@@ -36,71 +42,61 @@ public:
             stage_ = Stage::settling;
             return;
         }
-        if (stage_ == Stage::off || stage_ == Stage::waiting) {
+        if (stage_ == Stage::anchor) {
+            // This poll is after the blocking SSA transfers have returned.
+            // Starting the quiet interval here also handles a delayed poll.
+            since_ = now;
+            stage_ = progress_ == 232 ? Stage::holding : Stage::quiet;
             return;
         }
-        const unsigned delay_index = trial_ / 8;
+        if (stage_ == Stage::holding) {
+            if (uint32_t(now - since_) >= 500000) {
+                if (++trial_ == 6) {
+                    trial_ = 0;
+                    running_ = false;
+                }
+                column_ = 0;
+                stage_ = Stage::loading;
+            }
+            return;
+        }
+        if (stage_ == Stage::settling || stage_ == Stage::quiet) {
+            const uint32_t wait = stage_ == Stage::settling ? 400000 : (trial_ < 2 ? 20000 : 10000);
+            if (uint32_t(now - since_) < wait) {
+                return;
+            }
+            stage_ = Stage::writing;
+        }
+        if (stage_ != Stage::writing) {
+            return;
+        }
         const bool reverse = trial_ % 2;
-        const unsigned marker_column = reverse ? 159 : 0;
-        uint32_t hold = 1000000;
-        if (stage_ == Stage::settling) {
-            hold = 600000 + trial_ * 1999;
-        } else if (stage_ == Stage::jumped) {
-            hold = delays_[delay_index];
-        } else if (stage_ == Stage::cleared) {
-            hold = 100000;
+        const unsigned column = (ring_ + (reverse ? 161 - staged_ : 160 + staged_)) % 162;
+        for (unsigned panel = 0; panel < 3; ++panel) {
+            write_pattern(panel, column, true);
         }
-        if (uint32_t(now - since_) < hold) {
-            return;
-        }
-        since_ = now;
-        switch (stage_) {
-        case Stage::settling:
-            scroll_display_panorama(reverse ? 159 : 3);
-            stage_ = Stage::jumped;
-            break;
-        case Stage::jumped:
-            for (unsigned panel = 0; panel < 3; ++panel) {
-                write_pattern(panel, marker_column, reverse ? 2 : 1);
-            }
-            stage_ = Stage::marked;
-            break;
-        case Stage::marked:
-            for (unsigned panel = 0; panel < 3; ++panel) {
-                write_pattern(panel, marker_column, 0);
-            }
-            stage_ = Stage::cleared;
-            break;
-        case Stage::cleared:
-            if (++trial_ == 40) {
-                trial_ = 0;
-                running_ = false;
-            }
-            column_ = 0;
-            stage_ = Stage::loading;
-            break;
-        default:
-            break;
+        if (++staged_ == 2) {
+            ring_ = (ring_ + (reverse ? 160 : 2)) % 162;
+            scroll_display_panorama(ring_);
+            staged_ = 0;
+            progress_ += 2;
+            stage_ = Stage::anchor;
         }
     }
 private:
-    enum class Stage {
-        off, loading, waiting, begin, settling, jumped, marked, cleared,
-    };
-    static void write_pattern(unsigned panel, unsigned x, unsigned marker) {
+    enum class Stage { off, loading, waiting, begin, settling, writing, anchor, quiet, holding };
+    static void write_pattern(unsigned panel, unsigned x, bool marker) {
         uint8_t pixels[256];
         for (unsigned y = 0; y < 128; ++y) {
-            const uint16_t pixel = (marker == 1 && y < 64) || (marker == 2 && y >= 64) ? 0xffff : 0;
+            const uint16_t pixel = marker ? (y % 16 < 8 ? 0xffff : 0) : (y % 16 >= 8 ? 0x7bef : 0);
             pixels[2 * y] = uint8_t(pixel >> 8);
             pixels[2 * y + 1] = uint8_t(pixel);
         }
         write_display_column(panel, x, pixels);
     }
     Stage stage_ = Stage::off;
-    unsigned column_ = 0, trial_ = 0;
+    unsigned column_ = 0, trial_ = 0, ring_ = 0, progress_ = 0, staged_ = 0;
     uint32_t since_ = 0;
     bool running_ = false;
-    static constexpr uint32_t delays_[] = {5000, 10000, 15000, 20000, 30000};
 };
-
 #endif

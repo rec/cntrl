@@ -24,6 +24,13 @@ struct ScrollStep {
     uint16_t pixels[3][128] = {};
 };
 static std::vector<ScrollStep> scroll_trace;
+#ifdef CNTRL_DIAGNOSTICS
+static std::vector<bool> refresh_settings;
+void set_display_fast_refresh(bool enabled) {
+    refresh_settings.push_back(enabled);
+}
+#endif
+
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
     unsigned start = panel * 464 + (audit_right ? 232 - step : step);
     return audit_strip[start + x][y];
@@ -482,76 +489,88 @@ static void audit_animation_batches() {
     auto load = [&]() {
         unsigned before = writes;
         for (unsigned i = 0; i < 486; ++i) {
-            probe.poll(now++);
+            probe.poll(now);
+            now += 400;
         }
-        assert(writes == before + 486);
+        now -= 400;
+        assert(writes == before + 486 && ring == 0);
         for (const auto &panel : ram) {
-            for (const auto &row : panel) {
-                for (uint16_t pixel : row) {
-                    assert(pixel == 0);
-                }
-            }
-        }
-    };
-    auto hold = [&](uint32_t delay) {
-        unsigned before_writes = writes, before_scrolls = scroll_updates;
-        probe.poll(now + delay - 1);
-        assert(writes == before_writes && scroll_updates == before_scrolls);
-        now += delay;
-        probe.poll(now);
-    };
-    auto picture = [&](int top, int bottom) {
-        for (const auto &panel : screens) {
             for (unsigned y = 0; y < 128; ++y) {
-                for (unsigned x = 0; x < 160; ++x) {
-                    assert(panel[y][x] == (int(x) == (y < 64 ? top : bottom) ? 0xffff : 0));
+                for (uint16_t pixel : panel[y]) {
+                    assert(pixel == (y % 16 >= 8 ? 0x7bef : 0));
                 }
             }
         }
+    };
+    auto no_work = [&](uint32_t when) {
+        unsigned before_writes = writes, before_scrolls = scroll_updates;
+        probe.poll(when);
+        assert(writes == before_writes && scroll_updates == before_scrolls);
     };
     probe.arm();
     load();
     for (unsigned repeat = 0; repeat < 2; ++repeat) {
-        unsigned before = writes;
-        probe.poll(now + 5000000);
-        assert(writes == before); // Idle until C, even after a long wait.
+        now += 5000000;
+        no_work(now);
         probe.start();
-        probe.poll(now);
-        const uint32_t delays[] = {5000, 10000, 15000, 20000, 30000};
-        for (unsigned trial = 0; trial < 40; ++trial) {
-            const bool reverse = trial % 2;
-            assert(ring == 0);
-            unsigned before_writes = writes, before_scrolls = scroll_updates;
-            hold(600000 + trial * 1999);
-            assert(writes == before_writes && scroll_updates == before_scrolls + 1);
-            assert(ring == (reverse ? 159 : 3));
-            picture(-1, -1);
-            hold(delays[trial / 8]);
-            assert(writes == before_writes + 3 && scroll_updates == before_scrolls + 1);
-            picture(reverse ? -1 : 159, reverse ? 0 : -1);
-            for (unsigned panel = 0; panel < 3; ++panel) {
-                for (unsigned y = 0; y < 128; ++y) {
-                    assert(ram[panel][y][reverse ? 159 : 0] == ((reverse ? y >= 64 : y < 64) ? 0xffff : 0));
+        no_work(now);
+        for (unsigned trial = 0; trial < 6; ++trial) {
+            assert(refresh_settings.back() == (trial >= 2));
+            no_work(now + 399999);
+            now += 400000;
+            for (unsigned batch = 0; batch < 116; ++batch) {
+                const unsigned old_ring = ring;
+                const unsigned before_scrolls = scroll_updates;
+                for (unsigned step = 0; step < 2; ++step) {
+                    const unsigned before_writes = writes;
+                    probe.poll(now);
+                    assert(writes == before_writes + 3);
+                    const unsigned column = (old_ring + (trial % 2 ? 161 - step : 160 + step)) % 162;
+                    for (unsigned panel = 0; panel < 3; ++panel) {
+                        for (unsigned y = 0; y < 128; ++y) {
+                            assert(ram[panel][y][column] == (y % 16 < 8 ? 0xffff : 0));
+                        }
+                    }
+                    assert(scroll_updates == before_scrolls + step);
+                    now += 1000; // More than the modeled wire time, including SSA.
+                }
+                assert(ring == (old_ring + (trial % 2 ? 160 : 2)) % 162);
+                if (batch == 20) {
+                    now += 50000; // Delayed post-command poll must still start a full wait.
+                }
+                no_work(now); // Anchor after the completed transfers.
+                if (batch < 115) {
+                    const unsigned wait = trial < 2 ? 20000 : 10000;
+                    no_work(now + wait - 1);
+                    now += wait;
                 }
             }
-            hold(1000000);
-            assert(writes == before_writes + 6 && scroll_updates == before_scrolls + 1);
-            picture(-1, -1);
-            hold(100000);
+            for (const auto &panel : screens) {
+                for (unsigned y = 0; y < 128; ++y) {
+                    for (uint16_t pixel : panel[y]) {
+                        assert(pixel == (y % 16 < 8 ? 0xffff : 0));
+                    }
+                }
+            }
+            no_work(now + 499999);
+            now += 500000;
+            no_work(now);
             load();
-            --now;
         }
+        assert(!refresh_settings.back()); // Completed sequences restore stock timing.
     }
-    probe.start();
-    probe.poll(now);
-    hold(600000);
+    assert(refresh_settings.size() == 13);
+    for (unsigned i = 0; i < 12; ++i) {
+        assert(refresh_settings[i] == (i % 6 >= 2));
+    }
+    set_display_fast_refresh(true);
     probe.stop();
-    unsigned before_writes = writes, before_scrolls = scroll_updates;
-    probe.poll(now + 10000000);
-    assert(!probe.active() && writes == before_writes && scroll_updates == before_scrolls);
+    assert(!refresh_settings.back());
+    no_work(now + 10000000);
+    assert(!probe.active());
     probe.arm();
     load();
-    picture(-1, -1);
+    assert(!refresh_settings.back());
     probe.stop();
 #endif
 

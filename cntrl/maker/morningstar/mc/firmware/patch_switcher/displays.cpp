@@ -22,6 +22,18 @@ void initialize_display_panorama() {
     end_transfer(); native_mode = true;
 }
 
+#ifdef CNTRL_DIAGNOSTICS
+void set_display_fast_refresh(bool enabled) {
+    const uint8_t fast[] = {0, 1, 1};
+    const uint8_t stock[] = {5, 60, 60};
+    begin_transfer();
+    for (const auto &panel : panorama_panels) {
+        command(panel, 0xb1, enabled ? fast : stock, sizeof(fast));
+    }
+    end_transfer();
+}
+#endif
+
 void write_display_column(unsigned index, unsigned column, const uint8_t *pixels) {
     if (index >= 3 || column >= display_ram_columns) return;
     const auto &panel = panorama_panels[index];

@@ -12,7 +12,7 @@ superseded firmware, not alternative current modes.
 
 - [User-selected directional fallback](#user-selected-directional-fallback)
 - [Current evidence and limits](#current-evidence-and-limits)
-- [Current diagnostic and controls](#current-diagnostic-repeated-single-jump-delays)
+- [Current diagnostic and controls](#current-diagnostic-faster-refresh-with-conservative-pacing)
 - [Baseline mapping and timing assumptions](#what-the-hardware-scroll-baseline-assumes)
 - [Host progressive-scan model](#progressive-scanout-replay)
 - [Video comparisons, speed sweeps and conclusions](#later-optical-comparisons-and-speed-sweeps-2026-11-01)
@@ -72,8 +72,9 @@ Visual qualification of actual patch transitions remains with the user.
 
 ## Current evidence and limits
 
-Before the directional fallback, the installed diagnostic was the repeated
-single-jump delay comparison below.
+The current opt-in experiment is the faster-refresh comparison below. Before
+the directional fallback, the installed diagnostic was the repeated single-jump
+delay comparison, now archived under historical protocols.
 The recording `signal-2026-11-01-17-13-52-667.mp4` captures all forty trials.
 Wrong-edge top-half markers appear at playback 8.10 s on the left panel and
 15.60 s on all panels, in the second and fourth leftward 5 ms trials. The
@@ -112,65 +113,62 @@ assumptions. Potential visible-region overwrites are not automatically optical
 damage: an already-scanned column can be overwritten without changing that frame.
 No model yet explains all observations, including changing directional results.
 
-## Current diagnostic: repeated single-jump delays
+## Current diagnostic: faster refresh with conservative pacing
 
-This diagnostic is available only in a `DIAGNOSTICS=1` build, through explicit
-`CNTRL DISPLAY EDGE` arming. Normal builds exclude that command entirely.
-It is not armed by diagnostic-build startup either. The instructions
-below apply inside that mode; in the normal patch UI C sends and F undoes.
+This opt-in `DIAGNOSTICS=1` trial preserves the newer per-panel renderer and the
+user-selected send-right/undo-left fallback. Only the explicitly armed probe
+changes panel timing. Normal builds exclude the probe and its timing setter.
 
-Press C once and record for **90 seconds**, preferably in slow motion. There
-are 20 left/right pairs, four pairs per programmed delay in this order:
+Press C once for three left/right pairs, allowing **20 seconds**:
 
-| Pairs | Delay after scroll request |
-| --- | --- |
-| 1-4 | 5 ms |
-| 5-8 | 10 ms |
-| 9-12 | 15 ms |
-| 13-16 | 20 ms |
-| 17-20 | 30 ms |
+| Pair | B1h parameters | Quiet interval after each two-column scroll |
+| --- | --- | --- |
+| 1 | Stock `05 3c 3c` | At least 20 ms |
+| 2 | Faster `00 01 01` | At least 10 ms |
+| 3 | Faster `00 01 01` | At least 10 ms |
 
-Each trial starts with all 162 columns black and offset zero. After settling
-for 600 ms plus 1,999 us times the trial index, the diagnostic requests a single
-three-column jump. At the selected delay it writes one marker column on each
-panel, holds for one second, then erases that column. It waits another 100 ms
-before resetting/repainting, to avoid intentionally moving the held marker to
-the wrong edge during reset. No labels or brightness changes are used.
+Each movement replaces the horizontal grey/black baseline with vertically
+offset white/black stripes, using 232 columns. Both hidden columns are prepared
+before issuing a single two-column scroll on all panels. The quiet interval
+starts on the first poll after the blocking scroll transfers have returned,
+so transfers and delayed polls cannot consume the waiting allowance. There is
+no catch-up backlog. Each poll writes at most one column per panel.
 
-- Leftward jump: top-half white marker written to RAM column 0. It belongs at
-  the far right. Look for a brief top-half flash at the far left.
-- Rightward jump: bottom-half white marker written to RAM column 159. It belongs
-  at the far left. Look for a brief bottom-half flash at the far right.
+RTNA changes from 5 to 0 as well as reducing both porches to 1. Unlike the
+previous porch-only comparison, this shortens the nominal line/active-scan
+time. The datasheet formula gives approximately 128-130 Hz for LINE=160..162,
+not a measured module refresh rate. The 10 ms quiet interval exceeds the
+nominal 7.7-7.8 ms frame period, but is not a qualified worst-case bound.
 
-The expected held markers are positive controls for the writes. Count each
-top-half/bottom-half pair; no continuous animation occurs. C repeats the complete
-sequence; F exits to the saved UI. Completion restores the black baseline.
-Original panel timing, 8 MHz SPI and normal patch scrolling are unchanged.
+Transfers and polling add time: the faster movements are expected to take
+roughly 1.3-1.4 seconds, and the stock controls roughly 2.5 seconds. Actual
+on-device duration remains unmeasured. This is a candidate conservative
+schedule, not a claim of proven tear-free operation or a 500 ms replacement.
 
-Delays are firmware scheduling targets measured from the poll timestamp just
-before the three scroll commands, not independently measured command-to-pixel
-latencies. Sequential panel transfers and polling add skew and lateness. The
-varied settling intervals sample uncontrolled phases, not guaranteed phase
-coverage. Video playback timestamps are not physical timing measurements.
+Watch the outgoing left edge during leftward movement and the outgoing right
+edge during rightward movement. Ignore baseline repaints between passes. Each
+baseline settles for 400 ms and each completed movement holds for 500 ms.
+Brightness stays constant. C repeats; F restores stock refresh and the saved
+UI. Completion also restores stock refresh and the initial baseline.
 
-This extends the earlier finding that 5 ms was not reliably safe. Short-delay
-wrong-edge flashes disappearing at longer delays would support finite mapping
-application latency. Failure at 30 ms would challenge the assumed one-frame
-bound. Clean isolated jumps would leave a continuous-command interaction as a
-candidate; none of these outcomes alone supplies a smooth half-second fix.
+Native checks cover both timing settings, six movements and repeat, both
+hidden-column addresses and payloads, two writes before each scroll, quiet
+intervals anchored after transfer completion, delayed polls, timer rollover,
+final pixels, completion/exit restoration and rearming. Driver checks cover
+exact B1h bytes and SPI/GPIO handoff. Diagnostic native tests and ARM image
+inspection passed. A separate normal build also passed binary/HEX and stock
+flash-header checks, with commands, probe class and timing setter absent from
+its ELF. Its HEX digest remains exactly
+`400fd0de53cc744f94a6c7169867050675d3c9cd021101d6604d012a49bdb174`,
+matching the previously deployed normal image. No Python source or
+Python-consumed data changed, so Python checks were not run.
 
-Native checks cover all forty trials and repeat, marker addresses and payloads,
-single-jump ordering, minimum delays, erase-before-reset, timer rollover, idle,
-stop and rearm. Native tests and ARM build/image inspection passed. No Python
-source or Python-consumed data changed.
-
-Image SHA-256:
-`9651ebbf99335406e872ef0411c3ee9a67d3b9079c344f2ab9b74e987d0e8208`.
-Uploaded through the existing helper on 2026-11-01. The updater reported
-reset/disappearance with status 1; USB subsequently returned
-`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic is waiting
-for C at installation; no trials were triggered from the host. Subsequent
-video findings appear in Current evidence and limits.
+Diagnostic image SHA-256:
+`a1af901ab4c184d56f3d457967711d32435a96fd4237ad39accc00d0c327dc18`.
+Uploaded through the existing helper on 2026-11-01. After its usual
+reset/disappearance status 1, USB returned `CNTRL READY 20 21411 fa5ba7e8`
+and `CNTRL EDGE ARMED`. The trial is waiting for C; no motion was triggered
+from the host. Optical results and actual duration remain pending.
 
 ## Additional documented evidence
 
@@ -788,6 +786,67 @@ the user's readability request. This documentation update does not refactor code
 
 ## Historical diagnostic protocols
 
+### Previous repeated single-jump delays
+
+This diagnostic is available only in a `DIAGNOSTICS=1` build, through explicit
+`CNTRL DISPLAY EDGE` arming. Normal builds exclude that command entirely.
+It is not armed by diagnostic-build startup either. The instructions
+below apply inside that mode; in the normal patch UI C sends and F undoes.
+
+Press C once and record for **90 seconds**, preferably in slow motion. There
+are 20 left/right pairs, four pairs per programmed delay in this order:
+
+| Pairs | Delay after scroll request |
+| --- | --- |
+| 1-4 | 5 ms |
+| 5-8 | 10 ms |
+| 9-12 | 15 ms |
+| 13-16 | 20 ms |
+| 17-20 | 30 ms |
+
+Each trial starts with all 162 columns black and offset zero. After settling
+for 600 ms plus 1,999 us times the trial index, the diagnostic requests a single
+three-column jump. At the selected delay it writes one marker column on each
+panel, holds for one second, then erases that column. It waits another 100 ms
+before resetting/repainting, to avoid intentionally moving the held marker to
+the wrong edge during reset. No labels or brightness changes are used.
+
+- Leftward jump: top-half white marker written to RAM column 0. It belongs at
+  the far right. Look for a brief top-half flash at the far left.
+- Rightward jump: bottom-half white marker written to RAM column 159. It belongs
+  at the far left. Look for a brief bottom-half flash at the far right.
+
+The expected held markers are positive controls for the writes. Count each
+top-half/bottom-half pair; no continuous animation occurs. C repeats the complete
+sequence; F exits to the saved UI. Completion restores the black baseline.
+Original panel timing, 8 MHz SPI and normal patch scrolling are unchanged.
+
+Delays are firmware scheduling targets measured from the poll timestamp just
+before the three scroll commands, not independently measured command-to-pixel
+latencies. Sequential panel transfers and polling add skew and lateness. The
+varied settling intervals sample uncontrolled phases, not guaranteed phase
+coverage. Video playback timestamps are not physical timing measurements.
+
+This extends the earlier finding that 5 ms was not reliably safe. Short-delay
+wrong-edge flashes disappearing at longer delays would support finite mapping
+application latency. Failure at 30 ms would challenge the assumed one-frame
+bound. Clean isolated jumps would leave a continuous-command interaction as a
+candidate; none of these outcomes alone supplies a smooth half-second fix.
+
+Native checks cover all forty trials and repeat, marker addresses and payloads,
+single-jump ordering, minimum delays, erase-before-reset, timer rollover, idle,
+stop and rearm. Native tests and ARM build/image inspection passed. No Python
+source or Python-consumed data changed.
+
+Image SHA-256:
+`9651ebbf99335406e872ef0411c3ee9a67d3b9079c344f2ab9b74e987d0e8208`.
+Uploaded through the existing helper on 2026-11-01. The updater reported
+reset/disappearance with status 1; USB subsequently returned
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic is waiting
+for C at installation; no trials were triggered from the host. Subsequent
+video findings appear in Current evidence and limits.
+
+
 ### Previous static hidden-column test
 
 Press C once and allow **50 seconds** for three passes at logical offsets 0, 70
@@ -928,7 +987,7 @@ above follows that upload; actual on-device transition duration remains unmeasur
 
 
 These protocols preserve image provenance, controls and test conditions. They
-are superseded by the current single-jump diagnostic. Their result statements
+are superseded by the current faster-refresh diagnostic. Their result statements
 are dated observations, not current device-state checks.
 
 ### Previous horizontal-stripe speed sweep

@@ -12,5 +12,8 @@ constexpr unsigned transition_progress(uint32_t elapsed_ms, unsigned duration_ms
 }
 
 void initialize_display_panorama();
+#ifdef CNTRL_DIAGNOSTICS
+void set_display_fast_refresh(bool enabled);
+#endif
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels);
 void scroll_display_panorama(unsigned offset);

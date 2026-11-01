@@ -133,7 +133,7 @@ test: tools test-button-timing test-switch-gesture test-boot-selection
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/test_support" \
 		"$(ROOT)/test_displays.cpp" "$(ROOT)/usb_probe/displays.cpp" -o "$(ROOT)/build/test_displays"
 	"$(ROOT)/build/test_displays"
-	$(CXX) -std=c++17 -Wall -Wextra -Werror -DCNTRL_PANORAMA -I"$(ROOT)/test_support" -I"$(ROOT)/usb_probe" \
+	$(CXX) $(DIAGNOSTIC_FLAGS) -std=c++17 -Wall -Wextra -Werror -DCNTRL_PANORAMA -I"$(ROOT)/test_support" -I"$(ROOT)/usb_probe" \
 		"$(ROOT)/test_displays.cpp" "$(ROOT)/patch_switcher/displays.cpp" -o "$(ROOT)/build/test_panorama_displays"
 	"$(ROOT)/build/test_panorama_displays"
 	$(CXX) $(DIAGNOSTIC_FLAGS) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \

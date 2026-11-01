@@ -289,6 +289,17 @@ int main() {
     scroll_display_panorama(1);
     for (const auto &panel : transfers)
         assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 161}));
+#ifdef CNTRL_DIAGNOSTICS
+    set_display_fast_refresh(true);
+    for (const auto &panel : transfers) {
+        assert((panel.back().bytes == std::vector<uint8_t>{0xb1, 0, 1, 1}));
+    }
+    assert(clock_gpio && data_gpio && !spi_active);
+    set_display_fast_refresh(false);
+    for (const auto &panel : transfers) {
+        assert((panel.back().bytes == std::vector<uint8_t>{0xb1, 5, 60, 60}));
+    }
+#endif
     // Splash output must restore landscape addressing and remove scroll offset.
     write_display_group(7, 0, 0, column, 1);
     for (const auto &panel : transfers) {
