@@ -18,7 +18,7 @@ public:
         } else if (stage_ == 3) {
             since_ = now; progress_ = 0; stage_ = 4;
         } else if (stage_ == 4) {
-            const unsigned durations[] = {500, 1000, 2000, 4000};
+            const unsigned durations[] = {1000, 1250, 1500, 1750};
             unsigned goal = transition_progress(uint32_t(now - since_) / 1000, durations[trial_ / 4]);
             if (progress_ >= goal) return;
             ring_ = (ring_ + (trial_ % 2 ? 161 : 1)) % 162;

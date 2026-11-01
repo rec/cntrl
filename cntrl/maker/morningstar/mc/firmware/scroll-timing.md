@@ -4,18 +4,23 @@ The current `CNTRL DISPLAY EDGE` experiment uses only horizontal stripes.
 The baseline has eight-pixel-high grey stripes separated by eight black rows.
 Incoming columns use the earlier eight-white/eight-black horizontal marker,
 shifted vertically by eight rows relative to the baseline. This replaces the
-vertical-bar pattern after the user found it difficult to read. The speed
-sequence and scheduling are unchanged. All three panels use the same pattern;
+vertical-bar pattern after the user found it difficult to read. The refined
+speed sequence below retains the same scheduling. All three panels use the same pattern;
 brightness remains constant.
 
 Press C once. Two left/right pairs run at each target duration, fastest first:
 
 | Pairs | Target duration per movement | Approximate rate |
 | --- | --- | --- |
-| 1-2 | 0.5 seconds | 464 columns/second |
-| 3-4 | 1 second | 232 columns/second |
-| 5-6 | 2 seconds | 116 columns/second |
-| 7-8 | 4 seconds | 58 columns/second |
+| 1-2 | 1 second | 232 columns/second |
+| 3-4 | 1.25 seconds | 186 columns/second |
+| 5-6 | 1.5 seconds | 155 columns/second |
+| 7-8 | 1.75 seconds | 133 columns/second |
+
+The user reported visible effects at 0.5 and 1 second and none at 2 and 4
+seconds in the preceding sweep. That video has not yet been supplied for
+analysis. This narrower sweep investigates the reported interval; the report
+is not a measured safe timing bound.
 
 Every movement has 232 one-column steps, with the production 60 Hz progress
 targets and write-three-panels-then-scroll ordering. The previous artificial
@@ -27,7 +32,7 @@ interval between individual writes.
 
 The full 162-column baseline reloads before each movement, followed by a
 500 ms settle. Completed movements hold for one second. The first movement
-uses the baseline already prepared while armed. Allow **70 seconds** for the
+uses the baseline already prepared while armed. Allow **60 seconds** for the
 complete sequence and recording margin. After the final reset it waits for C;
 C repeats everything, and F exits to the saved UI.
 
@@ -45,7 +50,7 @@ offsets, each speed group's timing targets, resets, both repetitions of the
 full sequence, stop and micros rollover. Normal patch scrolling is unchanged.
 
 Installed and armed on 2026-11-01 with image SHA-256
-`c9ca86d845212dc6333232e88b45a93613cd957f575cf383d968c3b895001330`.
+`7891583d298702c636e04b05f9e5d5b349723a81f3248723e07e40ce13ed31b7`.
 Native tests and ARM image checks passed. Visual speed/width results are pending.
 
 ## Previous contrasting changed-pixel comparison

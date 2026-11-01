@@ -51,12 +51,10 @@ void scroll_display_panorama(unsigned offset) {
         assert(offset == (ring + (undo ? 161 : 1)) % 162);
         if (probe_steps % 232 == 0) probe_last = probe_now;
         if (probe_steps % 232 == 231) {
-            const unsigned durations[] = {500, 1000, 2000, 4000};
+            const unsigned durations[] = {1000, 1250, 1500, 1750};
             unsigned duration = durations[(probe_steps / (4 * 232)) % 4] * 1000;
-            // At 4 seconds the first 60 Hz target still has zero progress;
-            // the first actual column arrives on the second target frame.
-            unsigned first_step = duration == 4000000 ? 34000 : 17000;
-            assert(uint32_t(probe_now - probe_last) >= duration - first_step);
+            // Each target duration advances on the first 60 Hz target frame.
+            assert(uint32_t(probe_now - probe_last) >= duration - 17000);
             assert(uint32_t(probe_now - probe_last) <= duration);
         }
         ++probe_steps;
