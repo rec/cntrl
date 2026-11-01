@@ -4,38 +4,12 @@ The application is built and running on the pedal. It is not a fully
 hardware-qualified release. Dated sections below retain earlier image hashes,
 format numbers and measurements; they are historical, not the current build.
 
-## Scrolling investigation status, 2026-11-01
+## Scrolling investigation
 
-The current scrolling diagnostic source is `77bdc62`, with HEX SHA-256
-`be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
-It was uploaded and explicitly armed through `CNTRL DISPLAY EDGE`; subsequent
-USB status was `CNTRL READY 20 21411 fa5ba7e8`. This is a historical installation
-record, not a live connection check at documentation-update time. The status
-identifies saved-setup loading, not the image digest. A power cycle clears the
-diagnostic mode but does not uninstall its firmware.
-
-The diagnostic runs horizontal-stripe transitions using paced two-column
-batches at a nominal half-second duration. The user reports a clear fringe
-on every leftward pass and none visible rightward. It is not a verified fix.
-C runs/repeats the diagnostic and F exits/redraws the saved setup while armed;
-these presses are consumed rather than sending/undoing patches. Normal
-`renderer.h` scrolling remains separate and still has the original problem.
-
-See [the current protocol and history](scroll-timing.md),
-[the evidence and hypotheses](../scrolling-scan-timing.md), and
-[the initial record](../../../../../plan/scrolling-bug.md).
-The required outcome remains continuous smooth hardware scrolling. Software
-redraw trials were too jerky; blanking and fade-out replacement were rejected.
-No hardware fault or need for disassembly has been established. Native tests
-and image integrity checks do not establish visual quality or physical timing.
-
-Normal scrolling reads outgoing/prepared MCU buffers and writes one incoming
-column per panel before each SSA command. It uses a 162-column ring with 160
-visible columns, a 72-column virtual gap, 232 steps and a 500 ms default.
-Configured duration overrides the default. Progress is grouped by 60 Hz targets;
-that is not a measurement of the panel refresh rate or an acknowledgement of
-offset application. The older sliding-pane section below records historical
-default-duration changes and deployment evidence.
+The [MC6 Pro scrolling investigation](../scrolling-scan-timing.md) is the single
+reference for analysis, current diagnostic instructions, deployment provenance
+and historical scrolling experiments. The [plan](../../../../../plan/scrolling-bug.md)
+remains separate.
 
 ## Historical deployment, 2026-10-25
 
@@ -71,94 +45,13 @@ safety, complete editor coverage and release qualification remain unproven.
 New version 9 labels and the latest visual animation behavior need observation
 on the pedal; successful boot and read-back are not a visual test.
 
-## Sliding send/undo panes, 2026-10-24
+## Sliding send/undo panes
 
-C sends MIDI and pushes history before requesting a leftward transition. F
-performs the existing per-instrument undo, selects the undone patch as R's
-browsing candidate, and requests the reverse transition. Failed sends and an
-empty undo stack do not request animation. There is no MIDI delay waiting for
-graphics, and no persistent history or graphics-format change.
-
-The screen pitch is 232 pixels: 160 visible plus a 72-pixel physical-gap
-estimate. Over a show-configured duration at 60 Hz (default 1 second after preparation), the
-old panes move left on C and right on F. The new R candidate is rendered using
-the existing grey-name rule before entering from the right. On F, the next
-undo target, or a blank pane, enters from the left. Virtual gaps are black.
-
-The RAM-only library still renders fonts. Preparing destination bitmaps is
-incremental and leaves the old screen contents visible. Native ST7735 column
-writes use the tested 8 MHz byte-wise protocol and `MADCTL=0x88`; each animation
-poll advances at most one pixel and writes one column per panel. Button scans,
-USB and queued MIDI output run between these polls. Scroll commands are issued
-at frame targets. Destination screen-specific styling is reconciled afterward.
-The target duration is not a hard real-time guarantee under SD/USB stalls.
-
-Ordinary UI repainting also uses native columns and retains the current ring
-offset. Splash output switches back to landscape row addressing and resets the
-scroll offset. On return, renderer invalidation restores native mode and
-repaints behind the existing first-image/blackout gate. New actions during an
-animation retain their MIDI/history effects and coalesce into the latest pending
-view; they do not build an unbounded animation queue.
-
-Verification: 194 Python tests, the sanitizer-enabled portable controller suite,
-and native button/display/renderer tests passed. New tests cover forward/reverse
-pane mapping, nonzero ring offsets, the native-column protocol and return to
-splash addressing. Controller tests cover browsing away before undo and exclude
-failed sends/empty undo from transition events. HEX/ELF comparison and the stock
-flash-configuration digest passed. RAM1 has 111,680 bytes free, RAM2 309,312,
-with no external RAM linked.
-
-Uploaded main-image SHA-256:
-`6baf5b03d9ff0de30d854c5fce4547f1e4c585084a8a388dd5dc2cce4cc05872`.
-After the uploader's usual reset/disappearance status 1, USB confirmed format 7.
-The setup catalogue was empty. The existing pman example was recompiled,
-copied with readback verification and selected; status then reported
-`CNTRL READY 7 23390 0718301d`.
-
-At that deployment, `instruments/pman.toml` mixed an initial
-`[[patches.pman.0]]` header with `[[patches]]` entries and lacked explicit setup
-fields. It was not edited for that task. Upload used a temporary copy with the
-flat initial header and `setup = "default"` on each entry, matching the example's
-existing default-setup routing. No factory EEPROM or vendor backups were changed.
-The current repository table now uses the flat header and explicit default setup.
-Physical transition/splash/text verification remains pending user observation.
-
-The user subsequently confirmed that the original transition build looked
-correct. A timing fixup changes the default from 400 ms to 2 seconds. Set
-`transition_ms = 2000` at the top level of a show to specify it explicitly, or
-choose another integer duration in 1..65535 milliseconds. The compiler stores
-the setting in the metadata header's previously reserved u16; zero denotes the
-firmware default and preserves existing compiled shows and their checksums.
-Resolved TOML exports retain this setting. Both send and undo receive the same
-duration, without changing MIDI timing. The two-second fixup was uploaded and
-boot-verified. A subsequent fixup sets the default to 1000 ms (one second);
-explicit `transition_ms` values still take precedence.
-The current implementation keeps an omitted duration unspecified through the
-model, compiled metadata (zero), and firmware (`std::nullopt`). The renderer
-alone resolves it to `DEFAULT_TRANSITION_MS`, currently 500 ms for both send
-and undo, when starting a transition.
-Resolved TOML omits unspecified durations; explicit values, including 1000,
-remain explicit throughout.
-The one-second image was flashed and boot-verified with pman and its checksum
-unchanged. SHA-256: `b2c97ed563419a8a308193f7c104ad0150ea6af69ecfd1e3fadf423c42f03b2e`.
-
-```bash
-make -C firmware test
-uv run --frozen pytest
-make -C cntrl/maker/morningstar/mc/firmware test inspect-patch-switcher
-```
-
-The build creates `build/patch-switcher.hex` in this directory, plus the ELF and
-raw image under `build/patch-switcher/`. The inspect target compares HEX and ELF
-bytes and checks the complete stock flash configuration. Neither target invokes
-an updater. The diagnostic `usb_probe` build remains available for hardware
-investigation; it shares button scanning and display transactions with the new
-adapter, not the patch-switcher application logic.
-
-Use the generic [host instructions](../../../../../firmware/README.md) with
-`--target cntrl/maker/morningstar/mc/patch-switcher-target.json`. The Python CLI
-and compiled show format are independent of the controller. Install firmware
-separately using the established recovery/upload workflow only when authorized.
+C sends a patch and requests a leftward transition; F performs undo and
+requests the reverse transition. Animation does not delay MIDI/history actions.
+For scrolling behaviour, evidence, deployment hashes and limitations, see the
+[scrolling investigation](../scrolling-scan-timing.md) and its
+[original transition history](../scrolling-scan-timing.md#original-patch-switcher-transition-history).
 
 ## Read-only storage information
 

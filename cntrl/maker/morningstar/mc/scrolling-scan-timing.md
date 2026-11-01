@@ -1,10 +1,23 @@
-# Scroll pointer application and RAM reuse
+# MC6 Pro scrolling investigation
 
 Investigation follow-up, updated 2026-11-01. The current findings below supersede
 earlier proposed experiments and historical deployment statements in this file.
 Read alongside [the experiment record](../../../../plan/scrolling-bug.md).
-The leftward sliver remains unresolved. The [diagnostic guide](firmware/scroll-timing.md)
-describes the installed experiment and preserves earlier protocols.
+The leftward sliver remains unresolved. This is the single analysis and
+experiment reference. The [plan](../../../../plan/scrolling-bug.md) remains
+separate. Current instructions appear below; archived protocols describe
+superseded firmware, not alternative current modes.
+
+## Document map
+
+- [Current evidence and limits](#current-evidence-and-limits)
+- [Current diagnostic and controls](#current-diagnostic-two-column-half-second-test)
+- [Baseline mapping and timing assumptions](#what-the-hardware-scroll-baseline-assumes)
+- [Host progressive-scan model](#progressive-scanout-replay)
+- [Video comparisons, speed sweeps and conclusions](#later-optical-comparisons-and-speed-sweeps-2026-11-01)
+- [Historical diagnostic protocols](#historical-diagnostic-protocols)
+- [Standalone diagnostic archive](#standalone-diagnostic-archive)
+- [Original patch-switcher transition history](#original-patch-switcher-transition-history)
 
 ## Current evidence and limits
 
@@ -31,6 +44,47 @@ model, delayed-offset snapshot model and progressive scan model have different
 assumptions. Potential visible-region overwrites are not automatically optical
 damage: an already-scanned column can be overwritten without changing that frame.
 No model yet explains all observations, including changing directional results.
+
+## Current diagnostic: two-column half-second test
+
+The current `CNTRL DISPLAY EDGE` diagnostic keeps the horizontal grey baseline
+and offset white incoming stripes, but changes scheduling to 116 two-column
+batches. Batch starts are spaced at least 4,311 microseconds apart, targeting
+500,076 microseconds for 232 steps. Each step still writes one incoming column
+on all three panels, then issues the three scroll commands. One step runs per
+poll, so other pedal work can run between the two steps in a batch.
+
+There is no 60 Hz progress backlog in this experiment. A delayed poll does not
+trigger multiple overdue batches. After a delayed second step, a new batch
+also waits at least 1 ms from that step's start. Actual transfer and polling
+costs may stretch the nominal half-second transition. This is a bounded batch
+size, not an acknowledgement that the panel has applied the preceding offsets.
+It does not establish that two-column batching alone is safe.
+
+**Observed result, 2026-11-01:** the user reports the fringe clearly visible in
+all leftward passes and completely invisible in rightward passes. This rejects
+two-column batching as a complete fix at the nominal half-second speed. No
+video of this latest trial or actual on-device duration has been measured.
+See [the consolidated evidence and limitations](#later-optical-comparisons-and-speed-sweeps-2026-11-01).
+
+Press C once for four left/right pairs, all using the same half-second target.
+Allow **25 seconds** including resets and recording margin. Every movement
+starts with a fully restored baseline. Completed movements hold for one second;
+the next baseline settles for 500 ms. C repeats; F restores the saved UI.
+Inspect the outgoing left edge during leftward motion and the outgoing right
+edge during rightward motion, excluding reset/repaint frames.
+
+Native tests check two steps per batch, batch-start spacing, inter-batch quiet
+time, the approximately 500 ms target at 100 us polling, exact addresses and
+payloads, all eight transitions, resets, repeat and micros rollover. A delayed
+second-step case verifies that an overdue batch is not started immediately.
+Normal patch scrolling is unchanged; this remains an unsuccessful diagnostic candidate.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
+Native tests and ARM image checks passed; USB returned the saved-setup status
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The user observation
+above follows that upload; actual on-device transition duration remains unmeasured.
 
 ## Additional documented evidence
 
@@ -333,7 +387,7 @@ scroll commands have displaced those columns before their writes become
 visible. The old renderer comment claiming outgoing edges were never
 overwritten has been qualified to refer to the last commanded offset.
 
-The replacement [optical fixture](firmware/scroll-timing.md) uses the actual
+The replacement [optical fixture](#historical-diagnostic-protocols) uses the actual
 renderer and its normal ordering, unlike the preceding pointer-jump test.
 It provides pane/band identity and initially hidden four-pixel stripes, with
 constant illumination. It does not change the normal animation algorithm.
@@ -555,7 +609,757 @@ a next step. No specific smooth, safe update schedule has been verified.
 In the diagnostic, stage 2 is idle awaiting C; `start()` leaves that state, so
 `poll()` has no stage-2 body. C repeats, F exits and redraws the saved setup.
 Arming is not persistent across a power cycle. Current source/image provenance
-is recorded in the diagnostic guide; a successful `CNTRL READY` response checks
+is recorded in the current diagnostic section; a successful `CNTRL READY` response checks
 saved-setup loading, not firmware identity or visual quality. Further C++ edits
 should use multiline control flow with braces and separate state changes, per
 the user's readability request. This documentation update does not refactor code.
+
+## Historical diagnostic protocols
+
+These protocols preserve image provenance, controls and test conditions. They
+are superseded by the current two-column diagnostic. Their result statements
+are dated observations, not current device-state checks.
+
+### Previous horizontal-stripe speed sweep
+
+This previous `CNTRL DISPLAY EDGE` experiment used only horizontal stripes.
+The baseline has eight-pixel-high grey stripes separated by eight black rows.
+Incoming columns use the earlier eight-white/eight-black horizontal marker,
+shifted vertically by eight rows relative to the baseline. This replaces the
+vertical-bar pattern after the user found it difficult to read. The refined
+speed sequence below retains the same scheduling. All three panels use the same pattern;
+brightness remains constant.
+
+Press C once. Two left/right pairs run at each target duration, fastest first:
+
+| Pairs | Target duration per movement | Approximate rate |
+| --- | --- | --- |
+| 1-2 | 1 second | 232 columns/second |
+| 3-4 | 1.25 seconds | 186 columns/second |
+| 5-6 | 1.5 seconds | 155 columns/second |
+| 7-8 | 1.75 seconds | 133 columns/second |
+
+The user reported visible effects at 0.5 and 1 second and none at 2 and 4
+seconds in the preceding sweep. That video has not yet been supplied for
+analysis. This narrower sweep investigates the reported interval; the report
+is not a measured safe timing bound.
+
+Every movement has 232 one-column steps, with the production 60 Hz progress
+targets and write-three-panels-then-scroll ordering. The previous artificial
+1.5 ms reservation is removed. Transfer, computation and polling overhead can
+make the fastest passes finish late; durations and rates above are targets,
+not measured hardware timings. Changing duration also changes batch sizes,
+so this probes the combined production timing behaviour, not only a uniform
+interval between individual writes.
+
+The full 162-column baseline reloads before each movement, followed by a
+500 ms settle. Completed movements hold for one second. The first movement
+uses the baseline already prepared while armed. Allow **60 seconds** for the
+complete sequence and recording margin. After the final reset it waits for C;
+C repeats everything, and F exits to the saved UI.
+
+During leftward motion, incoming white bars belong on the right; inspect the
+far left for premature fragments. Reverse those sides during rightward motion.
+The incoming pattern contains black intervals too, so not every unsafe write
+would make a white fringe. Exclude the visible reset/repaint between trials.
+Compare the widest clearly identified fringe across repetitions at each speed.
+A wider fringe at higher speed supports a timing explanation. Uncontrolled
+scan phase, coarse step batches and optical response prevent assuming exact
+proportionality or interpreting one clean pass as proof.
+
+Native tests check every baseline/marker pixel, all incoming addresses and
+offsets, each speed group's timing targets, resets, both repetitions of the
+full sequence, stop and micros rollover. Normal patch scrolling is unchanged.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`7891583d298702c636e04b05f9e5d5b349723a81f3248723e07e40ce13ed31b7`.
+Native tests and ARM image checks passed. The later supplied recording
+`signal-2026-11-01-14-20-40-925.mp4` shows intermittent fringes in inspected
+sections through 1.5 s. The user reports a hint at 1.75 s; the tail's compressed
+playback gives weaker evidence there. Exact widths and a safe threshold were
+not measured. The target duration varies scroll speed/batch size, not panel
+refresh rate.
+
+### Previous contrasting changed-pixel comparison
+
+This previous `CNTRL DISPLAY EDGE` experiment compared scroll-only movement
+with writes of a distinct incoming pattern: eight-pixel white/black horizontal
+stripes. The control uses the same preloaded block/ruler pattern as before.
+Brightness stays constant, and both conditions retain the same 1.5 ms step
+reservation and 500 ms / 60 Hz progress targets. Actual timing equality remains
+unmeasured if transfers exceed their reserved interval.
+
+Press C once. Four left/right pairs run in this order:
+
+| Pair | Condition |
+| --- | --- |
+| 1 | Scroll only |
+| 2 | Write contrasting striped columns while scrolling |
+| 3 | Scroll only |
+| 4 | Write contrasting striped columns while scrolling |
+
+Each individual movement starts from offset zero and the fully restored
+baseline, including all 162 RAM columns on all panels. The reset visibly
+repaints the screen, then settles for 700 ms before the next movement.
+The first movement uses the baseline already prepared while armed. Each
+completed motion is held for 1.5 seconds before reset. After the last motion
+the baseline is restored and the test waits for C again. Allow **30 seconds**
+for watching/recording, including preparation overhead. F exits to the saved UI.
+
+During a leftward rewrite trial, striped content should enter from the right;
+look for a narrow striped fragment at the far left while original blocks
+remain there. During a rightward rewrite trial, stripes should enter from the
+left; inspect the far right. Once the old image has scrolled out, a fully
+striped display is expected. Reset/repaint frames are not evidence of the bug.
+
+This replaces the preceding unchanged-pixel comparison. It deliberately
+changes RAM contents at the production incoming-column addresses. It retains
+the diagnostic's pattern, target timing and pair order, with per-movement
+resets necessary to keep later trials from inheriting striped RAM. Normal
+patch scrolling is unchanged.
+
+Native tests check the full baseline and resets, contrasting payloads and
+incoming addresses for every rewrite step, zero motion writes in controls,
+offset sequences, minimum spacing, C repeat, stopping and micros rollover.
+Expected RAM changes are tracked independently and checked at each command.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`82c08c65919f0d929066682f8f53845b1e19004bd75b4033af0bbb23df6f758a`.
+Native tests and ARM image checks passed. After upload/reset, USB returned
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The later recording
+`signal-2026-11-01-13-36-41-071.mp4` shows incoming stripe fragments at the
+outgoing left edge around 24 s and the outgoing right edge around 45-46 s,
+before reset painting. This confirmed the changed-content fringe in both
+directions under this protocol; it did not measure controller latency.
+
+### Previous unchanged-pixel rewrite comparison
+
+The preceding `CNTRL DISPLAY EDGE` sequence alternated two conditions using the
+same preloaded 162-column pattern. No labels are repainted during the test.
+Brightness remains constant. Each pair consists of one leftward and one
+rightward scroll:
+
+| Pair | Condition |
+| --- | --- |
+| 1 | Scroll commands only |
+| 2 | Rewrite existing pixels before every scroll step |
+| 3 | Scroll commands only |
+| 4 | Rewrite existing pixels before every scroll step |
+
+Press C once and watch the four pairs, approximately 16-17 seconds overall.
+The 1.5-second holds separate individual movements. Allow 20 seconds if recording.
+C repeats all four pairs; F or `CNTRL DISPLAY EDGE END` restores the saved UI.
+If a power cycle clears diagnostic mode, rearm with `CNTRL DISPLAY EDGE`.
+
+Both conditions keep the production 500 ms / 60 Hz progress targets. Each step
+reserves 1.5 ms from step start to its scroll command. The rewrite condition
+uses that interval for the usual three panel-column writes, in panel order,
+at the production incoming-column addresses. Every pixel written is regenerated
+from its fixed RAM coordinate and exactly matches what was preloaded there.
+The control condition waits through the same interval without writing pixels.
+If the actual writes take longer than 1.5 ms, the command runs late; equality
+of physical timings has not been measured. This spacing replaces the preceding
+scroll-only diagnostic's 1 ms minimum between commands.
+
+Native tests check the expected write/no-write pair order, all three addresses
+and payloads at every step, zero RAM changes, minimum command spacing, all
+eight offset sequences, repeat, stopping and micros rollover. The original
+preload pattern and the normal patch-scrolling algorithm are unchanged.
+
+A repeatable visible difference between control and rewrite pairs is useful
+without a slow-motion camera. Corruption during same-pixel rewrites would
+reproduce a write-operation interaction without changing the RAM image.
+Clean rewrite pairs would strengthen the changed-content hypothesis, subject
+to the different pattern and unmeasured timing. A visually clean result is
+provisional until the later slow-motion recording.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`6a172d08c0dc517ce93e5d582fe06305bbbec61ab1052de8a03876be6d134145`.
+Native tests and ARM image checks passed. After upload/reset, USB returned
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED` at installation.
+The later `signal-2026-11-01-13-15-01-587.mp4` did not clearly reproduce the
+original fringe in inspected unchanged-pixel rewrite trials. The pattern made
+negative judgments difficult; exact matching of device timings was not verified.
+
+### Previous scroll-only diagnostic
+
+The preceding `CNTRL DISPLAY EDGE` experiment preloaded all 162 RAM columns on
+each panel, then changes only the scroll offset during motion. It replaces
+the production-sequence fixture described below. There are no pixel writes,
+repaints, backlight changes or RAM resets during the sequence or a C-triggered
+repeat. Normal patch scrolling is unchanged.
+
+The stationary pattern has broad horizontal bands and narrow vertical rulers.
+Each panel has three differently phased 54-column zones across its 162-column
+RAM ring. The two initially hidden columns are deliberately filled too, using
+the same pattern. There are no A/B/C labels or `PRESS C` prompt in this version.
+
+When ready to record:
+
+1. Keep all three patterned displays, including both edges, sharp and in view.
+2. Record at 240 fps and press C once.
+3. Allow 20 seconds for four left/right pairs and their 1.5-second holds.
+4. Stop once the original pattern stays still. C repeats without repainting;
+   F or `CNTRL DISPLAY EDGE END` exits and redraws the saved setup.
+
+Each motion uses the production 500 ms / 60 Hz progress targets, one-column
+offset steps, and 232 steps. Offset commands are spaced at least 1 ms apart
+to avoid compressing each batch after removing the three column transfers.
+This spacing approximates the removed work; it is not measured production
+timing. The final batch can extend a few milliseconds beyond the 500 ms target.
+The full sequence takes approximately 16 seconds, with 20 seconds allowing
+recording margin. It remains armed indefinitely awaiting C.
+
+This is circular motion of the preloaded pattern, not replacement of panes
+across the virtual 72-column gaps. Rulers and band boundaries legitimately
+wrap from one edge to the other. Inspect whether the *whole pattern* translates
+consistently, rather than treating any narrow feature at an edge as a defect.
+A fixed-edge fragment that disagrees with the translating pattern is the
+relevant observation.
+
+If a matching defect persists, it has been reproduced without concurrent RAM
+writes. If it disappears, the write interaction remains a candidate, but the
+different data pattern and changed inter-command timing are also variables.
+Neither outcome alone proves the precise controller timing or a hardware fault.
+
+Native tests assert exactly 486 preload column writes, check all pattern pixels
+including hidden RAM, then forbid writes during two complete eight-transition
+sequences. They check each offset, minimum step spacing, immutable RAM, return
+to offset zero, indefinite idle, C repeat, stop and micros rollover.
+
+Installed and armed on 2026-10-31 with image SHA-256
+`1449ff6eaaffd015c23fc10bd64dc08e9172fec756f5a63cb5928dce10486a00`.
+Native tests, ARM compilation, binary/HEX comparison and the stock flash-header
+check passed. After upload/reset, USB returned `CNTRL READY 20 21411 fa5ba7e8`
+and `CNTRL EDGE ARMED`. No motion was triggered from the host. The user later
+described the motion as impressive and visually free of glitches. This is an
+unaided observation, not a guaranteed clean scanout measurement. This protocol
+was superseded by the write comparisons above. A power cycle clears diagnostic
+mode; the same USB command rearms the currently installed version.
+
+### Previous production-sequence diagnostic
+
+The preceding `CNTRL DISPLAY EDGE` fixture used the actual `DisplayRenderer`,
+including its normal one-step-per-poll writes, 60 Hz progress batches, 500 ms
+duration, 72-column gap and three-panel scroll commands. It replaces the
+single-jump/delayed-write experiment documented below. Normal scrolling code
+is unchanged apart from correcting a comment that overstated scanout safety.
+
+Arm over USB, wait for the three patterned panes A/B/C to finish painting,
+then record at 240 fps and press C. There is no `PRESS C` label in this version.
+It performs four left/right pairs, holding each completed image for 1.5 seconds.
+Allow approximately 20 seconds, until A/B/C remain still. C repeats; F or
+`CNTRL DISPLAY EDGE END` exits and redraws the saved setup. Buttons are consumed
+by the fixture. It does not send patches or write saved configuration.
+
+Keep all three displays and their edges visible. Preserve the whole recording's
+slow-motion section. The backlight stays at the configured brightness throughout
+the test; there are no optical brightness markers, fades or blanking.
+
+Each pane has a distinct arrangement of 16-pixel horizontal light/dark bands
+and repeated column digits. A leftward transition moves A/B/C to B/C/D;
+rightward reverses that change. Before the first transition only, both hidden
+RAM columns on each panel are seeded with contrasting four-pixel stripes.
+Every subsequent transition runs without resetting the ring offset or reseeding.
+
+Interpretation:
+
+- Four-pixel stripes appearing on the first transition identify exposure of
+  the initial hidden RAM without replacement by the expected staged column.
+- A fragment with the incoming pane's band pattern at the outgoing edge
+  identifies incoming data visible on the wrong side. An early black cut into
+  an outgoing band can similarly identify a gap write, but must be compared
+  against the expected moving boundary.
+- Pane identity, column digits and frame-to-frame motion must be considered
+  together. Camera scan/exposure and LCD response can mix adjacent states;
+  a single ambiguous edge fragment is not enough to assign a cause.
+
+Native tests use the real renderer and a literal four-pane reference panorama,
+not its coordinate helper. They check every incoming pixel, all three writes
+before each offset command, all visible pixels after each command, poisoned
+hidden columns, consecutive transitions through ring wrap, and the 30 batches
+(eight of seven steps, 22 of eight steps). Fixture tests cover eight transitions,
+idle arming, restart, stop and millis rollover. The host model still applies
+offset commands immediately, so passing it does not establish scanout safety.
+
+Installed and armed with image SHA-256
+`961409bf3e9536c22f4ddd6dc5a280a7a4da207bfde385a814c3a853d8ac6e36`.
+The ARM build passed binary/HEX comparison and the stock flash-header check.
+After upload/reset, USB returned `CNTRL READY 20 21411 fa5ba7e8` and
+`CNTRL EDGE ARMED` at installation. The subsequent
+`signal-2026-10-31-19-46-49-065.mp4` shows incoming-pattern fragments at the
+outgoing left edge around 55.5-57 s and right edge around 73.3 s. This
+reproduced the artifact through the production renderer; it was not a safe
+timing bound. That fixture has been superseded.
+
+### Historical single-jump timing diagnostic
+
+The following describes the earlier firmware and its recordings, not the
+current `CNTRL DISPLAY EDGE` sequence.
+
+Enter with `CNTRL DISPLAY EDGE` over USB serial. Once `PRESS C` is visible,
+record at 240 fps and press C once. Keep the left label and both edges of the
+centre display sharp and in view. Avoid exposure saturation. Let the entire
+sequence finish and return to `PRESS C`, then stop recording. F exits to the
+normal patch UI at any time; `CNTRL DISPLAY EDGE END` does the same over USB.
+C and F are consumed by the diagnostic rather than sending or undoing patches.
+The test does not change saved configuration, assets, or panel frame-rate settings.
+
+The left display labels sixteen leftward trials, then sixteen rightward trials.
+Each direction repeats the 2 ms / 5 ms pair eight times. For example, `L 2MS R1`
+means leftward, 2 ms, repetition 1; `R 5MS R8` is the final trial. The whole
+sequence takes approximately one minute in real time. For each trial:
+
+1. All scroll offsets reset to zero. Each RAM column is painted incrementally,
+   including the two hidden columns. Centre-display edge columns are black;
+   short interior ticks identify the baseline.
+2. The pattern settles for 800 ms plus 1,999 microseconds times the trial index.
+   This varies the scheduling relative to the free-running panel scan; it does
+   not measure or guarantee coverage of particular scan phases.
+3. Backlight PWM rises from 96 to 192, followed by a single three-column hardware
+   scroll command to the centre display only.
+4. After the labelled delay, one previously visible column is replaced with a
+   white marker broken by horizontal black bands. LEFT rewrites RAM column 0;
+   RIGHT rewrites column 159. The result is held until 700 ms after the trigger.
+
+With a settled LEFT offset, the rewritten marker belongs at the right edge.
+With a settled RIGHT offset it belongs at the left edge. A transient marker at
+the opposite edge indicates that the write was visible using the old mapping.
+Inspect the transient sequence, not just the final held pattern.
+
+The brightness step is an approximate optical reference, not a TE signal.
+Backlight circuitry, PWM phase, camera exposure and rolling shutter affect the
+observed brightness change. Software deadlines use the poll timestamp immediately
+before the brightness/scroll commands; transfer time and scheduling add error.
+This diagnostic measures a different sequence from normal animation:
+one pointer jump followed by one write, with no ongoing scroll commands.
+
+One sequence samples only 32 uncontrolled scan phases. Repeat recordings if necessary;
+a clean delay in one trial is not a guaranteed safe bound. Keep the original
+video file, including its slow-motion timing information.
+
+Native tests cover the complete order, both RAM addresses, all delay deadlines,
+one marker write per trial, idle arming, repetition, stopping and micros rollover.
+Bus tests verify that only the centre panel receives the trial offset. These
+tests do not establish physical pointer application time.
+
+The original twelve-trial version was installed 2026-10-31 with image SHA-256
+`d88a1d3b158a483065e8f813a1ba45e846562abc749a3a926525448fa21fccd7`.
+The helper completed the upload and reset, then USB returned
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. This verifies command
+acceptance and setup loading, not the visible pattern or physical timings.
+The recording sequence has not been started from the host.
+
+### First recording and repetition follow-up
+
+`/Users/tom/Desktop/signal-2026-10-31-19-08-33-369.mp4` contains 3,599 video
+frames at 720x1280 and 30 playback fps, approximately 120 seconds. Rotating it
+counterclockwise makes the labels upright. At playback 4.300 s (LEFT 0 MS),
+striped fragments appear at the old left edge while the intended marker appears
+at the right. Around 5.967 s (LEFT 2 MS), fragments again appear at both edges.
+The inspected LEFT 5-20 ms onset frames did not show the same wrong-edge marker;
+this is not a safe timing bound. The inspected RIGHT onsets did not supply an
+equally clear wrong-edge transient. Export timing varies across the recording.
+
+Offset reset between trials briefly moves the previous marker to the opposite
+edge before clearing it; those frames must be excluded from onset analysis.
+The repeated 2/5 ms sequence above follows this first recording and tests more
+uncontrolled phases. No change to the normal animation algorithm is made.
+
+The 32-trial version passed native tests and ARM image checks and was installed
+with SHA-256
+`7aeb13b8401ee11b9b32785ea4d181ddd3e860f4a878b47fbfddd6863eb4ef37`.
+After reset it returned the same saved-setup status and `CNTRL EDGE ARMED`.
+It was left waiting for C at that installation; no sequence was started from
+the host. The later repeated recording
+`signal-2026-10-31-19-17-59-393.mp4` showed wrong-edge markers at 5 ms in
+leftward repetitions 5-8, rejecting 5 ms as a safe fixed delay. This protocol
+has been superseded by the later comparisons above.
+
+## Standalone diagnostic archive
+
+The following records the separate `firmware/scroll_probe` experiments from
+2026-10-24 and the subsequent edge-staging change. That standalone image is
+not the currently installed patch-switcher diagnostic. Runtime control changes
+below are a historical sequence; later entries supersede earlier controls.
+Build instructions remain in [its README](firmware/scroll_probe/README.md).
+
+The diagnostic uses the stock panel initialization, followed by native-coordinate
+`MADCTL = 0x88` (MY/BGR retained, MV cleared), `SCRLAR = 1,160,1` and scroll start
+1. It assumes a 162-line controller with the visible gate lines 1..160. This
+mapping is an experimental hypothesis, not identification of the installed chip.
+Unexpected orientation or edge lines must be distinguished from absent scrolling.
+
+### Speed comparison
+
+Initial painting happens while dark. Tiles are 32 pixels wide, numbered 00..39,
+with a shared grid/diagonal pattern in a repeating 1280x128 image. It reuses the
+installed ST7735 library's classic font data. Each panel initially shows 160
+consecutive columns. With the default 72-pixel gap the windows are left 0..159,
+centre 232..391 and right 464..623. Columns 160..231 and 392..463 are hidden
+behind the two physical gaps, rather than squeezed out of the image.
+
+All three panels show windows at world positions `x`, `x+232` and `x+464`,
+modulo 1280. The artwork keeps the same pixel scale; it continues behind the
+estimated gaps. Updates initially target 16,667 microseconds, approximately 60 Hz.
+Each update fills the entering circular-buffer columns per panel, then changes
+all three scroll offsets once. Pixel traffic is 768 bytes times the stride per
+update, plus command traffic. Tiles should continue across panel boundaries.
+
+Initially the speed is one pixel per update (60 pixels/second). Press and release
+C to cycle through 1, 2, 4, 8, 16 and 32 pixels per update, then back to 1, without
+blanking, repainting or resetting position. These correspond to 60, 120, 240,
+480, 960 and 1,920 pixels/second if the update fits within its time budget.
+The current isolation baseline cannot maintain 60 Hz at the highest strides.
+Press and release B to toggle the panel update order. The initial order is
+left, centre, right (`LTR`); the alternate is right, centre, left (`RTL`). Both
+the entering-pixel writes and the subsequent scroll commands use that order.
+The image's position, direction, speed and physical window assignments do not
+change, and toggling B does not blank or repaint the screens.
+
+Press and release A to cycle the target update rate through 60, 50, 40 and 30 Hz,
+then back to 60. The gaps stay fixed at the configured width, default 72 pixels.
+A does not blank, repaint or reset position. Keep C at one pixel per update
+initially to compare cadence; movement speed in pixels/second will also decrease
+with update rate. D, E and F do nothing. Panel refresh registers are unchanged.
+All SPI calls finish and restore GPIO 13/12 before the next button scan.
+
+The complete source pattern is cached once at startup in 327,680 bytes of RAM.
+The isolation baseline restores 8 MHz byte transfers and addresses each column
+separately, even when the caller supplies several columns. This removes the
+faster clock, 16-bit transfers and controller multi-column addressing from the
+rendering path while keeping the cache and six speeds. Each source column wraps
+independently, so gaps need not be multiples of a tile or controller width.
+Initialization uses the shared driver; the normal application's driver is unchanged.
+
+`CNTRL STATUS` returns fields such as:
+
+```text
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=110 ssa=51 steps=110 pixels=84480 us=... period=... max_period=... max_us=... overruns=...
+```
+
+`pixels` counts streamed pixel bytes after the baseline, not baseline painting or
+command bytes. `us` measures the most recent step's SPI writes and scroll
+commands. `period` is the interval between the latest two update starts, in
+microseconds. `max_period` is the longest start-to-start interval. `max_us` is
+the worst step duration and `overruns` counts steps exceeding the selected rate's
+time budget. Measurements reset on A, B or C; the first start-to-start interval
+after a setting change is excluded from the maximum because it spans settings.
+These are elapsed times, not sampled CPU load. `rate` is the target, not a
+measurement. `gap` reports the configured fixed gap.
+`CNTRL SCROLL NEXT` toggles speed from the host. The usual `cntrl status --port
+/dev/cu.usbmodem144682801` command can read status without new host tooling.
+
+### Historical standalone build validation and staging
+
+Paths in this historical staging record are relative to `firmware/scroll_probe`.
+
+Native tests cover all six strides, including unaligned starts and source-image
+wraps, the update-rate cycle and interval calculations, pixel byte order,
+per-column register payloads, both panel command orders, selected-panel isolation,
+coordinate bounds and SPI/GPIO handoff. These establish software behaviour, not
+whether the physical controller implements scrolling. Inspection compares HEX
+with ELF bytes and checks the stock flash-configuration digest. No build target
+uploads anything.
+
+The image is `../build/scroll-probe.hex`. To use the existing fixed-image upload
+helper, it is copied to `../build/patch-switcher.hex` only after inspection. This
+does not change the normal application sources or the helper's target restriction.
+The normal build was preserved as `../build/application-before-scroll.hex` before
+staging the diagnostic. That saved build has SHA-256
+`60ebbcc450560197396faecdc9e6c96827fb078737ec73d82585ec9fb27353cd`.
+Restore it through the same software bootloader/helper workflow, or build and
+inspect the current patch-switcher target before restoration. Neither restoration
+path needs to modify saved card files.
+
+### Original upload record, 2026-10-24
+
+Diagnostic HEX SHA-256:
+`977daac74c91f826d1da56238a2029b75d358b4aeb59621dca18494d6fa54851`.
+Both native test targets and stock flash configuration/HEX-ELF checks passed.
+Software bootloader entry and helper upload completed; the uploader returned
+status 1 after its usual reset/disappearance, then USB confirmed the ONE status
+above. Before upload the application reported `CNTRL READY 7 0 00000000`:
+no compatible show was active. The diagnostic made no changes to that state.
+The user subsequently reported that both demonstrations looked good. This is
+visual confirmation, not an instrumented measurement of panel synchronization.
+
+### 60 Hz speed-comparison upload, 2026-10-24
+
+HEX SHA-256:
+`1ffaca937276d46776e006bfec7415a5565bca4e84582147ff6c3335fe68f8a3`.
+Both diagnostic tests, the existing button/display/renderer tests, and stock
+flash configuration/HEX-ELF checks passed. After software bootloader entry and
+upload, USB confirmed the `rate=60 stride=1` report above. The uploader returned
+its usual status 1 on reset/disappearance; the serial response confirms the new
+firmware booted. Visual comparison of the two speeds remains a physical test.
+
+### Optimized six-speed upload, 2026-10-24
+
+HEX SHA-256:
+`019c1c671fb4a4e2a12bd6f0c3a6cb5a63059ee2e1bf0c7e4f4ee0caa1d18735`.
+All native tests and image checks passed. The first attempted optimization used
+the SPI library's bulk-buffer transfer; the device enumerated but stopped
+responding to status. Software bootloader entry still worked. Replacing that
+call with blocking 16-bit transfers restored normal USB responses. The precise
+cause of the bulk-transfer stall was not established; that path is not retained.
+
+After upload, each stride ran for two seconds under USB observation:
+
+| Pixels/update | Measured updates/second | Worst update, microseconds |
+| --- | --- | --- |
+| 1 | 59.86 | 438 |
+| 2 | 60.32 | 858 |
+| 4 | 59.89 | 1,745 |
+| 8 | 60.31 | 3,452 |
+| 16 | 59.83 | 6,727 |
+| 32 | 59.93 | 13,739 |
+
+All six reported a latest start-to-start period of 16,667 microseconds and zero
+overruns. The host rate estimates use short sample windows and integer frame
+counts, hence the small spread around 60 Hz. The test ended back at stride 1.
+Pixel transfer throughput is confirmed; visual quality at the increased clock
+and higher strides still needs the user's observation. Saved card data was not
+touched. At the highest stride, button scanning can be delayed by a whole update
+(about 14 ms); the diagnostic does not claim a 3 ms worst-case scan interval.
+
+The user subsequently reported intermittent glitches on the left panel and
+stable rendering garbage on the other two. The timing results did not establish
+correct rendering. The exact cause has not been isolated.
+
+### Rendering isolation baseline
+
+Restore the previously working 8 MHz byte-wise, single-column write protocol,
+keeping the cached image and six-speed controls. At high strides, frame timing
+will exceed the 60 Hz budget and button scanning can be delayed by that longer
+update. This test prioritizes rendering correctness over speed. A clean result
+would narrow the fault to the removed transfer/addressing changes, not identify
+which one caused it. Saved card files remain untouched.
+
+Built and uploaded with HEX SHA-256
+`3c79bbc0f3a017aa98782f98c210bb0e9108af4da41bc2b1e2ce4387a284b7f2`.
+Diagnostic and button/display/renderer native tests passed, as did the stock
+flash-configuration and HEX/ELF checks. The uploader returned its usual status 1
+on reset/disappearance; USB then confirmed this baseline running at stride 1:
+
+```text
+CNTRL SCROLL READY spi=8 rate=60 stride=1 x=333 ssa=148 steps=333 pixels=255744 us=965 period=16667 max_us=965 overruns=0
+```
+
+The user subsequently confirmed that rendering was clean again. This restores
+a visually confirmed baseline, without identifying which removed optimization
+caused the earlier corruption.
+
+### Gap-aware panorama, 2026-10-24
+
+The image now contains 40 numbered tiles over 1,280 columns, with a configurable
+equal gap between the three windows. The uploaded build uses `SCROLL_GAP=64`.
+The known-working 8 MHz single-column transfer path is unchanged. The cache
+grows to 327,680 bytes, leaving 156,704 bytes free in RAM1 according to the build.
+
+Native tests passed for gaps of 64 and 17 pixels, including all six strides and
+source-image wraparound. Button/display/renderer tests and stock flash-config
+and HEX/ELF checks passed. Uploaded HEX SHA-256:
+`f60225f7b146f561994525c3c85d8812313415cbf0a67129c62dea9026c538dd`.
+After the uploader's usual reset/disappearance status 1, USB confirmed:
+
+```text
+CNTRL SCROLL READY spi=8 gap=64 rate=60 stride=1 x=500 ssa=141 steps=500 pixels=384000 us=965 period=16667 max_us=965 overruns=0
+```
+
+The physical continuity illusion at the estimated gap width awaits visual
+confirmation. The diagnostic still does not open the SD card or send MIDI.
+
+### Panel update-order comparison, 2026-10-24
+
+B toggles both pixel-write and scroll-command order; C retains its six speeds.
+This tests whether the observed left/centre motion hitch follows transaction
+order. It does not synchronize the three independent panel refresh cycles or
+establish the cause of the hitch by itself.
+
+Native tests verify both panel-index sequences and actual chip-select order for
+forward/reverse scroll commands, including a selected-panel subset. Diagnostic,
+button/display/renderer tests and stock flash-config/HEX-ELF checks passed.
+Uploaded HEX SHA-256:
+`5bea12f8816fd8576788914d78735fd9c9b0fe00e49e48539b78f9428ab8df91`.
+The uploader returned its usual status 1 on reset/disappearance; USB then
+confirmed the new build running in the original left-to-right order:
+
+```text
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=449 ssa=32 steps=449 pixels=344832 us=964 period=16667 max_us=965 overruns=0
+```
+
+The effect of B on visible motion awaits physical observation. Saved card data
+remains untouched.
+
+The user subsequently reported no visible difference from B: the rightmost
+panel remained smooth and the left/centre panels retained small motion jumps.
+This does not establish a cause. The gap change is the next comparison target.
+
+### Runtime gap comparison, 2026-10-24
+
+A now toggles between the configured gap and zero. B and C retain their existing
+functions. Both cases use the same cached image and update target. Repainting
+preserves the current world offset and writes each visible source column into
+the corresponding circular-buffer position, with the backlight off until done.
+
+Native tests cover repeated gap changes/repaints at nonzero ring positions and
+continued scrolling at all six strides, including source-image wraparound.
+Diagnostic, button/display/renderer tests and stock flash-config/HEX-ELF checks
+passed. Uploaded HEX SHA-256:
+`38ae0a74fd860c107319fa7d712a2363b7bb33557185da8e30bc7c42dcf30061`.
+Following the uploader's usual reset/disappearance status 1, USB confirmed:
+
+```text
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=497 ssa=144 steps=497 pixels=381696 us=965 period=16667 max_us=965 overruns=0
+```
+
+The effect of gap toggling on the observed jumps awaits physical comparison.
+Saved card data remains untouched.
+
+The user subsequently reported identical behaviour with and without gaps: the
+rightmost display was steady and the other two retained subtle motion jumps.
+
+### Update-rate comparison, 2026-10-24
+
+The gap is fixed again at the configured width. A replaces its gap toggle with
+a 60/50/40/30 Hz cycle; B and C are unchanged. The new `max_period` records the
+longest interval between update starts, rather than only timing the drawing
+work. Setting changes reset measurements and exclude the transitional interval
+from that maximum. No panel refresh-register changes are made.
+
+Native tests cover the rate cycle and integer interval calculations alongside
+the existing window, pixel and protocol tests. Diagnostic and button/display/
+renderer tests and stock flash-config/HEX-ELF checks passed. Uploaded HEX SHA-256:
+`09ff20326659f304201912d1eea153ed545c7bd4491bffe199f492b3d889ee1e`.
+After the uploader's usual reset/disappearance status 1, USB confirmed:
+
+```text
+CNTRL SCROLL READY order=LTR spi=8 gap=64 rate=60 stride=1 x=629 ssa=12 steps=629 pixels=483072 us=965 period=16667 max_period=16720 max_us=965 overruns=0
+```
+
+In this initial observation the longest period exceeded the 16,667-microsecond
+target by 53 microseconds, not a full update interval. This is not a correlation
+with a visibly observed jump. The effect of changing rates awaits physical
+comparison. Saved card data remains untouched.
+
+### Patch-switcher edge staging, 2026-10-31
+
+The production patch switcher previously replaced outgoing, still-visible RAM
+columns with incoming pixels, then advanced the scroll register after a batch.
+This exposed a wrong-image strip on the left during sends and on the right
+during undo. Black empty windows made the contrast more apparent.
+
+The patch switcher now scrolls across all 162 controller rows, retaining the
+160-column visible window and staging each incoming column in hidden RAM. It
+writes all three panels before advancing the offset by one column. Native mode
+uses scroll area `0,162,0`, with zero as its neutral start; writes retain the
+one-row panel origin and wrap through addresses 161 and 0. Splash output restores
+the previous `1,160,1` landscape area and start 1. The standalone diagnostic
+probe above retains its original geometry.
+
+The mapping follows the MY row-address reversal and scroll-area/start commands
+in the [ST7735S datasheet](https://www.orientdisplay.com/wp-content/uploads/2020/11/ST7735S.pdf),
+sections 9.11.3, 10.1.26 and 10.1.30. No new MCU image buffers are required.
+
+Native tests check the image after every scroll step in both directions and
+reject writes to currently visible columns before scrolling. Bus tests check
+the hidden-row addresses, wraparound, neutral start and splash restoration.
+That was the pending qualification at this historical stage. Later experiments
+above show that the edge artifact remains unresolved; native hidden-column
+checks did not establish physical scanout safety.
+
+## Original patch-switcher transition history
+
+This archive preserves the original application transition deployments and
+default-duration changes. Current behaviour and unresolved qualification are
+stated at the top of this document.
+
+### Sliding send/undo panes, 2026-10-24
+
+C sends MIDI and pushes history before requesting a leftward transition. F
+performs the existing per-instrument undo, selects the undone patch as R's
+browsing candidate, and requests the reverse transition. Failed sends and an
+empty undo stack do not request animation. There is no MIDI delay waiting for
+graphics, and no persistent history or graphics-format change.
+
+The screen pitch is 232 pixels: 160 visible plus a 72-pixel physical-gap
+estimate. Over a show-configured duration at 60 Hz (default 1 second after preparation), the
+old panes move left on C and right on F. The new R candidate is rendered using
+the existing grey-name rule before entering from the right. On F, the next
+undo target, or a blank pane, enters from the left. Virtual gaps are black.
+
+The RAM-only library still renders fonts. Preparing destination bitmaps is
+incremental and leaves the old screen contents visible. Native ST7735 column
+writes use the tested 8 MHz byte-wise protocol and `MADCTL=0x88`; each animation
+poll advances at most one pixel and writes one column per panel. Button scans,
+USB and queued MIDI output run between these polls. Scroll commands are issued
+at frame targets. Destination screen-specific styling is reconciled afterward.
+The target duration is not a hard real-time guarantee under SD/USB stalls.
+
+Ordinary UI repainting also uses native columns and retains the current ring
+offset. Splash output switches back to landscape row addressing and resets the
+scroll offset. On return, renderer invalidation restores native mode and
+repaints behind the existing first-image/blackout gate. New actions during an
+animation retain their MIDI/history effects and coalesce into the latest pending
+view; they do not build an unbounded animation queue.
+
+Verification: 194 Python tests, the sanitizer-enabled portable controller suite,
+and native button/display/renderer tests passed. New tests cover forward/reverse
+pane mapping, nonzero ring offsets, the native-column protocol and return to
+splash addressing. Controller tests cover browsing away before undo and exclude
+failed sends/empty undo from transition events. HEX/ELF comparison and the stock
+flash-configuration digest passed. RAM1 has 111,680 bytes free, RAM2 309,312,
+with no external RAM linked.
+
+Uploaded main-image SHA-256:
+`6baf5b03d9ff0de30d854c5fce4547f1e4c585084a8a388dd5dc2cce4cc05872`.
+After the uploader's usual reset/disappearance status 1, USB confirmed format 7.
+The setup catalogue was empty. The existing pman example was recompiled,
+copied with readback verification and selected; status then reported
+`CNTRL READY 7 23390 0718301d`.
+
+At that deployment, `instruments/pman.toml` mixed an initial
+`[[patches.pman.0]]` header with `[[patches]]` entries and lacked explicit setup
+fields. It was not edited for that task. Upload used a temporary copy with the
+flat initial header and `setup = "default"` on each entry, matching the example's
+existing default-setup routing. No factory EEPROM or vendor backups were changed.
+The current repository table now uses the flat header and explicit default setup.
+Physical transition/splash/text verification remains pending user observation.
+
+The user subsequently confirmed that the original transition build looked
+correct. A timing fixup changes the default from 400 ms to 2 seconds. Set
+`transition_ms = 2000` at the top level of a show to specify it explicitly, or
+choose another integer duration in 1..65535 milliseconds. The compiler stores
+the setting in the metadata header's previously reserved u16; zero denotes the
+firmware default and preserves existing compiled shows and their checksums.
+Resolved TOML exports retain this setting. Both send and undo receive the same
+duration, without changing MIDI timing. The two-second fixup was uploaded and
+boot-verified. A subsequent fixup sets the default to 1000 ms (one second);
+explicit `transition_ms` values still take precedence.
+The current implementation keeps an omitted duration unspecified through the
+model, compiled metadata (zero), and firmware (`std::nullopt`). The renderer
+alone resolves it to `DEFAULT_TRANSITION_MS`, currently 500 ms for both send
+and undo, when starting a transition.
+Resolved TOML omits unspecified durations; explicit values, including 1000,
+remain explicit throughout.
+The one-second image was flashed and boot-verified with pman and its checksum
+unchanged. SHA-256: `b2c97ed563419a8a308193f7c104ad0150ea6af69ecfd1e3fadf423c42f03b2e`.
+
+```bash
+make -C firmware test
+uv run --frozen pytest
+make -C cntrl/maker/morningstar/mc/firmware test inspect-patch-switcher
+```
+
+The build creates `build/patch-switcher.hex` in this directory, plus the ELF and
+raw image under `build/patch-switcher/`. The inspect target compares HEX and ELF
+bytes and checks the complete stock flash configuration. Neither target invokes
+an updater. The diagnostic `usb_probe` build remains available for hardware
+investigation; it shares button scanning and display transactions with the new
+adapter, not the patch-switcher application logic.
+
+Use the generic [host instructions](../../../../firmware/README.md) with
+`--target cntrl/maker/morningstar/mc/patch-switcher-target.json`. The Python CLI
+and compiled show format are independent of the controller. Install firmware
+separately using the established recovery/upload workflow only when authorized.
