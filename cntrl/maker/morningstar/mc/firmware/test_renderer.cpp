@@ -26,6 +26,9 @@ static uint32_t probe_now = 0, probe_last = 0;
 static unsigned probe_steps = 0;
 static unsigned probe_writes = 0;
 static uint16_t probe_ram[3][128][162];
+static uint16_t probe_baseline[3][128][162];
+static bool probe_loading = false;
+static unsigned probe_preloads = 0;
 
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
     unsigned start = panel * 232 + (audit_undo ? 232 - step : step);
@@ -82,17 +85,33 @@ void scroll_display_panorama(unsigned offset) {
     }
 }
 
-void initialize_display_panorama() { scroll_display_panorama(0); }
+void initialize_display_panorama() {
+    bool checking = scroll_only;
+    if (checking) { probe_loading = true; probe_preloads = 0; scroll_only = false; }
+    scroll_display_panorama(0);
+    scroll_only = checking;
+}
 
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels) {
-    if (scroll_only) {
+    if (scroll_only && probe_loading) {
+        assert(panel == probe_preloads / 162 && column == probe_preloads % 162);
+        for (unsigned y = 0; y < 128; ++y) {
+            unsigned pixel = unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1];
+            assert(pixel == probe_baseline[panel][y][column]);
+            probe_ram[panel][y][column] = pixel;
+        }
+        if (++probe_preloads == 486) probe_loading = false;
+    } else if (scroll_only) {
         assert((probe_steps / (2 * 232)) % 2); // Only the rewrite pair may write.
         bool undo = (probe_steps / 232) % 2;
         assert(panel == probe_writes++);
         unsigned next = (ring + (undo ? 161 : 1)) % 162;
         assert(column == (next + (undo ? 0 : 159)) % 162);
-        for (unsigned y = 0; y < 128; ++y)
-            assert((unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1]) == probe_ram[panel][y][column]);
+        for (unsigned y = 0; y < 128; ++y) {
+            unsigned pixel = unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1];
+            assert(pixel == (y % 16 < 8 ? 0xffffu : 0u));
+            probe_ram[panel][y][column] = pixel;
+        }
     }
     assert(panel < 3 && column < display_ram_columns);
     ++writes; pixels_sent += 128;
@@ -333,18 +352,19 @@ static void audit_animation_batches() {
                 assert(ram[panel][y][x] == (x % 18 < 2 ? 0 : bands[(panel + zone + y / 16) % 4]));
             }
     std::memcpy(probe_ram, ram, sizeof(ram));
+    std::memcpy(probe_baseline, ram, sizeof(ram));
     scroll_only = true; probe_steps = 0;
     before = scroll_updates;
     probe.poll(10000); assert(scroll_updates == before);
     for (unsigned repetition = 0; repetition < 2; ++repetition) {
         probe.start();
         // Exercise micros rollover and a complete C-triggered repeat.
-        for (uint32_t elapsed = 0; elapsed < 18000000; elapsed += 100) {
-            probe_now = UINT32_MAX - 500000 + repetition * 18000000 + elapsed;
+        for (uint32_t elapsed = 0; elapsed < 26000000; elapsed += 100) {
+            probe_now = UINT32_MAX - 500000 + repetition * 26000000 + elapsed;
             probe.poll(probe_now);
         }
-        assert(scroll_updates == before + (repetition + 1) * 8 * 232 && ring == 0);
-        assert(writes == initial_writes + 486 + (repetition + 1) * 4 * 232 * 3);
+        assert(scroll_updates == before + (repetition + 1) * (8 * 232 + 8) && ring == 0);
+        assert(writes == initial_writes + 486 + (repetition + 1) * (4 * 232 * 3 + 8 * 486));
     }
     probe.start(); probe.poll(probe_now);
     probe.stop(); before = scroll_updates;

@@ -1,6 +1,55 @@
-# Unchanged-pixel rewrite comparison
+# Contrasting changed-pixel comparison
 
-The current `CNTRL DISPLAY EDGE` sequence alternates two conditions using the
+The current `CNTRL DISPLAY EDGE` experiment compares scroll-only movement
+with writes of a distinct incoming pattern: eight-pixel white/black horizontal
+stripes. The control uses the same preloaded block/ruler pattern as before.
+Brightness stays constant, and both conditions retain the same 1.5 ms step
+reservation and 500 ms / 60 Hz progress targets. Actual timing equality remains
+unmeasured if transfers exceed their reserved interval.
+
+Press C once. Four left/right pairs run in this order:
+
+| Pair | Condition |
+| --- | --- |
+| 1 | Scroll only |
+| 2 | Write contrasting striped columns while scrolling |
+| 3 | Scroll only |
+| 4 | Write contrasting striped columns while scrolling |
+
+Each individual movement starts from offset zero and the fully restored
+baseline, including all 162 RAM columns on all panels. The reset visibly
+repaints the screen, then settles for 700 ms before the next movement.
+The first movement uses the baseline already prepared while armed. Each
+completed motion is held for 1.5 seconds before reset. After the last motion
+the baseline is restored and the test waits for C again. Allow **30 seconds**
+for watching/recording, including preparation overhead. F exits to the saved UI.
+
+During a leftward rewrite trial, striped content should enter from the right;
+look for a narrow striped fragment at the far left while original blocks
+remain there. During a rightward rewrite trial, stripes should enter from the
+left; inspect the far right. Once the old image has scrolled out, a fully
+striped display is expected. Reset/repaint frames are not evidence of the bug.
+
+This replaces the preceding unchanged-pixel comparison. It deliberately
+changes RAM contents at the production incoming-column addresses. It retains
+the diagnostic's pattern, target timing and pair order, with per-movement
+resets necessary to keep later trials from inheriting striped RAM. Normal
+patch scrolling is unchanged.
+
+Native tests check the full baseline and resets, contrasting payloads and
+incoming addresses for every rewrite step, zero motion writes in controls,
+offset sequences, minimum spacing, C repeat, stopping and micros rollover.
+Expected RAM changes are tracked independently and checked at each command.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`82c08c65919f0d929066682f8f53845b1e19004bd75b4033af0bbb23df6f758a`.
+Native tests and ARM image checks passed. After upload/reset, USB returned
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. Visual results remain
+pending; the sequence awaits C.
+
+## Previous unchanged-pixel rewrite comparison
+
+The preceding `CNTRL DISPLAY EDGE` sequence alternated two conditions using the
 same preloaded 162-column pattern. No labels are repainted during the test.
 Brightness remains constant. Each pair consists of one leftward and one
 rightward scroll:
