@@ -1616,3 +1616,35 @@ Use the generic [host instructions](../../../../firmware/README.md) with
 `--target cntrl/maker/morningstar/mc/patch-switcher-target.json`. The Python CLI
 and compiled show format are independent of the controller. Install firmware
 separately using the established recovery/upload workflow only when authorized.
+
+## Working theory summary, 2026-11-01
+
+Our working theory is that we reuse display RAM before the panel has finished
+displaying it at its old position.
+
+A scroll command requests a new mapping, but the panel does not necessarily use
+that mapping immediately. Meanwhile, we write incoming pixels into columns that
+are hidden according to the requested position. If the panel still reads those
+columns using the old mapping, the incoming pixels briefly appear at the
+outgoing edge: the sliver.
+
+The evidence fits that explanation:
+
+- **The static mapping works.** Both hidden columns remain invisible after
+  settling and reveal correctly at either edge at the three tested offsets.
+- **Five milliseconds is sometimes too soon.** The video shows newly written
+  markers at the old edge after an isolated scroll request, even without
+  continuous scrolling.
+- **Slower movement helps.** It gives the panel more time before RAM is reused.
+- **Two-column batches and porch changes did not fix it.** Neither establishes
+  that the panel has finished using the old mapping.
+
+What we still do not know is exactly when the offset takes effect and when each
+column is fetched. That uncertainty matters: our simplified models explain the
+general failure, but not every directional observation, and they have not
+produced a reliable half-second schedule.
+
+The leading explanation is therefore a timing mismatch between requested
+scrolling and actual panel reads, rather than an incorrect static address
+mapping. It is not yet a complete explanation of the controller's behavior,
+and there is no verified smooth fix.
