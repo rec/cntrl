@@ -1,4 +1,54 @@
-# Contrasting changed-pixel comparison
+# Horizontal-stripe speed sweep
+
+The current `CNTRL DISPLAY EDGE` experiment uses only horizontal stripes.
+The baseline has eight-pixel-high grey stripes separated by eight black rows.
+Incoming columns use the earlier eight-white/eight-black horizontal marker,
+shifted vertically by eight rows relative to the baseline. This replaces the
+vertical-bar pattern after the user found it difficult to read. The speed
+sequence and scheduling are unchanged. All three panels use the same pattern;
+brightness remains constant.
+
+Press C once. Two left/right pairs run at each target duration, fastest first:
+
+| Pairs | Target duration per movement | Approximate rate |
+| --- | --- | --- |
+| 1-2 | 0.5 seconds | 464 columns/second |
+| 3-4 | 1 second | 232 columns/second |
+| 5-6 | 2 seconds | 116 columns/second |
+| 7-8 | 4 seconds | 58 columns/second |
+
+Every movement has 232 one-column steps, with the production 60 Hz progress
+targets and write-three-panels-then-scroll ordering. The previous artificial
+1.5 ms reservation is removed. Transfer, computation and polling overhead can
+make the fastest passes finish late; durations and rates above are targets,
+not measured hardware timings. Changing duration also changes batch sizes,
+so this probes the combined production timing behaviour, not only a uniform
+interval between individual writes.
+
+The full 162-column baseline reloads before each movement, followed by a
+500 ms settle. Completed movements hold for one second. The first movement
+uses the baseline already prepared while armed. Allow **70 seconds** for the
+complete sequence and recording margin. After the final reset it waits for C;
+C repeats everything, and F exits to the saved UI.
+
+During leftward motion, incoming white bars belong on the right; inspect the
+far left for premature fragments. Reverse those sides during rightward motion.
+The incoming pattern contains black intervals too, so not every unsafe write
+would make a white fringe. Exclude the visible reset/repaint between trials.
+Compare the widest clearly identified fringe across repetitions at each speed.
+A wider fringe at higher speed supports a timing explanation. Uncontrolled
+scan phase, coarse step batches and optical response prevent assuming exact
+proportionality or interpreting one clean pass as proof.
+
+Native tests check every baseline/marker pixel, all incoming addresses and
+offsets, each speed group's timing targets, resets, both repetitions of the
+full sequence, stop and micros rollover. Normal patch scrolling is unchanged.
+
+Installed and armed on 2026-11-01 with image SHA-256
+`c9ca86d845212dc6333232e88b45a93613cd957f575cf383d968c3b895001330`.
+Native tests and ARM image checks passed. Visual speed/width results are pending.
+
+## Previous contrasting changed-pixel comparison
 
 The current `CNTRL DISPLAY EDGE` experiment compares scroll-only movement
 with writes of a distinct incoming pattern: eight-pixel white/black horizontal

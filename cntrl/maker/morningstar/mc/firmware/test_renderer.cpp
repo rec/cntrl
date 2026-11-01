@@ -46,12 +46,20 @@ void scroll_display_panorama(unsigned offset) {
     if (scroll_only) {
         assert(std::memcmp(probe_ram, ram, sizeof(ram)) == 0);
         bool undo = (probe_steps / 232) % 2;
-        bool rewrite = (probe_steps / (2 * 232)) % 2;
-        assert(probe_writes == (rewrite ? 3u : 0u));
+        assert(probe_writes == 3);
         probe_writes = 0;
         assert(offset == (ring + (undo ? 161 : 1)) % 162);
-        if (probe_steps) assert(uint32_t(probe_now - probe_last) >= 1500);
-        probe_last = probe_now; ++probe_steps;
+        if (probe_steps % 232 == 0) probe_last = probe_now;
+        if (probe_steps % 232 == 231) {
+            const unsigned durations[] = {500, 1000, 2000, 4000};
+            unsigned duration = durations[(probe_steps / (4 * 232)) % 4] * 1000;
+            // At 4 seconds the first 60 Hz target still has zero progress;
+            // the first actual column arrives on the second target frame.
+            unsigned first_step = duration == 4000000 ? 34000 : 17000;
+            assert(uint32_t(probe_now - probe_last) >= duration - first_step);
+            assert(uint32_t(probe_now - probe_last) <= duration);
+        }
+        ++probe_steps;
     }
     if (audit_motion) {
         assert(audit_panel == 3); // All three writes must precede this command.
@@ -102,7 +110,6 @@ void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels
         }
         if (++probe_preloads == 486) probe_loading = false;
     } else if (scroll_only) {
-        assert((probe_steps / (2 * 232)) % 2); // Only the rewrite pair may write.
         bool undo = (probe_steps / 232) % 2;
         assert(panel == probe_writes++);
         unsigned next = (ring + (undo ? 161 : 1)) % 162;
@@ -343,13 +350,11 @@ static void audit_animation_batches() {
         probe.poll(0); assert(writes == previous + 1);
     }
     assert(writes == initial_writes + 486 && ring == 0);
-    // Check visible and hidden RAM, including every band and ruler boundary.
-    constexpr uint16_t bands[] = {0xffff, 0xffff, 0x4208, 0x4208};
+    // Check visible and hidden RAM, including every horizontal stripe boundary.
     for (unsigned panel = 0; panel < 3; ++panel)
         for (unsigned x = 0; x < 162; ++x)
             for (unsigned y = 0; y < 128; ++y) {
-                unsigned zone = x < 54 ? 0 : x < 108 ? 1 : 2;
-                assert(ram[panel][y][x] == (x % 18 < 2 ? 0 : bands[(panel + zone + y / 16) % 4]));
+                assert(ram[panel][y][x] == (y % 16 >= 8 ? 0x7bef : 0));
             }
     std::memcpy(probe_ram, ram, sizeof(ram));
     std::memcpy(probe_baseline, ram, sizeof(ram));
@@ -359,12 +364,12 @@ static void audit_animation_batches() {
     for (unsigned repetition = 0; repetition < 2; ++repetition) {
         probe.start();
         // Exercise micros rollover and a complete C-triggered repeat.
-        for (uint32_t elapsed = 0; elapsed < 26000000; elapsed += 100) {
-            probe_now = UINT32_MAX - 500000 + repetition * 26000000 + elapsed;
+        for (uint32_t elapsed = 0; elapsed < 65000000; elapsed += 100) {
+            probe_now = UINT32_MAX - 500000 + repetition * 65000000 + elapsed;
             probe.poll(probe_now);
         }
-        assert(scroll_updates == before + (repetition + 1) * (8 * 232 + 8) && ring == 0);
-        assert(writes == initial_writes + 486 + (repetition + 1) * (4 * 232 * 3 + 8 * 486));
+        assert(scroll_updates == before + (repetition + 1) * (16 * 232 + 16) && ring == 0);
+        assert(writes == initial_writes + 486 + (repetition + 1) * (16 * 232 * 3 + 16 * 486));
     }
     probe.start(); probe.poll(probe_now);
     probe.stop(); before = scroll_updates;
