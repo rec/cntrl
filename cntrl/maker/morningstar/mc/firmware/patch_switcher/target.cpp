@@ -256,10 +256,7 @@ public:
         ++scan_count_;
     }
     void show(unsigned pane, const cntrl::Pane &content) override {
-        // Controller slots are history/current/candidate; physical panels are
-        // candidate/current/history from left to right. Modules use panel order.
-        static constexpr unsigned performance_panels[] = {2, 1, 0};
-        renderer_.show(feature_open() ? pane : performance_panels[pane], content);
+        renderer_.show(pane, content);
     }
     void transition(bool undo, std::optional<unsigned> duration_ms) override { renderer_.transition(undo, duration_ms); }
 #ifdef CNTRL_DIAGNOSTICS

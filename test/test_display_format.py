@@ -111,6 +111,31 @@ def test_each_line_autoscales_independently(target: models.Target) -> None:
     assert (second[1][1], second[2]) == (16, 14)
 
 
+def test_window_records_and_pages_follow_physical_left_to_right_order(
+    target: models.Target,
+) -> None:
+    show = models.Show.model_validate(
+        {
+            'fill_in_styles': False,
+            'pages': {
+                'candidate': {'fields': ['display_name']},
+                'current': {'fields': ['brightness']},
+                'history': {'fields': ['patch_cycle.name']},
+            },
+            'windows': {
+                'next': {'page': 'candidate', 'style': {'background_color': 'red'}},
+                'sent': {'page': 'current', 'style': {'background_color': 'green'}},
+                'undo': {'page': 'history', 'style': {'background_color': 'blue'}},
+            },
+        }
+    )
+    windows, refs, block = display.compile_display(show, [patch()], target)
+    assert [graphics.SCREEN.unpack(w)[5] for w in windows] == [0xF800, 0x0400, 0x001F]
+    assert [r[3] for r in lines(block, refs[0][0])] == ['Flute']
+    assert [r[3] for r in lines(block, refs[0][1])] == ['192']
+    assert [r[3] for r in lines(block, refs[0][2])] == ['wind']
+
+
 def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
     target: models.Target,
 ) -> None:
@@ -136,7 +161,7 @@ def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
         }
     )
     _, refs, block = display.compile_display(show, [value], target)
-    heading, label = lines(block, refs[0][2])
+    heading, label = lines(block, refs[0][0])
     assert (heading[1][4], heading[1][5]) == (65504, 31)
     assert (label[1][4], label[1][5]) == (1024, 31)
 
@@ -267,7 +292,7 @@ def test_tag_labels_and_patch_content_resolve_their_own_styles(
         }
     )
     _, refs, block = display.compile_display(show, [value], target)
-    tags, label = lines(block, refs[0][2])
+    tags, label = lines(block, refs[0][0])
     assert tags[3] == 'sax, whole-system'
     assert tags[1][4] == 31
     assert label[1][4] == 1024

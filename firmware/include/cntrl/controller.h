@@ -287,9 +287,8 @@ private:
         Pane view;
         view.graphics = document_.graphics(slot);
         if (index >= 0) {
-            document_.page(view, unsigned(index), slot, slot == 2 && already_sent(unsigned(index)));
-            // The target displays history (logical slot 0) on the right.
-            if (slot == 0) for (auto &line : view.lines) line.stippled = true;
+            document_.page(view, unsigned(index), slot, slot == 0 && already_sent(unsigned(index)));
+            if (slot == 2) for (auto &line : view.lines) line.stippled = true;
         }
         bool has_text = false;
         for (const auto &line : view.lines) if (line.text[0]) has_text = true;
@@ -297,9 +296,9 @@ private:
         hardware_.show(slot, view);
     }
     void render() {
-        pane(0, depth_ ? history_[depth_ - 1].previous : -1);
+        pane(0, document_.patches() ? int(candidate()) : -1);
         pane(1, center_);
-        pane(2, document_.patches() ? int(candidate()) : -1);
+        pane(2, depth_ ? history_[depth_ - 1].previous : -1);
     }
 };
 } // namespace cntrl

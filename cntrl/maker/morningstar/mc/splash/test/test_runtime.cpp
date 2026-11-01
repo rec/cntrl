@@ -108,7 +108,7 @@ void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<u
         unsigned rows = panels.rows;
         uint8_t mask = 1u << button, other = 1u << ((button + 1) % 6);
         if (!session.controls(mask, now)) controller.button(button, true, now);
-        assert(device.sent == 0 && !std::strcmp(device.panes[2].lines[1].text, "Flute"));
+        assert(device.sent == 0 && !std::strcmp(device.panes[0].lines[1].text, "Flute"));
         assert(session.brightness(192, now) == 192);
         assert(!session.poll(now, true));
         assert(session.take_redraw() == (phase != 0));
@@ -116,7 +116,7 @@ void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<u
         assert(session.controls(mask | other, now + 1));
         assert(session.controls(other, now + 2));
         if (!session.controls(0, now + 3)) controller.button(button, false, now + 3);
-        assert(device.sent == 0 && !std::strcmp(device.panes[2].lines[1].text, "Flute"));
+        assert(device.sent == 0 && !std::strcmp(device.panes[0].lines[1].text, "Flute"));
         assert(!session.controls(0, now + 4));
         assert(!session.controls(1u << 2, now + 5));
         controller.button(2, true, now + 5);

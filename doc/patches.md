@@ -339,7 +339,9 @@ unknown, rather than risk sending it twice.
 
 ## Required authoring and format changes
 
-Setup format 20 and song records CSG4 replace the preceding formats. Recompile and
+Setup format 21 and song records CSG4 replace the preceding formats. Setup
+window graphics and page references use physical left-to-right order:
+next (0), sent (1), undo (2). Recompile and
 upload matching setup and song documents together before using this firmware.
 Existing binary documents are rejected; no migration or dual execution path is
 provided. Keep backups before replacing existing device data.

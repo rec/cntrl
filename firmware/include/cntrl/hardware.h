@@ -53,6 +53,7 @@ struct Hardware {
     virtual void finish_fonts(bool) {}
     virtual unsigned display_width() const = 0;
     virtual unsigned display_height() const = 0;
+    // Pane indices follow physical left-to-right order: 0, 1, 2.
     virtual void show(unsigned pane, const Pane &content) = 0;
     virtual void transition(bool undo, std::optional<unsigned> duration_ms) { (void)undo; (void)duration_ms; }
     // Temporary performance feedback bypasses dimming; a normal call clears it.

@@ -258,9 +258,9 @@ class Window(BaseModel, frozen=True):
 
 
 class Windows(BaseModel, frozen=True):
-    undo: Window = Field(default_factory=Window)
-    sent: Window = Field(default_factory=Window)
     next: Window = Field(default_factory=Window)
+    sent: Window = Field(default_factory=Window)
+    undo: Window = Field(default_factory=Window)
 
     model_config = ConfigDict(extra='forbid')
 

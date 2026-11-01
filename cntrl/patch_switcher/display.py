@@ -333,7 +333,7 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
 MAX_LINES = 16
 CONSTANT = 255
 DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22)
-WINDOW_NAMES = ('undo', 'sent', 'next')
+WINDOW_NAMES = ('next', 'sent', 'undo')
 LINE = struct.Struct('<BBHHH')
 HEADER = struct.Struct('<4sHHHHI')
 PATCH_FIELDS = (

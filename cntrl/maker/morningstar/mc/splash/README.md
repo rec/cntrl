@@ -136,7 +136,7 @@ When disabled, original asset pixels are sent directly without the tint transfor
 or color-walk calculations. Set it to `true` to enable the independent centre/outer
 color walks. This controls both startup and idle animation and does not change
 GIF motion, frame timing, or backlight fades. The current `simple-setup.toml`
-explicitly sets it to `false`. This setting requires setup format 20 firmware.
+explicitly sets it to `false`. This setting requires setup format 21 firmware.
 
 `color_cycle.h` implements the walk and pure integer RGB565 transform. The walk
 uses distinct seeds mixed with the first frame's uptime, continues between animation loops and

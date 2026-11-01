@@ -132,7 +132,7 @@ original name is preserved as UTF-8 metadata without display-character limits.
 Executable values require an explicit `type`. Named definitions use `patches`;
 ordered browser entries use `patch_cycles`. Delimiter shorthand, implicit string
 references and bare-list sequences are rejected. See
-[the Patch schema and format 20 authoring changes](../doc/patches.md) for MIDI,
+[the Patch schema and format 21 authoring changes](../doc/patches.md) for MIDI,
 state, composition, switches and stable references. Independent authoring errors
 are reported together before any binary is written. Display text is checked
 against target capabilities.
@@ -305,9 +305,10 @@ The whole screen is filled with its background, including empty history panes.
 Text is clipped to the rectangle inset by `pad` on every side. Runtime errors
 retain the center screen's colors/padding and use its left inset.
 
-The rightmost patch name alone is stippled when its instrument, program and
+The leftmost candidate patch name is stippled when its instrument, program and
 bank-select address match the most recent successful send for that instrument.
-The tag and the other two screens keep their normal foreground color.
+All populated history lines on the rightmost screen are stippled. The candidate
+heading and the center screen keep their normal rendering.
 Names/tags are not part of this comparison; the same addressed patch can
 appear under different names. Sending to another instrument does not clear it.
 Undo updates it only when a restoration is actually sent. A failed send does
@@ -318,7 +319,7 @@ triggers neither a transition nor brightness feedback.
 The stipple preserves the resolved foreground color and exposes the
 line's background at pixels where `(x + y) & 1` is nonzero. Masking follows
 composition of all glyphs, so overlapping letters share a consistent pattern.
-Tag headings, other windows and padding keep their normal appearance.
+Stippling leaves background and padding colors unchanged.
 
 Colors accept `0xRRGGBB` or case-insensitive names: black, white, red, green,
 lime, blue, yellow, cyan/aqua, magenta/fuchsia, silver, gray/grey, maroon, olive,
@@ -369,7 +370,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 14 firmware. Replace old `screens.NAME` color tables with
+version 21 firmware. Replace old `screens.NAME` color tables with
 `windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
@@ -386,11 +387,11 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (14), u16 chord milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (21), u16 chord milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
-| Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (undo/sent/next) |
+| Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
 | Metadata header, 8 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified) |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
@@ -406,7 +407,7 @@ The existing firmware tag counters and target `max_patch_cycles` limit refer
 to navigation patch cycles. Classification tags are resolved by the host and
 stored in authored display metadata; they do not change navigation records.
 
-Records occur in the order header, screens (undo/sent/next), instruments,
+Records occur in the order header, screens (next/sent/undo), instruments,
 tags, patches, metadata header, identities, bank mappings, logical banks
 and name metadata, followed by the display header, styles, pages, literal texts
 and display source metadata. Name metadata has no terminators or trailing padding; empty
@@ -419,7 +420,7 @@ nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 20 SIZE CRC\n`. Errors use
+`CNTRL STATUS\n` replies `CNTRL READY 21 SIZE CRC\n`. Errors use
 `CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
 without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
 Names in commands are hex-encoded ASCII, never paths. Requests are:

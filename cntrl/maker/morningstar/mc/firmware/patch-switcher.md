@@ -52,6 +52,10 @@ on the pedal; successful boot and read-back are not a visual test.
 ## Sliding send/undo panes
 
 The performance panes are candidate (left), current (centre), history (right).
+Pane indices are physical left-to-right throughout: 0 candidate, 1 current,
+2 history. Setup format 21 stores window graphics and page references in that
+same next/sent/undo order. The hardware adapter forwards pane indices directly,
+as it does for module screens. Recompile setups before uploading to format 21.
 A sends a patch: candidate moves right into current, and current into history.
 D undoes along the reverse path. Performance button columns are mirrored:
 A/C and D/F exchange functions; B/E retain theirs. C+F opens the module menu.

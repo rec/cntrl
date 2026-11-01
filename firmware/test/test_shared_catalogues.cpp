@@ -31,12 +31,12 @@ int main(int argc, char **argv) {
     assert(document.load(bytes.data(), unsigned(bytes.size()), board));
     assert(document.instruments() == 1 && document.patches() == 64);
     cntrl::Pane view;
-    document.page(view, 1, 2, true);
+    document.page(view, 1, 0, true);
     assert(!std::strcmp(view.lines[0].text, "Internal"));
     assert(!std::strcmp(view.lines[1].text, "Igneous"));
     assert(!std::strcmp(view.lines[2].text, "!XTREME!"));
     assert(!view.lines[0].stippled && view.lines[1].stippled && view.lines[2].stippled);
-    document.page(view, 1, 2, false);
+    document.page(view, 1, 0, false);
     assert(!view.lines[1].stippled && !view.lines[2].stippled);
     cntrl::PatchExecutor executor(board, board, board, 5);
     for (unsigned i = 0; i < 64; ++i) {

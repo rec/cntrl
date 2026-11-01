@@ -73,12 +73,12 @@ void test_empty_patch_windows_are_black(const std::vector<uint8_t> &source) {
     Fake hw; cntrl::Document doc;
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
     TestController app(hw); app.activate(doc);
-    assert(hw.panes[0].graphics.background == 0 && hw.panes[1].graphics.background == 0);
-    assert(hw.panes[2].graphics.background == 0x07e0);
+    assert(hw.panes[2].graphics.background == 0 && hw.panes[1].graphics.background == 0);
+    assert(hw.panes[0].graphics.background == 0x07e0);
     app.action(2);
-    assert(hw.panes[0].graphics.background == 0 && hw.panes[1].graphics.background == 0x07e0);
+    assert(hw.panes[2].graphics.background == 0 && hw.panes[1].graphics.background == 0x07e0);
     app.action(5);
-    assert(hw.panes[0].graphics.background == 0 && hw.panes[1].graphics.background == 0);
+    assert(hw.panes[2].graphics.background == 0 && hw.panes[1].graphics.background == 0);
 
     // A selected patch can also have a page whose fields all resolve to empty.
     unsigned display = doc.display_metadata();
@@ -144,9 +144,9 @@ void test_greyed_names(const cntrl::Document &doc) {
     Fake hw;
     TestController app(hw);
     app.activate(doc);
-    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(2); // A:Flute is now known to be selected.
-    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     hw.connected = false;
     for (unsigned i = 0; i < 3; ++i) {
         app.button(2, true, 2 * i); app.button(2, false, 2 * i + 1);
@@ -156,41 +156,41 @@ void test_greyed_names(const cntrl::Document &doc) {
     hw.connected = true;
     assert(hw.panes[1].lines[1].graphics.foreground == hw.panes[1].graphics.foreground);
     app.action(0); // B:Strings has not been sent.
-    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(2);
     assert(!hw.panes[1].lines[0].stippled && !hw.panes[1].lines[1].stippled);
-    assert(!hw.panes[2].lines[0].stippled);
+    assert(!hw.panes[0].lines[0].stippled);
     app.action(1); // Back to A:Flute, although B was sent more recently.
-    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     auto sends = hw.sent.size(), transitions = hw.transitions.size();
     app.action(2);
     assert(hw.sent.size() == sends && hw.transitions.size() == transitions && app.depth() == 2);
     app.action(1); // A:Sax is different from A's last send.
-    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(2);
-    // Logical history slot 0 maps to the physical rightmost display.
-    assert(hw.panes[0].lines[0].text[0] && hw.panes[0].lines[1].text[0]);
-    for (const auto &line : hw.panes[0].lines) if (line.text[0]) assert(line.stippled);
-    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    // History occupies physical rightmost slot 2.
+    assert(hw.panes[2].lines[0].text[0] && hw.panes[2].lines[1].text[0]);
+    for (const auto &line : hw.panes[2].lines) if (line.text[0]) assert(line.stippled);
+    assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     hw.connected = false;
     app.action(5); // Failed undo leaves A:Sax selected.
-    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     hw.connected = true;
     app.action(5); // Restore A:Flute, leaving A:Sax as candidate.
-    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(0);
-    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     unsigned sent = unsigned(hw.sent.size());
     app.action(5); app.action(5); // Unknown pre-show selections: no MIDI sent.
     assert(hw.sent.size() == sent && app.depth() == 0);
-    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(1); // A:Sax
     hw.connected = false; app.action(2);
-    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(0);
-    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.activate(doc); // A new document starts with unknown instrument state.
-    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
 }
 
 void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
@@ -204,12 +204,12 @@ void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     unsigned sent = hw.sent.size();
     app.action(5);
     assert(hw.sent.size() == sent); // No previous selection for Strings' instrument.
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Strings"));
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Strings"));
     assert((hw.transitions == std::vector<bool>{false, false, true}));
     assert((hw.durations == std::vector<std::optional<unsigned>>{std::nullopt, std::nullopt, std::nullopt}));
     app.action(5);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Flute"));
-    assert(!hw.panes[0].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
+    assert(!hw.panes[2].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
     std::vector<uint8_t> configured(doc.data(), doc.data() + doc.length());
     configured[doc.metadata() + 6] = 0x4d;
     configured[doc.metadata() + 7] = 1; // 333 milliseconds.
@@ -231,15 +231,15 @@ void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
     cntrl::put32(aliased.data() + 20, cntrl::checksum(aliased.data() + 28, unsigned(aliased.size()) - 28));
     assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
     app.activate(doc); app.action(2); app.action(1);
-    assert(!hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     std::memcpy(aliased.data() + second + 5, aliased.data() + first + 5, 2);
     cntrl::put32(aliased.data() + (doc.bank(1) - aliased.data()), cntrl::u32(doc.bank(0)));
     sync_program(aliased, doc, 1);
     cntrl::put32(aliased.data() + 20, cntrl::checksum(aliased.data() + 28, unsigned(aliased.size()) - 28));
     assert(doc.load(aliased.data(), unsigned(aliased.size()), hw));
     app.activate(doc); app.action(2); app.action(1);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Sax")); // Different name, same patch address.
-    assert(hw.panes[2].lines[1].stippled && hw.panes[2].lines[1].graphics.foreground == hw.panes[2].graphics.foreground);
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax")); // Different name, same patch address.
+    assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     unsigned sent = unsigned(hw.sent.size());
     auto transitions = hw.transitions.size();
     app.button(2, true, 100); app.button(2, false, 101);
@@ -470,7 +470,7 @@ int main(int argc, char **argv) {
         assert(formatted.load(display_bytes.data(), unsigned(display_bytes.size()), hw));
         Fake output;
         TestController app(output); app.activate(formatted);
-        const auto &view = output.panes[2];
+        const auto &view = output.panes[0];
         assert(!std::strcmp(view.lines[0].text, "192"));
         assert(!std::strcmp(view.lines[1].text, "Flute"));
         assert(!view.lines[2].text[0]);
@@ -479,7 +479,7 @@ int main(int argc, char **argv) {
         assert(view.lines[0].graphics.size == 16 && view.lines[1].graphics.size == 16);
         assert(view.lines[1].graphics.background == 31 && view.lines[1].graphics.foreground == 65535);
         cntrl::Pane numeric, settings;
-        formatted.page(numeric, 0, 0, false);
+        formatted.page(numeric, 0, 2, false);
         assert(!std::strcmp(numeric.lines[0].text, "1"));
         assert(!numeric.lines[1].text[0] && !numeric.lines[2].text[0] && !numeric.lines[3].text[0]);
         assert(!std::strcmp(numeric.lines[4].text, "a"));
@@ -490,9 +490,9 @@ int main(int argc, char **argv) {
         assert(!std::strcmp(settings.lines[2].text, "100"));
         assert(!settings.lines[3].text[0]);
         app.action(2);
-        assert(output.panes[2].lines[1].stippled);
-        assert(output.panes[2].lines[1].graphics.foreground == 65535);
-        assert(!output.panes[2].lines[0].stippled);
+        assert(output.panes[0].lines[1].stippled);
+        assert(output.panes[0].lines[1].graphics.foreground == 65535);
+        assert(!output.panes[0].lines[0].stippled);
         TestStorage storage;
         cntrl::Documents documents(storage, output, app, output);
         documents.boot(); upload(documents, display_bytes); command(documents, "CNTRL SETUP FINISH");
@@ -500,9 +500,9 @@ int main(int argc, char **argv) {
         assert(documents.edit_adjust(0, 3, 1) && documents.edit_adjust(0, 5, 1) && documents.edit_adjust(0, 0, 1));
         assert(documents.edit_save(100));
         while (documents.busy()) documents.tick(101);
-        assert(!std::strcmp(output.panes[2].lines[0].text, "193"));
-        assert(!std::strcmp(output.panes[2].lines[2].text, "0"));
-        documents.document().page(numeric, 0, 0, false);
+        assert(!std::strcmp(output.panes[0].lines[0].text, "193"));
+        assert(!std::strcmp(output.panes[0].lines[2].text, "0"));
+        documents.document().page(numeric, 0, 2, false);
         assert(!std::strcmp(numeric.lines[0].text, "2"));
         assert(!std::strcmp(numeric.lines[2].text, "0"));
     }
@@ -520,8 +520,8 @@ int main(int argc, char **argv) {
         Fake display;
         TestController app(display);
         app.activate(autoscale);
-        assert(display.panes[2].lines[0].graphics.size == 16);
-        assert(display.panes[2].lines[1].graphics.size == 16);
+        assert(display.panes[0].lines[0].graphics.size == 16);
+        assert(display.panes[0].lines[1].graphics.size == 16);
         TestStorage storage;
         TestController controller(display);
         cntrl::Documents documents(storage, display, controller, display);
@@ -529,7 +529,7 @@ int main(int argc, char **argv) {
         assert(documents.edit_begin() && documents.edit_adjust(0, 7, 1));
         assert(documents.edit_save(100));
         while (documents.busy()) documents.tick(101);
-        assert(display.panes[2].lines[0].graphics.size == 16);
+        assert(display.panes[0].lines[0].graphics.size == 16);
         scaled[style + 1] = 15; // Unsupported font size, with a valid checksum.
         cntrl::put32(scaled.data() + 20, cntrl::checksum(scaled.data() + 28, unsigned(scaled.size()) - 28));
         cntrl::Document invalid_layout;
@@ -616,31 +616,31 @@ int main(int argc, char **argv) {
     app.activate(disabled);
     assert(!hw.splash);
     app.activate(doc);
-    assert(hw.sent.empty() && !hw.panes[0].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
-    assert(!hw.panes[0].lines[0].text[0] && !hw.panes[1].lines[0].text[0]);
-    assert(hw.panes[2].lines[0].x >= 4 && hw.panes[2].lines[1].x >= 4);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Flute"));
-    app.action(0); assert(!std::strcmp(hw.panes[2].lines[1].text, "Strings"));
+    assert(hw.sent.empty() && !hw.panes[2].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
+    assert(!hw.panes[2].lines[0].text[0] && !hw.panes[1].lines[0].text[0]);
+    assert(hw.panes[0].lines[0].x >= 4 && hw.panes[0].lines[1].x >= 4);
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
+    app.action(0); assert(!std::strcmp(hw.panes[0].lines[1].text, "Strings"));
     app.action(1); app.action(1); // Sax
-    app.action(4); assert(!std::strcmp(hw.panes[2].lines[1].text, "Pad"));
-    app.action(3); assert(!std::strcmp(hw.panes[2].lines[1].text, "Sax"));
+    app.action(4); assert(!std::strcmp(hw.panes[0].lines[1].text, "Pad"));
+    app.action(3); assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
     assert(hw.sent.empty());
     app.activate(doc);
     app.action(2); // A:Flute, bank select + PC + volume + pan.
     assert((hw.sent.back() == std::vector<uint8_t>{0xb0, 0, 1, 0xb0, 32, 2, 0xc0, 0, 0xb0, 7, 100, 0xb0, 10, 0}));
     app.action(0); app.action(2); // B:Strings
     app.action(0); app.action(2); // A:Sax
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
+    assert(!std::strcmp(hw.panes[2].lines[1].text, "Flute"));
     app.action(5);
     assert(hw.routes.back() == "din" && hw.sent.back()[7] == 0);
     assert(!std::strcmp(hw.panes[1].lines[1].text, "Flute"));
-    assert(!hw.panes[0].lines[1].text[0]); // Next undo is B's first send.
+    assert(!hw.panes[2].lines[1].text[0]); // Next undo is B's first send.
     unsigned count = unsigned(hw.sent.size());
     app.action(5); assert(hw.sent.size() == count);
     assert(!std::strcmp(hw.panes[1].lines[1].text, "Flute"));
     app.action(5); assert(hw.sent.size() == count && app.depth() == 0);
-    assert(!hw.panes[0].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Flute"));
+    assert(!hw.panes[2].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
     app.action(5); assert(hw.sent.size() == count);
     app.activate(doc);
     hw.connected = false; app.action(2); assert(app.depth() == 0 && hw.errors);
@@ -657,22 +657,22 @@ int main(int argc, char **argv) {
     // Single release, inclusive pairing, ignored third button, and C immediacy.
     app.activate(doc);
     app.button(1, true, 0); app.button(1, false, 40);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Sax"));
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
     app.button(0, true, 100); app.button(1, true, 200);
     app.button(4, true, 201); app.tick(500);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Sax"));
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
     count = unsigned(hw.sent.size()); app.button(2, true, 501);
     assert(hw.sent.size() == count + 1);
     app.button(0, false, 502); app.button(1, false, 503);
     app.button(4, false, 504);
     app.button(0, true, 600); app.button(4, true, 650); // Unrecognized A+E.
     app.button(0, false, 651); app.button(4, false, 652);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Sax"));
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
     app.button(1, true, 0xfffffff0u); app.tick(0x54u);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Sax")); // Exactly 100 ms.
-    app.tick(0x55u); assert(!std::strcmp(hw.panes[2].lines[1].text, "Strings"));
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax")); // Exactly 100 ms.
+    app.tick(0x55u); assert(!std::strcmp(hw.panes[0].lines[1].text, "Strings"));
     app.button(1, false, 0x56u); app.tick(0x100u);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "Strings"));
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Strings"));
     const unsigned pairs[][2] = {{0, 1}, {0, 3}, {1, 4}, {3, 4}};
     const cntrl::Chord recognized[] = {cntrl::Chord::ab, cntrl::Chord::ad,
                                       cntrl::Chord::be, cntrl::Chord::de};
@@ -681,7 +681,7 @@ int main(int argc, char **argv) {
         app.button(pairs[i][reverse], true, 0);
         assert(app.button(pairs[i][1 - reverse], true, 100) == recognized[i]);
         app.tick(500);
-        assert(!std::strcmp(hw.panes[2].lines[1].text, "Flute"));
+        assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
     }
     // Persistent upload, status, reboot, and interrupted inactive-slot writes.
     TestStorage memory;
@@ -691,10 +691,10 @@ int main(int argc, char **argv) {
     docs.boot(); assert(io.sent.empty());
     upload(docs, bytes); assert(io.replies.back() == "CNTRL OK");
     command(docs, "CNTRL SETUP FINISH");
-    assert(io.sent.empty() && !std::strcmp(io.panes[2].lines[1].text, "Flute"));
+    assert(io.sent.empty() && !std::strcmp(io.panes[0].lines[1].text, "Flute"));
     command(docs, "CNTRL STATUS"); assert(io.replies.back().find("CNTRL READY " + std::to_string(cntrl::document_version) + " ") == 0);
     cntrl::Documents reboot(memory, io, runner, io);
-    reboot.boot(); assert(!std::strcmp(io.panes[2].lines[1].text, "Flute"));
+    reboot.boot(); assert(!std::strcmp(io.panes[0].lines[1].text, "Flute"));
     auto new_show = bytes;
     new_show[18] = 128;
     unsigned first_patch = 76 + 2 * 68 + 2 * 68;
@@ -709,15 +709,15 @@ int main(int argc, char **argv) {
         replacement.boot(); upload(replacement, new_show);
         assert(io.replies.back().find("CNTRL ERROR ") == 0);
         cntrl::Documents recovery(interrupted, io, runner, io);
-        recovery.boot(); assert(!std::strcmp(io.panes[2].lines[1].text, "Flute"));
+        recovery.boot(); assert(!std::strcmp(io.panes[0].lines[1].text, "Flute"));
     }
     upload(reboot, new_show);
     assert(io.replies.back() == "CNTRL OK");
-    assert(!std::strcmp(io.panes[2].lines[1].text, "Oboe"));
+    assert(!std::strcmp(io.panes[0].lines[1].text, "Oboe"));
     assert(io.brightness == 128);
     io.brightness = 0;
     cntrl::Documents latest(memory, io, runner, io);
-    latest.boot(); assert(!std::strcmp(io.panes[2].lines[1].text, "Oboe"));
+    latest.boot(); assert(!std::strcmp(io.panes[0].lines[1].text, "Oboe"));
     assert(io.brightness == 128);
     upload(reboot, corrupt); assert(io.replies.back() == "CNTRL ERROR invalid-document");
     command(reboot, "CNTRL SETUP PUT 54657374 500 00000000 1");
