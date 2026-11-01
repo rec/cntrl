@@ -1,9 +1,43 @@
 # Leftward scrolling slivers
 
-Investigation record, 2026-10-31. The leftward slivers are **not fixed**.
+Investigation record, updated 2026-11-01. The leftward slivers are **not fixed**.
 This report preserves results from the discarded investigation commits. Their
 IDs below are historical references, not commits retained in the cleaned history.
 This file is placed in `plan/scrolling-bug.md` at the user's explicit request.
+
+## Current status, 2026-11-01
+
+The original record below covers the initial cleanup and trials. Later work
+is documented in [the RAM-reuse investigation](../cntrl/maker/morningstar/mc/scrolling-scan-timing.md)
+and [the installed diagnostic and experiment history](../cntrl/maker/morningstar/mc/firmware/scroll-timing.md).
+
+- Hardware scrolling of preloaded RAM looked smooth and clean to the user.
+  Rewriting unchanged pixels did not clearly reproduce the original fringe
+  in the inspected video. Contrasting changed pixels did reproduce incoming
+  content at the outgoing edge in both directions.
+- Slower horizontal-stripe transitions reduced the observed fringe. The user
+  reported visible effects at 0.5 and 1 second, a hint at 1.75, and none seen
+  at 2 or 4 seconds. Inspected refined-sweep video confirms intermittent
+  fringes through 1.5 seconds; the tail gives weaker coverage of 1.75 seconds.
+  These are observations, not a guaranteed safe threshold or measured panel rate.
+- The latest diagnostic, source `77bdc62`, limits batches to two columns with
+  starts at least 4,311 us apart, targeting 0.5 seconds overall. The user reports
+  a very clear fringe in every leftward case and none visible in the rightward
+  cases. Thus limiting batches to two is **not a complete fix**. Actual on-device
+  duration and a video of this latest trial have not been measured/inspected.
+- Delayed-offset and progressive-scan host models reproduce some hazards, but
+  do not explain all physical observations. TE configuration readback works;
+  no usable live frame reference has been found through the tested inputs.
+- Normal scrolling already reads prepared MCU buffers. The suspected conflict
+  is overwriting panel RAM still used by the outgoing image. Under the current
+  mapping only two of 162 full-height columns are hidden, so an arbitrary
+  complete new image cannot be preloaded alongside the outgoing 160-column image.
+
+The working hypothesis is a RAM-update/visible-mapping interaction, not a
+verified hardware fault. Smooth hardware scrolling remains required. Software
+scrolling trials were too jerky; blanking and fade-out/change/fade-in were
+rejected because they interrupt visible content. The user will not disassemble
+the unit for this issue. No normal-speed hardware-scroll fix has been verified.
 
 ## Retained baseline and fixes
 
@@ -18,7 +52,7 @@ thin wrong-image strip at the left edge. Later reports described strips on
 all three displays and estimated their width at approximately four pixels.
 The artifact appears during motion and disappears after settling.
 
-Only two behavioral fixes from the investigation are retained:
+At the initial cleanup, two behavioral fixes from the investigation were retained:
 
 1. Original `17d8ef5`: permit a transition during a pending candidate repaint.
    The old `ready()` guard silently rejected the animation while the controller
@@ -230,8 +264,9 @@ solution and was another poorly targeted detour.
 ## Validation and operational limits
 
 Native display/renderer and applicable splash tests passed for the retained
-fixes and deployed trials; combined ARM firmware builds also passed. Native
-scroll models apply SSA synchronously. They cannot prove physical scan timing,
+fixes and deployed trials; combined ARM firmware builds also passed. The original
+native scroll models apply SSA synchronously. Later host models add assumed
+offset latching and progressive scanning; they still cannot prove physical scan timing,
 absence of tearing, or visual smoothness. The marker checks and user animation
 reports are separate physical evidence, not consequences of test success.
 
@@ -252,10 +287,11 @@ scrolling unusable, and software rendering did not satisfy smoothness needs.
 The stationary checks support the tested static mapping but leave live RAM
 reuse ordering unresolved. No normal-speed hardware-scroll fix was verified.
 
-The cleaned history retains baseline 33c80cd plus the two transition fixes and
+The initial cleaned history retained baseline 33c80cd plus the two transition fixes and
 their focused regressions. All experimental algorithms, delays, command-order
 changes, register probes, marker commands and additional address-audit tests
-are removed. This report preserves their results without retaining the tools.
+were removed at that cleanup. Subsequent commits added the current diagnostic
+and expanded host tests; consult the linked follow-up documents for their state.
 
 Primary references:
 

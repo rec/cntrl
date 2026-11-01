@@ -1,10 +1,36 @@
 # Scroll pointer application and RAM reuse
 
-Investigation follow-up, 2026-10-31. The initial analysis below describes the
-hardware-scroll baseline; later video evidence and a replacement candidate are
-recorded at the end.
+Investigation follow-up, updated 2026-11-01. The current findings below supersede
+earlier proposed experiments and historical deployment statements in this file.
 Read alongside [the experiment record](../../../../plan/scrolling-bug.md).
-The leftward sliver remains unresolved.
+The leftward sliver remains unresolved. The [diagnostic guide](firmware/scroll-timing.md)
+describes the installed experiment and preserves earlier protocols.
+
+## Current evidence and limits
+
+The installed diagnostic is the two-column, nominal 500 ms horizontal-stripe
+trial from `77bdc62`, image SHA-256
+`be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
+The user reports a clearly visible fringe in all leftward passes and none
+visible in rightward passes. The latest trial therefore rejects two columns
+per batch as a sufficient remedy. It is a diagnostic result, not a change to
+normal patch scrolling. No on-device duration measurement or inspected video
+of this latest trial is available.
+
+The evidence increasingly points to changed pixels reaching the outgoing edge
+while scrolling, but neither exact SSA application timing nor the RAM fetch
+order is established. Preloaded scrolling and same-pixel rewrites did not
+clearly reproduce the characteristic failure; contrasting new pixels did.
+Those comparisons also changed patterns and/or timing, so they are supporting
+evidence rather than complete isolation of the cause. A dynamic addressing or
+driver-sequencing error is not exhaustively excluded. There is no established
+hardware fault or evidence that disassembly/modification is required.
+
+Read the later sections as dated experiments. The original immediate-offset
+model, delayed-offset snapshot model and progressive scan model have different
+assumptions. Potential visible-region overwrites are not automatically optical
+damage: an already-scanned column can be overwritten without changing that frame.
+No model yet explains all observations, including changing directional results.
 
 ## Additional documented evidence
 
@@ -22,13 +48,15 @@ The exact controller revision remains unconfirmed.
 ## What the hardware-scroll baseline assumes
 
 `firmware/patch_switcher/renderer.h`, in `animate()`, increments `ring_`, stages
-three incoming columns, and sends the new pointer. Its comment that this never
-overwrites an outgoing edge is true relative to the preceding **requested**
-pointer, not necessarily the pointer currently used by scanout.
+three incoming columns, and sends the new pointer. The original comment claiming
+this never overwrote an outgoing edge has been qualified: hidden-column safety
+is relative to the preceding **requested** pointer, not necessarily the pointer
+currently used by scanout.
 
-`firmware/test_renderer.cpp` immediately applies each pointer command to its
-simulated screens. Its hidden-column assertion therefore cannot detect the
-case where several requests arrive before the panel applies them.
+The original `firmware/test_renderer.cpp` model immediately applied each pointer
+command to its simulated screens. Its hidden-column assertion could not detect
+several requests arriving before application. Later delayed/progressive replays
+are documented below; their timing remains hypothetical.
 
 At an initially settled logical offset zero, forward writes logical RAM columns
 160, 161, 0, 1, 2, ... . If scanout still uses zero, the third write overwrites
@@ -63,7 +91,7 @@ strategy alone cannot preserve the requested 500 ms motion. This is not a
 general lower bound on hardware scrolling: safely reusing already-scanned rows
 could permit more work, if their timing is known.
 
-## Next discriminating experiment
+## Initial proposed discriminating experiment (subsequently performed)
 
 The useful missing observation is the time between a pointer command and its
 visible application, together with when overwritten edge RAM is scanned.
@@ -78,6 +106,9 @@ phases; a single clean delay is not a bound.
 A verified accessible TE signal would supply a better direct timing reference,
 but no such connection is established. Register receipt is not that reference.
 Neither experiment was implemented at the time of this initial analysis.
+The later single-jump diagnostic rejected a fixed 5 ms delay; preloaded,
+unchanged-pixel and changed-pixel motion tests followed. See the later evidence
+table rather than treating this original proposal as the next action.
 
 Validation here was source inspection and independent arithmetic. No application,
 device command, firmware upload, Python test suite, or hardware measurement ran.
@@ -164,6 +195,19 @@ This supplies no TE timing reference through the tested reader inputs. It
 does not prove that the TE command took effect, that TE is disconnected, or
 that no other MCU connection exists. Register readback was not part of this
 probe. It does not establish a scanout bound or fix the moving strip.
+
+The working probe image SHA-256 was
+`86f057907103f692a26d92984dc9c040e85ac7180dd091adca1d5af91fa53e18`.
+An initial image rejected the diagnostic command because its router had not
+been extended; it produced no timing measurements. The corrected image's ARM
+build and flash configuration/HEX-ELF checks passed. The probe was then removed
+from the sources rather than retained as a production command.
+
+The baseline native tests and ARM image checks passed after removing the probe.
+The normal hardware-scrolling image, SHA-256
+`dca55d0cbfe3be31cd24b47ccf9c54c4baef3759376ad79f4f411f614ed76d20`,
+was restored on the pedal and returned `CNTRL READY 20 21411 fa5ba7e8` at that
+historical stage. Later diagnostic deployments supersede that restoration.
 
 ## TE readback and passive MCU input search, 2026-10-31
 
@@ -413,18 +457,105 @@ the earlier compensated MADCTL trial already failed on the device (see
 Native tests assert both the already-scanned clean cases and corruption at
 every sampled phase when the outgoing edge is scanned last, as well as clean
 slow controls and complete final frames. This remains a host-only experiment;
-the installed production-sequence diagnostic and scrolling algorithm are
-unchanged. No new physical timing measurement or hardware-fault conclusion
+the diagnostic and normal scrolling algorithm were unchanged by that model
+commit. No new physical timing measurement or hardware-fault conclusion
 follows from this model.
 
-The working probe image SHA-256 was
-`86f057907103f692a26d92984dc9c040e85ac7180dd091adca1d5af91fa53e18`.
-An initial image rejected the diagnostic command because its router had not
-been extended; it produced no timing measurements. The corrected image's ARM
-build and flash configuration/HEX-ELF checks passed. The probe was then removed
-from the sources rather than retained as a production command.
+## Later optical comparisons and speed sweeps, 2026-11-01
 
-The baseline native tests and ARM image checks passed after removing the probe.
-The normal hardware-scrolling image, SHA-256
-`dca55d0cbfe3be31cd24b47ccf9c54c4baef3759376ad79f4f411f614ed76d20`,
-was restored on the pedal and returned `CNTRL READY 20 21411 fa5ba7e8`.
+All video filenames below refer to originals supplied from `/Users/tom/Desktop/`.
+Playback timestamps are locating aids, not physical timing measurements. Exports
+contain speed changes; nominal playback fps does not establish preservation of
+all 240 fps source samples. Local crops/contact sheets under `/private/tmp/` are
+inspection aids, not durable repository fixtures.
+
+| Experiment | Evidence | Supported conclusion and limit |
+| --- | --- | --- |
+| Scroll preloaded RAM without pixel writes (`574454f`) | User described smooth, impressive motion with no apparent glitches | Scrolling a fixed pattern can look clean. Pattern and command spacing differed from production; this was not proof of an artifact-free scan. |
+| Scroll-only versus unchanged-pixel rewrites (`9fdf915`) | `signal-2026-11-01-13-15-01-587.mp4`; inspected rewrite movements around 28-32 and 44-48 s, controls around 60-64 and 76-80 s | No clear return of the original wrong-pattern fringe. Initial camera motion and compressed timing weaken early trials; the final reverse trial is not captured. The block/ruler pattern limits negative conclusions. |
+| Contrasting changed-pixel writes (`a60372e`) | `signal-2026-11-01-13-36-41-071.mp4`; about 24 s leftward and 45-46 s rightward | Fine incoming stripe fragments appear at the outgoing edge while old blocks remain, separately from reset painting. This reproduces changed-content fringes in both directions. |
+| Broad duration sweep (`947e667`, corrected to horizontal stripes by `9877d06`) | User saw a large fringe at 0.5 s, medium at 1 s, nothing visible at 2 or 4 s; that video was not supplied | Supports speed sensitivity, not an exact width measurement or safe threshold. Vertical bars and staggered checkerboards were rejected as confusing; horizontal stripes were preferred. |
+| Refined 1/1.25/1.5/1.75 s sweep (`799a9ef`) | `signal-2026-11-01-14-20-40-925.mp4`, 7,330 video frames over about 244.246 s | Inspected slowed sections show a narrow intermittent fringe through 1.5 s; the tail gives less detailed coverage of 1.75 s. The user reports a hint at 1.75 s. No exact native-column width or linear speed/width fit was established. |
+| Two-column batches at nominal 0.5 s (`77bdc62`) | User reports every leftward pass visibly fringed and every rightward pass visually clean | Rejects the proposed batch-size-only fix. A recording and actual device duration for this trial remain unavailable. |
+
+The user reports that fringe size wavers within a pass. Inspect repeated frames
+and distinguish the incoming leading boundary from a separate outgoing-edge
+fragment. A fully replaced striped image at the end and the baseline repaint
+between trials are expected. Camera exposure, perspective and LCD response
+limit physical-column width estimates from these recordings.
+
+### Batch size versus average speed
+
+For the normal 60 Hz progression, the exact software batch counts are:
+
+| Target duration | Column batches per transition |
+| --- | --- |
+| 0.5 s | 8 batches of 7, 22 of 8 |
+| 1 s | 8 of 3, 52 of 4 |
+| 1.25 s | 68 of 3, 7 of 4 |
+| 1.5 s | 38 of 2, 52 of 3 |
+| 1.75 s | 83 of 2, 22 of 3 |
+| 2 s | 8 of 1, 112 of 2 |
+
+The apparent clean 2 s observation coincided with a maximum batch size of two,
+matching the two hidden RAM columns. That motivated the latest 500 ms experiment:
+116 two-column batches with starts at least 4,311 us apart, without 60 Hz catch-up
+bursts. A delayed second step also prevents a new batch for at least 1 ms from
+that step's start. All three panel columns are written before each scroll command.
+Native tests enforce the schedule and payloads; they do not acknowledge scanout.
+
+The continued leftward fringe shows that fitting a batch into two hidden columns
+is insufficient. A new batch can still reuse RAM before the actual display has
+moved far enough. The two-column experiment changes burst size/cadence while
+retaining a nominal 500 ms duration; it does not measure or synchronize panel
+refresh. Longer transitions vary both average speed and batch sizes. Neither
+comparison alone proves a fixed latency, six-step lag, exact four-column fringe,
+or strictly proportional fringe width. Panel refresh rate itself was not varied.
+
+### Source buffering, preloading and unresolved mechanism
+
+Normal scrolling already renders into MCU memory: `previous_` holds outgoing
+images, `cache_` prepared images, and `moving_pixel()` chooses source pixels.
+The diagnostic markers are generated from fixed formulas. There is no display
+RAM readback used as the animation source. More source buffering alone cannot
+prevent the destination panel RAM from changing while that RAM is being scanned.
+
+Under the current full-height mapping, 160 of 162 columns are visible. The two
+hidden columns permit partial preloading, not storage of an arbitrary full next
+image alongside the outgoing image. Preloaded scrolling rotates an existing
+162-column ring; after 162 steps the RAM mapping repeats. A real transition to
+different content must eventually replace pixels. The two arbitrary 160-column
+images require 320 columns of data, before considering the virtual gap. This is
+a limitation of full preloading in this mapping, not a proof that safe concurrent
+updates or smooth hardware scrolling are impossible.
+
+The leading hypothesis is a mismatch between RAM reuse and the mapping/scan
+actually in use. Deferred SSA application, progressive RAM reads and dynamic
+addressing/driver sequencing remain unresolved possibilities. Register receipt,
+SPI completion and host-model success are not acknowledgements that a column
+has left the visible scan. Scan-direction changes, SSA-first ordering and 2 ms
+pacing have already failed in earlier device trials; do not repeat them as if
+untested. The latest rightward-clean result does not erase earlier rightward
+fringes in different sequences.
+
+### Constraints and code entry points
+
+Preserve continuous visible content and smooth motion. Software-rendered trials
+were rejected as jerky. Backlight blanking and fade-out/change/fade-in were
+rejected as visible interruptions, not offered as remedies. The user does not
+want to open the unit; TE readback/input results do not require disassembly as
+a next step. No specific smooth, safe update schedule has been verified.
+
+- Current diagnostic: [scroll_timing.h](firmware/patch_switcher/scroll_timing.h).
+- Normal animation and MCU source buffers: [renderer.h](firmware/patch_switcher/renderer.h), `animate()` and `moving_pixel()`.
+- Normal progress and source coordinates: [panorama.h](firmware/patch_switcher/panorama.h).
+- Native column writes and SSA command 37h: [displays.cpp](firmware/patch_switcher/displays.cpp).
+- Actual-payload audits and hypothetical scan replays: [test_renderer.cpp](firmware/test_renderer.cpp).
+
+In the diagnostic, stage 2 is idle awaiting C; `start()` leaves that state, so
+`poll()` has no stage-2 body. C repeats, F exits and redraws the saved setup.
+Arming is not persistent across a power cycle. Current source/image provenance
+is recorded in the diagnostic guide; a successful `CNTRL READY` response checks
+saved-setup loading, not firmware identity or visual quality. Further C++ edits
+should use multiline control flow with braces and separate state changes, per
+the user's readability request. This documentation update does not refactor code.

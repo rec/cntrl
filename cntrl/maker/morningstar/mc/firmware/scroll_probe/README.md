@@ -4,8 +4,14 @@ Standalone experimental firmware, not a patch-switcher mode. It initializes only
 the display/backlight and switch-reader pins, uses USB serial and never opens
 the SD card or sends MIDI. Saved shows and animation assets are untouched. It
 remains installed across power cycles until normal firmware is uploaded again.
-It is not the currently installed application; normal patch-switcher firmware
-has since been restored. Dated results below describe the diagnostic experiments.
+It is not the currently installed application. As of 2026-11-01 the pedal runs
+patch-switcher firmware with an explicitly armed `CNTRL DISPLAY EDGE` experiment,
+not this standalone probe. See [the current diagnostic](../scroll-timing.md),
+[the consolidated scrolling investigation](../../scrolling-scan-timing.md) and
+[the initial experiment record](../../../../../../plan/scrolling-bug.md).
+Dated results below describe this older standalone diagnostic, not the current
+fringe status. No smooth normal-speed fringe fix has been verified; the latest
+two-column experiment still fringes leftward according to the user.
 
 The diagnostic uses the stock panel initialization, followed by native-coordinate
 `MADCTL = 0x88` (MY/BGR retained, MV cleared), `SCRLAR = 1,160,1` and scroll start

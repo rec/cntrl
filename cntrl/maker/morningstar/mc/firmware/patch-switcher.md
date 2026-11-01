@@ -4,7 +4,40 @@ The application is built and running on the pedal. It is not a fully
 hardware-qualified release. Dated sections below retain earlier image hashes,
 format numbers and measurements; they are historical, not the current build.
 
-## Current deployment, 2026-10-25
+## Scrolling investigation status, 2026-11-01
+
+The current scrolling diagnostic source is `77bdc62`, with HEX SHA-256
+`be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
+It was uploaded and explicitly armed through `CNTRL DISPLAY EDGE`; subsequent
+USB status was `CNTRL READY 20 21411 fa5ba7e8`. This is a historical installation
+record, not a live connection check at documentation-update time. The status
+identifies saved-setup loading, not the image digest. A power cycle clears the
+diagnostic mode but does not uninstall its firmware.
+
+The diagnostic runs horizontal-stripe transitions using paced two-column
+batches at a nominal half-second duration. The user reports a clear fringe
+on every leftward pass and none visible rightward. It is not a verified fix.
+C runs/repeats the diagnostic and F exits/redraws the saved setup while armed;
+these presses are consumed rather than sending/undoing patches. Normal
+`renderer.h` scrolling remains separate and still has the original problem.
+
+See [the current protocol and history](scroll-timing.md),
+[the evidence and hypotheses](../scrolling-scan-timing.md), and
+[the initial record](../../../../../plan/scrolling-bug.md).
+The required outcome remains continuous smooth hardware scrolling. Software
+redraw trials were too jerky; blanking and fade-out replacement were rejected.
+No hardware fault or need for disassembly has been established. Native tests
+and image integrity checks do not establish visual quality or physical timing.
+
+Normal scrolling reads outgoing/prepared MCU buffers and writes one incoming
+column per panel before each SSA command. It uses a 162-column ring with 160
+visible columns, a 72-column virtual gap, 232 steps and a 500 ms default.
+Configured duration overrides the default. Progress is grouped by 60 Hz targets;
+that is not a measurement of the panel refresh rate or an acknowledgement of
+offset application. The older sliding-pane section below records historical
+default-duration changes and deployment evidence.
+
+## Historical deployment, 2026-10-25
 
 - Deployed source: `48b2693` (`Add display_name overrides to patch_switcher`),
   including the latest independent centre/outer splash colour and speed walks.

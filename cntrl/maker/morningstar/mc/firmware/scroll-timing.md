@@ -14,6 +14,12 @@ costs may stretch the nominal half-second transition. This is a bounded batch
 size, not an acknowledgement that the panel has applied the preceding offsets.
 It does not establish that two-column batching alone is safe.
 
+**Observed result, 2026-11-01:** the user reports the fringe clearly visible in
+all leftward passes and completely invisible in rightward passes. This rejects
+two-column batching as a complete fix at the nominal half-second speed. No
+video of this latest trial or actual on-device duration has been measured.
+See [the consolidated evidence and limitations](../scrolling-scan-timing.md#later-optical-comparisons-and-speed-sweeps-2026-11-01).
+
 Press C once for four left/right pairs, all using the same half-second target.
 Allow **25 seconds** including resets and recording margin. Every movement
 starts with a fully restored baseline. Completed movements hold for one second;
@@ -25,17 +31,17 @@ Native tests check two steps per batch, batch-start spacing, inter-batch quiet
 time, the approximately 500 ms target at 100 us polling, exact addresses and
 payloads, all eight transitions, resets, repeat and micros rollover. A delayed
 second-step case verifies that an overdue batch is not started immediately.
-Normal patch scrolling is unchanged pending this physical experiment.
+Normal patch scrolling is unchanged; this remains an unsuccessful diagnostic candidate.
 
 Installed and armed on 2026-11-01 with image SHA-256
 `be176066b42e537555a38fea4dc384dd44cefc9ad25fb5b54fe761fe3ffa1bdc`.
 Native tests and ARM image checks passed; USB returned the saved-setup status
-`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. Physical results and
-the actual on-device transition duration remain unmeasured.
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The user observation
+above follows that upload; actual on-device transition duration remains unmeasured.
 
 ## Previous horizontal-stripe speed sweep
 
-The current `CNTRL DISPLAY EDGE` experiment uses only horizontal stripes.
+This previous `CNTRL DISPLAY EDGE` experiment used only horizontal stripes.
 The baseline has eight-pixel-high grey stripes separated by eight black rows.
 Incoming columns use the earlier eight-white/eight-black horizontal marker,
 shifted vertically by eight rows relative to the baseline. This replaces the
@@ -86,11 +92,16 @@ full sequence, stop and micros rollover. Normal patch scrolling is unchanged.
 
 Installed and armed on 2026-11-01 with image SHA-256
 `7891583d298702c636e04b05f9e5d5b349723a81f3248723e07e40ce13ed31b7`.
-Native tests and ARM image checks passed. Visual speed/width results are pending.
+Native tests and ARM image checks passed. The later supplied recording
+`signal-2026-11-01-14-20-40-925.mp4` shows intermittent fringes in inspected
+sections through 1.5 s. The user reports a hint at 1.75 s; the tail's compressed
+playback gives weaker evidence there. Exact widths and a safe threshold were
+not measured. The target duration varies scroll speed/batch size, not panel
+refresh rate.
 
 ## Previous contrasting changed-pixel comparison
 
-The current `CNTRL DISPLAY EDGE` experiment compares scroll-only movement
+This previous `CNTRL DISPLAY EDGE` experiment compared scroll-only movement
 with writes of a distinct incoming pattern: eight-pixel white/black horizontal
 stripes. The control uses the same preloaded block/ruler pattern as before.
 Brightness stays constant, and both conditions retain the same 1.5 ms step
@@ -134,8 +145,11 @@ Expected RAM changes are tracked independently and checked at each command.
 Installed and armed on 2026-11-01 with image SHA-256
 `82c08c65919f0d929066682f8f53845b1e19004bd75b4033af0bbb23df6f758a`.
 Native tests and ARM image checks passed. After upload/reset, USB returned
-`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. Visual results remain
-pending; the sequence awaits C.
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The later recording
+`signal-2026-11-01-13-36-41-071.mp4` shows incoming stripe fragments at the
+outgoing left edge around 24 s and the outgoing right edge around 45-46 s,
+before reset painting. This confirmed the changed-content fringe in both
+directions under this protocol; it did not measure controller latency.
 
 ## Previous unchanged-pixel rewrite comparison
 
@@ -181,8 +195,10 @@ provisional until the later slow-motion recording.
 Installed and armed on 2026-11-01 with image SHA-256
 `6a172d08c0dc517ce93e5d582fe06305bbbec61ab1052de8a03876be6d134145`.
 Native tests and ARM image checks passed. After upload/reset, USB returned
-`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The sequence awaits C;
-visual comparison remains pending.
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED` at installation.
+The later `signal-2026-11-01-13-15-01-587.mp4` did not clearly reproduce the
+original fringe in inspected unchanged-pixel rewrite trials. The pattern made
+negative judgments difficult; exact matching of device timings was not verified.
 
 ## Previous scroll-only diagnostic
 
@@ -234,9 +250,11 @@ Installed and armed on 2026-10-31 with image SHA-256
 `1449ff6eaaffd015c23fc10bd64dc08e9172fec756f5a63cb5928dce10486a00`.
 Native tests, ARM compilation, binary/HEX comparison and the stock flash-header
 check passed. After upload/reset, USB returned `CNTRL READY 20 21411 fa5ba7e8`
-and `CNTRL EDGE ARMED`. No motion was triggered from the host. Visual results
-remain pending the user's recording. A power cycle clears diagnostic mode;
-the same USB command rearms it.
+and `CNTRL EDGE ARMED`. No motion was triggered from the host. The user later
+described the motion as impressive and visually free of glitches. This is an
+unaided observation, not a guaranteed clean scanout measurement. This protocol
+was superseded by the write comparisons above. A power cycle clears diagnostic
+mode; the same USB command rearms the currently installed version.
 
 ## Previous production-sequence diagnostic
 
@@ -287,8 +305,11 @@ Installed and armed with image SHA-256
 `961409bf3e9536c22f4ddd6dc5a280a7a4da207bfde385a814c3a853d8ac6e36`.
 The ARM build passed binary/HEX comparison and the stock flash-header check.
 After upload/reset, USB returned `CNTRL READY 20 21411 fa5ba7e8` and
-`CNTRL EDGE ARMED`. The sequence is waiting for C; no physical recording
-of this fixture has yet been inspected.
+`CNTRL EDGE ARMED` at installation. The subsequent
+`signal-2026-10-31-19-46-49-065.mp4` shows incoming-pattern fragments at the
+outgoing left edge around 55.5-57 s and right edge around 73.3 s. This
+reproduced the artifact through the production renderer; it was not a safe
+timing bound. That fixture has been superseded.
 
 ## Historical single-jump timing diagnostic
 
@@ -368,4 +389,8 @@ The 32-trial version passed native tests and ARM image checks and was installed
 with SHA-256
 `7aeb13b8401ee11b9b32785ea4d181ddd3e860f4a878b47fbfddd6863eb4ef37`.
 After reset it returned the same saved-setup status and `CNTRL EDGE ARMED`.
-It is waiting for C; no recording sequence was started from the host.
+It was left waiting for C at that installation; no sequence was started from
+the host. The later repeated recording
+`signal-2026-10-31-19-17-59-393.mp4` showed wrong-edge markers at 5 ms in
+leftward repetitions 5-8, rejecting 5 ms as a safe fixed delay. This protocol
+has been superseded by the later comparisons above.
