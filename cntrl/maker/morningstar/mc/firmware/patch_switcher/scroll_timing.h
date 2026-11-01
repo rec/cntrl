@@ -1,7 +1,7 @@
 #pragma once
 #include "panorama.h"
 
-// Write markers into settled hidden columns before revealing them at each edge.
+// Isolate scroll application with a single jump followed by a delayed RAM write.
 class ScrollTimingProbe {
 public:
     bool active() const { return stage_ != Stage::off; }
@@ -24,7 +24,7 @@ public:
             }
             write_pattern(column_ / 162, column_ % 162, 0);
             if (++column_ == 486) {
-                scroll_display_panorama(origins_[trial_]);
+                scroll_display_panorama(0);
                 since_ = now;
                 stage_ = running_ ? Stage::settling : Stage::waiting;
             }
@@ -38,47 +38,40 @@ public:
         if (stage_ == Stage::off || stage_ == Stage::waiting) {
             return;
         }
-        const uint32_t hold = stage_ == Stage::settling || stage_ == Stage::returned ? 1000000 : 2000000;
+        const unsigned delay_index = trial_ / 8;
+        const bool reverse = trial_ % 2;
+        const unsigned marker_column = reverse ? 159 : 0;
+        uint32_t hold = 1000000;
+        if (stage_ == Stage::settling) {
+            hold = 600000 + trial_ * 1999;
+        } else if (stage_ == Stage::jumped) {
+            hold = delays_[delay_index];
+        } else if (stage_ == Stage::cleared) {
+            hold = 100000;
+        }
         if (uint32_t(now - since_) < hold) {
             return;
         }
         since_ = now;
-        const unsigned origin = origins_[trial_];
         switch (stage_) {
         case Stage::settling:
+            scroll_display_panorama(reverse ? 159 : 3);
+            stage_ = Stage::jumped;
+            break;
+        case Stage::jumped:
             for (unsigned panel = 0; panel < 3; ++panel) {
-                write_pattern(panel, (origin + 160) % 162, 1);
+                write_pattern(panel, marker_column, reverse ? 2 : 1);
             }
-            stage_ = Stage::first_hidden;
+            stage_ = Stage::marked;
             break;
-        case Stage::first_hidden:
+        case Stage::marked:
             for (unsigned panel = 0; panel < 3; ++panel) {
-                write_pattern(panel, (origin + 161) % 162, 2);
+                write_pattern(panel, marker_column, 0);
             }
-            stage_ = Stage::second_hidden;
+            stage_ = Stage::cleared;
             break;
-        case Stage::second_hidden:
-            scroll_display_panorama((origin + 1) % 162);
-            stage_ = Stage::first_right;
-            break;
-        case Stage::first_right:
-            scroll_display_panorama((origin + 2) % 162);
-            stage_ = Stage::second_right;
-            break;
-        case Stage::second_right:
-            scroll_display_panorama(origin);
-            stage_ = Stage::returned;
-            break;
-        case Stage::returned:
-            scroll_display_panorama((origin + 161) % 162);
-            stage_ = Stage::first_left;
-            break;
-        case Stage::first_left:
-            scroll_display_panorama((origin + 160) % 162);
-            stage_ = Stage::second_left;
-            break;
-        case Stage::second_left:
-            if (++trial_ == 3) {
+        case Stage::cleared:
+            if (++trial_ == 40) {
                 trial_ = 0;
                 running_ = false;
             }
@@ -91,8 +84,7 @@ public:
     }
 private:
     enum class Stage {
-        off, loading, waiting, begin, settling, first_hidden, second_hidden,
-        first_right, second_right, returned, first_left, second_left,
+        off, loading, waiting, begin, settling, jumped, marked, cleared,
     };
     static void write_pattern(unsigned panel, unsigned x, unsigned marker) {
         uint8_t pixels[256];
@@ -107,5 +99,5 @@ private:
     unsigned column_ = 0, trial_ = 0;
     uint32_t since_ = 0;
     bool running_ = false;
-    static constexpr unsigned origins_[] = {0, 70, 161};
+    static constexpr uint32_t delays_[] = {5000, 10000, 15000, 20000, 30000};
 };

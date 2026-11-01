@@ -11,7 +11,7 @@ superseded firmware, not alternative current modes.
 ## Document map
 
 - [Current evidence and limits](#current-evidence-and-limits)
-- [Current diagnostic and controls](#current-diagnostic-static-hidden-columns)
+- [Current diagnostic and controls](#current-diagnostic-repeated-single-jump-delays)
 - [Baseline mapping and timing assumptions](#what-the-hardware-scroll-baseline-assumes)
 - [Host progressive-scan model](#progressive-scanout-replay)
 - [Video comparisons, speed sweeps and conclusions](#later-optical-comparisons-and-speed-sweeps-2026-11-01)
@@ -21,15 +21,18 @@ superseded firmware, not alternative current modes.
 
 ## Current evidence and limits
 
-The current diagnostic is the static hidden-column test below; optical results
-are pending. The preceding panel-porch comparison (`b4b6f24`) did not visibly
-improve the left-edge sliver in any setting across repeated runs, according to
-the user. This weakens the porch-delay hypothesis without ruling out scan timing.
-The user also observed a tiny disturbance in the rightmost pixel during an
-initial rightward pass, but could not reproduce it after rearming. Retain that
-as an intermittent observation, separate from the consistent left-edge defect.
-The earlier two-column trial likewise did not fix the fringe. Normal patch
-scrolling is unchanged.
+The current diagnostic is the repeated single-jump delay comparison below;
+optical results are pending. The user confirmed that the static hidden-column
+test (`223dbce`) behaved exactly as described: no signal during stationary
+hidden writes, followed by correct distinct marker reveals at both edges for
+all three offsets. This supports the tested static mapping and writable hidden
+storage, not safe reuse during continuous scrolling.
+
+The preceding panel-porch comparison (`b4b6f24`) did not visibly improve the
+left-edge sliver in any setting across repeated runs. A tiny rightmost-pixel
+disturbance during an initial rightward pass could not be reproduced after
+rearming; retain it as an intermittent observation. The earlier two-column
+trial likewise did not fix the fringe. Normal patch scrolling is unchanged.
 
 The evidence increasingly points to changed pixels reaching the outgoing edge
 while scrolling, but neither exact SSA application timing nor the RAM fetch
@@ -46,49 +49,59 @@ assumptions. Potential visible-region overwrites are not automatically optical
 damage: an already-scanned column can be overwritten without changing that frame.
 No model yet explains all observations, including changing directional results.
 
-## Current diagnostic: static hidden columns
+## Current diagnostic: repeated single-jump delays
 
-Press C once and allow **50 seconds** for three passes at logical offsets 0, 70
-and 161. All panels use the same pattern and original panel timing. Each pass
-clears all 162 RAM columns to black, selects its origin, and settles for one
-second before writing. This is a mapping test, not a smooth animation.
+Press C once and record for **90 seconds**, preferably in slow motion. There
+are 20 left/right pairs, four pairs per programmed delay in this order:
 
-| Time from settled-origin request | Action | Expected visible result |
-| --- | --- | --- |
-| 0-1 s | Settle without writes | Black |
-| 1 s | Write top-half white marker to `(origin + 160) % 162` | Still black |
-| 3 s | Write bottom-half white marker to `(origin + 161) % 162` | Still black |
-| 5 s | Scroll to origin + 1 | Top-half line at far right |
-| 7 s | Scroll to origin + 2 | Top-half line one pixel inward, bottom-half line at far right |
-| 9 s | Return to origin | Black |
-| 10 s | Scroll to origin - 1 | Bottom-half line at far left |
-| 12 s | Scroll to origin - 2 | Top-half line at far left, bottom-half line one pixel inward |
-| 14 s | Begin next baseline | Ignore reset/repaint transients |
+| Pairs | Delay after scroll request |
+| --- | --- |
+| 1-4 | 5 ms |
+| 5-8 | 10 ms |
+| 9-12 | 15 ms |
+| 13-16 | 20 ms |
+| 17-20 | 30 ms |
 
-Offsets wrap modulo 162. Reveal steps issue only scroll commands, with no
-pixel writes. At completion the black baseline is restored at offset zero;
-C repeats and F exits to the saved UI. Brightness remains constant. No labels
-are painted over the test. The porch setter and its obsolete tests have been
-removed; startup retains the stock 60/60 settings.
+Each trial starts with all 162 columns black and offset zero. After settling
+for 600 ms plus 1,999 us times the trial index, the diagnostic requests a single
+three-column jump. At the selected delay it writes one marker column on each
+panel, holds for one second, then erases that column. It waits another 100 ms
+before resetting/repainting, to avoid intentionally moving the held marker to
+the wrong edge during reset. No labels or brightness changes are used.
 
-A marker visible during the initial five-second stationary period would
-contradict the assumed hidden-column mapping at that settled offset. Correct
-reveals would support distinct usable storage and the tested static mapping,
-not prove safe RAM reuse during fast scrolling. Inspect both edges and exclude
-reset frames. The native model necessarily uses the assumed geometry; its
-checks establish the emitted sequence, not the physical mapping.
+- Leftward jump: top-half white marker written to RAM column 0. It belongs at
+  the far right. Look for a brief top-half flash at the far left.
+- Rightward jump: bottom-half white marker written to RAM column 159. It belongs
+  at the far left. Look for a brief bottom-half flash at the far right.
 
-Native tests check all marker pixels and addresses, no scroll commands during
-hidden writes, no pixel writes during reveals, both edges at all three origins,
-minimum holds, timer rollover, complete repeat, stop and rearm. Native tests and
-ARM build/image inspection passed. No Python source or Python-consumed data changed.
+The expected held markers are positive controls for the writes. Count each
+top-half/bottom-half pair; no continuous animation occurs. C repeats the complete
+sequence; F exits to the saved UI. Completion restores the black baseline.
+Original panel timing, 8 MHz SPI and normal patch scrolling are unchanged.
+
+Delays are firmware scheduling targets measured from the poll timestamp just
+before the three scroll commands, not independently measured command-to-pixel
+latencies. Sequential panel transfers and polling add skew and lateness. The
+varied settling intervals sample uncontrolled phases, not guaranteed phase
+coverage. Video playback timestamps are not physical timing measurements.
+
+This extends the earlier finding that 5 ms was not reliably safe. Short-delay
+wrong-edge flashes disappearing at longer delays would support finite mapping
+application latency. Failure at 30 ms would challenge the assumed one-frame
+bound. Clean isolated jumps would leave a continuous-command interaction as a
+candidate; none of these outcomes alone supplies a smooth half-second fix.
+
+Native checks cover all forty trials and repeat, marker addresses and payloads,
+single-jump ordering, minimum delays, erase-before-reset, timer rollover, idle,
+stop and rearm. Native tests and ARM build/image inspection passed. No Python
+source or Python-consumed data changed.
 
 Image SHA-256:
-`d2ad579546b3c091762ca00e96d3c48cdc10d97dc2f25c2dd5dd6a38216be9a6`.
-Uploaded through the existing helper on 2026-11-01. The updater reported its
-reset/disappearance status 1, then USB returned `CNTRL READY 20 21411 fa5ba7e8`
-and `CNTRL EDGE ARMED`. The demo is waiting for C; no sequence was started from
-the host. Optical results remain pending.
+`9651ebbf99335406e872ef0411c3ee9a67d3b9079c344f2ab9b74e987d0e8208`.
+Uploaded through the existing helper on 2026-11-01. The updater reported
+reset/disappearance with status 1; USB subsequently returned
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic is waiting
+for C; no trials were triggered from the host. Optical results remain pending.
 
 ## Additional documented evidence
 
@@ -620,6 +633,52 @@ the user's readability request. This documentation update does not refactor code
 
 ## Historical diagnostic protocols
 
+### Previous static hidden-column test
+
+Press C once and allow **50 seconds** for three passes at logical offsets 0, 70
+and 161. All panels use the same pattern and original panel timing. Each pass
+clears all 162 RAM columns to black, selects its origin, and settles for one
+second before writing. This is a mapping test, not a smooth animation.
+
+| Time from settled-origin request | Action | Expected visible result |
+| --- | --- | --- |
+| 0-1 s | Settle without writes | Black |
+| 1 s | Write top-half white marker to `(origin + 160) % 162` | Still black |
+| 3 s | Write bottom-half white marker to `(origin + 161) % 162` | Still black |
+| 5 s | Scroll to origin + 1 | Top-half line at far right |
+| 7 s | Scroll to origin + 2 | Top-half line one pixel inward, bottom-half line at far right |
+| 9 s | Return to origin | Black |
+| 10 s | Scroll to origin - 1 | Bottom-half line at far left |
+| 12 s | Scroll to origin - 2 | Top-half line at far left, bottom-half line one pixel inward |
+| 14 s | Begin next baseline | Ignore reset/repaint transients |
+
+Offsets wrap modulo 162. Reveal steps issue only scroll commands, with no
+pixel writes. At completion the black baseline is restored at offset zero;
+C repeats and F exits to the saved UI. Brightness remains constant. No labels
+are painted over the test. The porch setter and its obsolete tests have been
+removed; startup retains the stock 60/60 settings.
+
+A marker visible during the initial five-second stationary period would
+contradict the assumed hidden-column mapping at that settled offset. Correct
+reveals would support distinct usable storage and the tested static mapping,
+not prove safe RAM reuse during fast scrolling. Inspect both edges and exclude
+reset frames. The native model necessarily uses the assumed geometry; its
+checks establish the emitted sequence, not the physical mapping.
+
+Native tests check all marker pixels and addresses, no scroll commands during
+hidden writes, no pixel writes during reveals, both edges at all three origins,
+minimum holds, timer rollover, complete repeat, stop and rearm. Native tests and
+ARM build/image inspection passed. No Python source or Python-consumed data changed.
+
+Image SHA-256:
+`d2ad579546b3c091762ca00e96d3c48cdc10d97dc2f25c2dd5dd6a38216be9a6`.
+Uploaded through the existing helper on 2026-11-01. The updater reported its
+reset/disappearance status 1, then USB returned `CNTRL READY 20 21411 fa5ba7e8`
+and `CNTRL EDGE ARMED`. The demo is waiting for C; no sequence was started from
+the host. The user confirmed complete agreement with the expected sequence, including
+black hidden-write intervals and both distinct marker reveals at both edges.
+
+
 ### Previous panel porch comparison
 
 This experiment changes only B1h panel timing while retaining the preceding
@@ -714,7 +773,7 @@ above follows that upload; actual on-device transition duration remains unmeasur
 
 
 These protocols preserve image provenance, controls and test conditions. They
-are superseded by the current static hidden-column diagnostic. Their result statements
+are superseded by the current single-jump diagnostic. Their result statements
 are dated observations, not current device-state checks.
 
 ### Previous horizontal-stripe speed sweep

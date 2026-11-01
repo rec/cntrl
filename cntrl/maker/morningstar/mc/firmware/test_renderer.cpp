@@ -331,45 +331,34 @@ static void audit_animation_batches() {
         assert(writes == before); // Idle until C, even after a long wait.
         probe.start();
         probe.poll(now);
-        for (unsigned origin : {0u, 70u, 161u}) {
-            assert(ring == origin);
+        const uint32_t delays[] = {5000, 10000, 15000, 20000, 30000};
+        for (unsigned trial = 0; trial < 40; ++trial) {
+            const bool reverse = trial % 2;
+            assert(ring == 0);
             unsigned before_writes = writes, before_scrolls = scroll_updates;
-            hold(1000000);
-            assert(writes == before_writes + 3 && scroll_updates == before_scrolls);
+            hold(600000 + trial * 1999);
+            assert(writes == before_writes && scroll_updates == before_scrolls + 1);
+            assert(ring == (reverse ? 159 : 3));
             picture(-1, -1);
-            hold(2000000);
-            assert(writes == before_writes + 6 && scroll_updates == before_scrolls);
-            picture(-1, -1);
+            hold(delays[trial / 8]);
+            assert(writes == before_writes + 3 && scroll_updates == before_scrolls + 1);
+            picture(reverse ? -1 : 159, reverse ? 0 : -1);
             for (unsigned panel = 0; panel < 3; ++panel) {
                 for (unsigned y = 0; y < 128; ++y) {
-                    assert(ram[panel][y][(origin + 160) % 162] == (y < 64 ? 0xffff : 0));
-                    assert(ram[panel][y][(origin + 161) % 162] == (y >= 64 ? 0xffff : 0));
+                    assert(ram[panel][y][reverse ? 159 : 0] == ((reverse ? y >= 64 : y < 64) ? 0xffff : 0));
                 }
             }
-            hold(2000000);
-            assert(ring == (origin + 1) % 162);
-            picture(159, -1);
-            hold(2000000);
-            assert(ring == (origin + 2) % 162);
-            picture(158, 159);
-            hold(2000000);
-            assert(ring == origin);
-            picture(-1, -1);
             hold(1000000);
-            assert(ring == (origin + 161) % 162);
-            picture(-1, 0);
-            hold(2000000);
-            assert(ring == (origin + 160) % 162);
-            picture(0, 1);
-            assert(writes == before_writes + 6); // Reveal uses no pixel writes.
-            hold(2000000);
+            assert(writes == before_writes + 6 && scroll_updates == before_scrolls + 1);
+            picture(-1, -1);
+            hold(100000);
             load();
-            --now; // Loading records its last poll as the settle start.
+            --now;
         }
     }
     probe.start();
     probe.poll(now);
-    hold(1000000);
+    hold(600000);
     probe.stop();
     unsigned before_writes = writes, before_scrolls = scroll_updates;
     probe.poll(now + 10000000);
