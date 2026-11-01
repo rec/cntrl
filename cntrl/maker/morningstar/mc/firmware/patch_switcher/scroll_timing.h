@@ -1,70 +1,111 @@
 #pragma once
 #include "panorama.h"
 
-// Compare panel porches with unchanged two-column, nominal 500 ms motion.
+// Write markers into settled hidden columns before revealing them at each edge.
 class ScrollTimingProbe {
 public:
-    bool active() const { return stage_ != 0; }
-    void arm() { stage_ = 1; column_ = trial_ = ring_ = 0; running_ = false; }
-    void stop() {
-        if (active()) {
-            set_display_porches(60, 60);
-        }
-        stage_ = 0;
+    bool active() const { return stage_ != Stage::off; }
+    void arm() {
+        stage_ = Stage::loading;
+        column_ = trial_ = 0;
+        running_ = false;
     }
-    void start() { if (stage_ == 2) { running_ = true; stage_ = 3; } }
+    void stop() { stage_ = Stage::off; }
+    void start() {
+        if (stage_ == Stage::waiting) {
+            running_ = true;
+            stage_ = Stage::begin;
+        }
+    }
     void poll(uint32_t now) {
-        if (!active()) return;
-        if (stage_ == 1) {
-            if (!column_) {
+        if (stage_ == Stage::loading) {
+            if (column_ == 0) {
                 initialize_display_panorama();
-                const auto &porches = porches_[trial_ / 2];
-                set_display_porches(porches[0], porches[1]);
-                ring_ = 0;
             }
-            unsigned panel = column_ / 162, x = column_ % 162;
-            write_pattern(panel, x, false);
-            if (++column_ == 3 * 162) { since_ = now; stage_ = running_ ? 7 : 2; }
-        } else if (stage_ == 3) {
-            since_ = batch_since_ = last_step_ = now;
-            progress_ = batch_left_ = 0; stage_ = 4;
-        } else if (stage_ == 4) {
-            if (!batch_left_) {
-                // 116 batches * 4311 us = 500076 us. Never catch up by
-                // immediately issuing another batch after a scheduling delay.
-                if (uint32_t(now - batch_since_) < 4311 || uint32_t(now - last_step_) < 1000) return;
-                batch_since_ = now; batch_left_ = 2;
+            write_pattern(column_ / 162, column_ % 162, 0);
+            if (++column_ == 486) {
+                scroll_display_panorama(origins_[trial_]);
+                since_ = now;
+                stage_ = running_ ? Stage::settling : Stage::waiting;
             }
-            ring_ = (ring_ + (trial_ % 2 ? 161 : 1)) % 162;
-            unsigned column = (ring_ + (trial_ % 2 ? 0 : 159)) % 162;
-            for (unsigned panel = 0; panel < 3; ++panel) write_pattern(panel, column, true);
-            scroll_display_panorama(ring_);
-            --batch_left_; last_step_ = now;
-            if (++progress_ == 232) { since_ = now; stage_ = 5; }
-        } else if (stage_ == 5 && uint32_t(now - since_) >= 1000000) {
-            if (++trial_ == 12) {
-                running_ = false;
+            return;
+        }
+        if (stage_ == Stage::begin) {
+            since_ = now;
+            stage_ = Stage::settling;
+            return;
+        }
+        if (stage_ == Stage::off || stage_ == Stage::waiting) {
+            return;
+        }
+        const uint32_t hold = stage_ == Stage::settling || stage_ == Stage::returned ? 1000000 : 2000000;
+        if (uint32_t(now - since_) < hold) {
+            return;
+        }
+        since_ = now;
+        const unsigned origin = origins_[trial_];
+        switch (stage_) {
+        case Stage::settling:
+            for (unsigned panel = 0; panel < 3; ++panel) {
+                write_pattern(panel, (origin + 160) % 162, 1);
+            }
+            stage_ = Stage::first_hidden;
+            break;
+        case Stage::first_hidden:
+            for (unsigned panel = 0; panel < 3; ++panel) {
+                write_pattern(panel, (origin + 161) % 162, 2);
+            }
+            stage_ = Stage::second_hidden;
+            break;
+        case Stage::second_hidden:
+            scroll_display_panorama((origin + 1) % 162);
+            stage_ = Stage::first_right;
+            break;
+        case Stage::first_right:
+            scroll_display_panorama((origin + 2) % 162);
+            stage_ = Stage::second_right;
+            break;
+        case Stage::second_right:
+            scroll_display_panorama(origin);
+            stage_ = Stage::returned;
+            break;
+        case Stage::returned:
+            scroll_display_panorama((origin + 161) % 162);
+            stage_ = Stage::first_left;
+            break;
+        case Stage::first_left:
+            scroll_display_panorama((origin + 160) % 162);
+            stage_ = Stage::second_left;
+            break;
+        case Stage::second_left:
+            if (++trial_ == 3) {
                 trial_ = 0;
+                running_ = false;
             }
-            column_ = 0; stage_ = 1;
-        } else if (stage_ == 7 && uint32_t(now - since_) >= 500000) {
-            stage_ = 3;
+            column_ = 0;
+            stage_ = Stage::loading;
+            break;
+        default:
+            break;
         }
     }
 private:
-    static void write_pattern(unsigned panel, unsigned x, bool marker) {
+    enum class Stage {
+        off, loading, waiting, begin, settling, first_hidden, second_hidden,
+        first_right, second_right, returned, first_left, second_left,
+    };
+    static void write_pattern(unsigned panel, unsigned x, unsigned marker) {
         uint8_t pixels[256];
         for (unsigned y = 0; y < 128; ++y) {
-            uint16_t pixel = y % 16 >= 8 ? 0x7bef : 0;
-            if (marker) pixel = y % 16 < 8 ? 0xffff : 0;
-            pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
+            const uint16_t pixel = (marker == 1 && y < 64) || (marker == 2 && y >= 64) ? 0xffff : 0;
+            pixels[2 * y] = uint8_t(pixel >> 8);
+            pixels[2 * y + 1] = uint8_t(pixel);
         }
         write_display_column(panel, x, pixels);
     }
-    unsigned stage_ = 0, column_ = 0, trial_ = 0, ring_ = 0, progress_ = 0, batch_left_ = 0;
-    uint32_t since_ = 0, batch_since_ = 0, last_step_ = 0;
+    Stage stage_ = Stage::off;
+    unsigned column_ = 0, trial_ = 0;
+    uint32_t since_ = 0;
     bool running_ = false;
-    static constexpr uint8_t porches_[6][2] = {
-        {60, 60}, {16, 16}, {1, 31}, {31, 1}, {16, 16}, {60, 60},
-    };
+    static constexpr unsigned origins_[] = {0, 70, 161};
 };

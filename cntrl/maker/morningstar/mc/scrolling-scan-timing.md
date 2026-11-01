@@ -11,7 +11,7 @@ superseded firmware, not alternative current modes.
 ## Document map
 
 - [Current evidence and limits](#current-evidence-and-limits)
-- [Current diagnostic and controls](#current-diagnostic-panel-porch-comparison)
+- [Current diagnostic and controls](#current-diagnostic-static-hidden-columns)
 - [Baseline mapping and timing assumptions](#what-the-hardware-scroll-baseline-assumes)
 - [Host progressive-scan model](#progressive-scanout-replay)
 - [Video comparisons, speed sweeps and conclusions](#later-optical-comparisons-and-speed-sweeps-2026-11-01)
@@ -21,11 +21,15 @@ superseded firmware, not alternative current modes.
 
 ## Current evidence and limits
 
-The current diagnostic is the panel-porch comparison described below. Its optical
-result is pending. The preceding two-column, nominal 500 ms trial from `77bdc62`
-produced a clearly visible fringe in all leftward passes and none visible in
-rightward passes according to the user. Two-column batching alone is therefore
-not a sufficient remedy. Normal patch scrolling is unchanged.
+The current diagnostic is the static hidden-column test below; optical results
+are pending. The preceding panel-porch comparison (`b4b6f24`) did not visibly
+improve the left-edge sliver in any setting across repeated runs, according to
+the user. This weakens the porch-delay hypothesis without ruling out scan timing.
+The user also observed a tiny disturbance in the rightmost pixel during an
+initial rightward pass, but could not reproduce it after rearming. Retain that
+as an intermittent observation, separate from the consistent left-edge defect.
+The earlier two-column trial likewise did not fix the fringe. Normal patch
+scrolling is unchanged.
 
 The evidence increasingly points to changed pixels reaching the outgoing edge
 while scrolling, but neither exact SSA application timing nor the RAM fetch
@@ -42,53 +46,49 @@ assumptions. Potential visible-region overwrites are not automatically optical
 damage: an already-scanned column can be overwritten without changing that frame.
 No model yet explains all observations, including changing directional results.
 
-## Current diagnostic: panel porch comparison
+## Current diagnostic: static hidden columns
 
-This experiment changes only B1h panel timing while retaining the preceding
-horizontal stripes, 232 steps, two-column batches, 4,311 us batch spacing and
-nominal 500 ms motion. RTNA remains 5; SPI remains 8 MHz. Each pair moves left
-then right. All three panels receive the same setting before baseline repaint,
-followed by the existing 500 ms settle between movements.
+Press C once and allow **50 seconds** for three passes at logical offsets 0, 70
+and 161. All panels use the same pattern and original panel timing. Each pass
+clears all 162 RAM columns to black, selects its origin, and settles for one
+second before writing. This is a mapping test, not a smooth animation.
 
-| Pair | Front porch | Back porch | Purpose |
-| --- | --- | --- | --- |
-| 1 | 60 | 60 | Original timing control |
-| 2 | 16 | 16 | Shorter equal porches |
-| 3 | 1 | 31 | Short front porch, same total as pair 2 |
-| 4 | 31 | 1 | Short back porch, same total as pair 2 |
-| 5 | 16 | 16 | Repeat shorter equal porches |
-| 6 | 60 | 60 | Repeat original timing control |
+| Time from settled-origin request | Action | Expected visible result |
+| --- | --- | --- |
+| 0-1 s | Settle without writes | Black |
+| 1 s | Write top-half white marker to `(origin + 160) % 162` | Still black |
+| 3 s | Write bottom-half white marker to `(origin + 161) % 162` | Still black |
+| 5 s | Scroll to origin + 1 | Top-half line at far right |
+| 7 s | Scroll to origin + 2 | Top-half line one pixel inward, bottom-half line at far right |
+| 9 s | Return to origin | Black |
+| 10 s | Scroll to origin - 1 | Bottom-half line at far left |
+| 12 s | Scroll to origin - 2 | Top-half line at far left, bottom-half line one pixel inward |
+| 14 s | Begin next baseline | Ignore reset/repaint transients |
 
-Press C once and record all twelve movements, allowing **35 seconds**. Inspect
-the outgoing edge during motion, excluding baseline repaints. Count pairs in
-the order above; no labels are drawn over the stripes. C repeats the sequence;
-F exits and restores the saved UI. Original 60/60 timing is restored on exit
-and after completion. Brightness stays constant.
+Offsets wrap modulo 162. Reveal steps issue only scroll commands, with no
+pixel writes. At completion the black baseline is restored at offset zero;
+C repeats and F exits to the saved UI. Brightness remains constant. No labels
+are painted over the test. The porch setter and its obsolete tests have been
+removed; startup retains the stock 60/60 settings.
 
-The alternative hypothesis is an interval between SSA latching and the first
-visible RAM fetch. The progressive replay currently makes these simultaneous;
-a blank interval after latching could allow reuse to reach even the edge
-scanned first. This is a hypothesis, not a documented latch phase. At the
-nominal 850 kHz oscillator, the datasheet formula estimates approximately
-60 Hz for 60/60 and 87 Hz for all three shortened settings (LINE=160..162).
-Actual refresh and movement duration are unmeasured. Shortening porches changes
-both blanking time and refresh rate; comparing 16/16, 1/31 and 31/1 holds the
-nominal frame period constant while changing the distribution.
+A marker visible during the initial five-second stationary period would
+contradict the assumed hidden-column mapping at that settled offset. Correct
+reveals would support distinct usable storage and the tested static mapping,
+not prove safe RAM reuse during fast scrolling. Inspect both edges and exclude
+reset frames. The native model necessarily uses the assumed geometry; its
+checks establish the emitted sequence, not the physical mapping.
 
-Native tests cover the full twelve-movement sequence and repeat, exact porch
-settings, pixel payloads, two-column pacing, delayed polling, timer rollover,
-completion restoration and exit restoration. Bus tests verify B1h payloads on
-all panels and SPI/GPIO handoff. Native tests and ARM build/image inspection
-passed. No Python source or Python-consumed data changed.
+Native tests check all marker pixels and addresses, no scroll commands during
+hidden writes, no pixel writes during reveals, both edges at all three origins,
+minimum holds, timer rollover, complete repeat, stop and rearm. Native tests and
+ARM build/image inspection passed. No Python source or Python-consumed data changed.
 
-Diagnostic image SHA-256:
-`561bc292a8de481dbe8ca8984639314968568f153cc429b395a3557ff019dbd1`.
-Uploaded through the existing helper on 2026-11-01. The updater reported
-reset/disappearance with status 1; subsequent USB responses were
-`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic is waiting
-for C; no motion was triggered from the host. Optical results remain pending.
-This experiment does not include the separately suggested static hidden-column
-test.
+Image SHA-256:
+`d2ad579546b3c091762ca00e96d3c48cdc10d97dc2f25c2dd5dd6a38216be9a6`.
+Uploaded through the existing helper on 2026-11-01. The updater reported its
+reset/disappearance status 1, then USB returned `CNTRL READY 20 21411 fa5ba7e8`
+and `CNTRL EDGE ARMED`. The demo is waiting for C; no sequence was started from
+the host. Optical results remain pending.
 
 ## Additional documented evidence
 
@@ -620,6 +620,57 @@ the user's readability request. This documentation update does not refactor code
 
 ## Historical diagnostic protocols
 
+### Previous panel porch comparison
+
+This experiment changes only B1h panel timing while retaining the preceding
+horizontal stripes, 232 steps, two-column batches, 4,311 us batch spacing and
+nominal 500 ms motion. RTNA remains 5; SPI remains 8 MHz. Each pair moves left
+then right. All three panels receive the same setting before baseline repaint,
+followed by the existing 500 ms settle between movements.
+
+| Pair | Front porch | Back porch | Purpose |
+| --- | --- | --- | --- |
+| 1 | 60 | 60 | Original timing control |
+| 2 | 16 | 16 | Shorter equal porches |
+| 3 | 1 | 31 | Short front porch, same total as pair 2 |
+| 4 | 31 | 1 | Short back porch, same total as pair 2 |
+| 5 | 16 | 16 | Repeat shorter equal porches |
+| 6 | 60 | 60 | Repeat original timing control |
+
+Press C once and record all twelve movements, allowing **35 seconds**. Inspect
+the outgoing edge during motion, excluding baseline repaints. Count pairs in
+the order above; no labels are drawn over the stripes. C repeats the sequence;
+F exits and restores the saved UI. Original 60/60 timing is restored on exit
+and after completion. Brightness stays constant.
+
+The alternative hypothesis is an interval between SSA latching and the first
+visible RAM fetch. The progressive replay currently makes these simultaneous;
+a blank interval after latching could allow reuse to reach even the edge
+scanned first. This is a hypothesis, not a documented latch phase. At the
+nominal 850 kHz oscillator, the datasheet formula estimates approximately
+60 Hz for 60/60 and 87 Hz for all three shortened settings (LINE=160..162).
+Actual refresh and movement duration are unmeasured. Shortening porches changes
+both blanking time and refresh rate; comparing 16/16, 1/31 and 31/1 holds the
+nominal frame period constant while changing the distribution.
+
+Native tests cover the full twelve-movement sequence and repeat, exact porch
+settings, pixel payloads, two-column pacing, delayed polling, timer rollover,
+completion restoration and exit restoration. Bus tests verify B1h payloads on
+all panels and SPI/GPIO handoff. Native tests and ARM build/image inspection
+passed. No Python source or Python-consumed data changed.
+
+Diagnostic image SHA-256:
+`561bc292a8de481dbe8ca8984639314968568f153cc429b395a3557ff019dbd1`.
+Uploaded through the existing helper on 2026-11-01. The updater reported
+reset/disappearance with status 1; subsequent USB responses were
+`CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic was left waiting
+for C; no motion was triggered from the host. The user subsequently reported
+identical left-edge slivers in every setting across repeated runs. An initial
+rightmost-pixel disturbance was observed but not reproduced after rearming.
+This experiment does not include the separately suggested static hidden-column
+test.
+
+
 ### Previous two-column half-second test
 
 The previous `CNTRL DISPLAY EDGE` diagnostic keeps the horizontal grey baseline
@@ -663,7 +714,7 @@ above follows that upload; actual on-device transition duration remains unmeasur
 
 
 These protocols preserve image provenance, controls and test conditions. They
-are superseded by the current panel-porch diagnostic. Their result statements
+are superseded by the current static hidden-column diagnostic. Their result statements
 are dated observations, not current device-state checks.
 
 ### Previous horizontal-stripe speed sweep

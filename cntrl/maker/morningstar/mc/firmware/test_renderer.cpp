@@ -21,21 +21,6 @@ struct ScrollStep {
     uint16_t pixels[3][128] = {};
 };
 static std::vector<ScrollStep> scroll_trace;
-static bool scroll_only = false;
-static uint32_t probe_now = 0, probe_last = 0;
-static uint32_t probe_batch = 0, probe_previous = 0;
-static unsigned probe_steps = 0;
-static unsigned probe_writes = 0;
-static uint16_t probe_ram[3][128][162];
-static uint16_t probe_baseline[3][128][162];
-static bool probe_loading = false;
-static unsigned probe_preloads = 0;
-static std::vector<std::pair<uint8_t, uint8_t>> probe_porches;
-
-void set_display_porches(uint8_t front, uint8_t back) {
-    probe_porches.emplace_back(front, back);
-}
-
 static uint16_t audit_pixel(unsigned panel, unsigned x, unsigned y, unsigned step) {
     unsigned start = panel * 232 + (audit_undo ? 232 - step : step);
     return audit_strip[start + x][y];
@@ -49,27 +34,6 @@ static uint16_t rounded_background(unsigned x, unsigned y, uint16_t color) {
 }
 
 void scroll_display_panorama(unsigned offset) {
-    if (scroll_only) {
-        assert(std::memcmp(probe_ram, ram, sizeof(ram)) == 0);
-        bool undo = (probe_steps / 232) % 2;
-        assert(probe_writes == 3);
-        probe_writes = 0;
-        assert(offset == (ring + (undo ? 161 : 1)) % 162);
-        if (probe_steps % 232 == 0) probe_last = probe_now;
-        if (probe_steps % 2 == 0) {
-            if (probe_steps % 232) {
-                assert(uint32_t(probe_now - probe_batch) >= 4311);
-                assert(uint32_t(probe_now - probe_previous) >= 1000);
-            }
-            probe_batch = probe_now;
-        }
-        probe_previous = probe_now;
-        if (probe_steps % 232 == 231) {
-            assert(uint32_t(probe_now - probe_last) >= 495000);
-            assert(uint32_t(probe_now - probe_last) <= 520000);
-        }
-        ++probe_steps;
-    }
     if (audit_motion) {
         assert(audit_panel == 3); // All three writes must precede this command.
         ++audit_step; audit_panel = 0;
@@ -103,32 +67,10 @@ void scroll_display_panorama(unsigned offset) {
 }
 
 void initialize_display_panorama() {
-    bool checking = scroll_only;
-    if (checking) { probe_loading = true; probe_preloads = 0; scroll_only = false; }
     scroll_display_panorama(0);
-    scroll_only = checking;
 }
 
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels) {
-    if (scroll_only && probe_loading) {
-        assert(panel == probe_preloads / 162 && column == probe_preloads % 162);
-        for (unsigned y = 0; y < 128; ++y) {
-            unsigned pixel = unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1];
-            assert(pixel == probe_baseline[panel][y][column]);
-            probe_ram[panel][y][column] = pixel;
-        }
-        if (++probe_preloads == 486) probe_loading = false;
-    } else if (scroll_only) {
-        bool undo = (probe_steps / 232) % 2;
-        assert(panel == probe_writes++);
-        unsigned next = (ring + (undo ? 161 : 1)) % 162;
-        assert(column == (next + (undo ? 0 : 159)) % 162);
-        for (unsigned y = 0; y < 128; ++y) {
-            unsigned pixel = unsigned(pixels[2 * y]) << 8 | pixels[2 * y + 1];
-            assert(pixel == (y % 16 < 8 ? 0xffffu : 0u));
-            probe_ram[panel][y][column] = pixel;
-        }
-    }
     assert(panel < 3 && column < display_ram_columns);
     ++writes; pixels_sent += 128;
     unsigned x = (column + display_ram_columns - ring) % display_ram_columns;
@@ -350,58 +292,92 @@ static void audit_animation_batches() {
     }
 
     ScrollTimingProbe probe;
-    unsigned before = scroll_updates;
-    probe.poll(0); assert(scroll_updates == before);
-    probe.arm();
-    unsigned initial_writes = writes;
-    for (unsigned i = 0; i < 486; ++i) {
-        unsigned previous = writes;
-        probe.poll(0); assert(writes == previous + 1);
-    }
-    assert(writes == initial_writes + 486 && ring == 0);
-    // Check visible and hidden RAM, including every horizontal stripe boundary.
-    for (unsigned panel = 0; panel < 3; ++panel)
-        for (unsigned x = 0; x < 162; ++x)
-            for (unsigned y = 0; y < 128; ++y) {
-                assert(ram[panel][y][x] == (y % 16 >= 8 ? 0x7bef : 0));
-            }
-    std::memcpy(probe_ram, ram, sizeof(ram));
-    std::memcpy(probe_baseline, ram, sizeof(ram));
-    scroll_only = true; probe_steps = 0;
-    before = scroll_updates;
-    probe.poll(10000); assert(scroll_updates == before);
-    for (unsigned repetition = 0; repetition < 2; ++repetition) {
-        probe.start();
-        // Exercise micros rollover and a complete C-triggered repeat.
-        for (uint32_t elapsed = 0; elapsed < 32000000; elapsed += 100) {
-            probe_now = UINT32_MAX - 500000 + repetition * 32000000 + elapsed;
-            probe.poll(probe_now);
+    uint32_t now = UINT32_MAX - 500000;
+    auto load = [&]() {
+        unsigned before = writes;
+        for (unsigned i = 0; i < 486; ++i) {
+            probe.poll(now++);
         }
-        assert(scroll_updates == before + (repetition + 1) * (12 * 232 + 12) && ring == 0);
-        assert(writes == initial_writes + 486 + (repetition + 1) * (12 * 232 * 3 + 12 * 486));
-    }
-    const std::pair<uint8_t, uint8_t> expected_porches[] = {
-        {60, 60}, {16, 16}, {1, 31}, {31, 1}, {16, 16}, {60, 60},
+        assert(writes == before + 486);
+        for (const auto &panel : ram) {
+            for (const auto &row : panel) {
+                for (uint16_t pixel : row) {
+                    assert(pixel == 0);
+                }
+            }
+        }
     };
-    assert(probe_porches.size() == 25);
-    for (unsigned i = 0; i < 24; ++i) {
-        assert(probe_porches[i] == expected_porches[(i % 12) / 2]);
+    auto hold = [&](uint32_t delay) {
+        unsigned before_writes = writes, before_scrolls = scroll_updates;
+        probe.poll(now + delay - 1);
+        assert(writes == before_writes && scroll_updates == before_scrolls);
+        now += delay;
+        probe.poll(now);
+    };
+    auto picture = [&](int top, int bottom) {
+        for (const auto &panel : screens) {
+            for (unsigned y = 0; y < 128; ++y) {
+                for (unsigned x = 0; x < 160; ++x) {
+                    assert(panel[y][x] == (int(x) == (y < 64 ? top : bottom) ? 0xffff : 0));
+                }
+            }
+        }
+    };
+    probe.arm();
+    load();
+    for (unsigned repeat = 0; repeat < 2; ++repeat) {
+        unsigned before = writes;
+        probe.poll(now + 5000000);
+        assert(writes == before); // Idle until C, even after a long wait.
+        probe.start();
+        probe.poll(now);
+        for (unsigned origin : {0u, 70u, 161u}) {
+            assert(ring == origin);
+            unsigned before_writes = writes, before_scrolls = scroll_updates;
+            hold(1000000);
+            assert(writes == before_writes + 3 && scroll_updates == before_scrolls);
+            picture(-1, -1);
+            hold(2000000);
+            assert(writes == before_writes + 6 && scroll_updates == before_scrolls);
+            picture(-1, -1);
+            for (unsigned panel = 0; panel < 3; ++panel) {
+                for (unsigned y = 0; y < 128; ++y) {
+                    assert(ram[panel][y][(origin + 160) % 162] == (y < 64 ? 0xffff : 0));
+                    assert(ram[panel][y][(origin + 161) % 162] == (y >= 64 ? 0xffff : 0));
+                }
+            }
+            hold(2000000);
+            assert(ring == (origin + 1) % 162);
+            picture(159, -1);
+            hold(2000000);
+            assert(ring == (origin + 2) % 162);
+            picture(158, 159);
+            hold(2000000);
+            assert(ring == origin);
+            picture(-1, -1);
+            hold(1000000);
+            assert(ring == (origin + 161) % 162);
+            picture(-1, 0);
+            hold(2000000);
+            assert(ring == (origin + 160) % 162);
+            picture(0, 1);
+            assert(writes == before_writes + 6); // Reveal uses no pixel writes.
+            hold(2000000);
+            load();
+            --now; // Loading records its last poll as the settle start.
+        }
     }
-    assert(probe_porches.back() == expected_porches[0]);
-    probe.start(); probe.poll(probe_now);
-    probe_now += 4400; probe.poll(probe_now); // First column of a batch.
-    unsigned after_first = scroll_updates;
-    probe_now += 20000; probe.poll(probe_now); // Delayed second column.
-    assert(scroll_updates == after_first + 1);
-    probe_now += 100; probe.poll(probe_now);
-    assert(scroll_updates == after_first + 1); // No immediate catch-up batch.
-    // Exit must restore stock timing even from a shortened-porch setting.
-    set_display_porches(1, 31);
-    probe.stop(); before = scroll_updates;
-    assert(probe_porches.back() == expected_porches[0]);
-    probe.poll(probe_now + 1000000);
-    assert(!probe.active() && scroll_updates == before);
-    scroll_only = false;
+    probe.start();
+    probe.poll(now);
+    hold(1000000);
+    probe.stop();
+    unsigned before_writes = writes, before_scrolls = scroll_updates;
+    probe.poll(now + 10000000);
+    assert(!probe.active() && writes == before_writes && scroll_updates == before_scrolls);
+    probe.arm();
+    load();
+    picture(-1, -1);
+    probe.stop();
 }
 
 static void blank(unsigned panel, uint16_t background = 0xffff) {
