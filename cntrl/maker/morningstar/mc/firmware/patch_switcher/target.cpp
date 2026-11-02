@@ -28,7 +28,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/cable_test.h>
 #endif
 #include "buttons.h"
-#include "backlight_throb.h"
+#include "pixel_throb.h"
 #include "displays.h"
 #include "switches.h"
 #include "renderer.h"
@@ -257,7 +257,7 @@ public:
         ++scan_count_;
     }
     void show(unsigned pane, const cntrl::Pane &content) override {
-        if (pane == 0) pending_patch_ = content.pending_patch;
+        if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
         renderer_.show(pane, content);
     }
     void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only) override { renderer_.transition(undo, duration_ms, target_only); }
@@ -381,14 +381,14 @@ public:
     }
 private:
     void apply_brightness(uint32_t now) {
-        const uint8_t target = throb_.brightness(
-            !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, runtime.brightness);
-        uint8_t brightness = brightness_feedback_ ? feedback_brightness_ : splash_session.brightness(target, now);
+        renderer_.target_brightness(throb_.brightness(
+            !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128));
+        uint8_t brightness = brightness_feedback_ ? feedback_brightness_ : splash_session.brightness(runtime.brightness, now);
         if (brightness != applied_brightness_) {
             analogWrite(6, brightness); applied_brightness_ = brightness;
         }
     }
-    BacklightThrob throb_;
+    PixelThrob throb_;
     int pending_patch_ = -1;
     bool splash_visible_ = false;
     bool brightness_feedback_ = false;

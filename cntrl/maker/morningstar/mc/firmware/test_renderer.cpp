@@ -926,5 +926,16 @@ int main() {
         }
         assert(renderer.ready()); blank(0, 0x4444);
     }
+    for (unsigned i = 0; i < 3; ++i) {
+        cntrl::Pane pane; pane.graphics.background = 0xffff;
+        renderer.show(i, pane);
+    }
+    drain(renderer);
+    renderer.target_brightness(64); drain(renderer);
+    blank(0, 0x8410); blank(1); blank(2);
+    renderer.target_brightness(16); drain(renderer);
+    blank(0, 0x2104); blank(1); blank(2);
+    renderer.target_brightness(128); drain(renderer);
+    blank(0); blank(1); blank(2); // Original pixels survive repeated dimming.
     audit_animation_batches();
 }

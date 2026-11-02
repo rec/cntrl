@@ -697,10 +697,10 @@ error, then USB enumerated as cntrl. Post-flash status was
 triggered by automation. Physical hold feedback and MIDI capture remain pending.
 
 
-## Pending-patch backlight pulse
+## Pending-patch pixel pulse
 
-While the leftmost performance pane contains an unsent patch, the shared
-backlight pulses from PWM 128 to 16 and back to 128 over 4000 ms. Each 2000 ms
+While the leftmost performance pane contains an unsent patch, only its pixel
+colors pulse from full intensity (128) to 50% intensity (64) and back over 4000 ms. Each 2000 ms
 half-cycle uses cubic smoothstep (`3t² - 2t³`), with zero slope at both ends.
 The implementation uses bounded 32-bit fixed-point arithmetic and no sine calls,
 allocation, delays or additional timers.
@@ -711,6 +711,10 @@ not restart it. Already-sent patches,
 empty panes and other module pages use the configured brightness. Temporary
 hold feedback takes priority, and splash/screensaver playback retains its own
 brightness and fades. When the pulse resumes after an override it starts at 128.
+The shared backlight stays at the configured brightness. Pixel scaling happens
+only when transmitting the left panel's RGB565 columns; cached pixels remain
+unchanged. Idle polls refresh at most one 128-pixel column, and content repainting
+and scroll animations take priority. No extra framebuffer is allocated.
 The pulse never changes the saved brightness setting.
 
 ## Cycle navigation animation

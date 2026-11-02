@@ -12,6 +12,7 @@ constexpr unsigned WINDOW_CORNER_RADIUS = 8;
 // One glyph/column per repaint poll; one three-panel column step per animation poll.
 class DisplayRenderer {
 public:
+    void target_brightness(uint8_t value) { requested_brightness_ = value; }
     bool ready() const {
         return !preparing_ && !animating_ && drawing_ < 0 && !dirty_[0] && !dirty_[1] && !dirty_[2];
     }
@@ -34,6 +35,9 @@ public:
     void show(unsigned pane, const cntrl::Pane &content) {
         if (pane >= 3 || !std::memcmp(&requested_[pane], &content, sizeof(content))) return;
         requested_[pane] = content;
+        if (pane == 0 && pixel_brightness_ != requested_brightness_) {
+            pixel_brightness_ = requested_brightness_; dim_column_ = 0;
+        }
         dirty_[pane] = true;
     }
     void error(const char *message) {
@@ -61,7 +65,7 @@ public:
             if (preparing_) {
                 preparing_ = false; animating_ = true;
                 progress_ = 0; started_ = now; anchor_ = waiting_ = false;
-            }
+            } else dim_target();
             return;
         }
         if (rendering_) {
@@ -112,13 +116,40 @@ public:
             cache_[drawing_][index] = pixel;
         }
         if (changed && !preparing_)
-            write_display_column(unsigned(drawing_), (rings_[drawing_] + y_) % display_ram_columns, pixels);
+            write_column(unsigned(drawing_), (rings_[drawing_] + y_) % display_ram_columns, pixels);
         if (++y_ == 160) {
             valid_[drawing_] = true;
             drawing_ = -1;
         }
     }
 private:
+    void write_column(unsigned panel, unsigned column, uint8_t *pixels) {
+        if (panel == 0 && pixel_brightness_ != 128) {
+            for (unsigned y = 0; y < 128; ++y) {
+                const uint16_t pixel = uint16_t(pixels[2 * y]) << 8 | pixels[2 * y + 1];
+                const unsigned red = ((pixel >> 11) * pixel_brightness_ + 64) / 128;
+                const unsigned green = (((pixel >> 5) & 63) * pixel_brightness_ + 64) / 128;
+                const unsigned blue = ((pixel & 31) * pixel_brightness_ + 64) / 128;
+                const uint16_t dimmed = uint16_t(red << 11 | green << 5 | blue);
+                pixels[2 * y] = uint8_t(dimmed >> 8); pixels[2 * y + 1] = uint8_t(dimmed);
+            }
+        }
+        write_display_column(panel, column, pixels);
+    }
+    void dim_target() {
+        if (!valid_[0]) return;
+        if (dim_column_ == 160) {
+            if (pixel_brightness_ == requested_brightness_) return;
+            pixel_brightness_ = requested_brightness_; dim_column_ = 0;
+        }
+        uint8_t pixels[256];
+        for (unsigned y = 0; y < 128; ++y) {
+            const uint16_t pixel = cache_[0][y * 160 + dim_column_];
+            pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
+        }
+        write_column(0, (rings_[0] + dim_column_) % display_ram_columns, pixels);
+        ++dim_column_;
+    }
     void round_corners() {
         auto *pixels = graphics_.getFrameBuffer();
         constexpr unsigned diameter = 2 * WINDOW_CORNER_RADIUS;
@@ -254,7 +285,7 @@ private:
                 pixels[2 * y] = uint8_t(pixel >> 8);
                 pixels[2 * y + 1] = uint8_t(pixel);
             }
-            write_display_column(panel, (rings_[panel] + x) % display_ram_columns, pixels);
+            write_column(panel, (rings_[panel] + x) % display_ram_columns, pixels);
         }
         if (progress_ % 2 == 0) {
             // Both hidden columns are prepared before the two-column reveal.
@@ -271,6 +302,8 @@ private:
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
     bool target_only_ = false;
+    uint8_t pixel_brightness_ = 128, requested_brightness_ = 128;
+    unsigned dim_column_ = 160;
     unsigned rings_[3] = {}, progress_ = 0;
     unsigned duration_ms_ = 0;
     uint32_t started_ = 0, quiet_since_ = 0;

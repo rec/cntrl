@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-class BacklightThrob {
+class PixelThrob {
 public:
     uint8_t brightness(int patch, uint32_t now, uint8_t normal) {
         if (patch < 0) { patch_ = -1; return normal; }
@@ -17,7 +17,7 @@ public:
         return maximum - ((maximum - minimum) * eased + precision / 2) / precision;
     }
 private:
-    static constexpr uint32_t minimum = 16, maximum = 128;
+    static constexpr uint32_t minimum = 64, maximum = 128;
     static constexpr uint32_t period_ms = 4000, half_period_ms = period_ms / 2;
     static constexpr uint32_t precision = 1024;
     int patch_ = -1;
