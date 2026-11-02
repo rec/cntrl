@@ -73,5 +73,5 @@ def test_generated_fonts_and_exported_metrics_are_current(tmp_path: Path) -> Non
             (tmp_path / f'font_{n}.cpp').read_text(), n, i
         )
         if n == 'StillTime':
-            face = face.model_copy(update={'horizontal_scale': 1.25})
+            face = face.model_copy(update={'horizontal_scale': 1.5})
         assert face == next(f for f in target.fonts if f.name == n)

@@ -21,7 +21,7 @@ below that limit is used. Switch pages retain their independent line sizing.
 
 Styles may set `horizontal_scale` to a positive width multiplier. It participates
 in the usual style cascade and overrides the selected font's default. StillTime
-defaults to 1.25; other fonts default to 1.0. Fitting includes the scaled width.
+defaults to 1.5; other fonts default to 1.0. Fitting includes the scaled width.
 
 ## Automatic cycle styles
 

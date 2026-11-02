@@ -399,7 +399,7 @@
     },
     {
       "name": "StillTime",
-      "horizontal_scale": 1.25,
+      "horizontal_scale": 1.5,
       "id": 5,
       "sizes": {
         "12": {

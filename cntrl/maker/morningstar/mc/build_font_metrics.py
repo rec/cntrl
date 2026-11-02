@@ -121,7 +121,7 @@ def main() -> None:
         for i, (n, _, _) in enumerate(FAMILIES, 3)
     ]
     faces = [
-        f.model_copy(update={'horizontal_scale': 1.25}) if f.name == 'StillTime' else f
+        f.model_copy(update={'horizontal_scale': 1.5}) if f.name == 'StillTime' else f
         for f in faces
     ]
     data = json.loads(options.output.read_text())

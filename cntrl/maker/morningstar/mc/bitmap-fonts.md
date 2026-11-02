@@ -310,12 +310,12 @@ final status is `CNTRL READY 14 34597 488beaf6`. SD latency was not measured.
 Styles accept `horizontal_scale`, a positive finite multiplier. Omission inherits
 an explicit value from the style cascade; if none is set, the selected font's
 `horizontal_scale` in the target catalogue supplies its default. StillTime uses
-1.25; all other fonts use 1.0. An explicit 1.0 restores StillTime's original width.
+1.5; all other fonts use 1.0. An explicit 1.0 restores StillTime's original width.
 
 ```toml
 [style]
 font_name = 'StillTime'
-horizontal_scale = 1.25
+horizontal_scale = 1.5
 ```
 
 Glyphs, bearings and spacing are scaled horizontally on the host before measuring
@@ -323,7 +323,7 @@ and fitting. The vertical scale is unchanged. Paired program lines still use one
 shared fitting size. No additional scaling is performed by the pedal.
 
 Different scales can coexist in a setup. Exported font assets use names such as
-`StillTime@1.25x`; that suffix identifies a prepared variant, not a new family for
+`StillTime@1.5x`; that suffix identifies a prepared variant, not a new family for
 autoformatting. Recompiling an export reuses the already-scaled assets. Changing
 the scale of a compiled-only font requires rebuilding from its original source.
 

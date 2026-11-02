@@ -539,7 +539,7 @@ def test_still_time_default_scale_can_be_overridden() -> None:
         compiler.read_document(MC / 'patch-switcher-target.json')
     )
     for face in target.fonts:
-        assert face.horizontal_scale == (1.25 if face.name == 'StillTime' else 1.0)
+        assert face.horizontal_scale == (1.5 if face.name == 'StillTime' else 1.0)
     source = models.Show(
         fill_in_styles=False, style=models.Style(font_name='StillTime')
     )
@@ -548,10 +548,10 @@ def test_still_time_default_scale_can_be_overridden() -> None:
     )
     assets: dict[int, bytes] = {}
     _, _, default = display.compile_display(source, [patch], target, assets)
-    assert b'StillTime@1.25x' in default
+    assert b'StillTime@1.5x' in default
     source = source.model_copy(
         update={'style': models.Style(font_name='StillTime', horizontal_scale=1.0)}
     )
     _, _, unscaled = display.compile_display(source, [patch], target, assets)
-    assert b'StillTime@1.25x' not in unscaled
+    assert b'StillTime@1.5x' not in unscaled
     assert default != unscaled
