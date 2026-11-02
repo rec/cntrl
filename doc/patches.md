@@ -32,7 +32,10 @@ For N cycles, foreground generation starts with the configured background
 color as an anchor. It greedily chooses N other colors,
 maximizing each new color's minimum squared RGB distance from the anchor and
 earlier choices. Candidates are a bounded RGB grid with channel values
-0, 32, 64, 96, 128, 160, 192, 224 and 255. This is a farthest-point heuristic,
+0, 32, 64, 96, 128, 160, 192, 224 and 255, restricted to weighted RGB brightness
+below 50%: `(0.299 R + 0.587 G + 0.114 B) / 255 < 0.5`. This is an approximate
+perceived-brightness measure, not linear-light luminance. Explicitly authored
+foreground colors are unchanged. This is a farthest-point heuristic,
 not a guarantee of the global optimum. The N foregrounds are distinct; the
 background anchor is not assigned to a cycle. Existing contrast warnings remain.
 

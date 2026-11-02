@@ -13,9 +13,13 @@ def cycle_styles(
         return {}
     background = graphics.color(show.background_color)
     random = Random(show.seed)
-    # A bounded RGB lattice includes all cube corners. Greedy maximin selection
+    # Keep weighted RGB brightness below half scale. Greedy maximin selection
     # spreads colors away from both the background anchor and earlier choices.
-    candidates = list(product([*range(0, 256, 32), 255], repeat=3))
+    candidates = [
+        c
+        for c in product([*range(0, 256, 32), 255], repeat=3)
+        if 299 * c[0] + 587 * c[1] + 114 * c[2] < 127_500
+    ]
     random.shuffle(candidates)
     distances = [
         sum((a - b) ** 2 for a, b in zip(c, background, strict=True))

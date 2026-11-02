@@ -59,8 +59,21 @@ def test_background_anchor_excludes_its_color(
         models.Show(background_color='black'), ['a', 'b', 'c'], target
     )
     assert all(s.background_color == 'black' for s in styles.values())
-    assert styles['a'].foreground_color == '0xFFFFFF'
     assert all(s.foreground_color != '0x000000' for s in styles.values())
+
+
+@pytest.mark.parametrize('seed', [0, 1, 42])
+def test_generated_foregrounds_stay_below_half_brightness(
+    seed: int,
+    target: models.Target,
+) -> None:
+    styles = formatting.cycle_styles(
+        models.Show(seed=seed), [str(i) for i in range(64)], target
+    )
+    for style in styles.values():
+        assert style.foreground_color is not None
+        red, green, blue = graphics.color(style.foreground_color)
+        assert (0.299 * red + 0.587 * green + 0.114 * blue) / 255 < 0.5
 
 
 def test_disabled_filling_does_not_generate_styles(target: models.Target) -> None:
