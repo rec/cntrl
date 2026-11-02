@@ -11,15 +11,15 @@ def cycle_styles(
 ) -> dict[str, models.Style]:
     if not show.fill_in_styles or not names:
         return {}
-    backgrounds = [graphics.color(c) for c in show.background_colors]
-    average = tuple(sum(c[i] for c in backgrounds) / len(backgrounds) for i in range(3))
+    background = graphics.color(show.background_color)
     random = Random(show.seed)
     # A bounded RGB lattice includes all cube corners. Greedy maximin selection
     # spreads colors away from both the background anchor and earlier choices.
     candidates = list(product([*range(0, 256, 32), 255], repeat=3))
     random.shuffle(candidates)
     distances = [
-        sum((a - b) ** 2 for a, b in zip(c, average, strict=True)) for c in candidates
+        sum((a - b) ** 2 for a, b in zip(c, background, strict=True))
+        for c in candidates
     ]
     foregrounds: list[str] = []
     for _ in names:
@@ -43,7 +43,7 @@ def cycle_styles(
         previous = available.pop()
         result[name] = models.Style(
             font_name=previous,
-            background_color=random.choice(show.background_colors),
+            background_color=show.background_color,
             foreground_color=foreground,
         )
     return result

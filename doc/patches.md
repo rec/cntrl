@@ -20,20 +20,16 @@ Global parameter and switch fields keep their existing formatting.
 ```toml
 seed = 0
 fill_in_styles = true
-background_colors = [
-    '0xFFFFE8', '0xFFF8E8', '0xFFF0E0',
-    '0xFFF4D8', '0xFFFADC', '0xFFEEDC',
-]
+background_color = '0xFFF8D8'
 ```
 
-The six pale yellow/orange colors above are the default background palette.
-Every cycle randomly chooses one background; repeats are allowed. Each cycle
+Every cycle uses the same pale yellow background by default. Each cycle
 also gets a random available font, shared with its programs. All available font
 families are used before repeating, with adjacent repeats avoided when possible.
 Available families include target fonts and configured `[fonts]` entries.
 
-For N cycles, foreground generation starts with the average RGB color of the
-configured background palette as an anchor. It greedily chooses N other colors,
+For N cycles, foreground generation starts with the configured background
+color as an anchor. It greedily chooses N other colors,
 maximizing each new color's minimum squared RGB distance from the anchor and
 earlier choices. Candidates are a bounded RGB grid with channel values
 0, 32, 64, 96, 128, 160, 192, 224 and 255. This is a farthest-point heuristic,

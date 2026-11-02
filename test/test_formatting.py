@@ -45,15 +45,18 @@ def test_seeded_cycles_balance_fonts_and_keep_unique_colors(
             )
         )
     assert len({s.foreground_color for s in styles.values()}) == len(names)
-    assert all(s.background_color in show.background_colors for s in styles.values())
+    assert all(
+        s.background_color == show.background_color == '0xFFF8D8'
+        for s in styles.values()
+    )
     assert styles != formatting.cycle_styles(models.Show(seed=1), names, target)
 
 
-def test_background_anchor_excludes_its_color_and_can_repeat(
+def test_background_anchor_excludes_its_color(
     target: models.Target,
 ) -> None:
     styles = formatting.cycle_styles(
-        models.Show(background_colors=['black']), ['a', 'b', 'c'], target
+        models.Show(background_color='black'), ['a', 'b', 'c'], target
     )
     assert all(s.background_color == 'black' for s in styles.values())
     assert styles['a'].foreground_color == '0xFFFFFF'
@@ -68,7 +71,7 @@ def test_disabled_filling_does_not_generate_styles(target: models.Target) -> Non
 
 
 @pytest.mark.parametrize(
-    'values', [{'background_colors': []}, {'seed': True}, {'fill_in_styles': 1}]
+    'values', [{'background_color': []}, {'seed': True}, {'fill_in_styles': 1}]
 )
 def test_formatting_settings_are_validated(values: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
@@ -77,7 +80,7 @@ def test_formatting_settings_are_validated(values: dict[str, object]) -> None:
 
 def test_invalid_background_is_reported(target: models.Target) -> None:
     with pytest.raises(ValueError, match='unknown color'):
-        formatting.cycle_styles(models.Show(background_colors=['wrong']), ['a'], target)
+        formatting.cycle_styles(models.Show(background_color='wrong'), ['a'], target)
 
 
 @pytest.mark.parametrize('seed', [0, None])

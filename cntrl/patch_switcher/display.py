@@ -369,7 +369,7 @@ FIELDS = {
 SOURCE_FIELDS = (
     'seed',
     'fill_in_styles',
-    'background_colors',
+    'background_color',
     'switches',
     'style',
     'pad',
