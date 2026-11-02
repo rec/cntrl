@@ -5,8 +5,8 @@
 #include <cstdio>
 
 namespace cntrl {
-constexpr unsigned metadata_header_size = 12;
-constexpr unsigned document_version = 22;
+constexpr unsigned metadata_header_size = 14;
+constexpr unsigned document_version = 23;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -70,6 +70,7 @@ public:
         unsigned nb = u16(bytes + meta + 4);
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
+        if (!u16(bytes + meta + 12)) return false;
         unsigned names = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
@@ -200,11 +201,12 @@ public:
     unsigned patch_cycles() const { return patch_cycles_; }
     unsigned instruments() const { return instruments_; }
     unsigned patches() const { return patches_; }
-    unsigned chord_ms() const { return u16(data_ + 6); }
+    unsigned navigation_hold_ms() const { return u16(data_ + 6); }
     uint8_t brightness() const { return data_[18]; }
     unsigned pulse_period_ms() const { return u16(data_ + metadata() + 8); }
     uint8_t pulse_minimum() const { return data_[metadata() + 10]; }
     uint8_t pulse_maximum() const { return data_[metadata() + 11]; }
+    unsigned navigation_repeat_ms() const { return u16(data_ + metadata() + 12); }
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
     bool usb_midi_interface() const { return data_[19] & 2; }
@@ -392,7 +394,7 @@ private:
         case 19: std::snprintf(text, size, "%lu", (unsigned long)(screensaver_timeout() / 1000)); return;
         case 20: case 21: {
             if (code == 21 && !transition_ms()) return;
-            unsigned ms = code == 20 ? chord_ms() : *transition_ms();
+            unsigned ms = code == 20 ? navigation_hold_ms() : *transition_ms();
             if (ms % 1000) {
                 std::snprintf(text, size, "%u.%03u", ms / 1000, ms % 1000);
                 unsigned end = unsigned(std::strlen(text));

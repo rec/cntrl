@@ -142,6 +142,82 @@ void test_program_change_brightness(const cntrl::Document &doc) {
     }
 }
 
+void test_four_button_navigation(const cntrl::Document &doc) {
+    Fake hw; TestController app(hw);
+    app.activate(doc);
+    app.button(1, true, 0); assert(app.selected_patch() == 1);
+    app.tick(1499); assert(app.selected_patch() == 1);
+    app.tick(1500); assert(app.selected_patch() == 2);
+    app.button(1, true, 1600); // Duplicate press cannot restart the hold.
+    app.tick(2499); assert(app.selected_patch() == 2);
+    app.tick(2500); assert(app.selected_patch() == 0);
+    app.button(1, false, 2501); app.tick(10000);
+    assert(app.selected_patch() == 0 && hw.sent.empty());
+    for (unsigned b : {0u, 3u}) { app.button(b, true, 10001); app.button(b, false, 10002); }
+    assert(app.selected_patch() == 0 && hw.sent.empty());
+
+    app.activate(doc);
+    app.button(1, true, 0); app.button(5, true, 100);
+    assert(app.selected_patch() == 0 && app.depth() == 0 && hw.sent.empty());
+    app.tick(1599); assert(app.selected_patch() == 0);
+    app.tick(1600); assert(app.selected_patch() == 2);
+    app.button(1, false, 1700); app.button(1, true, 1800);
+    assert(app.selected_patch() == 1);
+    app.button(1, false, 1801); app.button(4, true, 1900);
+    assert(app.selected_patch() == 3);
+    app.button(4, false, 1901); app.button(4, true, 2000);
+    assert(app.selected_patch() == 1);
+    app.button(5, false, 2100); // D release restores forward and restarts the delay.
+    app.tick(3599); assert(app.selected_patch() == 1);
+    app.tick(3600); assert(app.selected_patch() == 3);
+    app.button(4, false, 3601);
+
+    app.activate(doc);
+    app.button(4, true, 0); assert(app.selected_patch() == 3);
+    app.button(5, true, 100); assert(app.selected_patch() == 0);
+    app.tick(1599); assert(app.selected_patch() == 0);
+    app.tick(1600); assert(app.selected_patch() == 3);
+    app.button(5, false, 1700);
+    app.tick(3199); assert(app.selected_patch() == 3);
+    app.tick(3200); assert(app.selected_patch() == 0);
+    app.button(4, false, 3201);
+
+    app.activate(doc);
+    app.button(1, true, 0);
+    app.tick(100000); assert(app.selected_patch() == 2);
+    app.tick(100000); assert(app.selected_patch() == 2); // No burst after a stalled poll.
+    app.button(1, false, 100001);
+
+    app.activate(doc);
+    app.button(1, true, 0); app.button(1, false, 1);
+    app.button(2, true, 10); app.button(2, false, 11);
+    assert(app.depth() == 1 && !hw.sent.empty());
+    app.button(1, true, 20); app.button(1, false, 21);
+    app.button(2, true, 30); app.button(2, false, 31);
+    assert(app.depth() == 2);
+    app.button(5, true, 40); app.button(5, false, 41);
+    assert(app.depth() == 1); // D alone retains undo.
+
+    app.activate(doc);
+    app.button(1, true, UINT32_MAX - 500);
+    app.tick(998); assert(app.selected_patch() == 1);
+    app.tick(999); assert(app.selected_patch() == 2);
+    app.cancel_gesture(); app.tick(100000);
+    assert(app.selected_patch() == 2);
+
+    std::vector<uint8_t> configured(doc.data(), doc.data() + doc.length());
+    configured[6] = 100; configured[7] = 0;
+    configured[doc.metadata() + 12] = 200; configured[doc.metadata() + 13] = 0;
+    cntrl::put32(configured.data() + 20, cntrl::checksum(configured.data() + 28, unsigned(configured.size()) - 28));
+    cntrl::Document custom; assert(custom.load(configured.data(), unsigned(configured.size()), hw));
+    app.activate(custom);
+    app.button(1, true, 0);
+    app.tick(99); assert(app.selected_patch() == 1);
+    app.tick(100); assert(app.selected_patch() == 2);
+    app.tick(299); assert(app.selected_patch() == 2);
+    app.tick(300); assert(app.selected_patch() == 0);
+}
+
 void test_greyed_names(const cntrl::Document &doc) {
     Fake hw;
     TestController app(hw);
@@ -150,9 +226,9 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert(hw.panes[0].three_bands && hw.panes[1].three_bands == false);
     assert(hw.panes[0].pending_patch == int(app.selected_patch()));
     app.action(4); app.action(3); // Browse forward and backward between cycles.
-    assert((hw.target_transitions == std::vector<bool>{true, false}));
+    assert((hw.target_transitions == std::vector<bool>{false, true}));
     app.action(1); app.action(0); // Browse forward and backward within the cycle.
-    assert((hw.target_transitions == std::vector<bool>{true, false, true, false}));
+    assert((hw.target_transitions == std::vector<bool>{false, true, false, true}));
     assert(hw.panes[1].pending_patch == -1 && hw.panes[2].pending_patch == -1);
     assert(hw.panes[0].lines[0].graphics.background == hw.panes[0].lines[1].graphics.foreground);
     assert(hw.panes[0].lines[0].graphics.foreground == hw.panes[0].lines[1].graphics.background);
@@ -268,7 +344,7 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     assert(hw.splash); // No setup still uses the installed startup animation.
     for (const auto &pane : hw.panes) assert(pane.lines[1].centered && !std::strcmp(pane.lines[1].text, "No setups"));
     controller.button(0, true, 0);
-    assert(controller.button(3, true, 50) == cntrl::Chord::ad); // No document needed.
+    controller.button(3, true, 50); // Unassigned even without a document.
     controller.button(0, false, 60); controller.button(3, false, 61);
     upload(docs, bytes); command(docs, "CNTRL SETUP FINISH");
     cntrl::SetupUi ui(docs, hw);
@@ -501,7 +577,7 @@ int main(int argc, char **argv) {
         formatted.page(settings, 0, 1, false);
         assert(!std::strcmp(settings.lines[0].text, "false"));
         assert(!std::strcmp(settings.lines[1].text, "0"));
-    assert(!std::strcmp(settings.lines[2].text, "0.1"));
+        assert(!std::strcmp(settings.lines[2].text, "1.5"));
         assert(!settings.lines[3].text[0]);
         app.action(2);
         assert(output.panes[0].lines[1].stippled);
@@ -676,35 +752,7 @@ int main(int argc, char **argv) {
     assert(app.depth() == cntrl::history_capacity);
     for (unsigned i = 0; i < cntrl::history_capacity; ++i) app.action(5);
     assert(app.depth() == 0);
-    // Single release, inclusive pairing, ignored third button, and C immediacy.
-    app.activate(doc);
-    app.button(1, true, 0); app.button(1, false, 40);
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
-    app.button(0, true, 100); app.button(1, true, 200);
-    app.button(4, true, 201); app.tick(500);
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
-    count = unsigned(hw.sent.size()); app.button(2, true, 501);
-    assert(hw.sent.size() == count + 1);
-    app.button(0, false, 502); app.button(1, false, 503);
-    app.button(4, false, 504);
-    app.button(0, true, 600); app.button(4, true, 650); // Unrecognized A+E.
-    app.button(0, false, 651); app.button(4, false, 652);
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
-    app.button(1, true, 0xfffffff0u); app.tick(0x54u);
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax")); // Exactly 100 ms.
-    app.tick(0x55u); assert(!std::strcmp(hw.panes[0].lines[1].text, "Strings"));
-    app.button(1, false, 0x56u); app.tick(0x100u);
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Strings"));
-    const unsigned pairs[][2] = {{0, 1}, {0, 3}, {1, 4}, {3, 4}};
-    const cntrl::Chord recognized[] = {cntrl::Chord::ab, cntrl::Chord::ad,
-                                      cntrl::Chord::be, cntrl::Chord::de};
-    for (unsigned i = 0; i < 4; ++i) for (unsigned reverse = 0; reverse < 2; ++reverse) {
-        app.activate(doc);
-        app.button(pairs[i][reverse], true, 0);
-        assert(app.button(pairs[i][1 - reverse], true, 100) == recognized[i]);
-        app.tick(500);
-        assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
-    }
+    test_four_button_navigation(doc);
     // Persistent upload, status, reboot, and interrupted inactive-slot writes.
     TestStorage memory;
     Fake io;

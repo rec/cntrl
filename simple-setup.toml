@@ -8,6 +8,10 @@ period = 4
 minimum = 64
 maximum = 128
 
+[navigation]
+hold_delay = 1.5
+repeat_interval = 1
+
 [instruments.both]
 output = 'din'
 channel = 1

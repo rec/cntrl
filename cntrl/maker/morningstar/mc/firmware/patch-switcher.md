@@ -57,8 +57,8 @@ Pane indices are physical left-to-right throughout: 0 candidate, 1 current,
 same next/sent/undo order. The hardware adapter forwards pane indices directly,
 as it does for module screens. Recompile setups before uploading to format 21.
 A sends a patch: candidate moves right into current, and current into history.
-D undoes along the reverse path. Performance button columns are mirrored:
-A/C and D/F exchange functions; B/E retain theirs. C+F opens the module menu.
+D undoes along the reverse path. B browses patches and E browses cycles, with
+hold-to-repeat and D-held reverse as described below. C/F are unassigned.
 Utility modules keep their existing controls and displayed instructions.
 Animation does not delay MIDI/history actions.
 For scrolling behaviour, evidence, deployment hashes and limitations, see the
@@ -721,7 +721,7 @@ The pulse never changes the saved brightness setting.
 
 Changing patch cycles or browsing patches within a cycle slides the new card
 into the physical left target window:
-from the right when navigating forward, and from the left when navigating
+from the left when navigating forward, and from the right when navigating
 backward. The center and right windows stay fixed. This uses the setup's
 transition duration and the existing two-column hardware scroll scheduling.
 Each panel retains its own scroll offset so later send and undo animations
@@ -753,7 +753,7 @@ maximum = 128
 
 All configuration durations use seconds for bare numbers. Explicit units such
 as `period = '4000 ms'` are also accepted through `reccy.configuration.units`.
-`chord`, `transition` and the build option `switch_window` follow the same rule.
+`transition`, navigation timings and the build option `switch_window` follow the same rule.
 Durations must resolve to whole milliseconds for the firmware's timer precision.
 The `_ms` configuration names have been removed; milliseconds remain an internal
 wire-format and firmware unit.
@@ -765,7 +765,7 @@ settings, and the firmware reads them without supplying another default. Setup
 format 22 requires recompiling and replacing older compiled setups.
 
 The page `background_color`, `seed`, `fill_in_styles`, `animation_color_cycle`,
-`brightness`, `chord`, `screensaver_timeout` and `transition` are existing
+`brightness`, `screensaver_timeout` and `transition` are existing
 setup settings. `horizontal_scale` belongs to styles; StillTime's font metadata
 sets its default to 1.5. The fixed three-band patch-manager structure and the
 128-level pixel intensity scale are layout and encoding definitions.
@@ -782,3 +782,40 @@ and its 15 ms debounce. Input delay is derived from the chosen window plus the
 debounce interval. It still requires no hold. Changing it requires rebuilding
 and flashing the combined image. Other setup settings only require recompiling
 and uploading the setup.
+
+## Four-button patch-manager navigation (setup format 23)
+
+Physical buttons A/B/D/E keep their primary actions: A sends the target, B browses
+patches forward, D undoes the latest send, and E browses cycles forward. C and F
+are unassigned on this page. Old C/F browsing and the C+F module-menu shortcut
+are removed. Other modules keep their existing button assignments.
+
+B and E step once immediately. Holding either begins repeating after the hold
+delay and then at the repeat interval:
+
+```toml
+[navigation]
+hold_delay = 1.5
+repeat_interval = 1
+```
+
+Bare values are seconds; explicit units such as `'1500 ms'` work too. Both
+settings accept 0.001..65.535 seconds in whole-millisecond increments. The first
+repeat occurs at the hold delay, not one interval later. Delayed polls skip
+missed repeats instead of catching up in a burst.
+
+While B or E is down, pressing D immediately steps backward in that collection
+and consumes D's undo action. Reverse applies to subsequent B/E presses and
+holds only until D is released. Changing direction restarts the hold delay;
+releasing B/E stops that button's repeats. D alone still undoes, and A retains
+its existing send and hold-brightness feedback. Setup changes and leaving the
+page cancel held-button state. The displays and scrolling animations are unchanged.
+
+While any physical button is held, including unassigned C/F, the target window
+stays at full pixel brightness. The pulse starts from full brightness only after
+all buttons are released. This also suppresses it throughout hold delays and
+auto-repeat in either direction.
+
+The old short chord-delay setting is removed. `navigation.hold_delay` replaces
+its header slot in format 23; the repeat interval is stored in the metadata
+header. Recompile setups before uploading them to this firmware.

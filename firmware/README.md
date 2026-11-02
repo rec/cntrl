@@ -144,23 +144,17 @@ that the receiving instrument acknowledged it.
 
 ## On the controller
 
-Buttons are logically arranged as:
-
-```text
-D E F
-A B C
-```
-
-D/E wrap patch cycles, retaining one cursor per patch cycle. A/B wrap patches within
-the patch cycle. Browsing only changes NEXT. C executes the candidate and leaves NEXT
+The target maps four physical buttons to send, browse patches, undo and browse
+cycles. Browsing wraps within its collection and retains one cursor per cycle.
+Browsing only changes NEXT. Send executes the candidate and leaves NEXT
 unchanged. A simple program selection records a known program Undo entry.
 Composites and side effects clear unsafe program history rather than invent an
-inverse. F restores the latest known program selection by restoring that
+inverse. Undo restores the latest known program selection by restoring that
 instrument's previous selection, leaving other instruments unchanged. If its
 previous selection is unknown, Undo pops the action without sending anything.
 
-On the performance page, a successful C press that changes the instrument's
-last-sent program or bank sets all screens to maximum brightness until C is
+On the performance page, a successful send press that changes the instrument's
+last-sent program or bank sets all screens to maximum brightness until send is
 released. Release restores the configured brightness immediately, with no minimum
 flash duration. The first send counts as a change because previous state is
 unknown. Repeated program/bank selections and failed sends do not flash. Leaving
@@ -172,11 +166,13 @@ labels. Undo without a restoration leaves SENT unchanged
 while history remains; emptying history blanks UNDO and SENT. A new show and
 startup both clear history and select the first candidate without sending MIDI.
 
-A/B/D/E singles wait up to `chord` (default 0.1 seconds). Early release fires a single
-immediately. A second press at or before the deadline consumes both singles.
-Recognized AB/BE/DE pairs are reserved. A+D opens the module menu; choose Setups for setup management or MIDI cable test. A pair
-blocks further A/B/D/E actions until all four are released. C/F remain immediate
-after electrical debounce. No hold, repeat or double-press actions are installed.
+Browse buttons step immediately after electrical debounce. Holding one repeats
+after `navigation.hold_delay` (default 1.5 seconds), then every
+`navigation.repeat_interval` (default 1 second). Pressing undo while a browse
+button is held steps backward immediately and suppresses undo. Browsing stays
+backward only while undo remains held. Releasing undo restores forward browsing
+and restarts the hold delay. Delayed polls never produce a burst of catch-up
+steps. Physical assignments are documented in the target's firmware guide.
 
 In management, A/B browse, C confirms and F goes back. Choose a setup, then
 Select or Edit. The numeric editor chooses a patch, a field and its value.
@@ -233,7 +229,7 @@ page = 'patch'
 Field names share one namespace. Built-in patch attributes are `patch_cycle.name`, `tags`,
 `display_name`, `name`, `program`, `bank`, `volume`, `pan` and `instrument` (the
 routing alias). Built-in global settings are `brightness`, `splash`,
-`usb_midi_interface`, `screensaver_timeout`, `chord` and `transition`.
+`usb_midi_interface`, `screensaver_timeout`, `navigation.hold_delay` and `transition`.
 These read the current document, including numeric edits. Additional shared
 display values are defined as `[parameters.tempo]` with `value = 120` and an
 optional `style` block; they are configuration values, not a tempo engine.
@@ -350,7 +346,7 @@ default-off `usb_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
 idle timeout in seconds.
-Configuration quantities use `reccy.configuration.units`: `chord` and
+Configuration quantities use `reccy.configuration.units`: `navigation.hold_delay` and
 `transition` accept durations such as `"100 ms"` and `"0.5 s"`, while bare
 numbers mean seconds. `screensaver_timeout` accepts whole seconds such
 as `"2 min"` or `"1:30"`; bare numbers remain seconds. Values must convert
@@ -370,7 +366,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 22 firmware. Replace old `screens.NAME` color tables with
+version 23 firmware. Replace old `screens.NAME` color tables with
 `windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
@@ -387,12 +383,12 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (22), u16 chord milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (23), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 12 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128) |
+| Metadata header, 14 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |

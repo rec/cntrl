@@ -34,13 +34,14 @@ public:
         hardware.controller = this;
     }
     void action(unsigned button) { cntrl::Controller::action(button); drain(); }
-    cntrl::Chord button(unsigned button, bool pressed, uint32_t now) {
-        auto result = cntrl::Controller::button(button, pressed, now); drain(); return result;
+    void button(unsigned button, bool pressed, uint32_t now) {
+        now_ = now; cntrl::Controller::button(button, pressed, now); drain();
     }
-    void tick(uint32_t now) { cntrl::Controller::tick(now); drain(); }
+    void tick(uint32_t now) { now_ = now; cntrl::Controller::tick(now); drain(); }
 private:
+    uint32_t now_ = 0;
     void drain() {
         for (unsigned i = 0; i < cntrl::max_document && executor().status() == cntrl::PatchExecutor::Status::pending; ++i)
-            cntrl::Controller::tick(0);
+            cntrl::Controller::tick(now_);
     }
 };

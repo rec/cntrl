@@ -342,6 +342,23 @@ class TargetPulse(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class NavigationSettings(BaseModel, frozen=True):
+    hold_delay: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 1.5
+    repeat_interval: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 1.0
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Show(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
@@ -356,13 +373,8 @@ class Show(BaseModel, frozen=True):
         float, Field(strict=True, gt=0, le=1), units.unit_validator('dimensionless')
     ] = 0.5
     target_pulse: TargetPulse = Field(default_factory=TargetPulse)
+    navigation: NavigationSettings = Field(default_factory=NavigationSettings)
     take_first_match: Annotated[bool, Field(strict=True)] = False
-    chord: Annotated[
-        float,
-        Field(strict=True, ge=0.001, le=65.535),
-        units.unit_validator('second'),
-        AfterValidator(millisecond_resolution),
-    ] = 0.1
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     transition: (
         Annotated[

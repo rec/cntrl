@@ -369,6 +369,7 @@ def compile_show(
         round(show.target_pulse.period * 1000),
         show.target_pulse.minimum,
         show.target_pulse.maximum,
+        round(show.navigation.repeat_interval * 1000),
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
     body += (
@@ -393,7 +394,7 @@ def compile_show(
         HEADER.pack(
             b'CSW1',
             DOCUMENT_VERSION,
-            round(show.chord * 1000),
+            round(show.navigation.hold_delay * 1000),
             HEADER.size + len(body),
             len(instruments),
             len(patch_cycles),
@@ -1357,5 +1358,5 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHHHBB')
-DOCUMENT_VERSION = 22
+METADATA = struct.Struct('<4sHHHBBH')
+DOCUMENT_VERSION = 23

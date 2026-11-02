@@ -461,7 +461,8 @@ private:
                 || std::memcmp(old.named_patch(i), current.named_patch(i), 66)) ++patches;
         for (unsigned i = 0; i < old.instruments() || i < current.instruments(); ++i)
             if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
-        settings = old.chord_ms() != current.chord_ms() || old.brightness() != current.brightness()
+        settings = old.navigation_hold_ms() != current.navigation_hold_ms()
+            || old.navigation_repeat_ms() != current.navigation_repeat_ms() || old.brightness() != current.brightness()
             || old.splash() != current.splash() || old.usb_midi_interface() != current.usb_midi_interface()
             || old.animation_color_cycle() != current.animation_color_cycle()
             || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();

@@ -7,8 +7,8 @@ public:
         period_ms = period; half_period_ms = period / 2;
         minimum = low; maximum = high; patch_ = -1;
     }
-    uint8_t brightness(int patch, uint32_t now, uint8_t normal) {
-        if (patch < 0 || !period_ms) { patch_ = -1; return normal; }
+    uint8_t brightness(int patch, uint32_t now, uint8_t normal, uint8_t held_buttons) {
+        if (patch < 0 || held_buttons || !period_ms) { patch_ = -1; return normal; }
         if (patch != patch_) { patch_ = patch; started_ = now; }
         uint32_t elapsed = now - started_;
         started_ += elapsed / period_ms * period_ms;

@@ -324,7 +324,9 @@ def tag_style(names: list[str], tags: dict[str, models.Tag]) -> models.Style:
 
 def field_value(
     name: str, patch: DisplayPatch, show: models.Show
-) -> str | int | bool | None:
+) -> str | int | float | bool | None:
+    if name == 'navigation.hold_delay':
+        return show.navigation.hold_delay
     if name in patch.values:
         return patch.values[name]
     if name.startswith('names.'):
@@ -387,7 +389,7 @@ FIELDS = {
     'splash': 17,
     'usb_midi_interface': 18,
     'screensaver_timeout': 19,
-    'chord': 20,
+    'navigation.hold_delay': 20,
     'transition': 21,
 }
 SOURCE_FIELDS = (

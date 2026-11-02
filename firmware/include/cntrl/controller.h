@@ -3,7 +3,6 @@
 #include <cstdio>
 
 namespace cntrl {
-enum class Chord { none, ab, ad, be, de };
 
 class Controller {
 public:
@@ -88,7 +87,7 @@ public:
         cursors_[selected_] = a.patch - u16(document_.patch_cycle(selected_) + 64);
         --depth_;
     }
-    void cancel_gesture() { release_c(); held_ = 0; pending_ = -1; locked_ = false; }
+    void cancel_gesture() { release_c(); held_ = 0; reverse_ = false; }
     void refresh() { cancel_gesture(); if (document_.valid()) render(); }
     void activate(const Document &document) {
         executor_.cancel(); sending_ = -1;
@@ -105,52 +104,40 @@ public:
         for (auto &p : current_) p = -1;
         for (auto &p : last_sent_) p = -1;
         center_ = -1;
-        held_ = 0; pending_ = -1; locked_ = false;
+        held_ = 0; reverse_ = false;
         render();
     }
-    // A..F use indices 0..5; timestamps belong to debounced edges.
-    Chord button(unsigned button, bool pressed, uint32_t now) {
-        if (button >= 6) return Chord::none;
-        tick(now);
-        if (button == 2) {
-            if (!pressed) release_c();
-            else if (!c_held_) { c_held_ = true; action(button); }
-            return Chord::none;
-        }
-        if (button == 5) {
-            if (pressed) action(button);
-            return Chord::none;
-        }
+    // Adapters map send/patch/undo/cycle to logical inputs 2/1/5/4.
+    // Logical inputs 0/3 have no physical assignment on this page.
+    void button(unsigned button, bool pressed, uint32_t now) {
+        if (button >= 6 || button == 0 || button == 3) return;
         const unsigned mask = 1u << button;
         if (pressed) {
-            if (held_ & mask) return Chord::none;
+            if (held_ & mask) return;
             held_ |= mask;
-            if (locked_) return Chord::none;
-            if (pending_ >= 0) {
-                // Recognized and unrecognized pairs both consume their singles.
-                unsigned pair = (1u << unsigned(pending_)) | mask;
-                pending_ = -1;
-                locked_ = true;
-                switch (pair) {
-                    case 3: return Chord::ab;
-                    case 9: return Chord::ad;
-                    case 18: return Chord::be;
-                    case 24: return Chord::de;
-                    default: return Chord::none;
+            if (button == 2) {
+                c_held_ = true; action(button);
+            } else if (button == 5 && (held_ & ((1u << 1) | (1u << 4)))) {
+                reverse_ = true;
+                for (unsigned i = 0; i < 2; ++i) {
+                    unsigned nav = i ? 4 : 1;
+                    if (held_ & (1u << nav)) { repeat_since_[i] = now; repeating_[i] = false; action(nav); }
                 }
             } else {
-                pending_ = int(button);
-                since_ = now;
+                if (button == 1 || button == 4) {
+                    unsigned i = button == 4;
+                    repeat_since_[i] = now; repeating_[i] = false;
+                }
+                action(button);
             }
         } else {
             held_ &= ~mask;
-            if (pending_ == int(button)) {
-                pending_ = -1;
-                action(button);
+            if (button == 2) release_c();
+            if (button == 5 && reverse_) {
+                reverse_ = false;
+                for (unsigned i = 0; i < 2; ++i) { repeat_since_[i] = now; repeating_[i] = false; }
             }
-            if (!held_) locked_ = false;
         }
-        return Chord::none;
     }
     void tick(uint32_t now) {
         executor_.tick();
@@ -158,27 +145,32 @@ public:
             flashing_ = true; hardware_.set_brightness(255, true);
         }
         finish_execution();
-        if (pending_ >= 0 && uint32_t(now - since_) > (document_.valid() ? document_.chord_ms() : 100)) {
-            unsigned button = unsigned(pending_);
-            pending_ = -1;
-            action(button);
+        if (!document_.valid()) return;
+        for (unsigned i = 0; i < 2; ++i) {
+            unsigned button = i ? 4 : 1;
+            unsigned delay = repeating_[i] ? document_.navigation_repeat_ms() : document_.navigation_hold_ms();
+            if ((held_ & (1u << button)) && uint32_t(now - repeat_since_[i]) >= delay && action(button)) {
+                repeat_since_[i] = now; repeating_[i] = true;
+            }
         }
     }
-    void action(unsigned button) {
-        if (executor_.busy()) return;
+    bool action(unsigned button) {
+        if (executor_.busy() || button >= 6) return false;
         static constexpr unsigned operations[] = {4, 3, 7, 6, 5, 8};
-        if (button < 6) executor_.invoke(StatePatch{operations[button]});
+        unsigned operation = operations[button];
+        if (reverse_ && (button == 1 || button == 4)) ++operation;
+        return executor_.invoke(StatePatch{operation});
     }
     bool navigate(unsigned operation) {
         if (!document_.valid() || !document_.patch_cycles()) return false;
         if (operation == 5 || operation == 6) {
             if (document_.patch_cycles() > 1)
-                hardware_.transition(operation == 5, document_.transition_ms(), true);
+                hardware_.transition(operation == 6, document_.transition_ms(), true);
             selected_ = (selected_ + document_.patch_cycles() + (operation == 6 ? -1 : 1)) % document_.patch_cycles();
         } else if (operation == 3 || operation == 4) {
             unsigned count = u16(document_.patch_cycle(selected_) + 66);
             if (count > 1)
-                hardware_.transition(operation == 3, document_.transition_ms(), true);
+                hardware_.transition(operation == 4, document_.transition_ms(), true);
             cursors_[selected_] = (cursors_[selected_] + count + (operation == 4 ? -1 : 1)) % count;
         } else if (operation == 7) {
             if (executor_.busy()) return false;
@@ -224,10 +216,11 @@ private:
     int last_sent_[max_instruments] = {};
     unsigned selected_ = 0, depth_ = 0, held_ = 0;
     unsigned preview_selected_ = 0, preview_depth_ = 0;
-    int center_ = -1, pending_ = -1;
+    int center_ = -1;
     int sending_ = -1;
-    uint32_t since_ = 0;
-    bool locked_ = false, c_held_ = false, flashing_ = false, undoing_ = false, previewing_ = false;
+    uint32_t repeat_since_[2] = {};
+    bool repeating_[2] = {}, reverse_ = false;
+    bool c_held_ = false, flashing_ = false, undoing_ = false, previewing_ = false;
     uint8_t brightness_ = 192;
     bool move(unsigned operation, unsigned &selected, uint16_t *cursors) const {
         if (!document_.valid() || !document_.patch_cycles()) return false;

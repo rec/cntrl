@@ -54,6 +54,7 @@ USBHost host;
 MIDIDevice host_midi(host);
 extern cntrl::StoredPatchSources patch_sources;
 extern cntrl::Controller controller;
+extern uint8_t held_controls;
 bool patch_state(unsigned operation, uint32_t value);
 enum class UiOperation : unsigned {
     menu_previous = 128, menu_next, menu_activate, menu_back, menu_open, performance_show,
@@ -385,7 +386,7 @@ public:
 private:
     void apply_brightness(uint32_t now) {
         renderer_.target_brightness(throb_.brightness(
-            !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128));
+            !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128, held_controls));
         uint8_t brightness = brightness_feedback_ ? feedback_brightness_ : splash_session.brightness(runtime.brightness, now);
         if (brightness != applied_brightness_) {
             analogWrite(6, brightness); applied_brightness_ = brightness;
@@ -853,8 +854,10 @@ bool state_ui(UiOperation operation) {
         if (module_menu.button(5, true) == -2) { documents.redraw(); module_controls_locked = true; }
         return true;
     case UiOperation::menu_open:
+        controller.cancel_gesture();
         songs_ui.leave(); module_menu.enter(); module_controls_locked = true; return true;
     case UiOperation::performance_show:
+        controller.cancel_gesture();
         module_menu.leave(); songs_ui.leave(); documents.redraw(); module_controls_locked = true; return true;
     case UiOperation::menu_activate: {
         if (!module_menu.open()) return false;
@@ -1155,10 +1158,7 @@ void poll_target() {
                         else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_back)});
                     }
                 } else {
-                    if ((events[i] & press_event) && controller.button(mirrored_button(i), true, now) == cntrl::Chord::ad
-                        && !patch_work_pending() && splash_session.management_allowed()) {
-                        controller.cancel_gesture(); controller.executor().invoke(cntrl::StatePatch{9});
-                    }
+                    if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
                     if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
                 }
             }
@@ -1176,6 +1176,7 @@ void poll_target() {
     // continue while command input and reply-producing jobs wait for room.
     if (board.reply_ready()) serial_router.poll(now);
     if (board.reply_ready()) songs_transfer.poll(now);
+    if (feature_open()) controller.cancel_gesture();
     controller.tick(now);
     song_sources.tick();
     songs.tick();

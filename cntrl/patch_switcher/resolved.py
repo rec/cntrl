@@ -59,7 +59,7 @@ def patch(data: bytes, node: int) -> dict[str, object]:
 
 def export(data: bytes) -> str:
     offset = graph_offset(data)
-    _, _, chord, _, ni, nc, np, flags, _, timeout = HEADER.unpack_from(data)
+    _, _, hold, _, ni, nc, np, flags, _, timeout = HEADER.unpack_from(data)
     meta = 76 + ni * 68 + nc * 68 + np * 82
     nb = struct.unpack_from('<H', data, meta + 4)[0]
     source = read_source(data, offset)
@@ -70,7 +70,6 @@ def export(data: bytes) -> str:
     source.pop('patch_tags', None)
     authored_switches = cast(dict[str, object], source.pop('switches', {}))
     result: dict[str, object] = {
-        'chord': chord / 1000,
         'brightness': flags & 255,
         'splash': bool(flags & 256),
         'animation_color_cycle': bool(flags & 1024),
@@ -85,6 +84,8 @@ def export(data: bytes) -> str:
         'minimum': minimum,
         'maximum': maximum,
     }
+    repeat = struct.unpack_from('<H', data, meta + 12)[0]
+    result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
     result.update(source)
     instruments: dict[str, object] = {}
     setups: list[dict[str, object]] = []

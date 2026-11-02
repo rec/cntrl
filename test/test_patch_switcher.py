@@ -27,6 +27,7 @@ def test_custom_pulse_round_trip(
 ) -> None:
     show['target_pulse'] = {'period': period, 'minimum': 20, 'maximum': 100}
     show['foreground_brightness_limit'] = '40%'
+    show['navigation'] = {'hold_delay': '2 seconds', 'repeat_interval': '250 ms'}
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     settings = models.Show.model_validate(exported)
@@ -34,6 +35,9 @@ def test_custom_pulse_round_trip(
         period=5, minimum=20, maximum=100
     )
     assert settings.foreground_brightness_limit == 0.4
+    assert settings.navigation == models.NavigationSettings(
+        hold_delay=2, repeat_interval=0.25
+    )
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
@@ -54,6 +58,13 @@ def test_invalid_pulse_is_rejected(pulse: dict[str, object]) -> None:
         models.TargetPulse.model_validate(pulse)
 
 
+@pytest.mark.parametrize('value', [0, 65.536, 0.0011, True, '1 Hz'])
+def test_invalid_navigation_timing_is_rejected(value: object) -> None:
+    for n in ('hold_delay', 'repeat_interval'):
+        with pytest.raises(ValueError):
+            models.NavigationSettings.model_validate({n: value})
+
+
 @pytest.fixture
 def definitions() -> object:
     return compiler.read_document(FIXTURES / 'definitions.json')
@@ -71,7 +82,7 @@ def test_compiler_matches_shared_cpp_fixture(
 ) -> None:
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
-    assert compiler.HEADER.unpack_from(result)[2:7] == (100, len(result), 2, 2, 4)
+    assert compiler.HEADER.unpack_from(result)[2:7] == (1500, len(result), 2, 2, 4)
     assert compiler.HEADER.unpack_from(result)[1] == compiler.DOCUMENT_VERSION
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
@@ -103,14 +114,14 @@ def test_configuration_units_compile_to_the_same_document(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
     numeric = show | {
-        'chord': 0.1,
+        'navigation': {'hold_delay': 1.5, 'repeat_interval': 1},
         'transition': 0.5,
         'screensaver_timeout': 60,
         'pad': 4,
         'contrast': 0.6,
     }
     authored = show | {
-        'chord': '0.1 s',
+        'navigation': {'hold_delay': '1500 ms', 'repeat_interval': '1 second'},
         'transition': '500 ms',
         'screensaver_timeout': '1:00',
         'pad': '4 px',
@@ -124,7 +135,6 @@ def test_configuration_units_compile_to_the_same_document(
 @pytest.mark.parametrize(
     'field,value',
     [
-        ('chord', '0.1 ms'),
         ('transition', '1 Hz'),
         ('transition', '66 s'),
         ('transition', True),
