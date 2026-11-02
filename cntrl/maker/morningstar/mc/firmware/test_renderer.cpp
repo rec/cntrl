@@ -10,6 +10,7 @@
 static uint16_t screens[3][128][160];
 static uint16_t ram[3][128][display_ram_columns];
 static unsigned ring = 0;
+static unsigned panel_rings[3] = {};
 static bool check_motion = false, check_undo = false;
 static unsigned checked_progress = 0;
 static unsigned writes = 0, pixels_sent = 0;
@@ -64,6 +65,7 @@ void scroll_display_panorama(unsigned offset) {
     ++scroll_updates;
     if (check_motion) checked_progress += !check_undo ? (ring + display_ram_columns - offset) % display_ram_columns : (offset + display_ram_columns - ring) % display_ram_columns;
     ring = offset;
+    for (auto &value : panel_rings) value = offset;
     for (unsigned panel = 0; panel < 3; ++panel)
         for (unsigned y = 0; y < 128; ++y)
                 for (unsigned x = 0; x < 160; ++x) screens[panel][y][x] = ram[panel][y][(ring + x) % display_ram_columns];
@@ -85,6 +87,13 @@ void scroll_display_panorama(unsigned offset) {
     }
 }
 
+void scroll_display_panel(unsigned panel, unsigned offset) {
+    panel_rings[panel] = offset;
+    for (unsigned y = 0; y < 128; ++y)
+        for (unsigned x = 0; x < 160; ++x)
+            screens[panel][y][x] = ram[panel][y][(offset + x) % display_ram_columns];
+}
+
 void initialize_display_panorama() {
     scroll_display_panorama(0);
 }
@@ -92,7 +101,7 @@ void initialize_display_panorama() {
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels) {
     assert(panel < 3 && column < display_ram_columns);
     ++writes; pixels_sent += 128;
-    unsigned x = (column + display_ram_columns - ring) % display_ram_columns;
+    unsigned x = (column + display_ram_columns - panel_rings[panel]) % display_ram_columns;
     if (audit_motion) {
         if (!panel) { scroll_trace.emplace_back(); scroll_trace.back().column = column; }
         assert(scroll_trace.back().column == column);
@@ -893,5 +902,29 @@ int main() {
     assert(transition_progress(1999, 2000) < display_pitch);
     assert(transition_progress(2000, 2000) == display_pitch);
     assert(transition_progress(500, 500) == display_pitch);
+    for (unsigned backward = 0; backward < 2; ++backward) {
+        for (unsigned i = 0; i < 3; ++i) {
+            cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
+            renderer.show(i, pane);
+        }
+        drain(renderer);
+        const unsigned origin = panel_rings[0];
+        renderer.transition(backward, 500, true);
+        cntrl::Pane next; next.graphics.background = 0x4444;
+        renderer.show(0, next);
+        for (unsigned now = 10000; now < 11000; ++now) {
+            for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
+            blank(1, 0x2222); blank(2, 0x3333);
+            unsigned progress = backward ? (panel_rings[0] + 162 - origin) % 162
+                : (origin + 162 - panel_rings[0]) % 162;
+            for (unsigned y = 0; y < 128; ++y) for (unsigned x = 0; x < 160; ++x) {
+                int source = int(x) + (backward ? int(progress) : -int(progress));
+                bool incoming = source < 0 || source >= 160;
+                if (incoming) source += backward ? -160 : 160;
+                assert(screens[0][y][x] == rounded_background(unsigned(source), y, incoming ? 0x4444 : 0x1111));
+            }
+        }
+        assert(renderer.ready()); blank(0, 0x4444);
+    }
     audit_animation_batches();
 }

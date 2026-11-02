@@ -17,16 +17,18 @@ public:
     }
     void invalidate() {
         drawing_ = -1; rendering_ = false;
-        preparing_ = animating_ = native_ready_ = false; ring_ = 0;
+        preparing_ = animating_ = native_ready_ = false;
+        for (auto &ring : rings_) ring = 0;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms) {
+    void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only = false) {
         if (preparing_ || animating_ || !valid_[0] || !valid_[1] || !valid_[2]) return;
         // Browsing may still be repainting the candidate. Animate from the
         // pixels already on screen instead of silently dropping the transition.
         drawing_ = -1; rendering_ = false;
         std::memcpy(previous_, cache_, sizeof(cache_));
-        undo_ = undo; duration_ms_ = duration_ms.value_or(DEFAULT_TRANSITION_MS); preparing_ = true;
+        undo_ = undo; target_only_ = target_only;
+        duration_ms_ = duration_ms.value_or(DEFAULT_TRANSITION_MS); preparing_ = true;
         for (auto &dirty : dirty_) dirty = true;
     }
     void show(unsigned pane, const cntrl::Pane &content) {
@@ -110,7 +112,7 @@ public:
             cache_[drawing_][index] = pixel;
         }
         if (changed && !preparing_)
-            write_display_column(unsigned(drawing_), (ring_ + y_) % display_ram_columns, pixels);
+            write_display_column(unsigned(drawing_), (rings_[drawing_] + y_) % display_ram_columns, pixels);
         if (++y_ == 160) {
             valid_[drawing_] = true;
             drawing_ = -1;
@@ -178,6 +180,12 @@ private:
         }
     }
     uint16_t moving_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
+        if (target_only_) {
+            int source = int(x) + (undo_ ? int(progress) : -int(progress));
+            if (source >= 0 && source < 160) return previous_[0][y * 160 + unsigned(source)];
+            source += undo_ ? -160 : 160;
+            return cache_[0][y * 160 + unsigned(source)];
+        }
         // Sample one continuous panorama, including the physical gaps.
         // Send carries candidate -> current -> history to the right.
         int source = int(panel * display_pitch + x)
@@ -214,9 +222,10 @@ private:
             }
             waiting_ = false;
         }
-        if (progress_ == display_pitch) {
+        const unsigned distance = target_only_ ? 160 : display_pitch;
+        if (progress_ == distance) {
             // Do not reconcile the final image until the final offset settles.
-            for (unsigned panel = 0; panel < 3; ++panel) {
+            for (unsigned panel = 0; panel < (target_only_ ? 1u : 3u); ++panel) {
                 for (unsigned y = 0; y < 128; ++y) {
                     for (unsigned x = 0; x < 160; ++x) {
                         cache_[panel][y * 160 + x] = moving_pixel(panel, x, y, progress_);
@@ -230,26 +239,29 @@ private:
             return;
         }
         if (progress_ % 2 == 0) {
-            const uint64_t deadline = uint64_t(progress_ / 2 + 1) * duration_ms_ * 1000 / (display_pitch / 2);
+            const uint64_t deadline = uint64_t(progress_ / 2 + 1) * duration_ms_ * 1000 / (distance / 2);
             if (uint32_t(now - started_) < deadline) {
                 return;
             }
         }
         ++progress_;
-        ring_ = (ring_ + (undo_ ? 1 : display_ram_columns - 1)) % display_ram_columns;
         unsigned x = undo_ ? 159 : 0;
         uint8_t pixels[256];
-        for (unsigned panel = 0; panel < 3; ++panel) {
+        for (unsigned panel = 0; panel < (target_only_ ? 1u : 3u); ++panel) {
+            rings_[panel] = (rings_[panel] + (undo_ ? 1 : display_ram_columns - 1)) % display_ram_columns;
             for (unsigned y = 0; y < 128; ++y) {
                 uint16_t pixel = moving_pixel(panel, x, y, progress_);
                 pixels[2 * y] = uint8_t(pixel >> 8);
                 pixels[2 * y + 1] = uint8_t(pixel);
             }
-            write_display_column(panel, (ring_ + x) % display_ram_columns, pixels);
+            write_display_column(panel, (rings_[panel] + x) % display_ram_columns, pixels);
         }
         if (progress_ % 2 == 0) {
             // Both hidden columns are prepared before the two-column reveal.
-            scroll_display_panorama(ring_);
+            if (!target_only_ && rings_[0] == rings_[1] && rings_[1] == rings_[2])
+                scroll_display_panorama(rings_[0]);
+            else for (unsigned panel = 0; panel < (target_only_ ? 1u : 3u); ++panel)
+                scroll_display_panel(panel, rings_[panel]);
             anchor_ = true;
         }
     }
@@ -258,7 +270,8 @@ private:
     uint16_t cache_[3][160 * 128] = {};
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
-    unsigned ring_ = 0, progress_ = 0;
+    bool target_only_ = false;
+    unsigned rings_[3] = {}, progress_ = 0;
     unsigned duration_ms_ = 0;
     uint32_t started_ = 0, quiet_since_ = 0;
     bool anchor_ = false, waiting_ = false;

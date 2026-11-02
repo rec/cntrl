@@ -712,3 +712,12 @@ empty panes and other module pages use the configured brightness. Temporary
 hold feedback takes priority, and splash/screensaver playback retains its own
 brightness and fades. When the pulse resumes after an override it starts at 128.
 The pulse never changes the saved brightness setting.
+
+## Cycle navigation animation
+
+Changing patch cycles slides the new card into the physical left target window:
+from the right when navigating forward, and from the left when navigating
+backward. The center and right windows stay fixed. This uses the setup's
+transition duration and the existing two-column hardware scroll scheduling.
+Each panel retains its own scroll offset so later send and undo animations
+continue to move all three windows together correctly.

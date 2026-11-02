@@ -18,3 +18,4 @@ void initialize_display_panorama();
 void set_display_fast_refresh(bool enabled);
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels);
 void scroll_display_panorama(unsigned offset);
+void scroll_display_panel(unsigned panel, unsigned offset);

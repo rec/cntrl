@@ -57,7 +57,7 @@ struct Hardware {
     virtual unsigned display_height() const = 0;
     // Pane indices follow physical left-to-right order: 0, 1, 2.
     virtual void show(unsigned pane, const Pane &content) = 0;
-    virtual void transition(bool undo, std::optional<unsigned> duration_ms) { (void)undo; (void)duration_ms; }
+    virtual void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only = false) { (void)undo; (void)duration_ms; (void)target_only; }
     // Temporary performance feedback bypasses dimming; a normal call clears it.
     virtual void set_brightness(uint8_t value, bool temporary = false) = 0;
     virtual void set_usb_midi_interface(bool) {}

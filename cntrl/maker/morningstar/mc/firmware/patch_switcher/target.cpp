@@ -260,7 +260,7 @@ public:
         if (pane == 0) pending_patch_ = content.pending_patch;
         renderer_.show(pane, content);
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms) override { renderer_.transition(undo, duration_ms); }
+    void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only) override { renderer_.transition(undo, duration_ms, target_only); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
         if (enabled) {

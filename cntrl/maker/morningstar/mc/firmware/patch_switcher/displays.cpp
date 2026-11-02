@@ -53,6 +53,13 @@ void scroll_display_panorama(unsigned offset) {
     end_transfer();
 }
 
+void scroll_display_panel(unsigned index, unsigned offset) {
+    const uint8_t start[] = {0, uint8_t((display_ram_columns - offset % display_ram_columns) % display_ram_columns)};
+    begin_transfer();
+    command(panorama_panels[index], 0x37, start, 2);
+    end_transfer();
+}
+
 void write_display_group(uint8_t selected, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
     if (native_mode) {
         set_display_fast_refresh(false);
