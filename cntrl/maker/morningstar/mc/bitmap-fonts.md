@@ -331,3 +331,9 @@ Outline fonts are rasterized at the requested width. Scaling classic, Arial or
 ComicSansMS resamples their native bitmaps and requires the pinned Teensy font
 sources installed by the firmware toolchain. Exported assets are self-contained
 and do not require those sources for unchanged recompilation.
+
+
+Line boxes preserve the outline font's declared descender space even when the
+text contains only capitals. Actual glyph bounds can enlarge that space but do
+not shrink it. This keeps caps-only faces away from the heading divider and
+uses the same vertical metrics for fitting, sparse assets and rendering.

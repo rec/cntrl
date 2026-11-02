@@ -78,6 +78,7 @@ void initialize(const Panel &panel, char number, bool greeting) {
     delay(500);
     // Panel register values traced at stock flash 0x60013828 and 0x60013894.
     // Records contain command, argument count, then arguments. No vendor code.
+    // MADCTL color order differs from stock: our pixel buffers are RGB565.
     const uint8_t settings[] = {
         0xb1, 3, 5, 0x3c, 0x3c,
         0xb2, 3, 5, 0x3c, 0x3c,
@@ -95,7 +96,7 @@ void initialize(const Panel &panel, char number, bool greeting) {
             0x28, 0x26, 0x2e, 0x3a, 0, 1, 3, 0x13,
         0xe1, 16, 4, 0x16, 6, 0x0d, 0x2d, 0x26, 0x23, 0x27,
             0x27, 0x25, 0x2d, 0x3b, 0, 1, 4, 0x13,
-        0x36, 1, 0xa8, // Stock rotation 1, including BGR color order.
+        0x36, 1, 0xa0, // Stock rotation 1, with RGB order for our RGB565 pixels.
     };
     for (unsigned i = 0; i < sizeof(settings);) {
         const uint8_t code = settings[i++];

@@ -48,6 +48,8 @@ def pack(
                 index.extend(POSITION.pack(identifiers.index(identifier), x, y))
         top = min((r.top for r in runs.values()), default=0)
         bottom = max(1, max((r.bottom for r in runs.values()), default=0))
+        if isinstance(outline, Outline):
+            bottom = max(bottom, outline.descent(size))
         height, baseline = (
             (metrics[size].line_height, metrics[size].top)
             if metrics
@@ -281,6 +283,8 @@ class Preparation:
                     runs = {t: outline.shape(s, t) for t in valid}
                     top = min((r.top for r in runs.values()), default=0)
                     bottom = max(1, max((r.bottom for r in runs.values()), default=0))
+                    if isinstance(outline, Outline):
+                        bottom = max(bottom, outline.descent(s))
                     sizes[s] = models.FontMetrics(
                         line_height=max(1, bottom - top),
                         top=-top,

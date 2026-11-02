@@ -161,7 +161,7 @@ int main() {
                 assert(transfer.data[k]);
             }
         }
-        assert((transfers[i][16].bytes == std::vector<uint8_t>{0x36, 0xa8}));
+        assert((transfers[i][16].bytes == std::vector<uint8_t>{0x36, 0xa0}));
         assert((transfers[i][18].bytes == std::vector<uint8_t>{0x2a, 0, 1, 0, 160}));
         assert((transfers[i][19].bytes == std::vector<uint8_t>{0x2b, 0, 2, 0, 129}));
         const auto &pixels = transfers[i][20].bytes;
@@ -215,7 +215,7 @@ int main() {
     initialize_scroll();
     for (const auto &panel : transfers) {
         assert(panel.size() == 3);
-        assert((panel[0].bytes == std::vector<uint8_t>{0x36, 0x88}));
+        assert((panel[0].bytes == std::vector<uint8_t>{0x36, 0x80}));
         assert((panel[1].bytes == std::vector<uint8_t>{0x33, 0, 1, 0, 160, 0, 1}));
         assert((panel[2].bytes == std::vector<uint8_t>{0x37, 0, 1}));
     }
@@ -270,7 +270,7 @@ int main() {
     for (auto &panel : transfers) panel.clear();
     initialize_display_panorama();
     for (const auto &panel : transfers) {
-        assert((panel[0].bytes == std::vector<uint8_t>{0x36, 0x88}));
+        assert((panel[0].bytes == std::vector<uint8_t>{0x36, 0x80}));
         assert((panel[1].bytes == std::vector<uint8_t>{0x33, 0, 0, 0, 162, 0, 0}));
         assert((panel[2].bytes == std::vector<uint8_t>{0x37, 0, 0}));
         assert((panel[3].bytes == std::vector<uint8_t>{0xb1, 0, 1, 1}));
@@ -306,7 +306,7 @@ int main() {
         assert((panel[n - 7].bytes == std::vector<uint8_t>{0xb1, 5, 60, 60}));
         assert((panel[n - 6].bytes == std::vector<uint8_t>{0x33, 0, 1, 0, 160, 0, 1}));
         assert((panel[n - 5].bytes == std::vector<uint8_t>{0x37, 0, 1}));
-        assert((panel[n - 4].bytes == std::vector<uint8_t>{0x36, 0xa8}));
+        assert((panel[n - 4].bytes == std::vector<uint8_t>{0x36, 0xa0}));
     }
     assert(clock_gpio && data_gpio && !spi_active);
 #endif

@@ -5,7 +5,7 @@
 
 void initialize_scroll() {
     const Panel panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
-    const uint8_t native[] = {0x88}; // Preserve MY/BGR, disable row/column exchange.
+    const uint8_t native[] = {0x80}; // Preserve MY and RGB order, disable row/column exchange.
     const uint8_t area[] = {0, 1, 0, 160, 0, 1}; // Account for both hidden gate lines.
     const uint8_t start[] = {0, 1};
     begin_transfer();

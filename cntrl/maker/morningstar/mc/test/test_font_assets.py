@@ -555,3 +555,35 @@ def test_still_time_default_scale_can_be_overridden() -> None:
     _, _, unscaled = display.compile_display(source, [patch], target, assets)
     assert b'StillTime@1.5x' not in unscaled
     assert default != unscaled
+
+
+@pytest.mark.parametrize(
+    'source,text,descent',
+    [
+        ('ewert/Ewert-Regular.ttf', 'guitar', 9),
+        ('graduate/Graduate-Regular.ttf', 'reed', 6),
+        ('courier-prime/CourierPrime-Regular.ttf', 'gyp', 10),
+    ],
+)
+def test_line_boxes_reserve_font_descent(source: str, text: str, descent: int) -> None:
+    outline = Outline(ROOT / 'cntrl/fonts' / source)
+    data = font_assets.pack(outline, {28: [text]})
+    face = font_assets.decode(data, 'Test', crc32(data))
+    metrics = face.sizes[28]
+    assert metrics.line_height - metrics.top >= descent
+    assert metrics.line_height - metrics.top >= outline.shape(28, text).bottom
+
+
+def test_prepared_capitals_keep_space_below_the_baseline() -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(MC / 'patch-switcher-target.json')
+    )
+    prepared = font_assets.Preparation(
+        models.Show(),
+        target,
+        [(0, 'guitar', models.Style(font_name='OrnamentalSlab'), 4, 3, 0)],
+        ['guitar heading'],
+    )
+    face = next(f for f in prepared.target.fonts if f.name == 'OrnamentalSlab')
+    metrics = face.sizes[28]
+    assert metrics.line_height - metrics.top == 9

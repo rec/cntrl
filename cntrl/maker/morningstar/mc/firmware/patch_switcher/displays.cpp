@@ -12,7 +12,7 @@ const Panel panorama_panels[] = {{15, 34, 21}, {24, 23, 22}, {27, 25, 20}};
 }
 
 void initialize_display_panorama() {
-    const uint8_t mode[] = {0x88}, area[] = {0, 0, 0, display_ram_columns, 0, 0}, start[] = {0, 0};
+    const uint8_t mode[] = {0x80}, area[] = {0, 0, 0, display_ram_columns, 0, 0}, start[] = {0, 0};
     begin_transfer();
     for (const auto &panel : panorama_panels) {
         command(panel, 0x36, mode, 1);
@@ -56,7 +56,7 @@ void scroll_display_panorama(unsigned offset) {
 void write_display_group(uint8_t selected, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) {
     if (native_mode) {
         set_display_fast_refresh(false);
-        const uint8_t mode[] = {0xa8}, area[] = {0, 1, 0, 160, 0, 1}, start[] = {0, 1};
+        const uint8_t mode[] = {0xa0}, area[] = {0, 1, 0, 160, 0, 1}, start[] = {0, 1};
         begin_transfer();
         for (const auto &panel : panorama_panels) {
             command(panel, 0x33, area, 6);

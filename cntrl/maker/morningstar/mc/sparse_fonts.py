@@ -1,6 +1,7 @@
 """Shape show text on the host and rasterize only its selected glyphs."""
 
 import struct
+from math import ceil
 from pathlib import Path
 
 import freetype
@@ -36,6 +37,10 @@ class Outline:
         uharfbuzz.ot_font_set_funcs(self.hb)  # ty: ignore[unresolved-attribute]  # Public C extension API.
         self.glyphs: dict[tuple[int, int], Glyph] = {}
         self.runs: dict[tuple[int, str], Run] = {}
+
+    def descent(self, size: int) -> int:
+        """Reserve the font's declared below-baseline space, even for capitals."""
+        return max(0, ceil(-self.face.descender * size / self.face.units_per_EM))
 
     def glyph(self, size: int, identifier: int) -> Glyph:
         key = (size, identifier)
