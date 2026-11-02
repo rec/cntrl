@@ -28,6 +28,7 @@ struct TextLine {
 
 struct Pane {
     bool heading_band = false;
+    int pending_patch = -1; // Document patch index, or -1 when no unsent patch is displayed.
     ScreenGraphics graphics;
     TextLine lines[max_lines];
 };

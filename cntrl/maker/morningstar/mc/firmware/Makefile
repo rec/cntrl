@@ -124,6 +124,9 @@ inspect-patch-switcher: patch-switcher
 
 test: tools test-button-timing test-switch-gesture test-boot-selection
 	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined "$(ROOT)/test_backlight_throb.cpp" -o "$(ROOT)/build/test_backlight_throb"
+	"$(ROOT)/build/test_backlight_throb"
+	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(abspath $(ROOT)/../../../../..)/firmware/include" \
 		-fsanitize=address,undefined "$(ROOT)/test_original_firmware.cpp" -o "$(ROOT)/build/test_original_firmware"
 	"$(ROOT)/build/test_original_firmware"

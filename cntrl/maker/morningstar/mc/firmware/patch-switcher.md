@@ -695,3 +695,20 @@ same verified image reached reset on retry; the updater returned a disappearance
 error, then USB enumerated as cntrl. Post-flash status was
 `CNTRL READY 14 34597 488beaf6` and pman remained selected. No Panic messages were
 triggered by automation. Physical hold feedback and MIDI capture remain pending.
+
+
+## Pending-patch backlight pulse
+
+While the leftmost performance pane contains an unsent patch, the shared
+backlight pulses from PWM 128 to 16 and back to 128 over 4000 ms. Each 2000 ms
+half-cycle uses cubic smoothstep (`3t² - 2t³`), with zero slope at both ends.
+The implementation uses bounded 32-bit fixed-point arithmetic and no sine calls,
+allocation, delays or additional timers.
+
+The pulse starts at 128 when the indication becomes active, and restarts at 128
+when navigating to a different patch or cycle. Repainting the same patch does
+not restart it. Already-sent patches,
+empty panes and other module pages use the configured brightness. Temporary
+hold feedback takes priority, and splash/screensaver playback retains its own
+brightness and fades. When the pulse resumes after an override it starts at 128.
+The pulse never changes the saved brightness setting.

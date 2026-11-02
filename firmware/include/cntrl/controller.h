@@ -287,7 +287,9 @@ private:
         Pane view;
         view.graphics = document_.graphics(slot);
         if (index >= 0) {
-            document_.page(view, unsigned(index), slot, slot == 0 && already_sent(unsigned(index)));
+            const bool sent = already_sent(unsigned(index));
+            view.pending_patch = slot == 0 && !sent ? index : -1;
+            document_.page(view, unsigned(index), slot, slot == 0 && sent);
             if (view.lines[0].text[0]) {
                 view.heading_band = true;
                 auto &heading = view.lines[0].graphics;
@@ -299,7 +301,7 @@ private:
         }
         bool has_text = false;
         for (const auto &line : view.lines) if (line.text[0]) has_text = true;
-        if (!has_text) view.graphics.background = 0;
+        if (!has_text) { view.graphics.background = 0; view.pending_patch = -1; }
         hardware_.show(slot, view);
     }
     void render() {

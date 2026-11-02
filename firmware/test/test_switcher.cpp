@@ -145,10 +145,13 @@ void test_greyed_names(const cntrl::Document &doc) {
     TestController app(hw);
     app.activate(doc);
     assert(hw.panes[0].heading_band);
+    assert(hw.panes[0].pending_patch == int(app.selected_patch()));
+    assert(hw.panes[1].pending_patch == -1 && hw.panes[2].pending_patch == -1);
     assert(hw.panes[0].lines[0].graphics.background == hw.panes[0].lines[1].graphics.foreground);
     assert(hw.panes[0].lines[0].graphics.foreground == hw.panes[0].lines[1].graphics.background);
     assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(2); // A:Flute is now known to be selected.
+    assert(hw.panes[0].pending_patch == -1);
     assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     hw.connected = false;
     for (unsigned i = 0; i < 3; ++i) {
@@ -159,6 +162,7 @@ void test_greyed_names(const cntrl::Document &doc) {
     hw.connected = true;
     assert(hw.panes[1].lines[1].graphics.foreground == hw.panes[1].graphics.foreground);
     app.action(0); // B:Strings has not been sent.
+    assert(hw.panes[0].pending_patch == int(app.selected_patch()));
     assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(2);
     assert(!hw.panes[1].lines[0].stippled && !hw.panes[1].lines[1].stippled);
