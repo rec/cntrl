@@ -6,6 +6,7 @@ from zlib import crc32
 
 import tomlkit
 
+from . import right_pages
 from .compiler import (
     DOCUMENT_VERSION,
     GRAPH,
@@ -86,6 +87,7 @@ def export(data: bytes) -> str:
     }
     repeat = struct.unpack_from('<H', data, meta + 12)[0]
     result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
+    result['right_pages'] = right_pages.unpack(data, meta + 14)
     result.update(source)
     instruments: dict[str, object] = {}
     setups: list[dict[str, object]] = []

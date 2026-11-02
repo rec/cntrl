@@ -58,7 +58,7 @@ same next/sent/undo order. The hardware adapter forwards pane indices directly,
 as it does for module screens. Recompile setups before uploading to format 21.
 A sends a patch: candidate moves right into current, and current into history.
 D undoes along the reverse path. B browses patches and E browses cycles, with
-hold-to-repeat and D-held reverse as described below. C/F are unassigned.
+hold-to-repeat and D-held reverse as described below. C taps tempo on the Tap Tempo page; F cycles the rightmost page.
 Utility modules keep their existing controls and displayed instructions.
 Animation does not delay MIDI/history actions.
 For scrolling behaviour, evidence, deployment hashes and limitations, see the
@@ -786,8 +786,7 @@ and uploading the setup.
 ## Four-button patch-manager navigation (setup format 23)
 
 Physical buttons A/B/D/E keep their primary actions: A sends the target, B browses
-patches forward, D undoes the latest send, and E browses cycles forward. C and F
-are unassigned on this page. Old C/F browsing and the C+F module-menu shortcut
+patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Previous Undo, Tap Tempo and Status. Old C/F browsing and the C+F module-menu shortcut
 are removed. Other modules keep their existing button assignments.
 
 B and E step once immediately. Holding either begins repeating after the hold
@@ -811,7 +810,7 @@ releasing B/E stops that button's repeats. D alone still undoes, and A retains
 its existing send and hold-brightness feedback. Setup changes and leaving the
 page cancel held-button state. The displays and scrolling animations are unchanged.
 
-While any physical button is held, including unassigned C/F, the target window
+While any physical button is held, including C/F, the target window
 stays at full pixel brightness. The pulse starts from full brightness only after
 all buttons are released. This also suppresses it throughout hold delays and
 auto-repeat in either direction.
@@ -819,3 +818,6 @@ auto-repeat in either direction.
 The old short chord-delay setting is removed. `navigation.hold_delay` replaces
 its header slot in format 23; the repeat interval is stored in the metadata
 header. Recompile setups before uploading them to this firmware.
+
+The auxiliary pages and all their configuration defaults are documented in
+[the firmware guide](../../../../../firmware/README.md#auxiliary-patch-manager-pages-format-24).

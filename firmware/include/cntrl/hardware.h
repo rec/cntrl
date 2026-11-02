@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include "right_page_settings.h"
 
 namespace cntrl {
 constexpr unsigned max_document = 65536;
@@ -26,12 +27,18 @@ struct TextLine {
     bool stippled = false;
 };
 
+struct Circle {
+    uint16_t x = 0, y = 0, diameter = 0, annulus = 0, color = 0, ring_color = 0;
+};
+
 struct Pane {
+    bool performance = false;
     bool three_bands = false;
     bool heading_band = false;
     int pending_patch = -1; // Document patch index, or -1 when no unsent patch is displayed.
     ScreenGraphics graphics;
     TextLine lines[max_lines];
+    Circle circle;
 };
 
 inline bool button_pair_valid(unsigned mask) {
@@ -58,7 +65,10 @@ struct Hardware {
     virtual unsigned display_height() const = 0;
     // Pane indices follow physical left-to-right order: 0, 1, 2.
     virtual void show(unsigned pane, const Pane &content) = 0;
-    virtual void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only = false) { (void)undo; (void)duration_ms; (void)target_only; }
+    virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1) { (void)undo; (void)duration_ms; (void)pane; }
+    virtual void configure_right_pages(const RightPageSettings &) {}
+    virtual void browse_right_page(bool) {}
+    virtual void tap_tempo(uint32_t) {}
     // Temporary performance feedback bypasses dimming; a normal call clears it.
     virtual void set_brightness(uint8_t value, bool temporary = false) = 0;
     virtual void set_target_pulse(unsigned, uint8_t, uint8_t) {}

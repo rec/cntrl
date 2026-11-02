@@ -13,6 +13,10 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     std::vector<std::string> routes, replies;
     std::vector<bool> transitions;
     std::vector<bool> target_transitions;
+    std::vector<bool> right_page_moves;
+    unsigned taps = 0;
+    void browse_right_page(bool reverse) override { right_page_moves.push_back(reverse); }
+    void tap_tempo(uint32_t) override { ++taps; }
     std::vector<std::optional<unsigned>> durations;
     cntrl::Pane panes[3];
     bool connected = true;
@@ -33,8 +37,8 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
-    void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only = false) override {
-        if (target_only) { target_transitions.push_back(undo); return; }
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1) override {
+        if (pane >= 0) { target_transitions.push_back(undo); return; }
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
     void set_brightness(uint8_t value, bool) override { brightness = value; }
@@ -153,6 +157,16 @@ void test_four_button_navigation(const cntrl::Document &doc) {
     app.tick(2500); assert(app.selected_patch() == 0);
     app.button(1, false, 2501); app.tick(10000);
     assert(app.selected_patch() == 0 && hw.sent.empty());
+    hw.right_page_moves.clear();
+    app.button(3, true, 11000);
+    app.tick(111000); assert((hw.right_page_moves == std::vector<bool>{false}));
+    app.button(5, true, 111001);
+    assert((hw.right_page_moves == std::vector<bool>{false, true}) && app.depth() == 0);
+    app.button(3, false, 111002); app.button(3, true, 111003);
+    assert((hw.right_page_moves == std::vector<bool>{false, true, true}));
+    app.button(5, false, 111004); app.button(3, false, 111005); app.button(3, true, 111006);
+    assert((hw.right_page_moves == std::vector<bool>{false, true, true, false}));
+    app.button(3, false, 111007);
     for (unsigned b : {0u, 3u}) { app.button(b, true, 10001); app.button(b, false, 10002); }
     assert(app.selected_patch() == 0 && hw.sent.empty());
 

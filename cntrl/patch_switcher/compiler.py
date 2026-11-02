@@ -9,7 +9,7 @@ from zlib import crc32
 import tomlkit
 from pydantic import ValidationError
 
-from . import display, models
+from . import display, models, right_pages
 
 
 class CompilationError(ValueError):
@@ -318,6 +318,7 @@ def compile_show(
                 for i, p in enumerate(compiler.values)
             },
         )
+        right_settings = right_pages.pack(show, target)
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -370,6 +371,7 @@ def compile_show(
         show.target_pulse.minimum,
         show.target_pulse.maximum,
         round(show.navigation.repeat_interval * 1000),
+        *right_settings,
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
     body += (
@@ -1358,5 +1360,5 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHHHBBH')
-DOCUMENT_VERSION = 23
+METADATA = struct.Struct('<4sHHHBBH22H')
+DOCUMENT_VERSION = 24

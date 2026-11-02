@@ -7,6 +7,8 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <Arduino.h>
 #include <SD.h>
 #include <USBHost_t36.h>
+#include <malloc.h>
+extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 #include <cntrl/documents.h>
 #include <cntrl/patch_sources.h>
 #include <cntrl/setup_ui.h>
@@ -32,6 +34,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include "displays.h"
 #include "switches.h"
 #include "renderer.h"
+#include "performance_pages.h"
 #ifdef CNTRL_DIAGNOSTICS
 #include "scroll_timing.h"
 #endif
@@ -67,6 +70,8 @@ bool state_ui(UiOperation operation);
 bool patch_stock(uint8_t pair, cntrl::PatchExecutor &invocation);
 bool patch_work_pending();
 bool feature_open();
+PerformanceStatus performance_status();
+void capture_disk_space();
 DMAMEM cntrl::Controller::NavigationState invocation_navigation[6];
 bool restoring_invocation = false;
 unsigned pending_ui_operation = 0;
@@ -259,12 +264,28 @@ public:
     }
     void show(unsigned pane, const cntrl::Pane &content) override {
         if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
+        if (pane == 2) {
+            if (content.performance) {
+                right_pages_.history(content);
+                if (!performance_visible_) right_pages_.revisit(documents.selected());
+                performance_visible_ = true;
+                if (right_pages_.active()) return;
+            } else performance_visible_ = false;
+        }
         renderer_.show(pane, content);
     }
+    void configure_right_pages(const cntrl::RightPageSettings &settings) override { right_pages_.configure(settings); }
+    void browse_right_page(bool reverse) override {
+        if (!documents.document().valid()) return;
+        renderer_.transition(reverse, documents.document().transition_ms(), 2);
+        right_pages_.browse(reverse, documents.selected());
+        if (!right_pages_.active()) renderer_.show(2, right_pages_.history());
+    }
+    void tap_tempo(uint32_t now) override { if (documents.document().valid()) right_pages_.tap(now); }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high) override {
         throb_.configure(period, low, high);
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only) override { renderer_.transition(undo, duration_ms, target_only); }
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane) override { renderer_.transition(undo, duration_ms, pane, right_pages_.active()); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
         if (enabled) {
@@ -318,6 +339,7 @@ public:
                 if (source == 0) {
                     uint32_t packet = usb_midi_read_message();
                     if (!packet) break;
+                    if (((packet >> 8) & 255) == 0xf8) right_pages_.clock((packet >> 4) & 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.open()) continue;
 #endif
@@ -329,6 +351,7 @@ public:
                 } else {
                     HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
                     int byte = serial.read(); if (byte < 0) break;
+                    if (byte == 0xf8) right_pages_.clock(source + 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.open()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
 #endif
@@ -343,7 +366,8 @@ public:
         }
         source_cursor_ = (source_cursor_ + 1) % 3;
         // Existing USB-host input is deliberately not bridged.
-        host_midi.read();
+        if (host_midi.read() && host_midi.getType() == 0xf8)
+            right_pages_.clock(18 + host_midi.getCable(), micros());
 #if CNTRL_PANIC
         if (panic.open()) { if (bridge_.handoff(*this)) panic.tick(); }
         else
@@ -375,12 +399,19 @@ public:
         renderer_.draw(micros());
     }
     void display(uint32_t now, bool transfer_busy) {
+        right_pages_.time(now, micros());
         ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) { scroll_timing.poll(micros()); return; }
 #endif
         splash_visible_ = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
+        if (!splash_visible_ && !feature_open() && documents.document().valid()
+            && right_pages_.active() && right_pages_.due(now, held_controls & (1u << 2))) {
+            // Prepare the incoming card during the renderer's bounded transition preparation.
+            PerformanceStatus status = right_pages_.page() == PerformancePages::Page::status ? performance_status() : PerformanceStatus{};
+            renderer_.show(2, right_pages_.view(now, micros(), held_controls & (1u << 2), status));
+        }
         if (!splash_visible_) draw();
     }
 private:
@@ -393,6 +424,8 @@ private:
         }
     }
     PixelThrob throb_;
+    PerformancePages right_pages_;
+    bool performance_visible_ = false;
     int pending_patch_ = -1;
     bool splash_visible_ = false;
     bool brightness_feedback_ = false;
@@ -1030,6 +1063,31 @@ void storage_info(bool scan) {
     Serial.printf("CNTRL STORAGE END %u\n", entries);
 }
 
+PerformanceStatus cached_disk;
+void capture_disk_space() {
+    if (!card.ready) return;
+    uint32_t clusters = SD.sdfs.clusterCount();
+    uint32_t free = SD.sdfs.freeClusterCount();
+    if (!clusters || free > clusters || SD.sdfs.card()->errorCode()) return;
+    cached_disk.disk_free = uint64_t(free) * SD.sdfs.bytesPerCluster();
+    cached_disk.disk_used = uint64_t(clusters - free) * SD.sdfs.bytesPerCluster();
+    cached_disk.disk_valid = true;
+}
+
+PerformanceStatus performance_status() {
+    PerformanceStatus result = cached_disk;
+    uintptr_t stack;
+    __asm__ volatile("mov %0, sp" : "=r"(stack));
+    uintptr_t end = reinterpret_cast<uintptr_t>(&_ebss);
+    result.ram_free[0] = stack > end ? uint32_t(stack - end) : 0;
+    result.ram_used[0] = 512 * 1024 - result.ram_free[0];
+    const auto heap = mallinfo();
+    result.ram_free[1] = uint32_t(reinterpret_cast<uintptr_t>(&_heap_end) - reinterpret_cast<uintptr_t>(__brkval)) + heap.fordblks;
+    result.ram_used[1] = 512 * 1024 - result.ram_free[1];
+    result.cycles = documents.document().patch_cycles(); result.patches = documents.document().patches();
+    return result;
+}
+
 void midi_status(unsigned route) { board.midi_status(route); }
 bool asset_command(const char *line) {
     if (board.configuration_locked()) { board.reply("CNTRL ERROR close-switches-first"); return true; }
@@ -1060,6 +1118,7 @@ void initialize_target() {
     initialize_displays(false);
     board.begin();
     card.ready = SD.begin(BUILTIN_SDCARD);
+    capture_disk_space();
     font_files.ready = card.ready;
     splash_card.ready = card.ready;
     splash_assets.boot();

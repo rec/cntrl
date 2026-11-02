@@ -22,13 +22,13 @@ public:
         for (auto &ring : rings_) ring = 0;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only = false) {
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool keep_right = false) {
         if (preparing_ || animating_ || !valid_[0] || !valid_[1] || !valid_[2]) return;
         // Browsing may still be repainting the candidate. Animate from the
         // pixels already on screen instead of silently dropping the transition.
         drawing_ = -1; rendering_ = false;
         std::memcpy(previous_, cache_, sizeof(cache_));
-        undo_ = undo; target_only_ = target_only;
+        undo_ = undo; animation_pane_ = pane; keep_right_ = keep_right;
         duration_ms_ = duration_ms.value_or(DEFAULT_TRANSITION_MS); preparing_ = true;
         for (auto &dirty : dirty_) dirty = true;
     }
@@ -58,7 +58,7 @@ public:
             for (unsigned i = 0; i < 3; ++i) if (dirty_[i]) {
                 drawing_ = int(i); dirty_[i] = false;
                 painting_ = requested_[i]; y_ = field_ = letter_ = 0;
-                graphics_.configure(painting_.graphics); backgrounds(); rendering_ = true; break;
+                graphics_.configure(painting_.graphics); backgrounds(); circle(); rendering_ = true; break;
             }
         }
         if (drawing_ < 0) {
@@ -123,6 +123,23 @@ public:
         }
     }
 private:
+    bool moving_panel(unsigned panel) const {
+        return animation_pane_ >= 0 ? panel == unsigned(animation_pane_) : !(keep_right_ && panel == 2);
+    }
+    void circle() {
+        const auto &c = painting_.circle;
+        if (!c.diameter) return;
+        const int span = c.diameter + 2 * c.annulus;
+        const int left = int(c.x) - span / 2, top = int(c.y) - span / 2;
+        for (int row = 0; row < span; ++row) for (int col = 0; col < span; ++col) {
+            int x = left + col, y = top + row;
+            if (x < 0 || x >= 160 || y < 0 || y >= 128) continue;
+            int dx = 2 * col + 1 - span, dy = 2 * row + 1 - span;
+            int distance = dx * dx + dy * dy;
+            if (distance <= span * span)
+                graphics_.getFrameBuffer()[y * 160 + x] = distance <= c.diameter * c.diameter ? c.color : c.ring_color;
+        }
+    }
     void write_column(unsigned panel, unsigned column, uint8_t *pixels) {
         if (panel == 0 && pixel_brightness_ != 128) {
             for (unsigned y = 0; y < 128; ++y) {
@@ -230,11 +247,11 @@ private:
         }
     }
     uint16_t moving_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
-        if (target_only_) {
+        if (animation_pane_ >= 0) {
             int source = int(x) + (undo_ ? int(progress) : -int(progress));
-            if (source >= 0 && source < 160) return previous_[0][y * 160 + unsigned(source)];
+            if (source >= 0 && source < 160) return previous_[panel][y * 160 + unsigned(source)];
             source += undo_ ? -160 : 160;
-            return cache_[0][y * 160 + unsigned(source)];
+            return cache_[panel][y * 160 + unsigned(source)];
         }
         // Sample one continuous panorama, including the physical gaps.
         // Send carries candidate -> current -> history to the right.
@@ -250,6 +267,7 @@ private:
             return 0;
         }
         unsigned index = y * 160 + unsigned(column);
+        if (keep_right_ && undo_ && pane == 2) return cache_[1][index];
         if (pane < 0) {
             return cache_[0][index];
         }
@@ -272,10 +290,10 @@ private:
             }
             waiting_ = false;
         }
-        const unsigned distance = target_only_ ? 160 : display_pitch;
+        const unsigned distance = animation_pane_ >= 0 ? 160 : display_pitch;
         if (progress_ == distance) {
             // Do not reconcile the final image until the final offset settles.
-            for (unsigned panel = 0; panel < (target_only_ ? 1u : 3u); ++panel) {
+            for (unsigned panel = 0; panel < 3; ++panel) if (moving_panel(panel)) {
                 for (unsigned y = 0; y < 128; ++y) {
                     for (unsigned x = 0; x < 160; ++x) {
                         cache_[panel][y * 160 + x] = moving_pixel(panel, x, y, progress_);
@@ -297,7 +315,7 @@ private:
         ++progress_;
         unsigned x = undo_ ? 159 : 0;
         uint8_t pixels[256];
-        for (unsigned panel = 0; panel < (target_only_ ? 1u : 3u); ++panel) {
+        for (unsigned panel = 0; panel < 3; ++panel) if (moving_panel(panel)) {
             rings_[panel] = (rings_[panel] + (undo_ ? 1 : display_ram_columns - 1)) % display_ram_columns;
             for (unsigned y = 0; y < 128; ++y) {
                 uint16_t pixel = moving_pixel(panel, x, y, progress_);
@@ -308,9 +326,9 @@ private:
         }
         if (progress_ % 2 == 0) {
             // Both hidden columns are prepared before the two-column reveal.
-            if (!target_only_ && rings_[0] == rings_[1] && rings_[1] == rings_[2])
+            if (animation_pane_ < 0 && !keep_right_ && rings_[0] == rings_[1] && rings_[1] == rings_[2])
                 scroll_display_panorama(rings_[0]);
-            else for (unsigned panel = 0; panel < (target_only_ ? 1u : 3u); ++panel)
+            else for (unsigned panel = 0; panel < 3; ++panel) if (moving_panel(panel))
                 scroll_display_panel(panel, rings_[panel]);
             anchor_ = true;
         }
@@ -320,7 +338,8 @@ private:
     uint16_t cache_[3][160 * 128] = {};
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
-    bool target_only_ = false;
+    int animation_pane_ = -1;
+    bool keep_right_ = false;
     uint8_t pixel_brightness_ = 128, requested_brightness_ = 128;
     unsigned dim_column_ = 160;
     unsigned rings_[3] = {}, progress_ = 0;

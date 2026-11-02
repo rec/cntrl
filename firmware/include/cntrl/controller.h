@@ -93,6 +93,7 @@ public:
         executor_.cancel(); sending_ = -1;
         cancel_gesture();
         document_ = document;
+        hardware_.configure_right_pages(document.right_pages());
         hardware_.set_target_pulse(document.pulse_period_ms(), document.pulse_minimum(), document.pulse_maximum());
         hardware_.set_brightness(document.brightness());
         brightness_ = document.brightness();
@@ -108,17 +109,22 @@ public:
         render();
     }
     // Adapters map send/patch/undo/cycle to logical inputs 2/1/5/4.
-    // Logical inputs 0/3 have no physical assignment on this page.
+    // Logical inputs 0/3 map to physical C (tap) and F (right page).
     void button(unsigned button, bool pressed, uint32_t now) {
-        if (button >= 6 || button == 0 || button == 3) return;
+        if (button >= 6) return;
         const unsigned mask = 1u << button;
         if (pressed) {
             if (held_ & mask) return;
             held_ |= mask;
-            if (button == 2) {
+            if (button == 0) {
+                hardware_.tap_tempo(now);
+            } else if (button == 3) {
+                hardware_.browse_right_page(reverse_);
+            } else if (button == 2) {
                 c_held_ = true; action(button);
-            } else if (button == 5 && (held_ & ((1u << 1) | (1u << 4)))) {
+            } else if (button == 5 && (held_ & ((1u << 1) | (1u << 3) | (1u << 4)))) {
                 reverse_ = true;
+                if (held_ & (1u << 3)) hardware_.browse_right_page(true);
                 for (unsigned i = 0; i < 2; ++i) {
                     unsigned nav = i ? 4 : 1;
                     if (held_ & (1u << nav)) { repeat_since_[i] = now; repeating_[i] = false; action(nav); }
@@ -165,12 +171,12 @@ public:
         if (!document_.valid() || !document_.patch_cycles()) return false;
         if (operation == 5 || operation == 6) {
             if (document_.patch_cycles() > 1)
-                hardware_.transition(operation == 6, document_.transition_ms(), true);
+                hardware_.transition(operation == 6, document_.transition_ms(), 0);
             selected_ = (selected_ + document_.patch_cycles() + (operation == 6 ? -1 : 1)) % document_.patch_cycles();
         } else if (operation == 3 || operation == 4) {
             unsigned count = u16(document_.patch_cycle(selected_) + 66);
             if (count > 1)
-                hardware_.transition(operation == 4, document_.transition_ms(), true);
+                hardware_.transition(operation == 4, document_.transition_ms(), 0);
             cursors_[selected_] = (cursors_[selected_] + count + (operation == 4 ? -1 : 1)) % count;
         } else if (operation == 7) {
             if (executor_.busy()) return false;
@@ -283,6 +289,7 @@ private:
     }
     void pane(unsigned slot, int index) {
         Pane view;
+        view.performance = true;
         view.graphics = document_.graphics(slot);
         if (index >= 0) {
             view.three_bands = true;

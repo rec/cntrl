@@ -5,8 +5,9 @@
 #include <cstdio>
 
 namespace cntrl {
-constexpr unsigned metadata_header_size = 14;
-constexpr unsigned document_version = 23;
+constexpr unsigned right_page_settings_offset = 14;
+constexpr unsigned metadata_header_size = right_page_settings_offset + 2 * RightPageSettings::count;
+constexpr unsigned document_version = 24;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -71,6 +72,19 @@ public:
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
+        RightPageSettings right;
+        for (unsigned i = 0; i < RightPageSettings::count; ++i) right.words[i] = u16(bytes + meta + right_page_settings_offset + 2 * i);
+        using R = RightPageSettings;
+        if (!right[R::refresh] || !right[R::clock_timeout] || !right[R::clocks_per_quarter]
+            || right[R::clocks_per_quarter] > 960 || !right[R::clock_beats] || right[R::clock_beats] > 16
+            || !right[R::tap_intervals] || right[R::tap_intervals] > 8 || right[R::minimum_taps] < 2
+            || right[R::minimum_taps] > right[R::tap_intervals] + 1 || !right[R::minimum_interval]
+            || right[R::minimum_interval] > right[R::reset_gap] || !right[R::flash_duration]
+            || !right[R::diameter] || !right[R::annulus] || right[R::title_height] < 8 || right[R::tempo_height] < 8
+            || unsigned(right[R::title_height]) + right[R::tempo_height] + right[R::diameter] + 2u * right[R::annulus] + 2u * right[R::padding] > hardware.display_height()
+            || unsigned(right[R::diameter]) + 2u * right[R::annulus] + 2u * right[R::padding] > hardware.display_width()
+            || (right[R::tempo_font] != 8 && right[R::tempo_font] != 9) || right[R::status_font] > 2
+            || !right[R::digits] || right[R::digits] > 4 || right[R::decimals] > 2) return false;
         unsigned names = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
@@ -207,6 +221,11 @@ public:
     uint8_t pulse_minimum() const { return data_[metadata() + 10]; }
     uint8_t pulse_maximum() const { return data_[metadata() + 11]; }
     unsigned navigation_repeat_ms() const { return u16(data_ + metadata() + 12); }
+    RightPageSettings right_pages() const {
+        RightPageSettings settings;
+        for (unsigned i = 0; i < RightPageSettings::count; ++i) settings.words[i] = u16(data_ + metadata() + right_page_settings_offset + 2 * i);
+        return settings;
+    }
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
     bool usb_midi_interface() const { return data_[19] & 2; }

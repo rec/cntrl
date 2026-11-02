@@ -65,6 +65,59 @@ def test_invalid_navigation_timing_is_rejected(value: object) -> None:
             models.NavigationSettings.model_validate({n: value})
 
 
+def test_right_page_settings_round_trip(
+    show: dict[str, object], definitions: object, target: models.Target
+) -> None:
+    show['right_pages'] = {
+        'refresh_interval': '2 seconds',
+        'clock_timeout': '500 ms',
+        'clocks_per_quarter': 96,
+        'clock_average_beats': 2,
+        'tap_intervals': 6,
+        'minimum_taps': 3,
+        'minimum_interval': '80 ms',
+        'reset_gap': 4,
+        'flash_duration': '200 ms',
+        'flasher_diameter': 36,
+        'annulus': 14,
+        'tempo_font': 'CourierPrimeBold',
+        'status_font': 'Arial',
+        'off_color': '0x300000',
+        'on_color': '0xFF2200',
+    }
+    data = compiler.compile_show(show, definitions, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    settings = models.Show.model_validate(exported).right_pages
+    assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
+    assert settings.refresh_interval == 2 and settings.flash_duration == 0.2
+    assert settings.tempo_font == 'CourierPrimeBold'
+    assert compiler.compile_show(exported, {}, [], target) == data
+
+
+@pytest.mark.parametrize(
+    'settings',
+    [
+        {'clocks_per_quarter': 0},
+        {'tap_intervals': 9},
+        {'minimum_taps': 6},
+        {'minimum_interval': 4, 'reset_gap': 3},
+        {'flash_duration': '1 Hz'},
+        {'flasher_diameter': 60},
+        {'off_color': 'bad-color'},
+        {'decimals': 3},
+    ],
+)
+def test_invalid_right_page_settings_are_rejected(
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    settings: dict[str, object],
+) -> None:
+    show['right_pages'] = settings
+    with pytest.raises(compiler.CompilationError):
+        compiler.compile_show(show, definitions, [], target)
+
+
 @pytest.fixture
 def definitions() -> object:
     return compiler.read_document(FIXTURES / 'definitions.json')

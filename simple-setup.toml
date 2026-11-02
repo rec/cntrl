@@ -12,6 +12,18 @@ maximum = 128
 hold_delay = 1.5
 repeat_interval = 1
 
+[right_pages]
+refresh_interval = 1
+clocks_per_quarter = 24
+clock_timeout = 1
+tap_intervals = 4
+minimum_taps = 2
+minimum_interval = 0.1
+reset_gap = 3
+flash_duration = 0.3
+flasher_diameter = 40
+annulus = 15
+
 [instruments.both]
 output = 'din'
 channel = 1

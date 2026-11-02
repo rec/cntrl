@@ -366,7 +366,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 23 firmware. Replace old `screens.NAME` color tables with
+version 24 firmware. Replace old `screens.NAME` color tables with
 `windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
@@ -383,12 +383,12 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (23), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (24), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 14 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds |
+| Metadata header, 58 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, then 22 u16 right-page settings |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
@@ -456,3 +456,60 @@ Only the inactive slot is replaced. Boot chooses the newest valid committed slot
 Interrupted and short writes are covered by host tests; filesystem and physical
 power-loss guarantees depend on the board's storage implementation and require
 separate qualification.
+
+### Auxiliary patch-manager pages (format 24)
+
+F cycles the rightmost window through Previous Undo, Tap Tempo and Status using
+horizontal scrolling. Hold D to browse backward; pressing D while F is held also
+steps backward immediately. F never repeats automatically. C taps only on Tap
+Tempo. Sending and undo keep an auxiliary right page in place.
+
+Tap Tempo displays fixed-position Courier digits (`---.-` initially). Two taps
+produce the first result; subsequent taps average the latest four intervals.
+Intervals below 0.1 seconds are ignored; a gap over 3 seconds starts a fresh tap
+sequence. Each accepted tap anchors the beat. The smaller flasher has a 40-pixel
+red center and a 15-pixel black annulus. It lights while C is held and for 0.3
+seconds at each computed beat. Tempo survives page changes until reboot.
+
+Status snapshots the setup name on entry and refreshes other values every second.
+Disk used/free is read once at startup and cached. RAM banks are reported
+separately in KiB, disk in MiB, with U/F meaning used/free. CPU displays `--`:
+the busy-loop firmware has no reliable CPU-utilization measurement. Incoming
+clock uses the first active input stream; other streams cannot double its tempo.
+After a clock timeout, the retained tempo is stippled until clocks resume.
+
+All durations below are seconds and accept unit strings. Dimensions are pixels;
+title and tempo heights reserve layout bands, while font size is fitted automatically.
+
+```toml
+[right_pages]
+refresh_interval = 1
+clock_timeout = 1
+clocks_per_quarter = 24
+clock_average_beats = 1
+tap_intervals = 4
+minimum_taps = 2
+minimum_interval = 0.1
+reset_gap = 3
+flash_duration = 0.3
+flasher_diameter = 40
+annulus = 15
+title_height = 12
+tempo_height = 40
+padding = 2
+tempo_font = 'CourierPrime' # or CourierPrimeBold
+status_font = 'classic' # also Arial or ComicSansMS
+off_color = '0x400000'
+on_color = '0xFF0000'
+ring_color = 'black'
+digits = 3
+decimals = 1
+```
+
+The 22 metadata words are, in order: refresh milliseconds, clock-timeout
+milliseconds, clocks per quarter, clock averaging beats, tap averaging intervals,
+minimum taps, minimum tap interval milliseconds, tap reset-gap milliseconds,
+flash milliseconds, center diameter, annulus width, title height, tempo height,
+padding, tempo font ID, status font ID, off RGB565, on RGB565, ring RGB565,
+integer digits, decimal digits, and page-background RGB565. Recompile saved
+setups when moving from format 23 to 24.

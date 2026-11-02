@@ -359,6 +359,75 @@ class NavigationSettings(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class RightPages(BaseModel, frozen=True):
+    refresh_interval: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 1.0
+    clock_timeout: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 1.0
+    clocks_per_quarter: Annotated[int, Field(strict=True, ge=1, le=960)] = 24
+    clock_average_beats: Annotated[int, Field(strict=True, ge=1, le=16)] = 1
+    tap_intervals: Annotated[int, Field(strict=True, ge=1, le=8)] = 4
+    minimum_taps: Annotated[int, Field(strict=True, ge=2, le=9)] = 2
+    minimum_interval: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.1
+    reset_gap: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 3.0
+    flash_duration: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.3
+    flasher_diameter: Annotated[
+        int, Field(strict=True, ge=1, le=128), units.unit_validator('pixel')
+    ] = 40
+    annulus: Annotated[
+        int, Field(strict=True, ge=1, le=64), units.unit_validator('pixel')
+    ] = 15
+    title_height: Annotated[
+        int, Field(strict=True, ge=8, le=128), units.unit_validator('pixel')
+    ] = 12
+    tempo_height: Annotated[
+        int, Field(strict=True, ge=8, le=128), units.unit_validator('pixel')
+    ] = 40
+    padding: Annotated[
+        int, Field(strict=True, ge=0, le=64), units.unit_validator('pixel')
+    ] = 2
+    tempo_font: Literal['CourierPrime', 'CourierPrimeBold'] = 'CourierPrime'
+    status_font: Literal['classic', 'Arial', 'ComicSansMS'] = 'classic'
+    off_color: str = '0x400000'
+    on_color: str = '0xFF0000'
+    ring_color: str = 'black'
+    digits: Annotated[int, Field(strict=True, ge=1, le=4)] = 3
+    decimals: Annotated[int, Field(strict=True, ge=0, le=2)] = 1
+
+    @model_validator(mode='after')
+    def feasible_taps(self) -> 'RightPages':
+        if self.minimum_taps > self.tap_intervals + 1:
+            raise ValueError('minimum_taps exceeds tap_intervals + 1')
+        if self.minimum_interval > self.reset_gap:
+            raise ValueError('minimum_interval exceeds reset_gap')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Show(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
@@ -374,6 +443,7 @@ class Show(BaseModel, frozen=True):
     ] = 0.5
     target_pulse: TargetPulse = Field(default_factory=TargetPulse)
     navigation: NavigationSettings = Field(default_factory=NavigationSettings)
+    right_pages: RightPages = Field(default_factory=RightPages)
     take_first_match: Annotated[bool, Field(strict=True)] = False
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     transition: (

@@ -1,4 +1,5 @@
 #include "patch_switcher/renderer.h"
+#include "patch_switcher/performance_pages.h"
 #include "patch_switcher/scroll_timing.h"
 #include <array>
 #include <map>
@@ -653,7 +654,44 @@ static void sparse_text() {
     font_assets::cache.begin(); font_assets::cache.finish(true);
 }
 
+static void test_performance_pages() {
+    cntrl::RightPageSettings settings{{1000, 1000, 24, 1, 4, 2, 100, 3000, 300,
+        40, 15, 12, 40, 2, 8, 0, 0x4000, 0xf800, 0, 3, 1, 0xffdb}};
+    PerformancePages pages; pages.configure(settings);
+    PerformanceStatus status; status.cycles = 10; status.patches = 59;
+    assert(!pages.active());
+    pages.browse(false, "first");
+    auto view = pages.view(0, 0, false, status);
+    assert(!std::strcmp(view.lines[0].text, "Tap Tempo"));
+    assert(!std::strcmp(view.lines[1].text, "---.-") && view.circle.color == 0x4000);
+    pages.tap(100); view = pages.view(100, 100000, true, status);
+    assert(view.circle.color == 0xf800 && !std::strcmp(view.lines[1].text, "---.-"));
+    pages.tap(600); view = pages.view(600, 600000, false, status);
+    assert(!std::strcmp(view.lines[1].text, "120.0") && view.circle.color == 0xf800);
+    assert(!pages.due(899, false) && pages.due(900, false));
+    view = pages.view(900, 900000, false, status); assert(view.circle.color == 0x4000);
+    assert(pages.due(1100, false));
+    pages.browse(false, "frozen"); pages.time(1200, 1200000);
+    view = pages.view(1200, 1200000, false, status);
+    assert(!std::strcmp(view.lines[2].text, "Setup frozen"));
+    assert(!std::strcmp(view.lines[3].text, "Tap 120.0"));
+    assert(!std::strcmp(view.lines[4].text, "Clock --"));
+    assert(!std::strcmp(view.lines[9].text, "Cycles 10") && !std::strcmp(view.lines[10].text, "Patches 59"));
+    assert(!pages.due(2199, false) && pages.due(2200, false));
+    for (unsigned i = 0; i <= 24; ++i) pages.clock(16, 2000000 + i * 500000 / 24);
+    view = pages.view(2500, 2500000, false, status);
+    assert(!std::strcmp(view.lines[4].text, "Clock 120.0") && !view.lines[4].stippled);
+    pages.time(3501, 3501000); view = pages.view(3501, 3501000, false, status);
+    assert(!std::strcmp(view.lines[4].text, "Clock 120.0") && view.lines[4].stippled);
+    pages.clock(17, 3600000); view = pages.view(3600, 3600000, false, status);
+    assert(!view.lines[4].stippled && !std::strcmp(view.lines[2].text, "Setup frozen"));
+    pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::tap);
+    view = pages.view(3601, 3601000, false, status);
+    assert(!std::strcmp(view.lines[1].text, "120.0"));
+}
+
 int main() {
+    test_performance_pages();
     sparse_text();
     {
         ShowGraphics graphics;
@@ -844,7 +882,7 @@ int main() {
     assert(ShowGraphics::supports_font(2, 96) && !ShowGraphics::supports_font(3, 8));
     assert(ShowGraphics::supports_font(5, 28)); // Fixed cable-test UI title.
     assert(!ShowGraphics::supports_font(5, 32));
-    assert(!ShowGraphics::supports_font(8, 24)); // Shows use sparse SD assets.
+    assert(ShowGraphics::supports_font(8, 24)); // Built-in monospace UI; show text still uses SD subsets.
     assert(!ShowGraphics::supports_font(10, 24));
     assert(ShowGraphics::supports_font(0, 13) && !ShowGraphics::supports_font(1, 15));
 
@@ -918,7 +956,7 @@ int main() {
         }
         drain(renderer);
         const unsigned origin = panel_rings[0];
-        renderer.transition(backward, 500, true);
+        renderer.transition(backward, 500, 0);
         cntrl::Pane next; next.graphics.background = 0x4444;
         renderer.show(0, next);
         for (unsigned now = 10000; now < 11000; ++now) {
@@ -946,5 +984,46 @@ int main() {
     blank(0, 0x2104); blank(1); blank(2);
     renderer.target_brightness(128); drain(renderer);
     blank(0); blank(1); blank(2); // Original pixels survive repeated dimming.
+    for (unsigned backward = 0; backward < 2; ++backward) {
+        for (unsigned i = 0; i < 3; ++i) {
+            cntrl::Pane p; p.graphics.background = uint16_t(0x1111 * (i + 1));
+            renderer.show(i, p);
+        }
+        drain(renderer);
+        unsigned origin = panel_rings[2];
+        renderer.transition(backward, 500, 2);
+        cntrl::Pane incoming; incoming.graphics.background = 0x4444;
+        renderer.show(2, incoming);
+        for (unsigned now = 12000; now < 13000; ++now) {
+            for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
+            blank(0, 0x1111); blank(1, 0x2222);
+            unsigned progress = backward ? (panel_rings[2] + 162 - origin) % 162 : (origin + 162 - panel_rings[2]) % 162;
+            for (unsigned x = 0; x < 160; ++x) {
+                int source = int(x) + (backward ? int(progress) : -int(progress));
+                bool entering = source < 0 || source >= 160;
+                if (entering) source += backward ? -160 : 160;
+                for (unsigned y = 0; y < 128; ++y)
+                    assert(screens[2][y][x] == rounded_background(unsigned(source), y, entering ? 0x4444 : 0x3333));
+            }
+        }
+        assert(renderer.ready()); blank(2, 0x4444);
+    }
+    renderer.transition(true, 500, -1, true);
+    cntrl::Pane restored; restored.graphics.background = 0x7777; renderer.show(0, restored);
+    restored.graphics.background = 0x8888; renderer.show(1, restored);
+    for (unsigned now = 13000; now < 14000; ++now) {
+        for (unsigned work = 0; work < 8; ++work) renderer.draw(now * 1000);
+        blank(2, 0x4444);
+        for (unsigned x = 0; x < 160; ++x)
+            assert(screens[1][64][x] == 0 || screens[1][64][x] == 0x2222 || screens[1][64][x] == 0x8888);
+    }
+    assert(renderer.ready()); blank(0, 0x7777); blank(1, 0x8888);
+    cntrl::Pane flasher; flasher.graphics.background = 0xffff;
+    flasher.circle = {80, 90, 40, 15, 0xf800, 0};
+    renderer.show(2, flasher); drain(renderer);
+    assert(screens[2][90][80] == 0xf800);
+    assert(screens[2][90][105] == 0 && screens[2][90][120] == 0xffff);
+    flasher.circle.color = 0x4000; renderer.show(2, flasher); drain(renderer);
+    assert(screens[2][90][80] == 0x4000 && screens[2][90][105] == 0);
     audit_animation_batches();
 }
