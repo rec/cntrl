@@ -12,7 +12,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     std::vector<std::vector<uint8_t>> sent;
     std::vector<std::string> routes, replies;
     std::vector<bool> transitions;
-    std::vector<bool> cycle_transitions;
+    std::vector<bool> target_transitions;
     std::vector<std::optional<unsigned>> durations;
     cntrl::Pane panes[3];
     bool connected = true;
@@ -34,7 +34,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
     void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only = false) override {
-        if (target_only) { cycle_transitions.push_back(undo); return; }
+        if (target_only) { target_transitions.push_back(undo); return; }
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
     void set_brightness(uint8_t value, bool) override { brightness = value; }
@@ -150,7 +150,9 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert(hw.panes[0].three_bands && hw.panes[1].three_bands == false);
     assert(hw.panes[0].pending_patch == int(app.selected_patch()));
     app.action(4); app.action(3); // Browse forward and backward between cycles.
-    assert((hw.cycle_transitions == std::vector<bool>{true, false}));
+    assert((hw.target_transitions == std::vector<bool>{true, false}));
+    app.action(1); app.action(0); // Browse forward and backward within the cycle.
+    assert((hw.target_transitions == std::vector<bool>{true, false, true, false}));
     assert(hw.panes[1].pending_patch == -1 && hw.panes[2].pending_patch == -1);
     assert(hw.panes[0].lines[0].graphics.background == hw.panes[0].lines[1].graphics.foreground);
     assert(hw.panes[0].lines[0].graphics.foreground == hw.panes[0].lines[1].graphics.background);

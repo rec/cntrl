@@ -717,9 +717,10 @@ unchanged. Idle polls refresh at most one 128-pixel column, and content repainti
 and scroll animations take priority. No extra framebuffer is allocated.
 The pulse never changes the saved brightness setting.
 
-## Cycle navigation animation
+## Patch and cycle navigation animation
 
-Changing patch cycles slides the new card into the physical left target window:
+Changing patch cycles or browsing patches within a cycle slides the new card
+into the physical left target window:
 from the right when navigating forward, and from the left when navigating
 backward. The center and right windows stay fixed. This uses the setup's
 transition duration and the existing two-column hardware scroll scheduling.

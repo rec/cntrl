@@ -177,6 +177,8 @@ public:
             selected_ = (selected_ + document_.patch_cycles() + (operation == 6 ? -1 : 1)) % document_.patch_cycles();
         } else if (operation == 3 || operation == 4) {
             unsigned count = u16(document_.patch_cycle(selected_) + 66);
+            if (count > 1)
+                hardware_.transition(operation == 3, document_.transition_ms(), true);
             cursors_[selected_] = (cursors_[selected_] + count + (operation == 4 ? -1 : 1)) % count;
         } else if (operation == 7) {
             if (executor_.busy()) return false;
