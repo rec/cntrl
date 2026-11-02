@@ -173,9 +173,9 @@ def compile_display(
     target = prepared.target
     choices = [
         graphics.font_choice(
-            s.font_name, list(SWITCH_STATES) if c == 22 else [t], target, p, n
+            name, list(SWITCH_STATES) if c == 22 else [t], target, p, n
         )
-        for c, t, s, p, n, _ in requests
+        for name, (c, t, s, p, n, _) in zip(prepared.names, requests, strict=True)
     ]
     for indexes in paired_lines:
         limit = min(choices[i][1] for i in indexes)

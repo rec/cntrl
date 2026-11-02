@@ -84,7 +84,16 @@ def test_disabled_filling_does_not_generate_styles(target: models.Target) -> Non
 
 
 @pytest.mark.parametrize(
-    'values', [{'background_color': []}, {'seed': True}, {'fill_in_styles': 1}]
+    'values',
+    [
+        {'background_color': []},
+        {'seed': True},
+        {'fill_in_styles': 1},
+        *[
+            {'style': {'horizontal_scale': v}}
+            for v in [0, -1, float('nan'), float('inf'), True]
+        ],
+    ],
 )
 def test_formatting_settings_are_validated(values: dict[str, object]) -> None:
     with pytest.raises(ValidationError):

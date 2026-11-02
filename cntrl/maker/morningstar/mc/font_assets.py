@@ -5,12 +5,14 @@ from pathlib import Path
 from zlib import crc32
 
 from ....patch_switcher import models
+from .bitmap_raster import BitmapRaster
 from .build_bitmap_fonts import FAMILIES, SIZES
+from .build_font_metrics import Options
 from .sparse_fonts import CHARACTER, GLYPH, POSITION, RUN, MissingGlyphs, Outline
 
 
 def pack(
-    outline: Outline,
+    outline: Outline | BitmapRaster,
     selected: dict[int, list[str]],
     metrics: dict[int, models.FontMetrics] | None = None,
 ) -> bytes:
@@ -180,13 +182,22 @@ class Preparation:
         requests: list[tuple[int, str, models.Style, int, int, int]],
         contexts: list[str],
     ) -> None:
-        self.outlines: dict[str, Outline] = {}
+        self.outlines: dict[str, Outline | BitmapRaster] = {}
         self.data: dict[str, bytes] = {}
         self.selected: dict[str, dict[int, list[str]]] = {}
+        self.names: list[str] = []
+        variants: dict[str, tuple[str, float]] = {}
+        defaults = {f.name: f.horizontal_scale for f in target.fonts}
         names: dict[str, list[str]] = {}
         locations: dict[tuple[str, str], list[str]] = {}
         for (code, text, style, *_), context in zip(requests, contexts, strict=True):
-            name = style.font_name or 'classic'
+            family = style.font_name or 'classic'
+            scale = style.horizontal_scale
+            if scale is None:
+                scale = defaults.get(family, 1.0)
+            name = family if scale == 1 else f'{family}@{scale}x'
+            self.names.append(name)
+            variants[name] = family, scale
             texts = [text] + (
                 list(NUMBERS)
                 if code in NUMERIC_FIELDS
@@ -203,7 +214,13 @@ class Preparation:
         faces = {f.name: f for f in target.fonts}
         errors = []
         for name, texts in names.items():
-            path = Path(show.fonts[name]) if name in show.fonts else builtins.get(name)
+            family, scale = variants[name]
+            source = show.fonts.get(name, show.fonts.get(family))
+            path = Path(source) if source is not None else builtins.get(family)
+            native = family in ('classic', 'Arial', 'ComicSansMS') and scale != 1
+            if native and path is None:
+                native_name = 'Arial' if family == 'classic' else family
+                path = Options().source / f'st7735_t3_font_{native_name}.c'
             if path is None:
                 if name not in faces:
                     errors.append(f'unknown font {name!r}')
@@ -218,10 +235,15 @@ class Preparation:
                                 f'({", ".join(dict.fromkeys(locations[name, t]))})'
                             )
                 continue
-            if name in show.fonts and name in faces and name not in builtins:
+            if family in show.fonts and family in faces and family not in builtins:
                 errors.append(f'{name}: font name already exists')
                 continue
             if path.suffix == '.cfont':
+                if scale != 1 and name not in show.fonts:
+                    raise ValueError(
+                        f'{family}: changing a compiled font scale '
+                        'requires its original font file'
+                    )
                 data = path.read_bytes()
                 face = decode(data, name, crc32(data))
                 self.data[name] = data
@@ -237,7 +259,13 @@ class Preparation:
                             f'({", ".join(dict.fromkeys(locations[name, t]))})'
                         )
             else:
-                outline = Outline(path)
+                outline = (
+                    BitmapRaster(
+                        path, 'Arial' if family == 'classic' else family, scale
+                    )
+                    if native
+                    else Outline(path, scale)
+                )
                 self.outlines[name] = outline
                 valid = []
                 for t in sorted(set(texts)):
@@ -249,7 +277,7 @@ class Preparation:
                             f'{name}: {error} ({", ".join(locations[name, t])})'
                         )
                 sizes = {}
-                for s in SIZES:
+                for s in faces[family].sizes if native else SIZES:
                     runs = {t: outline.shape(s, t) for t in valid}
                     top = min((r.top for r in runs.values()), default=0)
                     bottom = max(1, max((r.bottom for r in runs.values()), default=0))

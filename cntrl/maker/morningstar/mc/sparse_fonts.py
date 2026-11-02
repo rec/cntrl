@@ -28,7 +28,8 @@ class Run(BaseModel, frozen=True):
 
 
 class Outline:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, horizontal_scale: float = 1.0) -> None:
+        self.horizontal_scale = horizontal_scale
         self.data = path.read_bytes()
         self.face = freetype.Face.from_bytes(self.data)
         self.hb = uharfbuzz.Font(uharfbuzz.Face(self.data))  # ty: ignore[unresolved-attribute]  # Public C extension API.
@@ -40,6 +41,10 @@ class Outline:
         key = (size, identifier)
         if key not in self.glyphs:
             self.face.set_pixel_sizes(0, size)
+            self.face.set_transform(
+                freetype.Matrix(round(self.horizontal_scale * 65536), 0, 0, 65536),
+                freetype.Vector(0, 0),
+            )
             self.face.load_glyph(
                 identifier,
                 freetype.FT_LOAD_RENDER  # ty: ignore[unresolved-attribute]  # Public C extension API.
@@ -68,7 +73,7 @@ class Outline:
         key = (size, text)
         if key in self.runs:
             return self.runs[key]
-        self.hb.scale = (size * 64, size * 64)
+        self.hb.scale = (round(size * 64 * self.horizontal_scale), size * 64)
         positions: list[list[int]] = []
         x = y = 0
         left = right = top = bottom = 0

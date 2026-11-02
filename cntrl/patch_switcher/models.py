@@ -59,6 +59,9 @@ class Style(BaseModel, frozen=True):
     background_color: str | None = None
     foreground_color: str | None = None
     font_name: str | None = None
+    horizontal_scale: (
+        Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)] | None
+    ) = None
 
     model_config = ConfigDict(extra='forbid')
 
@@ -285,6 +288,9 @@ class FontMetrics(BaseModel, frozen=True):
 
 
 class FontFace(BaseModel, frozen=True):
+    horizontal_scale: Annotated[
+        float, Field(strict=True, gt=0, allow_inf_nan=False)
+    ] = 1.0
     name: str
     id: int
     sizes: dict[units.Pixels, FontMetrics]

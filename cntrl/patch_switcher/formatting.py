@@ -1,5 +1,6 @@
 """Generate missing cycle formatting without changing authored styles."""
 
+import re
 from itertools import product
 from random import Random
 
@@ -35,7 +36,12 @@ def cycle_styles(
             min(d, sum((a - b) ** 2 for a, b in zip(c, chosen, strict=True)))
             for c, d in zip(candidates, distances, strict=True)
         ]
-    fonts = list(dict.fromkeys([f.name for f in target.fonts] + list(show.fonts)))
+    fonts = list(
+        dict.fromkeys(
+            [f.name for f in target.fonts]
+            + [re.sub(r'@[0-9.e+-]+x$', '', n) for n in show.fonts]
+        )
+    )
     available: list[str] = []
     previous: str | None = None
     result: dict[str, models.Style] = {}

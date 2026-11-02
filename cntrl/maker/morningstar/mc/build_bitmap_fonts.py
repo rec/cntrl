@@ -186,12 +186,6 @@ FAMILIES = [
         '// SIL OFL 1.1: ../../../../../fonts/graduate/OFL.txt',
     ),
     (
-        'ParallelLines',
-        'monoton/Monoton-Regular.ttf',
-        'Derived from Monoton, Copyright 2011 Vernon Adams.\n'
-        '// SIL OFL 1.1: ../../../../../fonts/monoton/OFL.txt',
-    ),
-    (
         'OrnamentalSlab',
         'ewert/Ewert-Regular.ttf',
         'Derived from Ewert, Copyright 2011 Johan Kallas and Mihkel Virkus.\n'

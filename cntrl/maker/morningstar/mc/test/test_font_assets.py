@@ -92,7 +92,10 @@ def test_autoformatting_prepares_every_bundled_outline_family() -> None:
         assets,
     )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert set(exported['fonts']) == {f.name for f in target.fonts[3:]}
+    assert set(exported['fonts']) == {
+        f.name if f.horizontal_scale == 1 else f'{f.name}@{f.horizontal_scale}x'
+        for f in target.fonts[3:]
+    }
     for name, path in exported['fonts'].items():
         key = int(Path(path).stem, 16)
         face = font_assets.decode(assets[key], name, key)
@@ -485,3 +488,70 @@ def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
         target,
     )
     assert all(w[0:2] == bytes([0, 8]) for w in windows)
+
+
+@pytest.mark.parametrize(
+    'family', ['StillTime', 'CaveatBold', 'classic', 'Arial', 'ComicSansMS']
+)
+def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> None:
+    source = compiler.read_document(ROOT / 'firmware/test/show.json')
+    assert isinstance(source, dict)
+    source['fill_in_styles'] = False
+    source['style'] = {'font_name': family, 'horizontal_scale': 1.25}
+    source['pages'] = {
+        'patch': {
+            'fields': ['patch_cycle.name', 'display_name'],
+            'line_styles': {'patch_cycle.name': {'horizontal_scale': 1.0}},
+        }
+    }
+    target = models.Target.model_validate(
+        compiler.read_document(MC / 'patch-switcher-target.json')
+    )
+    definitions = compiler.read_document(ROOT / 'firmware/test/definitions.json')
+    assets: dict[int, bytes] = {}
+    data = compiler.compile_show(source, definitions, [], target, assets)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert f'{family}@1.25x' in exported['fonts']
+    if family in ('StillTime', 'CaveatBold'):
+        assert family in exported['fonts']
+    for key, bitmap in assets.items():
+        cli.save_font(tmp_path, key, bitmap)
+    path = tmp_path / 'exported.toml'
+    path.write_text(resolved.export(data))
+    command = cli.Sources(
+        document=[str(path)], target=[str(MC / 'patch-switcher-target.json')]
+    )
+    assert cli.compile_inputs(command)['exported'] == data
+
+
+def test_outline_scaling_changes_width_without_changing_height() -> None:
+    path = ROOT / 'cntrl/fonts/still-time/StillTime.otf'
+    normal, wide = Outline(path), Outline(path, 1.25)
+    for text in ['world', 'Igneous', 'BowedSaw']:
+        first, second = normal.shape(32, text), wide.shape(32, text)
+        assert second.width == pytest.approx(first.width * 1.25, abs=2)
+        assert (second.top, second.bottom) == (first.top, first.bottom)
+        assert len(first.positions) == len(second.positions)
+
+
+def test_still_time_default_scale_can_be_overridden() -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(MC / 'patch-switcher-target.json')
+    )
+    for face in target.fonts:
+        assert face.horizontal_scale == (1.25 if face.name == 'StillTime' else 1.0)
+    source = models.Show(
+        fill_in_styles=False, style=models.Style(font_name='StillTime')
+    )
+    patch = display.DisplayPatch(
+        values={'patch_cycle.name': 'world', 'display_name': 'BowedSaw'}
+    )
+    assets: dict[int, bytes] = {}
+    _, _, default = display.compile_display(source, [patch], target, assets)
+    assert b'StillTime@1.25x' in default
+    source = source.model_copy(
+        update={'style': models.Style(font_name='StillTime', horizontal_scale=1.0)}
+    )
+    _, _, unscaled = display.compile_display(source, [patch], target, assets)
+    assert b'StillTime@1.25x' not in unscaled
+    assert default != unscaled

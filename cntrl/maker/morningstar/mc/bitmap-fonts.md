@@ -1,6 +1,6 @@
 # Bitmap display fonts
 
-Fourteen bundled outline families are available alongside classic, Arial and
+Thirteen bundled outline families are available alongside classic, Arial and
 ComicSansMS. The IDs below identify their generated reference tables:
 
 | Configuration name | Source | Face ID | License |
@@ -15,10 +15,9 @@ ComicSansMS. The IDs below identify their generated reference tables:
 | `DecoRound` | Righteous Regular | 10 | SIL OFL 1.1 |
 | `DMSerifDisplay` | DM Serif Display Regular | 11 | SIL OFL 1.1 |
 | `CollegeBlock` | Graduate Regular | 12 | SIL OFL 1.1 |
-| `ParallelLines` | Monoton Regular | 13 | SIL OFL 1.1 |
-| `OrnamentalSlab` | Ewert Regular | 14 | SIL OFL 1.1 |
-| `RubikDistressed` | Rubik Distressed Regular | 15 | SIL OFL 1.1 |
-| `SpecialElite` | Special Elite Regular | 16 | Apache 2.0 |
+| `OrnamentalSlab` | Ewert Regular | 13 | SIL OFL 1.1 |
+| `RubikDistressed` | Rubik Distressed Regular | 14 | SIL OFL 1.1 |
+| `SpecialElite` | Special Elite Regular | 15 | Apache 2.0 |
 
 The generated reference tables contain printable ASCII, characters 32 through
 126, at nominal pixel
@@ -46,8 +45,8 @@ included license declares a Reserved Font Name.
 
 The additional source fonts, pinned revision, checksums and licenses are listed
 in the [font source catalogue](../../../fonts/README.md). DecoRound, CollegeBlock,
-ParallelLines and OrnamentalSlab use different bitmap names because their source
-licenses reserve the original names. All fourteen bundled outline families are
+and OrnamentalSlab use different bitmap names because their source
+licenses reserve the original names. All thirteen bundled outline families are
 automatically eligible for cycle formatting when `fill_in_styles = true`.
 
 A show can declare local TrueType or OpenType files and select them with the
@@ -305,3 +304,30 @@ font files. Each downloaded TOML recompiled byte-for-byte to its installed binar
 and its regenerated font assets matched the uploaded files. No MIDI send was
 requested during deployment or verification. The pedal was returned to `pman`;
 final status is `CNTRL READY 14 34597 488beaf6`. SD latency was not measured.
+
+## Horizontal scaling
+
+Styles accept `horizontal_scale`, a positive finite multiplier. Omission inherits
+an explicit value from the style cascade; if none is set, the selected font's
+`horizontal_scale` in the target catalogue supplies its default. StillTime uses
+1.25; all other fonts use 1.0. An explicit 1.0 restores StillTime's original width.
+
+```toml
+[style]
+font_name = 'StillTime'
+horizontal_scale = 1.25
+```
+
+Glyphs, bearings and spacing are scaled horizontally on the host before measuring
+and fitting. The vertical scale is unchanged. Paired program lines still use one
+shared fitting size. No additional scaling is performed by the pedal.
+
+Different scales can coexist in a setup. Exported font assets use names such as
+`StillTime@1.25x`; that suffix identifies a prepared variant, not a new family for
+autoformatting. Recompiling an export reuses the already-scaled assets. Changing
+the scale of a compiled-only font requires rebuilding from its original source.
+
+Outline fonts are rasterized at the requested width. Scaling classic, Arial or
+ComicSansMS resamples their native bitmaps and requires the pinned Teensy font
+sources installed by the firmware toolchain. Exported assets are self-contained
+and do not require those sources for unchanged recompilation.

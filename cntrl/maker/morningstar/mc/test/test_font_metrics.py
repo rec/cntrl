@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from cntrl.maker.morningstar.mc import build_font_metrics
+from cntrl.maker.morningstar.mc.bitmap_raster import BitmapRaster
 from cntrl.patch_switcher import compiler, display, graphics, models
 
 
@@ -50,7 +51,6 @@ def test_page_lines_select_different_native_font_families() -> None:
         'DecoRound',
         'DMSerifDisplay',
         'CollegeBlock',
-        'ParallelLines',
         'OrnamentalSlab',
         'RubikDistressed',
         'SpecialElite',
@@ -126,3 +126,27 @@ def test_unknown_font_is_rejected() -> None:
             target,
             4,
         )
+
+
+@pytest.mark.parametrize('family', ['Arial', 'ComicSansMS'])
+def test_bitmap_scaling_doubles_columns_without_changing_rows(family: str) -> None:
+    source = build_font_metrics.Options().source / f'st7735_t3_font_{family}.c'
+    normal = BitmapRaster(source, family, 1.0)
+    wide = BitmapRaster(source, family, 2.0)
+    for letter in 'AgW':
+        first, second = normal.glyph(24, ord(letter)), wide.glyph(24, ord(letter))
+        assert second.width == 2 * first.width
+        assert (second.height, second.top) == (first.height, first.top)
+        assert second.left == 2 * first.left
+        for y in range(first.height):
+            for x in range(first.width):
+                expected = bool(
+                    first.pixels[y * ((first.width + 7) // 8) + x // 8]
+                    & (128 >> (x % 8))
+                )
+                for column in (2 * x, 2 * x + 1):
+                    actual = bool(
+                        second.pixels[y * ((second.width + 7) // 8) + column // 8]
+                        & (128 >> (column % 8))
+                    )
+                    assert actual == expected

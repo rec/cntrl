@@ -80,14 +80,6 @@ extern const ILI9341_t3_font_t CollegeBlock_28;
 extern const ILI9341_t3_font_t CollegeBlock_32;
 extern const ILI9341_t3_font_t CollegeBlock_40;
 extern const ILI9341_t3_font_t CollegeBlock_48;
-extern const ILI9341_t3_font_t ParallelLines_12;
-extern const ILI9341_t3_font_t ParallelLines_16;
-extern const ILI9341_t3_font_t ParallelLines_20;
-extern const ILI9341_t3_font_t ParallelLines_24;
-extern const ILI9341_t3_font_t ParallelLines_28;
-extern const ILI9341_t3_font_t ParallelLines_32;
-extern const ILI9341_t3_font_t ParallelLines_40;
-extern const ILI9341_t3_font_t ParallelLines_48;
 extern const ILI9341_t3_font_t OrnamentalSlab_12;
 extern const ILI9341_t3_font_t OrnamentalSlab_16;
 extern const ILI9341_t3_font_t OrnamentalSlab_20;
@@ -225,17 +217,6 @@ inline const ILI9341_t3_font_t *bitmap_font(unsigned face, unsigned size) {
         default: return nullptr;
     }
     case 13: switch (size) {
-        case 12: return &ParallelLines_12;
-        case 16: return &ParallelLines_16;
-        case 20: return &ParallelLines_20;
-        case 24: return &ParallelLines_24;
-        case 28: return &ParallelLines_28;
-        case 32: return &ParallelLines_32;
-        case 40: return &ParallelLines_40;
-        case 48: return &ParallelLines_48;
-        default: return nullptr;
-    }
-    case 14: switch (size) {
         case 12: return &OrnamentalSlab_12;
         case 16: return &OrnamentalSlab_16;
         case 20: return &OrnamentalSlab_20;
@@ -246,7 +227,7 @@ inline const ILI9341_t3_font_t *bitmap_font(unsigned face, unsigned size) {
         case 48: return &OrnamentalSlab_48;
         default: return nullptr;
     }
-    case 15: switch (size) {
+    case 14: switch (size) {
         case 12: return &RubikDistressed_12;
         case 16: return &RubikDistressed_16;
         case 20: return &RubikDistressed_20;
@@ -257,7 +238,7 @@ inline const ILI9341_t3_font_t *bitmap_font(unsigned face, unsigned size) {
         case 48: return &RubikDistressed_48;
         default: return nullptr;
     }
-    case 16: switch (size) {
+    case 15: switch (size) {
         case 12: return &SpecialElite_12;
         case 16: return &SpecialElite_16;
         case 20: return &SpecialElite_20;

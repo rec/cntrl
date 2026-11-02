@@ -25,15 +25,19 @@ programs, patches and shared parameters. Keep page-specific field overrides in
 | `foreground_color` | Text color |
 | `background_color` | Color behind the line |
 | `font_name` | Exact installed bitmap font family |
+| `horizontal_scale` | Positive width multiplier; overrides the font default |
 | `icon` | Image-file reference; empty string suppresses an inherited icon |
 
-All four properties are optional. Omission leaves the lower-precedence value
+All five properties are optional. Omission leaves the lower-precedence value
 unchanged. Merge individual properties, not whole style objects. Apply centrally
 defined application defaults only where no source supplies a value.
 
 Retain the existing color syntax and target font validation. A name such as
 `CourierPrimeBold` identifies a family; Bold is documentation within the name.
-There are no weight, italic, synthesis or font fallback controls.
+There are no weight, italic, synthesis or font fallback controls. Horizontal
+scaling changes glyph widths and spacing before automatic fitting, without
+changing the vertical scale. StillTime defaults to 1.25; all other fonts default
+to 1.0. Explicit style values override these font defaults.
 
 Use show-level `style` for authored appearance defaults. Remove duplicate
 show-level font controls as part of converting configurations, so each setting
@@ -154,7 +158,7 @@ future work. Resolving the reference does not display an icon yet.
 
 ## Implementation and verification
 
-1. Reduce the existing style model to the four properties above. Remove
+1. Reduce the existing style model to the five properties above. Remove
    tag priorities and authored sizing controls, including obsolete export
    metadata and configuration paths.
 2. Reuse the existing property merge logic with the documented tag order.

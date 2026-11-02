@@ -28,22 +28,8 @@ def read_bits(data: bytes, offset: int, count: int, signed: bool = False) -> int
 
 
 def native_face(source: str, name: str, identifier: int) -> models.FontFace:
-    arrays = {
-        n: bytes(int(v, 0) for v in re.findall(r'0x[0-9a-fA-F]+|\d+', b))
-        for n, b in re.findall(
-            r'const unsigned char (\w+)\[\](?: CNTRL_FONT_FLASH)? = \{(.*?)\};',
-            source,
-            re.S,
-        )
-    }
     sizes: dict[int, models.FontMetrics] = {}
-    for size, raw in re.findall(
-        rf'const ILI9341_t3_font_t {name}_(\d+)(?: CNTRL_FONT_FLASH)? = \{{(.*?)\}};',
-        source,
-        re.S,
-    ):
-        fields = [f.strip() for f in raw.split(',') if f.strip()]
-        index, data = arrays[fields[0]], arrays[fields[2]]
+    for size, (index, data, numbers) in native_tables(source, name).items():
         (
             version,
             reserved,
@@ -59,7 +45,7 @@ def native_face(source: str, name: str, identifier: int) -> models.FontFace:
             bd,
             line,
             cap,
-        ) = (int(f) for f in fields[3:])
+        ) = numbers
         if (version, reserved, first, last, second, second_last) != (
             1,
             0,
@@ -94,6 +80,27 @@ def native_face(source: str, name: str, identifier: int) -> models.FontFace:
     return models.FontFace(name=name, id=identifier, sizes=sizes)
 
 
+def native_tables(source: str, name: str) -> dict[int, tuple[bytes, bytes, list[int]]]:
+    result: dict[int, tuple[bytes, bytes, list[int]]] = {}
+    arrays = {
+        n: bytes(int(v, 0) for v in re.findall(r'0x[0-9a-fA-F]+|\d+', b))
+        for n, b in re.findall(
+            r'const unsigned char (\w+)\[\](?: CNTRL_FONT_FLASH)? = \{(.*?)\};',
+            source,
+            re.S,
+        )
+    }
+    for size, raw in re.findall(
+        rf'const ILI9341_t3_font_t {name}_(\d+)(?: CNTRL_FONT_FLASH)? = \{{(.*?)\}};',
+        source,
+        re.S,
+    ):
+        fields = [f.strip() for f in raw.split(',') if f.strip()]
+        index, data = arrays[fields[0]], arrays[fields[2]]
+        result[int(size)] = index, data, [int(f) for f in fields[3:]]
+    return result
+
+
 def main() -> None:
     options = tyro.cli(Options)
     classic = native_face(
@@ -112,6 +119,10 @@ def main() -> None:
             i,
         )
         for i, (n, _, _) in enumerate(FAMILIES, 3)
+    ]
+    faces = [
+        f.model_copy(update={'horizontal_scale': 1.25}) if f.name == 'StillTime' else f
+        for f in faces
     ]
     data = json.loads(options.output.read_text())
     data.update(
