@@ -659,6 +659,10 @@ static void test_performance_pages() {
         40, 15, 12, 40, 2, 8, 0, 0x4000, 0xf800, 0, 3, 1, 0xffdb}};
     PerformancePages pages; pages.configure(settings);
     PerformanceStatus status; status.cycles = 10; status.patches = 59;
+    status.ram_used[0] = 49 * 1024; status.ram_free[0] = 463 * 1024;
+    status.ram_used[1] = 25 * 1024; status.ram_free[1] = 487 * 1024;
+    status.disk_valid = true; status.disk_used = 1181116006ull;
+    status.disk_free = 29ull * 1024 * 1024 * 1024 - status.disk_used;
     assert(!pages.active());
     pages.browse(false, "first");
     auto view = pages.view(0, 0, false, status);
@@ -673,18 +677,40 @@ static void test_performance_pages() {
     assert(pages.due(1100, false));
     pages.browse(false, "frozen"); pages.time(1200, 1200000);
     view = pages.view(1200, 1200000, false, status);
-    assert(!std::strcmp(view.lines[2].text, "Setup frozen"));
-    assert(!std::strcmp(view.lines[3].text, "Tap 120.0"));
-    assert(!std::strcmp(view.lines[4].text, "Clock --"));
-    assert(!std::strcmp(view.lines[9].text, "Cycles 10") && !std::strcmp(view.lines[10].text, "Patches 59"));
+    assert(!std::strcmp(view.lines[1].text, "Setup: frozen"));
+    assert(!std::strcmp(view.lines[4].text, "Tap: 120.0"));
+    assert(!std::strcmp(view.lines[3].text, "Clock: ---.-"));
+    assert(!std::strcmp(view.lines[2].text, "Cycles: 10  Patches: 59"));
+    assert(!std::strcmp(view.lines[5].text, "RAM: 49/512k 25/512k"));
+    assert(!std::strcmp(view.lines[6].text, "Disk: 1.1/29G"));
+    assert(!std::strcmp(view.lines[7].text, "Uptime: 0:00:01"));
+    assert(view.lines[0].graphics.line_height == settings[cntrl::RightPageSettings::title_height] * 3 / 2);
+    for (unsigned i = 1; i <= 7; ++i) {
+        assert(view.lines[i].graphics.font == view.lines[1].graphics.font);
+        assert(view.lines[i].graphics.size == view.lines[1].graphics.size);
+        assert(view.lines[i].graphics.line_height >= 17 && view.lines[i].graphics.line_height <= 18);
+    }
+    assert(view.lines[1].y < 30);
+    assert(view.lines[2].y > view.lines[1].y && view.lines[5].y > view.lines[3].y);
+    assert(view.lines[4].x >= 80 && view.lines[3].y == view.lines[4].y);
     assert(!pages.due(2199, false) && pages.due(2200, false));
     for (unsigned i = 0; i <= 24; ++i) pages.clock(16, 2000000 + i * 500000 / 24);
     view = pages.view(2500, 2500000, false, status);
-    assert(!std::strcmp(view.lines[4].text, "Clock 120.0") && !view.lines[4].stippled);
+    assert(!std::strcmp(view.lines[3].text, "Clock: 120.0") && !view.lines[3].stippled);
     pages.time(3501, 3501000); view = pages.view(3501, 3501000, false, status);
-    assert(!std::strcmp(view.lines[4].text, "Clock 120.0") && view.lines[4].stippled);
+    assert(!std::strcmp(view.lines[3].text, "Clock: 120.0") && view.lines[3].stippled);
     pages.clock(17, 3600000); view = pages.view(3600, 3600000, false, status);
-    assert(!view.lines[4].stippled && !std::strcmp(view.lines[2].text, "Setup frozen"));
+    assert(!view.lines[3].stippled && !std::strcmp(view.lines[1].text, "Setup: frozen"));
+    pages.time(1205000, 1205000000);
+    view = pages.view(1205000, 1205000000, false, status);
+    assert(!std::strcmp(view.lines[7].text, "Uptime: 0:20:05"));
+    status.disk_valid = false;
+    view = pages.view(1205000, 1205000000, false, status);
+    assert(!std::strcmp(view.lines[6].text, "Disk: --/--G"));
+    pages.time(0xfffffff0u, 0);
+    pages.time(0x000003e8u, 1000000);
+    view = pages.view(1000, 1000000, false, status);
+    assert(!std::strcmp(view.lines[7].text, "Uptime: 1193:02:48"));
     pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::firmware);
     view = pages.view(3600, 3600000, false, status);
     assert(!std::strcmp(view.lines[0].text, "Firmware"));
@@ -696,7 +722,11 @@ static void test_performance_pages() {
     pages.tap(3900); // C on Firmware must not change the tap-tempo history.
     pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::undo);
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::firmware);
-    pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::status);
+    pages.browse(true, "a-very-long-setup-name-that-cannot-fit-at-the-smallest-font");
+    assert(pages.page() == PerformancePages::Page::status);
+    view = pages.view(3601, 3601000, false, status);
+    assert(view.lines[1].x >= 2 && view.lines[1].x < 80);
+    assert(std::strstr(view.lines[1].text, "..."));
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::tap);
     view = pages.view(3601, 3601000, false, status);
     assert(!std::strcmp(view.lines[1].text, "120.0"));
@@ -885,6 +915,22 @@ int main() {
     assert(screens[2][78][24] == 0xf800);
     blank(0); blank(1);
     renderer.show(2, empty); drain(renderer); blank(2);
+
+    view = empty;
+    view.graphics.background = 0xffff; view.graphics.pad = 2;
+    for (unsigned i = 0; i < 2; ++i) {
+        auto &field = view.lines[i];
+        std::strcpy(field.text, i ? "Tap: 120.0" : "Clock: 120.0");
+        field.graphics = view.graphics;
+        field.graphics.foreground = 0;
+        field.graphics.size = field.graphics.line_height = 8;
+        field.x = i ? 82 : 2; field.y = 60;
+        field.stippled = !i;
+    }
+    renderer.show(2, view); drain(renderer);
+    assert(screens[2][60][2] == 0 && screens[2][60][3] == 0xffff);
+    assert(screens[2][60][82] == 0 && screens[2][60][83] == 0);
+    renderer.show(2, empty); drain(renderer);
 
     view = empty;
     view.graphics.background = 0x07e0;

@@ -63,7 +63,9 @@ public:
             line(pane, 2, "firmware", 128 - pad - label_height, label_height, 0, true);
             return pane;
         }
-        line(pane, 0, page_ == Page::tap ? "Tap Tempo" : "Status", pad, title, 0, true);
+        const unsigned heading_height = page_ == Page::status
+            ? std::min(title * 3 / 2, (128 - 2 * pad) / 2) : title;
+        line(pane, 0, page_ == Page::tap ? "Tap Tempo" : "Status", pad, heading_height, 0, true);
         if (page_ == Page::tap) {
             char number[24], sample[24];
             number_text(number, sizeof(number), tap_.period(), false, true);
@@ -81,31 +83,50 @@ public:
             pane.circle.color = settings_[flashing_ ? R::on_color : R::off_color];
             pane.circle.ring_color = settings_[R::ring_color];
         } else {
-            char rows[10][64] = {};
+            char rows[6][64] = {};
+            std::snprintf(rows[0], sizeof(rows[0]), "Setup: %.56s", setup_);
+            std::snprintf(rows[1], sizeof(rows[1]), "Cycles: %u  Patches: %u", status.cycles, status.patches);
+            char tap[24], clock[24], tap_label[32];
+            number_text(tap, sizeof(tap), tap_.period(), false, true);
+            number_text(clock, sizeof(clock), clock_.period_us(), true, true);
+            std::snprintf(rows[2], sizeof(rows[2]), "Clock: %s", clock);
+            std::snprintf(rows[3], sizeof(rows[3]), "RAM: %lu/%luk %lu/%luk",
+                (unsigned long)(status.ram_used[0] / 1024),
+                (unsigned long)((status.ram_used[0] + status.ram_free[0]) / 1024),
+                (unsigned long)(status.ram_used[1] / 1024),
+                (unsigned long)((status.ram_used[1] + status.ram_free[1]) / 1024));
+            constexpr uint64_t gibibyte = 1024ull * 1024 * 1024;
+            if (status.disk_valid) {
+                uint64_t tenths = (status.disk_used * 10 + gibibyte / 2) / gibibyte;
+                std::snprintf(rows[4], sizeof(rows[4]), "Disk: %lu.%lu/%luG",
+                    (unsigned long)(tenths / 10), (unsigned long)(tenths % 10),
+                    (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
+            } else std::snprintf(rows[4], sizeof(rows[4]), "Disk: --/--G");
             uint64_t seconds = uptime_ / 1000;
-            std::snprintf(rows[0], sizeof(rows[0]), "Up %lluh %02u:%02u", (unsigned long long)(seconds / 3600),
-                unsigned(seconds / 60 % 60), unsigned(seconds % 60));
-            std::snprintf(rows[1], sizeof(rows[1]), "Setup %.57s", setup_);
-            char tap[24], clock[24];
-            number_text(tap, sizeof(tap), tap_.period(), false, false);
-            number_text(clock, sizeof(clock), clock_.period_us(), true, false);
-            std::snprintf(rows[2], sizeof(rows[2]), "Tap %s", tap);
-            std::snprintf(rows[3], sizeof(rows[3]), "Clock %s", clock);
-            std::snprintf(rows[4], sizeof(rows[4]), "CPU --");
-            for (unsigned i = 0; i < 2; ++i)
-                std::snprintf(rows[5 + i], sizeof(rows[5 + i]), "RAM%u U/F %lu/%luK", i + 1,
-                    (unsigned long)(status.ram_used[i] / 1024), (unsigned long)(status.ram_free[i] / 1024));
-            if (status.disk_valid)
-                std::snprintf(rows[7], sizeof(rows[7]), "Disk U/F %lu/%luM",
-                    (unsigned long)(status.disk_used / 1048576), (unsigned long)(status.disk_free / 1048576));
-            else std::snprintf(rows[7], sizeof(rows[7]), "Disk U/F --");
-            std::snprintf(rows[8], sizeof(rows[8]), "Cycles %u", status.cycles);
-            std::snprintf(rows[9], sizeof(rows[9]), "Patches %u", status.patches);
-            unsigned height = (128 - 2 * pad - title) / 10;
-            for (unsigned i = 0; i < 10; ++i)
-                line(pane, i + 1, rows[i], pad + title + i * height, height, settings_[R::status_font], false);
+            std::snprintf(rows[5], sizeof(rows[5]), "Uptime: %lu:%02u:%02u",
+                (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
+            std::snprintf(tap_label, sizeof(tap_label), "Tap: %s", tap);
+            const unsigned body_top = pad + heading_height;
+            const unsigned body_height = 128 - pad - body_top;
+            auto body = [&](unsigned maximum_size) {
+                for (unsigned i = 0; i < 6; ++i) {
+                    const unsigned y = body_top + body_height * i / 6;
+                    const unsigned height = body_height * (i + 1) / 6 - body_height * i / 6;
+                    if (i == 2) {
+                        line(pane, 3, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, 80, maximum_size);
+                        line(pane, 4, tap_label, y, height, settings_[R::status_font], false, nullptr, 80, 160, maximum_size);
+                    } else {
+                        line(pane, i < 2 ? i + 1 : i + 2, rows[i], y, height,
+                            settings_[R::status_font], i == 0, nullptr, 0, 160, maximum_size);
+                    }
+                }
+            };
+            body(96);
+            unsigned shared_size = pane.lines[1].graphics.size;
+            for (unsigned i = 2; i <= 7; ++i) shared_size = std::min(shared_size, unsigned(pane.lines[i].graphics.size));
+            body(shared_size);
             clock_.poll(now_us);
-            pane.lines[4].stippled = clock_.period_us() && !clock_.active();
+            pane.lines[3].stippled = clock_.period_us() && !clock_.active();
         }
         return pane;
     }
@@ -130,7 +151,7 @@ private:
         else std::snprintf(text, length, "%*lu", fixed ? int(digits) : 1, (unsigned long)value);
     }
     void line(cntrl::Pane &pane, unsigned index, const char *text, unsigned y, unsigned height,
-              unsigned face, bool centered, const char *sample = nullptr) {
+              unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 160, unsigned maximum_size = 96) {
         auto &l = pane.lines[index];
         std::snprintf(l.text, sizeof(l.text), "%s", text);
         l.graphics = pane.graphics; l.graphics.font = face;
@@ -139,20 +160,21 @@ private:
         int16_t left = 0, top = 0; uint16_t width = 0, ink_height = 0;
         const char *fitting = sample ? sample : l.text;
         for (unsigned size : sizes) {
+            if (size > maximum_size) continue;
             const auto *font = ShowGraphics::native_font(face, size);
             if (!font) continue;
             measure.setFont(*font); measure.getTextBounds(fitting, 0, 0, &left, &top, &width, &ink_height);
-            if ((width > 160 - 2 * pane.graphics.pad || ink_height > height) && size > (face >= 8 ? 12u : 8u)) continue;
+            if ((width > right_edge - left_edge - 2 * pane.graphics.pad || ink_height > height) && size > (face >= 8 ? 12u : 8u)) continue;
             l.graphics.size = size; l.graphics.line_height = height; l.graphics.top = 0;
-            l.x = centered ? (160 - width) / 2 - left : sample ? 160 - pane.graphics.pad - width - left : pane.graphics.pad;
-            l.y = int(y) + (int(height) - ink_height) / 2 - top;
-            if (!sample && width > 160 - 2 * pane.graphics.pad) {
+            if (!sample && width > right_edge - left_edge - 2 * pane.graphics.pad) {
                 unsigned n = unsigned(std::strlen(l.text));
-                while (n > 3 && width > 160 - 2 * pane.graphics.pad) {
+                while (n > 3 && width > right_edge - left_edge - 2 * pane.graphics.pad) {
                     --n; std::memcpy(l.text + n - 3, "...", 4);
                     measure.getTextBounds(l.text, 0, 0, &left, &top, &width, &ink_height);
                 }
             }
+            l.x = centered ? (left_edge + right_edge - width) / 2 - left : sample ? right_edge - pane.graphics.pad - width - left : left_edge + pane.graphics.pad;
+            l.y = int(y) + (int(height) - ink_height) / 2 - top;
             return;
         }
     }

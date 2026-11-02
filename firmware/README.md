@@ -472,9 +472,14 @@ red center and a 15-pixel black annulus. It lights while C is held and for 0.3
 seconds at each computed beat. Tempo survives page changes until reboot.
 
 Status snapshots the setup name on entry and refreshes other values every second.
-Disk used/free is read once at startup and cached. RAM banks are reported
-separately in KiB, disk in MiB, with U/F meaning used/free. CPU displays `--`:
-the busy-loop firmware has no reliable CPU-utilization measurement. Incoming
+The centered Status heading uses 1.5 times the configured title height. The six
+body rows share the remaining height equally and all use the same configured
+status font at the largest size that fits every field. The setup line is centered.
+Counts share one row, as do Clock and Tap; only the stale clock reading is stippled.
+RAM shows both banks as `RAM: used/totalk used/totalk`, in KiB, on one row. Disk shows used/total GiB, read once at startup and cached. Uptime is
+elapsed time since cntrl started, formatted as hours:minutes:seconds, and remains
+correct across the elapsed-clock rollover. CPU is omitted because the busy-loop
+firmware has no reliable CPU-utilization measurement. Incoming
 clock uses the first active input stream; other streams cannot double its tempo.
 After a clock timeout, the retained tempo is stippled until clocks resume.
 

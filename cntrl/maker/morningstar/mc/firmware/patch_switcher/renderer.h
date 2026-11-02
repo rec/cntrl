@@ -1,5 +1,6 @@
 #pragma once
 #include <cntrl/hardware.h>
+#include <algorithm>
 #include <cstring>
 #include <cstdio>
 #include "displays.h"
@@ -230,6 +231,18 @@ private:
         for (unsigned i = 0; i < cntrl::max_lines; ++i) {
             const auto &line = painting_.lines[i];
             if (!line.text[0]) continue;
+            if (preserve_text && line.y >= 0 && line.graphics.font != 255) {
+                // Positioned fields can share a row. Stipple only this field's ink bounds.
+                if (line.stippled) {
+                    graphics_.select_font(line.graphics.font, line.graphics.size);
+                    int16_t left, top; uint16_t width, height;
+                    graphics_.getTextBounds(line.text, line.x, text_y(i, 0), &left, &top, &width, &height);
+                    for (int y = std::max(0, int(top)); y < std::min(128, int(top) + height); ++y)
+                        for (int x = std::max(0, int(left)); x < std::min(160, int(left) + width); ++x)
+                            if ((x + y) & 1) graphics_.getFrameBuffer()[y * 160 + x] = line.graphics.background;
+                }
+                continue;
+            }
             unsigned end = 128 - painting_.graphics.pad;
             for (unsigned j = i + 1; j < cntrl::max_lines; ++j) if (painting_.lines[j].text[0]) {
                 unsigned bottom = text_y(i, line_rows(line) - 1) - line.graphics.top + line.graphics.line_height;
