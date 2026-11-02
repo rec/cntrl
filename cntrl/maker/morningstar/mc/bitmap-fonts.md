@@ -1,6 +1,6 @@
 # Bitmap display fonts
 
-Seven bundled outline families are available alongside classic, Arial and
+Fourteen bundled outline families are available alongside classic, Arial and
 ComicSansMS. The IDs below identify their generated reference tables:
 
 | Configuration name | Source | Face ID | License |
@@ -12,6 +12,13 @@ ComicSansMS. The IDs below identify their generated reference tables:
 | `CaveatBold` | Caveat Bold | 7 | SIL OFL 1.1 |
 | `CourierPrime` | Courier Prime Regular | 8 | SIL OFL 1.1 |
 | `CourierPrimeBold` | Courier Prime Bold | 9 | SIL OFL 1.1 |
+| `DecoRound` | Righteous Regular | 10 | SIL OFL 1.1 |
+| `DMSerifDisplay` | DM Serif Display Regular | 11 | SIL OFL 1.1 |
+| `CollegeBlock` | Graduate Regular | 12 | SIL OFL 1.1 |
+| `ParallelLines` | Monoton Regular | 13 | SIL OFL 1.1 |
+| `OrnamentalSlab` | Ewert Regular | 14 | SIL OFL 1.1 |
+| `RubikDistressed` | Rubik Distressed Regular | 15 | SIL OFL 1.1 |
+| `SpecialElite` | Special Elite Regular | 16 | Apache 2.0 |
 
 The generated reference tables contain printable ASCII, characters 32 through
 126, at nominal pixel
@@ -37,6 +44,12 @@ included license declares a Reserved Font Name.
 
 ## Fonts supplied by a show
 
+The additional source fonts, pinned revision, checksums and licenses are listed
+in the [font source catalogue](../../../fonts/README.md). DecoRound, CollegeBlock,
+ParallelLines and OrnamentalSlab use different bitmap names because their source
+licenses reserve the original names. All fourteen bundled outline families are
+automatically eligible for cycle formatting when `fill_in_styles = true`.
+
 A show can declare local TrueType or OpenType files and select them with the
 existing style settings:
 
@@ -56,8 +69,7 @@ page and line styles.
 The normal `cntrl setup copy` command shapes text with HarfBuzz and rasterizes
 it with FreeType on the development machine. Only glyphs actually used by the
 show, at the sizes selected by automatic fitting, are uploaded to
-`/cntrl/fonts/` on the pedal's SD card. The bundled outline families (Circuit,
-CircuitBold, StillTime, MetalLord, CaveatBold, CourierPrime and CourierPrimeBold)
+`/cntrl/fonts/` on the pedal's SD card. All bundled outline families listed above
 use this same sparse path automatically. Classic, Arial and ComicSansMS remain
 built-in ASCII fonts for the UI and shows that select them. StillTime at size
 28 remains built in for the fixed cable-test title; show text uses its SD subset.

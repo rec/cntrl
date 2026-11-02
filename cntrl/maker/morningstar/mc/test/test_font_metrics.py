@@ -47,6 +47,13 @@ def test_page_lines_select_different_native_font_families() -> None:
         'CaveatBold',
         'CourierPrime',
         'CourierPrimeBold',
+        'DecoRound',
+        'DMSerifDisplay',
+        'CollegeBlock',
+        'ParallelLines',
+        'OrnamentalSlab',
+        'RubikDistressed',
+        'SpecialElite',
     ],
 )
 def test_native_autoscale_uses_largest_fitting_size_per_label(name: str) -> None:

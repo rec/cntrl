@@ -65,6 +65,40 @@ def test_switch_statuses_have_prepared_runs_and_unicode_labels() -> None:
         assert any(text in m.runs for f in faces for m in f.sizes.values())
 
 
+def test_autoformatting_prepares_every_bundled_outline_family() -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(MC / 'patch-switcher-target.json')
+    )
+    source = compiler.read_document(ROOT / 'firmware/test/show.json')
+    assert isinstance(source, dict)
+    source['fill_in_styles'] = True
+    source['patch_cycles'] = {
+        f'CYCLE {i}': [
+            {
+                'type': 'program-change',
+                'instrument': 'a',
+                'program': i + 1,
+                'name': 'Patch',
+            }
+        ]
+        for i in range(len(target.fonts))
+    }
+    assets: dict[int, bytes] = {}
+    data = compiler.compile_show(
+        source,
+        compiler.read_document(ROOT / 'firmware/test/definitions.json'),
+        [],
+        target,
+        assets,
+    )
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert set(exported['fonts']) == {f.name for f in target.fonts[3:]}
+    for name, path in exported['fonts'].items():
+        key = int(Path(path).stem, 16)
+        face = font_assets.decode(assets[key], name, key)
+        assert any('Patch' in m.runs for m in face.sizes.values())
+
+
 @pytest.fixture(scope='module')
 def peer(tmp_path_factory: pytest.TempPathFactory) -> Path:
     executable = tmp_path_factory.mktemp('font-peer') / 'peer'

@@ -167,6 +167,49 @@ FAMILIES = [
         'Copyright 2015 The Courier Prime Project Authors.\n'
         '// SIL OFL 1.1: ../../../../../fonts/courier-prime/OFL.txt',
     ),
+    (
+        'DecoRound',
+        'righteous/Righteous-Regular.ttf',
+        'Derived from Righteous, Copyright 2011 Brian J. Bonislawsky DBA Astigmatic.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/righteous/OFL.txt',
+    ),
+    (
+        'DMSerifDisplay',
+        'dm-serif-display/DMSerifDisplay-Regular.ttf',
+        'Copyright 2014-2018 Adobe; Copyright 2019 Google LLC.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/dm-serif-display/OFL.txt',
+    ),
+    (
+        'CollegeBlock',
+        'graduate/Graduate-Regular.ttf',
+        'Derived from Graduate, Copyright 2012 The Graduate Project Authors.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/graduate/OFL.txt',
+    ),
+    (
+        'ParallelLines',
+        'monoton/Monoton-Regular.ttf',
+        'Derived from Monoton, Copyright 2011 Vernon Adams.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/monoton/OFL.txt',
+    ),
+    (
+        'OrnamentalSlab',
+        'ewert/Ewert-Regular.ttf',
+        'Derived from Ewert, Copyright 2011 Johan Kallas and Mihkel Virkus.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/ewert/OFL.txt',
+    ),
+    (
+        'RubikDistressed',
+        'rubik-distressed/RubikDistressed-Regular.ttf',
+        'Copyright 2020 The Rubik Filtered Project Authors.\n'
+        '// SIL OFL 1.1: ../../../../../fonts/rubik-distressed/OFL.txt',
+    ),
+    (
+        'SpecialElite',
+        'special-elite/SpecialElite-Regular.ttf',
+        'Copyright 2010 Brian J. Bonislawsky DBA Astigmatic (AOETI).\n'
+        '// Converted to bitmap format.\n'
+        '// Apache 2.0: ../../../../../fonts/special-elite/LICENSE.txt',
+    ),
 ]
 
 
