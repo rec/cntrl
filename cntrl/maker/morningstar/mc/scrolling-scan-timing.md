@@ -1718,14 +1718,14 @@ Physical transition/splash/text verification remains pending user observation.
 
 The user subsequently confirmed that the original transition build looked
 correct. A timing fixup changes the default from 400 ms to 2 seconds. Set
-`transition_ms = 2000` at the top level of a show to specify it explicitly, or
+`transition = 2` at the top level of a show to specify it explicitly, or
 choose another integer duration in 1..65535 milliseconds. The compiler stores
 the setting in the metadata header's previously reserved u16; zero denotes the
 firmware default and preserves existing compiled shows and their checksums.
 Resolved TOML exports retain this setting. Both send and undo receive the same
 duration, without changing MIDI timing. The two-second fixup was uploaded and
 boot-verified. A subsequent fixup sets the default to 1000 ms (one second);
-explicit `transition_ms` values still take precedence.
+explicit `transition` values still take precedence.
 The current implementation keeps an omitted duration unspecified through the
 model, compiled metadata (zero), and firmware (`std::nullopt`). The renderer
 alone resolves it to `DEFAULT_TRANSITION_MS`, now 1400 ms for both send

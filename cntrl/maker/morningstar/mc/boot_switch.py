@@ -4,15 +4,24 @@ import struct
 import subprocess
 import sys
 from pathlib import Path
+from typing import Annotated
 
 import tyro
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel, Field
+from reccy.configuration import units
 
+from ....patch_switcher.models import millisecond_resolution
 from .firmware import FirmwareImage, read_hex
 from .upload_helper import validate_firmware
 
 
 class Build(BaseModel, frozen=True):
+    switch_window: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=0.112),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.05
     stock: Path = Path(__file__).parent / (
         '2026-10-16_MC6_PRO_Firmware_v_3_14_0_261016501_0.hex'
     )
@@ -127,6 +136,7 @@ def build(command: Build) -> None:
             '-Wall',
             '-Wextra',
             '-Werror',
+            f'-DCNTRL_SWITCH_WINDOW_MS={round(command.switch_window * 1000)}',
             f'-Wl,-T,{source / "hook.ld"},--defsym,custom_entry={entry}',
             str(source / 'gate.S'),
             str(source / 'hook.cpp'),
@@ -159,7 +169,8 @@ def build(command: Build) -> None:
         raise ValueError('combined HEX readback differs')
     print(
         f'{output}: patch mode by default; '
-        'stock exit pair is configured per visit, 50 ms, no hold'
+        f'stock exit pair is configured per visit, '
+        f'{command.switch_window} seconds, no hold'
     )
     print(f'SHA256: {image.sha256}')
 

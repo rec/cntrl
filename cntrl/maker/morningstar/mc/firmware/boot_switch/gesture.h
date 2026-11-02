@@ -6,7 +6,8 @@ struct GestureResult {
     bool activate;
 };
 
-class SwitchGesture {
+template<unsigned Window> class SwitchGesture {
+    static_assert(Window >= 1 && Window <= 112, "gesture delay must fit the input history");
 public:
     void cancel() {
         // Volatile stores keep this freestanding hook independent of libc.
@@ -45,10 +46,10 @@ public:
         // Do not interpret buttons held during stock startup as a command.
         if (!pressed && !stable_) armed_ = true;
         bool activate = armed_ && stable_ == 3
-            && uint32_t(now - pressed_at_[0]) <= 50
-            && uint32_t(now - pressed_at_[1]) <= 50;
+            && uint32_t(now - pressed_at_[0]) <= Window
+            && uint32_t(now - pressed_at_[1]) <= Window;
         if (activate) armed_ = false;
-        return {history_[(now - 65) & 127], activate};
+        return {history_[(now - (Window + 15)) & 127], activate};
     }
 private:
     uint8_t history_[128] = {};

@@ -7,6 +7,18 @@ from cntrl.maker.morningstar.mc import boot_switch
 from cntrl.maker.morningstar.mc.firmware import AddressRange, FirmwareImage, read_hex
 
 
+def test_switch_window_configuration() -> None:
+    assert (
+        boot_switch.Build.model_validate(
+            {'switch_window': '0.02 seconds'}
+        ).switch_window
+        == 0.02
+    )
+    for v in (0, 0.113, 0.0011, True, '1 Hz'):
+        with pytest.raises(ValueError):
+            boot_switch.Build.model_validate({'switch_window': v})
+
+
 @pytest.fixture
 def images() -> tuple[FirmwareImage, FirmwareImage]:
     data = bytearray(0x83000)

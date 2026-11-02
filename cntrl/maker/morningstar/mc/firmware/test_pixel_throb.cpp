@@ -4,6 +4,7 @@
 
 int main() {
     PixelThrob pulse;
+    pulse.configure(4000, 64, 128);
     assert(pulse.brightness(-1, 0, 192) == 192);
     const uint32_t start = UINT32_MAX - 400;
     assert(pulse.brightness(0, start, 192) == 128);
@@ -26,4 +27,9 @@ int main() {
     assert(pulse.brightness(2, start + 9502, 192) == 128);
     assert(pulse.brightness(2, start + 11502, 192) == 64);
     assert(pulse.brightness(-1, start + 11503, 192) == 192);
+    pulse.configure(2000, 20, 100);
+    assert(pulse.brightness(0, 0, 128) == 100);
+    assert(pulse.brightness(0, 500, 128) == 60);
+    assert(pulse.brightness(0, 1000, 128) == 20);
+    assert(pulse.brightness(0, 2000, 128) == 100);
 }

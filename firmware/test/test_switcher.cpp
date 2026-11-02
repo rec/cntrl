@@ -499,7 +499,7 @@ int main(int argc, char **argv) {
         formatted.page(settings, 0, 1, false);
         assert(!std::strcmp(settings.lines[0].text, "false"));
         assert(!std::strcmp(settings.lines[1].text, "0"));
-        assert(!std::strcmp(settings.lines[2].text, "100"));
+    assert(!std::strcmp(settings.lines[2].text, "0.1"));
         assert(!settings.lines[3].text[0]);
         app.action(2);
         assert(output.panes[0].lines[1].stippled);
@@ -574,6 +574,14 @@ int main(int argc, char **argv) {
     }
     corrupt = bytes; corrupt[4] = 11;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    assert(doc.pulse_period_ms() == 4000 && doc.pulse_minimum() == 64 && doc.pulse_maximum() == 128);
+    for (unsigned bad : {0u, 1u, 129u}) {
+        corrupt = bytes;
+        if (bad < 2) { corrupt[doc.metadata() + 8] = uint8_t(bad); corrupt[doc.metadata() + 9] = 0; }
+        else corrupt[doc.metadata() + 11] = uint8_t(bad);
+        cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
+        assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    }
     // Name metadata is length-delimited and must fit the document exactly.
     unsigned names = unsigned(doc.bank(doc.patches()) - bytes.data());
     for (unsigned offset : {names, names + 4}) {

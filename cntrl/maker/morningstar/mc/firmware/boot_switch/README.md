@@ -185,3 +185,10 @@ consumption and journal capacity. It has not been flashed: the user requested
 finishing the branch without flashing after concurrent pedal work was detected.
 The image is in this worktree's `build/boot-switch/combined.hex`. The build prints
 its SHA-256; rebasing onto subsequent firmware fixes changes it.
+
+The 50 ms pair window is now configurable when building the combined image:
+`uv run --frozen -m cntrl.maker.morningstar.mc.boot_switch --switch-window 0.05`.
+Allowed values are 1..112 ms. The input delay is the selected window plus the
+15 ms debounce interval, and must fit the hook's 128 ms input history. Timing
+figures above describe the default build. The button pair remains configured
+per stock visit; changing the timing requires rebuilding and flashing.

@@ -3,8 +3,12 @@
 
 class PixelThrob {
 public:
+    void configure(unsigned period, uint8_t low, uint8_t high) {
+        period_ms = period; half_period_ms = period / 2;
+        minimum = low; maximum = high; patch_ = -1;
+    }
     uint8_t brightness(int patch, uint32_t now, uint8_t normal) {
-        if (patch < 0) { patch_ = -1; return normal; }
+        if (patch < 0 || !period_ms) { patch_ = -1; return normal; }
         if (patch != patch_) { patch_ = patch; started_ = now; }
         uint32_t elapsed = now - started_;
         started_ += elapsed / period_ms * period_ms;
@@ -17,8 +21,8 @@ public:
         return maximum - ((maximum - minimum) * eased + precision / 2) / precision;
     }
 private:
-    static constexpr uint32_t minimum = 64, maximum = 128;
-    static constexpr uint32_t period_ms = 4000, half_period_ms = period_ms / 2;
+    uint32_t minimum = 0, maximum = 0;
+    uint32_t period_ms = 0, half_period_ms = 0;
     static constexpr uint32_t precision = 1024;
     int patch_ = -1;
     uint32_t started_ = 0;

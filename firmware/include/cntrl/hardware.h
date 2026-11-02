@@ -61,6 +61,7 @@ struct Hardware {
     virtual void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only = false) { (void)undo; (void)duration_ms; (void)target_only; }
     // Temporary performance feedback bypasses dimming; a normal call clears it.
     virtual void set_brightness(uint8_t value, bool temporary = false) = 0;
+    virtual void set_target_pulse(unsigned, uint8_t, uint8_t) {}
     virtual void set_usb_midi_interface(bool) {}
     virtual void set_splash(bool enabled, uint32_t idle_ms) = 0;
     virtual void set_animation_color_cycle(bool) {}

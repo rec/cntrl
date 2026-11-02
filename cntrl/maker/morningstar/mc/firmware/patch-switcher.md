@@ -733,3 +733,51 @@ height: rows 0–41, 42–84 and 85–127. Each line's font box is centered in i
 band. Empty lines leave their band empty rather than redistributing the other
 lines. The reversed heading fills the top band; the second and third lines keep
 their shared fitting font size. Other module pages retain their existing layout.
+
+## Adjustable presentation values (setup format 22)
+
+These settings can be changed in the setup TOML, then recompiled and uploaded:
+
+```toml
+# Ceiling on weighted RGB brightness for generated cycle foregrounds.
+foreground_brightness_limit = '50%'
+# Existing settings: brightness = 192, transition = '500 ms'.
+# Omitted transition uses the renderer's 75 ms fallback.
+
+[target_pulse]
+period = 4  # Seconds for a full bright-to-dim-to-bright cycle; 0.002..65.535.
+minimum = 64
+maximum = 128
+```
+
+All configuration durations use seconds for bare numbers. Explicit units such
+as `period = '4000 ms'` are also accepted through `reccy.configuration.units`.
+`chord`, `transition` and the build option `switch_window` follow the same rule.
+Durations must resolve to whole milliseconds for the firmware's timer precision.
+The `_ms` configuration names have been removed; milliseconds remain an internal
+wire-format and firmware unit.
+
+Pulse intensities range from 0 to 128, where 128 leaves the pixel colors intact.
+The minimum must not exceed the maximum. Equal limits make the intensity steady.
+The model supplies the defaults once; the compiled setup carries explicit pulse
+settings, and the firmware reads them without supplying another default. Setup
+format 22 requires recompiling and replacing older compiled setups.
+
+The page `background_color`, `seed`, `fill_in_styles`, `animation_color_cycle`,
+`brightness`, `chord`, `screensaver_timeout` and `transition` are existing
+setup settings. `horizontal_scale` belongs to styles; StillTime's font metadata
+sets its default to 1.5. The fixed three-band patch-manager structure and the
+128-level pixel intensity scale are layout and encoding definitions.
+
+Stock firmware cannot read the setup's settings. Its exit-gesture window is a
+build option, defaulting to 50 ms:
+
+```bash
+uv run --frozen -m cntrl.maker.morningstar.mc.boot_switch --switch-window 0.05
+```
+
+This window accepts 1..112 ms, limited by the stock hook's 128 ms input history
+and its 15 ms debounce. Input delay is derived from the chosen window plus the
+debounce interval. It still requires no hold. Changing it requires rebuilding
+and flashing the combined image. Other setup settings only require recompiling
+and uploading the setup.

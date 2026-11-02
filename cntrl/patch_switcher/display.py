@@ -119,6 +119,8 @@ def compile_display(
                     if value is None
                     else str(value).lower()
                     if isinstance(value, bool)
+                    else format(value, 'g')
+                    if code in (20, 21) and isinstance(value, float)
                     else str(value)
                 )
                 if len(text.encode('utf-8')) >= 64 or any(
@@ -385,13 +387,14 @@ FIELDS = {
     'splash': 17,
     'usb_midi_interface': 18,
     'screensaver_timeout': 19,
-    'chord_ms': 20,
-    'transition_ms': 21,
+    'chord': 20,
+    'transition': 21,
 }
 SOURCE_FIELDS = (
     'seed',
     'fill_in_styles',
     'background_color',
+    'foreground_brightness_limit',
     'switches',
     'style',
     'pad',

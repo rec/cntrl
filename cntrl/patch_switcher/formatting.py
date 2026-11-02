@@ -14,13 +14,18 @@ def cycle_styles(
         return {}
     background = graphics.color(show.background_color)
     random = Random(show.seed)
-    # Keep weighted RGB brightness below half scale. Greedy maximin selection
+    # Keep weighted RGB brightness below the configured limit. Greedy maximin selection
     # spreads colors away from both the background anchor and earlier choices.
     candidates = [
         c
         for c in product([*range(0, 256, 32), 255], repeat=3)
-        if 299 * c[0] + 587 * c[1] + 114 * c[2] < 127_500
+        if 299 * c[0] + 587 * c[1] + 114 * c[2]
+        < show.foreground_brightness_limit * 255_000
     ]
+    if len(candidates) < len(names):
+        raise ValueError(
+            'foreground brightness limit leaves too few distinct cycle colors'
+        )
     random.shuffle(candidates)
     distances = [
         sum((a - b) ** 2 for a, b in zip(c, background, strict=True))

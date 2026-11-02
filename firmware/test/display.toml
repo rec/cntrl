@@ -23,7 +23,7 @@ value = 120
 fields = ['program', 'bank', 'volume', 'pan', 'instrument', 'name']
 
 [pages.settings]
-fields = ['usb_midi_interface', 'screensaver_timeout', 'chord_ms', 'transition_ms']
+fields = ['usb_midi_interface', 'screensaver_timeout', 'chord', 'transition']
 
 [windows.undo]
 page = 'numeric'

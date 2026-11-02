@@ -94,6 +94,7 @@ public:
         executor_.cancel(); sending_ = -1;
         cancel_gesture();
         document_ = document;
+        hardware_.set_target_pulse(document.pulse_period_ms(), document.pulse_minimum(), document.pulse_maximum());
         hardware_.set_brightness(document.brightness());
         brightness_ = document.brightness();
         hardware_.set_usb_midi_interface(document.usb_midi_interface());

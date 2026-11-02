@@ -2,7 +2,7 @@
 #include "selection.h"
 
 // The composer extends stock's cleared BSS and MPU boundary by 256 bytes.
-SwitchGesture gesture;
+SwitchGesture<CNTRL_SWITCH_WINDOW_MS> gesture;
 bool blocked = false;
 
 extern "C" unsigned boot_selected() {

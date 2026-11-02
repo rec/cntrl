@@ -5,6 +5,7 @@ from functools import cached_property
 from typing import Annotated, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -15,6 +16,12 @@ from pydantic import (
     model_validator,
 )
 from reccy.configuration import units
+
+
+def millisecond_resolution(value: float) -> float:
+    if value != round(value * 1000) / 1000:
+        raise ValueError('duration must be a whole number of milliseconds')
+    return value
 
 
 def parse_tags(value: object) -> object:
@@ -316,6 +323,25 @@ class SwitchAssignment(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class TargetPulse(BaseModel, frozen=True):
+    period: Annotated[
+        float,
+        Field(strict=True, ge=0.002, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 4.0
+    minimum: Annotated[int, Field(strict=True, ge=0, le=128)] = 64
+    maximum: Annotated[int, Field(strict=True, ge=1, le=128)] = 128
+
+    @model_validator(mode='after')
+    def ordered_limits(self) -> 'TargetPulse':
+        if self.minimum > self.maximum:
+            raise ValueError('minimum must not exceed maximum')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Show(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
@@ -326,14 +352,24 @@ class Show(BaseModel, frozen=True):
     seed: Annotated[int, Field(strict=True)] | None = 0
     fill_in_styles: Annotated[bool, Field(strict=True)] = True
     background_color: str = '0xFFF8D8'
+    foreground_brightness_limit: Annotated[
+        float, Field(strict=True, gt=0, le=1), units.unit_validator('dimensionless')
+    ] = 0.5
+    target_pulse: TargetPulse = Field(default_factory=TargetPulse)
     take_first_match: Annotated[bool, Field(strict=True)] = False
-    chord_ms: Annotated[
-        int, Field(strict=True, ge=1, le=65535), units.unit_validator('millisecond')
-    ] = 100
+    chord: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.1
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
-    transition_ms: (
+    transition: (
         Annotated[
-            int, Field(strict=True, ge=1, le=65535), units.unit_validator('millisecond')
+            float,
+            Field(strict=True, ge=0.001, le=65.535),
+            units.unit_validator('second'),
+            AfterValidator(millisecond_resolution),
         ]
         | None
     ) = None

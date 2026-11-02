@@ -26,6 +26,20 @@ def target() -> models.Target:
     )
 
 
+def test_custom_foreground_brightness_limit(target: models.Target) -> None:
+    styles = formatting.cycle_styles(
+        models.Show(foreground_brightness_limit=0.3), ['a', 'b', 'c'], target
+    )
+    for s in styles.values():
+        assert s.foreground_color is not None
+        red, green, blue = graphics.color(s.foreground_color)
+        assert 299 * red + 587 * green + 114 * blue < 0.3 * 255000
+    with pytest.raises(ValueError, match='too few'):
+        formatting.cycle_styles(
+            models.Show(foreground_brightness_limit=0.0001), ['a', 'b'], target
+        )
+
+
 def test_seeded_cycles_balance_fonts_and_keep_unique_colors(
     target: models.Target,
 ) -> None:

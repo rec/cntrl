@@ -3,7 +3,7 @@ brightness = 192
 style = {font_name = 'classic'}
 pad = 4
 contrast = 0.6
-chord_ms = 100
+chord = 0.1
 
 [instruments.keys]
 instrument = 'synth'

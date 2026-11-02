@@ -260,6 +260,9 @@ public:
         if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
         renderer_.show(pane, content);
     }
+    void set_target_pulse(unsigned period, uint8_t low, uint8_t high) override {
+        throb_.configure(period, low, high);
+    }
     void transition(bool undo, std::optional<unsigned> duration_ms, bool target_only) override { renderer_.transition(undo, duration_ms, target_only); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {

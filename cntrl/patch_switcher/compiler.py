@@ -363,7 +363,12 @@ def compile_show(
     if len(mappings) > 65535:
         errors.append('too many bank mappings')
     metadata = METADATA.pack(
-        b'CMTA', min(len(mappings), 65535), show.transition_ms or 0
+        b'CMTA',
+        min(len(mappings), 65535),
+        round(show.transition * 1000) if show.transition is not None else 0,
+        round(show.target_pulse.period * 1000),
+        show.target_pulse.minimum,
+        show.target_pulse.maximum,
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
     body += (
@@ -388,7 +393,7 @@ def compile_show(
         HEADER.pack(
             b'CSW1',
             DOCUMENT_VERSION,
-            show.chord_ms,
+            round(show.chord * 1000),
             HEADER.size + len(body),
             len(instruments),
             len(patch_cycles),
@@ -1352,5 +1357,5 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHH')
-DOCUMENT_VERSION = 21
+METADATA = struct.Struct('<4sHHHBB')
+DOCUMENT_VERSION = 22

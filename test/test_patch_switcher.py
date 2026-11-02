@@ -18,6 +18,42 @@ def target() -> models.Target:
     )
 
 
+@pytest.mark.parametrize('period', [5, '5 seconds', '5000 ms'])
+def test_custom_pulse_round_trip(
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    period: int | str,
+) -> None:
+    show['target_pulse'] = {'period': period, 'minimum': 20, 'maximum': 100}
+    show['foreground_brightness_limit'] = '40%'
+    data = compiler.compile_show(show, definitions, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    settings = models.Show.model_validate(exported)
+    assert settings.target_pulse == models.TargetPulse(
+        period=5, minimum=20, maximum=100
+    )
+    assert settings.foreground_brightness_limit == 0.4
+    assert compiler.compile_show(exported, {}, [], target) == data
+
+
+@pytest.mark.parametrize(
+    'pulse',
+    [
+        {'period': 0},
+        {'period': '2 Hz'},
+        {'period': 65.536},
+        {'period': 0.0021},
+        {'minimum': 129},
+        {'maximum': 0},
+        {'minimum': 100, 'maximum': 90},
+    ],
+)
+def test_invalid_pulse_is_rejected(pulse: dict[str, object]) -> None:
+    with pytest.raises(ValueError):
+        models.TargetPulse.model_validate(pulse)
+
+
 @pytest.fixture
 def definitions() -> object:
     return compiler.read_document(FIXTURES / 'definitions.json')
@@ -40,42 +76,42 @@ def test_compiler_matches_shared_cpp_fixture(
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
 
 
-@pytest.mark.parametrize('duration', [None, 1000, 2000, 750, 65535])
+@pytest.mark.parametrize('duration', [None, 1.0, 2.0, 0.75, 65.535])
 def test_transition_duration_survives_resolved_export(
     show: dict[str, object],
     definitions: object,
     target: models.Target,
-    duration: int | None,
+    duration: float | None,
 ) -> None:
-    show['transition_ms'] = duration
+    show['transition'] = duration
     data = compiler.compile_show(show, definitions, [], target)
     _, _, _, _, ni, nc, np, _, _, _ = compiler.HEADER.unpack_from(data)
     meta = 76 + ni * 68 + nc * 68 + np * 82
-    assert struct.unpack_from('<H', data, meta + 6)[0] == (duration or 0)
+    assert struct.unpack_from('<H', data, meta + 6)[0] == round((duration or 0) * 1000)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported.get('transition_ms') == duration
-    assert models.Show.model_validate(exported).transition_ms == duration
+    assert exported.get('transition') == duration
+    assert models.Show.model_validate(exported).transition == duration
     assert compiler.compile_show(exported, {'setups': []}, [], target) == data
 
 
 def test_omitted_transition_duration_stays_unspecified(show: dict[str, object]) -> None:
-    assert 'transition_ms' not in show
-    assert models.Show.model_validate(show).transition_ms is None
+    assert 'transition' not in show
+    assert models.Show.model_validate(show).transition is None
 
 
 def test_configuration_units_compile_to_the_same_document(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
     numeric = show | {
-        'chord_ms': 100,
-        'transition_ms': 500,
+        'chord': 0.1,
+        'transition': 0.5,
         'screensaver_timeout': 60,
         'pad': 4,
         'contrast': 0.6,
     }
     authored = show | {
-        'chord_ms': '0.1 s',
-        'transition_ms': '500 ms',
+        'chord': '0.1 s',
+        'transition': '500 ms',
         'screensaver_timeout': '1:00',
         'pad': '4 px',
         'contrast': '60 percent',
@@ -88,10 +124,10 @@ def test_configuration_units_compile_to_the_same_document(
 @pytest.mark.parametrize(
     'field,value',
     [
-        ('chord_ms', '0.1 ms'),
-        ('transition_ms', '1 Hz'),
-        ('transition_ms', '66 s'),
-        ('transition_ms', True),
+        ('chord', '0.1 ms'),
+        ('transition', '1 Hz'),
+        ('transition', '66 s'),
+        ('transition', True),
         ('pad', '1 mm'),
         ('font_size', '8.5 px'),
         ('contrast', '101 percent'),

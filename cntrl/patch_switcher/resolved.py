@@ -70,7 +70,7 @@ def export(data: bytes) -> str:
     source.pop('patch_tags', None)
     authored_switches = cast(dict[str, object], source.pop('switches', {}))
     result: dict[str, object] = {
-        'chord_ms': chord,
+        'chord': chord / 1000,
         'brightness': flags & 255,
         'splash': bool(flags & 256),
         'animation_color_cycle': bool(flags & 1024),
@@ -78,7 +78,13 @@ def export(data: bytes) -> str:
         'screensaver_timeout': timeout // 1000,
     }
     if duration := struct.unpack_from('<H', data, meta + 6)[0]:
-        result['transition_ms'] = duration
+        result['transition'] = duration / 1000
+    period, minimum, maximum = struct.unpack_from('<HBB', data, meta + 8)
+    result['target_pulse'] = {
+        'period': period / 1000,
+        'minimum': minimum,
+        'maximum': maximum,
+    }
     result.update(source)
     instruments: dict[str, object] = {}
     setups: list[dict[str, object]] = []

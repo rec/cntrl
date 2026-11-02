@@ -1,4 +1,4 @@
-chord_ms = 100
+chord = 0.1
 brightness = 192
 splash = true
 usb_midi_interface = false
