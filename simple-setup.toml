@@ -4,6 +4,7 @@ animation_color_cycle = false
 foreground_brightness_limit = '50%'
 
 [target_pulse]
+delay = 2
 period = 4
 minimum = 64
 maximum = 128

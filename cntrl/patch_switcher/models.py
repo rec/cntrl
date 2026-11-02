@@ -324,6 +324,12 @@ class SwitchAssignment(BaseModel, frozen=True):
 
 
 class TargetPulse(BaseModel, frozen=True):
+    delay: Annotated[
+        float,
+        Field(strict=True, ge=0, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 2.0
     period: Annotated[
         float,
         Field(strict=True, ge=0.002, le=65.535),

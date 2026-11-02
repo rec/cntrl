@@ -705,7 +705,7 @@ half-cycle uses cubic smoothstep (`3t² - 2t³`), with zero slope at both ends.
 The implementation uses bounded 32-bit fixed-point arithmetic and no sine calls,
 allocation, delays or additional timers.
 
-The pulse starts at 128 when the indication becomes active, and restarts at 128
+The pulse stays at 128 for the configured delay (2 seconds by default) before starting, and restarts its delay
 when navigating to a different patch or cycle. Repainting the same patch does
 not restart it. Already-sent patches,
 empty panes and other module pages use the configured brightness. Temporary
@@ -746,6 +746,7 @@ foreground_brightness_limit = '50%'
 # Omitted transition uses the renderer's 75 ms fallback.
 
 [target_pulse]
+delay = 2  # Seconds at full brightness before the throb; zero disables the delay.
 period = 4  # Seconds for a full bright-to-dim-to-bright cycle; 0.002..65.535.
 minimum = 64
 maximum = 128
@@ -812,7 +813,7 @@ page cancel held-button state. The displays and scrolling animations are unchang
 
 While any physical button is held, including C/F, the target window
 stays at full pixel brightness. The pulse starts from full brightness only after
-all buttons are released. This also suppresses it throughout hold delays and
+all buttons are released and the configured delay has elapsed. This also suppresses it throughout hold delays and
 auto-repeat in either direction.
 
 The old short chord-delay setting is removed. `navigation.hold_delay` replaces

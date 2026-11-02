@@ -82,12 +82,13 @@ def export(data: bytes) -> str:
     period, minimum, maximum = struct.unpack_from('<HBB', data, meta + 8)
     result['target_pulse'] = {
         'period': period / 1000,
+        'delay': struct.unpack_from('<H', data, meta + 14)[0] / 1000,
         'minimum': minimum,
         'maximum': maximum,
     }
     repeat = struct.unpack_from('<H', data, meta + 12)[0]
     result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
-    result['right_pages'] = right_pages.unpack(data, meta + 14)
+    result['right_pages'] = right_pages.unpack(data, meta + 16)
     result.update(source)
     instruments: dict[str, object] = {}
     setups: list[dict[str, object]] = []

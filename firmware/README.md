@@ -366,7 +366,7 @@ Zero (the default) disables the screensaver. Positive values enable the installe
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
 documents are rejected; recompile the source show and upload it after installing
-version 24 firmware. Replace old `screens.NAME` color tables with
+version 25 firmware. Replace old `screens.NAME` color tables with
 `windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
@@ -383,12 +383,12 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (24), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (25), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 58 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, then 22 u16 right-page settings |
+| Metadata header, 60 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 22 u16 right-page settings |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
@@ -524,3 +524,19 @@ label near the bottom center, above C. Press C to start the existing stock-firmw
 handoff. In stock firmware, A+F pressed within the configured 50 ms window returns
 to cntrl with no hold. This uses the same persistent boot selection and navigation
 continuation as the Original Firmware module. F and D+F browse away normally.
+
+Target-pulse `delay` defaults to 2 seconds. Each newly selected pending patch stays
+at the configured pulse maximum for this delay before starting the smooth throb.
+Holding any button suppresses the pulse; releasing all buttons starts a fresh
+delay. Sending the patch cancels it. Use `delay = 0` for an immediate throb.
+The setting uses seconds and accepts unit strings, like the pulse period.
+
+```toml
+[target_pulse]
+delay = 2
+period = 4
+minimum = 64
+maximum = 128
+```
+
+Setup format 25 adds this delay to metadata. Recompile saved setups for format 25.

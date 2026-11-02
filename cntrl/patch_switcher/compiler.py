@@ -371,6 +371,7 @@ def compile_show(
         show.target_pulse.minimum,
         show.target_pulse.maximum,
         round(show.navigation.repeat_interval * 1000),
+        round(show.target_pulse.delay * 1000),
         *right_settings,
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
@@ -1360,5 +1361,5 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHHHBBH22H')
-DOCUMENT_VERSION = 24
+METADATA = struct.Struct('<4sHHHBBHH22H')
+DOCUMENT_VERSION = 25

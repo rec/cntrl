@@ -292,8 +292,8 @@ public:
 #endif
         } else right_pages_.tap(now);
     }
-    void set_target_pulse(unsigned period, uint8_t low, uint8_t high) override {
-        throb_.configure(period, low, high);
+    void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
+        throb_.configure(period, low, high, delay);
     }
     void transition(bool undo, std::optional<unsigned> duration_ms, int pane) override { renderer_.transition(undo, duration_ms, pane, right_pages_.active()); }
 #ifdef CNTRL_DIAGNOSTICS

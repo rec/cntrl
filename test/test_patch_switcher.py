@@ -25,14 +25,19 @@ def test_custom_pulse_round_trip(
     target: models.Target,
     period: int | str,
 ) -> None:
-    show['target_pulse'] = {'period': period, 'minimum': 20, 'maximum': 100}
+    show['target_pulse'] = {
+        'period': period,
+        'delay': '1500 ms',
+        'minimum': 20,
+        'maximum': 100,
+    }
     show['foreground_brightness_limit'] = '40%'
     show['navigation'] = {'hold_delay': '2 seconds', 'repeat_interval': '250 ms'}
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     settings = models.Show.model_validate(exported)
     assert settings.target_pulse == models.TargetPulse(
-        period=5, minimum=20, maximum=100
+        period=5, delay=1.5, minimum=20, maximum=100
     )
     assert settings.foreground_brightness_limit == 0.4
     assert settings.navigation == models.NavigationSettings(
@@ -44,6 +49,10 @@ def test_custom_pulse_round_trip(
 @pytest.mark.parametrize(
     'pulse',
     [
+        {'delay': -1},
+        {'delay': 65.536},
+        {'delay': '2 Hz'},
+        {'delay': 0.0001},
         {'period': 0},
         {'period': '2 Hz'},
         {'period': 65.536},
