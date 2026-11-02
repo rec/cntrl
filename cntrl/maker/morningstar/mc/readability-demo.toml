@@ -1,0 +1,33 @@
+# Upper sample: Atkinson Hyperlegible Next SemiBold.
+# Lower sample: Barlow Condensed SemiBold, at the same fitted size.
+# Empty sequences let the samples be browsed without sending MIDI.
+fill_in_styles = false
+animation_color_cycle = false
+splash = false
+screensaver_timeout = '0 s'
+
+[fonts]
+AtkinsonNextSemiBold = '../../../fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-SemiBold.ttf'
+BarlowCondensedSemiBold = '../../../fonts/barlow-condensed/BarlowCondensed-SemiBold.ttf'
+
+[style]
+foreground_color = '0x202040'
+background_color = '0xFFF8D8'
+
+[pages.patch]
+fields = ['comparison', 'display_name', 'name']
+
+[pages.patch.line_styles]
+display_name = {font_name = 'AtkinsonNextSemiBold'}
+name = {font_name = 'BarlowCondensedSemiBold'}
+
+[parameters.comparison]
+value = 'Atkinson / Barlow'
+
+[patch_cycles]
+samples = [
+    {type = 'sequence', name = 'Breathy Sax', patches = []},
+    {type = 'sequence', name = 'BowedSaw', patches = []},
+    {type = 'sequence', name = 'GuitHero 0123', patches = []},
+    {type = 'sequence', name = 'WX Clari', patches = []},
+]

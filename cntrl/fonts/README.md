@@ -1,6 +1,6 @@
 # Additional font sources
 
-These seven unmodified regular-weight TrueType files were downloaded on
+These unmodified regular-weight TrueType files were downloaded on
 2026-11-02 from [Google Fonts at revision 6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec](https://github.com/google/fonts/tree/6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec).
 Only the generated bitmap versions use the selectable names below.
 
@@ -33,3 +33,28 @@ SHA-256 checksums of the original source files:
 64a9962c862451507b5d8dbc1c4bf023ddbcad701bc73d277eae46723718327a  rubik-distressed/RubikDistressed-Regular.ttf
 a776fcb4ceb8bdf03e2967688ebdad42680de5b91a7e62c17e718ae212d14bc4  special-elite/SpecialElite-Regular.ttf
 ```
+
+
+## Readability trial
+
+The comparison setup [`readability-demo.toml`](../maker/morningstar/mc/readability-demo.toml)
+selects these semibold faces explicitly through the custom-font path. Both are
+unmodified upstream files, licensed under SIL OFL 1.1 without Reserved Font Names
+in their bundled licenses. They were downloaded on 2026-11-02.
+
+| Family | Source revision | Font | License |
+| --- | --- | --- | --- |
+| Atkinson Hyperlegible Next SemiBold | [7925f50f](https://github.com/googlefonts/atkinson-hyperlegible-next/tree/7925f50f649b3813257faf2f4c0b381011f434f1) | [TTF](atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-SemiBold.ttf) | [OFL](atkinson-hyperlegible-next/OFL.txt) |
+| Barlow Condensed SemiBold | [6c1dbe27](https://github.com/google/fonts/tree/6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec/ofl/barlowcondensed) | [TTF](barlow-condensed/BarlowCondensed-SemiBold.ttf) | [OFL](barlow-condensed/OFL.txt) |
+
+Source SHA-256 checksums:
+
+```text
+8e2fff779f35ac25239656bb0f3b2bd35959a2009e3dd21a12141c3b9030362b  atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-SemiBold.ttf
+7b619d14bc2327509a9ef32b0890f709626f7ecc9ff61191c2a4314c5499d2d9  barlow-condensed/BarlowCondensed-SemiBold.ttf
+```
+
+The comparison displays identical text in Atkinson on the second line and Barlow
+on the third, using their shared fitting size. Browse the four samples using the
+normal patch navigation. Sample actions are empty sequences and send no MIDI.
+The existing `simple-setup` remains available in the setup selector.
