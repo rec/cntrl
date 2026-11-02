@@ -70,6 +70,7 @@ def compile_display(
     requests: list[tuple[int, str, models.Style, int, int, int]] = []
     instances: list[list[int]] = []
     contexts: list[str] = []
+    paired_lines: list[list[int]] = []
     for patch in patches:
         tag = tag_style(patch.program_tags + patch.tags, show.tags)
         for window in windows:
@@ -154,6 +155,8 @@ def compile_display(
                     )
                 )
             instances.append(lines)
+            if len(lines) >= 3 and 'switch.name' not in patch.values:
+                paired_lines.append(lines[1:3])
             for j in lines:
                 code, text, style, pad, _, stipple = requests[j]
                 requests[j] = (
@@ -174,6 +177,25 @@ def compile_display(
         )
         for c, t, s, p, n, _ in requests
     ]
+    for indexes in paired_lines:
+        limit = min(choices[i][1] for i in indexes)
+        sizes = set.intersection(*(set(choices[i][0].sizes) for i in indexes))
+        sizes = {
+            s
+            for s in sizes
+            if s <= limit
+            and all(
+                not choices[i][0].sizes[s].runs
+                or requests[i][1] in choices[i][0].sizes[s].runs
+                for i in indexes
+            )
+        }
+        if not sizes:
+            raise ValueError(
+                'second and third patch lines have no shared fitting font size'
+            )
+        for i in indexes:
+            choices[i] = choices[i][0], max(sizes)
     for (code, text, _, _, _, _), (face, size) in zip(requests, choices, strict=True):
         prepared.use(face.name, size, code, text)
     show, keys, generated = prepared.finish()

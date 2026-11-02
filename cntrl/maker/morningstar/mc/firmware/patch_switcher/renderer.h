@@ -157,7 +157,7 @@ private:
             ? ShowGraphics::wrapped_position(line, length - 1).row + 1 : 1;
     }
     void backgrounds(bool preserve_text = false) {
-        unsigned start = painting_.graphics.pad;
+        unsigned start = painting_.heading_band ? 0 : painting_.graphics.pad;
         for (unsigned i = 0; i < cntrl::max_lines; ++i) {
             const auto &line = painting_.lines[i];
             if (!line.text[0]) continue;
@@ -167,8 +167,11 @@ private:
                 end = (bottom + text_y(j, 0) - painting_.lines[j].graphics.top) / 2;
                 break;
             }
-            for (unsigned y = start; y < end && y < 128u - painting_.graphics.pad; ++y)
-                for (unsigned x = painting_.graphics.pad; x < 160u - painting_.graphics.pad; ++x)
+            const bool heading = painting_.heading_band && i == 0;
+            if (heading) end = text_y(i, 0) - line.graphics.top + line.graphics.line_height + 2;
+            const unsigned inset = heading ? 0 : painting_.graphics.pad;
+            for (unsigned y = start; y < end && y < 128u - inset; ++y)
+                for (unsigned x = inset; x < 160u - inset; ++x)
                     if (!preserve_text || (line.stippled && ((x + y) & 1)))
                         graphics_.getFrameBuffer()[y * 160 + x] = line.graphics.background;
             start = end;

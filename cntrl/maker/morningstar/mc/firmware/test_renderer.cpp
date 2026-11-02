@@ -755,6 +755,18 @@ int main() {
     assert(screens[0][44][150] == 2 && screens[0][83][150] == 2);
     assert(screens[0][84][150] == 4 && screens[0][123][150] == 4);
     assert(screens[0][3][150] == 0xffff && screens[0][124][150] == 0xffff);
+    bands.heading_band = true;
+    renderer.show(0, bands); drain(renderer);
+    // Three 8-pixel lines leave 96 pixels of spacing: first line ends at 28,
+    // with two pixels below it. The heading reaches both physical edges.
+    assert(screens[0][0][80] == 1);
+    assert(screens[0][29][0] == 1 && screens[0][29][159] == 1);
+    assert(screens[0][30][150] == 2 && screens[0][30][0] == 0xffff);
+    bands.lines[0].stippled = true;
+    renderer.show(0, bands); drain(renderer);
+    assert(screens[0][29][0] == 1 && screens[0][29][159] == 1);
+    bands.lines[0].stippled = false;
+    bands.heading_band = false;
     bands.lines[1].graphics.background = 8;
     renderer.show(0, bands); drain(renderer);
     assert(screens[0][44][150] == 8 && screens[0][83][150] == 8);

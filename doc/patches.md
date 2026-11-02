@@ -10,6 +10,15 @@ named definition, a browser patch cycle, a switch assignment, a song position or
 sequence. A sequence executes all its children on one activation. A song advances
 one position at a time.
 
+## Patch window presentation
+
+The top line has a reversed full-width heading band, from the top edge to two
+pixels below its text bounds. Its background uses the heading's resolved patch
+color and its text uses the page background. The second and third displayed
+lines use the smaller of their fitted sizes, retaining their font families.
+If the families have different bitmap sizes, the largest shared size at or
+below that limit is used. Switch pages retain their independent line sizing.
+
 ## Automatic cycle styles
 
 Setup-level `fill_in_styles = true` (the default) fills missing formatting for

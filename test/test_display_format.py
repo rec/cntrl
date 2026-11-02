@@ -53,6 +53,28 @@ def lines(block: bytes, page: int) -> list[tuple[int, tuple[int, ...], int, str]
     ]
 
 
+def test_patch_program_lines_share_smaller_fitting_size(target: models.Target) -> None:
+    show = models.Show(
+        fill_in_styles=False,
+        pages={'patch': models.Page(fields=['patch_cycle.name', 'names.a', 'names.b'])},
+    )
+    item = display.DisplayPatch(
+        values={
+            'patch_cycle.name': 'wind',
+            'names.a': 'Short',
+            'names.b': 'A longer name',
+        }
+    )
+    expected = min(
+        graphics.font_choice(None, [t], target, 4, 3)[1]
+        for t in ['Short', 'A longer name']
+    )
+    _, references, block = display.compile_display(show, [item], target)
+    for reference in references[0]:
+        rows = lines(block, reference)
+        assert rows[1][1][1] == rows[2][1][1] == expected
+
+
 def test_disabled_style_filling_preserves_plain_page(target: models.Target) -> None:
     windows, references, block = display.compile_display(
         models.Show(fill_in_styles=False), [patch()], target

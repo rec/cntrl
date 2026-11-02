@@ -288,6 +288,13 @@ private:
         view.graphics = document_.graphics(slot);
         if (index >= 0) {
             document_.page(view, unsigned(index), slot, slot == 0 && already_sent(unsigned(index)));
+            if (view.lines[0].text[0]) {
+                view.heading_band = true;
+                auto &heading = view.lines[0].graphics;
+                const uint16_t foreground = heading.foreground;
+                heading.foreground = heading.background;
+                heading.background = foreground;
+            }
             if (slot == 2) for (auto &line : view.lines) line.stippled = true;
         }
         bool has_text = false;

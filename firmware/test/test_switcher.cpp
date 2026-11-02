@@ -144,6 +144,9 @@ void test_greyed_names(const cntrl::Document &doc) {
     Fake hw;
     TestController app(hw);
     app.activate(doc);
+    assert(hw.panes[0].heading_band);
+    assert(hw.panes[0].lines[0].graphics.background == hw.panes[0].lines[1].graphics.foreground);
+    assert(hw.panes[0].lines[0].graphics.foreground == hw.panes[0].lines[1].graphics.background);
     assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(2); // A:Flute is now known to be selected.
     assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);

@@ -27,6 +27,7 @@ struct TextLine {
 };
 
 struct Pane {
+    bool heading_band = false;
     ScreenGraphics graphics;
     TextLine lines[max_lines];
 };
