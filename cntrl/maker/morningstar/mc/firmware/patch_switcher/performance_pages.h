@@ -2,6 +2,7 @@
 #include <cntrl/hardware.h>
 #include <cntrl/tempo.h>
 #include "show_graphics.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -14,7 +15,7 @@ struct PerformanceStatus {
 
 class PerformancePages {
 public:
-    enum class Page { undo, tap, status };
+    enum class Page { undo, tap, status, firmware };
     void configure(const cntrl::RightPageSettings &settings) {
         settings_ = settings;
         using R = cntrl::RightPageSettings;
@@ -23,7 +24,7 @@ public:
         dirty_ = true;
     }
     void browse(bool reverse, const char *setup) {
-        page_ = Page((unsigned(page_) + (reverse ? 2 : 1)) % 3);
+        page_ = Page((unsigned(page_) + (reverse ? 3 : 1)) % 4);
         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
         dirty_ = true;
     }
@@ -46,7 +47,7 @@ public:
         if (page_ == Page::undo) return false;
         if (dirty_) return true;
         if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
-        return (held || tap_.flash(now, settings_[R::flash_duration])) != flashing_;
+        return page_ == Page::tap && (held || tap_.flash(now, settings_[R::flash_duration])) != flashing_;
     }
     cntrl::Pane view(uint32_t now, uint32_t now_us, bool held, const PerformanceStatus &status) {
         using R = cntrl::RightPageSettings;
@@ -55,6 +56,13 @@ public:
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = settings_[R::padding];
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
+        if (page_ == Page::firmware) {
+            line(pane, 0, "Firmware", pad, std::min(title * 3, (128 - 2 * pad) / 3), 0, true);
+            const unsigned label_height = std::min(title * 2, (128 - 2 * pad) / 4);
+            line(pane, 1, "Use stock", 128 - pad - label_height * 2, label_height, 0, true);
+            line(pane, 2, "firmware", 128 - pad - label_height, label_height, 0, true);
+            return pane;
+        }
         line(pane, 0, page_ == Page::tap ? "Tap Tempo" : "Status", pad, title, 0, true);
         if (page_ == Page::tap) {
             char number[24], sample[24];
@@ -127,7 +135,7 @@ private:
         std::snprintf(l.text, sizeof(l.text), "%s", text);
         l.graphics = pane.graphics; l.graphics.font = face;
         const unsigned sizes[] = {96, 72, 60, 48, 40, 32, 28, 24, 20, 18, 16, 14, 13, 12, 11, 10, 9, 8};
-        ST7735_t3 measure(255, 255, 255); measure.setTextSize(1);
+        ST7735_t3 measure(255, 255, 255); measure.setTextSize(1); measure.setTextWrap(false);
         int16_t left = 0, top = 0; uint16_t width = 0, ink_height = 0;
         const char *fitting = sample ? sample : l.text;
         for (unsigned size : sizes) {

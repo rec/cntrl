@@ -80,6 +80,7 @@ cntrl::PatchExecutor *visiting_invocation = nullptr;
 
 #if CNTRL_ORIGINAL_FIRMWARE
 bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation);
+bool start_original_firmware();
 #endif
 class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink, public cntrl::PatchOutputs
 #if CNTRL_PANIC
@@ -281,7 +282,16 @@ public:
         right_pages_.browse(reverse, documents.selected());
         if (!right_pages_.active()) renderer_.show(2, right_pages_.history());
     }
-    void tap_tempo(uint32_t now) override { if (documents.document().valid()) right_pages_.tap(now); }
+    void tap_tempo(uint32_t now) override {
+        if (!documents.document().valid()) return;
+        if (right_pages_.page() == PerformancePages::Page::firmware) {
+#if CNTRL_ORIGINAL_FIRMWARE
+            if (!start_original_firmware()) error("Firmware switch failed");
+#else
+            error("Stock firmware unavailable");
+#endif
+        } else right_pages_.tap(now);
+    }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high) override {
         throb_.configure(period, low, high);
     }

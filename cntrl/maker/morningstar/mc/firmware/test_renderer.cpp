@@ -685,6 +685,18 @@ static void test_performance_pages() {
     assert(!std::strcmp(view.lines[4].text, "Clock 120.0") && view.lines[4].stippled);
     pages.clock(17, 3600000); view = pages.view(3600, 3600000, false, status);
     assert(!view.lines[4].stippled && !std::strcmp(view.lines[2].text, "Setup frozen"));
+    pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::firmware);
+    view = pages.view(3600, 3600000, false, status);
+    assert(!std::strcmp(view.lines[0].text, "Firmware"));
+    assert(!std::strcmp(view.lines[1].text, "Use stock"));
+    assert(!std::strcmp(view.lines[2].text, "firmware"));
+    assert(view.lines[0].graphics.line_height == 3 * settings[cntrl::RightPageSettings::title_height]);
+    assert(view.lines[1].y > 64 && view.lines[2].y > view.lines[1].y);
+    assert(!pages.due(5000, true));
+    pages.tap(3900); // C on Firmware must not change the tap-tempo history.
+    pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::undo);
+    pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::firmware);
+    pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::status);
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::tap);
     view = pages.view(3601, 3601000, false, status);
     assert(!std::strcmp(view.lines[1].text, "120.0"));

@@ -459,7 +459,7 @@ separate qualification.
 
 ### Auxiliary patch-manager pages (format 24)
 
-F cycles the rightmost window through Previous Undo, Tap Tempo and Status using
+F cycles the rightmost window through Previous Undo, Tap Tempo, Status and Firmware using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary right page in place.
@@ -513,3 +513,9 @@ flash milliseconds, center diameter, annulus width, title height, tempo height,
 padding, tempo font ID, status font ID, off RGB565, on RGB565, ring RGB565,
 integer digits, decimal digits, and page-background RGB565. Recompile saved
 setups when moving from format 23 to 24.
+
+The Firmware page has a large centered title and a two-line “Use stock firmware”
+label near the bottom center, above C. Press C to start the existing stock-firmware
+handoff. In stock firmware, A+F pressed within the configured 50 ms window returns
+to cntrl with no hold. This uses the same persistent boot selection and navigation
+continuation as the Original Firmware module. F and D+F browse away normally.
