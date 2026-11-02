@@ -289,6 +289,7 @@ private:
         Pane view;
         view.graphics = document_.graphics(slot);
         if (index >= 0) {
+            view.three_bands = true;
             const bool sent = already_sent(unsigned(index));
             view.pending_patch = slot == 0 && !sent ? index : -1;
             document_.page(view, unsigned(index), slot, slot == 0 && sent);

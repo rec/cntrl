@@ -725,3 +725,11 @@ backward. The center and right windows stay fixed. This uses the setup's
 transition duration and the existing two-column hardware scroll scheduling.
 Each panel retains its own scroll offset so later send and undo animations
 continue to move all three windows together correctly.
+
+## Patch-manager vertical bands
+
+Patch-manager cards use three fixed vertical bands covering the full 128-pixel
+height: rows 0–41, 42–84 and 85–127. Each line's font box is centered in its own
+band. Empty lines leave their band empty rather than redistributing the other
+lines. The reversed heading fills the top band; the second and third lines keep
+their shared fitting font size. Other module pages retain their existing layout.

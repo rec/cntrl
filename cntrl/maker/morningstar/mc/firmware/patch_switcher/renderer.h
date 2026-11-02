@@ -166,6 +166,12 @@ private:
     unsigned text_y(unsigned field, unsigned row) const {
         const auto &positioned = painting_.lines[field];
         if (positioned.y >= 0) return unsigned(positioned.y) + row * positioned.graphics.line_height + positioned.graphics.top;
+        if (painting_.three_bands) {
+            const unsigned start = field * 128 / 3, end = (field + 1) * 128 / 3;
+            const unsigned height = line_rows(positioned) * positioned.graphics.line_height;
+            return start + (height < end - start ? (end - start - height) / 2 : 0)
+                + row * positioned.graphics.line_height + positioned.graphics.top;
+        }
         const auto &settings = painting_.graphics;
         unsigned count = 0, height = 0, preceding = 0, index = 0;
         for (unsigned i = 0; i < cntrl::max_lines; ++i) {
@@ -190,6 +196,19 @@ private:
             ? ShowGraphics::wrapped_position(line, length - 1).row + 1 : 1;
     }
     void backgrounds(bool preserve_text = false) {
+        if (painting_.three_bands) {
+            for (unsigned i = 0; i < 3; ++i) {
+                const auto &line = painting_.lines[i];
+                if (!line.text[0]) continue;
+                const bool heading = painting_.heading_band && i == 0;
+                const unsigned inset = heading ? 0 : painting_.graphics.pad;
+                for (unsigned y = i * 128 / 3; y < (i + 1) * 128 / 3; ++y)
+                    for (unsigned x = inset; x < 160u - inset; ++x)
+                        if (!preserve_text || (line.stippled && ((x + y) & 1)))
+                            graphics_.getFrameBuffer()[y * 160 + x] = line.graphics.background;
+            }
+            return;
+        }
         unsigned start = painting_.heading_band ? 0 : painting_.graphics.pad;
         for (unsigned i = 0; i < cntrl::max_lines; ++i) {
             const auto &line = painting_.lines[i];

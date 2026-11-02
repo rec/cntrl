@@ -27,6 +27,7 @@ struct TextLine {
 };
 
 struct Pane {
+    bool three_bands = false;
     bool heading_band = false;
     int pending_patch = -1; // Document patch index, or -1 when no unsent patch is displayed.
     ScreenGraphics graphics;

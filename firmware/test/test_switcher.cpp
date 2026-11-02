@@ -147,6 +147,7 @@ void test_greyed_names(const cntrl::Document &doc) {
     TestController app(hw);
     app.activate(doc);
     assert(hw.panes[0].heading_band);
+    assert(hw.panes[0].three_bands && hw.panes[1].three_bands == false);
     assert(hw.panes[0].pending_patch == int(app.selected_patch()));
     app.action(4); app.action(3); // Browse forward and backward between cycles.
     assert((hw.cycle_transitions == std::vector<bool>{true, false}));
