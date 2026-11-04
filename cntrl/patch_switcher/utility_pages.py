@@ -1,4 +1,4 @@
-"""Compact runtime settings for the auxiliary performance pages."""
+"""Compact runtime settings for the utility pages."""
 
 import struct
 
@@ -6,7 +6,7 @@ from . import graphics, models
 
 
 def pack(show: models.Setup, target: models.Target) -> list[int]:
-    r = show.right_pages
+    r = show.utility_pages
     if (
         r.title_height * 3 // 2
         + 4
@@ -16,9 +16,11 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
         + 2 * r.padding
         > target.display_height
     ):
-        raise ValueError('right_pages: title, tempo and flasher exceed display height')
+        raise ValueError(
+            'utility_pages: title, tempo and flasher exceed display height'
+        )
     if r.flasher_diameter + 2 * r.annulus + 2 * r.padding > target.display_width:
-        raise ValueError('right_pages: flasher exceeds display width')
+        raise ValueError('utility_pages: flasher exceeds display width')
     return [
         round(r.refresh_interval * 1000),
         round(r.clock_timeout * 1000),

@@ -2,7 +2,7 @@
 
 Status: setup management and songs/setlists use the static module menu. Panic,
 the MIDI cable tester, MIDI Interface and stock-firmware switching use the
-right-hand page cycle. The menu contains Setups, Songs and setlists, and Switches. The broader organization below remains guidance for
+utility page cycle. The menu contains Setups, Songs and setlists, and Switches. The broader organization below remains guidance for
 subsequent features.
 
 ## Purpose
@@ -87,7 +87,7 @@ scheduling rather than blocking waits.
 ## Establishing the interfaces
 
 The cable tester, MIDI interface and Panic use target adapters for physical
-services while owning their own behavior; the right-page renderer supplies their
+services while owning their own behavior; the utility-page renderer supplies their
 shared display style. A future MIDI monitor should
 reuse those services. Establish additional shared interfaces only when another
 module actually needs them.

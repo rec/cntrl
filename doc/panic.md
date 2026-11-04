@@ -1,6 +1,6 @@
 # Panic page
 
-Panic follows MIDI Cable Test in the right-hand page cycle. It uses the shared
+Panic follows MIDI Cable Test in the utility page cycle. It uses the shared
 background, heading and text style, with press/hold instructions and a
 Ready/Sending indicator. The other two displays stay in place.
 
@@ -29,7 +29,7 @@ and continues the page cycle. Re-entry is idle.
 ## Implementation boundaries
 
 `firmware/include/cntrl/panic.h` owns the bounded state machine and brightness feedback. The
-shared right-page renderer supplies its display. `PanicOutputs`
+shared utility-page renderer supplies its display. `PanicOutputs`
 provides output availability and nonblocking three-byte transmission. The
 module has no dependency on the cable tester or MIDI interface module.
 

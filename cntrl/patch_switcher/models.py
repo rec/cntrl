@@ -359,7 +359,7 @@ class NavigationSettings(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class RightPages(BaseModel, frozen=True):
+class UtilityPages(BaseModel, frozen=True):
     refresh_interval: Annotated[
         float,
         Field(strict=True, ge=0.001, le=65.535),
@@ -419,7 +419,7 @@ class RightPages(BaseModel, frozen=True):
     decimals: Annotated[int, Field(strict=True, ge=0, le=2)] = 1
 
     @model_validator(mode='after')
-    def feasible_taps(self) -> 'RightPages':
+    def feasible_taps(self) -> 'UtilityPages':
         if self.minimum_taps > self.tap_intervals + 1:
             raise ValueError('minimum_taps exceeds tap_intervals + 1')
         if self.minimum_interval > self.reset_gap:
@@ -444,7 +444,7 @@ class Setup(BaseModel, frozen=True):
     ] = 0.5
     target_pulse: TargetPulse = Field(default_factory=TargetPulse)
     navigation: NavigationSettings = Field(default_factory=NavigationSettings)
-    right_pages: RightPages = Field(default_factory=RightPages)
+    utility_pages: UtilityPages = Field(default_factory=UtilityPages)
     take_first_match: Annotated[bool, Field(strict=True)] = False
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     transition: (

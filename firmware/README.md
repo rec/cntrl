@@ -396,7 +396,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 60 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 22 u16 right-page settings |
+| Metadata header, 60 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 22 u16 utility-page settings |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
@@ -497,7 +497,7 @@ separate qualification.
 The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test, Panic and MIDI Interface using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
-Tempo. Sending and undo keep an auxiliary right page in place.
+Tempo. Sending and undo keep an auxiliary utility page in place.
 
 Tap Tempo displays fixed-position Courier digits (`---.-` initially). Two taps
 produce the first result; subsequent taps average the latest four intervals.
@@ -526,8 +526,11 @@ After a clock timeout, the retained tempo is stippled until clocks resume.
 All durations below are seconds and accept unit strings. Dimensions are pixels;
 title and tempo heights reserve layout bands, while font size is fitted automatically.
 
+Configure these pages under `[utility_pages]`, formerly `[right_pages]`.
+Existing compiled setups keep the same layout; editable exports use the new name.
+
 ```toml
-[right_pages]
+[utility_pages]
 refresh_interval = 1
 clock_timeout = 1
 clocks_per_quarter = 24
@@ -593,9 +596,9 @@ to repeat controller and Note Off sweeps. F cancels and advances. MIDI Interface
 is last: C temporarily toggles the setup's bridge setting; leaving restores it.
 Both pages use the shared display style and leave routing unchanged on entry.
 
-Right-page titles use `title_font`, defaulting to `classic`; `Arial` and
+Utility-page titles use `title_font`, defaulting to `classic`; `Arial` and
 `ComicSansMS` are also supported. The title band adds two pixels above and below
 the previous layout, without enlarging the text. Status shows `Up` beside Disk.
-Setup format 27 appends the title-font word to the right-page metadata.
+Setup format 27 appends the title-font word to the utility-page metadata.
 Panic stops an unfinished first sweep one second after C is released and shows
 `Incomplete`; a completed sweep shows `Ready`.

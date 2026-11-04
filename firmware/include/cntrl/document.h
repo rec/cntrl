@@ -5,8 +5,8 @@
 #include <cstdio>
 
 namespace cntrl {
-constexpr unsigned right_page_settings_offset = 16;
-constexpr unsigned metadata_header_size = right_page_settings_offset + 2 * RightPageSettings::count;
+constexpr unsigned utility_page_settings_offset = 16;
+constexpr unsigned metadata_header_size = utility_page_settings_offset + 2 * UtilityPageSettings::count;
 constexpr unsigned document_version = 27;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
@@ -72,9 +72,9 @@ public:
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
-        RightPageSettings right;
-        for (unsigned i = 0; i < RightPageSettings::count; ++i) right.words[i] = u16(bytes + meta + right_page_settings_offset + 2 * i);
-        using R = RightPageSettings;
+        UtilityPageSettings right;
+        for (unsigned i = 0; i < UtilityPageSettings::count; ++i) right.words[i] = u16(bytes + meta + utility_page_settings_offset + 2 * i);
+        using R = UtilityPageSettings;
         if (!right[R::refresh] || !right[R::clock_timeout] || !right[R::clocks_per_quarter]
             || right[R::clocks_per_quarter] > 960 || !right[R::clock_beats] || right[R::clock_beats] > 16
             || !right[R::tap_intervals] || right[R::tap_intervals] > 8 || right[R::minimum_taps] < 2
@@ -222,9 +222,9 @@ public:
     uint8_t pulse_minimum() const { return data_[metadata() + 10]; }
     uint8_t pulse_maximum() const { return data_[metadata() + 11]; }
     unsigned navigation_repeat_ms() const { return u16(data_ + metadata() + 12); }
-    RightPageSettings right_pages() const {
-        RightPageSettings settings;
-        for (unsigned i = 0; i < RightPageSettings::count; ++i) settings.words[i] = u16(data_ + metadata() + right_page_settings_offset + 2 * i);
+    UtilityPageSettings utility_pages() const {
+        UtilityPageSettings settings;
+        for (unsigned i = 0; i < UtilityPageSettings::count; ++i) settings.words[i] = u16(data_ + metadata() + utility_page_settings_offset + 2 * i);
         return settings;
     }
     bool splash() const { return data_[19] & 1; }

@@ -1,6 +1,6 @@
 # USB MIDI interface page
 
-MIDI Interface follows Panic at the end of the right-hand page cycle. It opens
+MIDI Interface follows Panic at the end of the utility page cycle. It opens
 with the setup's current bridge state and does not change routing on entry.
 With a configured USB host, C temporarily toggles forwarding; F continues cycling
 and restores the setup setting if it was changed. The setup itself is not edited
@@ -43,7 +43,7 @@ queues and parser state, preserving accepted pedal work and required SysEx
 termination. Normal performance controls remain available on this page.
 
 `firmware/include/cntrl/midi_interface.h` owns the switch, activity state and display-independent status snapshot.
-The shared right-page renderer supplies the layout.
+The shared utility-page renderer supplies the layout.
 `MidiInterfaceControl` supplies temporary bridge control and restores the setup
 preference on exit. The target supplies host and activity events and optional
 build inclusion. There is no dependency on the cable-test module or second

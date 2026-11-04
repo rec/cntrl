@@ -74,10 +74,10 @@ def test_invalid_navigation_timing_is_rejected(value: object) -> None:
             models.NavigationSettings.model_validate({n: value})
 
 
-def test_right_page_settings_round_trip(
+def test_utility_page_settings_round_trip(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['right_pages'] = {
+    show['utility_pages'] = {
         'refresh_interval': '2 seconds',
         'clock_timeout': '500 ms',
         'clocks_per_quarter': 96,
@@ -98,7 +98,7 @@ def test_right_page_settings_round_trip(
     }
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    settings = models.Setup.model_validate(exported).right_pages
+    settings = models.Setup.model_validate(exported).utility_pages
     assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
     assert settings.title_font == 'Arial'
     assert settings.refresh_interval == 2 and settings.flash_fraction == 0.2
@@ -123,13 +123,13 @@ def test_right_page_settings_round_trip(
         {'decimals': 3},
     ],
 )
-def test_invalid_right_page_settings_are_rejected(
+def test_invalid_utility_page_settings_are_rejected(
     show: dict[str, object],
     definitions: object,
     target: models.Target,
     settings: dict[str, object],
 ) -> None:
-    show['right_pages'] = settings
+    show['utility_pages'] = settings
     with pytest.raises(compiler.CompilationError):
         compiler.compile_show(show, definitions, [], target)
 

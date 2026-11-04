@@ -798,7 +798,7 @@ Physical buttons A/B/D/E keep their primary actions: A sends the target, B brows
 patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status, Firmware, MIDI Cable Test, Panic and MIDI Interface, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
 are removed. Other modules keep their existing button assignments.
 
-The right-hand pages share one heading font and size, with white
+The utility pages share one heading font and size, with white
 text on a black heading band. All titles fit against the same reference text.
 Status labels are dark blue and values are green. Their text has one additional
 vertical ink pixel
@@ -806,7 +806,7 @@ without wider glyphs or spacing. The page background and Tap Tempo ring thicknes
 are configured in the setup:
 
 ```toml
-[right_pages]
+[utility_pages]
 title_font = 'classic' # also Arial or ComicSansMS
 background_color = '0xFFF085'
 annulus = 5

@@ -16,12 +16,12 @@ struct PerformanceStatus {
     unsigned cycles = 0, patches = 0;
 };
 
-class PerformancePages {
+class UtilityPages {
 public:
     enum class Page { tap, status, firmware, cable, panic, interface, confirm_firmware };
-    void configure(const cntrl::RightPageSettings &settings) {
+    void configure(const cntrl::UtilityPageSettings &settings) {
         settings_ = settings;
-        using R = cntrl::RightPageSettings;
+        using R = cntrl::UtilityPageSettings;
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
         clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
         dirty_ = true;
@@ -64,13 +64,13 @@ public:
         clock_.poll(now_us); tap_.flash(now, 0);
     }
     bool due(uint32_t now) {
-        using R = cntrl::RightPageSettings;
+        using R = cntrl::UtilityPageSettings;
         if (dirty_) return true;
         if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
     cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, const cntrl::MidiInterface::Status &interface = {}) {
-        using R = cntrl::RightPageSettings;
+        using R = cntrl::UtilityPageSettings;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
@@ -202,7 +202,7 @@ public:
     }
 private:
     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
-        using R = cntrl::RightPageSettings;
+        using R = cntrl::UtilityPageSettings;
         unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];
         if (!period) {
             if (!fixed) { std::snprintf(text, length, "--"); return; }
@@ -251,7 +251,7 @@ private:
             return;
         }
     }
-    cntrl::RightPageSettings settings_;
+    cntrl::UtilityPageSettings settings_;
     cntrl::TapTempo tap_;
     cntrl::ClockTempo clock_;
     Page page_ = Page::status;

@@ -13,7 +13,7 @@ maximum = 128
 hold_delay = 1.5
 repeat_interval = 1
 
-[right_pages]
+[utility_pages]
 refresh_interval = 1
 clocks_per_quarter = 24
 clock_timeout = 1

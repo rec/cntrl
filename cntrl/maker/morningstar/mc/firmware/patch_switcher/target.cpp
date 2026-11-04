@@ -34,7 +34,7 @@ extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 #include "displays.h"
 #include "switches.h"
 #include "renderer.h"
-#include "performance_pages.h"
+#include "utility_pages.h"
 #ifdef CNTRL_DIAGNOSTICS
 #include "scroll_timing.h"
 #endif
@@ -265,63 +265,63 @@ public:
         if (pane == 2) {
             if (content.performance) {
                 if (!performance_visible_) {
-                    right_pages_.revisit(documents.selected());
-                    enter_right_page();
+                    utility_pages_.revisit(documents.selected());
+                    enter_utility_page();
                 }
                 performance_visible_ = true;
                 return;
             } else {
-                if (performance_visible_) leave_right_page();
+                if (performance_visible_) leave_utility_page();
                 performance_visible_ = false;
             }
         }
         renderer_.show(pane, content);
     }
-    void enter_right_page() {
+    void enter_utility_page() {
 #if CNTRL_CABLE_TEST
-        if (right_pages_.page() == PerformancePages::Page::cable) cable_test.enter();
+        if (utility_pages_.page() == UtilityPages::Page::cable) cable_test.enter();
 #endif
 #if CNTRL_PANIC
-        if (right_pages_.page() == PerformancePages::Page::panic) panic.enter(runtime.brightness);
+        if (utility_pages_.page() == UtilityPages::Page::panic) panic.enter(runtime.brightness);
 #endif
 #if CNTRL_MIDI_INTERFACE
-        if (right_pages_.page() == PerformancePages::Page::interface) midi_interface.enter(usb_configuration != 0, runtime.interface);
+        if (utility_pages_.page() == UtilityPages::Page::interface) midi_interface.enter(usb_configuration != 0, runtime.interface);
 #endif
     }
-    void leave_right_page() {
+    void leave_utility_page() {
 #if CNTRL_CABLE_TEST
-        if (right_pages_.page() == PerformancePages::Page::cable) leave_cable_test();
+        if (utility_pages_.page() == UtilityPages::Page::cable) leave_cable_test();
 #endif
 #if CNTRL_PANIC
-        if (right_pages_.page() == PerformancePages::Page::panic) leave_panic();
+        if (utility_pages_.page() == UtilityPages::Page::panic) leave_panic();
 #endif
 #if CNTRL_MIDI_INTERFACE
-        if (right_pages_.page() == PerformancePages::Page::interface) midi_interface.leave();
+        if (utility_pages_.page() == UtilityPages::Page::interface) midi_interface.leave();
 #endif
     }
-    void configure_right_pages(const cntrl::RightPageSettings &settings) override {
-        leave_right_page();
-        right_pages_.configure(settings);
-        enter_right_page();
+    void configure_utility_pages(const cntrl::UtilityPageSettings &settings) override {
+        leave_utility_page();
+        utility_pages_.configure(settings);
+        enter_utility_page();
     }
-    void browse_right_page(bool reverse) override {
+    void browse_utility_page(bool reverse) override {
         if (!documents.document().valid()) return;
-        if (right_pages_.page() == PerformancePages::Page::confirm_firmware
+        if (utility_pages_.page() == UtilityPages::Page::confirm_firmware
             && (held_controls & (1u << 2))) return;
-        leave_right_page();
-        if (right_pages_.browse(reverse, documents.selected())) {
+        leave_utility_page();
+        if (utility_pages_.browse(reverse, documents.selected())) {
 #if CNTRL_ORIGINAL_FIRMWARE
             if (!start_original_firmware()) error("Firmware switch failed");
 #else
             error("Stock firmware unavailable");
 #endif
         } else renderer_.transition(reverse, documents.document().transition_ms(), 2);
-        enter_right_page();
+        enter_utility_page();
     }
     void tap_tempo(uint32_t now) override {
         if (!documents.document().valid()) return;
 #if CNTRL_CABLE_TEST
-        if (right_pages_.page() == PerformancePages::Page::cable) {
+        if (utility_pages_.page() == UtilityPages::Page::cable) {
             if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy())) return;
             controller.cancel_gesture();
             cable_test.toggle(now);
@@ -330,7 +330,7 @@ public:
         }
 #endif
 #if CNTRL_PANIC
-        if (right_pages_.page() == PerformancePages::Page::panic) {
+        if (utility_pages_.page() == UtilityPages::Page::panic) {
             if (!panic_owns_midi && (patch_work_pending() || !output_idle() || documents.busy())) return;
             controller.cancel_gesture();
             if (!panic_owns_midi) bridge_.configure(false);
@@ -340,13 +340,13 @@ public:
         }
 #endif
 #if CNTRL_MIDI_INTERFACE
-        if (right_pages_.page() == PerformancePages::Page::interface) {
+        if (utility_pages_.page() == UtilityPages::Page::interface) {
             if (patch_work_pending() || !output_idle() || documents.busy()) return;
             midi_interface.toggle();
             return;
         }
 #endif
-        right_pages_.tap(now);
+        utility_pages_.tap(now);
     }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
         throb_.configure(period, low, high, delay);
@@ -401,7 +401,7 @@ public:
                 if (source == 0) {
                     uint32_t packet = usb_midi_read_message();
                     if (!packet) break;
-                    if (((packet >> 8) & 255) == 0xf8) right_pages_.clock((packet >> 4) & 15, micros());
+                    if (((packet >> 8) & 255) == 0xf8) utility_pages_.clock((packet >> 4) & 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.enabled()) continue;
 #endif
@@ -413,7 +413,7 @@ public:
                 } else {
                     HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
                     int byte = serial.read(); if (byte < 0) break;
-                    if (byte == 0xf8) right_pages_.clock(source + 15, micros());
+                    if (byte == 0xf8) utility_pages_.clock(source + 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.enabled()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
 #endif
@@ -429,7 +429,7 @@ public:
         source_cursor_ = (source_cursor_ + 1) % 3;
         // Existing USB-host input is deliberately not bridged.
         if (host_midi.read() && host_midi.getType() == 0xf8)
-            right_pages_.clock(18 + host_midi.getCable(), micros());
+            utility_pages_.clock(18 + host_midi.getCable(), micros());
 #if CNTRL_PANIC
         if (panic_owns_midi) {
             panic.tick(now, bridge_.handoff(*this));
@@ -470,7 +470,7 @@ public:
 #if CNTRL_PANIC
         transfer_busy = transfer_busy || panic_owns_midi;
 #endif
-        right_pages_.time(now, micros(), held_controls & (1u << 2));
+        utility_pages_.time(now, micros(), held_controls & (1u << 2));
         ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) { scroll_timing.poll(micros()); return; }
@@ -478,22 +478,22 @@ public:
         splash_visible_ = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
 #if CNTRL_CABLE_TEST
-        if (right_pages_.page() == PerformancePages::Page::cable && cable_test.take_redraw())
-            right_pages_.revisit(documents.selected());
+        if (utility_pages_.page() == UtilityPages::Page::cable && cable_test.take_redraw())
+            utility_pages_.revisit(documents.selected());
 #endif
 #if CNTRL_PANIC
-        if (right_pages_.page() == PerformancePages::Page::panic && panic.take_redraw())
-            right_pages_.revisit(documents.selected());
+        if (utility_pages_.page() == UtilityPages::Page::panic && panic.take_redraw())
+            utility_pages_.revisit(documents.selected());
 #endif
 #if CNTRL_MIDI_INTERFACE
-        if (right_pages_.page() == PerformancePages::Page::interface && midi_interface.take_redraw())
-            right_pages_.revisit(documents.selected());
+        if (utility_pages_.page() == UtilityPages::Page::interface && midi_interface.take_redraw())
+            utility_pages_.revisit(documents.selected());
 #endif
         if (!splash_visible_ && !feature_open() && documents.document().valid()
-            && right_pages_.due(now)) {
+            && utility_pages_.due(now)) {
             // Prepare the incoming card during the renderer's bounded transition preparation.
-            PerformanceStatus status = right_pages_.page() == PerformancePages::Page::status ? performance_status() : PerformanceStatus{};
-            renderer_.show(2, right_pages_.view(now, micros(), status
+            PerformanceStatus status = utility_pages_.page() == UtilityPages::Page::status ? performance_status() : PerformanceStatus{};
+            renderer_.show(2, utility_pages_.view(now, micros(), status
 #if CNTRL_CABLE_TEST
                 , cable_test.status()
 #else
@@ -521,7 +521,7 @@ private:
         }
     }
     PixelThrob throb_;
-    PerformancePages right_pages_;
+    UtilityPages utility_pages_;
     bool performance_visible_ = false;
     int pending_patch_ = -1;
     bool splash_visible_ = false;

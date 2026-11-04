@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include "right_page_settings.h"
+#include "utility_page_settings.h"
 
 namespace cntrl {
 constexpr unsigned max_document = 65536;
@@ -75,8 +75,8 @@ struct Hardware {
     // Pane indices follow physical left-to-right order: 0, 1, 2.
     virtual void show(unsigned pane, const Pane &content) = 0;
     virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1) { (void)undo; (void)duration_ms; (void)pane; }
-    virtual void configure_right_pages(const RightPageSettings &) {}
-    virtual void browse_right_page(bool) {}
+    virtual void configure_utility_pages(const UtilityPageSettings &) {}
+    virtual void browse_utility_page(bool) {}
     virtual void tap_tempo(uint32_t) {}
     // Temporary performance feedback bypasses dimming; a normal call clears it.
     virtual void set_brightness(uint8_t value, bool temporary = false) = 0;
