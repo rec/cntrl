@@ -470,7 +470,7 @@ public:
 #if CNTRL_PANIC
         transfer_busy = transfer_busy || panic_owns_midi;
 #endif
-        right_pages_.time(now, micros());
+        right_pages_.time(now, micros(), held_controls & (1u << 2));
         ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) { scroll_timing.poll(micros()); return; }

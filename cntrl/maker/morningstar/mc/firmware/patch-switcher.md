@@ -810,11 +810,13 @@ are configured in the setup:
 title_font = 'classic' # also Arial or ComicSansMS
 background_color = '0xFFF085'
 annulus = 5
+off_color = '0x600000'
 flash_fraction = '40%'
 ```
 
-The flash occupies the configured fraction of each measured tap cycle; holding C
-does not extend it. Setup format 26 stores the fraction in thousandths. Recompile
+The flash occupies the configured fraction of each measured tap cycle. Holding C
+also lights the indicator, even before a tempo is established; releasing C
+returns to the normal beat flash. Setup format 26 stores the fraction in thousandths. Recompile
 saved setups after replacing `flash_duration` with `flash_fraction`.
 
 These are the defaults. Colors use the existing `0xRRGGBB` syntax and are

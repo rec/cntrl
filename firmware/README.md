@@ -499,7 +499,7 @@ sequence. Its first tap preserves the previous tempo; at least two fresh taps
 are needed to establish a new tempo. Each accepted tap anchors the beat.
 The smaller flasher has a 40-pixel
 red center and a 5-pixel black annulus. It lights for a configurable fraction of
-each computed beat, defaulting to 40%. Holding C does not extend the flash. Tempo survives page changes until reboot.
+each computed beat, defaulting to 40%. Holding C also lights the indicator, even before a tempo is established. Releasing C resumes the normal beat flash. Tempo survives page changes until reboot.
 
 Status snapshots the setup name on entry and refreshes other values every second.
 All page headings use the same font, size and weight, fitted against MIDI Cable Test
@@ -538,7 +538,7 @@ tempo_height = 40
 padding = 2
 tempo_font = 'CourierPrime' # or CourierPrimeBold
 status_font = 'classic' # also Arial or ComicSansMS
-off_color = '0x400000'
+off_color = '0x600000'
 on_color = '0xFF0000'
 ring_color = 'black'
 digits = 3

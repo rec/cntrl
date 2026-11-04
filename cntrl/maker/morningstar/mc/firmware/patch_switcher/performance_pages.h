@@ -58,7 +58,8 @@ public:
         dirty_ = true;
     }
     void clock(unsigned source, uint32_t now_us) { clock_.clock(source, now_us); }
-    void time(uint32_t now, uint32_t now_us) {
+    void time(uint32_t now, uint32_t now_us, bool held) {
+        held_ = held;
         uptime_ += uint32_t(now - previous_); previous_ = now;
         clock_.poll(now_us); tap_.flash(now, 0);
     }
@@ -66,7 +67,7 @@ public:
         using R = cntrl::RightPageSettings;
         if (dirty_) return true;
         if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
-        return page_ == Page::tap && tap_.flash(now, settings_[R::flash_fraction]) != flashing_;
+        return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
     cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, const cntrl::MidiInterface::Status &interface = {}) {
         using R = cntrl::RightPageSettings;
@@ -132,7 +133,7 @@ public:
             if (decimals) { sample[pos++] = '.'; for (unsigned i = 0; i < decimals; ++i) sample[pos++] = '8'; }
             sample[pos] = 0;
             line(pane, 1, number, pad + heading_height, settings_[R::tempo_height], settings_[R::tempo_font], false, sample);
-            flashing_ = tap_.flash(now, settings_[R::flash_fraction]);
+            flashing_ = held_ || tap_.flash(now, settings_[R::flash_fraction]);
             pane.circles[0].diameter = settings_[R::diameter]; pane.circles[0].annulus = settings_[R::annulus];
             pane.circles[0].x = 80;
             unsigned start = pad + heading_height + settings_[R::tempo_height];
@@ -257,5 +258,5 @@ private:
     char setup_[64] = {};
     uint64_t uptime_ = 0;
     uint32_t previous_ = 0, refreshed_ = 0;
-    bool dirty_ = false, flashing_ = false;
+    bool dirty_ = false, flashing_ = false, held_ = false;
 };
