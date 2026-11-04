@@ -466,8 +466,11 @@ Tempo. Sending and undo keep an auxiliary right page in place.
 
 Tap Tempo displays fixed-position Courier digits (`---.-` initially). Two taps
 produce the first result; subsequent taps average the latest four intervals.
-Intervals below 0.1 seconds are ignored; a gap over 3 seconds starts a fresh tap
-sequence. Each accepted tap anchors the beat. The smaller flasher has a 40-pixel
+Intervals below 0.1 seconds are ignored. A gap longer than two established beat
+periods, or the configured reset gap (3 seconds by default), starts a fresh tap
+sequence. Its first tap preserves the previous tempo; at least two fresh taps
+are needed to establish a new tempo. Each accepted tap anchors the beat.
+The smaller flasher has a 40-pixel
 red center and a 5-pixel black annulus. It lights for a configurable fraction of
 each computed beat, defaulting to 40%. Holding C does not extend the flash. Tempo survives page changes until reboot.
 

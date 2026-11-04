@@ -10,11 +10,12 @@ public:
     }
     void tap(uint32_t now) {
         if (!window_) return;
-        if (!last_known_ || uint32_t(now - last_) > gap_) {
+        const uint32_t interval = now - last_;
+        if (!last_known_ || interval > gap_
+            || (count_ && period_ && uint64_t(interval) > uint64_t(period_) * 2)) {
             count_ = next_ = 0; sum_ = 0; last_ = now; last_known_ = true;
             beat_anchor_ = now; beat_known_ = true; return;
         }
-        uint32_t interval = now - last_;
         if (interval < minimum_) return;
         last_ = now;
         beat_anchor_ = now; beat_known_ = true;

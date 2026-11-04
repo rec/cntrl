@@ -24,6 +24,21 @@ int main() {
     tap.tap(899); assert(tap.period() == 500);
     assert(tap.flash(1098, 400) && !tap.flash(1099, 400));
 
+    cntrl::TapTempo fast;
+    fast.configure(4, 2, 100, 3000);
+    for (uint32_t now = 100; now <= 660; now += 140) fast.tap(now);
+    assert(fast.period() == 140); // Approximately 429 BPM.
+    fast.tap(2848); // Under three seconds, but far beyond the established beat.
+    assert(fast.period() == 140); // Previously this single tap changed it to 92 BPM.
+    fast.tap(3348);
+    assert(fast.period() == 500); // Two fresh taps can establish a slower tempo.
+    fast.tap(4348);
+    assert(fast.period() == 750); // Exactly two beats is still part of the sequence.
+    fast.tap(5849);
+    assert(fast.period() == 750);
+    fast.tap(6049);
+    assert(fast.period() == 200); // Two fresh taps can also establish a faster tempo.
+
     cntrl::ClockTempo clock;
     clock.configure(24, 1, 1000000);
     assert(!clock.period_us() && !clock.active());
