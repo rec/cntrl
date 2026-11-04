@@ -1,22 +1,29 @@
 #pragma once
-#include "hardware.h"
 #include "midi_bridge.h"
 #include "midi_outputs.h"
 #include <cstdio>
 
 namespace cntrl {
-// Owns test behavior only. The caller grants exclusive DIN/TRS access while open.
+// Owns test behavior only. The caller grants exclusive DIN/TRS access while enabled.
 class CableTest {
 public:
-    explicit CableTest(Hardware &hardware, ScreenGraphics title = {}) : hardware_(hardware), title_(title) {}
-    bool open() const { return open_; }
+    struct Status { bool enabled = false; char routes[2][32] = {}; };
+    explicit CableTest(midi::Sink &sink) : sink_(sink) {}
+    Status status() const {
+        Status result; result.enabled = enabled_;
+        for (unsigned i = 0; i < output_count; ++i) if (seen_[i])
+            std::snprintf(result.routes[i], sizeof(result.routes[i]), input_[i] == i ? "%s" : "%s to %s",
+                midi::output_connections[i].label, input_names[input_[i]]);
+        return result;
+    }
+    bool take_redraw() { bool result = dirty_; dirty_ = false; return result; }
     bool enabled() const { return enabled_; }
-    void enter() { open_ = true; enabled_ = false; reset(); render(); }
+    void enter() { open_ = true; enabled_ = false; reset(); dirty_ = true; }
     void leave() { open_ = enabled_ = false; reset(); }
     void toggle(uint32_t now) {
         if (!open_) return;
         enabled_ = !enabled_; reset(); last_send_ = now - interval_ms;
-        render();
+        dirty_ = true;
     }
     void receive(unsigned input, uint8_t byte, uint32_t now) {
         if (!enabled_ || input >= input_names.size()) return;
@@ -30,7 +37,7 @@ public:
                 && uint32_t(now - probe.sent) < timeout_ms) {
                 bool changed = !seen_[output] || input_[output] != input;
                 seen_[output] = true; input_[output] = input; received_[output] = now;
-                if (changed) render();
+                if (changed) dirty_ = true;
                 return;
             }
         }
@@ -43,12 +50,12 @@ public:
                 seen_[i] = false; changed = true;
             }
         }
-        if (changed) render();
+        if (changed) dirty_ = true;
         if (uint32_t(now - last_send_) < interval_ms) return;
         last_send_ = now;
         for (unsigned i = 0; i < output_count; ++i) {
             const uint8_t bytes[] = {uint8_t(0xb0 + i), breath_controller, value_[i]};
-            if (hardware_.send(midi::output_connections[i].name, bytes, sizeof(bytes))) {
+            if (sink_.submit(midi::output_connections[i].route, {11, {bytes[0], bytes[1], bytes[2]}})) {
                 probes_[i][cursor_[i]] = {true, value_[i], now};
                 cursor_[i] = (cursor_[i] + 1) % history;
                 value_[i] = (value_[i] + 1) & 127;
@@ -62,8 +69,8 @@ private:
     static constexpr uint32_t interval_ms = 10, timeout_ms = 250;
     static constexpr unsigned history = 8;
     struct Probe { bool valid = false; uint8_t value = 0; uint32_t sent = 0; };
-    Hardware &hardware_;
-    ScreenGraphics title_;
+    midi::Sink &sink_;
+    bool dirty_ = true;
     bool open_ = false, enabled_ = false, seen_[output_count] = {};
     unsigned input_[output_count] = {}, cursor_[output_count] = {};
     uint8_t value_[output_count] = {};
@@ -76,39 +83,6 @@ private:
             seen_[i] = false; cursor_[i] = value_[i] = 0;
             for (auto &probe : probes_[i]) probe = Probe();
         }
-    }
-    void render() {
-        Pane views[3];
-        for (auto &view : views) {
-            view.graphics.background = 0;
-            view.graphics.foreground = 0xffff;
-            for (auto &line : view.lines) {
-                line.graphics = view.graphics;
-                line.graphics.size = line.graphics.line_height = 16;
-                line.centered = true;
-            }
-        }
-        auto &center = views[1];
-        std::snprintf(center.lines[0].text, 64, "MIDI cable test");
-        center.lines[0].graphics = title_;
-        center.lines[0].graphics.foreground = 0xffff;
-        center.lines[0].graphics.background = 0;
-        center.lines[0].y = 4;
-        for (unsigned i = 0; i < output_count; ++i) if (seen_[i]) {
-            const char *name = midi::output_connections[i].label;
-            const char *input = input_names[input_[i]];
-            std::snprintf(center.lines[1 + i].text, 64, input_[i] == i ? "%s" : "%s to %s", name, input);
-        }
-        center.lines[1].y = 44;
-        center.lines[2].y = 72;
-        std::snprintf(center.lines[3].text, 64, "%s", enabled_ ? "On" : "Off");
-        center.lines[3].y = hardware_.display_height() - 24;
-        auto &back = views[2].lines[0];
-        std::snprintf(back.text, 64, "Back");
-        back.centered = false;
-        back.x = hardware_.display_width() - 4 - 4 * 12;
-        back.y = 4;
-        for (unsigned i = 0; i < 3; ++i) hardware_.show(i, views[i]);
     }
 };
 }

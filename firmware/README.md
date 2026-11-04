@@ -459,7 +459,7 @@ separate qualification.
 
 ### Auxiliary patch-manager pages (format 26)
 
-The rightmost window starts on Status. F cycles through Tap Tempo, Status and Firmware using
+The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware and MIDI Cable Test using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary right page in place.
@@ -475,7 +475,7 @@ red center and a 5-pixel black annulus. It lights for a configurable fraction of
 each computed beat, defaulting to 40%. Holding C does not extend the flash. Tempo survives page changes until reboot.
 
 Status snapshots the setup name on entry and refreshes other values every second.
-All three headings use the same font, size and weight, fitted against Tap Tempo
+All page headings use the same font, size and weight, fitted against MIDI Cable Test
 within 1.5 times the configured title height, with white text on black.
 Status labels are dark blue (#00008B) and values green (#008000). The six
 body rows share the remaining height equally and all use the same configured
@@ -548,3 +548,7 @@ maximum = 128
 ```
 
 Setup format 25 adds this delay to metadata. Recompile saved setups for format 25.
+
+The MIDI Cable Test page follows Firmware. C toggles testing; F stops it and
+continues cycling. Off leaves normal MIDI operation unchanged. See
+[the cable tester](../doc/midi-cable-test.md) for test behavior and port ownership.

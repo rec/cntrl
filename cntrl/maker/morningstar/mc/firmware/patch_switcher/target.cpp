@@ -63,7 +63,7 @@ enum class UiOperation : unsigned {
     menu_previous = 128, menu_next, menu_activate, menu_back, menu_open, performance_show,
     setup_previous, setup_next, setup_confirm, setup_back,
     songs_previous, songs_next, songs_confirm, songs_previous_section, songs_next_section, songs_back,
-    cable_toggle, cable_back, interface_toggle, interface_back,
+    interface_toggle = 146, interface_back,
     panic_begin, panic_end, panic_back, stock_confirm, stock_back, switches_return,
 };
 bool state_ui(UiOperation operation);
@@ -155,15 +155,10 @@ public:
     void restore_interface() override { bridge_.configure(runtime.interface); }
 #endif
 #if CNTRL_CABLE_TEST
-    // Still Time 28: measured line height 30, top-bearing adjustment 1.
-    cntrl::CableTest cable_test{*this, {5, 28, 4, 0, 0xffff, 0, 30, 1}};
-    void enter_cable_test() {
-        bridge_.configure(false);
-        cable_test.enter();
-    }
+    cntrl::CableTest cable_test{*this};
     void leave_cable_test() {
+        if (cable_test.enabled()) bridge_.configure(runtime.interface);
         cable_test.leave();
-        bridge_.configure(runtime.interface);
     }
 #endif
     void begin() {
@@ -176,7 +171,12 @@ public:
         const auto *connection = cntrl::midi::find_output(output);
         if (!connection) return false;
         switch (connection->transport) {
-        case cntrl::midi::OutputTransport::physical: return true;
+        case cntrl::midi::OutputTransport::physical:
+#if CNTRL_CABLE_TEST
+            return !cable_test.enabled();
+#else
+            return true;
+#endif
         case cntrl::midi::OutputTransport::usb_device: return usb_configuration != 0;
         case cntrl::midi::OutputTransport::usb_host: return bool(host_midi);
         }
@@ -205,7 +205,7 @@ public:
         if (midi_interface.open()) return;
 #endif
 #if CNTRL_CABLE_TEST
-        if (cable_test.open()) return;
+        if (cable_test.enabled()) return;
 #endif
         bridge_.configure(enabled);
     }
@@ -214,12 +214,6 @@ public:
     bool send(const char *output, const uint8_t *data, unsigned length) override {
         const auto *connection = cntrl::midi::find_output(output);
         if (!connection || length > 14 || !available(output)) return false;
-#if CNTRL_CABLE_TEST
-        if (cable_test.open()) {
-            if (connection->transport != cntrl::midi::OutputTransport::physical || length != 3) return false;
-            return submit(connection->route, {11, {data[0], data[1], data[2]}});
-        }
-#endif
         return bridge_.pedal(connection->route, data, length);
     }
     bool submit(unsigned route, const cntrl::midi::Packet &p) override {
@@ -267,18 +261,37 @@ public:
         if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
         if (pane == 2) {
             if (content.performance) {
-                if (!performance_visible_) right_pages_.revisit(documents.selected());
+                if (!performance_visible_) {
+                    right_pages_.revisit(documents.selected());
+#if CNTRL_CABLE_TEST
+                    if (right_pages_.page() == PerformancePages::Page::cable) cable_test.enter();
+#endif
+                }
                 performance_visible_ = true;
                 return;
-            } else performance_visible_ = false;
+            } else {
+#if CNTRL_CABLE_TEST
+                if (cable_test.enabled()) leave_cable_test();
+#endif
+                performance_visible_ = false;
+            }
         }
         renderer_.show(pane, content);
     }
-    void configure_right_pages(const cntrl::RightPageSettings &settings) override { right_pages_.configure(settings); }
+    void configure_right_pages(const cntrl::RightPageSettings &settings) override {
+#if CNTRL_CABLE_TEST
+        leave_cable_test();
+        if (right_pages_.page() == PerformancePages::Page::cable) cable_test.enter();
+#endif
+        right_pages_.configure(settings);
+    }
     void browse_right_page(bool reverse) override {
         if (!documents.document().valid()) return;
         if (right_pages_.page() == PerformancePages::Page::confirm_firmware
             && (held_controls & (1u << 2))) return;
+#if CNTRL_CABLE_TEST
+        if (right_pages_.page() == PerformancePages::Page::cable) leave_cable_test();
+#endif
         if (right_pages_.browse(reverse, documents.selected())) {
 #if CNTRL_ORIGINAL_FIRMWARE
             if (!start_original_firmware()) error("Firmware switch failed");
@@ -286,9 +299,21 @@ public:
             error("Stock firmware unavailable");
 #endif
         } else renderer_.transition(reverse, documents.document().transition_ms(), 2);
+#if CNTRL_CABLE_TEST
+        if (right_pages_.page() == PerformancePages::Page::cable) cable_test.enter();
+#endif
     }
     void tap_tempo(uint32_t now) override {
         if (!documents.document().valid()) return;
+#if CNTRL_CABLE_TEST
+        if (right_pages_.page() == PerformancePages::Page::cable) {
+            if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy())) return;
+            controller.cancel_gesture();
+            cable_test.toggle(now);
+            bridge_.configure(cable_test.enabled() ? false : runtime.interface);
+            return;
+        }
+#endif
         right_pages_.tap(now);
     }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
@@ -350,7 +375,7 @@ public:
                     if (!packet) break;
                     if (((packet >> 8) & 255) == 0xf8) right_pages_.clock((packet >> 4) & 15, micros());
 #if CNTRL_CABLE_TEST
-                    if (cable_test.open()) continue;
+                    if (cable_test.enabled()) continue;
 #endif
 #if CNTRL_PANIC
                     if (panic.open()) continue;
@@ -362,7 +387,7 @@ public:
                     int byte = serial.read(); if (byte < 0) break;
                     if (byte == 0xf8) right_pages_.clock(source + 15, micros());
 #if CNTRL_CABLE_TEST
-                    if (cable_test.open()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
+                    if (cable_test.enabled()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
 #endif
                     bool complete = bridge_.receive(source + 5, uint8_t(byte), now);
 #if CNTRL_MIDI_INTERFACE
@@ -382,7 +407,7 @@ public:
         else
 #endif
 #if CNTRL_CABLE_TEST
-        if (cable_test.open()) { if (bridge_.handoff(*this)) cable_test.tick(now); }
+        if (cable_test.enabled()) { if (bridge_.handoff(*this)) cable_test.tick(now); }
         else
 #endif
         bridge_.service(*this, now);
@@ -408,6 +433,9 @@ public:
         renderer_.draw(micros());
     }
     void display(uint32_t now, bool transfer_busy) {
+#if CNTRL_CABLE_TEST
+        transfer_busy = transfer_busy || cable_test.enabled();
+#endif
         right_pages_.time(now, micros());
         ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
@@ -415,11 +443,19 @@ public:
 #endif
         splash_visible_ = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
+#if CNTRL_CABLE_TEST
+        if (right_pages_.page() == PerformancePages::Page::cable && cable_test.take_redraw())
+            right_pages_.revisit(documents.selected());
+#endif
         if (!splash_visible_ && !feature_open() && documents.document().valid()
             && right_pages_.due(now)) {
             // Prepare the incoming card during the renderer's bounded transition preparation.
             PerformanceStatus status = right_pages_.page() == PerformancePages::Page::status ? performance_status() : PerformanceStatus{};
-            renderer_.show(2, right_pages_.view(now, micros(), status));
+            renderer_.show(2, right_pages_.view(now, micros(), status
+#if CNTRL_CABLE_TEST
+                , cable_test.status()
+#endif
+            ));
         }
         if (!splash_visible_) draw();
     }
@@ -681,9 +717,6 @@ enum ModuleIndex { setups_module, songs_module,
 #if CNTRL_ORIGINAL_FIRMWARE
     original_firmware_module,
 #endif
-#if CNTRL_CABLE_TEST
-    cable_test_module,
-#endif
 #if CNTRL_MIDI_INTERFACE
     midi_interface_module,
 #endif
@@ -697,9 +730,6 @@ const char *const module_names[] = {"Setups", "Songs and setlists",
 #endif
 #if CNTRL_ORIGINAL_FIRMWARE
     "Original firmware",
-#endif
-#if CNTRL_CABLE_TEST
-    "MIDI cable test",
 #endif
 #if CNTRL_MIDI_INTERFACE
     "MIDI interface",
@@ -932,13 +962,6 @@ bool state_ui(UiOperation operation) {
             original_firmware.enter(); module_controls_locked = true;
         }
 #endif
-#if CNTRL_CABLE_TEST
-        else if (selected == cable_test_module) {
-            if (!documents.busy() && board.output_idle()) {
-                board.enter_cable_test(); module_controls_locked = true;
-            } else module_menu.enter();
-        }
-#endif
 #if CNTRL_MIDI_INTERFACE
         else if (selected == midi_interface_module) {
             if (!documents.busy() && board.output_idle()) {
@@ -971,14 +994,6 @@ bool state_ui(UiOperation operation) {
         if (!songs_ui.open()) { documents.redraw(); module_controls_locked = true; }
         return true;
     }
-#if CNTRL_CABLE_TEST
-    case UiOperation::cable_toggle:
-        if (!board.cable_test.open()) return false;
-        board.cable_test.toggle(now); return true;
-    case UiOperation::cable_back:
-        if (!board.cable_test.open()) return false;
-        board.leave_cable_test(); module_menu.enter(); module_controls_locked = true; return true;
-#endif
 #if CNTRL_MIDI_INTERFACE
     case UiOperation::interface_toggle:
         if (!board.midi_interface.open()) return false;
@@ -1021,9 +1036,6 @@ bool feature_open() {
 #endif
 #if CNTRL_ORIGINAL_FIRMWARE
         || original_firmware.open()
-#endif
-#if CNTRL_CABLE_TEST
-        || board.cable_test.open()
 #endif
 #if CNTRL_MIDI_INTERFACE
         || board.midi_interface.open()
@@ -1178,13 +1190,6 @@ void poll_target() {
                         else if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_activate)});
                         else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_back)});
                     }
-#if CNTRL_CABLE_TEST
-                } else if (board.cable_test.open()) {
-                    if (events[i] & press_event) {
-                        if (i == 1) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::cable_toggle)});
-                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::cable_back)});
-                    }
-#endif
 #if CNTRL_MIDI_INTERFACE
                 } else if (board.midi_interface.open()) {
                     if (events[i] & press_event) {
@@ -1226,6 +1231,9 @@ void poll_target() {
                         else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_back)});
                     }
                 } else {
+#if CNTRL_CABLE_TEST
+                    if (board.cable_test.enabled() && i != 2 && i != 5) continue;
+#endif
                     if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
                     if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
                 }

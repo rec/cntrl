@@ -1,14 +1,12 @@
 # MIDI cable test
 
-The cable test is an optional active-tool module. Opening its page always starts
-with the switch Off and both result lines empty. B toggles On/Off. F stops the
-test and returns to the module menu. Leaving and reopening never restores On.
+The cable tester is the final right-hand page, after Firmware. Opening it starts
+Off with both result rows empty. C toggles On/Off. F stops any active test and
+continues the page cycle. Re-entering never restores On.
 
-The center screen has four fixed rows: title, DIN result, TRS result and the
-On/Off indicator centered above B. Empty results leave their rows blank without
-moving the other content. The outer screens are black, with a white Back label
-in the top-right corner of the right screen near F. Backlight brightness stays
-unchanged. The target supplies the title font; other text uses the normal font.
+The page uses the shared configurable background, white-on-black heading, and
+heavier text without wider spacing. DIN and TRS results occupy fixed middle rows;
+On/Off appears at the bottom above C. The other two displays remain in place.
 
 While On, the module sends a stream of breath-controller messages on both test
 outputs. [MIDI CC 2 is Breath Controller](https://midi.org/midi-1-0-control-change-messages).
@@ -35,20 +33,19 @@ This checks delivery of MIDI messages, not individual connector-pin continuity.
 
 ## Boundaries
 
-`firmware/include/cntrl/cable_test.h` owns the test state, message generation,
-return matching and page. It depends on the shared hardware interface and MIDI
-parser. The target owns port access, actual transmission, input delivery and
-module navigation. No module calls another module.
+`firmware/include/cntrl/cable_test.h` owns message generation, return matching
+and a display-independent status snapshot. It uses the shared MIDI sink and
+parser. The target owns port access and navigation; the shared right-page
+renderer supplies the layout.
 
-The current target waits for queued performance sends to drain before granting
-access. While the tester page is open, the normal USB MIDI bridge is suspended;
-USB input is discarded and physical input is delivered to the tester without
-forwarding. Test messages go directly to the bounded physical output buffers,
-so no test backlog survives switching Off or leaving. Bytes already handed to
-the UART finish transmitting. Leaving restores the setup's bridge setting.
-
-The initial selector lists installed tools explicitly. It does not introduce
-runtime discovery, dynamic plugins or a new setup configuration format.
+Browsing the page while Off leaves normal MIDI operation unchanged. Starting a
+test requires pending performance sends and setup transfers to finish. While On,
+the normal USB MIDI bridge is suspended, USB input is discarded, and physical
+input goes to the tester without forwarding. Performance buttons are inactive;
+C stops testing and F leaves the page. Test messages go directly to bounded
+physical output buffers, so no test backlog survives stopping. Bytes already
+handed to the UART finish transmitting. Stopping restores the setup's bridge
+setting. Leaving performance mode also stops the test.
 
 ## Verification
 

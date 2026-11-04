@@ -382,7 +382,7 @@ Packed glyph metrics in the target file are generated data. The document stores
 only selected font IDs/sizes, RGB565 colors, padding, vertical metrics and
 precomputed name offsets. Sparse font records reference their SD asset by CRC32;
 bitmaps and shaped runs are transferred separately. Classic, Arial, ComicSansMS
-and the fixed StillTime cable-test title remain in firmware. Changing show
+and the fixed StillTime tool titles remain in firmware. Changing show
 fonts uses SD uploads without reflashing.
 `fonts-in-flash.patch` places the library's immutable native font data in mapped
 program flash instead of DTCM. It does not change font contents or decoding.
@@ -520,18 +520,17 @@ under `build/pman-before-display.bin`; converted source and binary are under
 `build/pman-display-v11.toml` and `build/pman-display-v11.bin`.
 User confirmation of the visible appearance remains pending.
 
-## MIDI cable-test module
+## MIDI cable-test page
 
-C+F opens the module menu. A/B choose Setups or MIDI cable test, C opens the
-selection, and F returns to performance. On the test page, B toggles transmission
-and F stops the test and returns to the module menu. Every entry starts Off.
-The center display shows the Still Time title, DIN and TRS result rows, and
-On/Off centered above B. The left and right displays are black, except for a
-white Back label at the top-right near F. The backlight stays unchanged.
-DIN is Serial1 and the dedicated 3.5 mm TRS port is Serial2; Omniports are not used.
+MIDI Cable Test is the final right-hand page after Firmware. C starts or stops
+transmission; F stops any active test and continues the cycle. Every entry starts
+Off. The shared page style supplies the background, heading and text weight.
+DIN and TRS results occupy fixed middle rows, with On/Off at the bottom above C.
+The other two displays remain in place. DIN is Serial1 and the dedicated 3.5 mm
+TRS port is Serial2; Omniports are not used.
 
-The module is included by default. Build `patch-switcher` with `CABLE_TEST=0` to
-exclude it and its menu entry. See the generic
+The tester is included by default. Build `patch-switcher` with `CABLE_TEST=0` to
+exclude it and its page. See the generic
 [cable-test behavior](../../../../../doc/midi-cable-test.md). Native tests and
 included/excluded builds pass. The combined image was flashed through the running
 upload helper on 2026-10-27, SHA-256
@@ -789,10 +788,10 @@ and uploading the setup.
 ## Four-button patch-manager navigation (setup format 23)
 
 Physical buttons A/B/D/E keep their primary actions: A sends the target, B browses
-patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status and Firmware, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
+patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status, Firmware and MIDI Cable Test, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
 are removed. Other modules keep their existing button assignments.
 
-The three right-hand pages share one heading font and size, with white
+The right-hand pages share one heading font and size, with white
 text on a black heading band. All titles fit against the same reference text.
 Status labels are dark blue and values are green. Their text has one additional
 vertical ink pixel

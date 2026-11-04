@@ -1,6 +1,7 @@
 #pragma once
 #include <cntrl/hardware.h>
 #include <cntrl/tempo.h>
+#include <cntrl/cable_test.h>
 #include "show_graphics.h"
 #include <algorithm>
 #include <cstdio>
@@ -15,7 +16,7 @@ struct PerformanceStatus {
 
 class PerformancePages {
 public:
-    enum class Page { tap, status, firmware, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, confirm_firmware };
     void configure(const cntrl::RightPageSettings &settings) {
         settings_ = settings;
         using R = cntrl::RightPageSettings;
@@ -25,7 +26,12 @@ public:
     }
     bool browse(bool reverse, const char *setup) {
         if (page_ == Page::confirm_firmware) return !reverse;
-        page_ = Page((unsigned(page_) + (reverse ? 2 : 1)) % 3);
+#if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
+        constexpr unsigned count = 3;
+#else
+        constexpr unsigned count = 4;
+#endif
+        page_ = Page((unsigned(page_) + (reverse ? count - 1 : 1)) % count);
         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
         dirty_ = true;
         return false;
@@ -53,7 +59,7 @@ public:
         if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && tap_.flash(now, settings_[R::flash_fraction]) != flashing_;
     }
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status) {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}) {
         using R = cntrl::RightPageSettings;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
@@ -67,12 +73,18 @@ public:
             return pane;
         }
         const unsigned heading_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
-        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : "Firmware";
-        line(pane, 0, heading, pad, heading_height, 0, true, "Tap Tempo");
+        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : "Firmware";
+        line(pane, 0, heading, pad, heading_height, 0, true, "MIDI Cable Test");
         pane.heading_band = true;
         auto &header = pane.lines[0];
         header.graphics.foreground = 0xffff; header.graphics.background = 0;
         header.graphics.top = header.y; header.y = 0;
+        if (page_ == Page::cable) {
+            line(pane, 1, cable.routes[0], 38, 22, settings_[R::status_font], true);
+            line(pane, 2, cable.routes[1], 65, 22, settings_[R::status_font], true);
+            line(pane, 3, cable.enabled ? "On" : "Off", 100, 24, settings_[R::status_font], true);
+            return pane;
+        }
         if (page_ == Page::firmware) {
             const unsigned label_height = std::min(title * 2, (128 - 2 * pad) / 4);
             line(pane, 1, "Use stock", 128 - pad - label_height * 2, label_height, 0, true);
