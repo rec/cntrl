@@ -459,7 +459,7 @@ separate qualification.
 
 ### Auxiliary patch-manager pages (format 26)
 
-The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware and MIDI Cable Test using
+The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test, Panic and MIDI Interface using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary right page in place.
@@ -552,3 +552,8 @@ Setup format 25 adds this delay to metadata. Recompile saved setups for format 2
 The MIDI Cable Test page follows Firmware. C toggles testing; F stops it and
 continues cycling. Off leaves normal MIDI operation unchanged. See
 [the cable tester](../doc/midi-cable-test.md) for test behavior and port ownership.
+
+Panic follows the cable tester. Press C for its controller reset pass, or hold C
+to repeat controller and Note Off sweeps. F cancels and advances. MIDI Interface
+is last: C temporarily toggles the setup's bridge setting; leaving restores it.
+Both pages use the shared display style and leave routing unchanged on entry.

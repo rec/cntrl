@@ -63,8 +63,7 @@ enum class UiOperation : unsigned {
     menu_previous = 128, menu_next, menu_activate, menu_back, menu_open, performance_show,
     setup_previous, setup_next, setup_confirm, setup_back,
     songs_previous, songs_next, songs_confirm, songs_previous_section, songs_next_section, songs_back,
-    interface_toggle = 146, interface_back,
-    panic_begin, panic_end, panic_back, stock_confirm, stock_back, switches_return,
+    stock_confirm = 151, stock_back, switches_return,
 };
 bool state_ui(UiOperation operation);
 bool patch_stock(uint8_t pair, cntrl::PatchExecutor &invocation);
@@ -141,16 +140,19 @@ public:
 #endif
 #if CNTRL_PANIC
     cntrl::Panic panic{*this, *this};
-    void enter_panic() { bridge_.configure(false); panic.enter(runtime.brightness); }
-    void leave_panic() { panic.leave(); bridge_.configure(runtime.interface); }
+    bool panic_owns_midi = false;
+    void leave_panic() {
+        panic.leave();
+        if (panic_owns_midi) bridge_.configure(runtime.interface);
+        panic_owns_midi = false;
+    }
     bool transmit(const char *output, const uint8_t *bytes) override {
         const auto *connection = cntrl::midi::find_output(output);
         return connection && submit(connection->route, {uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}});
     }
 #endif
 #if CNTRL_MIDI_INTERFACE
-    // Still Time 20: measured line height 21, no top adjustment.
-    cntrl::MidiInterface midi_interface{*this, *this, {5, 20, 4, 0, 0xffff, 0, 21, 0}};
+    cntrl::MidiInterface midi_interface{*this};
     void configure_interface(bool enabled) override { bridge_.configure(enabled); }
     void restore_interface() override { bridge_.configure(runtime.interface); }
 #endif
@@ -199,10 +201,10 @@ public:
         if (switches.open()) return;
 #endif
 #if CNTRL_PANIC
-        if (panic.open()) return;
+        if (panic_owns_midi) return;
 #endif
 #if CNTRL_MIDI_INTERFACE
-        if (midi_interface.open()) return;
+        if (midi_interface.open()) midi_interface.enter(usb_configuration != 0, enabled);
 #endif
 #if CNTRL_CABLE_TEST
         if (cable_test.enabled()) return;
@@ -263,35 +265,49 @@ public:
             if (content.performance) {
                 if (!performance_visible_) {
                     right_pages_.revisit(documents.selected());
-#if CNTRL_CABLE_TEST
-                    if (right_pages_.page() == PerformancePages::Page::cable) cable_test.enter();
-#endif
+                    enter_right_page();
                 }
                 performance_visible_ = true;
                 return;
             } else {
-#if CNTRL_CABLE_TEST
-                if (cable_test.enabled()) leave_cable_test();
-#endif
+                if (performance_visible_) leave_right_page();
                 performance_visible_ = false;
             }
         }
         renderer_.show(pane, content);
     }
-    void configure_right_pages(const cntrl::RightPageSettings &settings) override {
+    void enter_right_page() {
 #if CNTRL_CABLE_TEST
-        leave_cable_test();
         if (right_pages_.page() == PerformancePages::Page::cable) cable_test.enter();
 #endif
+#if CNTRL_PANIC
+        if (right_pages_.page() == PerformancePages::Page::panic) panic.enter(runtime.brightness);
+#endif
+#if CNTRL_MIDI_INTERFACE
+        if (right_pages_.page() == PerformancePages::Page::interface) midi_interface.enter(usb_configuration != 0, runtime.interface);
+#endif
+    }
+    void leave_right_page() {
+#if CNTRL_CABLE_TEST
+        if (right_pages_.page() == PerformancePages::Page::cable) leave_cable_test();
+#endif
+#if CNTRL_PANIC
+        if (right_pages_.page() == PerformancePages::Page::panic) leave_panic();
+#endif
+#if CNTRL_MIDI_INTERFACE
+        if (right_pages_.page() == PerformancePages::Page::interface) midi_interface.leave();
+#endif
+    }
+    void configure_right_pages(const cntrl::RightPageSettings &settings) override {
+        leave_right_page();
         right_pages_.configure(settings);
+        enter_right_page();
     }
     void browse_right_page(bool reverse) override {
         if (!documents.document().valid()) return;
         if (right_pages_.page() == PerformancePages::Page::confirm_firmware
             && (held_controls & (1u << 2))) return;
-#if CNTRL_CABLE_TEST
-        if (right_pages_.page() == PerformancePages::Page::cable) leave_cable_test();
-#endif
+        leave_right_page();
         if (right_pages_.browse(reverse, documents.selected())) {
 #if CNTRL_ORIGINAL_FIRMWARE
             if (!start_original_firmware()) error("Firmware switch failed");
@@ -299,9 +315,7 @@ public:
             error("Stock firmware unavailable");
 #endif
         } else renderer_.transition(reverse, documents.document().transition_ms(), 2);
-#if CNTRL_CABLE_TEST
-        if (right_pages_.page() == PerformancePages::Page::cable) cable_test.enter();
-#endif
+        enter_right_page();
     }
     void tap_tempo(uint32_t now) override {
         if (!documents.document().valid()) return;
@@ -311,6 +325,23 @@ public:
             controller.cancel_gesture();
             cable_test.toggle(now);
             bridge_.configure(cable_test.enabled() ? false : runtime.interface);
+            return;
+        }
+#endif
+#if CNTRL_PANIC
+        if (right_pages_.page() == PerformancePages::Page::panic) {
+            if (!panic_owns_midi && (patch_work_pending() || !output_idle() || documents.busy())) return;
+            controller.cancel_gesture();
+            if (!panic_owns_midi) bridge_.configure(false);
+            panic_owns_midi = true;
+            panic.button(true);
+            return;
+        }
+#endif
+#if CNTRL_MIDI_INTERFACE
+        if (right_pages_.page() == PerformancePages::Page::interface) {
+            if (patch_work_pending() || !output_idle() || documents.busy()) return;
+            midi_interface.toggle();
             return;
         }
 #endif
@@ -378,7 +409,7 @@ public:
                     if (cable_test.enabled()) continue;
 #endif
 #if CNTRL_PANIC
-                    if (panic.open()) continue;
+                    if (panic_owns_midi) continue;
 #endif
                     // Omniport USB cables remain enumerated but are unused.
                     if (cntrl::midi::physical_output((packet >> 4) & 15)) bridge_.usb(packet, now);
@@ -403,7 +434,10 @@ public:
         if (host_midi.read() && host_midi.getType() == 0xf8)
             right_pages_.clock(18 + host_midi.getCable(), micros());
 #if CNTRL_PANIC
-        if (panic.open()) { if (bridge_.handoff(*this)) panic.tick(); }
+        if (panic_owns_midi) {
+            if (bridge_.handoff(*this)) panic.tick();
+            if (!panic.active()) { bridge_.configure(runtime.interface); panic_owns_midi = false; }
+        }
         else
 #endif
 #if CNTRL_CABLE_TEST
@@ -436,6 +470,9 @@ public:
 #if CNTRL_CABLE_TEST
         transfer_busy = transfer_busy || cable_test.enabled();
 #endif
+#if CNTRL_PANIC
+        transfer_busy = transfer_busy || panic_owns_midi;
+#endif
         right_pages_.time(now, micros());
         ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
@@ -447,6 +484,14 @@ public:
         if (right_pages_.page() == PerformancePages::Page::cable && cable_test.take_redraw())
             right_pages_.revisit(documents.selected());
 #endif
+#if CNTRL_PANIC
+        if (right_pages_.page() == PerformancePages::Page::panic && panic.take_redraw())
+            right_pages_.revisit(documents.selected());
+#endif
+#if CNTRL_MIDI_INTERFACE
+        if (right_pages_.page() == PerformancePages::Page::interface && midi_interface.take_redraw())
+            right_pages_.revisit(documents.selected());
+#endif
         if (!splash_visible_ && !feature_open() && documents.document().valid()
             && right_pages_.due(now)) {
             // Prepare the incoming card during the renderer's bounded transition preparation.
@@ -454,6 +499,16 @@ public:
             renderer_.show(2, right_pages_.view(now, micros(), status
 #if CNTRL_CABLE_TEST
                 , cable_test.status()
+#else
+                , {}
+#endif
+#if CNTRL_PANIC
+                , panic.active()
+#else
+                , false
+#endif
+#if CNTRL_MIDI_INTERFACE
+                , midi_interface.status()
 #endif
             ));
         }
@@ -711,28 +766,16 @@ enum ModuleIndex { setups_module, songs_module,
 #if CNTRL_SWITCHES
     switches_module,
 #endif
-#if CNTRL_PANIC
-    panic_module,
-#endif
 #if CNTRL_ORIGINAL_FIRMWARE
     original_firmware_module,
-#endif
-#if CNTRL_MIDI_INTERFACE
-    midi_interface_module,
 #endif
 };
 const char *const module_names[] = {"Setups", "Songs and setlists",
 #if CNTRL_SWITCHES
     "Switches",
 #endif
-#if CNTRL_PANIC
-    "Panic",
-#endif
 #if CNTRL_ORIGINAL_FIRMWARE
     "Original firmware",
-#endif
-#if CNTRL_MIDI_INTERFACE
-    "MIDI interface",
 #endif
 };
 #if CNTRL_ORIGINAL_FIRMWARE
@@ -946,13 +989,6 @@ bool state_ui(UiOperation operation) {
             } else module_menu.enter();
         }
 #endif
-#if CNTRL_PANIC
-        else if (selected == panic_module) {
-            if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) {
-                board.enter_panic(); module_controls_locked = true;
-            } else module_menu.enter();
-        }
-#endif
         else if (selected == setups_module) {
             if (documents.busy()) module_menu.enter();
             else { setup_ui.enter(); module_controls_locked = true; }
@@ -960,13 +996,6 @@ bool state_ui(UiOperation operation) {
 #if CNTRL_ORIGINAL_FIRMWARE
         else if (selected == original_firmware_module) {
             original_firmware.enter(); module_controls_locked = true;
-        }
-#endif
-#if CNTRL_MIDI_INTERFACE
-        else if (selected == midi_interface_module) {
-            if (!documents.busy() && board.output_idle()) {
-                board.midi_interface.enter(usb_configuration != 0); module_controls_locked = true;
-            } else module_menu.enter();
         }
 #endif
         return true;
@@ -994,23 +1023,6 @@ bool state_ui(UiOperation operation) {
         if (!songs_ui.open()) { documents.redraw(); module_controls_locked = true; }
         return true;
     }
-#if CNTRL_MIDI_INTERFACE
-    case UiOperation::interface_toggle:
-        if (!board.midi_interface.open()) return false;
-        board.midi_interface.toggle(); return true;
-    case UiOperation::interface_back:
-        if (!board.midi_interface.open()) return false;
-        board.midi_interface.leave(); module_menu.enter(); module_controls_locked = true; return true;
-#endif
-#if CNTRL_PANIC
-    case UiOperation::panic_begin:
-    case UiOperation::panic_end:
-        if (!board.panic.open()) return false;
-        board.panic.button(operation == UiOperation::panic_begin); return true;
-    case UiOperation::panic_back:
-        if (!board.panic.open()) return false;
-        board.leave_panic(); module_menu.enter(); module_controls_locked = true; return true;
-#endif
 #if CNTRL_SWITCHES
     case UiOperation::switches_return:
         board.enter_switches(documents.document(), 0); module_controls_locked = true; return true;
@@ -1031,14 +1043,8 @@ bool feature_open() {
 #if CNTRL_SWITCHES
         || board.switches.open()
 #endif
-#if CNTRL_PANIC
-        || board.panic.open()
-#endif
 #if CNTRL_ORIGINAL_FIRMWARE
         || original_firmware.open()
-#endif
-#if CNTRL_MIDI_INTERFACE
-        || board.midi_interface.open()
 #endif
         ;
 }
@@ -1159,6 +1165,9 @@ void poll_target() {
             if (buttons[i].pressed) pressed |= 1u << i;
         }
         held_controls = pressed;
+#if CNTRL_PANIC
+        if ((events[2] & release_event) && board.panic.open()) board.panic.button(false);
+#endif
         bool consumed = splash_session.controls(pressed, now, !feature_open() && pressed == (1u << 0));
 #ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) {
@@ -1190,13 +1199,6 @@ void poll_target() {
                         else if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_activate)});
                         else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_back)});
                     }
-#if CNTRL_MIDI_INTERFACE
-                } else if (board.midi_interface.open()) {
-                    if (events[i] & press_event) {
-                        if (i == 1) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::interface_toggle)});
-                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::interface_back)});
-                    }
-#endif
 #if CNTRL_ORIGINAL_FIRMWARE
                 } else if (original_firmware.open()) {
                     if (events[i] & press_event) {
@@ -1214,15 +1216,6 @@ void poll_target() {
                         UiOperation::songs_confirm, UiOperation::songs_previous_section,
                         UiOperation::songs_next_section, UiOperation::songs_back};
                     if (events[i] & press_event) controller.executor().invoke(cntrl::StatePatch{unsigned(operations[i])});
-#if CNTRL_PANIC
-                } else if (board.panic.open()) {
-                    if (i == 1) {
-                        if (events[i] & press_event) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::panic_begin)});
-                        if (events[i] & release_event) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::panic_end)});
-                    } else if (i == 5 && (events[i] & press_event)) {
-                        controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::panic_back)});
-                    }
-#endif
                 } else if (setup_ui.open()) {
                     if (events[i] & press_event) {
                         if (i == 0) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_previous)});
@@ -1233,6 +1226,9 @@ void poll_target() {
                 } else {
 #if CNTRL_CABLE_TEST
                     if (board.cable_test.enabled() && i != 2 && i != 5) continue;
+#endif
+#if CNTRL_PANIC
+                    if (board.panic_owns_midi && i != 2 && i != 5) continue;
 #endif
                     if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
                     if (events[i] & release_event) controller.button(mirrored_button(i), false, now);

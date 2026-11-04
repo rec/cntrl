@@ -1,6 +1,6 @@
 # MIDI cable test
 
-The cable tester is the final right-hand page, after Firmware. Opening it starts
+The cable tester is the right-hand page after Firmware and before Panic. Opening it starts
 Off with both result rows empty. C toggles On/Off. F stops any active test and
 continues the page cycle. Re-entering never restores On.
 

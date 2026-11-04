@@ -1,7 +1,6 @@
 #pragma once
 #include "hardware.h"
 #include "midi_outputs.h"
-#include <cstdio>
 
 namespace cntrl {
 struct PanicOutputs {
@@ -13,18 +12,19 @@ struct PanicOutputs {
 class Panic {
 public:
     Panic(Hardware &hardware, PanicOutputs &outputs) : hardware_(hardware), outputs_(outputs) {}
+    bool take_redraw() { bool result = dirty_; dirty_ = false; return result; }
     bool open() const { return open_; }
     bool active() const { return phase_ != Phase::idle; }
     void enter(uint8_t brightness) {
         open_ = true; held_ = false; phase_ = Phase::idle;
-        brightness_ = brightness; render();
+        brightness_ = brightness; dirty_ = true;
     }
     void leave() {
         button(false); phase_ = Phase::idle; open_ = false;
     }
     void button(bool down) {
         if (!open_ || held_ == down) return;
-        held_ = down;
+        held_ = down; dirty_ = true;
         hardware_.set_brightness(down ? 255 : brightness_, down);
         if (down && !active()) {
             first_ = true; phase_ = Phase::controllers; reset_progress();
@@ -59,7 +59,7 @@ public:
             break;
         }
         for (const auto &progress : progress_) if (!progress.done) return;
-        first_ = false;
+        dirty_ = true; first_ = false;
         if (!held_) phase_ = Phase::idle;
         else phase_ = phase_ == Phase::controllers ? Phase::notes : Phase::controllers;
         reset_progress();
@@ -72,26 +72,10 @@ private:
     PanicOutputs &outputs_;
     Progress progress_[port_count];
     Phase phase_ = Phase::idle;
+    bool dirty_ = true;
     bool open_ = false, held_ = false, first_ = false;
     uint8_t brightness_ = 192;
     unsigned cursor_ = 0;
     void reset_progress() { for (auto &progress : progress_) progress = Progress(); cursor_ = 0; }
-    void render() {
-        Pane views[3];
-        for (auto &view : views) {
-            view.graphics.foreground = 0xffff; view.graphics.background = 0;
-            for (auto &line : view.lines) {
-                line.graphics = view.graphics;
-                line.graphics.size = line.graphics.line_height = 16;
-            }
-        }
-        auto &label = views[1].lines[0];
-        std::snprintf(label.text, 64, "Panic"); label.centered = true;
-        label.y = hardware_.display_height() - 24;
-        auto &back = views[2].lines[0];
-        std::snprintf(back.text, 64, "Back");
-        back.x = hardware_.display_width() - 52; back.y = 4;
-        for (unsigned i = 0; i < 3; ++i) hardware_.show(i, views[i]);
-    }
 };
 }

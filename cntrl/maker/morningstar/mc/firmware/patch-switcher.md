@@ -522,7 +522,7 @@ User confirmation of the visible appearance remains pending.
 
 ## MIDI cable-test page
 
-MIDI Cable Test is the final right-hand page after Firmware. C starts or stops
+MIDI Cable Test follows Firmware, with Panic and MIDI Interface after it. C starts or stops
 transmission; F stops any active test and continues the cycle. Every entry starts
 Off. The shared page style supplies the background, heading and text weight.
 DIN and TRS results occupy fixed middle rows, with On/Off at the bottom above C.
@@ -551,23 +551,26 @@ After the user's A+F entry, status remained `CNTRL READY 14 34597 488beaf6`
 and pman remained selected. Visual verification of the revised layout remains
 pending.
 
-## Standalone MIDI interface module
+## Panic and MIDI Interface pages
 
-The module menu includes MIDI interface when `MIDI_INTERFACE=1` (the build
-default). It starts Off on every visit. B toggles the existing DIN/TRS USB MIDI
-bridge; F returns to the menu and restores the setup's previous bridge setting.
-The setup is not edited or saved by the module.
+Panic and MIDI Interface follow the cable tester in the right-hand cycle. Both
+use the shared yellow background, reverse-color heading and heavier text while
+leaving the other two displays in place. Browsing them does not change routing.
 
-The center screen shows host USB configuration state, DIN/TRS input and output
-activity indicators, and On/Off above B. The outer screens are black with Back
-near F; brightness is unchanged. Each indicator remains lit for 100 ms after a
-complete input packet or successful physical output submission. USB configured
-status does not indicate that a DAW has opened a port.
+On Panic, C starts the controller reset pass and holding C continues Note Off
+sweeps. Releasing C restores brightness; F cancels sending and advances. Normal
+bridging resumes when sending completes or the page is left. Build with
+`PANIC=0` to omit this page.
 
-Build with `MIDI_INTERFACE=0` to omit the module and its menu entry. Cable tester
-inclusion remains controlled separately by `CABLE_TEST`. The module has no
-runtime dependency on the tester. The generic implementation and verification
-contract is in [the module guide](../../../../../doc/midi-interface.md).
+MIDI Interface opens with the setup's current bridge setting. C temporarily
+toggles it; F advances and restores the setting. The setup is not edited. The
+page shows host USB configuration, four DIN/TRS activity indicators and On/Off.
+Indicators remain lit for 100 ms after complete input packets or successful
+physical output submissions. USB configuration does not mean a DAW opened a port.
+Build with `MIDI_INTERFACE=0` to omit the page. See
+[the interface guide](../../../../../doc/midi-interface.md) and
+[the Panic guide](../../../../../doc/panic.md).
+
 This section records the original build-only verification. The module was later
 included in combined firmware uploads; dedicated physical forwarding and UI
 qualification remains pending.
@@ -788,7 +791,7 @@ and uploading the setup.
 ## Four-button patch-manager navigation (setup format 23)
 
 Physical buttons A/B/D/E keep their primary actions: A sends the target, B browses
-patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status, Firmware and MIDI Cable Test, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
+patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status, Firmware, MIDI Cable Test, Panic and MIDI Interface, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
 are removed. Other modules keep their existing button assignments.
 
 The right-hand pages share one heading font and size, with white

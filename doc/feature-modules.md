@@ -1,7 +1,7 @@
 # Optional feature modules
 
-Status: the static module menu includes setup management, songs/setlists, Panic,
-the MIDI cable tester and the MIDI interface. Firmware-specific modules are
+Status: setup management and songs/setlists use the static module menu. Panic,
+the MIDI cable tester and MIDI Interface use the right-hand page cycle. Firmware-specific modules are
 registered by their target. The broader organization below remains guidance for
 subsequent features.
 
@@ -87,7 +87,8 @@ scheduling rather than blocking waits.
 ## Establishing the interfaces
 
 The cable tester, MIDI interface and Panic use target adapters for physical
-services while owning their own behavior and pages. A future MIDI monitor should
+services while owning their own behavior; the right-page renderer supplies their
+shared display style. A future MIDI monitor should
 reuse those services. Establish additional shared interfaces only when another
 module actually needs them.
 

@@ -1,15 +1,14 @@
-# USB MIDI interface module
+# USB MIDI interface page
 
-Open MIDI interface from the module menu. Each visit starts Off. B toggles
-forwarding; F returns to the module menu and restores the setup's active bridge
-preference. Toggling the tool does not save or modify that preference. The module
-uses the existing bridge, parsers, queues and output scheduling.
+MIDI Interface follows Panic at the end of the right-hand page cycle. It opens
+with the setup's current bridge state and does not change routing on entry.
+C temporarily toggles forwarding; F continues cycling and restores the setup
+setting if it was changed. The setup itself is not edited or saved.
 
-The center display shows the title, host connection, four activity indicators
-and On/Off above B. The outer displays are black except for the right-hand Back
-label near F. Backlighting stays unchanged. While Off, activity is cleared and
-the host-status value is hidden. While On, Host connected means the USB device
-has been configured by the computer. It does not mean a DAW opened a MIDI port.
+The page uses the shared background, heading and heavier text. It shows host
+connection, four activity indicators and On/Off above C. The other two displays
+stay in place, and brightness is unchanged. Host connected means the USB device
+has been configured by the computer, not that a DAW opened a MIDI port.
 
 DIN in and TRS in indicate complete received MIDI packets, including real-time
 and streamed SysEx, independently of onward queue acceptance. DIN out and TRS out
@@ -23,9 +22,10 @@ re-enumeration. It generates no test messages and adds no physical MIDI thru or
 USB-host routing. With no computer connected it remains responsive, reports No
 host, and does not retain physical input for later replay. Off clears bridge
 queues and parser state, preserving accepted pedal work and required SysEx
-termination. The target coordinates exclusive tool ownership.
+termination. Normal performance controls remain available on this page.
 
-`firmware/include/cntrl/midi_interface.h` owns the page, switch and activity state.
+`firmware/include/cntrl/midi_interface.h` owns the switch, activity state and display-independent status snapshot.
+The shared right-page renderer supplies the layout.
 `MidiInterfaceControl` supplies temporary bridge control and restores the setup
 preference on exit. The target supplies host and activity events and optional
 build inclusion. There is no dependency on the cable-test module or second

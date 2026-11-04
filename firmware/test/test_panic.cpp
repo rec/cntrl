@@ -5,7 +5,6 @@
 #include <vector>
 
 struct Hardware : cntrl::Hardware, cntrl::PanicOutputs {
-    cntrl::Pane panes[3];
     std::vector<std::array<uint8_t, 3>> messages[4];
     std::vector<std::pair<uint8_t, bool>> brightness;
     bool connected[4] = {true, true, true, true}, blocked[4] = {};
@@ -26,7 +25,7 @@ struct Hardware : cntrl::Hardware, cntrl::PanicOutputs {
     bool supports_font(unsigned, unsigned) const override { return true; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
-    void show(unsigned i, const cntrl::Pane &view) override { panes[i] = view; }
+    void show(unsigned, const cntrl::Pane &) override { assert(false); }
     void set_brightness(uint8_t value, bool temporary = false) override { brightness.emplace_back(value, temporary); }
     void set_splash(bool, uint32_t) override { assert(false); }
     void error(const char *) override { assert(false); }
@@ -47,17 +46,11 @@ void check_controllers(const Hardware &hw, unsigned offset = 0) {
                 assert((messages[offset + channel * 3 + controller] == std::array<uint8_t, 3>{uint8_t(0xb0 + channel), controllers[controller], 0}));
 }
 
-void test_tap_and_page() {
+void test_tap_without_display_side_effects() {
     Hardware hw; cntrl::Panic panic(hw, hw);
     panic.enter(77); assert(panic.open() && !panic.active());
     assert(hw.brightness.empty());
-    for (const auto &line : hw.panes[0].lines) assert(!line.text[0]);
-    assert(!std::strcmp(hw.panes[1].lines[0].text, "Panic"));
-    assert(hw.panes[1].lines[0].centered && hw.panes[1].lines[0].y == 104);
-    for (unsigned i = 1; i < cntrl::max_lines; ++i) assert(!hw.panes[1].lines[i].text[0]);
-    assert(!std::strcmp(hw.panes[2].lines[0].text, "Back"));
-    assert(hw.panes[2].lines[0].y == 4 && hw.panes[2].lines[0].x == 108);
-    for (const auto &pane : hw.panes) assert(pane.graphics.background == 0);
+    assert(panic.take_redraw() && !panic.take_redraw());
     panic.button(true); panic.button(true);
     assert(hw.brightness.size() == 1 && hw.brightness[0].first == 255 && hw.brightness[0].second);
     panic.button(false);
@@ -103,4 +96,4 @@ void test_backpressure_and_disconnection() {
     panic.enter(50); assert(!panic.active());
 }
 
-int main() { test_tap_and_page(); test_hold_full_loop_and_release(); test_backpressure_and_disconnection(); }
+int main() { test_tap_without_display_side_effects(); test_hold_full_loop_and_release(); test_backpressure_and_disconnection(); }
