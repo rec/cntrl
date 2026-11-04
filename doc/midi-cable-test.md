@@ -5,8 +5,10 @@ Off with both result rows empty. C toggles On/Off. F stops any active test and
 continues the page cycle. Re-entering never restores On.
 
 The page uses the shared configurable background, white-on-black heading, and
-heavier text without wider spacing. DIN and TRS results occupy fixed middle rows;
-On/Off appears at the bottom above C. The other two displays remain in place.
+heavier text without wider spacing. DIN and TRS results occupy fixed middle rows.
+The bottom-right toggle uses the same icon and position as MIDI Interface and
+shows whether testing is enabled. C operates the toggle. The other two displays
+remain in place.
 
 While On, the module sends a stream of breath-controller messages on both test
 outputs. [MIDI CC 2 is Breath Controller](https://midi.org/midi-1-0-control-change-messages).

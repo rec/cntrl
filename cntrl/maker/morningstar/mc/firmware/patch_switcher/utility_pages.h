@@ -94,7 +94,7 @@ public:
         if (page_ == Page::cable) {
             line(pane, 1, cable.routes[0], 38, 22, settings_[R::status_font], true);
             line(pane, 2, cable.routes[1], 65, 22, settings_[R::status_font], true);
-            line(pane, 3, cable.enabled ? "On" : "Off", 100, 24, settings_[R::status_font], true);
+            pane.toggle = {128, 110, true, cable.enabled, false};
             return pane;
         }
         if (page_ == Page::panic) {

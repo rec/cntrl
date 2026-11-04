@@ -780,13 +780,15 @@ static void test_utility_pages() {
     assert(!std::strcmp(view.lines[0].text, "MIDI Cable Test"));
     assert(view.heading_band && view.graphics.background == 0xff90);
     assert(view.lines[0].graphics.font == heading.font && view.lines[0].graphics.size == heading.size);
-    assert(!std::strcmp(view.lines[3].text, "Off"));
+    assert(view.toggle.visible && !view.toggle.enabled && !view.toggle.disabled);
+    assert(!view.lines[3].text[0]);
     assert(!view.lines[1].text[0] && !view.lines[2].text[0]);
     cables.enabled = true;
     std::strcpy(cables.routes[0], "DIN to TRS");
     std::strcpy(cables.routes[1], "TRS to DIN");
     view = pages.view(4001, 4001000, status, cables);
-    assert(!std::strcmp(view.lines[3].text, "On"));
+    assert(view.toggle.visible && view.toggle.enabled && !view.toggle.disabled);
+    assert(!view.lines[3].text[0]);
     assert(!std::strcmp(view.lines[1].text, "DIN to TRS"));
     assert(!std::strcmp(view.lines[2].text, "TRS to DIN"));
     pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::panic);
