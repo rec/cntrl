@@ -9,3 +9,4 @@ dist/
 .tools/
 build/
 *.hex
+/.cache/reccy-docs/

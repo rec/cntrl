@@ -34,5 +34,5 @@ implementation of MIDI forwarding.
 Native tests cover lifecycle, setting restoration, host state, independent
 activity, expiry and timer rollover, stale-state clearing and disconnected-input
 parsing. Target-specific qualification, deployment and remaining physical checks
-are recorded in the [hardware investigation](../cntrl/maker/morningstar/mc/usb-midi-interface-plan.md)
-and [target guide](../cntrl/maker/morningstar/mc/firmware/patch-switcher.md).
+are recorded in the [hardware investigation](https://github.com/rec/cntrl/blob/main/cntrl/maker/morningstar/mc/usb-midi-interface-plan.md)
+and [target guide](https://github.com/rec/cntrl/blob/main/cntrl/maker/morningstar/mc/firmware/patch-switcher.md).

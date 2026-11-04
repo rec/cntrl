@@ -152,6 +152,6 @@ Pages contain ordered field names, for example
 its own data item to the page. Missing and empty values are omitted; zero and
 false remain visible. Built-ins and shared parameters use one unique namespace.
 Unknown or duplicate field names are errors. Pages are bounded by record capacity
-and target height. See the [application guide](../firmware/README.md) for the
+and target height. See the [application guide](https://github.com/rec/cntrl/blob/main/firmware/README.md) for the
 complete field catalogue and compiled format, and [Patch authoring](patches.md)
 for styles generated automatically for cycles.

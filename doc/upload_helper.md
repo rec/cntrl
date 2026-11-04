@@ -11,6 +11,6 @@ Investigate write failures before retrying, and verify application status and
 saved setup data after USB returns. Firmware flashing and setup transfers are
 separate operations; the helper does not grant serial-transfer permissions.
 
-The [target-specific helper guide](../cntrl/maker/morningstar/mc/firmware/upload-helper.md)
+The [target-specific helper guide](https://github.com/rec/cntrl/blob/main/cntrl/maker/morningstar/mc/firmware/upload-helper.md)
 contains the implementation link, exact commands, device identity, image path,
 validation rules, startup and recovery instructions.
