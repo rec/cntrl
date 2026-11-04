@@ -132,7 +132,7 @@ public:
     static constexpr unsigned owners = 6;
     Delivery delivery(unsigned owner) const { return owner < owned_.size() ? owned_[owner].delivery : Delivery::idle; }
     bool owned_send(unsigned owner, unsigned route, const uint8_t *bytes, unsigned size) {
-        if (owner >= owned_.size() || route >= destinations || !batch_valid(bytes, size)
+        if (owner >= owned_.size() || route >= destinations || !usb_enabled(route) || !batch_valid(bytes, size)
             || owned_[owner].delivery == Delivery::pending) return false;
         auto &b = owned_[owner];
         std::memcpy(b.bytes, bytes, size); b.size = size; b.offset = 0;
@@ -142,7 +142,7 @@ public:
     // The caller pins the source until delivery or cancellation. This keeps long
     // SysEx bounded to one USB packet per service tick without copying its data.
     bool owned_stream(unsigned owner, unsigned route, const uint8_t *bytes, unsigned size) {
-        if (owner >= owned_.size() || route >= destinations || !stream_valid(bytes, size)
+        if (owner >= owned_.size() || route >= destinations || !usb_enabled(route) || !stream_valid(bytes, size)
             || owned_[owner].delivery == Delivery::pending) return false;
         auto &b = owned_[owner];
         b.source = bytes; b.size = size; b.offset = 0; b.route = route;
@@ -163,6 +163,16 @@ public:
         for (const auto &r : routes_) if (r.pedal_count) return false;
         return true;
     }
+    bool usb_enabled(unsigned route) const {
+        return route == 8 ? usb_host_ : route == 6 || route == 7 ? usb_device_ : true;
+    }
+    void configure_usb(bool device, bool host, uint32_t now) {
+        usb_device_ = device; usb_host_ = host;
+        connected(device_present_, now);
+        host_connected(host_present_);
+        for (unsigned route = 6; route < destinations; ++route)
+            if (!usb_enabled(route)) disconnect_output(route);
+    }
     void configure(bool enabled) {
         // Also reset when switching between two enabled setups.
         enabled_ = enabled;
@@ -170,6 +180,7 @@ public:
         for (unsigned i = 0; i < 8; ++i) reset_route(i);
     }
     void connected(bool connected, uint32_t now) {
+        device_present_ = connected; connected = connected && usb_device_;
         if (!connected && forwarding_) { forwarding_ = false; waiting_ = false; }
         // Retry interface forwarding without delaying explicit pedal USB output.
         bool started = false;
@@ -181,27 +192,17 @@ public:
         connected_ = connected;
         for (unsigned i = 0; i < 8; ++i) reset_route(i);
         if (!connected) {
-            cancel_route(6); cancel_route(7);
-            for (unsigned i = 6; i < 8; ++i) {
-                auto &r = routes_[i];
-                r.counts.dropped += r.pedal_count;
-                r.pedal_count = r.pedal_head = r.pedal_offset = 0;
-                r.wire_sysex = r.terminate = false;
-            }
+            disconnect_output(6); disconnect_output(7);
         }
     }
     void host_connected(bool connected) {
+        host_present_ = connected; connected = connected && usb_host_;
         if (host_connected_ == connected) return;
         host_connected_ = connected;
-        if (!connected) {
-            cancel_route(8);
-            auto &r = routes_[8];
-            r.counts.dropped += r.pedal_count;
-            r.pedal_count = r.pedal_head = r.pedal_offset = 0;
-        }
+        if (!connected) disconnect_output(8);
     }
     bool pedal(unsigned route, const uint8_t *bytes, unsigned size) {
-        if (route >= destinations || !batch_valid(bytes, size) || (route == 6 && !connected_)) return false;
+        if (route >= destinations || !usb_enabled(route) || !batch_valid(bytes, size) || (route == 6 && !connected_)) return false;
         auto &r = routes_[route];
         if (r.pedal_count == pedal_capacity) return false;
         auto &b = r.pedal[(r.pedal_head + r.pedal_count) % pedal_capacity];
@@ -210,7 +211,7 @@ public:
     }
     // Report physical packet completion even without an available USB receiver.
     bool receive(unsigned route, uint8_t b, uint32_t now) {
-        if (route >= 8 || !enabled_ || (!forwarding_ && route < 6)) return false;
+        if (route >= 8 || !usb_device_ || !enabled_ || (!forwarding_ && route < 6)) return false;
         auto &r = routes_[route];
         bool was_sysex = r.parser.sysex();
         // Close an interrupted physical SysEx before forwarding a new status.
@@ -309,6 +310,13 @@ private:
         }
         return false;
     }
+    void disconnect_output(unsigned route) {
+        cancel_route(route);
+        auto &r = routes_[route];
+        r.counts.dropped += r.pedal_count;
+        r.pedal_count = r.pedal_head = r.pedal_offset = 0;
+        r.wire_sysex = r.terminate = false;
+    }
     void cancel_route(unsigned route) {
         for (auto &b : owned_) if (b.route == route && b.delivery == Delivery::pending) b.delivery = Delivery::cancelled;
     }
@@ -347,6 +355,7 @@ private:
         uint32_t last_sysex = 0;
         bool wire_sysex = false, terminate = false;
     } routes_[destinations];
+    bool usb_device_ = true, usb_host_ = true, device_present_ = false, host_present_ = false;
     bool enabled_ = false, connected_ = false, host_connected_ = false;
     bool forwarding_ = false, waiting_ = false;
     uint32_t checked_ = 0;

@@ -27,7 +27,7 @@ def graph_offset(data: bytes) -> int:
     if (
         magic != b'CSW1'
         or version != DOCUMENT_VERSION
-        or flags >> 11
+        or flags >> 13
         or length != len(data)
         or crc32(data[28:]) != crc
     ):
@@ -75,6 +75,8 @@ def export(data: bytes) -> str:
         'splash': bool(flags & 256),
         'animation_color_cycle': bool(flags & 1024),
         'is_midi_interface': bool(flags & 512),
+        'usb_device_midi': bool(flags & 2048),
+        'usb_host_midi': bool(flags & 4096),
         'screensaver_timeout': timeout // 1000,
     }
     if duration := struct.unpack_from('<H', data, meta + 6)[0]:

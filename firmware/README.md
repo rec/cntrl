@@ -363,6 +363,14 @@ values do not determine vertical spacing.
 
 ## Binary and transfer protocol
 
+Format 28 adds `usb_device_midi` and `usb_host_midi`, both defaulting to true.
+They independently enable MIDI communication on the USB Device and USB Host
+ports, with automatic connection and reconnection. USB serial commands remain
+available when MIDI is disabled. `is_midi_interface` separately controls
+computer-to-DIN/TRS forwarding and still defaults to false. See
+[USB MIDI configuration](../doc/midi-interface.md). Recompile older setups for
+format 28.
+
 Version 14 stores resolved pages and line styles with foreground and background
 colors. Each display record ends with four reserved zero bytes. Authored
 formatting metadata, including icon references, is retained for editable exports. The

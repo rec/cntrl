@@ -7,7 +7,7 @@
 namespace cntrl {
 constexpr unsigned utility_page_settings_offset = 16;
 constexpr unsigned metadata_header_size = utility_page_settings_offset + 2 * UtilityPageSettings::count;
-constexpr unsigned document_version = 27;
+constexpr unsigned document_version = 28;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -61,7 +61,7 @@ public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
-            || u32(bytes + 8) != length || bytes[19] > 7 || u32(bytes + 24) > 2147483000u
+            || u32(bytes + 8) != length || bytes[19] > 31 || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 68 + np * 82;
@@ -229,6 +229,8 @@ public:
     }
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
+    bool usb_device_midi() const { return data_[19] & 8; }
+    bool usb_host_midi() const { return data_[19] & 16; }
     bool is_midi_interface() const { return data_[19] & 2; }
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
     std::optional<unsigned> transition_ms() const {

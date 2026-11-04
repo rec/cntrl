@@ -153,7 +153,7 @@ def test_compiler_matches_shared_cpp_fixture(
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (1500, len(result), 2, 2, 4)
     assert compiler.HEADER.unpack_from(result)[1] == compiler.DOCUMENT_VERSION
-    assert compiler.HEADER.unpack_from(result)[7] == 192 | 256
+    assert compiler.HEADER.unpack_from(result)[7] == 192 | 256 | 2048 | 4096
 
 
 @pytest.mark.parametrize('duration', [None, 1.0, 2.0, 0.75, 65.535])
@@ -252,6 +252,28 @@ def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) 
     assert [p['instrument'] for p in table['patches']] == ['pman', 'vl70', '']
 
 
+@pytest.mark.parametrize(
+    'device, host', [(True, True), (False, True), (True, False), (False, False)]
+)
+def test_usb_ports_round_trip_independently(
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    device: bool,
+    host: bool,
+) -> None:
+    defaults = models.Setup.model_validate(show)
+    assert defaults.usb_device_midi and defaults.usb_host_midi
+    show.update(usb_device_midi=device, usb_host_midi=host)
+    data = compiler.compile_show(show, definitions, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['usb_device_midi'] is device
+    assert exported['usb_host_midi'] is host
+    assert bool(data[19] & 8) is device
+    assert bool(data[19] & 16) is host
+    assert compiler.compile_show(exported, {}, [], target) == data
+
+
 @pytest.mark.parametrize('enabled', [None, False, True])
 def test_usb_midi_switch_round_trips(
     show: dict[str, object],
@@ -269,12 +291,19 @@ def test_usb_midi_switch_round_trips(
     assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
 
 
+@pytest.mark.parametrize(
+    'field', ['is_midi_interface', 'usb_device_midi', 'usb_host_midi']
+)
 @pytest.mark.parametrize('value', [1, 'true', None])
 def test_usb_midi_switch_rejects_non_booleans(
-    show: dict[str, object], definitions: object, target: models.Target, value: object
+    show: dict[str, object],
+    definitions: object,
+    target: models.Target,
+    value: object,
+    field: str,
 ) -> None:
-    show['is_midi_interface'] = value
-    with pytest.raises(compiler.CompilationError, match='is_midi_interface'):
+    show[field] = value
+    with pytest.raises(compiler.CompilationError, match=field):
         compiler.compile_show(show, definitions, [], target)
 
 
@@ -310,7 +339,7 @@ def test_brightness_is_encoded_in_show(
 ) -> None:
     show['brightness'] = brightness
     result = compiler.compile_show(show, definitions, [], target)
-    assert compiler.HEADER.unpack_from(result)[7] == brightness | 256
+    assert compiler.HEADER.unpack_from(result)[7] & 255 == brightness
 
 
 @pytest.mark.parametrize('splash', [None, True, False])
@@ -324,7 +353,7 @@ def test_splash_defaults_to_enabled_unless_explicitly_disabled(
     if splash is not None:
         show['splash'] = splash
     result = compiler.compile_show(show, definitions, [], target)
-    assert result[18:20] == bytes([192, int(splash is not False)])
+    assert bool(result[19] & 1) is (splash is not False)
 
 
 @pytest.mark.parametrize('seconds', [0, 3, 2147483])

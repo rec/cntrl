@@ -467,6 +467,7 @@ private:
         settings = old.navigation_hold_ms() != current.navigation_hold_ms()
             || old.navigation_repeat_ms() != current.navigation_repeat_ms() || old.brightness() != current.brightness()
             || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
+            || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
             || old.animation_color_cycle() != current.animation_color_cycle()
             || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();
         auto names_end = [](const Document &d) {

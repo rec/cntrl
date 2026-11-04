@@ -169,8 +169,8 @@ public:
 #else
             return true;
 #endif
-        case cntrl::midi::OutputTransport::usb_device: return usb_configuration != 0;
-        case cntrl::midi::OutputTransport::usb_host: return bool(host_midi);
+        case cntrl::midi::OutputTransport::usb_device: return bridge_.usb_enabled(connection->route) && usb_configuration != 0;
+        case cntrl::midi::OutputTransport::usb_host: return bridge_.usb_enabled(connection->route) && bool(host_midi);
         }
         return false;
     }
@@ -185,6 +185,9 @@ public:
         font_assets::cache.finish(commit);
     }
     bool output_idle() const override { return bridge_.idle(); }
+    void set_usb_midi(bool device, bool host) override {
+        bridge_.configure_usb(device, host, millis());
+    }
     void set_midi_interface(bool enabled) override {
         runtime.interface = enabled;
 #if CNTRL_SWITCHES
@@ -206,6 +209,7 @@ public:
         return bridge_.pedal(connection->route, data, length);
     }
     bool submit(unsigned route, const cntrl::midi::Packet &p) override {
+        if (!bridge_.usb_enabled(route)) return false;
         if (route >= 6 && route < 8) return usb_midi_try_write_packed(p.packed(route - 6));
         if (route == 8) return host_midi.try_write_packed(p.packed());
         unsigned n = p.size();
@@ -366,6 +370,7 @@ public:
                 if (source == 0) {
                     uint32_t packet = usb_midi_read_message();
                     if (!packet) break;
+                    if (!bridge_.usb_enabled(6)) continue;
                     if (((packet >> 8) & 255) == 0xf8) utility_pages_.clock((packet >> 4) & 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.enabled()) continue;
@@ -388,7 +393,7 @@ public:
         }
         source_cursor_ = (source_cursor_ + 1) % 3;
         // Existing USB-host input is deliberately not bridged.
-        if (host_midi.read() && host_midi.getType() == 0xf8)
+        if (host_midi.read() && bridge_.usb_enabled(8) && host_midi.getType() == 0xf8)
             utility_pages_.clock(18 + host_midi.getCable(), micros());
 #if CNTRL_PANIC
         if (panic_owns_midi) {

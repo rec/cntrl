@@ -252,7 +252,48 @@ void test_interface_retry_clock_wrap() {
     assert((out.bytes[6] == std::vector<uint8_t>{0xf8}));
 }
 
+void test_usb_ports_enable_independently() {
+    for (bool device : {false, true}) for (bool host : {false, true}) {
+        cntrl::midi::Bridge b; Output out;
+        b.connected(true, 0); b.host_connected(true); b.configure(true);
+        b.configure_usb(device, host, 0);
+        const uint8_t note[] = {0x90, 60, 100};
+        assert(b.owned_send(0, 6, note, sizeof(note)) == device);
+        assert(b.owned_send(1, 8, note, sizeof(note)) == host);
+        assert(b.pedal(7, note, sizeof(note)) == device);
+        assert(b.pedal(8, note, sizeof(note)) == host);
+        b.usb(0x643c9009, 0);
+        b.service(out, 0);
+        assert(out.bytes[0].empty() == !device);
+        assert(out.bytes[6].empty() == !device);
+        assert(out.bytes[8].empty() == !host);
+        b.configure_usb(false, false, 1);
+        b.connected(true, 1); b.host_connected(true);
+        assert(!b.usb_enabled(6) && !b.usb_enabled(8));
+        for (auto &bytes : out.bytes) bytes.clear();
+        b.service(out, 1);
+        assert(out.bytes[6].empty() && out.bytes[7].empty() && out.bytes[8].empty());
+        b.configure_usb(true, true, 2);
+        b.service(out, 2);
+        assert(out.bytes[6].empty() && out.bytes[7].empty() && out.bytes[8].empty());
+        assert(b.owned_send(0, 6, note, sizeof(note)));
+        assert(b.owned_send(1, 8, note, sizeof(note)));
+        b.service(out, 2);
+        assert(!out.bytes[6].empty() && !out.bytes[8].empty());
+    }
+    // Disable also cancels accepted work while the cable is already absent.
+    cntrl::midi::Bridge b; Output out;
+    const uint8_t note[] = {0x90, 60, 100};
+    assert(b.owned_send(0, 8, note, sizeof(note)));
+    b.configure_usb(true, false, 0);
+    assert(b.delivery(0) == cntrl::midi::Bridge::Delivery::cancelled);
+    assert(b.pedal(0, note, sizeof(note)));
+    b.service(out, 0);
+    assert(!out.bytes[0].empty() && out.bytes[8].empty());
+}
+
 int main() {
+    test_usb_ports_enable_independently();
     test_automatic_interface_retries_without_replaying_waiting_traffic();
     test_interface_retry_clock_wrap();
     test_owned_sysex_streams_and_abandonment_terminates();

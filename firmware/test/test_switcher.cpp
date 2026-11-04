@@ -26,6 +26,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     bool splash = false;
     bool animation_color_cycle = false;
     bool is_midi_interface = false;
+    bool usb_device_midi = false, usb_host_midi = false;
     bool send(const char *route, const uint8_t *data, unsigned n) override {
         if (!connected) return false;
         sent.emplace_back(data, data + n); routes.emplace_back(route); return true;
@@ -42,6 +43,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
     void set_brightness(uint8_t value, bool) override { brightness = value; }
+    void set_usb_midi(bool device, bool host) override { usb_device_midi = device; usb_host_midi = host; }
     void set_midi_interface(bool value) override { is_midi_interface = value; }
     void set_splash(bool enabled, uint32_t) override { splash = enabled; }
     void set_animation_color_cycle(bool enabled) override { animation_color_cycle = enabled; }
@@ -68,6 +70,18 @@ void sync_program(std::vector<uint8_t> &bytes, const cntrl::Document &document, 
     std::memcpy(node + 4, cache, 2);
     std::memcpy(node + 6, cache + 4, 5);
     std::memcpy(node + 11, bytes.data() + (document.bank(index) - document.data()), 4);
+}
+
+void test_setup_applies_usb_ports(const std::vector<uint8_t> &source) {
+    Fake hw; TestController app(hw);
+    for (bool device : {true, false}) for (bool host : {true, false}) {
+        auto bytes = source;
+        bytes[19] = (bytes[19] & 7) | (device ? 8 : 0) | (host ? 16 : 0);
+        cntrl::Document doc;
+        assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+        app.activate(doc);
+        assert(hw.usb_device_midi == device && hw.usb_host_midi == host);
+    }
 }
 
 void test_empty_patch_windows_are_black(const std::vector<uint8_t> &source) {
@@ -563,6 +577,7 @@ int main(int argc, char **argv) {
     test_catalogue_jobs_are_bounded_and_preserve_order(bytes);
     cntrl::Document doc;
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+    test_setup_applies_usb_ports(bytes);
     test_empty_patch_windows_are_black(bytes);
     {
         std::ifstream display_file(argv[2]);
@@ -703,7 +718,7 @@ int main(int argc, char **argv) {
         app.activate(settings);
         assert(hw.brightness == value && hw.sent.empty());
     }
-    corrupt = bytes; corrupt[19] = 8;
+    corrupt = bytes; corrupt[19] = 32;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     corrupt = bytes; cntrl::put32(corrupt.data() + 24, 0x80000000u);
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));

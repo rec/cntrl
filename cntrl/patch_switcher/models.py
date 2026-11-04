@@ -459,6 +459,8 @@ class Setup(BaseModel, frozen=True):
     splash: Annotated[bool, Field(strict=True)] = True
     animation_color_cycle: Annotated[bool, Field(strict=True)] = False
     is_midi_interface: Annotated[bool, Field(strict=True)] = False
+    usb_device_midi: Annotated[bool, Field(strict=True)] = True
+    usb_host_midi: Annotated[bool, Field(strict=True)] = True
     screensaver_timeout: Annotated[
         int,
         Field(
