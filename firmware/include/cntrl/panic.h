@@ -11,28 +11,35 @@ struct PanicOutputs {
 
 class Panic {
 public:
+    enum class Status { ready, sending, incomplete };
+    Status status() const { return active() ? Status::sending : incomplete_ ? Status::incomplete : Status::ready; }
     Panic(Hardware &hardware, PanicOutputs &outputs) : hardware_(hardware), outputs_(outputs) {}
     bool take_redraw() { bool result = dirty_; dirty_ = false; return result; }
     bool open() const { return open_; }
     bool active() const { return phase_ != Phase::idle; }
     void enter(uint8_t brightness) {
-        open_ = true; held_ = false; phase_ = Phase::idle;
+        open_ = true; held_ = incomplete_ = false; phase_ = Phase::idle;
         brightness_ = brightness; dirty_ = true;
     }
     void leave() {
-        button(false); phase_ = Phase::idle; open_ = false;
+        button(false, 0); phase_ = Phase::idle; open_ = false;
     }
-    void button(bool down) {
+    void button(bool down, uint32_t now) {
         if (!open_ || held_ == down) return;
         held_ = down; dirty_ = true;
+        if (!down) released_ = now;
         hardware_.set_brightness(down ? 255 : brightness_, down);
         if (down && !active()) {
-            first_ = true; phase_ = Phase::controllers; reset_progress();
+            incomplete_ = false; first_ = true; phase_ = Phase::controllers; reset_progress();
         } else if (!down && !first_) phase_ = Phase::idle;
     }
     // At most one three-byte message per poll. A blocked output cannot starve others.
-    void tick() {
+    void tick(uint32_t now, bool outputs_ready) {
         if (!active()) return;
+        if (!held_ && uint32_t(now - released_) >= 1000) {
+            phase_ = Phase::idle; incomplete_ = dirty_ = true; return;
+        }
+        if (!outputs_ready) return;
         for (unsigned attempt = 0; attempt < port_count; ++attempt) {
             unsigned port = cursor_;
             cursor_ = (cursor_ + 1) % port_count;
@@ -72,7 +79,8 @@ private:
     PanicOutputs &outputs_;
     Progress progress_[port_count];
     Phase phase_ = Phase::idle;
-    bool dirty_ = true;
+    bool dirty_ = true, incomplete_ = false;
+    uint32_t released_ = 0;
     bool open_ = false, held_ = false, first_ = false;
     uint8_t brightness_ = 192;
     unsigned cursor_ = 0;

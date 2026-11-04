@@ -657,6 +657,11 @@ static void sparse_text() {
 static void test_performance_pages() {
     cntrl::RightPageSettings settings{{1000, 1000, 24, 1, 4, 2, 100, 3000, 400,
         40, 5, 12, 40, 2, 8, 0, 0x4000, 0xf800, 0, 3, 1, 0xff90}};
+    PerformancePages custom;
+    settings.words[cntrl::RightPageSettings::title_font] = 1;
+    custom.configure(settings);
+    assert(custom.view(0, 0, {}).lines[0].graphics.font == 1);
+    settings.words[cntrl::RightPageSettings::title_font] = 0;
     PerformancePages pages; pages.configure(settings);
     PerformanceStatus status; status.cycles = 10; status.patches = 59;
     status.ram_used[0] = 49 * 1024; status.ram_free[0] = 463 * 1024;
@@ -672,7 +677,7 @@ static void test_performance_pages() {
     assert(view.graphics.background == 0xff90 && view.circle.annulus == 5);
     DisplayRenderer renderer;
     renderer.show(2, view); drain(renderer);
-    assert(screens[2][10][0] == 0 && screens[2][25][0] == 0xff90);
+    assert(screens[2][10][0] == 0 && screens[2][23][0] == 0 && screens[2][24][0] == 0xff90);
     cntrl::Pane weight;
     weight.graphics.pad = 2;
     weight.lines[0].graphics = weight.graphics;
@@ -699,14 +704,14 @@ static void test_performance_pages() {
     assert(!std::strcmp(view.lines[3].text, "Clock: ---.-"));
     assert(!std::strcmp(view.lines[2].text, "Cycles: 10  Patches: 59"));
     assert(!std::strcmp(view.lines[5].text, "RAM: 49/512k 25/512k"));
-    assert(!std::strcmp(view.lines[6].text, "Disk: 1.1/29G"));
-    assert(!std::strcmp(view.lines[7].text, "Uptime: 0:00:01"));
-    assert(view.lines[0].graphics.line_height == settings[cntrl::RightPageSettings::title_height] * 3 / 2);
+    assert(!std::strcmp(view.lines[6].text, "Disk:1.1/29G Up:0:00:01"));
+    assert(!view.lines[7].text[0]);
+    assert(view.lines[0].graphics.line_height == settings[cntrl::RightPageSettings::title_height] * 3 / 2 + 4);
     assert(view.lines[0].graphics.font == heading.font && view.lines[0].graphics.size == heading.size);
-    for (unsigned i = 1; i <= 7; ++i) {
+    for (unsigned i = 1; i <= 6; ++i) {
         assert(view.lines[i].graphics.font == view.lines[1].graphics.font);
         assert(view.lines[i].graphics.size == view.lines[1].graphics.size);
-        assert(view.lines[i].graphics.line_height >= 17 && view.lines[i].graphics.line_height <= 18);
+        assert(view.lines[i].graphics.line_height >= 20 && view.lines[i].graphics.line_height <= 21);
     }
     assert(view.lines[1].y < 30);
     assert(view.lines[2].y > view.lines[1].y && view.lines[5].y > view.lines[3].y);
@@ -718,8 +723,8 @@ static void test_performance_pages() {
     assert(screens[2][counts.y][counts.x + 8 * advance] == 0x0400);
     assert(screens[2][counts.y][counts.x + 12 * advance] == 0x0011);
     assert(screens[2][counts.y][counts.x + 21 * advance] == 0x0400);
-    const auto &uptime = view.lines[7];
-    assert(screens[2][uptime.y][uptime.x + 9 * advance] == 0x0400);
+    const auto &uptime = view.lines[6];
+    assert(screens[2][uptime.y][uptime.x + 16 * advance] == 0x0400);
     assert(!pages.due(2199) && pages.due(2200));
     for (unsigned i = 0; i <= 24; ++i) pages.clock(16, 2000000 + i * 500000 / 24);
     view = pages.view(2500, 2500000, status);
@@ -730,14 +735,14 @@ static void test_performance_pages() {
     assert(!view.lines[3].stippled && !std::strcmp(view.lines[1].text, "Setup: frozen"));
     pages.time(1205000, 1205000000);
     view = pages.view(1205000, 1205000000, status);
-    assert(!std::strcmp(view.lines[7].text, "Uptime: 0:20:05"));
+    assert(!std::strcmp(view.lines[6].text, "Disk:1.1/29G Up:0:20:05"));
     status.disk_valid = false;
     view = pages.view(1205000, 1205000000, status);
-    assert(!std::strcmp(view.lines[6].text, "Disk: --/--G"));
+    assert(!std::strcmp(view.lines[6].text, "Disk:--/--G Up:0:20:05"));
     pages.time(0xfffffff0u, 0);
     pages.time(0x000003e8u, 1000000);
     view = pages.view(1000, 1000000, status);
-    assert(!std::strcmp(view.lines[7].text, "Uptime: 1193:02:48"));
+    assert(!std::strcmp(view.lines[6].text, "Disk:--/--G Up:1193:02:48"));
     pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::firmware);
     view = pages.view(3600, 3600000, status);
     assert(!std::strcmp(view.lines[0].text, "Firmware"));
@@ -778,11 +783,13 @@ static void test_performance_pages() {
     view = pages.view(4002, 4002000, status);
     assert(!std::strcmp(view.lines[0].text, "Panic") && !std::strcmp(view.lines[3].text, "Ready"));
     assert(view.heading_band && view.graphics.background == 0xff90 && view.lines[0].graphics.size == heading.size);
-    view = pages.view(4003, 4003000, status, {}, true);
+    view = pages.view(4003, 4003000, status, {}, cntrl::Panic::Status::incomplete);
+    assert(!std::strcmp(view.lines[3].text, "Incomplete"));
+    view = pages.view(4003, 4003000, status, {}, cntrl::Panic::Status::sending);
     assert(!std::strcmp(view.lines[3].text, "Sending"));
     pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::interface);
     cntrl::MidiInterface::Status interface{true, true, {true, false, false, true}};
-    view = pages.view(4004, 4004000, status, {}, false, interface);
+    view = pages.view(4004, 4004000, status, {}, cntrl::Panic::Status::ready, interface);
     assert(!std::strcmp(view.lines[0].text, "MIDI Interface"));
     assert(view.heading_band && view.graphics.background == 0xff90 && view.lines[0].graphics.size == heading.size);
     assert(!std::strcmp(view.lines[1].text, "Host connected") && !std::strcmp(view.lines[6].text, "On"));

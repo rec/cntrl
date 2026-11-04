@@ -7,7 +7,7 @@
 namespace cntrl {
 constexpr unsigned right_page_settings_offset = 16;
 constexpr unsigned metadata_header_size = right_page_settings_offset + 2 * RightPageSettings::count;
-constexpr unsigned document_version = 26;
+constexpr unsigned document_version = 27;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -81,9 +81,9 @@ public:
             || right[R::minimum_taps] > right[R::tap_intervals] + 1 || !right[R::minimum_interval]
             || right[R::minimum_interval] > right[R::reset_gap] || !right[R::flash_fraction] || right[R::flash_fraction] > 1000
             || !right[R::diameter] || !right[R::annulus] || right[R::title_height] < 8 || right[R::tempo_height] < 8
-            || unsigned(right[R::title_height]) * 3 / 2 + right[R::tempo_height] + right[R::diameter] + 2u * right[R::annulus] + 2u * right[R::padding] > hardware.display_height()
+            || unsigned(right[R::title_height]) * 3 / 2 + 4 + right[R::tempo_height] + right[R::diameter] + 2u * right[R::annulus] + 2u * right[R::padding] > hardware.display_height()
             || unsigned(right[R::diameter]) + 2u * right[R::annulus] + 2u * right[R::padding] > hardware.display_width()
-            || (right[R::tempo_font] != 8 && right[R::tempo_font] != 9) || right[R::status_font] > 2
+            || (right[R::tempo_font] != 8 && right[R::tempo_font] != 9) || right[R::status_font] > 2 || right[R::title_font] > 2
             || !right[R::digits] || right[R::digits] > 4 || right[R::decimals] > 2) return false;
         unsigned names = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;

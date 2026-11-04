@@ -337,7 +337,7 @@ exceeds the available height, extra gaps are zero and clipping still applies.
 The renderer computes these positions from the complete pane; compiled row-y
 values do not determine vertical spacing.
 
-## Binary and transfer protocol, version 14
+## Binary and transfer protocol
 
 Version 14 stores resolved pages and line styles with foreground and background
 colors. Each display record ends with four reserved zero bytes. Authored
@@ -444,7 +444,7 @@ than replaying an operation that might already have completed. Control-C and a
 fresh command are required after that loss. This is USB reconnect recovery, not
 power-loss transaction recovery. Host and firmware must both use this framing.
 
-Inside the session, `CNTRL STATUS\n` replies `CNTRL READY 26 SIZE CRC\n`.
+Inside the session, `CNTRL STATUS\n` replies `CNTRL READY 27 SIZE CRC\n`.
 Errors use `CNTRL ERROR REASON\n`. Names in commands are hex-encoded ASCII,
 never paths. Requests are:
 
@@ -533,6 +533,7 @@ flasher_diameter = 40
 annulus = 5
 background_color = '0xFFF085'
 title_height = 12
+title_font = 'classic' # also Arial or ComicSansMS
 tempo_height = 40
 padding = 2
 tempo_font = 'CourierPrime' # or CourierPrimeBold
@@ -544,13 +545,13 @@ digits = 3
 decimals = 1
 ```
 
-The 22 metadata words are, in order: refresh milliseconds, clock-timeout
+The 23 metadata words are, in order: refresh milliseconds, clock-timeout
 milliseconds, clocks per quarter, clock averaging beats, tap averaging intervals,
 minimum taps, minimum tap interval milliseconds, tap reset-gap milliseconds,
 flash fraction in thousandths, center diameter, annulus width, title height, tempo height,
 padding, tempo font ID, status font ID, off RGB565, on RGB565, ring RGB565,
-integer digits, decimal digits, and page-background RGB565. Recompile saved
-setups for format 26, which replaces flash duration with a cycle fraction.
+integer digits, decimal digits, page-background RGB565, and title font ID.
+Recompile saved setups for format 27, which adds the configurable title font.
 `flash_fraction` accepts 0.001..1 in steps of 0.001, including percentage strings.
 
 The Firmware page has the shared centered title and a two-line “Use stock firmware”
@@ -584,3 +585,10 @@ Panic follows the cable tester. Press C for its controller reset pass, or hold C
 to repeat controller and Note Off sweeps. F cancels and advances. MIDI Interface
 is last: C temporarily toggles the setup's bridge setting; leaving restores it.
 Both pages use the shared display style and leave routing unchanged on entry.
+
+Right-page titles use `title_font`, defaulting to `classic`; `Arial` and
+`ComicSansMS` are also supported. The title band adds two pixels above and below
+the previous layout, without enlarging the text. Status shows `Up` beside Disk.
+Setup format 27 appends the title-font word to the right-page metadata.
+Panic stops an unfinished first sweep one second after C is released and shows
+`Incomplete`; a completed sweep shows `Ready`.

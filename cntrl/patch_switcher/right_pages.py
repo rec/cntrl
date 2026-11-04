@@ -9,6 +9,7 @@ def pack(show: models.Show, target: models.Target) -> list[int]:
     r = show.right_pages
     if (
         r.title_height * 3 // 2
+        + 4
         + r.tempo_height
         + r.flasher_diameter
         + 2 * r.annulus
@@ -41,11 +42,12 @@ def pack(show: models.Show, target: models.Target) -> list[int]:
         r.digits,
         r.decimals,
         graphics.rgb565(graphics.color(r.background_color)),
+        ['classic', 'Arial', 'ComicSansMS'].index(r.title_font),
     ]
 
 
 def unpack(data: bytes, offset: int) -> dict[str, object]:
-    w = struct.unpack_from('<22H', data, offset)
+    w = struct.unpack_from('<23H', data, offset)
     result: dict[str, object] = {}
     names = [
         'refresh_interval',
@@ -67,6 +69,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         result[n] = w[i] / 1000 if i in (0, 1, 6, 7, 8) else w[i]
     result['tempo_font'] = 'CourierPrime' if w[14] == 8 else 'CourierPrimeBold'
     result['status_font'] = ['classic', 'Arial', 'ComicSansMS'][w[15]]
+    result['title_font'] = ['classic', 'Arial', 'ComicSansMS'][w[22]]
     for i, n in (
         (16, 'off_color'),
         (17, 'on_color'),

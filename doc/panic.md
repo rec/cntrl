@@ -14,7 +14,9 @@ A press starts this sequence on every available MIDI output, on channels 1..16:
 2. All Sound Off: CC 120, value 0.
 3. Reset All Controllers: CC 121, value 0.
 
-A tap completes this first controller sweep even after C is released. Once all
+A tap continues this first controller sweep after C is released, for up to one
+second. If an output remains blocked, it stops and shows `Incomplete`; a completed
+sweep returns to `Ready`. Once all
 outputs have completed it, a continued hold starts Note Off messages with
 velocity 0, covering every note on every channel and output. Notes described to
 the user as 1..128 are encoded as MIDI values 0..127.

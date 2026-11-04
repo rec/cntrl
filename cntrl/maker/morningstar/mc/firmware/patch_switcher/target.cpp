@@ -336,7 +336,7 @@ public:
             controller.cancel_gesture();
             if (!panic_owns_midi) bridge_.configure(false);
             panic_owns_midi = true;
-            panic.button(true);
+            panic.button(true, now);
             return;
         }
 #endif
@@ -433,7 +433,7 @@ public:
             right_pages_.clock(18 + host_midi.getCable(), micros());
 #if CNTRL_PANIC
         if (panic_owns_midi) {
-            if (bridge_.handoff(*this)) panic.tick();
+            panic.tick(now, bridge_.handoff(*this));
             if (!panic.active()) { bridge_.configure(runtime.interface); panic_owns_midi = false; }
         }
         else
@@ -501,9 +501,9 @@ public:
                 , {}
 #endif
 #if CNTRL_PANIC
-                , panic.active()
+                , panic.status()
 #else
-                , false
+                , cntrl::Panic::Status::ready
 #endif
 #if CNTRL_MIDI_INTERFACE
                 , midi_interface.status()
@@ -1160,7 +1160,7 @@ void poll_target() {
         }
         held_controls = pressed;
 #if CNTRL_PANIC
-        if ((events[2] & release_event) && board.panic.open()) board.panic.button(false);
+        if ((events[2] & release_event) && board.panic.open()) board.panic.button(false, now);
 #endif
         bool consumed = splash_session.controls(pressed, now, !feature_open() && pressed == (1u << 0));
 #ifdef CNTRL_DIAGNOSTICS

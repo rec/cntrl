@@ -803,6 +803,7 @@ are configured in the setup:
 
 ```toml
 [right_pages]
+title_font = 'classic' # also Arial or ComicSansMS
 background_color = '0xFFF085'
 annulus = 5
 flash_fraction = '40%'

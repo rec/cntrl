@@ -84,11 +84,12 @@ def test_right_page_settings_round_trip(
         'clock_average_beats': 2,
         'tap_intervals': 6,
         'minimum_taps': 3,
+        'title_font': 'Arial',
         'minimum_interval': '80 ms',
         'reset_gap': 4,
         'flash_fraction': '20%',
         'flasher_diameter': 36,
-        'annulus': 14,
+        'annulus': 12,
         'tempo_font': 'CourierPrimeBold',
         'status_font': 'Arial',
         'off_color': '0x300000',
@@ -99,6 +100,7 @@ def test_right_page_settings_round_trip(
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     settings = models.Show.model_validate(exported).right_pages
     assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
+    assert settings.title_font == 'Arial'
     assert settings.refresh_interval == 2 and settings.flash_fraction == 0.2
     assert settings.tempo_font == 'CourierPrimeBold'
     assert compiler.compile_show(exported, {}, [], target) == data

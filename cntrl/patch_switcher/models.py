@@ -416,6 +416,7 @@ class RightPages(BaseModel, frozen=True):
     ] = 2
     tempo_font: Literal['CourierPrime', 'CourierPrimeBold'] = 'CourierPrime'
     status_font: Literal['classic', 'Arial', 'ComicSansMS'] = 'classic'
+    title_font: Literal['classic', 'Arial', 'ComicSansMS'] = 'classic'
     off_color: str = '0x400000'
     on_color: str = '0xFF0000'
     ring_color: str = 'black'
