@@ -23,9 +23,6 @@ extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 #include <cntrl/songs_ui.h>
 #include <cntrl/songs_transfer.h>
 #include <cntrl/usb_session.h>
-#if CNTRL_MIDI_INTERFACE
-#include <cntrl/midi_interface.h>
-#endif
 #if CNTRL_CABLE_TEST
 #include <cntrl/cable_test.h>
 #endif
@@ -85,9 +82,6 @@ DMAMEM cntrl::UsbSession usb_session;
 class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink, public cntrl::PatchOutputs
 #if CNTRL_PANIC
     , public cntrl::PanicOutputs
-#endif
-#if CNTRL_MIDI_INTERFACE
-    , public cntrl::MidiInterfaceControl
 #endif
 {
 public:
@@ -152,11 +146,6 @@ public:
         return connection && submit(connection->route, {uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}});
     }
 #endif
-#if CNTRL_MIDI_INTERFACE
-    cntrl::MidiInterface midi_interface{*this};
-    void configure_interface(bool enabled) override { bridge_.configure(enabled); }
-    void restore_interface() override { bridge_.configure(runtime.interface); }
-#endif
 #if CNTRL_CABLE_TEST
     cntrl::CableTest cable_test{*this};
     void leave_cable_test() {
@@ -204,9 +193,6 @@ public:
 #if CNTRL_PANIC
         if (panic_owns_midi) return;
 #endif
-#if CNTRL_MIDI_INTERFACE
-        if (midi_interface.open()) midi_interface.enter(usb_configuration != 0, enabled);
-#endif
 #if CNTRL_CABLE_TEST
         if (cable_test.enabled()) return;
 #endif
@@ -223,7 +209,7 @@ public:
         if (route >= 6 && route < 8) return usb_midi_try_write_packed(p.packed(route - 6));
         if (route == 8) return host_midi.try_write_packed(p.packed());
         unsigned n = p.size();
-        if (const auto *connection = cntrl::midi::physical_output(route)) {
+        if (cntrl::midi::physical_output(route)) {
             HardwareSerial *serial;
             switch (route) {
             case 0: serial = &Serial1; break;
@@ -232,11 +218,6 @@ public:
             }
             if (unsigned(serial->availableForWrite()) < n) return false;
             if (serial->write(p.bytes, n) != n) return false;
-#if CNTRL_MIDI_INTERFACE
-            midi_interface.activity(unsigned(connection - cntrl::midi::output_connections.data()), true, millis());
-#else
-            (void)connection;
-#endif
             return true;
         }
         return false;
@@ -284,9 +265,6 @@ public:
 #if CNTRL_PANIC
         if (utility_pages_.page() == UtilityPages::Page::panic) panic.enter(runtime.brightness);
 #endif
-#if CNTRL_MIDI_INTERFACE
-        if (utility_pages_.page() == UtilityPages::Page::interface) midi_interface.enter(usb_configuration != 0, runtime.interface);
-#endif
     }
     void leave_utility_page() {
 #if CNTRL_CABLE_TEST
@@ -294,9 +272,6 @@ public:
 #endif
 #if CNTRL_PANIC
         if (utility_pages_.page() == UtilityPages::Page::panic) leave_panic();
-#endif
-#if CNTRL_MIDI_INTERFACE
-        if (utility_pages_.page() == UtilityPages::Page::interface) midi_interface.leave();
 #endif
     }
     void configure_utility_pages(const cntrl::UtilityPageSettings &settings) override {
@@ -336,13 +311,6 @@ public:
             if (!panic_owns_midi) bridge_.configure(false);
             panic_owns_midi = true;
             panic.button(true, now);
-            return;
-        }
-#endif
-#if CNTRL_MIDI_INTERFACE
-        if (utility_pages_.page() == UtilityPages::Page::interface) {
-            if (patch_work_pending() || !output_idle() || documents.busy()) return;
-            midi_interface.toggle();
             return;
         }
 #endif
@@ -390,9 +358,6 @@ public:
         bridge_.host_connected(bool(host_midi));
         uint32_t begin = micros(), now = millis();
         bridge_.connected(usb_configuration != 0, now);
-#if CNTRL_MIDI_INTERFACE
-        midi_interface.connected(usb_configuration != 0);
-#endif
         // Separate source limits plus an aggregate time budget. Rotate the
         // first source, so a saturated cable cannot starve later sources.
         for (unsigned i = 0; i < 3 && uint32_t(micros() - begin) < 180; ++i) {
@@ -417,12 +382,7 @@ public:
 #if CNTRL_CABLE_TEST
                     if (cable_test.enabled()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
 #endif
-                    bool complete = bridge_.receive(source + 5, uint8_t(byte), now);
-#if CNTRL_MIDI_INTERFACE
-                    if (complete) midi_interface.activity(source - 1, false, now);
-#else
-                    (void)complete;
-#endif
+                    bridge_.receive(source + 5, uint8_t(byte), now);
                 }
             }
         }
@@ -444,9 +404,6 @@ public:
         bridge_.service(*this, now);
 #if CNTRL_SWITCHES
         switches.tick();
-#endif
-#if CNTRL_MIDI_INTERFACE
-        midi_interface.tick(millis());
 #endif
         // Flush only already-buffered packets; this operation never waits.
         usb_midi_flush_output();
@@ -485,10 +442,6 @@ public:
         if (utility_pages_.page() == UtilityPages::Page::panic && panic.take_redraw())
             utility_pages_.revisit(documents.selected());
 #endif
-#if CNTRL_MIDI_INTERFACE
-        if (utility_pages_.page() == UtilityPages::Page::interface && midi_interface.take_redraw())
-            utility_pages_.revisit(documents.selected());
-#endif
         if (!splash_visible_ && !feature_open() && documents.document().valid()
             && utility_pages_.due(now)) {
             // Prepare the incoming card during the renderer's bounded transition preparation.
@@ -503,9 +456,6 @@ public:
                 , panic.status()
 #else
                 , cntrl::Panic::Status::ready
-#endif
-#if CNTRL_MIDI_INTERFACE
-                , midi_interface.status()
 #endif
             ));
         }

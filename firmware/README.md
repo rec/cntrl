@@ -510,7 +510,7 @@ separate qualification.
 
 ### Auxiliary patch-manager pages (format 26)
 
-The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test, Panic and MIDI Interface using
+The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test and Panic using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary utility page in place.
@@ -608,9 +608,11 @@ continues cycling. Off leaves normal MIDI operation unchanged. See
 [the cable tester](../doc/midi-cable-test.md) for test behavior and port ownership.
 
 Panic follows the cable tester. Press C for its controller reset pass, or hold C
-to repeat controller and Note Off sweeps. F cancels and advances. MIDI Interface
-is last: C temporarily toggles the setup's bridge setting; leaving restores it.
-Both pages use the shared display style and leave routing unchanged on entry.
+to repeat controller and Note Off sweeps. F cancels and advances back to Tap Tempo.
+USB MIDI forwarding remains controlled by `is_midi_interface` and patch state
+operations. The cable tester shows DIN/TRS rows and Out/In columns: DIN test data
+is blue, TRS test data is green, and each input takes the color of its latest
+matching test stream.
 
 Utility-page titles use `title_font`, defaulting to `classic`; `Arial` and
 `ComicSansMS` are also supported. The title band adds two pixels above and below

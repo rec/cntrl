@@ -522,10 +522,12 @@ User confirmation of the visible appearance remains pending.
 
 ## MIDI cable-test page
 
-MIDI Cable Test follows Firmware, with Panic and MIDI Interface after it. C starts or stops
+MIDI Cable Test follows Firmware, with Panic after it. C starts or stops
 transmission; F stops any active test and continues the cycle. Every entry starts
 Off. The shared page style supplies the background, heading and text weight.
-DIN and TRS results occupy fixed middle rows, with On/Off at the bottom above C.
+DIN and TRS occupy the matrix rows, with Out then In columns and a bottom-right
+toggle. DIN test data is blue and TRS test data is green; each input shows the
+color of its latest matching test stream.
 The other two displays remain in place. DIN is Serial1 and the dedicated 3.5 mm
 TRS port is Serial2; Omniports are not used.
 
@@ -551,27 +553,18 @@ After the user's A+F entry, status remained `CNTRL READY 14 34597 488beaf6`
 and pman remained selected. Visual verification of the revised layout remains
 pending.
 
-## Panic and MIDI Interface pages
+## Panic page and USB MIDI forwarding
 
-Panic and MIDI Interface follow the cable tester in the right-hand cycle. Both
-use the shared yellow background, reverse-color heading and heavier text while
-leaving the other two displays in place. Browsing them does not change routing.
+Panic follows the cable tester in the utility page cycle.
 
 On Panic, C starts the controller reset pass and holding C continues Note Off
 sweeps. Releasing C restores brightness; F cancels sending and advances. Normal
 bridging resumes when sending completes or the page is left. Build with
 `PANIC=0` to omit this page.
 
-MIDI Interface opens with the setup's current bridge setting. C temporarily
-toggles it; F advances and restores the setting. The setup is not edited. The
-page shows circular activity indicators in DIN/TRS rows and In/Out columns,
-with a small on/off toggle icon in the bottom-right corner. The body is greyed
-out when off; active indicators are bright green when on. Without a configured
-USB host, the switch is also greyed out and C cannot toggle it. Reconnecting
-restores availability without changing the switch setting.
-Indicators remain lit for 100 ms after complete input packets or successful
-physical output submissions. USB configuration does not mean a DAW opened a port.
-Build with `MIDI_INTERFACE=0` to omit the page. See
+USB MIDI forwarding is controlled by the setup and patch state operations,
+without a separate utility page. The cable tester now owns the Out/In matrix;
+its source colors identify test messages, not general MIDI activity. See
 [the interface guide](../../../../../doc/midi-interface.md) and
 [the Panic guide](../../../../../doc/panic.md).
 
@@ -795,7 +788,7 @@ and uploading the setup.
 ## Four-button patch-manager navigation (setup format 23)
 
 Physical buttons A/B/D/E keep their primary actions: A sends the target, B browses
-patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status, Firmware, MIDI Cable Test, Panic and MIDI Interface, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
+patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status, Firmware, MIDI Cable Test and Panic, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
 are removed. Other modules keep their existing button assignments.
 
 The utility pages share one heading font and size, with white

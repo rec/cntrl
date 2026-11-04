@@ -1,7 +1,7 @@
 # Optional feature modules
 
 Status: setup management and songs/setlists use the static module menu. Panic,
-the MIDI cable tester, MIDI Interface and stock-firmware switching use the
+the MIDI cable tester and stock-firmware switching use the
 utility page cycle. The menu contains Setups, Songs and setlists, and Switches. The broader organization below remains guidance for
 subsequent features.
 
@@ -86,7 +86,7 @@ scheduling rather than blocking waits.
 
 ## Establishing the interfaces
 
-The cable tester, MIDI interface and Panic use target adapters for physical
+The cable tester and Panic use target adapters for physical
 services while owning their own behavior; the utility-page renderer supplies their
 shared display style. A future MIDI monitor should
 reuse those services. Establish additional shared interfaces only when another

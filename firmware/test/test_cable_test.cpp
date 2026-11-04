@@ -19,46 +19,58 @@ void receive(cntrl::CableTest &test, unsigned port, uint8_t status, uint8_t valu
 }
 
 int main() {
+    using Source = cntrl::CableTest::Source;
     Hardware hw;
     cntrl::CableTest test(hw);
     test.enter(); test.tick(100);
     assert(!test.enabled() && hw.messages.empty());
-    assert(!test.status().enabled && !test.status().routes[0][0] && !test.status().routes[1][0]);
+    assert(!test.status().enabled && test.status().inputs[0] == Source::none && test.status().inputs[1] == Source::none);
     assert(test.take_redraw() && !test.take_redraw());
     test.toggle(100); test.tick(100);
     assert(hw.messages.size() == 2);
+    assert(test.status().sending[0] && test.status().sending[1]);
     assert(hw.messages[0].route == "din" && hw.messages[0].bytes == std::vector<uint8_t>({0xb0, 2, 0}));
     assert(hw.messages[1].route == "trs" && hw.messages[1].bytes == std::vector<uint8_t>({0xb1, 2, 0}));
     test.tick(109); assert(hw.messages.size() == 2);
     test.tick(110); assert(hw.messages.size() == 4);
     receive(test, 0, 0xb0, 1, 111);
     receive(test, 1, 0xb1, 1, 111);
-    assert(!std::strcmp(test.status().routes[0], "DIN"));
-    assert(!std::strcmp(test.status().routes[1], "TRS"));
+    assert(test.status().inputs[0] == Source::din);
+    assert(test.status().inputs[1] == Source::trs);
     receive(test, 1, 0xb0, 1, 112);
     receive(test, 0, 0xb1, 1, 112);
-    assert(!std::strcmp(test.status().routes[0], "DIN to TRS"));
-    assert(!std::strcmp(test.status().routes[1], "TRS to DIN"));
+    assert(test.status().inputs[1] == Source::din);
+    assert(test.status().inputs[0] == Source::trs);
     // Running status and interleaved MIDI clock use the shared parser.
     for (uint8_t b : {2, 0xf8, 1}) test.receive(0, b, 120);
     test.tick(369);
-    assert(!test.status().routes[0][0] && test.status().routes[1][0]);
-    test.tick(370); assert(!test.status().routes[1][0]);
+    assert(test.status().inputs[1] == Source::none && test.status().inputs[0] == Source::trs);
+    test.tick(370); assert(test.status().inputs[0] == Source::none);
     receive(test, 0, 0xb0, 127, 371); // Never sent: no match.
     receive(test, 1, 0xb2, 1, 371); // Wrong channel.
     for (uint8_t b : {0xb0, 3, 1}) test.receive(0, b, 371); // Wrong controller.
-    assert(!test.status().routes[0][0] && !test.status().routes[1][0]);
+    assert(test.status().inputs[0] == Source::none && test.status().inputs[1] == Source::none);
     test.toggle(372);
     auto count = hw.messages.size(); test.tick(1000);
     assert(hw.messages.size() == count);
     test.toggle(1000); hw.available = false; test.tick(1000);
     receive(test, 0, 0xb0, 0, 1001); // Failed send cannot pass.
-    assert(!test.status().routes[0][0]);
+    assert(test.status().inputs[0] == Source::none);
+    assert(!test.status().sending[0] && !test.status().sending[1]);
     hw.available = true; test.tick(1010); receive(test, 0, 0xb0, 0, 1011);
-    assert(test.status().routes[0][0]);
+    assert(test.status().inputs[0] == Source::din);
+    // One output can be received at both inputs independently.
+    receive(test, 1, 0xb0, 0, 1012);
+    assert(test.status().inputs[0] == Source::din && test.status().inputs[1] == Source::din);
+    hw.available = false; test.tick(1260);
+    assert(!test.status().sending[0] && !test.status().sending[1]);
+    test.tick(1261);
+    assert(test.status().inputs[0] == Source::none && test.status().inputs[1] == Source::din);
+    test.tick(1262); assert(test.status().inputs[1] == Source::none);
+    hw.available = true;
     test.leave(); count = hw.messages.size(); test.tick(2000);
     assert(!test.enabled() && hw.messages.size() == count);
-    test.enter(); assert(!test.enabled() && !test.status().routes[0][0]);
+    test.enter(); assert(!test.enabled() && test.status().inputs[0] == Source::none);
     test.toggle(0xfffffffau); test.tick(0xfffffffau); test.tick(4);
     assert(hw.messages.size() == count + 4); // Timestamp wrap.
 

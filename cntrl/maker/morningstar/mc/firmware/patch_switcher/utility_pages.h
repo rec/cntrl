@@ -2,7 +2,6 @@
 #include <cntrl/hardware.h>
 #include <cntrl/tempo.h>
 #include <cntrl/cable_test.h>
-#include <cntrl/midi_interface.h>
 #include <cntrl/panic.h>
 #include "show_graphics.h"
 #include <algorithm>
@@ -18,7 +17,7 @@ struct PerformanceStatus {
 
 class UtilityPages {
 public:
-    enum class Page { tap, status, firmware, cable, panic, interface, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, confirm_firmware };
     void configure(const cntrl::UtilityPageSettings &settings) {
         settings_ = settings;
         using R = cntrl::UtilityPageSettings;
@@ -29,15 +28,12 @@ public:
     bool browse(bool reverse, const char *setup) {
         if (page_ == Page::confirm_firmware) return !reverse;
         do {
-            page_ = Page((unsigned(page_) + (reverse ? 5 : 1)) % 6);
+            page_ = Page((unsigned(page_) + (reverse ? 4 : 1)) % 5);
 #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
             if (page_ == Page::cable) continue;
 #endif
 #if defined(CNTRL_PANIC) && !CNTRL_PANIC
             if (page_ == Page::panic) continue;
-#endif
-#if defined(CNTRL_MIDI_INTERFACE) && !CNTRL_MIDI_INTERFACE
-            if (page_ == Page::interface) continue;
 #endif
             break;
         } while (true);
@@ -69,7 +65,7 @@ public:
         if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, const cntrl::MidiInterface::Status &interface = {}) {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready) {
         using R = cntrl::UtilityPageSettings;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
@@ -84,7 +80,7 @@ public:
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::interface ? "MIDI Interface" : "Firmware";
+        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : "Firmware";
         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
         pane.heading_band = true;
         auto &header = pane.lines[0];
@@ -92,8 +88,20 @@ public:
         header.graphics.foreground = 0xffff; header.graphics.background = 0;
         header.graphics.top = header.y; header.y = 0;
         if (page_ == Page::cable) {
-            line(pane, 1, cable.routes[0], 38, 22, settings_[R::status_font], true);
-            line(pane, 2, cable.routes[1], 65, 22, settings_[R::status_font], true);
+            const bool active = cable.enabled;
+            const unsigned font = settings_[R::status_font];
+            line(pane, 1, "Out", 32, 18, font, true, nullptr, 56, 100);
+            line(pane, 2, "In", 32, 18, font, true, nullptr, 106, 154);
+            line(pane, 3, "DIN", 59, 18, font, false, nullptr, 8, 54);
+            line(pane, 4, "TRS", 85, 18, font, false, nullptr, 8, 54);
+            for (unsigned i = 1; i <= 4; ++i)
+                pane.lines[i].graphics.foreground = active ? 0 : 0x8410;
+            using Source = cntrl::CableTest::Source;
+            for (unsigned i = 0; i < 4; ++i) {
+                Source source = i < 2 ? (cable.sending[i] ? (i == 0 ? Source::din : Source::trs) : Source::none) : cable.inputs[i - 2];
+                uint16_t color = !active || source == Source::none ? 0x8410 : source == Source::din ? 0x001f : 0x07e0;
+                pane.circles[i] = {uint16_t(i < 2 ? 78 : 130), uint16_t(i % 2 ? 94 : 68), 12, 0, color, 0};
+            }
             pane.toggle = {128, 110, true, cable.enabled, false};
             return pane;
         }
@@ -101,21 +109,6 @@ public:
             line(pane, 1, "Press C", 40, 22, settings_[R::status_font], true);
             line(pane, 2, "Hold to repeat", 66, 22, settings_[R::status_font], true);
             line(pane, 3, panic == cntrl::Panic::Status::sending ? "Sending" : panic == cntrl::Panic::Status::incomplete ? "Incomplete" : "Ready", 100, 24, settings_[R::status_font], true);
-            return pane;
-        }
-        if (page_ == Page::interface) {
-            const bool active = interface.connected && interface.enabled;
-            const unsigned font = settings_[R::status_font];
-            line(pane, 1, "In", 32, 18, font, true, nullptr, 56, 100);
-            line(pane, 2, "Out", 32, 18, font, true, nullptr, 106, 154);
-            line(pane, 3, "DIN", 59, 18, font, false, nullptr, 8, 54);
-            line(pane, 4, "TRS", 85, 18, font, false, nullptr, 8, 54);
-            for (unsigned i = 1; i <= 4; ++i)
-                pane.lines[i].graphics.foreground = active ? 0 : 0x8410;
-            for (unsigned i = 0; i < 4; ++i)
-                pane.circles[i] = {uint16_t(i < 2 ? 78 : 130), uint16_t(i % 2 ? 94 : 68), 12, 0,
-                    uint16_t(active && interface.lit[i] ? 0x07e0 : 0x8410), 0};
-            pane.toggle = {128, 110, true, interface.enabled, !interface.connected};
             return pane;
         }
         if (page_ == Page::firmware) {
