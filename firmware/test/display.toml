@@ -2,7 +2,7 @@ fill_in_styles = false
 
 [instruments.a]
 instrument = 'synth'
-setup = 'stock'
+profile = 'stock'
 channel = 1
 output = 'din'
 

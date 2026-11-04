@@ -66,8 +66,8 @@ def import_instruments(output: Path) -> None:
     tags = TypeAdapter(dict[str, list[str]]).validate_json(TAGS_PATH.read_bytes())
     tables = convert_instruments(instruments, tags)
     definitions = models.Definitions(
-        setups=[
-            models.Setup(
+        profiles=[
+            models.InstrumentProfile(
                 instrument=i,
                 name='default',
                 banks={
@@ -96,7 +96,7 @@ def import_instruments(output: Path) -> None:
             while len(programs) < entry.program:
                 programs.append(tomlkit.inline_table())
             metadata = entry.model_dump(
-                exclude={'instrument', 'setup', 'bank', 'program', 'tags'},
+                exclude={'instrument', 'profile', 'bank', 'program', 'tags'},
                 exclude_none=True,
                 exclude_defaults=True,
             )

@@ -27,13 +27,13 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
             ]
         },
     }
-    data = compiler.compile_show(show, {'setups': []}, [], target)
+    data = compiler.compile_show(show, {'profiles': []}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['patch_cycles']['Functions'][0]['exit_buttons'] == 'A+F'
-    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+    assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
     with pytest.raises(compiler.CompilationError, match='unavailable'):
         compiler.compile_show(
-            show, {'setups': []}, [], target.model_copy(update={'functions': []})
+            show, {'profiles': []}, [], target.model_copy(update={'functions': []})
         )
     image = tmp_path / 'function.bin'
     image.write_bytes(data)

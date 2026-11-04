@@ -57,7 +57,7 @@ def test_keyed_bank_uses_configured_controller_mapping(target: models.Target) ->
         'patch_cycles': {'Live': ['Flute']},
     }
     definitions = {
-        'setups': [
+        'profiles': [
             {'instrument': 'synth', 'name': 'default', 'banks': {'3': {'lsb': 3}}}
         ]
     }
@@ -128,7 +128,7 @@ def test_compact_catalogue_can_be_loaded_as_an_external_table(
         'patch_cycles': {'Live': ['GuitHero']},
     }
     definitions = {
-        'setups': [
+        'profiles': [
             {'instrument': 'patchman', 'name': 'default', 'banks': {'3': {'lsb': 3}}}
         ]
     }
@@ -232,7 +232,7 @@ def test_name_tags_classify_copies_across_banks(target: models.Target) -> None:
         'patch_cycles': {'Live': [{'name': 'Flute', 'bank': 3}]},
     }
     definitions = {
-        'setups': [
+        'profiles': [
             {'instrument': 'synth', 'name': 'default', 'banks': {'3': {'lsb': 3}}}
         ]
     }

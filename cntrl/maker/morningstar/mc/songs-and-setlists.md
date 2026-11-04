@@ -75,11 +75,11 @@ A single TOML document contains the song library and its setlists. Example:
 ```toml
 [instruments.piano]
 instrument = 'piano'
-setup = 'default'
+profile = 'default'
 output = 'din'
 channel = 1
 
-[[definitions.setups]]
+[[definitions.profiles]]
 instrument = 'piano'
 name = 'default'
 

@@ -52,19 +52,19 @@ SDCourierBold = "../../../../fonts/courier-prime/CourierPrime-Bold.ttf"
 
 [instruments.pman]
 instrument = "pman"
-setup = "default"
+profile = "default"
 channel = 1
 output = "din"
 
-[[definitions.setups]]
+[[definitions.profiles]]
 instrument = "pman"
 name = "default"
 
-[definitions.setups.banks]
+[definitions.profiles.banks]
 
 [[definitions.programs]]
 instrument = "pman"
-setup = "default"
+profile = "default"
 program = 1
 
 [[patch_cycles.fonts]]

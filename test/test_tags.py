@@ -21,17 +21,17 @@ def show() -> dict[str, object]:
         instruments={
             'synth': {
                 'instrument': 'synth',
-                'setup': 'default',
+                'profile': 'default',
                 'channel': 1,
                 'output': 'din',
             }
         },
         definitions=models.Definitions(
-            setups=[models.Setup(instrument='synth', name='default')],
+            profiles=[models.InstrumentProfile(instrument='synth', name='default')],
             programs=[
                 models.TablePatch(
                     instrument='synth',
-                    setup='default',
+                    profile='default',
                     program=1,
                     name='Sax',
                     tags=['sax'],
@@ -135,7 +135,7 @@ def test_program_table_tags_merge_as_a_union(
         'patches': [
             {
                 'instrument': 'synth',
-                'setup': 'default',
+                'profile': 'default',
                 'program': 1,
                 'tags': ['whole-system', 'sax'],
             }

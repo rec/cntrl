@@ -292,7 +292,7 @@ def decode(data: bytes) -> Library:
     context: dict[str, object] = {'instruments': {}, 'patches': {}}
     instruments: dict[str, object] = {}
     definitions: dict[str, object] = {}
-    setups: list[object] = []
+    profiles: list[object] = []
     programs: list[object] = []
     fonts: dict[str, str] = {}
     source_fonts: list[dict[str, str]] = []
@@ -312,10 +312,10 @@ def decode(data: bytes) -> Library:
             value = dict(value)
             value['instrument'] = _qualified(prefix, value['instrument'], 31)
             instruments[_qualified(prefix, key, 31)] = value
-        for value in exported.get('definitions', {}).get('setups', []):
+        for value in exported.get('definitions', {}).get('profiles', []):
             value = dict(value)
             value['instrument'] = _qualified(prefix, value['instrument'], 31)
-            setups.append(value)
+            profiles.append(value)
         for value in exported.get('definitions', {}).get('programs', []):
             value = dict(value)
             value['instrument'] = _qualified(prefix, value['instrument'], 31)
@@ -329,7 +329,7 @@ def decode(data: bytes) -> Library:
     context['fonts'] = fonts
     context['tags'] = tags
     if sources:
-        context['definitions'] = {'setups': setups, 'programs': programs}
+        context['definitions'] = {'profiles': profiles, 'programs': programs}
     songs = []
     for (key, name), values in zip(song_headers, positions, strict=True):
         patches = []

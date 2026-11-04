@@ -43,7 +43,7 @@ class Bank(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Setup(BaseModel, frozen=True):
+class InstrumentProfile(BaseModel, frozen=True):
     instrument: str
     name: str
     banks: dict[int, Bank] = Field(default_factory=dict)
@@ -54,7 +54,7 @@ class Setup(BaseModel, frozen=True):
 
 class Instrument(BaseModel, frozen=True):
     instrument: str
-    setup: str = 'default'
+    profile: str = 'default'
     channel: Annotated[int, Field(strict=True, ge=1, le=16)]
     output: str
 
@@ -215,7 +215,7 @@ patch_adapter = TypeAdapter(Patch)
 
 class TablePatch(BaseModel, frozen=True):
     instrument: str
-    setup: str = 'default'
+    profile: str = 'default'
     program: Annotated[int, Field(strict=True, ge=1, le=128)]
     bank: Annotated[int, Field(strict=True, ge=0)] | None = None
     name: str | None = None
@@ -232,7 +232,7 @@ class TablePatch(BaseModel, frozen=True):
 
 
 class Definitions(BaseModel, frozen=True):
-    setups: list[Setup]
+    profiles: list[InstrumentProfile]
     programs: list[TablePatch] = Field(default_factory=list)
 
     model_config = ConfigDict(extra='forbid')

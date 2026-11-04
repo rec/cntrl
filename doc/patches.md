@@ -101,27 +101,27 @@ output = 'din'
 0 = ['Piano', 'Flute']
 3 = ['Lead', 'Strings']
 
-[[definitions.setups]]
+[[definitions.profiles]]
 instrument = 'synth'
 name = 'default'
 
-[definitions.setups.banks.0]
+[definitions.profiles.banks.0]
 lsb = 0
 
-[definitions.setups.banks.3]
+[definitions.profiles.banks.3]
 lsb = 3
 
 [patch_cycles]
 Live = ['Piano', 'Lead']
 ```
 
-Explicit banks need mappings in the setup definition. `msb` is the value sent on
+Explicit banks need mappings in the instrument profile. `msb` is the value sent on
 CC 0; `lsb` is the value sent on CC 32. Only the configured controllers are sent.
 The example configures CC 32 alone. The compiler does not guess a device's bank
 mapping from its name or a catalogue's bank numbers.
 
-The instrument identity defaults to its table key, and `setup` defaults to
-`'default'`. A setup with no bank mappings or initialization data needs no
+The instrument identity defaults to its table key, and `profile` defaults to
+`'default'`. A profile with no bank mappings or initialization data needs no
 definition. Routing still requires `channel` and `output`. Catalogues containing
 only names and metadata can be supplied as `--table` files; routing then belongs
 in the show file.
@@ -149,7 +149,7 @@ Each tag applies to every matching program name in that instrument's loaded
 catalogue. Missing names in a loaded catalogue are errors. Instruments whose
 catalogues are not loaded are ignored, so one tags file can serve several shows.
 Tag-table order determines tag order when a program belongs to multiple tags.
-If a nondefault setup is needed, declare `setup` once in the instrument table.
+If a nondefault profile is needed, declare `profile` once in the instrument table.
 Changing a classification does not require editing the documented catalogue.
 
 ## Several catalogues on one MIDI destination
@@ -204,7 +204,7 @@ slots for the stock VL70-m and Patchman units on channel 1.
 output = 'din'
 channel = 1
 
-[[definitions.setups]]
+[[definitions.profiles]]
 instrument = 'piano'
 name = 'default'
 

@@ -116,7 +116,7 @@ def test_resolved_export_recompiles_without_original_sources() -> None:
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+    assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
 
 
 def test_setup_cli_copy_download_and_delete(

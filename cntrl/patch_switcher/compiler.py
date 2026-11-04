@@ -78,16 +78,16 @@ def compile_show(
         raise CompilationError(_validation_errors('show', error)) from error
     try:
         parsed = show.definitions or models.Definitions.model_validate(
-            definitions if definitions else {'setups': []}
+            definitions if definitions else {'profiles': []}
         )
     except ValidationError as error:
         raise CompilationError(_validation_errors('definitions', error)) from error
-    setups: dict[tuple[str, str], models.Setup] = {}
-    for s in parsed.setups:
+    profiles: dict[tuple[str, str], models.InstrumentProfile] = {}
+    for s in parsed.profiles:
         key = (s.instrument, s.name)
-        if key in setups:
-            errors.append(f'definitions: duplicate setup {key}')
-        setups[key] = s
+        if key in profiles:
+            errors.append(f'definitions: duplicate profile {key}')
+        profiles[key] = s
         if any(b < 0 for b in s.banks):
             errors.append(f'definitions: negative bank in {key}')
     entries = _join_tables(
@@ -106,13 +106,15 @@ def compile_show(
         except ValidationError as error:
             errors.extend(_validation_errors(f'instruments.{alias}', error))
             continue
-        if (instrument.instrument, instrument.setup) not in setups:
-            if instrument.setup == 'default':
-                setups[instrument.instrument, instrument.setup] = models.Setup(
-                    instrument=instrument.instrument, name=instrument.setup
+        if (instrument.instrument, instrument.profile) not in profiles:
+            if instrument.profile == 'default':
+                profiles[instrument.instrument, instrument.profile] = (
+                    models.InstrumentProfile(
+                        instrument=instrument.instrument, name=instrument.profile
+                    )
                 )
             else:
-                errors.append(f'instruments.{alias}: unknown instrument/setup')
+                errors.append(f'instruments.{alias}: unknown instrument/profile')
         if instrument.output not in target.outputs:
             errors.append(
                 f'instruments.{alias}: unavailable output {instrument.output!r}'
@@ -129,7 +131,7 @@ def compile_show(
             )
         )
     compiler = PatchCompiler(
-        show, setups, entries, instruments, target, errors, documents or {}
+        show, profiles, entries, instruments, target, errors, documents or {}
     )
     named: dict[str, int] = {}
     for key, raw in show.patches.items():
@@ -346,12 +348,16 @@ def compile_show(
                     errors,
                 ),
                 _text(
-                    instrument.setup, 32, target, f'instruments.{alias}.setup', errors
+                    instrument.profile,
+                    32,
+                    target,
+                    f'instruments.{alias}.profile',
+                    errors,
                 ),
             )
         )
-        for bank, mapping in setups[
-            (instrument.instrument, instrument.setup)
+        for bank, mapping in profiles[
+            (instrument.instrument, instrument.profile)
         ].banks.items():
             if not 0 <= bank < 0xFFFFFFFF:
                 errors.append(f'instruments.{alias}: bank exceeds storage capacity')
@@ -419,16 +425,16 @@ class PatchCompiler:
     def __init__(
         self,
         show: models.Show,
-        setups: dict[tuple[str, str], models.Setup],
+        profiles: dict[tuple[str, str], models.InstrumentProfile],
         entries: list[models.TablePatch],
         instruments: dict[str, models.Instrument],
         target: models.Target,
         errors: list[str],
         documents: dict[str, object],
     ) -> None:
-        self.show, self.setups, self.entries, self.instruments = (
+        self.show, self.profiles, self.entries, self.instruments = (
             show,
-            setups,
+            profiles,
             entries,
             instruments,
         )
@@ -478,7 +484,7 @@ class PatchCompiler:
                 for a, i in self.instruments.items()
                 for e in self.entries
                 if e.instrument == i.instrument
-                and e.setup == i.setup
+                and e.profile == i.profile
                 and e.name == raw['name']
                 and ('instrument' not in raw or raw['instrument'] == a)
                 and ('bank' not in raw or raw['bank'] == e.bank)
@@ -608,9 +614,9 @@ class PatchCompiler:
                 f'{path}.instrument: unknown or invalid instrument {patch.instrument!r}'
             )
             return b'\0' * 11
-        setup = self.setups.get((instrument.instrument, instrument.setup))
-        if setup is None:
-            self.errors.append(f'{path}.instrument: unknown or invalid setup')
+        profile = self.profiles.get((instrument.instrument, instrument.profile))
+        if profile is None:
+            self.errors.append(f'{path}.instrument: unknown or invalid profile')
             return b'\0' * 11
         if instrument.output not in self.target.outputs:
             self.errors.append(
@@ -628,7 +634,7 @@ class PatchCompiler:
                 e
                 for e in self.entries
                 if e.instrument == instrument.instrument
-                and e.setup == instrument.setup
+                and e.profile == instrument.profile
                 and (bank is None or e.bank == bank)
                 and e.name is not None
                 and pattern.search(e.name)
@@ -651,19 +657,21 @@ class PatchCompiler:
                 (
                     e
                     for e in self.entries
-                    if (e.instrument, e.setup, e.program, e.bank)
-                    == (instrument.instrument, instrument.setup, program, bank)
+                    if (e.instrument, e.profile, e.program, e.bank)
+                    == (instrument.instrument, instrument.profile, program, bank)
                 ),
                 None,
             )
-        mapping = setup.banks.get(bank) if bank is not None else None
+        mapping = profile.banks.get(bank) if bank is not None else None
         if bank is not None and mapping is None:
-            self.errors.append(f'{path}.bank: bank {bank} has no mapping in this setup')
+            self.errors.append(
+                f'{path}.bank: bank {bank} has no mapping in this profile'
+            )
         if bank is not None and bank >= 0xFFFFFFFF:
             self.errors.append(f'{path}.bank: exceeds storage capacity')
         name = matched.name if matched and matched.name else patch.name
         program_name = matched.display_name if matched else None
-        identity = (instrument.instrument, instrument.setup, program, bank)
+        identity = (instrument.instrument, instrument.profile, program, bank)
         names = [name, program_name]
         if identity in self.program_names and self.program_names[identity] != names:
             self.errors.append(f'{path}: conflicting program names for {identity}')
@@ -888,11 +896,11 @@ class PatchCompiler:
     ) -> 'PatchCompiler':
         if found := next((c for c in contexts if c.show == source), None):
             return found
-        setups = dict(self.setups)
+        profiles = dict(self.profiles)
         entries = self.entries
         if source.definitions:
-            setups.update(
-                {(s.instrument, s.name): s for s in source.definitions.setups}
+            profiles.update(
+                {(s.instrument, s.name): s for s in source.definitions.profiles}
             )
             entries = _join_tables(
                 [
@@ -913,16 +921,18 @@ class PatchCompiler:
             try:
                 instrument = _instrument(key, raw)
                 instruments[key] = instrument
-                if instrument.setup == 'default':
-                    setups.setdefault(
-                        (instrument.instrument, instrument.setup),
-                        models.Setup(instrument=instrument.instrument, name='default'),
+                if instrument.profile == 'default':
+                    profiles.setdefault(
+                        (instrument.instrument, instrument.profile),
+                        models.InstrumentProfile(
+                            instrument=instrument.instrument, name='default'
+                        ),
                     )
             except ValidationError as error:
                 self.errors.extend(_validation_errors(f'instruments.{key}', error))
         result = PatchCompiler(
             source,
-            setups,
+            profiles,
             entries,
             instruments,
             self.target,
@@ -1124,7 +1134,7 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
             except ValidationError as error:
                 errors.extend(_validation_errors(context, error))
                 continue
-            key = (entry.instrument, entry.setup, entry.program, entry.bank)
+            key = (entry.instrument, entry.profile, entry.program, entry.bank)
             if (previous := entries.get(key)) is None:
                 entries[key] = entry
                 continue
@@ -1166,7 +1176,7 @@ def _join_tables(tables: list[object], errors: list[str]) -> list[models.TablePa
                 if k[:2]
                 == (
                     instrument.get('instrument', alias),
-                    instrument.get('setup', 'default'),
+                    instrument.get('profile', 'default'),
                 )
             ]
             shared = [
@@ -1315,7 +1325,7 @@ def _catalogue_rows(table: dict[str, object], errors: list[str]) -> list[object]
                     continue
                 address = {
                     'instrument': instrument.get('instrument', alias),
-                    'setup': instrument.get('setup', 'default'),
+                    'profile': instrument.get('profile', 'default'),
                     'program': number,
                     'bank': int(bank) if bank is not None else None,
                 }

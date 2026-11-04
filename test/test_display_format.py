@@ -271,7 +271,7 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
     definitions['programs'] = [
         {
             'instrument': 'synth',
-            'setup': 'stock',
+            'profile': 'stock',
             'program': 1,
             'bank': 0,
             'name': 'Flute',

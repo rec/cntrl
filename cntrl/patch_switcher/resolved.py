@@ -91,14 +91,14 @@ def export(data: bytes) -> str:
     result['right_pages'] = right_pages.unpack(data, meta + 16)
     result.update(source)
     instruments: dict[str, object] = {}
-    setups: list[dict[str, object]] = []
+    profiles: list[dict[str, object]] = []
     for i in range(ni):
         address = 76 + i * 68
         identity = meta + METADATA.size + i * 64
-        instrument, setup = _text(data, identity, 32), _text(data, identity + 32, 32)
+        instrument, profile = _text(data, identity, 32), _text(data, identity + 32, 32)
         instruments[_text(data, address, 32)] = {
             'instrument': instrument,
-            'setup': setup,
+            'profile': profile,
             'channel': data[address + 64] + 1,
             'output': _text(data, address + 32, 32),
         }
@@ -113,11 +113,11 @@ def export(data: bytes) -> str:
                 }
         value: dict[str, object] = {
             'instrument': instrument,
-            'name': setup,
+            'name': profile,
             'banks': banks,
         }
-        if value not in setups:
-            setups.append(value)
+        if value not in profiles:
+            profiles.append(value)
     result['instruments'] = instruments
     _, size, nodes, ns, nr, nn = GRAPH.unpack_from(data, offset)
     cursor = offset + GRAPH.size + nodes * 4
@@ -186,11 +186,11 @@ def export(data: bytes) -> str:
         instrument = struct.unpack_from('<H', data, address + 4)[0]
         identity = meta + METADATA.size + instrument * 64
         entry.update(
-            instrument=_text(data, identity, 32), setup=_text(data, identity + 32, 32)
+            instrument=_text(data, identity, 32), profile=_text(data, identity + 32, 32)
         )
         if entry not in programs:
             programs.append(entry)
-    result['definitions'] = {'setups': setups, 'programs': programs}
+    result['definitions'] = {'profiles': profiles, 'programs': programs}
     if offset + size > len(data):
         raise ValueError('truncated Patch graph')
     return tomlkit.dumps(result)

@@ -171,7 +171,7 @@ def test_transition_duration_survives_resolved_export(
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported.get('transition') == duration
     assert models.Show.model_validate(exported).transition == duration
-    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+    assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
 
 
 def test_omitted_transition_duration_stays_unspecified(show: dict[str, object]) -> None:
@@ -266,7 +266,7 @@ def test_usb_midi_switch_round_trips(
     assert bool(data[19] & 2) is (enabled is True)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['is_midi_interface'] is (enabled is True)
-    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+    assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
 
 
 @pytest.mark.parametrize('value', [1, 'true', None])
@@ -460,14 +460,14 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
         'patches': [
             {
                 'instrument': 'synth',
-                'setup': 'stock',
+                'profile': 'stock',
                 'program': 9,
                 'name': 'My Flute',
                 'bank': 0,
             },
             {
                 'instrument': 'synth',
-                'setup': 'stock',
+                'profile': 'stock',
                 'program': 2,
                 'name': 'Other Flute',
             },
@@ -519,7 +519,7 @@ def test_display_name_precedence_preserves_original_and_round_trips(
         'patches': [
             {
                 'instrument': 'synth',
-                'setup': 'stock',
+                'profile': 'stock',
                 'program': 1,
                 'name': 'Trumpet 2',
                 'display_name': program_label,
@@ -545,7 +545,7 @@ def test_display_name_precedence_preserves_original_and_round_trips(
     assert program['name'] == 'Trumpet 2'
     assert program.get('display_name') == program_label
     assert exported['patch_cycles']['wind'][0].get('display_name') == patch_label
-    assert compiler.compile_show(exported, {'setups': []}, [], target) == data
+    assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
 
 
 def test_two_show_labels_share_one_program_description(
@@ -557,7 +557,7 @@ def test_two_show_labels_share_one_program_description(
         programs=[
             {
                 'instrument': 'synth',
-                'setup': 'stock',
+                'profile': 'stock',
                 'program': 1,
                 'name': 'Trumpet 2',
                 'display_name': 'Muted Trumpet',
@@ -605,7 +605,7 @@ def test_display_override_does_not_require_rendering_original_name(
         'patches': [
             {
                 'instrument': 'synth',
-                'setup': 'stock',
+                'profile': 'stock',
                 'program': 1,
                 'name': original,
                 'display_name': 'Trumpet',
@@ -626,7 +626,12 @@ def test_name_cannot_override_known_synthesizer_name(
 ) -> None:
     table = {
         'patches': [
-            {'instrument': 'synth', 'setup': 'stock', 'program': 1, 'name': 'Trumpet 2'}
+            {
+                'instrument': 'synth',
+                'profile': 'stock',
+                'program': 1,
+                'name': 'Trumpet 2',
+            }
         ]
     }
     show['patch_cycles'] = {
@@ -646,7 +651,7 @@ def test_name_cannot_override_known_synthesizer_name(
 def test_table_conflicts_are_collected_and_missing_metadata_is_filled(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    base = {'instrument': 'synth', 'setup': 'stock', 'program': 1}
+    base = {'instrument': 'synth', 'profile': 'stock', 'program': 1}
     show['patch_cycles'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'Flute'}]
     }
@@ -700,12 +705,12 @@ def test_capacity_and_all_display_fields_are_checked(
     assert len(failure.value.errors) >= 3
 
 
-def test_setup_sysex_files_are_not_read_or_encoded(
+def test_profile_sysex_files_are_not_read_or_encoded(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
     assert isinstance(definitions, dict)
     modified = deepcopy(definitions)
-    modified['setups'][0]['sysex'] = ['/does/not/exist.syx']
+    modified['profiles'][0]['sysex'] = ['/does/not/exist.syx']
     assert compiler.compile_show(show, modified, [], target) == compiler.compile_show(
         show, definitions, [], target
     )
@@ -755,7 +760,7 @@ def test_cli_does_not_write_binary_when_patches_have_errors(
 ) -> None:
     document = tmp_path / 'invalid.toml'
     document.write_text(
-        '[instruments.a]\ninstrument="synth"\nsetup="stock"\nchannel=1\noutput="din"\n'
+        '[instruments.a]\ninstrument="synth"\nprofile="stock"\nchannel=1\noutput="din"\n'
         '[[patch_cycles.wind]]\ntype="program-change"\ninstrument="a"\nprogram=0\n'
         '[[patch_cycles.wind]]\ntype="program-change"\ninstrument="a"\nprogram=129\n'
     )

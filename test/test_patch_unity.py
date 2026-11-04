@@ -70,13 +70,13 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
         'instruments': {
             'piano': {
                 'instrument': 'synth',
-                'setup': 'factory',
+                'profile': 'factory',
                 'output': 'din',
                 'channel': 1,
             }
         },
         'definitions': {
-            'setups': [
+            'profiles': [
                 {
                     'instrument': 'synth',
                     'name': 'factory',
@@ -351,19 +351,19 @@ def test_named_program_bank_lookup_reserves_the_emitted_bank_control(
         'instruments': {
             'piano': {
                 'instrument': 'synth',
-                'setup': 'factory',
+                'profile': 'factory',
                 'output': 'din',
                 'channel': 1,
             }
         },
         'definitions': {
-            'setups': [
+            'profiles': [
                 {'instrument': 'synth', 'name': 'factory', 'banks': {'2': {'msb': 1}}}
             ],
             'programs': [
                 {
                     'instrument': 'synth',
-                    'setup': 'factory',
+                    'profile': 'factory',
                     'program': 7,
                     'bank': 2,
                     'name': 'Clean',

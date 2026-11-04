@@ -1,6 +1,6 @@
 [[patches]]
 instrument = 'synth'
-setup = 'stock'
+profile = 'stock'
 program = 1
 bank = 0
 tags = ['favourites']

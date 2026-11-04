@@ -17,13 +17,13 @@ def library() -> songs.Library:
         instruments={
             'piano': {
                 'instrument': 'Piano',
-                'setup': 'default',
+                'profile': 'default',
                 'channel': 2,
                 'output': 'din',
             }
         },
         definitions=models.Definitions(
-            setups=[models.Setup(instrument='Piano', name='default')]
+            profiles=[models.InstrumentProfile(instrument='Piano', name='default')]
         ),
         songs=[
             songs.Song(
@@ -144,7 +144,7 @@ def test_captured_sources_with_colliding_instrument_aliases_export_independently
             'instruments': {
                 alias: {
                     'instrument': 'Piano',
-                    'setup': 'default',
+                    'profile': 'default',
                     'channel': 3,
                     'output': 'din',
                 }

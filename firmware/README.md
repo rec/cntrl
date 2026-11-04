@@ -94,9 +94,17 @@ It defaults to 192 and accepts integers from 0 (off) to 255 (maximum PWM).
 The controller applies it when the show is uploaded and whenever that show loads
 at startup. Changing it requires a show upload, not a firmware rebuild.
 
+An **instrument profile** names an instrument's bank mappings and optional SysEx
+references. Declare profiles in `definitions.profiles` and select one with
+`profile = 'default'` on an instrument or program-table entry. The former
+instrument-level `setup` and `definitions.setups` keys have been renamed; update
+existing source files to the new names. Performance setups and `cntrl setup`
+commands retain their names. Compiled setup documents are unchanged, and
+editable exports use the new profile keys.
+
 Program numbers use 1..128 and channels 1..16. Definitions associate each
-instrument/setup pair with explicit bank mappings. Table entries identify
-`instrument`, `setup`, `program` and optional `bank`. When a table record omits
+instrument/profile pair with explicit bank mappings. Table entries identify
+`instrument`, `profile`, `program` and optional `bank`. When a table record omits
 `instrument`, loading the file supplies its filename stem. Explicit values are
 preserved. The current catalogues, `instruments/vl70m.toml` and
 `instruments/patchman.toml`, instead identify instruments by table key and programs
@@ -124,7 +132,7 @@ For example, a table entry can have `name = 'Trumpet 2'` and
 `display_name = 'Muted Trumpet'`; a show patch selecting that program can use
 `display_name = 'Opening solo'`. All three values are retained separately.
 Resolved downloads embed the used program descriptions in
-`definitions.programs`, alongside `definitions.setups`, and retain each show
+`definitions.programs`, alongside `definitions.profiles`, and retain each show
 patch's own `display_name`. They recompile without the original library files.
 Font sizing and precomputed offsets use the final display label only; a hidden
 original name is preserved as UTF-8 metadata without display-character limits.
@@ -268,7 +276,7 @@ style = {font_name = 'CourierPrimeBold'}
 
 [[definitions.programs]]
 instrument = 'synth'
-setup = 'default'
+profile = 'default'
 program = 1
 name = 'Sax'
 tags = ['sax']
@@ -389,7 +397,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
 | Metadata header, 60 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 22 u16 right-page settings |
-| Identity, 64 bytes per instrument | instrument identifier[32], instrument-level setup identifier[32] |
+| Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |

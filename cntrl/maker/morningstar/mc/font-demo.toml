@@ -6,11 +6,11 @@ pad = '4 px'
 
 [instruments.pman]
 instrument = 'pman'
-setup = 'default'
+profile = 'default'
 channel = 1
 output = 'din'
 
-[[definitions.setups]]
+[[definitions.profiles]]
 instrument = 'pman'
 name = 'default'
 

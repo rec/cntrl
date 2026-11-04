@@ -71,7 +71,7 @@ def test_authored_song_library_compiles_and_round_trips(path: str) -> None:
 
 
 @pytest.mark.parametrize('instrument', ['patchman', 'vl70m'])
-def test_instrument_catalogues_match_declared_setups(instrument: str) -> None:
+def test_instrument_catalogues_match_declared_profiles(instrument: str) -> None:
     definitions = models.Definitions.model_validate(
         compiler.read_document(Path('instruments/definitions.toml'))
     )
@@ -82,7 +82,7 @@ def test_instrument_catalogues_match_declared_setups(instrument: str) -> None:
             (p if isinstance(p, dict) else {'name': p})
             | {
                 'instrument': instrument,
-                'setup': 'default',
+                'profile': 'default',
                 'bank': int(b),
                 'program': n,
             }
@@ -92,12 +92,12 @@ def test_instrument_catalogues_match_declared_setups(instrument: str) -> None:
     ]
     assert patches
     for patch in patches:
-        setup = next(
+        profile = next(
             s
-            for s in definitions.setups
-            if (s.instrument, s.name) == (patch.instrument, patch.setup)
+            for s in definitions.profiles
+            if (s.instrument, s.name) == (patch.instrument, patch.profile)
         )
-        assert patch.bank is None or patch.bank in setup.banks
+        assert patch.bank is None or patch.bank in profile.banks
 
 
 TARGET = Path('cntrl/maker/morningstar/mc/patch-switcher-target.json')

@@ -1,25 +1,25 @@
-[[setups]]
+[[profiles]]
 instrument = "vl70m"
 name = "default"
 sysex = []
 
-[setups.banks.0]
+[profiles.banks.0]
 msb = 33
 lsb = 0
 
-[setups.banks.1]
+[profiles.banks.1]
 msb = 33
 lsb = 1
 
-[[setups]]
+[[profiles]]
 instrument = "patchman"
 name = "default"
 sysex = []
 
-[setups.banks.0]
+[profiles.banks.0]
 msb = 33
 lsb = 0
 
-[setups.banks.1]
+[profiles.banks.1]
 msb = 33
 lsb = 1

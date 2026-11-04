@@ -1711,9 +1711,9 @@ copied with readback verification and selected; status then reported
 At that deployment, `instruments/pman.toml` mixed an initial
 `[[patches.pman.0]]` header with `[[patches]]` entries and lacked explicit setup
 fields. It was not edited for that task. Upload used a temporary copy with the
-flat initial header and `setup = "default"` on each entry, matching the example's
+flat initial header and `profile = "default"` on each entry, matching the example's
 existing default-setup routing. No factory EEPROM or vendor backups were changed.
-The current repository table now uses the flat header and explicit default setup.
+The current repository table now uses the flat header and explicit default profile.
 Physical transition/splash/text verification remains pending user observation.
 
 The user subsequently confirmed that the original transition build looked

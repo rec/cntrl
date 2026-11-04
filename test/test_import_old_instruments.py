@@ -74,11 +74,11 @@ def test_emits_valid_files_without_inventing_routing(
     definitions = models.Definitions.model_validate(
         compiler.read_document(output / 'definitions.toml')
     )
-    assert [(s.instrument, s.name) for s in definitions.setups] == [
+    assert [(s.instrument, s.name) for s in definitions.profiles] == [
         ('vl70m', 'default'),
         ('patchman', 'default'),
     ]
-    assert definitions.setups[0].banks[0] == models.Bank(msb=33, lsb=0)
+    assert definitions.profiles[0].banks[0] == models.Bank(msb=33, lsb=0)
     table = compiler.read_document(output / 'patchman.toml')
     assert isinstance(table, dict)
     programs = table['instruments']['patchman']['programs']['1']

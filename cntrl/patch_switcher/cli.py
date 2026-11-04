@@ -168,7 +168,7 @@ def compile_inputs(
                 fonts: dict[int, bytes] = {}
                 result[e.name] = compiler.compile_show(
                     document,
-                    definition_data[0] if definition_data else {'setups': []},
+                    definition_data[0] if definition_data else {'profiles': []},
                     table_data,
                     target,
                     fonts,
