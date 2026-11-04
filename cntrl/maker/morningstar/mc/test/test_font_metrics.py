@@ -13,7 +13,7 @@ def test_page_lines_select_different_native_font_families() -> None:
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
     )
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {
             'instruments': {},
             'patch_cycles': {},

@@ -54,7 +54,7 @@ def lines(block: bytes, page: int) -> list[tuple[int, tuple[int, ...], int, str]
 
 
 def test_patch_program_lines_share_smaller_fitting_size(target: models.Target) -> None:
-    show = models.Show(
+    show = models.Setup(
         fill_in_styles=False,
         pages={'patch': models.Page(fields=['patch_cycle.name', 'names.a', 'names.b'])},
     )
@@ -77,7 +77,7 @@ def test_patch_program_lines_share_smaller_fitting_size(target: models.Target) -
 
 def test_disabled_style_filling_preserves_plain_page(target: models.Target) -> None:
     windows, references, block = display.compile_display(
-        models.Show(fill_in_styles=False), [patch()], target
+        models.Setup(fill_in_styles=False), [patch()], target
     )
     expected = [
         (0, (0, 48, 4, 0, 0, 65535, 48, 0), 8, 'wind'),
@@ -99,7 +99,7 @@ def test_display_fixture_matches_portable_firmware(target: models.Target) -> Non
 
 
 def test_a_window_can_select_a_different_page(target: models.Target) -> None:
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {
             'instruments': {},
             'patch_cycles': {},
@@ -124,7 +124,7 @@ def test_each_line_autoscales_independently(target: models.Target) -> None:
         }
     )
     _, refs, block = display.compile_display(
-        models.Show(instruments={}, patches={}),
+        models.Setup(instruments={}, patches={}),
         [value],
         target,
     )
@@ -136,7 +136,7 @@ def test_each_line_autoscales_independently(target: models.Target) -> None:
 def test_window_records_and_pages_follow_physical_left_to_right_order(
     target: models.Target,
 ) -> None:
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {
             'fill_in_styles': False,
             'pages': {
@@ -168,7 +168,7 @@ def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
             'tags': ['wind'],
         }
     )
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {
             'instruments': {},
             'patch_cycles': {'wind': []},
@@ -191,7 +191,7 @@ def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
 def test_page_fields_use_window_data_and_global_parameters(
     target: models.Target,
 ) -> None:
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {
             'instruments': {},
             'patch_cycles': {},
@@ -231,14 +231,14 @@ def test_ambiguous_or_unknown_references_are_rejected(
     config: dict[str, object], message: str, target: models.Target
 ) -> None:
     with pytest.raises(ValueError, match=message):
-        show = models.Show.model_validate(
+        show = models.Setup.model_validate(
             {'instruments': {}, 'patch_cycles': {}} | config
         )
         display.compile_display(show, [patch()], target)
 
 
 def test_window_errors_are_reported_together(target: models.Target) -> None:
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {
             'instruments': {},
             'patch_cycles': {},
@@ -296,7 +296,7 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
 def test_tag_labels_and_patch_content_resolve_their_own_styles(
     target: models.Target,
 ) -> None:
-    show = models.Show(
+    show = models.Setup(
         instruments={},
         patches={},
         tags={
@@ -326,7 +326,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / 'firmware/test'
 def test_local_tag_reapplies_after_program_tags(
     target: models.Target,
 ) -> None:
-    show = models.Show(
+    show = models.Setup(
         instruments={},
         patches={},
         style=models.Style(background_color='white'),

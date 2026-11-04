@@ -434,7 +434,7 @@ def test_adding_text_requires_the_original_outline(
 ) -> None:
     path = tmp_path / 'subset.cfont'
     path.write_bytes(bitmap)
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {'instruments': {}, 'patch_cycles': {}, 'fonts': {'Custom': str(path)}}
     )
     with pytest.raises(ValueError, match='original font file'):
@@ -452,7 +452,7 @@ def test_bundled_outline_fonts_use_sparse_unicode_assets() -> None:
     target = models.Target.model_validate(
         compiler.read_document(MC / 'patch-switcher-target.json')
     )
-    show = models.Show(
+    show = models.Setup(
         instruments={}, patches={}, style=models.Style(font_name='CourierPrime')
     )
     assets: dict[int, bytes] = {}
@@ -479,7 +479,7 @@ def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
     target = models.Target.model_validate(
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {'instruments': {}, 'patch_cycles': {}, 'pages': {'patch': {'fields': []}}}
     )
     windows, _, _ = display.compile_display(
@@ -540,7 +540,7 @@ def test_still_time_default_scale_can_be_overridden() -> None:
     )
     for face in target.fonts:
         assert face.horizontal_scale == (1.5 if face.name == 'StillTime' else 1.0)
-    source = models.Show(
+    source = models.Setup(
         fill_in_styles=False, style=models.Style(font_name='StillTime')
     )
     patch = display.DisplayPatch(
@@ -579,7 +579,7 @@ def test_prepared_capitals_keep_space_below_the_baseline() -> None:
         compiler.read_document(MC / 'patch-switcher-target.json')
     )
     prepared = font_assets.Preparation(
-        models.Show(),
+        models.Setup(),
         target,
         [(0, 'guitar', models.Style(font_name='OrnamentalSlab'), 4, 3, 0)],
         ['guitar heading'],

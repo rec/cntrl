@@ -83,7 +83,7 @@ def test_dual_internal_setup_has_one_program_action_and_both_names(
 def test_named_sound_fields_render_and_reject_unknown_names(
     target: models.Target,
 ) -> None:
-    show = models.Show.model_validate(
+    show = models.Setup.model_validate(
         {
             'pages': {'patch': {'fields': ['names.stock', 'names.modified']}},
         }

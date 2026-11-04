@@ -1,4 +1,4 @@
-"""Show and instrument-table formats, separate from hardware catalogues."""
+"""Setup and instrument-table formats, separate from hardware catalogues."""
 
 import re
 from functools import cached_property
@@ -435,7 +435,7 @@ class RightPages(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Show(BaseModel, frozen=True):
+class Setup(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
     patches: dict[str, object] = Field(default_factory=dict)

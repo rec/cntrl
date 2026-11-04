@@ -179,7 +179,7 @@ def decode(data: bytes, name: str, key: int) -> models.FontFace:
 class Preparation:
     def __init__(
         self,
-        show: models.Show,
+        show: models.Setup,
         target: models.Target,
         requests: list[tuple[int, str, models.Style, int, int, int]],
         contexts: list[str],
@@ -312,7 +312,7 @@ class Preparation:
             else []
         )
 
-    def finish(self) -> tuple[models.Show, dict[str, int], dict[int, bytes]]:
+    def finish(self) -> tuple[models.Setup, dict[str, int], dict[int, bytes]]:
         keys = {}
         assets = {}
         paths = {}

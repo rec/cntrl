@@ -77,7 +77,7 @@ class Download(BaseModel, frozen=True):
     overwrite: Annotated[bool, tyro.conf.arg(aliases=['-o'])] = False
 
 
-class Setup(BaseModel, frozen=True):
+class SetupCLI(BaseModel, frozen=True):
     command: (
         Annotated[history.History, tyro.conf.subcommand(name='history')]
         | Annotated[Copy, tyro.conf.subcommand(name='copy')]
@@ -370,7 +370,7 @@ def save_font(directory: Path, key: int, data: bytes) -> None:
 def main() -> None:
     command = tyro.cli(
         Annotated[Compile, tyro.conf.subcommand(name='compile')]
-        | Annotated[Setup, tyro.conf.subcommand(name='setup')]
+        | Annotated[SetupCLI, tyro.conf.subcommand(name='setup')]
         | Annotated[Status, tyro.conf.subcommand(name='status')]
         | Annotated[Songs, tyro.conf.subcommand(name='songs')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
@@ -401,7 +401,7 @@ def main() -> None:
                 print(f'  {alias}: channel {data[offset + 64] + 1} to {route}')
         elif isinstance(command, Songs):
             songs.run(command.command)
-        elif isinstance(command, Setup):
+        elif isinstance(command, SetupCLI):
             run_setup(command.command)
         else:
             print(transport.device_status(command.port))

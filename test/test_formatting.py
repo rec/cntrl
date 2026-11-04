@@ -28,7 +28,7 @@ def target() -> models.Target:
 
 def test_custom_foreground_brightness_limit(target: models.Target) -> None:
     styles = formatting.cycle_styles(
-        models.Show(foreground_brightness_limit=0.3), ['a', 'b', 'c'], target
+        models.Setup(foreground_brightness_limit=0.3), ['a', 'b', 'c'], target
     )
     for s in styles.values():
         assert s.foreground_color is not None
@@ -36,7 +36,7 @@ def test_custom_foreground_brightness_limit(target: models.Target) -> None:
         assert 299 * red + 587 * green + 114 * blue < 0.3 * 255000
     with pytest.raises(ValueError, match='too few'):
         formatting.cycle_styles(
-            models.Show(foreground_brightness_limit=0.0001), ['a', 'b'], target
+            models.Setup(foreground_brightness_limit=0.0001), ['a', 'b'], target
         )
 
 
@@ -45,7 +45,7 @@ def test_seeded_cycles_balance_fonts_and_keep_unique_colors(
 ) -> None:
     names = [str(i) for i in range(12)]
     state = getstate()
-    show = models.Show()
+    show = models.Setup()
     styles = formatting.cycle_styles(show, names, target)
     assert formatting.cycle_styles(show, names, target) == styles
     assert getstate() == state
@@ -63,14 +63,14 @@ def test_seeded_cycles_balance_fonts_and_keep_unique_colors(
         s.background_color == show.background_color == '0xFFF8D8'
         for s in styles.values()
     )
-    assert styles != formatting.cycle_styles(models.Show(seed=1), names, target)
+    assert styles != formatting.cycle_styles(models.Setup(seed=1), names, target)
 
 
 def test_background_anchor_excludes_its_color(
     target: models.Target,
 ) -> None:
     styles = formatting.cycle_styles(
-        models.Show(background_color='black'), ['a', 'b', 'c'], target
+        models.Setup(background_color='black'), ['a', 'b', 'c'], target
     )
     assert all(s.background_color == 'black' for s in styles.values())
     assert all(s.foreground_color != '0x000000' for s in styles.values())
@@ -82,7 +82,7 @@ def test_generated_foregrounds_stay_below_half_brightness(
     target: models.Target,
 ) -> None:
     styles = formatting.cycle_styles(
-        models.Show(seed=seed), [str(i) for i in range(64)], target
+        models.Setup(seed=seed), [str(i) for i in range(64)], target
     )
     for style in styles.values():
         assert style.foreground_color is not None
@@ -92,9 +92,9 @@ def test_generated_foregrounds_stay_below_half_brightness(
 
 def test_disabled_filling_does_not_generate_styles(target: models.Target) -> None:
     assert (
-        formatting.cycle_styles(models.Show(fill_in_styles=False), ['a'], target) == {}
+        formatting.cycle_styles(models.Setup(fill_in_styles=False), ['a'], target) == {}
     )
-    assert formatting.cycle_styles(models.Show(), [], target) == {}
+    assert formatting.cycle_styles(models.Setup(), [], target) == {}
 
 
 @pytest.mark.parametrize(
@@ -111,12 +111,12 @@ def test_disabled_filling_does_not_generate_styles(target: models.Target) -> Non
 )
 def test_formatting_settings_are_validated(values: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
-        models.Show.model_validate(values)
+        models.Setup.model_validate(values)
 
 
 def test_invalid_background_is_reported(target: models.Target) -> None:
     with pytest.raises(ValueError, match='unknown color'):
-        formatting.cycle_styles(models.Show(background_color='wrong'), ['a'], target)
+        formatting.cycle_styles(models.Setup(background_color='wrong'), ['a'], target)
 
 
 @pytest.mark.parametrize('seed', [0, None])
@@ -139,7 +139,7 @@ def test_generated_formatting_survives_export(
 def test_cycle_formatting_is_shared_without_overriding_authored_properties(
     target: models.Target,
 ) -> None:
-    show = models.Show(style=models.Style(foreground_color='red'))
+    show = models.Setup(style=models.Style(foreground_color='red'))
     patches = [
         display.DisplayPatch(values={'patch_cycle.name': 'wind', 'display_name': n})
         for n in ['Flute', 'Oboe']

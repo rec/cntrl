@@ -5,7 +5,7 @@ import struct
 from . import graphics, models
 
 
-def pack(show: models.Show, target: models.Target) -> list[int]:
+def pack(show: models.Setup, target: models.Target) -> list[int]:
     r = show.right_pages
     if (
         r.title_height * 3 // 2

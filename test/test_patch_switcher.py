@@ -35,7 +35,7 @@ def test_custom_pulse_round_trip(
     show['navigation'] = {'hold_delay': '2 seconds', 'repeat_interval': '250 ms'}
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    settings = models.Show.model_validate(exported)
+    settings = models.Setup.model_validate(exported)
     assert settings.target_pulse == models.TargetPulse(
         period=5, delay=1.5, minimum=20, maximum=100
     )
@@ -98,7 +98,7 @@ def test_right_page_settings_round_trip(
     }
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    settings = models.Show.model_validate(exported).right_pages
+    settings = models.Setup.model_validate(exported).right_pages
     assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
     assert settings.title_font == 'Arial'
     assert settings.refresh_interval == 2 and settings.flash_fraction == 0.2
@@ -170,13 +170,13 @@ def test_transition_duration_survives_resolved_export(
     assert struct.unpack_from('<H', data, meta + 6)[0] == round((duration or 0) * 1000)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported.get('transition') == duration
-    assert models.Show.model_validate(exported).transition == duration
+    assert models.Setup.model_validate(exported).transition == duration
     assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
 
 
 def test_omitted_transition_duration_stays_unspecified(show: dict[str, object]) -> None:
     assert 'transition' not in show
-    assert models.Show.model_validate(show).transition is None
+    assert models.Setup.model_validate(show).transition is None
 
 
 def test_configuration_units_compile_to_the_same_document(
@@ -216,7 +216,7 @@ def test_configuration_units_retain_constraints(
     show: dict[str, object], field: str, value: object
 ) -> None:
     with pytest.raises(ValueError, match=field):
-        models.Show.model_validate(show | {field: value})
+        models.Setup.model_validate(show | {field: value})
 
 
 def test_target_units_normalize_before_compilation(target: models.Target) -> None:
@@ -237,7 +237,7 @@ def test_removed_show_sizing_controls_are_rejected(
     show: dict[str, object], field: str, value: object
 ) -> None:
     with pytest.raises(ValueError, match=field):
-        models.Show.model_validate(show | {field: value})
+        models.Setup.model_validate(show | {field: value})
 
 
 def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) -> None:
@@ -259,7 +259,7 @@ def test_usb_midi_switch_round_trips(
     target: models.Target,
     enabled: bool | None,
 ) -> None:
-    assert models.Show.model_validate(show).is_midi_interface is False
+    assert models.Setup.model_validate(show).is_midi_interface is False
     if enabled is not None:
         show['is_midi_interface'] = enabled
     data = compiler.compile_show(show, definitions, [], target)
@@ -320,7 +320,7 @@ def test_splash_defaults_to_enabled_unless_explicitly_disabled(
     target: models.Target,
     splash: bool | None,
 ) -> None:
-    assert models.Show.model_validate(show).splash
+    assert models.Setup.model_validate(show).splash
     if splash is not None:
         show['splash'] = splash
     result = compiler.compile_show(show, definitions, [], target)
@@ -331,7 +331,7 @@ def test_splash_defaults_to_enabled_unless_explicitly_disabled(
 def test_screensaver_timeout_is_encoded_in_milliseconds(
     show: dict[str, object], definitions: object, target: models.Target, seconds: int
 ) -> None:
-    assert models.Show.model_validate(show).screensaver_timeout == 0
+    assert models.Setup.model_validate(show).screensaver_timeout == 0
     show['screensaver_timeout'] = seconds
     result = compiler.compile_show(show, definitions, [], target)
     assert compiler.HEADER.unpack_from(result)[9] == seconds * 1000

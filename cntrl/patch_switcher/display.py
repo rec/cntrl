@@ -24,7 +24,7 @@ class DisplayPatch(BaseModel, frozen=True):
 
 
 def compile_display(
-    show: models.Show,
+    show: models.Setup,
     patches: list[DisplayPatch],
     target: models.Target,
     assets: dict[int, bytes] | None = None,
@@ -323,7 +323,7 @@ def tag_style(names: list[str], tags: dict[str, models.Tag]) -> models.Style:
 
 
 def field_value(
-    name: str, patch: DisplayPatch, show: models.Show
+    name: str, patch: DisplayPatch, show: models.Setup
 ) -> str | int | float | bool | None:
     if name == 'navigation.hold_delay':
         return show.navigation.hold_delay

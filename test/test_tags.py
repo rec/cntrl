@@ -17,7 +17,7 @@ def target() -> models.Target:
 
 @pytest.fixture
 def show() -> dict[str, object]:
-    return models.Show(
+    return models.Setup(
         instruments={
             'synth': {
                 'instrument': 'synth',
@@ -62,7 +62,9 @@ def test_patch_inherits_program_tags_without_changing_patch_cycles(
     data = compiler.compile_show(show, {}, [], target)
     assert b'sax, whole-system\0' in data
     assert b'sax\0' in data
-    exported = models.Show.model_validate(tomlkit.parse(resolved.export(data)).unwrap())
+    exported = models.Setup.model_validate(
+        tomlkit.parse(resolved.export(data)).unwrap()
+    )
     assert list(exported.patch_cycles) == ['Song 1']
     assert exported.definitions is not None
     assert exported.definitions.programs[0].tags == ['sax']
@@ -110,7 +112,7 @@ def test_later_tags_override_properties_without_replacing_the_style() -> None:
 def test_unstyled_tags_survive_without_declarations(
     owner: str, show: dict[str, object], target: models.Target
 ) -> None:
-    document = models.Show.model_validate(show).model_dump(exclude_none=True)
+    document = models.Setup.model_validate(show).model_dump(exclude_none=True)
     entry = (
         document['definitions']['programs'][0]
         if owner == 'program'
@@ -142,7 +144,9 @@ def test_program_table_tags_merge_as_a_union(
         ]
     }
     data = compiler.compile_show(show, {}, [table], target)
-    exported = models.Show.model_validate(tomlkit.parse(resolved.export(data)).unwrap())
+    exported = models.Setup.model_validate(
+        tomlkit.parse(resolved.export(data)).unwrap()
+    )
     assert exported.definitions is not None
     assert exported.definitions.programs[0].tags == ['sax', 'whole-system']
 
@@ -151,7 +155,7 @@ def test_program_table_tags_merge_as_a_union(
 def test_icons_preserve_explicit_owners_through_recompilation(
     show: dict[str, object], target: models.Target, icon: str
 ) -> None:
-    show = models.Show.model_validate(show).model_dump(exclude_none=True)
+    show = models.Setup.model_validate(show).model_dump(exclude_none=True)
     show['tags']['sax']['style'] = {'icon': 'images/sax.png'}
     show['definitions']['programs'][0]['style'] = {'icon': 'images/program.png'}
     show['patch_cycles']['Song 1'][0]['style'] = {'icon': icon}

@@ -8,7 +8,7 @@ from . import graphics, models
 
 
 def cycle_styles(
-    show: models.Show, names: list[str], target: models.Target
+    show: models.Setup, names: list[str], target: models.Target
 ) -> dict[str, models.Style]:
     if not show.fill_in_styles or not names:
         return {}

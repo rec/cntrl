@@ -73,7 +73,7 @@ def compile_show(
     errors: list[str] = []
     generated: dict[int, bytes] = {}
     try:
-        show = models.Show.model_validate(document)
+        show = models.Setup.model_validate(document)
     except ValidationError as error:
         raise CompilationError(_validation_errors('show', error)) from error
     try:
@@ -424,7 +424,7 @@ class PatchCompiler:
 
     def __init__(
         self,
-        show: models.Show,
+        show: models.Setup,
         profiles: dict[tuple[str, str], models.InstrumentProfile],
         entries: list[models.TablePatch],
         instruments: dict[str, models.Instrument],
@@ -821,13 +821,13 @@ class PatchCompiler:
 
     def dependency_leaves(
         self, index: int
-    ) -> list[tuple[models.Patch, str, models.Show]]:
+    ) -> list[tuple[models.Patch, str, models.Setup]]:
         """Resolve local and companion dependencies before any send."""
-        leaves: list[tuple[models.Patch, str, models.Show]] = []
-        documents: dict[str, models.Show] = {'': self.show}
+        leaves: list[tuple[models.Patch, str, models.Setup]] = []
+        documents: dict[str, models.Setup] = {'': self.show}
         for key, raw in self.documents.items():
             try:
-                documents[key.casefold()] = models.Show.model_validate(raw)
+                documents[key.casefold()] = models.Setup.model_validate(raw)
             except ValidationError as error:
                 self.errors.extend(_validation_errors(key, error))
         pending: list[tuple[models.Patch, str, str, list[tuple[str, str]]]] = [
@@ -892,7 +892,7 @@ class PatchCompiler:
         return leaves
 
     def source_context(
-        self, source: models.Show, contexts: list['PatchCompiler']
+        self, source: models.Setup, contexts: list['PatchCompiler']
     ) -> 'PatchCompiler':
         if found := next((c for c in contexts if c.show == source), None):
             return found
