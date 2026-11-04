@@ -12,14 +12,13 @@ packages. See [Morningstar MC](cntrl/maker/morningstar/mc/README.md).
 The application supports named performance setups, on-controller selection and
 numeric editing, per-setup graphics, and separate original/program/show patch
 names. Named pages, windows and per-line styles are described in the
-[display-format design](plan/display-format.md). The default patch page retains
+[display formatting guide](doc/formatting.md). The default patch page retains
 the existing navigation-heading/name UI. Programs and patches can independently
-carry multiple reusable tags, with inherited membership and prioritized
-tag styles. The current compiled document format is version 18; source data must be
-recompiled for a format change. Firmware images and setup data are deployed
-separately. The [patch-switcher plan](plan/patch-switcher.md) and
-[multiple-setups plan](plan/multiple-setups.md) describe implemented behavior;
-remaining hardware qualification is tracked in the maker documentation.
+carry multiple reusable tags, with inherited membership and ordered
+tag-style overrides. The current compiled document format is version 25; source
+data must be recompiled for a format change. Firmware images and setup data are deployed
+separately. The [application guide](firmware/README.md) describes implemented
+behavior; remaining hardware qualification is tracked in the maker documentation.
 
 ## Controls and displays
 

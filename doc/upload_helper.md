@@ -1,49 +1,16 @@
 # Firmware upload helper
 
-Use the running `cntrl.maker.morningstar.mc.upload_helper` for firmware uploads.
-It lets Codex request USB flashing through a user-launched process with access
-to the pedal. Do not launch another server when the helper is already running.
+Use the running, user-launched upload helper for firmware flashing. Reuse that
+process; do not start a second server. It accepts an upload request for a fixed
+build image with an exact SHA-256, validates and snapshots the image, then calls
+the installed updater. It does not expose arbitrary commands or image paths.
 
-The implementation is
-[`upload_helper.py`](../cntrl/maker/morningstar/mc/upload_helper.py).
-It accepts requests over the owner-only Unix socket
-`cntrl/maker/morningstar/mc/firmware/.upload-helper.sock`. It snapshots the fixed
-image `cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex`, verifies its
-requested SHA-256, HEX checksums, boot headers and known-good flash configuration,
-then invokes the installed Morningstar updater's `tycmd` for pedal serial
-`14468280`. The image must exclude the reserved flash tail at `0x607c0000`.
-Requests cannot supply another image path, executable or uploader arguments.
+Build and inspect the image first, close serial captures, request bootloader
+entry, verify device identity, then upload with the digest. Let the upload finish.
+Investigate write failures before retrying, and verify application status and
+saved setup data after USB returns. Firmware flashing and setup transfers are
+separate operations; the helper does not grant serial-transfer permissions.
 
-## Upload workflow
-
-Run from the repository root after building and inspecting the intended image:
-
-```bash
-shasum -a 256 cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex
-uv run --frozen -m cntrl.maker.morningstar.mc.upload_helper bootloader
-```
-
-Close serial captures before bootloader entry. The `bootloader` command directly
-selects 134 baud on `/dev/cu.usbmodem144682801`; it does not use the helper socket
-or flash anything. Verify the expected pedal appears as HalfKay, then request
-the upload using the digest printed above:
-
-```bash
-uv run --frozen -m cntrl.maker.morningstar.mc.upload_helper upload --sha256 DIGEST
-```
-
-The running server independently checks the HalfKay identity before flashing.
-Let an upload finish without interrupting the helper. Afterward, verify that
-application USB returns and check its status. The updater can report exit status
-1 after a successful reset/disappearance, so check the device before deciding
-whether an upload failed. A write error needs investigation rather than being
-treated as a successful reset.
-
-The helper handles firmware flashing only. Normal USB serial queries and setup
-transfers use the application's serial connection directly and may still need
-host permission. The helper does not grant those permissions.
-
-If the server is absent, the user starts it in Terminal with
-`uv run --frozen -m cntrl.maker.morningstar.mc.upload_helper serve`.
-See the [full helper documentation](../cntrl/maker/morningstar/mc/firmware/upload-helper.md)
-for startup, recovery and implementation details.
+The [target-specific helper guide](../cntrl/maker/morningstar/mc/firmware/upload-helper.md)
+contains the implementation link, exact commands, device identity, image path,
+validation rules, startup and recovery instructions.

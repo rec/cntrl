@@ -1,8 +1,8 @@
 # Upload-only helper
 
-The patch-switcher application has repeatedly booted and communicated over USB,
-including software-triggered uploads of the current format 9 firmware. See the
-[deployment record](patch-switcher.md#current-deployment-2026-10-25).
+The patch-switcher application has repeatedly booted and communicated over USB
+after uploads through this helper. Firmware and compiled setup data are separate;
+verify both the application boot and the selected setup after an upload.
 Direct HalfKay uploads remain blocked by the
 command sandbox. This helper is a separate, explicitly user-launched capability;
 it does not change Codex permissions or expose general HID access.
@@ -134,3 +134,14 @@ software-entry/upload/reboot verification without a PROGRAM press.
 All 99 Python tests passed, including a real pseudo-terminal test checking that
 the command selects 134 baud without writing a serial payload or changing other
 terminal settings. Ruff, formatting, type checking and pyupgrade also passed.
+
+## Verify after upload
+
+An I/O write error is a failed upload attempt. Recheck the expected HalfKay
+identity and the unchanged image digest before a deliberate retry. Let every
+attempt finish; the helper never retries automatically. A later reset followed
+by board disappearance can return status 1 even when flashing succeeded.
+Check that application USB returns, query `CNTRL STATUS`, and verify the saved
+selection and setup bytes. USB enumeration alone does not verify setup data or
+physical MIDI behavior. Recompile and restore valid saved setups if their compiled
+format changed, preserving backups and already-invalid documents.

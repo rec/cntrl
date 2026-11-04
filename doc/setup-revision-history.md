@@ -71,5 +71,6 @@ Native tests cover reversible restores, failed writes, deletion, interrupted
 records, more than 1,000 revisions, and per-step I/O limits with a 64 KiB document
 and more than 2,000 directory entries. Python tests compare configurations and
 exercise the real C++ command receiver through a pseudo-terminal, including
-progress replies. The cooperative implementation has been flashed; post-boot
-verification and physical storage timing qualification remain pending.
+progress replies. The cooperative implementation has been flashed and subsequent
+boots have loaded saved setups successfully. Dedicated physical history-workflow and storage timing
+qualification remain pending.

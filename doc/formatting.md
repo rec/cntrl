@@ -1,15 +1,9 @@
 # Display formatting in TOML
 
-Status: implemented on main in compiled document format 14. Included in the
-combined firmware deployment recorded in the hardware documentation. This
-replaces the CSS proposal and updates
-[display-format.md](display-format.md), which records the current implementation.
+## Scope
 
-## Goal
-
-Keep formatting in the existing TOML configuration. Simplify the current style
-model and make its precedence explicit. Reuse object-attached partial styles,
-page fields, tag membership and host-side compilation.
+Formatting uses TOML configuration, object-attached partial styles, page fields,
+tag membership and host-side compilation.
 
 Authors choose colors and font names. Text always fits automatically. No CSS
 parser, selector language or additional dependency is required.
@@ -39,9 +33,8 @@ scaling changes glyph widths and spacing before automatic fitting, without
 changing the vertical scale. StillTime defaults to 1.5; all other fonts default
 to 1.0. Explicit style values override these font defaults.
 
-Use show-level `style` for authored appearance defaults. Remove duplicate
-show-level font controls as part of converting configurations, so each setting
-has one authoring path.
+Use show-level `style` for authored appearance defaults. Font names belong in
+styles; there is no separate show-level font setting.
 
 Illustrative configuration:
 
@@ -103,8 +96,8 @@ membership does not change MIDI behavior or navigation patch cycles.
 
 Apply the program's tags in listed order, followed by the patch's own
 tags in listed order. Within these tag layers, a later explicit
-property wins. Registry declaration order has no effect. Remove integer
-`priority` and the errors for conflicting values at equal priority.
+property wins. Registry declaration order has no effect. Tags have no integer
+`priority`.
 
 For example, program tags `['sax', 'bright']` apply sax then bright.
 Patch tags `['whole-system']` apply afterward. A tag that only changes
@@ -127,19 +120,15 @@ that fits the drawable window width and its allocated vertical space. Preserve
 glyph proportions. Short labels remain bounded by height so they cannot overlap
 other lines; unused horizontal space is acceptable.
 
-Remove authored `font_size` and `autoscale_fonts` throughout configuration and
-source metadata. There is one fitting behavior, with no replacement switch or
-fixed-size mode. Bitmap metrics and selected raster sizes remain internal.
+There are no authored `font_size` or `autoscale_fonts` controls. Selected raster
+sizes and metrics are compiler details. The patch-manager card divides the window
+into three equal vertical bands. Its first band is reversed, using the heading
+color as background and the page background as text color. The second and third
+lines share the smaller fitting size, while retaining their font families.
+Other pages, including switch pages, retain their own layout rules.
 
-Retain equal height allocation for fitting. After sizing and wrapping, subtract
-the rendered rows' total height from the available height. For N rows, divide
-the remainder by N to obtain H. Leave H/2 above and below the rows and H between
-them, with consistent pixel rounding.
-
-Retain window padding, horizontal centering, field order, missing-value omission
-and management-text wrapping. Line backgrounds paint their existing bands.
-Transitions finish with the destination window's resolved appearance. Existing
-fixed-size configurations deliberately change to automatic fitting.
+Window padding, horizontal centering, field order and missing-value omission
+remain part of the page model. Transitions end with the destination appearance.
 
 Already-sent text keeps its resolved foreground and uses alternating transparent
 pixels to expose the line background. Stippling remains application behavior;
@@ -156,28 +145,13 @@ Preserve partial styles, including empty icon strings, through download/recompil
 Image loading, path resolution, conversion, embedding, layout and rendering remain
 future work. Resolving the reference does not display an icon yet.
 
-## Implementation and verification
+## Pages and fields
 
-1. Reduce the existing style model to the five properties above. Remove
-   tag priorities and authored sizing controls, including obsolete export
-   metadata and configuration paths.
-2. Reuse the existing property merge logic with the documented tag order.
-   Convert repository examples and update the current display documentation.
-3. Make independent automatic fitting unconditional. Continue compiling resolved
-   pages and styles on the host into bounded firmware records. Preserve partial
-   styles, explicit tag lists and icon references in source metadata.
-4. Update the compiled format contract as required and require source
-   recompilation. Do not add a legacy decoder or automatic configuration migration.
-5. Test partial overrides at each applicable layer, tag ordering and repeated
-   inherited/local tags. Verify unrelated headings and global fields are
-   unaffected. Test export/recompile without flattening authored information.
-6. Test short and long labels, mixed families, multiple lines, background bands,
-   stippling and transition destinations. Preserve MIDI/send/undo behavior.
-   Verify physical appearance when deployment is requested.
-
-No borders, rounded corners, image rendering, general style selectors or new
-layout features are part of this work.
-
-## Additional work beyond the prompt
-
-None. Physical verification requires a separately requested deployment.
+Pages contain ordered field names, for example
+`fields = ['patch_cycle.name', 'names.vl70m', 'names.patchman']`. Each window supplies
+its own data item to the page. Missing and empty values are omitted; zero and
+false remain visible. Built-ins and shared parameters use one unique namespace.
+Unknown or duplicate field names are errors. Pages are bounded by record capacity
+and target height. See the [application guide](../firmware/README.md) for the
+complete field catalogue and compiled format, and [Patch authoring](patches.md)
+for styles generated automatically for cycles.

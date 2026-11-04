@@ -12,9 +12,9 @@ one position at a time.
 
 ## Patch window presentation
 
-The top line has a reversed full-width heading band, from the top edge to two
-pixels below its text bounds. Its background uses the heading's resolved patch
-color and its text uses the page background. The second and third displayed
+The patch-manager window is divided into three equal vertical bands. The top
+band is reversed across its full width. Its background uses the heading's
+resolved patch color and its text uses the page background. The second and third displayed
 lines use the smaller of their fitted sizes, retaining their font families.
 If the families have different bitmap sizes, the largest shared size at or
 below that limit is used. Switch pages retain their independent line sizing.
@@ -201,8 +201,6 @@ slots for the stock VL70-m and Patchman units on channel 1.
 
 ```toml
 [instruments.piano]
-instrument = 'piano'
-setup = 'default'
 output = 'din'
 channel = 1
 
@@ -262,8 +260,8 @@ Channels are 1..16. Programs use 1..128 or the existing program-name regular
 expression lookup. Volume, CC controllers and CC values use 0..127; pan uses
 -64..63. Pitch bend uses -8192..8191, with zero centered. NRPN parameters and values
 use 0..16383. Program selections send bank MSB, bank LSB, program, optional volume
-and optional pan, in that order. NRPN sends CC 99, 98, 6 and 38 as one ordered patch cycle
-on its output, allowing MIDI real-time traffic to interleave.
+and optional pan, in that order. NRPN sends CC 99, 98, 6 and 38 as one ordered
+message sequence on its output, allowing MIDI real-time traffic to interleave.
 
 SysEx `data` contains 0..127 payload bytes, without F0/F7; the compiler adds those
 delimiters. `midi.bytes` contains exactly one complete message including its
@@ -351,7 +349,7 @@ unknown, rather than risk sending it twice.
 
 ## Required authoring and format changes
 
-Setup format 21 and song records CSG4 replace the preceding formats. Setup
+The current setup format is 25; song records use CSG4. Setup
 window graphics and page references use physical left-to-right order:
 next (0), sent (1), undo (2). Recompile and
 upload matching setup and song documents together before using this firmware.

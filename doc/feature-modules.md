@@ -86,11 +86,10 @@ scheduling rather than blocking waits.
 
 ## Establishing the interfaces
 
-The MIDI cable tester is the first module. Its target adapter grants port access
-and delivers physical input, while the module owns test behavior and its page.
-Build the MIDI monitor against the shared core services next. Use those two
-modules to establish which interfaces are actually shared before formalizing
-more of the framework.
+The cable tester, MIDI interface and Panic use target adapters for physical
+services while owning their own behavior and pages. A future MIDI monitor should
+reuse those services. Establish additional shared interfaces only when another
+module actually needs them.
 
 Verify each module's logic independently. Also verify that observers leave
 routing unchanged, processors follow configured routes, active tools respect
@@ -99,4 +98,5 @@ separate physical verification.
 
 ## Additional work beyond the prompt
 
-None. The first implementation is documented in [midi-cable-test.md](midi-cable-test.md).
+None. Current modules are documented in [midi-cable-test.md](midi-cable-test.md),
+[midi-interface.md](midi-interface.md) and [panic.md](panic.md).

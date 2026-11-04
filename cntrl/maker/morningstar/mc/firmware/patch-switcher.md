@@ -420,7 +420,8 @@ power-loss or interrupted-write qualification is claimed.
 
 ## Named performance setups: 2026-10-24
 
-Implemented the portable [multiple-setups plan](../../../../../plan/multiple-setups.md).
+Implemented named setups as described in the
+[application guide](../../../../../firmware/README.md).
 The image was built and inspected, then uploaded through software HalfKay entry
 and the existing upload-only helper. SHA-256:
 `b77c697957e1ebcc6a73b64dad9bbd67ae9933e2c4147801255cf2b112f60ac5`.
@@ -493,7 +494,7 @@ Compiled format 11 uses named pages with ordered field names, partial styles
 and window bindings. The default page contains `group.name` and
 `display_name`, preserving the performance UI. Management, empty/error states
 and performance pages use the same generic line renderer. See the portable
-[display-format design](../../../../../plan/display-format.md) for configuration
+[display formatting guide](../../../../../doc/formatting.md) for configuration
 and inheritance rules.
 
 The saved pman setup was compared with its previous format 10 binary across all
@@ -567,9 +568,10 @@ status does not indicate that a DAW has opened a port.
 Build with `MIDI_INTERFACE=0` to omit the module and its menu entry. Cable tester
 inclusion remains controlled separately by `CABLE_TEST`. The module has no
 runtime dependency on the tester. The generic implementation and verification
-contract is in [the module plan](../../../../../plan/midi-interface.md).
-This module has not been flashed; physical forwarding and UI checks remain
-pending.
+contract is in [the module guide](../../../../../doc/midi-interface.md).
+This section records the original build-only verification. The module was later
+included in combined firmware uploads; dedicated physical forwarding and UI
+qualification remains pending.
 
 ## Setup revisions
 

@@ -248,7 +248,7 @@ order; later explicit properties win. A locally repeated tag applies again.
 The `tags` field displays the unique first-occurrence membership list and
 uses tag styles without program/patch overrides. Navigation headings and
 global fields do not acquire patch styles. There are no tag priorities.
-See [formatting](../plan/formatting.md) for the complete contract.
+See [formatting](../doc/formatting.md) for the complete contract.
 
 For example, the program can declare `tags = ['sax']`, while a patch that
 sets up the whole board adds `tags = ['whole-system']`. That patch displays

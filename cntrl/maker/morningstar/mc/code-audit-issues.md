@@ -1,9 +1,11 @@
 # Hardware appendix to the code audit
 
-Part of [plan/issues.md](../../../../plan/issues.md), reviewed 2026-10-28 at
+Hardware findings from the source audit reviewed 2026-10-28 at
 `eab498633baa2e7556a7f0ff2cadc83209a7ea94`. Findings below are source-traced;
 they were not reproduced on the pedal. Layout and SD-space usage are excluded.
-Paths below are relative to this directory unless stated otherwise.
+All five findings below are resolved. The completed generic audit plan was
+removed; this appendix retains the hardware investigation evidence. Paths below
+are relative to this directory unless stated otherwise.
 
 ## M1. P2: tool takeover can suspend an unfinished SysEx termination
 
@@ -122,8 +124,7 @@ choosing a larger memory-management change.
 ## Deployment-status references
 
 `firmware/patch-switcher.md` records the Panic combined-image upload and its
-post-boot setup verification. Compare that record with the stale status text in
-the generic plans; do not confuse installation with physical MIDI qualification.
+post-boot setup verification. Installation does not establish physical MIDI qualification.
 
 ## Additional work beyond the prompt
 

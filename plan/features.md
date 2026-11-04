@@ -14,10 +14,10 @@ different section orders.
 
 ### Multi-instrument scenes
 
-Recall a collection of instrument patches and controller values with one press.
-A scene could select a synth sound, change an effects preset and set a mixer
-level together. Preview the whole scene before sending, and make undo restore
-the previous scene's known selections.
+Composite Patches already execute several instrument and controller changes
+with one press. A future scene view could preview those children together and
+restore the previous scene's known selections; current Undo only restores known
+program selections, without reversing arbitrary effects.
 
 ### Favorites and recent selections
 
@@ -74,10 +74,9 @@ controller values.
 
 ## Clock, synchronization and scheduling
 
-- Receive beats, song position and time.
+- Extend the existing incoming-clock tempo measurement to song position and time.
 - Defer patch changes until the next beat, bar or four-bar boundary.
 - Sync metronomes.
-- Tap tempo.
 
 ## Note generation, looping and modulation
 
@@ -112,6 +111,14 @@ each connected device can report.
 Suppress new musical messages while allowing navigation and configuration,
 with an unmistakable display indication.
 
-## Additional work beyond the prompt
+## Input, remote UI and display extensions
 
-None.
+- Accept a USB typing keyboard for text entry, search and navigation, keeping
+  keyboard drivers in the target adapter and verifying socket power on hardware.
+- Provide an optional browser UI over the existing USB serial transport for setup
+  transfer, browsing and explicit actions. Detect browser support and keep the
+  pedal independent when the browser disconnects.
+- Add bounded temporary text/graphics popups over SysEx or serial. Expiry and
+  dismissal must restore the current underlying UI without changing patches.
+- Render the optional image references already retained in styles. Conversion,
+  embedding, layout and image loading remain future work.
