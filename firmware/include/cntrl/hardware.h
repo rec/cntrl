@@ -34,6 +34,11 @@ struct Circle {
     uint16_t x = 0, y = 0, diameter = 0, annulus = 0, color = 0, ring_color = 0;
 };
 
+struct ToggleIcon {
+    uint16_t x = 0, y = 0;
+    bool visible = false, enabled = false;
+};
+
 struct Pane {
     bool performance = false;
     bool three_bands = false;
@@ -41,7 +46,8 @@ struct Pane {
     int pending_patch = -1; // Document patch index, or -1 when no unsent patch is displayed.
     ScreenGraphics graphics;
     TextLine lines[max_lines];
-    Circle circle;
+    Circle circles[4];
+    ToggleIcon toggle;
 };
 
 inline bool button_pair_valid(unsigned mask) {

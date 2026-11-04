@@ -5,10 +5,13 @@ with the setup's current bridge state and does not change routing on entry.
 C temporarily toggles forwarding; F continues cycling and restores the setup
 setting if it was changed. The setup itself is not edited or saved.
 
-The page uses the shared background, heading and heavier text. It shows host
-connection, four activity indicators and On/Off above C. The other two displays
-stay in place, and brightness is unchanged. Host connected means the USB device
-has been configured by the computer, not that a DAW opened a MIDI port.
+The page uses the shared background, heading and heavier text. A small toggle
+icon in the bottom-right corner shows whether forwarding is enabled. The body
+contains a two-by-two array of circular indicators, with DIN/TRS rows and
+In/Out columns. Active indicators are bright green; inactive indicators are
+grey. When forwarding is off, all body labels and indicators are grey while
+the heading keeps its usual colors. The other two displays stay in place, and
+brightness is unchanged.
 
 DIN in and TRS in indicate complete received MIDI packets, including real-time
 and streamed SysEx, independently of onward queue acceptance. DIN out and TRS out
@@ -19,8 +22,8 @@ Off, exit and disconnection clear activity; reconnection does not replay it.
 
 On enables the existing physical-to-USB and USB-to-physical routes without USB
 re-enumeration. It generates no test messages and adds no physical MIDI thru or
-USB-host routing. With no computer connected it remains responsive, reports No
-host, and does not retain physical input for later replay. Off clears bridge
+USB-host routing. With no computer connected it remains responsive and does not retain physical
+input for later replay. Off clears bridge
 queues and parser state, preserving accepted pedal work and required SysEx
 termination. Normal performance controls remain available on this page.
 

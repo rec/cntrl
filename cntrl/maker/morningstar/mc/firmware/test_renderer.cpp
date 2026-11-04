@@ -674,7 +674,7 @@ static void test_performance_pages() {
     assert(!std::strcmp(view.lines[0].text, "Tap Tempo"));
     const auto heading = view.lines[0].graphics;
     assert(view.heading_band && heading.foreground == 0xffff && heading.background == 0);
-    assert(view.graphics.background == 0xff90 && view.circle.annulus == 5);
+    assert(view.graphics.background == 0xff90 && view.circles[0].annulus == 5);
     DisplayRenderer renderer;
     renderer.show(2, view); drain(renderer);
     assert(screens[2][10][0] == 0 && screens[2][23][0] == 0 && screens[2][24][0] == 0xff90);
@@ -689,13 +689,13 @@ static void test_performance_pages() {
     renderer.show(2, weight); drain(renderer);
     assert(screens[2][37][10] == 0 && screens[2][38][10] == 0xffff);
     assert(screens[2][30][9] == 0xffff && screens[2][30][15] == 0xffff);
-    assert(!std::strcmp(view.lines[1].text, "---.-") && view.circle.color == 0x4000);
+    assert(!std::strcmp(view.lines[1].text, "---.-") && view.circles[0].color == 0x4000);
     pages.tap(100); view = pages.view(100, 100000, status);
-    assert(view.circle.color == 0x4000 && !std::strcmp(view.lines[1].text, "---.-"));
+    assert(view.circles[0].color == 0x4000 && !std::strcmp(view.lines[1].text, "---.-"));
     pages.tap(600); view = pages.view(600, 600000, status);
-    assert(!std::strcmp(view.lines[1].text, "120.0") && view.circle.color == 0xf800);
+    assert(!std::strcmp(view.lines[1].text, "120.0") && view.circles[0].color == 0xf800);
     assert(!pages.due(799) && pages.due(800));
-    view = pages.view(900, 900000, status); assert(view.circle.color == 0x4000);
+    view = pages.view(900, 900000, status); assert(view.circles[0].color == 0x4000);
     assert(pages.due(1100));
     pages.browse(false, "frozen"); pages.time(1200, 1200000);
     view = pages.view(1200, 1200000, status);
@@ -792,9 +792,23 @@ static void test_performance_pages() {
     view = pages.view(4004, 4004000, status, {}, cntrl::Panic::Status::ready, interface);
     assert(!std::strcmp(view.lines[0].text, "MIDI Interface"));
     assert(view.heading_band && view.graphics.background == 0xff90 && view.lines[0].graphics.size == heading.size);
-    assert(!std::strcmp(view.lines[1].text, "Host connected") && !std::strcmp(view.lines[6].text, "On"));
-    assert(!std::strcmp(view.lines[2].text, "* DIN in") && !std::strcmp(view.lines[3].text, "o TRS in"));
-    assert(view.lines[2].graphics.foreground == 0x0400 && view.lines[3].graphics.foreground == 0x8410);
+    assert(!std::strcmp(view.lines[1].text, "In") && !std::strcmp(view.lines[2].text, "Out"));
+    assert(!std::strcmp(view.lines[3].text, "DIN") && !std::strcmp(view.lines[4].text, "TRS"));
+    assert(!view.lines[5].text[0] && !view.lines[6].text[0]);
+    assert(view.toggle.visible && view.toggle.enabled);
+    DisplayRenderer interface_renderer;
+    interface_renderer.show(2, view); drain(interface_renderer);
+    assert(screens[2][68][78] == 0x07e0 && screens[2][94][78] == 0x8410);
+    assert(screens[2][68][130] == 0x8410 && screens[2][94][130] == 0x07e0);
+    assert(screens[2][62][72] == 0xff90); // Circular, not square.
+    assert(screens[2][117][147] == 0xffff && screens[2][117][135] == 0x07e0);
+    interface.enabled = false;
+    view = pages.view(4005, 4005000, status, {}, cntrl::Panic::Status::ready, interface);
+    assert(!view.toggle.enabled && view.lines[0].graphics.foreground == 0xffff);
+    for (unsigned i = 1; i <= 4; ++i) assert(view.lines[i].graphics.foreground == 0x8410);
+    interface_renderer.show(2, view); drain(interface_renderer);
+    for (unsigned y : {68u, 94u}) for (unsigned x : {78u, 130u}) assert(screens[2][y][x] == 0x8410);
+    assert(screens[2][117][135] == 0xffff && screens[2][117][147] == 0x8410);
     pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::tap);
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::interface);
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::panic);
@@ -1156,11 +1170,11 @@ int main() {
     }
     assert(renderer.ready()); blank(0, 0x7777); blank(1, 0x8888);
     cntrl::Pane flasher; flasher.graphics.background = 0xffff;
-    flasher.circle = {80, 90, 40, 15, 0xf800, 0};
+    flasher.circles[0] = {80, 90, 40, 15, 0xf800, 0};
     renderer.show(2, flasher); drain(renderer);
     assert(screens[2][90][80] == 0xf800);
     assert(screens[2][90][105] == 0 && screens[2][90][120] == 0xffff);
-    flasher.circle.color = 0x4000; renderer.show(2, flasher); drain(renderer);
+    flasher.circles[0].color = 0x4000; renderer.show(2, flasher); drain(renderer);
     assert(screens[2][90][80] == 0x4000 && screens[2][90][105] == 0);
     audit_animation_batches();
 }

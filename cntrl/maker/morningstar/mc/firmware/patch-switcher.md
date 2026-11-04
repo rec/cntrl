@@ -564,7 +564,9 @@ bridging resumes when sending completes or the page is left. Build with
 
 MIDI Interface opens with the setup's current bridge setting. C temporarily
 toggles it; F advances and restores the setting. The setup is not edited. The
-page shows host USB configuration, four DIN/TRS activity indicators and On/Off.
+page shows circular activity indicators in DIN/TRS rows and In/Out columns,
+with a small on/off toggle icon in the bottom-right corner. The body is greyed
+out when off; active indicators are bright green when on.
 Indicators remain lit for 100 ms after complete input packets or successful
 physical output submissions. USB configuration does not mean a DAW opened a port.
 Build with `MIDI_INTERFACE=0` to omit the page. See

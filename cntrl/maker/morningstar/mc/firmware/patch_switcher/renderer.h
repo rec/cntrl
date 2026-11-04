@@ -59,7 +59,9 @@ public:
             for (unsigned i = 0; i < 3; ++i) if (dirty_[i]) {
                 drawing_ = int(i); dirty_[i] = false;
                 painting_ = requested_[i]; y_ = field_ = letter_ = 0;
-                graphics_.configure(painting_.graphics); backgrounds(); circle(); rendering_ = true; break;
+                graphics_.configure(painting_.graphics); backgrounds();
+                for (const auto &c : painting_.circles) circle(c);
+                toggle(); rendering_ = true; break;
             }
         }
         if (drawing_ < 0) {
@@ -139,8 +141,7 @@ private:
     bool moving_panel(unsigned panel) const {
         return animation_pane_ >= 0 ? panel == unsigned(animation_pane_) : !(keep_right_ && panel == 2);
     }
-    void circle() {
-        const auto &c = painting_.circle;
+    void circle(const cntrl::Circle &c) {
         if (!c.diameter) return;
         const int span = c.diameter + 2 * c.annulus;
         const int left = int(c.x) - span / 2, top = int(c.y) - span / 2;
@@ -151,6 +152,21 @@ private:
             int distance = dx * dx + dy * dy;
             if (distance <= span * span)
                 graphics_.getFrameBuffer()[y * 160 + x] = distance <= c.diameter * c.diameter ? c.color : c.ring_color;
+        }
+    }
+    void toggle() {
+        const auto &t = painting_.toggle;
+        if (!t.visible) return;
+        // A 26 by 14 capsule, with a white knob at the selected end.
+        for (int row = 0; row < 14; ++row) for (int col = 0; col < 26; ++col) {
+            int x = t.x + col, y = t.y + row;
+            if (x >= 160 || y >= 128) continue;
+            int dx = col < 7 ? 2 * col + 1 - 14 : col >= 19 ? 2 * col + 1 - 38 : 0;
+            int dy = 2 * row + 1 - 14;
+            if (dx * dx + dy * dy > 196) continue;
+            int knob = 2 * col + 1 - (t.enabled ? 38 : 14);
+            graphics_.getFrameBuffer()[y * 160 + x] = knob * knob + dy * dy <= 100
+                ? 0xffff : t.enabled ? 0x07e0 : 0x8410;
         }
     }
     void write_column(unsigned panel, unsigned column, uint8_t *pixels) {

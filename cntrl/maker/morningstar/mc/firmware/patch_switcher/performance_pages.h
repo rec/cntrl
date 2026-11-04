@@ -103,16 +103,17 @@ public:
             return pane;
         }
         if (page_ == Page::interface) {
-            line(pane, 1, interface.connected ? "Host connected" : "No host", 30, 18, settings_[R::status_font], true);
-            const char *labels[] = {"DIN in", "TRS in", "DIN out", "TRS out"};
-            for (unsigned i = 0; i < 4; ++i) {
-                char text[16];
-                std::snprintf(text, sizeof(text), "%c %s", interface.lit[i] ? '*' : 'o', labels[i]);
-                line(pane, 2 + i, text, 55 + (i / 2) * 22, 18, settings_[R::status_font], false,
-                    nullptr, (i % 2) * 80, (i % 2 + 1) * 80);
-                pane.lines[2 + i].graphics.foreground = interface.lit[i] ? 0x0400 : 0x8410;
-            }
-            line(pane, 6, interface.enabled ? "On" : "Off", 100, 24, settings_[R::status_font], true);
+            const unsigned font = settings_[R::status_font];
+            line(pane, 1, "In", 32, 18, font, true, nullptr, 56, 100);
+            line(pane, 2, "Out", 32, 18, font, true, nullptr, 106, 154);
+            line(pane, 3, "DIN", 59, 18, font, false, nullptr, 8, 54);
+            line(pane, 4, "TRS", 85, 18, font, false, nullptr, 8, 54);
+            for (unsigned i = 1; i <= 4; ++i)
+                pane.lines[i].graphics.foreground = interface.enabled ? 0 : 0x8410;
+            for (unsigned i = 0; i < 4; ++i)
+                pane.circles[i] = {uint16_t(i < 2 ? 78 : 130), uint16_t(i % 2 ? 94 : 68), 12, 0,
+                    uint16_t(interface.enabled && interface.lit[i] ? 0x07e0 : 0x8410), 0};
+            pane.toggle = {128, 110, true, interface.enabled};
             return pane;
         }
         if (page_ == Page::firmware) {
@@ -131,12 +132,12 @@ public:
             sample[pos] = 0;
             line(pane, 1, number, pad + heading_height, settings_[R::tempo_height], settings_[R::tempo_font], false, sample);
             flashing_ = tap_.flash(now, settings_[R::flash_fraction]);
-            pane.circle.diameter = settings_[R::diameter]; pane.circle.annulus = settings_[R::annulus];
-            pane.circle.x = 80;
+            pane.circles[0].diameter = settings_[R::diameter]; pane.circles[0].annulus = settings_[R::annulus];
+            pane.circles[0].x = 80;
             unsigned start = pad + heading_height + settings_[R::tempo_height];
-            pane.circle.y = (start + 128 - pad) / 2;
-            pane.circle.color = settings_[flashing_ ? R::on_color : R::off_color];
-            pane.circle.ring_color = settings_[R::ring_color];
+            pane.circles[0].y = (start + 128 - pad) / 2;
+            pane.circles[0].color = settings_[flashing_ ? R::on_color : R::off_color];
+            pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
             char rows[5][64] = {};
             std::snprintf(rows[0], sizeof(rows[0]), "Setup: %.56s", setup_);
