@@ -64,6 +64,8 @@ def main() -> None:
             )
         else:
             print(upload_asset(options.port, options.asset.read_bytes()))
+    except KeyboardInterrupt:
+        sys.exit(130)
     except subprocess.CalledProcessError as error:
         sys.exit(error.stderr.decode().strip())
     except (OSError, ValueError) as error:

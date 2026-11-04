@@ -23,6 +23,7 @@ extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 #endif
 #include <cntrl/songs_ui.h>
 #include <cntrl/songs_transfer.h>
+#include <cntrl/usb_session.h>
 #if CNTRL_MIDI_INTERFACE
 #include <cntrl/midi_interface.h>
 #endif
@@ -81,6 +82,7 @@ cntrl::PatchExecutor *visiting_invocation = nullptr;
 bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation);
 bool start_original_firmware();
 #endif
+DMAMEM cntrl::UsbSession usb_session;
 class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink, public cntrl::PatchOutputs
 #if CNTRL_PANIC
     , public cntrl::PanicOutputs
@@ -382,12 +384,8 @@ public:
         pending_patch_ = -1;
         renderer_.error(message);
     }
-    bool reply_ready() const override { return !response_[response_offset_]; }
-    void reply(const char *text) override {
-        // Replies are bounded and only produced in response to host requests.
-        std::snprintf(response_, sizeof(response_), "%s\n", text);
-        response_offset_ = 0;
-    }
+    bool reply_ready() const override { return usb_session.reply_ready(); }
+    void reply(const char *text) override { usb_session.reply(text); }
     void poll() {
         host.Task();
         bridge_.host_connected(bool(host_midi));
@@ -455,11 +453,11 @@ public:
         usb_midi_flush_output();
         uint32_t elapsed = micros() - begin;
         if (elapsed > max_midi_us_) max_midi_us_ = elapsed;
-        if (response_[response_offset_] && Serial.availableForWrite() > 0) {
-            unsigned n = std::strlen(response_ + response_offset_);
+        if (usb_session.output_pending() && Serial.availableForWrite() > 0) {
+            unsigned n = std::strlen(usb_session.output());
             unsigned room = Serial.availableForWrite();
             if (n > room) n = room;
-            response_offset_ += Serial.write(response_ + response_offset_, n);
+            usb_session.sent(Serial.write(usb_session.output(), n));
         }
     }
     void draw() {
@@ -535,8 +533,6 @@ private:
     unsigned source_cursor_ = 0;
     uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
     DisplayRenderer renderer_;
-    unsigned response_offset_ = 0;
-    char response_[600] = {};
 };
 
 class Card : public cntrl::SetupStorage {
@@ -1054,6 +1050,7 @@ cntrl::splash::Panels splash_panels;
 cntrl::splash::Player splash_player(splash_assets, splash_panels);
 cntrl::splash::Session splash_session(splash_assets, splash_player);
 
+StorageListing storage_listing;
 void storage_info(bool scan) {
     if (!card.ready) { board.reply("CNTRL ERROR storage-unavailable"); return; }
     auto *device = SD.sdfs.card();
@@ -1078,16 +1075,8 @@ void storage_info(bool scan) {
     std::snprintf(response, sizeof(response), "CNTRL STORAGE %lu %u %s %u %lu %lu %s",
         (unsigned long)sectors, unsigned(device->type()), identity, unsigned(SD.sdfs.fatType()),
         (unsigned long)SD.sdfs.bytesPerCluster(), (unsigned long)SD.sdfs.clusterCount(), free);
-    if (!scan) { board.reply(response); return; }
-    // The full report is streamed directly: Board's single pending reply is
-    // deliberately not a queue and cannot hold a directory listing.
-    Serial.println(response);
-    auto root = SD.sdfs.open("/", O_RDONLY);
-    unsigned entries = 0;
-    if (!root || !list_storage(root, 0, entries) || device->errorCode()) {
-        board.reply("CNTRL ERROR storage-list"); return;
-    }
-    Serial.printf("CNTRL STORAGE END %u\n", entries);
+    if (scan && !storage_listing.begin()) { board.reply("CNTRL ERROR storage-list"); return; }
+    board.reply(response);
 }
 
 PerformanceStatus cached_disk;
@@ -1117,6 +1106,9 @@ PerformanceStatus performance_status() {
 
 void midi_status(unsigned route) { board.midi_status(route); }
 bool asset_command(const char *line) {
+    if (!std::strcmp(line, "CNTRL STORAGE NEXT")) {
+        char response[600]; storage_listing.next(response, sizeof(response)); board.reply(response); return true;
+    }
     if (board.configuration_locked()) { board.reply("CNTRL ERROR close-switches-first"); return true; }
 #ifdef CNTRL_DIAGNOSTICS
     if (!std::strcmp(line, "CNTRL DISPLAY EDGE")) {
@@ -1141,6 +1133,8 @@ uint32_t last_scan = 0;
 } // namespace
 
 void initialize_target() {
+    // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
+    usb_session = cntrl::UsbSession{};
     initialize_switches();
     initialize_displays(false);
     board.begin();
@@ -1238,12 +1232,25 @@ void poll_target() {
     }
     // A bounded amount of work per iteration; SD-card latency itself depends
     // on the card and must be measured on the pedal before release.
-    for (unsigned i = 0; i < 256 && board.reply_ready() && Serial.available()
+    for (unsigned i = 0; i < 512 && !usb_session.output_pending() && Serial.available(); ++i)
+        usb_session.receive(Serial.read());
+    if (usb_session.resetting() && serial_router.accepts_input() && !songs_transfer.processing()) {
+        serial_router.cancel_transfer(); songs_transfer.cancel_transfer(); font_files.cancel_transfer(); storage_listing.cancel();
+        usb_session.reset_done();
+    }
+    for (unsigned i = 0; i < 128 && usb_session.input_size() && board.reply_ready()
 #if CNTRL_ORIGINAL_FIRMWARE
         && !firmware_visit_stage
 #endif
-        && serial_router.accepts_input(); ++i)
-        serial_router.receive(Serial.read(), now);
+        && serial_router.accepts_input(); ++i) {
+        serial_router.receive(usb_session.input(), now);
+        usb_session.consumed();
+    }
+    // A resumable session owns its unfinished transfers until a new session
+    // replaces it. USB outages must not expire staged bytes or list cursors.
+    if (usb_session.active()) {
+        serial_router.keepalive(now); songs_transfer.keepalive(now); font_files.keepalive(now);
+    }
     // Preserve the current serial frame under host backpressure. MIDI/buttons
     // continue while command input and reply-producing jobs wait for room.
     if (board.reply_ready()) serial_router.poll(now);

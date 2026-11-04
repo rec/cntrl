@@ -416,10 +416,37 @@ nonempty patch ranges covering every patch exactly once. Both compiler and
 receiver validate bounded sizes; the receiver also validates strings, routes,
 indices and message values before activating a document.
 
-`CNTRL STATUS\n` replies `CNTRL READY 21 SIZE CRC\n`. Errors use
-`CNTRL ERROR REASON\n`. Partial commands/transfers time out after ten seconds
-without a byte. The host uses 115200 baud, not a bootloader-triggering baud rate.
-Names in commands are hex-encoded ASCII, never paths. Requests are:
+Computer commands use a resumable USB session at 115200 baud, not a
+bootloader-triggering baud rate. After three failed USB attempts, the client
+prints `Waiting x seconds for USB (hit control-C to exit)` and retries after
+1, 2, 4, 8 seconds and so on, without a retry limit. Control-C exits with status
+130. Command validation and storage errors still fail normally. Firmware
+uploads and live MIDI output are outside this policy.
+
+Each wire request starts with byte 0x1e, then
+`CNTRL USB SESSION_HEX SEQUENCE REPLY_ACK DATA_HEX\n`. Data is at most 128 bytes;
+`-` means no data. Sequence 1 opens a random session with empty data. Later
+sequences deliver bytes or poll for a reply; sequence 0 releases the session.
+Responses are `CNTRL USB SESSION_HEX SEQUENCE REPLY_ID REPLY_HEX\n`, with `-`
+when no application reply is ready. A retry keeps the same session and sequence.
+The receiver delivers input bytes once and retains each application reply until
+acknowledged. The leading separator discards a partial wire frame before retry.
+This protects incremental uploads, listing cursors, rotation and history creation
+from duplicate execution when a write or acknowledgement is lost. Storage
+listings are also pulled one entry at a time with `CNTRL STORAGE NEXT`.
+
+An active session keeps unfinished transfers alive across USB outages. Releasing
+it, or opening a new session, discards incomplete incoming transfers after any
+already-running commit finishes. The retained state is in RAM: the pedal must
+remain powered. A reboot or replacement session produces `CNTRL USB LOST`; the
+client explains that the outcome may be uncertain and continues waiting rather
+than replaying an operation that might already have completed. Control-C and a
+fresh command are required after that loss. This is USB reconnect recovery, not
+power-loss transaction recovery. Host and firmware must both use this framing.
+
+Inside the session, `CNTRL STATUS\n` replies `CNTRL READY 26 SIZE CRC\n`.
+Errors use `CNTRL ERROR REASON\n`. Names in commands are hex-encoded ASCII,
+never paths. Requests are:
 
 - `CNTRL TIME EPOCH_SECONDS`: synchronize commit timestamps, reply `CNTRL OK`.
 - `CNTRL SETUP CURRENT`: reply `CNTRL CURRENT NAME_HEX` (empty name allowed).

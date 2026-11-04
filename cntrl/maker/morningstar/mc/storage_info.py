@@ -152,7 +152,14 @@ def read_storage_report(read_line: Callable[[], str]) -> StorageInfo:
 def query_storage_info(port: Path) -> StorageInfo:
     with SerialConnection(port) as connection:
         connection.write(b'CNTRL STORAGE SCAN\n')
-        return read_storage_report(lambda: connection.line(limit=1024))
+
+        def next_line() -> str:
+            response = connection.line(limit=1024)
+            if not response.startswith(('CNTRL STORAGE END', 'CNTRL ERROR')):
+                connection.write(b'CNTRL STORAGE NEXT\n')
+            return response
+
+        return read_storage_report(next_line)
 
 
 def main() -> None:
@@ -164,6 +171,8 @@ def main() -> None:
             print(report, end='')
         else:
             options.output.write_text(report)
+    except KeyboardInterrupt:
+        sys.exit(130)
     except (OSError, ValueError, termios.error) as error:
         sys.exit(str(error))
 

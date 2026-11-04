@@ -2,12 +2,15 @@
 #include "patch_switcher/font_storage.h"
 #include <cntrl/documents.h>
 #include "storage.h"
+#include "../../../../../firmware/test/usb_peer.h"
 #include <cassert>
 #include <iostream>
 #include <string>
 
 struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     font_assets::Files fonts;
+    cntrl::UsbSession usb;
+    bool reply_ready() const override { return usb.reply_ready(); }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *name) const override { return !std::strcmp(name, "din") || !std::strcmp(name, "trs"); }
     bool supports_function(unsigned code) const override { return code == 1; }
@@ -26,7 +29,7 @@ struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     void set_brightness(uint8_t, bool) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
-    void reply(const char *text) override { std::cout << text << std::endl; }
+    void reply(const char *text) override { usb.reply(text); }
 };
 int main(int argc, char **argv) {
     if (argc != 2) return 1;
@@ -46,8 +49,8 @@ int main(int argc, char **argv) {
     }
     TestController controller(peer);
     cntrl::Documents documents(peer, peer, controller, peer); documents.boot();
-    std::string line; char byte;
-    while (std::cin.get(byte)) {
+    std::string line;
+    return usb_peer(peer.usb, [&](uint8_t byte) {
         if (documents.busy()) { documents.receive(uint8_t(byte), 0); }
         else if (byte != '\n') { if (byte != '\r') line += byte; }
         else {
@@ -74,6 +77,6 @@ int main(int argc, char **argv) {
             }
             line.clear();
         }
-        for (unsigned i = 0; i < 129; ++i) documents.tick(0);
-    }
+    }, [&]() { documents.tick(0); }, [&]() { return documents.accepts_input(); },
+        [&]() { documents.cancel_transfer(); peer.fonts.cancel_transfer(); line.clear(); });
 }

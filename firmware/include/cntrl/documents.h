@@ -147,6 +147,9 @@ public:
         if (!start_write(now)) return false;
         return true;
     }
+    bool accepts_input() const { return browse_phase_ == BrowsePhase::idle && history_action_ == HistoryAction::none && !writing_ && !erasing_; }
+    void keepalive(uint32_t now) { last_byte_ = now; }
+    void cancel_transfer() { receiving_ = listing_ = overflow_ = false; download_ = used_ = 0; }
     void receive(uint8_t byte, uint32_t now) {
         if (browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || writing_ || erasing_) return;
         last_byte_ = now;

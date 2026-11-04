@@ -1,13 +1,11 @@
 // Host-only receiver for the Python PTY tests. No device access.
 #include "../receiver.h"
 #include "storage.h"
-#include <unistd.h>
+#include "../../../../../../firmware/test/usb_peer.h"
 
 struct Wire : cntrl::splash::Replies {
-    void reply(const char *line) override {
-        for (const char *p = line; *p; ++p) if (::write(1, p, 1) != 1) return;
-        ::write(1, "\n", 1);
-    }
+    cntrl::UsbSession usb;
+    void reply(const char *line) override { usb.reply(line); }
 };
 
 int main() {
@@ -16,10 +14,7 @@ int main() {
     cntrl::splash::Receiver receiver(memory, wire);
     receiver.boot();
     while (receiver.busy()) receiver.poll(0);
-    uint8_t bytes[512];
-    ssize_t count;
-    while ((count = ::read(0, bytes, sizeof(bytes))) > 0) {
-        for (ssize_t i = 0; i < count; ++i) receiver.receive(bytes[i], 0);
-        while (!receiver.accepts_input()) receiver.poll(0);
-    }
+    return usb_peer(wire.usb, [&](uint8_t b) { receiver.receive(b, 0); },
+        [&]() { receiver.poll(0); }, [&]() { return receiver.accepts_input(); },
+        [&]() { receiver.cancel_transfer(); });
 }

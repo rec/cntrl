@@ -1,4 +1,5 @@
 #include "patch_hardware.h"
+#include "usb_peer.h"
 // A host-only protocol peer. No device access, used by the Python PTY test.
 #include <cntrl/documents.h>
 #include <unistd.h>
@@ -7,6 +8,8 @@
 #include "storage.h"
 
 struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
+    cntrl::UsbSession usb;
+    bool reply_ready() const override { return usb.reply_ready(); }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *name) const override {
         return !std::strcmp(name, "din") || !std::strcmp(name, "trs");
@@ -18,11 +21,7 @@ struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     void set_brightness(uint8_t, bool) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
-    void reply(const char *line) override {
-        // Deliberately fragment replies to exercise host stream handling.
-        for (const char *p = line; *p; ++p) if (::write(1, p, 1) != 1) return;
-        ::write(1, "\n", 1);
-    }
+    void reply(const char *line) override { usb.reply(line); }
 };
 
 int main() {
@@ -30,16 +29,6 @@ int main() {
     TestController app(peer);
     cntrl::Documents docs(peer, peer, app, peer);
     docs.boot();
-    uint8_t buffer[37];
-    pollfd input{0, POLLIN, 0};
-    while (true) {
-        int ready = ::poll(&input, 1, docs.busy() ? 0 : -1);
-        if (ready < 0) return 1;
-        if (ready) {
-            ssize_t n = ::read(0, buffer, sizeof(buffer));
-            if (n <= 0) break;
-            for (ssize_t i = 0; i < n; ++i) docs.receive(buffer[i], 0);
-        }
-        docs.tick(0);
-    }
+    return usb_peer(peer.usb, [&](uint8_t b) { docs.receive(b, 0); },
+        [&]() { docs.tick(0); }, [&]() { return docs.accepts_input(); }, [&]() { docs.cancel_transfer(); });
 }

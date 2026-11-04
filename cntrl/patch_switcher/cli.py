@@ -405,5 +405,7 @@ def main() -> None:
             run_setup(command.command)
         else:
             print(transport.device_status(command.port))
+    except KeyboardInterrupt:
+        sys.exit(130)
     except (OSError, ValueError) as error:
         sys.exit(str(error))

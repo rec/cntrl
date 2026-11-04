@@ -1,8 +1,11 @@
 #include <cntrl/songs_transfer.h>
 #include "storage.h"
+#include "usb_peer.h"
 #include <iostream>
 #include <string>
 struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::Replies {
+    cntrl::UsbSession usb;
+    bool reply_ready() const override { return usb.reply_ready(); }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned, unsigned) const override { return true; }
@@ -16,16 +19,16 @@ struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::Replies {
     bool activate(const cntrl::SongSelection &, const cntrl::SongContinuation &, bool) override { return false; }
     cntrl::SongExecution execution_status() const override { return cntrl::SongExecution::completed; }
     bool capture_source(const cntrl::Document *&) override { return false; }
-    void reply(const char *line) override { std::cout << line << std::endl; }
+    void reply(const char *line) override { usb.reply(line); }
 };
 int main() {
     Board board; TestStorage storage; cntrl::Songs songs(storage, board);
     if (!songs.boot()) return 1;
     cntrl::SongsTransfer transfer(songs, board);
     std::string line;
-    while (std::getline(std::cin, line)) {
-        transfer.command(line.c_str());
-        while (songs.busy()) { songs.tick(); transfer.poll(0); }
-        transfer.poll(0);
-    }
+    return usb_peer(board.usb, [&](uint8_t b) {
+        if (b != '\n') line += char(b);
+        else { transfer.command(line.c_str()); line.clear(); }
+    }, [&]() { songs.tick(); transfer.poll(0); }, [&]() { return !transfer.processing(); },
+        [&]() { transfer.cancel_transfer(); line.clear(); });
 }

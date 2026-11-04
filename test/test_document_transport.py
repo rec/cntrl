@@ -204,11 +204,101 @@ def test_revision_commands_against_cpp_receiver(peer: Path) -> None:
 
 
 def test_progress_reply_is_not_returned_as_the_command_result() -> None:
+    connection = transport.SerialConnection(Path('/unused'))
+    connection.received.extend(b'CNTRL WAIT\nCNTRL WAIT\nCNTRL OK\n')
+    assert connection.line() == 'CNTRL OK'
+
+
+def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
+    peer: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = bytes.fromhex((ROOT / 'firmware/test/show.golden').read_text())
     master, slave = pty.openpty()
+    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
     try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
-            os.write(master, b'CNTRL WAIT\nCNTRL WAIT\nCNTRL OK\n')
-            assert connection.line() == 'CNTRL OK'
+        with transport.SerialConnection(
+            Path(os.ttyname(slave)), timeout=1
+        ) as connection:
+            client = transport.SetupClient(connection)
+            write_frame = connection.write_frame
+            read_frame = connection.read_frame
+            writes = 0
+            losses = 0
+
+            def interrupted_write(frame: bytes) -> None:
+                nonlocal writes
+                writes += 1
+                if writes == 3:
+                    write_frame(frame[: len(frame) // 2])
+                    raise OSError('injected partial USB write')
+                write_frame(frame)
+
+            def lost_reply() -> str:
+                nonlocal losses
+                result = read_frame()
+                if writes == 10 and losses == 0:
+                    losses += 1
+                    raise OSError('injected lost data acknowledgement')
+                return result
+
+            monkeypatch.setattr(connection, 'write_frame', interrupted_write)
+            monkeypatch.setattr(connection, 'read_frame', lost_reply)
+            client.copy('A', data, False)
+            assert losses == 1
+            client.copy('B', data, False)
+            client.select('A')
+            losses = 0
+
+            def lost_completion() -> str:
+                nonlocal losses
+                result = read_frame()
+                if result.endswith(b'CNTRL OK\n'.hex()) and losses < 3:
+                    losses += 1
+                    raise OSError('injected lost command completion')
+                return result
+
+            monkeypatch.setattr(connection, 'read_frame', lost_completion)
+            monkeypatch.setattr(transport.time, 'sleep', lambda _: None)
+            client.ok('CNTRL SETUP FORWARD')
+            assert losses == 3
+            assert client.current() == 'B'
+            losses = 0
+            client.ok(f'CNTRL HISTORY SAVE {b"A".hex()} 0 -')
+            assert losses == 3
+            revision = client.request(f'CNTRL HISTORY LIST {b"A".hex()} {2**64 - 1}')
+            assert revision.split()[2] == '1'
+            assert client.request(f'CNTRL HISTORY LIST {b"A".hex()} 1') == 'CNTRL END'
+            assert client.download('A') == data
     finally:
+        process.terminate()
+        process.wait(timeout=5)
         os.close(master)
         os.close(slave)
+
+
+def test_usb_wait_backoff_keeps_retrying_until_control_c(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    connection = transport.SerialConnection(Path('/unplugged'))
+    attempts = 0
+    seconds = 0
+
+    def unplugged() -> None:
+        nonlocal attempts
+        attempts += 1
+        raise FileNotFoundError('USB unplugged')
+
+    def wait(duration: float) -> None:
+        nonlocal seconds
+        seconds += int(duration)
+        if seconds == 15:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(connection, 'connect', unplugged)
+    monkeypatch.setattr(transport.time, 'sleep', wait)
+    with pytest.raises(KeyboardInterrupt):
+        connection.__enter__()
+    assert attempts == 6
+    assert capsys.readouterr().err.splitlines() == [
+        f'Waiting {n} seconds for USB (hit control-C to exit)' for n in (1, 2, 4, 8)
+    ]

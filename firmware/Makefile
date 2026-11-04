@@ -3,6 +3,9 @@ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 .PHONY: test
 test:
 	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_usb_session.cpp" -o "$(ROOT)/build/test_usb_session"
+	"$(ROOT)/build/test_usb_session"
+	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_tempo.cpp" -o "$(ROOT)/build/test_tempo"
 	"$(ROOT)/build/test_tempo"
 	mkdir -p "$(ROOT)/build"

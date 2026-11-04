@@ -11,7 +11,9 @@ public:
            bool (*asset_command)(const char *) = nullptr)
         : documents_(documents), assets_(assets), session_(session), replies_(replies),
           storage_info_(storage_info), midi_status_(midi_status), asset_command_(asset_command) {}
-    bool accepts_input() const { return assets_.accepts_input(); }
+    bool accepts_input() const { return assets_.accepts_input() && documents_.accepts_input(); }
+    void keepalive(uint32_t now) { last_ = now; documents_.keepalive(now); assets_.keepalive(now); }
+    void cancel_transfer() { used_ = 0; overflow_ = false; documents_.cancel_transfer(); assets_.cancel_transfer(); }
     void receive(uint8_t byte, uint32_t now) {
         if (assets_.busy()) { assets_.receive(byte, now); return; }
         if (documents_.busy()) { documents_.receive(byte, now); return; }
@@ -25,7 +27,7 @@ public:
         if (overflow_) replies_.reply("CNTRL ERROR command-too-long");
         else {
             line_[used_] = 0;
-            if (asset_command_ && (!std::strncmp(line_, "CNTRL FONT ", 11) || !std::strncmp(line_, "CNTRL SONGS ", 12)
+            if (asset_command_ && (!std::strncmp(line_, "CNTRL FONT ", 11) || !std::strncmp(line_, "CNTRL SONGS ", 12) || !std::strcmp(line_, "CNTRL STORAGE NEXT")
 #ifdef CNTRL_DIAGNOSTICS
                 || !std::strcmp(line_, "CNTRL DISPLAY EDGE") || !std::strcmp(line_, "CNTRL DISPLAY EDGE END")
 #endif

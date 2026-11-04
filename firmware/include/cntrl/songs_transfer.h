@@ -5,6 +5,9 @@ namespace cntrl {
 class SongsTransfer {
 public:
     SongsTransfer(Songs &songs, Replies &replies) : songs_(songs), replies_(replies) {}
+    bool processing() const { return processing_; }
+    void keepalive(uint32_t now) { if (receiving_) last_ = now; }
+    void cancel_transfer() { if (receiving_) songs_.import_abort(); receiving_ = false; }
     bool busy() const { return receiving_ || processing_; }
     void poll(uint32_t now) {
         if (processing_) {

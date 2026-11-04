@@ -1,7 +1,9 @@
 """Framed document transfer over a POSIX USB serial device."""
 
 import os
+import secrets
 import select
+import sys
 import termios
 import time
 from pathlib import Path
@@ -13,21 +15,65 @@ from .data_files import validate_name
 
 
 class SerialConnection:
+    """A resumable, acknowledged byte stream over a replaceable serial fd."""
+
     def __init__(self, port: Path, timeout: float = 30) -> None:
         self.port = port
         self.timeout = timeout
         self.fd = -1
+        self.session = secrets.randbits(32) or 1
+        self.sequence = 1
+        self.acknowledged = 0
+        self.received = bytearray()
         self.previous: list[int | list[bytes | int]] = []
 
     def __enter__(self) -> 'SerialConnection':
+        try:
+            self.exchange(b'')
+        except KeyboardInterrupt:
+            self.release()
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        try:
+            if args and args[0] is KeyboardInterrupt:
+                self.release()
+            else:
+                self.sequence = 0
+                self.exchange(b'')
+        finally:
+            self.close()
+
+    def release(self) -> None:
+        if self.fd >= 0:
+            try:
+                os.write(self.fd, f'\x1eCNTRL USB {self.session:x} 0 0 -\n'.encode())
+            except OSError:
+                pass  # Cancellation must not wait for an unplugged device.
+
+    def close(self) -> None:
+        if self.fd < 0:
+            return
+        try:
+            termios.tcsetattr(self.fd, termios.TCSANOW, self.previous)
+        except (OSError, termios.error):
+            pass  # The USB device may have disappeared during the command.
+        finally:
+            descriptor, self.fd = self.fd, -1
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass  # Closing a disconnected descriptor cannot resume a transfer.
+
+    def connect(self) -> None:
         self.fd = os.open(self.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         try:
             self.previous = termios.tcgetattr(self.fd)
             settings = termios.tcgetattr(self.fd)
-            settings[0] = 0
-            settings[1] = 0
+            settings[0] = settings[1] = settings[3] = 0
             settings[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
-            settings[3] = 0
             settings[4] = settings[5] = termios.B115200
             settings[6][termios.VMIN] = 0
             settings[6][termios.VTIME] = 0
@@ -35,16 +81,73 @@ class SerialConnection:
             termios.tcflush(self.fd, termios.TCIFLUSH)
         except (OSError, termios.error):
             os.close(self.fd)
+            self.fd = -1
             raise
-        return self
 
-    def __exit__(self, *args: object) -> None:
-        try:
-            termios.tcsetattr(self.fd, termios.TCSANOW, self.previous)
-        finally:
-            os.close(self.fd)
+    def exchange(self, data: bytes) -> None:
+        frame = (
+            f'\x1eCNTRL USB {self.session:x} {self.sequence} '
+            f'{self.acknowledged} {data.hex() or "-"}\n'
+        ).encode('ascii')
+        failures = 0
+        delay = 1
+        lost_reported = False
+        while True:
+            try:
+                if self.fd < 0:
+                    self.connect()
+                self.write_frame(frame)
+                while True:
+                    response = self.read_frame().split()
+                    if response == ['CNTRL', 'USB', 'LOST']:
+                        if self.sequence == 0:
+                            return
+                        if not lost_reported:
+                            print(
+                                'USB session was lost; the unfinished command will not '
+                                'be replayed. Hit control-C to exit.',
+                                file=sys.stderr,
+                                flush=True,
+                            )
+                            lost_reported = True
+                        raise OSError('USB session lost')
+                    if len(response) != 6 or response[:2] != ['CNTRL', 'USB']:
+                        raise OSError('Invalid USB transport response')
+                    try:
+                        session = int(response[2], 16)
+                        sequence, reply = int(response[3]), int(response[4])
+                        payload = (
+                            b'' if response[5] == '-' else bytes.fromhex(response[5])
+                        )
+                    except ValueError as error:
+                        raise OSError('Invalid USB transport response') from error
+                    if session != self.session or sequence < self.sequence:
+                        continue
+                    if sequence != self.sequence:
+                        raise OSError('Unexpected USB sequence')
+                    if payload and reply == self.acknowledged + 1:
+                        self.received.extend(payload)
+                        self.acknowledged = reply
+                    elif payload and reply != self.acknowledged:
+                        raise OSError('Unexpected USB reply sequence')
+                    self.sequence += 1
+                    return
+            except (OSError, termios.error):
+                self.close()
+                failures += 1
+                if failures >= 3:
+                    print(
+                        f'Waiting {delay} seconds for USB (hit control-C to exit)',
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    # Short sleeps remain interruptible even with a very large
+                    # accumulated backoff, without overflowing platform time_t.
+                    for _ in range(delay):
+                        time.sleep(1)
+                    delay *= 2
 
-    def write(self, data: bytes) -> None:
+    def write_frame(self, data: bytes) -> None:
         deadline = time.monotonic() + self.timeout
         pending = memoryview(data)
         while pending:
@@ -59,10 +162,10 @@ class SerialConnection:
                 raise OSError('USB serial disconnected')
             pending = pending[count:]
 
-    def line(self, limit: int = 256) -> str:
+    def read_frame(self) -> str:
         deadline = time.monotonic() + self.timeout
         result = bytearray()
-        while len(result) < limit:
+        while len(result) < 1300:
             remaining = deadline - time.monotonic()
             if remaining <= 0 or not select.select([self.fd], [], [], remaining)[0]:
                 raise TimeoutError('USB serial response timed out')
@@ -73,14 +176,31 @@ class SerialConnection:
             if not value:
                 raise OSError('USB serial disconnected')
             if value == b'\n':
-                response = result.decode('ascii').rstrip('\r')
-                if response == 'CNTRL WAIT':
-                    result.clear()
-                    deadline = time.monotonic() + self.timeout
-                    continue
-                return response
+                try:
+                    return result.decode('ascii').rstrip('\r')
+                except UnicodeDecodeError as error:
+                    raise OSError('Invalid USB response encoding') from error
             result.extend(value)
-        raise ValueError(f'USB serial response exceeds {limit - 1} bytes')
+        raise OSError('USB transport response too long')
+
+    def write(self, data: bytes) -> None:
+        for i in range(0, len(data), 128):
+            self.exchange(data[i : i + 128])
+
+    def line(self, limit: int = 256) -> str:
+        while True:
+            if b'\n' in self.received:
+                line, _, remaining = self.received.partition(b'\n')
+                self.received = remaining
+                if len(line) >= limit:
+                    raise ValueError(f'USB serial response exceeds {limit - 1} bytes')
+                response = line.decode('ascii').rstrip('\r')
+                if response != 'CNTRL WAIT':
+                    return response
+            else:
+                self.exchange(b'')
+                if not self.received:
+                    time.sleep(0.01)
 
 
 class SetupEntry(BaseModel, frozen=True):

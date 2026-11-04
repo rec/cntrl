@@ -29,6 +29,11 @@ public:
         active_ = -1; generation_ = length_ = checksum_ = 0;
         state_ = State::boot; slot_ = 0; offset_ = 0;
     }
+    void keepalive(uint32_t now) { last_ = now; }
+    void cancel_transfer() {
+        if (state_ == State::receiving) { storage_.finish(); state_ = State::command; }
+        used_ = line_used_ = 0;
+    }
     bool busy() const { return state_ != State::command; }
     bool accepts_input() const { return state_ == State::command || state_ == State::receiving; }
     uint32_t size() override { return length_; }

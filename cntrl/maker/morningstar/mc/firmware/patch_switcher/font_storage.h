@@ -8,6 +8,8 @@ namespace font_assets {
 class Files {
 public:
     bool ready = false;
+    void keepalive(uint32_t now) { last_ = now; }
+    void cancel_transfer() { writer_.close(); }
     bool busy() const { return bool(writer_); }
     void poll(uint32_t now, cntrl::Replies &replies) {
         if (writer_ && uint32_t(now - last_) > 10000) {
