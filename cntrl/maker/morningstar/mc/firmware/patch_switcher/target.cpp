@@ -267,10 +267,9 @@ public:
         if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
         if (pane == 2) {
             if (content.performance) {
-                right_pages_.history(content);
                 if (!performance_visible_) right_pages_.revisit(documents.selected());
                 performance_visible_ = true;
-                if (right_pages_.active()) return;
+                return;
             } else performance_visible_ = false;
         }
         renderer_.show(pane, content);
@@ -280,7 +279,6 @@ public:
         if (!documents.document().valid()) return;
         renderer_.transition(reverse, documents.document().transition_ms(), 2);
         right_pages_.browse(reverse, documents.selected());
-        if (!right_pages_.active()) renderer_.show(2, right_pages_.history());
     }
     void tap_tempo(uint32_t now) override {
         if (!documents.document().valid()) return;
@@ -295,7 +293,7 @@ public:
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
         throb_.configure(period, low, high, delay);
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane) override { renderer_.transition(undo, duration_ms, pane, right_pages_.active()); }
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane) override { renderer_.transition(undo, duration_ms, pane, true); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
         if (enabled) {
@@ -417,10 +415,10 @@ public:
         splash_visible_ = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
         if (!splash_visible_ && !feature_open() && documents.document().valid()
-            && right_pages_.active() && right_pages_.due(now, held_controls & (1u << 2))) {
+            && right_pages_.due(now)) {
             // Prepare the incoming card during the renderer's bounded transition preparation.
             PerformanceStatus status = right_pages_.page() == PerformancePages::Page::status ? performance_status() : PerformanceStatus{};
-            renderer_.show(2, right_pages_.view(now, micros(), held_controls & (1u << 2), status));
+            renderer_.show(2, right_pages_.view(now, micros(), status));
         }
         if (!splash_visible_) draw();
     }

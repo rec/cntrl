@@ -1362,4 +1362,4 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH22H')
-DOCUMENT_VERSION = 25
+DOCUMENT_VERSION = 26

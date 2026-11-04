@@ -94,8 +94,20 @@ public:
                     auto position = ShowGraphics::wrapped_position(line, letter_);
                     graphics_.setCursor(line.x + position.x, text_y(field_, position.row));
                 }
+                graphics_.setTextColor(line.color_mask & (uint64_t(1) << letter_) ? line.alternate_color : settings.foreground);
                 graphics_.write(uint8_t(text[letter_++]));
             } else {
+                if (line.heavier && length) {
+                    int16_t left, top; uint16_t width, height;
+                    graphics_.getTextBounds(text, line.x, text_y(field_, 0), &left, &top, &width, &height);
+                    auto *pixels = graphics_.getFrameBuffer();
+                    // Descend so newly added ink is not thickened again.
+                    for (int y = std::min(126 - int(settings.pad), int(top) + height - 1); y >= std::max(int(settings.pad), int(top)); --y)
+                        for (int x = std::max(int(settings.pad), int(left)); x < std::min(160 - int(settings.pad), int(left) + width); ++x)
+                            if (pixels[y * 160 + x] == settings.foreground
+                                || (line.color_mask && pixels[y * 160 + x] == line.alternate_color))
+                                pixels[(y + 1) * 160 + x] = pixels[y * 160 + x];
+                }
                 letter_ = 0;
                 if (++field_ == cntrl::max_lines) {
                     // Mask after composing all glyphs so italic overlaps keep
@@ -237,6 +249,7 @@ private:
                     graphics_.select_font(line.graphics.font, line.graphics.size);
                     int16_t left, top; uint16_t width, height;
                     graphics_.getTextBounds(line.text, line.x, text_y(i, 0), &left, &top, &width, &height);
+                    height += line.heavier;
                     for (int y = std::max(0, int(top)); y < std::min(128, int(top) + height); ++y)
                         for (int x = std::max(0, int(left)); x < std::min(160, int(left) + width); ++x)
                             if ((x + y) & 1) graphics_.getFrameBuffer()[y * 160 + x] = line.graphics.background;

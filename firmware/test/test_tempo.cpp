@@ -5,21 +5,24 @@
 int main() {
     cntrl::TapTempo tap;
     tap.configure(4, 2, 100, 3000);
-    assert(!tap.period() && !tap.flash(0, 300));
+    assert(!tap.period() && !tap.flash(0, 400));
     tap.tap(100); assert(!tap.period());
     tap.tap(600); assert(tap.period() == 500);
     tap.tap(650); assert(tap.period() == 500); // Reject a stray double tap.
     tap.tap(1100); tap.tap(1610); tap.tap(2100);
     assert(tap.period() == 500);
-    assert(tap.flash(2399, 300) && !tap.flash(2400, 300));
-    assert(tap.flash(2600, 300));
+    assert(tap.flash(2299, 400) && !tap.flash(2300, 400));
+    assert(tap.flash(2600, 400));
     tap.tap(10000); assert(tap.period() == 500);
     tap.tap(11000); assert(tap.period() == 1000); // Long gap started a fresh sequence.
+    assert(tap.flash(11399, 400) && !tap.flash(11400, 400));
+    assert(tap.flash(12000, 400));
+    assert(tap.flash(12249, 250) && !tap.flash(12250, 250));
     tap.configure(2, 3, 100, 3000);
     tap.tap(UINT32_MAX - 100); tap.tap(399);
     assert(tap.period() == 1000); // Retain the previous result until enough new taps.
     tap.tap(899); assert(tap.period() == 500);
-    assert(tap.flash(1198, 300) && !tap.flash(1199, 300));
+    assert(tap.flash(1098, 400) && !tap.flash(1099, 400));
 
     cntrl::ClockTempo clock;
     clock.configure(24, 1, 1000000);

@@ -25,6 +25,9 @@ struct TextLine {
     bool centered = false;
     bool wrap = false;
     bool stippled = false;
+    bool heavier = false; // One extra vertical ink pixel, preserving glyph advances.
+    uint64_t color_mask = 0; // Characters using alternate_color instead of foreground.
+    uint16_t alternate_color = 0;
 };
 
 struct Circle {

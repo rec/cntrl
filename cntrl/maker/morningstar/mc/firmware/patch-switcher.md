@@ -789,8 +789,29 @@ and uploading the setup.
 ## Four-button patch-manager navigation (setup format 23)
 
 Physical buttons A/B/D/E keep their primary actions: A sends the target, B browses
-patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Previous Undo, Tap Tempo, Status and Firmware. C on Firmware switches to stock; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
+patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status and Firmware, starting on Status. C on Firmware switches to stock; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
 are removed. Other modules keep their existing button assignments.
+
+The three right-hand pages share one heading font and size, with white
+text on a black heading band. All titles fit against the same reference text.
+Status labels are dark blue and values are green. Their text has one additional
+vertical ink pixel
+without wider glyphs or spacing. The page background and Tap Tempo ring thickness
+are configured in the setup:
+
+```toml
+[right_pages]
+background_color = '0xFFF085'
+annulus = 5
+flash_fraction = '40%'
+```
+
+The flash occupies the configured fraction of each measured tap cycle; holding C
+does not extend it. Setup format 26 stores the fraction in thousandths. Recompile
+saved setups after replacing `flash_duration` with `flash_fraction`.
+
+These are the defaults. Colors use the existing `0xRRGGBB` syntax and are
+quantized to the display's RGB565 format.
 
 B and E step once immediately. Holding either begins repeating after the hold
 delay and then at the repeat interval:

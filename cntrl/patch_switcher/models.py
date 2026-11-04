@@ -394,18 +394,17 @@ class RightPages(BaseModel, frozen=True):
         units.unit_validator('second'),
         AfterValidator(millisecond_resolution),
     ] = 3.0
-    flash_duration: Annotated[
+    flash_fraction: Annotated[
         float,
-        Field(strict=True, ge=0.001, le=65.535),
-        units.unit_validator('second'),
-        AfterValidator(millisecond_resolution),
-    ] = 0.3
+        Field(strict=True, ge=0.001, le=1, multiple_of=0.001),
+        units.unit_validator('dimensionless'),
+    ] = 0.4
     flasher_diameter: Annotated[
         int, Field(strict=True, ge=1, le=128), units.unit_validator('pixel')
     ] = 40
     annulus: Annotated[
         int, Field(strict=True, ge=1, le=64), units.unit_validator('pixel')
-    ] = 15
+    ] = 5
     title_height: Annotated[
         int, Field(strict=True, ge=8, le=128), units.unit_validator('pixel')
     ] = 12
@@ -420,6 +419,7 @@ class RightPages(BaseModel, frozen=True):
     off_color: str = '0x400000'
     on_color: str = '0xFF0000'
     ring_color: str = 'black'
+    background_color: str = '0xFFF085'
     digits: Annotated[int, Field(strict=True, ge=1, le=4)] = 3
     decimals: Annotated[int, Field(strict=True, ge=0, le=2)] = 1
 

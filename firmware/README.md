@@ -457,9 +457,9 @@ Interrupted and short writes are covered by host tests; filesystem and physical
 power-loss guarantees depend on the board's storage implementation and require
 separate qualification.
 
-### Auxiliary patch-manager pages (format 24)
+### Auxiliary patch-manager pages (format 26)
 
-F cycles the rightmost window through Previous Undo, Tap Tempo, Status and Firmware using
+The rightmost window starts on Status. F cycles through Tap Tempo, Status and Firmware using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary right page in place.
@@ -468,11 +468,13 @@ Tap Tempo displays fixed-position Courier digits (`---.-` initially). Two taps
 produce the first result; subsequent taps average the latest four intervals.
 Intervals below 0.1 seconds are ignored; a gap over 3 seconds starts a fresh tap
 sequence. Each accepted tap anchors the beat. The smaller flasher has a 40-pixel
-red center and a 15-pixel black annulus. It lights while C is held and for 0.3
-seconds at each computed beat. Tempo survives page changes until reboot.
+red center and a 5-pixel black annulus. It lights for a configurable fraction of
+each computed beat, defaulting to 40%. Holding C does not extend the flash. Tempo survives page changes until reboot.
 
 Status snapshots the setup name on entry and refreshes other values every second.
-The centered Status heading uses 1.5 times the configured title height. The six
+All three headings use the same font, size and weight, fitted against Tap Tempo
+within 1.5 times the configured title height, with white text on black.
+Status labels are dark blue (#00008B) and values green (#008000). The six
 body rows share the remaining height equally and all use the same configured
 status font at the largest size that fits every field. The setup line is centered.
 Counts share one row, as do Clock and Tap; only the stale clock reading is stippled.
@@ -496,9 +498,10 @@ tap_intervals = 4
 minimum_taps = 2
 minimum_interval = 0.1
 reset_gap = 3
-flash_duration = 0.3
+flash_fraction = '40%'
 flasher_diameter = 40
-annulus = 15
+annulus = 5
+background_color = '0xFFF085'
 title_height = 12
 tempo_height = 40
 padding = 2
@@ -514,12 +517,13 @@ decimals = 1
 The 22 metadata words are, in order: refresh milliseconds, clock-timeout
 milliseconds, clocks per quarter, clock averaging beats, tap averaging intervals,
 minimum taps, minimum tap interval milliseconds, tap reset-gap milliseconds,
-flash milliseconds, center diameter, annulus width, title height, tempo height,
+flash fraction in thousandths, center diameter, annulus width, title height, tempo height,
 padding, tempo font ID, status font ID, off RGB565, on RGB565, ring RGB565,
 integer digits, decimal digits, and page-background RGB565. Recompile saved
-setups when moving from format 23 to 24.
+setups for format 26, which replaces flash duration with a cycle fraction.
+`flash_fraction` accepts 0.001..1 in steps of 0.001, including percentage strings.
 
-The Firmware page has a large centered title and a two-line “Use stock firmware”
+The Firmware page has the shared centered title and a two-line “Use stock firmware”
 label near the bottom center, above C. Press C to start the existing stock-firmware
 handoff. In stock firmware, A+F pressed within the configured 50 ms window returns
 to cntrl with no hold. This uses the same persistent boot selection and navigation

@@ -25,11 +25,11 @@ public:
         if (count_ + 1 >= taps_) period_ = (sum_ + count_ / 2) / count_;
     }
     uint32_t period() const { return period_; }
-    bool flash(uint32_t now, uint32_t duration) {
+    bool flash(uint32_t now, unsigned fraction) {
         if (!period_ || !beat_known_) return false;
         uint32_t elapsed = now - beat_anchor_;
         beat_anchor_ += elapsed / period_ * period_;
-        return uint32_t(now - beat_anchor_) < duration;
+        return uint64_t(now - beat_anchor_) * 1000 < uint64_t(period_) * fraction;
     }
 private:
     uint32_t intervals_[8] = {}, sum_ = 0, last_ = 0, period_ = 0;

@@ -655,28 +655,45 @@ static void sparse_text() {
 }
 
 static void test_performance_pages() {
-    cntrl::RightPageSettings settings{{1000, 1000, 24, 1, 4, 2, 100, 3000, 300,
-        40, 15, 12, 40, 2, 8, 0, 0x4000, 0xf800, 0, 3, 1, 0xffdb}};
+    cntrl::RightPageSettings settings{{1000, 1000, 24, 1, 4, 2, 100, 3000, 400,
+        40, 5, 12, 40, 2, 8, 0, 0x4000, 0xf800, 0, 3, 1, 0xff90}};
     PerformancePages pages; pages.configure(settings);
     PerformanceStatus status; status.cycles = 10; status.patches = 59;
     status.ram_used[0] = 49 * 1024; status.ram_free[0] = 463 * 1024;
     status.ram_used[1] = 25 * 1024; status.ram_free[1] = 487 * 1024;
     status.disk_valid = true; status.disk_used = 1181116006ull;
     status.disk_free = 29ull * 1024 * 1024 * 1024 - status.disk_used;
-    assert(!pages.active());
-    pages.browse(false, "first");
-    auto view = pages.view(0, 0, false, status);
+    assert(pages.page() == PerformancePages::Page::status);
+    pages.browse(true, "first");
+    auto view = pages.view(0, 0, status);
     assert(!std::strcmp(view.lines[0].text, "Tap Tempo"));
+    const auto heading = view.lines[0].graphics;
+    assert(view.heading_band && heading.foreground == 0xffff && heading.background == 0);
+    assert(view.graphics.background == 0xff90 && view.circle.annulus == 5);
+    DisplayRenderer renderer;
+    renderer.show(2, view); drain(renderer);
+    assert(screens[2][10][0] == 0 && screens[2][25][0] == 0xff90);
+    cntrl::Pane weight;
+    weight.graphics.pad = 2;
+    weight.lines[0].graphics = weight.graphics;
+    weight.lines[0].x = 10; weight.lines[0].y = 30;
+    std::strcpy(weight.lines[0].text, "H");
+    renderer.show(2, weight); drain(renderer);
+    assert(screens[2][37][10] == 0xffff);
+    weight.lines[0].heavier = true;
+    renderer.show(2, weight); drain(renderer);
+    assert(screens[2][37][10] == 0 && screens[2][38][10] == 0xffff);
+    assert(screens[2][30][9] == 0xffff && screens[2][30][15] == 0xffff);
     assert(!std::strcmp(view.lines[1].text, "---.-") && view.circle.color == 0x4000);
-    pages.tap(100); view = pages.view(100, 100000, true, status);
-    assert(view.circle.color == 0xf800 && !std::strcmp(view.lines[1].text, "---.-"));
-    pages.tap(600); view = pages.view(600, 600000, false, status);
+    pages.tap(100); view = pages.view(100, 100000, status);
+    assert(view.circle.color == 0x4000 && !std::strcmp(view.lines[1].text, "---.-"));
+    pages.tap(600); view = pages.view(600, 600000, status);
     assert(!std::strcmp(view.lines[1].text, "120.0") && view.circle.color == 0xf800);
-    assert(!pages.due(899, false) && pages.due(900, false));
-    view = pages.view(900, 900000, false, status); assert(view.circle.color == 0x4000);
-    assert(pages.due(1100, false));
+    assert(!pages.due(799) && pages.due(800));
+    view = pages.view(900, 900000, status); assert(view.circle.color == 0x4000);
+    assert(pages.due(1100));
     pages.browse(false, "frozen"); pages.time(1200, 1200000);
-    view = pages.view(1200, 1200000, false, status);
+    view = pages.view(1200, 1200000, status);
     assert(!std::strcmp(view.lines[1].text, "Setup: frozen"));
     assert(!std::strcmp(view.lines[4].text, "Tap: 120.0"));
     assert(!std::strcmp(view.lines[3].text, "Clock: ---.-"));
@@ -685,6 +702,7 @@ static void test_performance_pages() {
     assert(!std::strcmp(view.lines[6].text, "Disk: 1.1/29G"));
     assert(!std::strcmp(view.lines[7].text, "Uptime: 0:00:01"));
     assert(view.lines[0].graphics.line_height == settings[cntrl::RightPageSettings::title_height] * 3 / 2);
+    assert(view.lines[0].graphics.font == heading.font && view.lines[0].graphics.size == heading.size);
     for (unsigned i = 1; i <= 7; ++i) {
         assert(view.lines[i].graphics.font == view.lines[1].graphics.font);
         assert(view.lines[i].graphics.size == view.lines[1].graphics.size);
@@ -693,47 +711,58 @@ static void test_performance_pages() {
     assert(view.lines[1].y < 30);
     assert(view.lines[2].y > view.lines[1].y && view.lines[5].y > view.lines[3].y);
     assert(view.lines[4].x >= 80 && view.lines[3].y == view.lines[4].y);
-    assert(!pages.due(2199, false) && pages.due(2200, false));
+    renderer.show(2, view); drain(renderer);
+    const auto &counts = view.lines[2];
+    const unsigned advance = 6 * std::max(1u, unsigned(ShowGraphics::native_font(counts.graphics.font, counts.graphics.size)->cap_height) / 8);
+    assert(screens[2][counts.y][counts.x] == 0x0011);
+    assert(screens[2][counts.y][counts.x + 8 * advance] == 0x0400);
+    assert(screens[2][counts.y][counts.x + 12 * advance] == 0x0011);
+    assert(screens[2][counts.y][counts.x + 21 * advance] == 0x0400);
+    const auto &uptime = view.lines[7];
+    assert(screens[2][uptime.y][uptime.x + 9 * advance] == 0x0400);
+    assert(!pages.due(2199) && pages.due(2200));
     for (unsigned i = 0; i <= 24; ++i) pages.clock(16, 2000000 + i * 500000 / 24);
-    view = pages.view(2500, 2500000, false, status);
+    view = pages.view(2500, 2500000, status);
     assert(!std::strcmp(view.lines[3].text, "Clock: 120.0") && !view.lines[3].stippled);
-    pages.time(3501, 3501000); view = pages.view(3501, 3501000, false, status);
+    pages.time(3501, 3501000); view = pages.view(3501, 3501000, status);
     assert(!std::strcmp(view.lines[3].text, "Clock: 120.0") && view.lines[3].stippled);
-    pages.clock(17, 3600000); view = pages.view(3600, 3600000, false, status);
+    pages.clock(17, 3600000); view = pages.view(3600, 3600000, status);
     assert(!view.lines[3].stippled && !std::strcmp(view.lines[1].text, "Setup: frozen"));
     pages.time(1205000, 1205000000);
-    view = pages.view(1205000, 1205000000, false, status);
+    view = pages.view(1205000, 1205000000, status);
     assert(!std::strcmp(view.lines[7].text, "Uptime: 0:20:05"));
     status.disk_valid = false;
-    view = pages.view(1205000, 1205000000, false, status);
+    view = pages.view(1205000, 1205000000, status);
     assert(!std::strcmp(view.lines[6].text, "Disk: --/--G"));
     pages.time(0xfffffff0u, 0);
     pages.time(0x000003e8u, 1000000);
-    view = pages.view(1000, 1000000, false, status);
+    view = pages.view(1000, 1000000, status);
     assert(!std::strcmp(view.lines[7].text, "Uptime: 1193:02:48"));
     pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::firmware);
-    view = pages.view(3600, 3600000, false, status);
+    view = pages.view(3600, 3600000, status);
     assert(!std::strcmp(view.lines[0].text, "Firmware"));
     assert(!std::strcmp(view.lines[1].text, "Use stock"));
     assert(!std::strcmp(view.lines[2].text, "firmware"));
-    assert(view.lines[0].graphics.line_height == 3 * settings[cntrl::RightPageSettings::title_height]);
+    assert(view.lines[0].graphics.line_height == heading.line_height);
+    assert(view.lines[0].graphics.font == heading.font && view.lines[0].graphics.size == heading.size);
     assert(view.lines[1].y > 64 && view.lines[2].y > view.lines[1].y);
-    assert(!pages.due(5000, true));
+    assert(!pages.due(5000));
     pages.tap(3900); // C on Firmware must not change the tap-tempo history.
-    pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::undo);
+    pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::tap);
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::firmware);
     pages.browse(true, "a-very-long-setup-name-that-cannot-fit-at-the-smallest-font");
     assert(pages.page() == PerformancePages::Page::status);
-    view = pages.view(3601, 3601000, false, status);
+    view = pages.view(3601, 3601000, status);
     assert(view.lines[1].x >= 2 && view.lines[1].x < 80);
     assert(std::strstr(view.lines[1].text, "..."));
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::tap);
-    view = pages.view(3601, 3601000, false, status);
+    view = pages.view(3601, 3601000, status);
     assert(!std::strcmp(view.lines[1].text, "120.0"));
 }
 
 int main() {
     test_performance_pages();
+    writes = pixels_sent = 0;
     sparse_text();
     {
         ShowGraphics graphics;

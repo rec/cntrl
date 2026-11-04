@@ -86,19 +86,20 @@ def test_right_page_settings_round_trip(
         'minimum_taps': 3,
         'minimum_interval': '80 ms',
         'reset_gap': 4,
-        'flash_duration': '200 ms',
+        'flash_fraction': '20%',
         'flasher_diameter': 36,
         'annulus': 14,
         'tempo_font': 'CourierPrimeBold',
         'status_font': 'Arial',
         'off_color': '0x300000',
         'on_color': '0xFF2200',
+        'background_color': '0x123456',
     }
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     settings = models.Show.model_validate(exported).right_pages
     assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
-    assert settings.refresh_interval == 2 and settings.flash_duration == 0.2
+    assert settings.refresh_interval == 2 and settings.flash_fraction == 0.2
     assert settings.tempo_font == 'CourierPrimeBold'
     assert compiler.compile_show(exported, {}, [], target) == data
 
@@ -110,9 +111,13 @@ def test_right_page_settings_round_trip(
         {'tap_intervals': 9},
         {'minimum_taps': 6},
         {'minimum_interval': 4, 'reset_gap': 3},
-        {'flash_duration': '1 Hz'},
-        {'flasher_diameter': 60},
+        {'flash_fraction': '1 Hz'},
+        {'flash_fraction': 0},
+        {'flash_fraction': 1.001},
+        {'flash_fraction': 0.4001},
+        {'flasher_diameter': 70},
         {'off_color': 'bad-color'},
+        {'background_color': 'bad-color'},
         {'decimals': 3},
     ],
 )

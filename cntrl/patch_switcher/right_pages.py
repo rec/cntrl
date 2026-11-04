@@ -8,7 +8,7 @@ from . import graphics, models
 def pack(show: models.Show, target: models.Target) -> list[int]:
     r = show.right_pages
     if (
-        r.title_height
+        r.title_height * 3 // 2
         + r.tempo_height
         + r.flasher_diameter
         + 2 * r.annulus
@@ -27,7 +27,7 @@ def pack(show: models.Show, target: models.Target) -> list[int]:
         r.minimum_taps,
         round(r.minimum_interval * 1000),
         round(r.reset_gap * 1000),
-        round(r.flash_duration * 1000),
+        round(r.flash_fraction * 1000),
         r.flasher_diameter,
         r.annulus,
         r.title_height,
@@ -40,7 +40,7 @@ def pack(show: models.Show, target: models.Target) -> list[int]:
         graphics.rgb565(graphics.color(r.ring_color)),
         r.digits,
         r.decimals,
-        graphics.rgb565(graphics.color(show.background_color)),
+        graphics.rgb565(graphics.color(r.background_color)),
     ]
 
 
@@ -56,7 +56,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         'minimum_taps',
         'minimum_interval',
         'reset_gap',
-        'flash_duration',
+        'flash_fraction',
         'flasher_diameter',
         'annulus',
         'title_height',
@@ -67,7 +67,12 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         result[n] = w[i] / 1000 if i in (0, 1, 6, 7, 8) else w[i]
     result['tempo_font'] = 'CourierPrime' if w[14] == 8 else 'CourierPrimeBold'
     result['status_font'] = ['classic', 'Arial', 'ComicSansMS'][w[15]]
-    for i, n in enumerate(('off_color', 'on_color', 'ring_color'), 16):
+    for i, n in (
+        (16, 'off_color'),
+        (17, 'on_color'),
+        (18, 'ring_color'),
+        (21, 'background_color'),
+    ):
         r, g, b = w[i] >> 11, (w[i] >> 5) & 63, w[i] & 31
         result[n] = '0x{:02X}{:02X}{:02X}'.format(
             r * 255 // 31, g * 255 // 63, b * 255 // 31
