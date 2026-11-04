@@ -268,7 +268,7 @@ definitions. Program tags joined from multiple table files form a union.
 Configuration fragment:
 
 ```toml
-[tags.sax.style]
+[tags.sax]
 foreground_color = 'yellow'
 
 [tags.whole-system]

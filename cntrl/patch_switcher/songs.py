@@ -63,7 +63,7 @@ class Library(BaseModel, frozen=True):
     definitions: models.Definitions | None = None
     patches: dict[str, object] = Field(default_factory=dict)
     fonts: dict[str, str] = Field(default_factory=dict)
-    tags: dict[str, models.Tag] = Field(default_factory=dict)
+    tags: dict[str, models.Style] = Field(default_factory=dict)
     songs: list[Song] = Field(default_factory=list)
     setlists: list[Setlist] = Field(default_factory=list)
     model_config = ConfigDict(extra='forbid')

@@ -49,7 +49,7 @@ def show() -> dict[str, object]:
                 {'type': 'program-change', 'instrument': 'synth', 'program': 1},
             ]
         },
-        tags={'sax': models.Tag(), 'whole-system': models.Tag()},
+        tags={'sax': models.Style(), 'whole-system': models.Style()},
         pages={
             'patch': models.Page(fields=['patch_cycle.name', 'tags', 'display_name'])
         },
@@ -94,10 +94,8 @@ def test_tags_are_inherited_once_in_child_then_parent_order() -> None:
 
 def test_later_tags_override_properties_without_replacing_the_style() -> None:
     tags = {
-        'sax': models.Tag(
-            style=models.Style(foreground_color='red', font_name='classic')
-        ),
-        'whole-system': models.Tag(style=models.Style(foreground_color='blue')),
+        'sax': models.Style(foreground_color='red', font_name='classic'),
+        'whole-system': models.Style(foreground_color='blue'),
     }
     assert display.tag_style(['sax', 'whole-system'], tags) == models.Style(
         foreground_color='blue', font_name='classic'
@@ -156,12 +154,12 @@ def test_icons_preserve_explicit_owners_through_recompilation(
     show: dict[str, object], target: models.Target, icon: str
 ) -> None:
     show = models.Setup.model_validate(show).model_dump(exclude_none=True)
-    show['tags']['sax']['style'] = {'icon': 'images/sax.png'}
+    show['tags']['sax'] = {'icon': 'images/sax.png'}
     show['definitions']['programs'][0]['style'] = {'icon': 'images/program.png'}
     show['patch_cycles']['Song 1'][0]['style'] = {'icon': icon}
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['tags']['sax']['style'] == {'icon': 'images/sax.png'}
+    assert exported['tags']['sax'] == {'icon': 'images/sax.png'}
     assert exported['definitions']['programs'][0]['style'] == {
         'icon': 'images/program.png'
     }

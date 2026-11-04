@@ -318,8 +318,8 @@ def merge_style(*styles: models.Style | None) -> models.Style:
     return models.Style.model_validate(values)
 
 
-def tag_style(names: list[str], tags: dict[str, models.Tag]) -> models.Style:
-    return merge_style(*(tags[n].style for n in names if n in tags))
+def tag_style(names: list[str], tags: dict[str, models.Style]) -> models.Style:
+    return merge_style(*(tags[n] for n in names if n in tags))
 
 
 def field_value(

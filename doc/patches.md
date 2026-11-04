@@ -2,7 +2,7 @@
 
 `patch_cycles` maps names to ordered lists of patches. A tag classifies a program
 or patch independently of those lists. Items use a `tags` list; the setup's
-optional `[tags.NAME.style]` tables define styles for selected tags. Tags do not
+optional `[tags.NAME]` tables define styles for selected tags. Tags do not
 need a declaration to be used.
 
 A fully specified Patch is an executable table with a required `type`. The same table works in a

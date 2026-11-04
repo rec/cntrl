@@ -73,12 +73,6 @@ class Style(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Tag(BaseModel, frozen=True):
-    style: Style | None = None
-
-    model_config = ConfigDict(extra='forbid')
-
-
 class Presentation(BaseModel, frozen=True):
     name: str | None = None
     display_name: str | None = None
@@ -487,7 +481,7 @@ class Setup(BaseModel, frozen=True):
     ] = 0.6
     windows: Windows = Field(default_factory=Windows)
     pages: dict[str, Page] = Field(default_factory=lambda: {'patch': Page()})
-    tags: dict[str, Tag] = Field(default_factory=dict)
+    tags: dict[str, Style] = Field(default_factory=dict)
     parameters: dict[str, Parameter] = Field(default_factory=dict)
     switches: dict[str, object] = Field(default_factory=dict)
 

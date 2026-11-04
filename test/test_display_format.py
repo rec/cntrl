@@ -179,7 +179,7 @@ def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
                     'line_styles': {'display_name': {'foreground_color': 'green'}},
                 }
             },
-            'tags': {'wind': {'style': {'foreground_color': 'white'}}},
+            'tags': {'wind': {'foreground_color': 'white'}},
         }
     )
     _, refs, block = display.compile_display(show, [value], target)
@@ -263,7 +263,7 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
             'line_styles': {'brightness': {'foreground_color': 'blue'}},
         }
     }
-    show['tags'] = {'wind': {'style': {'foreground_color': 'red'}}}
+    show['tags'] = {'wind': {'foreground_color': 'red'}}
     show['windows'] = {'next': {'pad': '8 px', 'style': {'background_color': 'black'}}}
     show['patch_cycles']['wind'][0]['style'] = {'background_color': 'white'}
     definitions = compiler.read_document(FIXTURES / 'definitions.json')
@@ -300,8 +300,8 @@ def test_tag_labels_and_patch_content_resolve_their_own_styles(
         instruments={},
         patches={},
         tags={
-            'sax': models.Tag(style=models.Style(foreground_color='red')),
-            'whole-system': models.Tag(style=models.Style(foreground_color='blue')),
+            'sax': models.Style(foreground_color='red'),
+            'whole-system': models.Style(foreground_color='blue'),
         },
         pages={'patch': models.Page(fields=['tags', 'display_name'])},
     )
@@ -331,8 +331,8 @@ def test_local_tag_reapplies_after_program_tags(
         patches={},
         style=models.Style(background_color='white'),
         tags={
-            'sax': models.Tag(style=models.Style(foreground_color='red')),
-            'bright': models.Tag(style=models.Style(foreground_color='blue')),
+            'sax': models.Style(foreground_color='red'),
+            'bright': models.Style(foreground_color='blue'),
         },
         pages={'patch': models.Page(fields=['tags', 'display_name'])},
     )

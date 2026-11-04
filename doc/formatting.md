@@ -44,10 +44,10 @@ foreground_color = 'black'
 background_color = 'white'
 font_name = 'Arial'
 
-[tags.sax.style]
+[tags.sax]
 foreground_color = '0xD08000'
 
-[tags.whole-system.style]
+[tags.whole-system]
 font_name = 'CourierPrimeBold'
 
 [pages.patch]
