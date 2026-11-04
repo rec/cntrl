@@ -1,6 +1,5 @@
 #include "target.h"
 #if CNTRL_ORIGINAL_FIRMWARE
-#include "../original_firmware.h"
 #include "../boot_switch/selection.h"
 extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #endif
@@ -64,7 +63,7 @@ enum class UiOperation : unsigned {
     menu_previous = 128, menu_next, menu_activate, menu_back, menu_open, performance_show,
     setup_previous, setup_next, setup_confirm, setup_back,
     songs_previous, songs_next, songs_confirm, songs_previous_section, songs_next_section, songs_back,
-    stock_confirm = 151, stock_back, switches_return,
+    switches_return = 153,
 };
 bool state_ui(UiOperation operation);
 bool patch_stock(uint8_t pair, cntrl::PatchExecutor &invocation);
@@ -762,16 +761,10 @@ enum ModuleIndex { setups_module, songs_module,
 #if CNTRL_SWITCHES
     switches_module,
 #endif
-#if CNTRL_ORIGINAL_FIRMWARE
-    original_firmware_module,
-#endif
 };
 const char *const module_names[] = {"Setups", "Songs and setlists",
 #if CNTRL_SWITCHES
     "Switches",
-#endif
-#if CNTRL_ORIGINAL_FIRMWARE
-    "Original firmware",
 #endif
 };
 #if CNTRL_ORIGINAL_FIRMWARE
@@ -922,7 +915,6 @@ void poll_firmware_visit(bool released) {
         firmware_visit_stage = 8;
     }
 }
-OriginalFirmware original_firmware(board, start_original_firmware);
 #endif
 cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof(module_names[0]));
 bool patch_work_pending() { return controller.busy() || songs.executing() || songs.busy(); }
@@ -989,11 +981,6 @@ bool state_ui(UiOperation operation) {
             if (documents.busy()) module_menu.enter();
             else { setup_ui.enter(); module_controls_locked = true; }
         }
-#if CNTRL_ORIGINAL_FIRMWARE
-        else if (selected == original_firmware_module) {
-            original_firmware.enter(); module_controls_locked = true;
-        }
-#endif
         return true;
     }
     case UiOperation::setup_previous:
@@ -1023,14 +1010,6 @@ bool state_ui(UiOperation operation) {
     case UiOperation::switches_return:
         board.enter_switches(documents.document(), 0); module_controls_locked = true; return true;
 #endif
-#if CNTRL_ORIGINAL_FIRMWARE
-    case UiOperation::stock_confirm:
-        if (!original_firmware.open()) return false;
-        original_firmware.start(); return true;
-    case UiOperation::stock_back:
-        if (!original_firmware.open()) return false;
-        original_firmware.leave(); module_menu.enter(); module_controls_locked = true; return true;
-#endif
     default: return false;
     }
 }
@@ -1038,9 +1017,6 @@ bool feature_open() {
     return module_menu.open() || setup_ui.open() || songs_ui.open()
 #if CNTRL_SWITCHES
         || board.switches.open()
-#endif
-#if CNTRL_ORIGINAL_FIRMWARE
-        || original_firmware.open()
 #endif
         ;
 }
@@ -1193,13 +1169,6 @@ void poll_target() {
                         else if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_activate)});
                         else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_back)});
                     }
-#if CNTRL_ORIGINAL_FIRMWARE
-                } else if (original_firmware.open()) {
-                    if (events[i] & press_event) {
-                        if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::stock_confirm)});
-                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::stock_back)});
-                    }
-#endif
 #if CNTRL_SWITCHES
                 } else if (board.switches.open()) {
                     if (events[i] & press_event) board.switches.button(i, true);

@@ -1,8 +1,8 @@
 # Optional feature modules
 
 Status: setup management and songs/setlists use the static module menu. Panic,
-the MIDI cable tester and MIDI Interface use the right-hand page cycle. Firmware-specific modules are
-registered by their target. The broader organization below remains guidance for
+the MIDI cable tester, MIDI Interface and stock-firmware switching use the
+right-hand page cycle. The menu contains Setups, Songs and setlists, and Switches. The broader organization below remains guidance for
 subsequent features.
 
 ## Purpose
