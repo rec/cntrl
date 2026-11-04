@@ -1,0 +1,2518 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Hardware-independent descriptions of MIDI controllers">
+      
+      
+      
+        <link rel="canonical" href="https://rec.github.io/cntrl/patches/">
+      
+      
+      
+        <link rel="prev" href="../panic/">
+      
+      
+        <link rel="next" href="../setup-revision-history/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.0.73">
+    
+    
+      
+        <title>Patches, switches and songs - cntrl</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.4ab2de0c.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-hidden="true"></label>
+    <div data-md-component="skip">
+      <a href="#__skip" class="md-skip">
+        Skip to content
+      </a>
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="./.." title="cntrl" class="md-header__button md-logo" aria-label="cntrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      <span class="md-visually-hidden">Navigation</span>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            cntrl
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Patches, switches and songs
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <span class="md-visually-hidden">Search</span>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="./.." title="cntrl" class="md-nav__button md-logo" aria-label="cntrl" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+
+    </a>
+    cntrl
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  cntrl
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../feature-modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Optional feature modules
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../formatting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Display formatting in TOML
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../midi-cable-test/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  MIDI cable test
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../midi-interface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  USB MIDI interface page
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../momentary-latched/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Switch assignments
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../panic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Panic page
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Patches, switches and songs
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Patches, switches and songs
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#patch-window-presentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Patch window presentation
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#automatic-cycle-styles" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Automatic cycle styles
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#simple-program-lists" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Simple program lists
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#several-catalogues-on-one-midi-destination" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Several catalogues on one MIDI destination
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#explicit-patches" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Explicit patches
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patch-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Patch types
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        State operations
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switch-timing-and-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Switch timing and ownership
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references-and-song-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        References and song libraries
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completion-failure-and-stock-return" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Completion, failure and stock return
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#required-authoring-and-format-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Required authoring and format changes
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup-revision-history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Setup revision history
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upload_helper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Firmware upload helper
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  API Reference
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        
+          <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_11">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  API Reference
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/cntrl/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  cntrl
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11_1" id="__nav_11_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_1_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_11_1">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  cntrl
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/catalogue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  catalogue
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/enums/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  enums
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_1_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/cntrl/maker/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  maker
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11_1_4" id="__nav_11_1_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_11_1_4_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_11_1_4">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  maker
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_1_4_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/cntrl/maker/morningstar/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  morningstar
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11_1_4_2" id="__nav_11_1_4_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_11_1_4_2_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_11_1_4_2">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  morningstar
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_1_4_2_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/cntrl/maker/morningstar/mc/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  mc
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11_1_4_2_2" id="__nav_11_1_4_2_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_11_1_4_2_2_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_11_1_4_2_2">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  mc
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/bitmap_raster/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  bitmap_raster
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/boot_switch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  boot_switch
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/build_bitmap_fonts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  build_bitmap_fonts
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/build_font_metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  build_font_metrics
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  firmware
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/font_assets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  font_assets
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/qualify_usb_midi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  qualify_usb_midi
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/sparse_fonts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  sparse_fonts
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_1_4_2_2_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/cntrl/maker/morningstar/mc/splash/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  splash
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11_1_4_2_2_10" id="__nav_11_1_4_2_2_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="6" aria-labelledby="__nav_11_1_4_2_2_10_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_11_1_4_2_2_10">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  splash
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/splash/asset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  asset
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/splash/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  cli
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/storage_info/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  storage_info
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/maker/morningstar/mc/upload_helper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  upload_helper
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  models
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_1_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/cntrl/patch_switcher/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  patch_switcher
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11_1_6" id="__nav_11_1_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        
+          <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_11_1_6_label" aria-expanded="false">
+            <label class="md-nav__title" for="__nav_11_1_6">
+              <span class="md-nav__icon md-icon"></span>
+              
+  
+  patch_switcher
+
+            </label>
+            <ul class="md-nav__list" data-md-scrollfix>
+              
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  cli
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/compiler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  compiler
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/data_files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  data_files
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/display/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  display
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/formatting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  formatting
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/graphics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  graphics
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/history/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  history
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  models
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/resolved/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  resolved
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/right_pages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  right_pages
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/songs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  songs
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cntrl/patch_switcher/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  transport
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+                
+              
+            </ul>
+          </nav>
+        
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#patch-window-presentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Patch window presentation
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#automatic-cycle-styles" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Automatic cycle styles
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#simple-program-lists" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Simple program lists
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#several-catalogues-on-one-midi-destination" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Several catalogues on one MIDI destination
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#explicit-patches" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Explicit patches
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patch-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Patch types
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        State operations
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switch-timing-and-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Switch timing and ownership
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references-and-song-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        References and song libraries
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completion-failure-and-stock-return" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Completion, failure and stock return
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#required-authoring-and-format-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Required authoring and format changes
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                <a id="__skip" tabindex="-1"></a>
+                
+                  
+
+
+<h1 id="patches-switches-and-songs">Patches, switches and songs<a class="headerlink" href="#patches-switches-and-songs" title="Permanent link">&para;</a></h1>
+<p><code>patch_cycles</code> maps names to ordered lists of patches. A tag classifies a program
+or patch independently of those lists. Items use a <code>tags</code> list; the setup's
+optional <code>[tags.NAME.style]</code> tables define styles for selected tags. Tags do not
+need a declaration to be used.</p>
+<p>A fully specified Patch is an executable table with a required <code>type</code>. The same table works in a
+named definition, a browser patch cycle, a switch assignment, a song position or a
+sequence. A sequence executes all its children on one activation. A song advances
+one position at a time.</p>
+<h2 id="patch-window-presentation">Patch window presentation<a class="headerlink" href="#patch-window-presentation" title="Permanent link">&para;</a></h2>
+<p>The patch-manager window is divided into three equal vertical bands. The top
+band is reversed across its full width. Its background uses the heading's
+resolved patch color and its text uses the page background. The second and third displayed
+lines use the smaller of their fitted sizes, retaining their font families.
+If the families have different bitmap sizes, the largest shared size at or
+below that limit is used. Switch pages retain their independent line sizing.</p>
+<p>Styles may set <code>horizontal_scale</code> to a positive width multiplier. It participates
+in the usual style cascade and overrides the selected font's default. StillTime
+defaults to 1.5; other fonts default to 1.0. Fitting includes the scaled width.</p>
+<h2 id="automatic-cycle-styles">Automatic cycle styles<a class="headerlink" href="#automatic-cycle-styles" title="Permanent link">&para;</a></h2>
+<p>Setup-level <code>fill_in_styles = true</code> (the default) fills missing formatting for
+each cycle and its program lines. Explicit show, window, page, tag, program,
+patch and field styles still override these generated defaults per property.
+Global parameter and switch fields keep their existing formatting.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">seed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">fill_in_styles</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">background_color</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'0xFFF8D8'</span>
+</span></code></pre></div>
+<p>Every cycle uses the same pale yellow background by default. Each cycle
+also gets a random available font, shared with its programs. All available font
+families are used before repeating, with adjacent repeats avoided when possible.
+Available families include target fonts and configured <code>[fonts]</code> entries.</p>
+<p>For N cycles, foreground generation starts with the configured background
+color as an anchor. It greedily chooses N other colors,
+maximizing each new color's minimum squared RGB distance from the anchor and
+earlier choices. Candidates are a bounded RGB grid with channel values
+0, 32, 64, 96, 128, 160, 192, 224 and 255, restricted to weighted RGB brightness
+below 50%: <code>(0.299 R + 0.587 G + 0.114 B) / 255 &lt; 0.5</code>. This is an approximate
+perceived-brightness measure, not linear-light luminance. Explicitly authored
+foreground colors are unchanged. This is a farthest-point heuristic,
+not a guarantee of the global optimum. The N foregrounds are distinct; the
+background anchor is not assigned to a cycle. Existing contrast warnings remain.</p>
+<p>One local random generator controls all these choices. Integer <code>seed</code> defaults
+to 0, making repeated compilation deterministic. Python callers may pass
+<code>seed=None</code> for a fresh one-time seed; TOML has no null literal. The compiled
+setup records that chosen seed, so downloading and recompiling preserves the
+appearance. Set <code>fill_in_styles = false</code> to retain only authored styling and
+application defaults. Styles are generated during compilation, with no pedal
+random generator or new firmware record format.</p>
+<h2 id="simple-program-lists">Simple program lists<a class="headerlink" href="#simple-program-lists" title="Permanent link">&para;</a></h2>
+<p>For an instrument that stays in one bank, list its program names in order:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[instruments.synth]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'din'</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">programs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'Piano'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Flute'</span><span class="p">,</span><span class="w"> </span><span class="p">{},</span><span class="w"> </span><span class="s1">'Strings'</span><span class="p">]</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">[patch_cycles]</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">Live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'Piano'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Flute'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Strings'</span><span class="p">]</span>
+</span></code></pre></div>
+<p>Array positions are program numbers 1 through 128. An empty table <code>{}</code> leaves
+that position unnamed without moving subsequent programs. A flat array sends
+Program Change only: it does not select bank 0 or send either bank-select
+controller. Select the desired bank on the instrument before using the setup.</p>
+<p>An entry can also be a metadata table, for example
+<code>{name = 'Flute', tags = 'woodwind,solo'}</code>. Tags accept a list of strings or a
+string separated by commas or colons. Program numbers and instrument identities
+come from the containing structure and cannot be repeated inside these entries.</p>
+<p>In a patch cycle, a string looks up an exact program name. If a name occurs more
+than once, qualify it with <code>{name = 'Flute', instrument = 'synth', bank = 3}</code>,
+using whichever qualifiers are needed to select one program. These shorthand
+entries can include presentation properties, volume and pan. Named patches,
+switch assignments, sequences and songs continue to use explicit typed Patches.</p>
+<p>For explicit banks, use a table whose keys are bank numbers:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[instruments.synth]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'din'</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">[instruments.synth.programs]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'Piano'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Flute'</span><span class="p">]</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'Lead'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Strings'</span><span class="p">]</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">[[definitions.setups]]</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">instrument</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'synth'</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'default'</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="k">[definitions.setups.banks.0]</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">lsb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">[definitions.setups.banks.3]</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">lsb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="k">[patch_cycles]</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="n">Live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'Piano'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Lead'</span><span class="p">]</span>
+</span></code></pre></div>
+<p>Explicit banks need mappings in the setup definition. <code>msb</code> is the value sent on
+CC 0; <code>lsb</code> is the value sent on CC 32. Only the configured controllers are sent.
+The example configures CC 32 alone. The compiler does not guess a device's bank
+mapping from its name or a catalogue's bank numbers.</p>
+<p>The instrument identity defaults to its table key, and <code>setup</code> defaults to
+<code>'default'</code>. A setup with no bank mappings or initialization data needs no
+definition. Routing still requires <code>channel</code> and <code>output</code>. Catalogues containing
+only names and metadata can be supplied as <code>--table</code> files; routing then belongs
+in the show file.</p>
+<p>When files are combined with <code>+</code>, different bank keys merge without changing
+program numbers. Equal program arrays are retained once; conflicting arrays are
+errors even with conflict avoidance enabled. Flat and bank-keyed catalogues for
+the same instrument cannot be mixed. Existing explicit configurations and
+examples remain supported. See <code>examples/patch-switcher/program-changes.toml</code>
+for a complete flat-list example.</p>
+<p>The documented VL70-m and Patchman catalogues keep their fixed program information
+in <code>instruments/vl70m.toml</code> and <code>instruments/patchman.toml</code>. Personal classifications
+are in <code>instruments/tags.toml</code>. Load the relevant catalogue and the tags file as
+separate <code>--table</code> arguments, or combine them with <code>+</code>. The tags file groups exact
+program names under each instrument:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[instruments.patchman.tags]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">trumpet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'Trumpet'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Maynard'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Alpert'</span><span class="p">]</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">sax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'Alto Sax'</span><span class="p">,</span><span class="w"> </span><span class="s1">'TenorSax'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Bari Sax'</span><span class="p">]</span>
+</span></code></pre></div>
+<p>Each tag applies to every matching program name in that instrument's loaded
+catalogue. Missing names in a loaded catalogue are errors. Instruments whose
+catalogues are not loaded are ignored, so one tags file can serve several shows.
+Tag-table order determines tag order when a program belongs to multiple tags.
+If a nondefault setup is needed, declare <code>setup</code> once in the instrument table.
+Changing a classification does not require editing the documented catalogue.</p>
+<h2 id="several-catalogues-on-one-midi-destination">Several catalogues on one MIDI destination<a class="headerlink" href="#several-catalogues-on-one-midi-destination" title="Permanent link">&para;</a></h2>
+<p>When two instruments receive the same Program Change, describe the route once
+and attach their aligned sound catalogues:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[instruments.both]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'din'</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">catalogues</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'vl70-internal.toml'</span><span class="p">,</span><span class="w"> </span><span class="s1">'patchman-internal.toml'</span><span class="p">]</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">[pages.patch]</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">fields</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'patch_cycle.name'</span><span class="p">,</span><span class="w"> </span><span class="s1">'names.vl70m'</span><span class="p">,</span><span class="w"> </span><span class="s1">'names.patchman'</span><span class="p">]</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="k">[patch_cycles]</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">Live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">]</span>
+</span></code></pre></div>
+<p>Paths are relative to the file containing the declaration. Each catalogue must
+describe one distinct instrument and one nonempty bank, with the same number of
+named program slots as the other catalogues. Slots align by program number.
+The catalogue bank describes the sounds; it does not request bank-selection
+messages. Set the hardware to the desired bank before using this configuration.</p>
+<p>Each activation sends one Program Change to the configured destination, regardless
+of the number of attached catalogues. Numeric cycle entries require exactly one
+configured destination; with several destinations, use explicit typed patches.
+Do not also supply <code>programs</code> on a declaration that uses <code>catalogues</code>.</p>
+<p>The <code>names.INSTRUMENT</code> fields expose the documented sound names independently.
+They use the same fitting, spacing, styling and already-sent stippling as the
+ordinary patch name. <code>display_name</code> remains available and defaults to the two
+names joined with <code>/</code>, omitting identical duplicates. Exports retain both names
+inside the program metadata and are self-contained; they do not need the original
+catalogue files to recompile.</p>
+<p>Loading <code>--table instruments/tags.toml</code> applies each underlying sound's tags to the
+shared program. The effective tags are their union, plus any tags on the patch.
+Unselected sounds in those source instruments are ignored when only the shared
+catalogue is loaded. This allows differently tagged sounds to share one action
+without changing the classifications of either sound.</p>
+<p><code>examples/patch-switcher/dual-internal.toml</code> represents all 64 paired Internal
+slots for the stock VL70-m and Patchman units on channel 1.</p>
+<h2 id="explicit-patches">Explicit patches<a class="headerlink" href="#explicit-patches" title="Permanent link">&para;</a></h2>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[instruments.piano]</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'din'</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">[[definitions.setups]]</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">instrument</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'piano'</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'default'</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="k">[patches.clean]</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="n">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'program-change'</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">instrument</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'piano'</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">program</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="n">display_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'Clean piano'</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="k">[patches.intro]</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="n">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'sequence'</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="n">patches</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="p">{</span><span class="n">type</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'state'</span><span class="p">,</span><span class="w"> </span><span class="n">operation</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'brightness'</span><span class="p">,</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">192</span><span class="p">},</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">    </span><span class="p">{</span><span class="n">type</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'reference'</span><span class="p">,</span><span class="w"> </span><span class="n">patch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'clean'</span><span class="p">},</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">    </span><span class="p">{</span><span class="n">type</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'control-change'</span><span class="p">,</span><span class="w"> </span><span class="n">output</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'trs'</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">controller</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">11</span><span class="p">,</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">100</span><span class="p">},</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="p">]</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="k">[patch_cycles]</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="n">Live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="n">type</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'reference'</span><span class="p">,</span><span class="w"> </span><span class="n">patch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'intro'</span><span class="p">}]</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="k">[switches.intro]</span>
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="n">button</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'A'</span>
+</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="n">on</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">type</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'reference'</span><span class="p">,</span><span class="w"> </span><span class="n">patch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">'intro'</span><span class="p">}</span>
+</span></code></pre></div>
+<p>Instrument declarations and their bank mappings retain their existing meaning.
+Switch-only setups can omit instruments, definitions, named patches and patch cycles
+when their patches do not use them. Named definitions have stable keys; their
+dictionary order does not define the browser order. <code>patch_cycles</code> supplies that order.</p>
+<h2 id="patch-types">Patch types<a class="headerlink" href="#patch-types" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Required fields</th>
+<th>Optional executable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>program-change</code></td>
+<td><code>instrument</code>, <code>program</code></td>
+<td><code>bank</code>, <code>volume</code>, <code>pan</code></td>
+</tr>
+<tr>
+<td><code>control-change</code></td>
+<td><code>output</code>, <code>channel</code>, <code>controller</code>, <code>value</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>pitch-bend</code></td>
+<td><code>output</code>, <code>channel</code>, <code>value</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>nrpn</code></td>
+<td><code>output</code>, <code>channel</code>, <code>parameter</code>, <code>value</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>sysex</code></td>
+<td><code>output</code>, <code>data</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>midi</code></td>
+<td><code>output</code>, <code>bytes</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td><code>operation</code> and the fields below</td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>stock-firmware</code></td>
+<td><code>exit_buttons</code>, such as <code>'A+F'</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>sequence</code></td>
+<td><code>patches</code>, a list of Patch tables</td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>reference</code></td>
+<td><code>patch</code>, a stable definition key</td>
+<td><code>document</code></td>
+</tr>
+</tbody>
+</table>
+<p>Every type can have <code>name</code>, <code>display_name</code>, <code>style</code> and <code>tags</code> presentation
+metadata. Named definitions default their label to their key. Inline patches use
+a description of the operation. References inherit the target's presentation;
+metadata on the reference occurrence overrides it. Children of a sequence do not
+replace the parent performance display.</p>
+<p>Channels are 1..16. Programs use 1..128 or the existing program-name regular
+expression lookup. Volume, CC controllers and CC values use 0..127; pan uses
+-64..63. Pitch bend uses -8192..8191, with zero centered. NRPN parameters and values
+use 0..16383. Program selections send bank MSB, bank LSB, program, optional volume
+and optional pan, in that order. NRPN sends CC 99, 98, 6 and 38 as one ordered
+message sequence on its output, allowing MIDI real-time traffic to interleave.</p>
+<p>SysEx <code>data</code> contains 0..127 payload bytes, without F0/F7; the compiler adds those
+delimiters. <code>midi.bytes</code> contains exactly one complete message including its
+status and any delimiters. Running status from another patch is never inherited.
+Long SysEx streams through the normal cooperative output scheduler. The target
+must support the named output; this format adds no output drivers.</p>
+<h2 id="state-operations">State operations<a class="headerlink" href="#state-operations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Fields</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>brightness</code></td>
+<td><code>value</code>, integer 0..255</td>
+<td>Set active screen brightness</td>
+</tr>
+<tr>
+<td><code>usb-midi-interface</code></td>
+<td><code>value</code>, Boolean</td>
+<td>Set the active USB MIDI bridge preference</td>
+</tr>
+<tr>
+<td><code>next-patch</code>, <code>previous-patch</code></td>
+<td>None</td>
+<td>Move the preview within its current patch cycle</td>
+</tr>
+<tr>
+<td><code>next-patch-cycle</code>, <code>previous-patch-cycle</code></td>
+<td>None</td>
+<td>Move the browser to another patch cycle</td>
+</tr>
+<tr>
+<td><code>activate-selection</code></td>
+<td>None</td>
+<td>Execute the selected Patch through the same executor</td>
+</tr>
+<tr>
+<td><code>undo</code></td>
+<td>None</td>
+<td>Restore a known previous program selection, when available</td>
+</tr>
+<tr>
+<td><code>menu</code></td>
+<td>None</td>
+<td>Return to the module menu after the invocation and required cleanup</td>
+</tr>
+<tr>
+<td><code>back</code></td>
+<td>None</td>
+<td>Return to performance after the invocation and required cleanup</td>
+</tr>
+</tbody>
+</table>
+<p>Brightness and USB interface state are runtime settings. Executing these patches
+does not write the setup. Persistent setup settings still use the existing
+explicit setup editing and Save workflow. There is no arbitrary attribute,
+expression or dictionary of arguments to evaluate.</p>
+<h2 id="switch-timing-and-ownership">Switch timing and ownership<a class="headerlink" href="#switch-timing-and-ownership" title="Permanent link">&para;</a></h2>
+<p>Switches use A through E; F remains the context's Back control. <code>mode</code> defaults to
+<code>press</code>, which requires <code>on</code> and forbids <code>off</code>. <code>momentary</code> requires both and
+requests On at press, Off at release. <code>latched</code> requires both and alternates on
+successive presses. On and Off may use different Patch types, outputs and channels.</p>
+<p>The full reachable graph determines ownership, including both branches and
+referenced sequences. Readable MIDI reserves its known controls. Raw MIDI and
+SysEx in a persistent assignment reserve their entire output through Off cleanup
+or explicit abandonment. Other assignments cannot share that output. There is no
+automatic note ownership or inferred inverse. Accepted work completes before the
+required Off patch runs. A held entry switch must be released before it rearms.</p>
+<p>Stock visits and context-leaving operations are allowed in press assignments and
+song positions. Either branch of a momentary or latched assignment must stay in
+its context. Other active assignments finish their explicit cleanup before a
+press assignment leaves. See <a href="../momentary-latched/">switch controls</a>.</p>
+<h2 id="references-and-song-libraries">References and song libraries<a class="headerlink" href="#references-and-song-libraries" title="Permanent link">&para;</a></h2>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[patches.borrowed]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'reference'</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">document</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'other-setup'</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">patch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'clean'</span>
+</span></code></pre></div>
+<p>External references use the setup's logical name and a named patch's stable key.
+Display labels and instrument/program matching are not identities. The setup CLI
+loads adjacent <code>other-setup.toml</code> companions recursively and compiles the complete
+dependency graph before opening the transport. On the pedal, sources are checked
+and pinned before execution. Missing references and cycles fail before effects;
+pending work prevents replacement of its source data.</p>
+<p>Song libraries have optional <code>instruments</code>, <code>definitions</code>, <code>patches</code>, <code>fonts</code> and
+<code>tags</code> context using the same authoring models. Each song's <code>patches</code> list
+contains ordinary Patch tables, with an optional <code>id</code> for the position's persistent
+occurrence identity. A nonempty library is compiled with <code>--target</code>; companion
+setups and font assets follow the existing copy/download workflow. Inline captures
+retain their compiled source; live references retain their stable document/key.</p>
+<h2 id="completion-failure-and-stock-return">Completion, failure and stock return<a class="headerlink" href="#completion-failure-and-stock-return" title="Permanent link">&para;</a></h2>
+<p>Execution is ordered across outputs. Backpressure leaves the current child
+pending. A failed child stops the invocation; completed effects are not rolled
+back. Completed locally means delivery to the local MIDI output, without an
+instrument acknowledgement. Disconnects or abandoned cleanup can leave remote
+state unknown. Undo restores known program selections and does not implicitly
+replay a composite or reverse state, SysEx or firmware visits.</p>
+<p>A stock visit checkpoints the enclosing root, completed child ordinal, source
+fingerprint, caller and song/setlist occurrences when present. It also preserves
+the browser context and active brightness/interface settings needed to resume.
+Only an explicit stock return can resume. Its durable token is consumed before
+dispatch; changed sources, invalid records and ordinary boot never replay it.
+Remaining children finish before a song advances once to its next position.
+Power loss after consumption can leave an operation unexecuted or its result
+unknown, rather than risk sending it twice.</p>
+<h2 id="required-authoring-and-format-changes">Required authoring and format changes<a class="headerlink" href="#required-authoring-and-format-changes" title="Permanent link">&para;</a></h2>
+<p>The current setup format is 25; song records use CSG4. Setup
+window graphics and page references use physical left-to-right order:
+next (0), sent (1), undo (2). Recompile and
+upload matching setup and song documents together before using this firmware.
+Existing binary documents are rejected; no migration or dual execution path is
+provided. Keep backups before replacing existing device data.
+Exports after on-pedal program or bank edits preserve the current MIDI values
+and displayed labels while canonicalizing their source metadata. Further
+export/recompile cycles are stable.</p>
+<ul>
+<li>Move the old browser-list dictionary from <code>patches</code> to <code>patch_cycles</code>.
+  <code>patches</code> now holds reusable named Patch tables.</li>
+<li>Rename <code>groups</code> to <code>patch_cycles</code>, <code>group.name</code> to <code>patch_cycle.name</code>, and
+  <code>categories</code> membership and style definitions to <code>tags</code>. Program catalogues
+  use the same <code>tags</code> membership field as patches.</li>
+<li>Add <code>type</code> to every executable table. Replace delimiter shorthand with explicit
+  program fields; strings are not references and bare lists are not sequences.</li>
+<li>Replace <code>function = 'stock-firmware'</code> with <code>type = 'stock-firmware'</code>.</li>
+<li>Replace <code>actions</code> with <code>switches</code>, and each old command with its complete Patch
+  table. References use stable keys rather than display names. Use <code>pages.switches</code>
+  and <code>switch.*</code> display fields for switch presentation.</li>
+<li>Replace song instrument/program references with <code>type = 'reference'</code>,
+  <code>document</code> and <code>patch</code>. Inline program selections use the song library's
+  instrument context.</li>
+</ul>
+<p>Automated tests and target builds qualify encoding, scheduling, source lifetimes
+and continuation logic. Physical MIDI reception, switch timing and stock-return
+behavior for this format still require separate hardware qualification.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog" role="status" aria-atomic="true">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      
+      
+        
+        
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":["navigation.indexes","content.code.copy"],"redirect":null,"search":"../assets/javascripts/workers/search.c47bb847.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","clipboard.error":"Could not copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.77dd0ce9.min.js"></script>
+      
+    
+  </body>
+</html>
