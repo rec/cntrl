@@ -196,7 +196,7 @@ public:
         font_assets::cache.finish(commit);
     }
     bool output_idle() const override { return bridge_.idle(); }
-    void set_usb_midi_interface(bool enabled) override {
+    void set_midi_interface(bool enabled) override {
         runtime.interface = enabled;
 #if CNTRL_SWITCHES
         if (switches.open()) return;
@@ -389,7 +389,7 @@ public:
         host.Task();
         bridge_.host_connected(bool(host_midi));
         uint32_t begin = micros(), now = millis();
-        bridge_.connected(usb_configuration != 0);
+        bridge_.connected(usb_configuration != 0, now);
 #if CNTRL_MIDI_INTERFACE
         midi_interface.connected(usb_configuration != 0);
 #endif
@@ -858,7 +858,7 @@ void poll_firmware_visit(bool released) {
             }
             invocation_navigation[5] = firmware_visit.initial_navigation;
             board.set_brightness(firmware_visit.runtime.brightness);
-            board.set_usb_midi_interface(firmware_visit.runtime.interface);
+            board.set_midi_interface(firmware_visit.runtime.interface);
             pending_ui_operation = firmware_visit.ui_operation;
             if (continuation.caller == 1) songs_ui.perform();
             else return_to_switches = continuation.caller == 2;
@@ -920,7 +920,7 @@ cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof
 bool patch_work_pending() { return controller.busy() || songs.executing() || songs.busy(); }
 bool patch_state(unsigned operation, uint32_t value) {
     if (operation == 1) { board.set_brightness(uint8_t(value)); return true; }
-    if (operation == 2) { board.set_usb_midi_interface(value != 0); return true; }
+    if (operation == 2) { board.set_midi_interface(value != 0); return true; }
     if (operation >= 3 && operation <= 8) {
         if ((operation == 7 || operation == 8) && (songs.executing() || documents.busy() || documents.dirty())) return false;
         return controller.navigate(operation);

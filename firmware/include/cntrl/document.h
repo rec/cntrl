@@ -229,7 +229,7 @@ public:
     }
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
-    bool usb_midi_interface() const { return data_[19] & 2; }
+    bool is_midi_interface() const { return data_[19] & 2; }
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
     std::optional<unsigned> transition_ms() const {
         unsigned value = u16(data_ + metadata() + 6);
@@ -410,7 +410,7 @@ private:
         case 4: if (p[7] == 255) return; std::snprintf(text, size, "%u", unsigned(p[7])); return;
         case 5: if (p[8] == 255) return; std::snprintf(text, size, "%d", int(p[8]) - 64); return;
         case 16: std::snprintf(text, size, "%u", unsigned(brightness())); return;
-        case 17: case 18: std::snprintf(text, size, "%s", (code == 17 ? splash() : usb_midi_interface()) ? "true" : "false"); return;
+        case 17: case 18: std::snprintf(text, size, "%s", (code == 17 ? splash() : is_midi_interface()) ? "true" : "false"); return;
         case 19: std::snprintf(text, size, "%lu", (unsigned long)(screensaver_timeout() / 1000)); return;
         case 20: case 21: {
             if (code == 21 && !transition_ms()) return;

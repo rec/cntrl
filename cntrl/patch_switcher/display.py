@@ -387,7 +387,7 @@ FIELDS = {
     'name': 7,
     'brightness': 16,
     'splash': 17,
-    'usb_midi_interface': 18,
+    'is_midi_interface': 18,
     'screensaver_timeout': 19,
     'navigation.hold_delay': 20,
     'transition': 21,

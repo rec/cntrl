@@ -25,7 +25,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     uint8_t brightness = 0;
     bool splash = false;
     bool animation_color_cycle = false;
-    bool usb_midi_interface = false;
+    bool is_midi_interface = false;
     bool send(const char *route, const uint8_t *data, unsigned n) override {
         if (!connected) return false;
         sent.emplace_back(data, data + n); routes.emplace_back(route); return true;
@@ -42,7 +42,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
     void set_brightness(uint8_t value, bool) override { brightness = value; }
-    void set_usb_midi_interface(bool value) override { usb_midi_interface = value; }
+    void set_midi_interface(bool value) override { is_midi_interface = value; }
     void set_splash(bool enabled, uint32_t) override { splash = enabled; }
     void set_animation_color_cycle(bool enabled) override { animation_color_cycle = enabled; }
     void error(const char *) override { ++errors; }

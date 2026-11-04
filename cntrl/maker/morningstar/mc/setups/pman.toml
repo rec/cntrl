@@ -1,6 +1,6 @@
 brightness = 192
 splash = true
-usb_midi_interface = false
+is_midi_interface = false
 screensaver_timeout = 3
 pad = 4
 contrast = 0.6

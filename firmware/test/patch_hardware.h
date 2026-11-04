@@ -14,7 +14,7 @@ struct TestPatchHardware : cntrl::Hardware, cntrl::PatchOutputs, cntrl::PatchSou
     bool acquire(const char *, const cntrl::Document *&, uint32_t &) override { return false; }
     bool state(unsigned operation, uint32_t value) override {
         if (operation == 1) { set_brightness(uint8_t(value)); return true; }
-        if (operation == 2) { set_usb_midi_interface(value != 0); return true; }
+        if (operation == 2) { set_midi_interface(value != 0); return true; }
         return controller && controller->navigate(operation);
     }
     bool stock(uint8_t buttons, cntrl::PatchExecutor &) override { return stock_firmware(buttons); }

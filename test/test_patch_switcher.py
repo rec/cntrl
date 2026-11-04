@@ -259,13 +259,13 @@ def test_usb_midi_switch_round_trips(
     target: models.Target,
     enabled: bool | None,
 ) -> None:
-    assert models.Show.model_validate(show).usb_midi_interface is False
+    assert models.Show.model_validate(show).is_midi_interface is False
     if enabled is not None:
-        show['usb_midi_interface'] = enabled
+        show['is_midi_interface'] = enabled
     data = compiler.compile_show(show, definitions, [], target)
     assert bool(data[19] & 2) is (enabled is True)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['usb_midi_interface'] is (enabled is True)
+    assert exported['is_midi_interface'] is (enabled is True)
     assert compiler.compile_show(exported, {'setups': []}, [], target) == data
 
 
@@ -273,8 +273,8 @@ def test_usb_midi_switch_round_trips(
 def test_usb_midi_switch_rejects_non_booleans(
     show: dict[str, object], definitions: object, target: models.Target, value: object
 ) -> None:
-    show['usb_midi_interface'] = value
-    with pytest.raises(compiler.CompilationError, match='usb_midi_interface'):
+    show['is_midi_interface'] = value
+    with pytest.raises(compiler.CompilationError, match='is_midi_interface'):
         compiler.compile_show(show, definitions, [], target)
 
 

@@ -74,7 +74,7 @@ def export(data: bytes) -> str:
         'brightness': flags & 255,
         'splash': bool(flags & 256),
         'animation_color_cycle': bool(flags & 1024),
-        'usb_midi_interface': bool(flags & 512),
+        'is_midi_interface': bool(flags & 512),
         'screensaver_timeout': timeout // 1000,
     }
     if duration := struct.unpack_from('<H', data, meta + 6)[0]:

@@ -21,7 +21,7 @@ void input(cntrl::midi::Bridge &b, unsigned route, std::initializer_list<uint8_t
 
 void test_messages_and_running_status() {
     cntrl::midi::Bridge b; Output out;
-    b.configure(true); b.connected(true);
+    b.configure(true); b.connected(true, 0);
     input(b, 6, {0x90, 60, 0xf8, 100, 61, 101, 0xc0, 12, 13, 0xf1, 2, 0xf2, 3, 4, 0xf3, 5, 0xf6});
     for (unsigned i = 0; i < 20; ++i) b.service(out, 0);
     assert((out.bytes[6] == std::vector<uint8_t>{0xf8, 0x90, 60, 100, 0x90, 61, 101, 0xc0, 12, 0xc0, 13, 0xf1, 2, 0xf2, 3, 4, 0xf3, 5, 0xf6}));
@@ -42,7 +42,7 @@ void test_messages_and_running_status() {
 
 void test_independent_outputs_and_pedal_reservation() {
     cntrl::midi::Bridge b; Output out;
-    b.configure(true); b.connected(true); out.blocked[0] = true;
+    b.configure(true); b.connected(true, 0); out.blocked[0] = true;
     for (unsigned i = 0; i < 1000; ++i) input(b, 0, {0x90, 60, 100});
     assert(b.counters(0).high_water == b.capacity);
     assert(b.counters(0).dropped == 1000 - b.capacity);
@@ -60,7 +60,7 @@ void test_independent_outputs_and_pedal_reservation() {
 
 void test_sysex_streaming_and_pedal_ownership() {
     cntrl::midi::Bridge b; Output out;
-    b.configure(true); b.connected(true);
+    b.configure(true); b.connected(true, 0);
     std::vector<uint8_t> expected{0xf0};
     input(b, 0, {0xf0, 1, 2}); b.service(out, 0);
     uint8_t patch[] = {0xc0, 12}; assert(b.pedal(0, patch, 2));
@@ -84,7 +84,7 @@ void test_sysex_streaming_and_pedal_ownership() {
 
 void test_sysex_timeout_overflow_and_disconnect() {
     cntrl::midi::Bridge b; Output out;
-    b.configure(true); b.connected(true);
+    b.configure(true); b.connected(true, 0);
     input(b, 0, {0xf0, 1, 2}); b.service(out, 0);
     uint8_t patch[] = {0xc0, 9}; assert(b.pedal(0, patch, 2));
     input(b, 0, {0xf8}, 999); b.service(out, 999); b.service(out, 1000); b.service(out, 1001);
@@ -100,15 +100,15 @@ void test_sysex_timeout_overflow_and_disconnect() {
     assert(out.bytes[0].back() == 0xf7);
     // Disconnect discards bridge backlog, but keeps physical pedal batches.
     input(b, 1, {0x90, 60, 100}); assert(b.pedal(1, patch, 2));
-    b.connected(false); b.service(out, 1001);
+    b.connected(false, 0); b.service(out, 1001);
     assert((out.bytes[1] == std::vector<uint8_t>{0xc0, 9}));
-    b.connected(true); b.service(out, 1001);
+    b.connected(true, 0); b.service(out, 1001);
     assert(out.bytes[1].size() == 2);
 }
 
 void test_default_off_and_disabled_explicit_usb() {
     cntrl::midi::Bridge b; Output out;
-    b.connected(true); input(b, 6, {0x90, 60, 100}); b.usb(0x00643c09, 0);
+    b.connected(true, 0); input(b, 6, {0x90, 60, 100}); b.usb(0x00643c09, 0);
     b.service(out, 0); assert(out.bytes[0].empty() && out.bytes[6].empty());
     uint8_t patch[] = {0xc0, 12}; assert(b.pedal(6, patch, 2)); b.service(out, 0);
     assert((out.bytes[6] == std::vector<uint8_t>{0xc0, 12}));
@@ -130,7 +130,7 @@ void test_default_off_and_disabled_explicit_usb() {
 
 void test_usb_sysex_resynchronizes_after_overflow() {
     cntrl::midi::Bridge b; Output out;
-    b.configure(true); b.connected(true); out.blocked[0] = true;
+    b.configure(true); b.connected(true, 0); out.blocked[0] = true;
     b.usb(0x0201f004, 0);
     for (unsigned i = 0; i < 300; ++i) b.usb(0x03020104, 0);
     b.usb(0x0000f705, 0);
@@ -172,7 +172,7 @@ void test_host_disconnect_discards_pending_selection() {
     assert(b.idle() && b.counters(8).dropped == 2);
 }
 void test_tool_handoff_waits_for_sysex_termination() {
-    cntrl::midi::Bridge b; Output out; b.configure(true); b.connected(true);
+    cntrl::midi::Bridge b; Output out; b.configure(true); b.connected(true, 0);
     input(b, 0, {0xf0, 1, 2}); b.service(out, 0);
     b.configure(false); out.blocked[0] = true;
     assert(!b.handoff(out));
@@ -214,7 +214,47 @@ void test_owned_nrpn_is_not_interleaved_with_other_owners() {
     uint8_t invalid[] = {0xf0, 1, 0xf8, 0xf7};
     assert(!cntrl::midi::message_valid(invalid, sizeof(invalid)));
 }
+void test_automatic_interface_retries_without_replaying_waiting_traffic() {
+    cntrl::midi::Bridge b; Output out;
+    b.configure(true); b.connected(false, 0);
+    b.connected(false, 2000); b.connected(true, 3999);
+    input(b, 6, {0x90, 60, 100}, 3999); b.usb(0x643c9009, 3999);
+    b.service(out, 3999);
+    assert(out.bytes[0].empty() && out.bytes[6].empty());
+    // Explicit pedal USB traffic stays available during the interface wait.
+    uint8_t patch[] = {0xc0, 12};
+    assert(b.pedal(6, patch, 2)); b.service(out, 3999);
+    assert((out.bytes[6] == std::vector<uint8_t>{0xc0, 12}));
+    input(b, 6, {0xf0, 1}, 3999);
+    b.connected(true, 4000);
+    input(b, 6, {2, 0xf7}, 4000); b.service(out, 4000);
+    assert(out.bytes[6].size() == 2); // No partial SysEx crosses the retry boundary.
+    input(b, 6, {0x90, 61, 100}, 4000); b.usb(0x643d9009, 4000); b.service(out, 4000);
+    assert(out.bytes[6].size() == 5 && out.bytes[0].size() == 3);
+    b.connected(false, 4100); b.connected(true, 6099);
+    input(b, 6, {0xf8}, 6099); b.service(out, 6099);
+    assert(out.bytes[6].size() == 5);
+    b.connected(true, 6100); input(b, 6, {0xf8}, 6100); b.service(out, 6100);
+    assert(out.bytes[6].size() == 6);
+    b.configure(false); b.connected(true, 9000);
+    input(b, 6, {0xf8}, 9000); b.service(out, 9000);
+    assert(out.bytes[6].size() == 6);
+    b.configure(true); input(b, 6, {0xf8}, 9001); b.service(out, 9001);
+    assert(out.bytes[6].size() == 7); // Manual enable with a host is immediate.
+}
+
+void test_interface_retry_clock_wrap() {
+    cntrl::midi::Bridge b; Output out;
+    b.configure(true); b.connected(false, 0xffffff00u);
+    b.connected(true, 1743); input(b, 6, {0xf8}, 1743); b.service(out, 1743);
+    assert(out.bytes[6].empty());
+    b.connected(true, 1744); input(b, 6, {0xf8}, 1744); b.service(out, 1744);
+    assert((out.bytes[6] == std::vector<uint8_t>{0xf8}));
+}
+
 int main() {
+    test_automatic_interface_retries_without_replaying_waiting_traffic();
+    test_interface_retry_clock_wrap();
     test_owned_sysex_streams_and_abandonment_terminates();
     test_owned_nrpn_is_not_interleaved_with_other_owners();
     for (const auto &connection : cntrl::midi::output_connections) {

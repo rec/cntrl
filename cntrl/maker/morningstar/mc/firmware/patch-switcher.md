@@ -151,7 +151,7 @@ self-contained editable downloads. Version 9 preserves original synthesizer
 names and the separate program/show `display_name` overrides in variable-length
 metadata; rendering uses the resolved label. Downloads embed the used program
 descriptions in `definitions.programs`. The default-off per-setup
-`usb_midi_interface` switch remains available. See the [USB MIDI interface plan and qualification
+`is_midi_interface` switch remains available. See the [USB MIDI interface plan and qualification
 record](../usb-midi-interface-plan.md). Existing shows need recompiling.
 Brightness
 (0..255, default 192) applies to backlight PWM pin 6 on show activation, including
@@ -212,7 +212,7 @@ or a particular voltage or impedance at the jacks.
 
 USB host supports one MIDI device, not a host bridge or hubs.
 USB device has two computer inputs and six outputs; explicit pedal USB messages
-share input cable 0 with forwarded DIN input. `usb_midi_interface = true` enables
+share input cable 0 with forwarded DIN input. `is_midi_interface = true` enables
 the two physical inputs and the DIN/TRS outputs as a computer interface. The four
 configurable USB output cables remain visible but their traffic is discarded.
 It defaults off

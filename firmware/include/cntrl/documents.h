@@ -88,7 +88,7 @@ public:
         case 3: return p[7] == 255 ? -1 : p[7];
         case 4: return p[8] == 255 ? -65 : int(p[8]) - 64;
         case 5: return d.brightness();
-        case 7: return d.usb_midi_interface();
+        case 7: return d.is_midi_interface();
         default: return int(d.screensaver_timeout() / 1000);
         }
     }
@@ -466,7 +466,7 @@ private:
             if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
         settings = old.navigation_hold_ms() != current.navigation_hold_ms()
             || old.navigation_repeat_ms() != current.navigation_repeat_ms() || old.brightness() != current.brightness()
-            || old.splash() != current.splash() || old.usb_midi_interface() != current.usb_midi_interface()
+            || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
             || old.animation_color_cycle() != current.animation_color_cycle()
             || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();
         auto names_end = [](const Document &d) {
@@ -495,7 +495,7 @@ private:
         document_ = Document(); controller_.deactivate();
         hardware_.begin_fonts(); hardware_.finish_fonts(true);
         hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
-        hardware_.set_usb_midi_interface(false);
+        hardware_.set_midi_interface(false);
         hardware_.set_animation_color_cycle(false);
         Pane view; view.lines[1].centered = true;
         view.lines[1].graphics.size = view.lines[1].graphics.line_height = 16;

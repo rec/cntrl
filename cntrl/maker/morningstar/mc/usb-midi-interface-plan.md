@@ -35,7 +35,7 @@ or discard traffic explicitly and report it instead of blocking.
 Add one strict Boolean performance-setup field:
 
 ```toml
-usb_midi_interface = false
+is_midi_interface = false
 ```
 
 It defaults to false, including when no setup is active. Carry it through setup
@@ -239,7 +239,7 @@ None.
 
 ## Implementation notes and qualification record
 
-The setup field is `usb_midi_interface`, strict Boolean, default false. The
+The setup field is `is_midi_interface`, strict Boolean, default false. The
 current compiled document is version 9: byte 19 bit 0 remains splash, bit 1 enables
 the bridge, and other bits are rejected. Older documents must be recompiled.
 During the original version 8 deployment, its only named setup, `pman`, was downloaded to
@@ -337,7 +337,7 @@ Port 1`, not IAC or the pedal's own USB input.
 Downloaded the current `pman` setup before testing. With its bridge disabled,
 neither the 304-byte short-message sequence nor the paced 4,099-byte SysEx
 appeared on the physical receiver. Temporarily enabled only
-`usb_midi_interface`, copied/read back the setup, and repeated the test:
+`is_midi_interface`, copied/read back the setup, and repeated the test:
 
 - All 304 short-message bytes matched exactly, covering 128 Program Changes
   across all sixteen channels and sixteen modulation Control Changes.

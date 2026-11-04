@@ -229,7 +229,7 @@ page = 'patch'
 Field names share one namespace. Built-in patch attributes are `patch_cycle.name`, `tags`,
 `display_name`, `name`, `program`, `bank`, `volume`, `pan` and `instrument` (the
 routing alias). Built-in global settings are `brightness`, `splash`,
-`usb_midi_interface`, `screensaver_timeout`, `navigation.hold_delay` and `transition`.
+`is_midi_interface`, `screensaver_timeout`, `navigation.hold_delay` and `transition`.
 These read the current document, including numeric edits. Additional shared
 display values are defined as `[parameters.tempo]` with `value = 120` and an
 optional `style` block; they are configuration values, not a tempo engine.
@@ -342,7 +342,7 @@ values do not determine vertical spacing.
 Version 14 stores resolved pages and line styles with foreground and background
 colors. Each display record ends with four reserved zero bytes. Authored
 formatting metadata, including icon references, is retained for editable exports. The
-default-off `usb_midi_interface` Boolean remains a
+default-off `is_midi_interface` Boolean remains a
 performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
 idle timeout in seconds.

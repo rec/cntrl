@@ -89,7 +89,7 @@ void test_independent_lights_and_timing() {
 
 void test_physical_input_activity_without_usb_delivery() {
     cntrl::midi::Bridge bridge; Output output;
-    bridge.configure(true); bridge.connected(true);
+    bridge.configure(true); bridge.connected(true, 0);
     assert(!bridge.receive(6, 0x90, 0));
     assert(!bridge.receive(6, 60, 0));
     assert(bridge.receive(6, 100, 0));
@@ -100,13 +100,13 @@ void test_physical_input_activity_without_usb_delivery() {
     assert(bridge.counters(6).dropped == 1);
     bridge.service(output, 0); assert(!output.accepted);
     // A disconnected host still permits physical parsing without queuing data.
-    bridge.connected(false);
+    bridge.connected(false, 0);
     assert(bridge.receive(7, 0xf8, 100));
     assert(!bridge.receive(7, 0xf0, 100));
     assert(!bridge.receive(7, 1, 100));
     assert(bridge.receive(7, 2, 100));
     assert(bridge.receive(7, 0xf7, 100));
-    bridge.connected(true); output.blocked = false;
+    bridge.connected(true, 0); output.blocked = false;
     bridge.service(output, 101); assert(!output.accepted);
     bridge.configure(false);
     assert(!bridge.receive(7, 0xf8, 102));

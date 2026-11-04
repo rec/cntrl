@@ -404,7 +404,7 @@ def compile_show(
             len(roots),
             show.brightness
             | int(show.splash) << 8
-            | int(show.usb_midi_interface) << 9
+            | int(show.is_midi_interface) << 9
             | int(show.animation_color_cycle) << 10,
             crc32(body),
             show.screensaver_timeout * 1000,

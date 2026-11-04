@@ -464,7 +464,7 @@ class Show(BaseModel, frozen=True):
     ) = None
     splash: Annotated[bool, Field(strict=True)] = True
     animation_color_cycle: Annotated[bool, Field(strict=True)] = False
-    usb_midi_interface: Annotated[bool, Field(strict=True)] = False
+    is_midi_interface: Annotated[bool, Field(strict=True)] = False
     screensaver_timeout: Annotated[
         int,
         Field(

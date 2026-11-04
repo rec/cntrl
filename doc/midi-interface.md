@@ -6,6 +6,17 @@ With a configured USB host, C temporarily toggles forwarding; F continues cyclin
 and restores the setup setting if it was changed. The setup itself is not edited
 or saved.
 
+Set `is_midi_interface = true` in the setup to enable MIDI forwarding
+on startup. It defaults to `false`, leaving forwarding off until enabled with C.
+If enabled without a configured host, forwarding checks again every two seconds
+until one is available. Losing the host starts the same retry cycle. A manual
+C enable with a host already present takes effect immediately. USB enumeration
+and command communication remain active independently of this setting, and
+MIDI received while waiting is not replayed after connection.
+
+The setting replaces `usb_midi_interface`; update existing TOML sources to the
+new name. Compiled setups retain their existing flag and need no conversion.
+
 The page uses the shared background, heading and heavier text. A small toggle
 icon in the bottom-right corner shows whether forwarding is enabled. The body
 contains a two-by-two array of circular indicators, with DIN/TRS rows and

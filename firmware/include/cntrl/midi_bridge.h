@@ -166,10 +166,18 @@ public:
     void configure(bool enabled) {
         // Also reset when switching between two enabled setups.
         enabled_ = enabled;
+        forwarding_ = enabled && connected_; waiting_ = false;
         for (unsigned i = 0; i < 8; ++i) reset_route(i);
     }
-    void connected(bool connected) {
-        if (connected_ == connected) return;
+    void connected(bool connected, uint32_t now) {
+        if (!connected && forwarding_) { forwarding_ = false; waiting_ = false; }
+        // Retry interface forwarding without delaying explicit pedal USB output.
+        bool started = false;
+        if (enabled_ && !forwarding_ && (!waiting_ || uint32_t(now - checked_) >= 2000)) {
+            checked_ = now; waiting_ = true;
+            started = forwarding_ = connected;
+        }
+        if (connected_ == connected && !started) return;
         connected_ = connected;
         for (unsigned i = 0; i < 8; ++i) reset_route(i);
         if (!connected) {
@@ -202,7 +210,7 @@ public:
     }
     // Report physical packet completion even without an available USB receiver.
     bool receive(unsigned route, uint8_t b, uint32_t now) {
-        if (route >= 8 || !enabled_ || (!connected_ && route < 6)) return false;
+        if (route >= 8 || !enabled_ || (!forwarding_ && route < 6)) return false;
         auto &r = routes_[route];
         bool was_sysex = r.parser.sysex();
         // Close an interrupted physical SysEx before forwarding a new status.
@@ -211,13 +219,13 @@ public:
         Packet p;
         bool complete = r.parser.receive(b, p);
         if (b < 0xf8 && (was_sysex || r.parser.sysex())) r.last_sysex = now;
-        if (complete && connected_) enqueue(route, p);
+        if (complete && forwarding_) enqueue(route, p);
         return complete;
     }
     void usb(uint32_t packed, uint32_t now) {
         unsigned route = (packed >> 4) & 15;
         Packet p{uint8_t(packed & 15), {uint8_t(packed >> 8), uint8_t(packed >> 16), uint8_t(packed >> 24)}};
-        if (route >= 6 || !enabled_ || !connected_) return;
+        if (route >= 6 || !forwarding_) return;
         if (!valid(p, routes_[route].parser.sysex() || routes_[route].parser.discarding())) {
             ++routes_[route].counts.dropped; return;
         }
@@ -340,6 +348,8 @@ private:
         bool wire_sysex = false, terminate = false;
     } routes_[destinations];
     bool enabled_ = false, connected_ = false, host_connected_ = false;
+    bool forwarding_ = false, waiting_ = false;
+    uint32_t checked_ = 0;
     unsigned cursor_ = 0;
     static bool valid(const Packet &p, bool sysex) {
         unsigned n = p.size();
