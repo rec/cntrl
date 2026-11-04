@@ -2,16 +2,20 @@
 
 MIDI Interface follows Panic at the end of the right-hand page cycle. It opens
 with the setup's current bridge state and does not change routing on entry.
-C temporarily toggles forwarding; F continues cycling and restores the setup
-setting if it was changed. The setup itself is not edited or saved.
+With a configured USB host, C temporarily toggles forwarding; F continues cycling
+and restores the setup setting if it was changed. The setup itself is not edited
+or saved.
 
 The page uses the shared background, heading and heavier text. A small toggle
 icon in the bottom-right corner shows whether forwarding is enabled. The body
 contains a two-by-two array of circular indicators, with DIN/TRS rows and
 In/Out columns. Active indicators are bright green; inactive indicators are
-grey. When forwarding is off, all body labels and indicators are grey while
-the heading keeps its usual colors. The other two displays stay in place, and
-brightness is unchanged.
+grey. Without a configured USB host, the whole body including the switch is
+greyed out, and C cannot toggle it. With a host and forwarding off, the switch
+is available but the labels and indicators remain grey. With a host and
+forwarding on, the whole body is enabled. The heading keeps its usual colors.
+Disconnecting preserves the switch setting for reconnection. The other two
+displays stay in place, and brightness is unchanged.
 
 DIN in and TRS in indicate complete received MIDI packets, including real-time
 and streamed SysEx, independently of onward queue acceptance. DIN out and TRS out

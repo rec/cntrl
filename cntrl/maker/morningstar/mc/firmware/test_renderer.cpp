@@ -808,7 +808,25 @@ static void test_performance_pages() {
     for (unsigned i = 1; i <= 4; ++i) assert(view.lines[i].graphics.foreground == 0x8410);
     interface_renderer.show(2, view); drain(interface_renderer);
     for (unsigned y : {68u, 94u}) for (unsigned x : {78u, 130u}) assert(screens[2][y][x] == 0x8410);
-    assert(screens[2][117][135] == 0xffff && screens[2][117][147] == 0x8410);
+    assert(screens[2][117][135] == 0xffff && screens[2][117][147] == 0);
+    interface.connected = false;
+    for (bool enabled : {false, true}) {
+        interface.enabled = enabled;
+        view = pages.view(4006, 4006000, status, {}, cntrl::Panic::Status::ready, interface);
+        assert(view.toggle.disabled && view.toggle.enabled == enabled);
+        assert(view.lines[0].graphics.foreground == 0xffff);
+        for (unsigned i = 1; i <= 4; ++i) assert(view.lines[i].graphics.foreground == 0x8410);
+        interface_renderer.show(2, view); drain(interface_renderer);
+        for (unsigned y : {68u, 94u}) for (unsigned x : {78u, 130u}) assert(screens[2][y][x] == 0x8410);
+        assert(screens[2][117][enabled ? 147 : 135] == 0xc618);
+        assert(screens[2][117][enabled ? 135 : 147] == 0x8410);
+    }
+    interface.connected = true;
+    view = pages.view(4007, 4007000, status, {}, cntrl::Panic::Status::ready, interface);
+    assert(!view.toggle.disabled && view.toggle.enabled);
+    for (unsigned i = 1; i <= 4; ++i) assert(view.lines[i].graphics.foreground == 0);
+    interface_renderer.show(2, view); drain(interface_renderer);
+    assert(screens[2][68][78] == 0x07e0 && screens[2][117][147] == 0xffff);
     pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::tap);
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::interface);
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::panic);

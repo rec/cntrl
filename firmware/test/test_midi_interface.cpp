@@ -40,6 +40,29 @@ void test_lifecycle_and_host_status() {
     ui.leave(); assert(!hw.bridge.enabled() && hw.restores == 2);
 }
 
+void test_switch_requires_host_and_preserves_setting_on_reconnect() {
+    Hardware hw; cntrl::MidiInterface ui(hw);
+    for (bool enabled : {false, true}) {
+        hw.bridge.configure(enabled);
+        ui.enter(false, enabled); ui.take_redraw();
+        unsigned before = hw.configures;
+        ui.toggle();
+        assert(ui.enabled() == enabled && hw.configures == before && !ui.take_redraw());
+        ui.activity(0, false, 10);
+        assert(!ui.status().lit[0]);
+        ui.connected(true);
+        assert(ui.enabled() == enabled && ui.take_redraw());
+        ui.toggle();
+        assert(ui.enabled() != enabled && hw.configures == before + 1);
+        ui.connected(false); ui.take_redraw();
+        ui.toggle();
+        assert(ui.enabled() != enabled && hw.configures == before + 1 && !ui.take_redraw());
+        ui.connected(true);
+        assert(ui.enabled() != enabled);
+        ui.leave();
+    }
+}
+
 void test_independent_lights_and_timing() {
     Hardware hw; cntrl::MidiInterface ui(hw);
     ui.enter(true, true); ui.take_redraw();
@@ -91,6 +114,7 @@ void test_physical_input_activity_without_usb_delivery() {
 
 int main() {
     test_lifecycle_and_host_status();
+    test_switch_requires_host_and_preserves_setting_on_reconnect();
     test_independent_lights_and_timing();
     test_physical_input_activity_without_usb_delivery();
 }

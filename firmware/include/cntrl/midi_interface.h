@@ -25,7 +25,7 @@ public:
         open_ = enabled_ = false; clear(); dirty_ = true;
     }
     void toggle() {
-        if (!open_) return;
+        if (!open_ || !connected_) return;
         enabled_ = !enabled_; clear(); control_.configure_interface(enabled_); dirty_ = true;
     }
     void connected(bool connected) {
@@ -35,7 +35,7 @@ public:
         if (open_) dirty_ = true;
     }
     void activity(unsigned connection, bool output, uint32_t now) {
-        if (!open_ || !enabled_ || connection >= (output ? midi::output_connections.size() : input_count)) return;
+        if (!open_ || !connected_ || !enabled_ || connection >= (output ? midi::output_connections.size() : input_count)) return;
         unsigned i = connection + (output ? input_count : 0);
         last_[i] = now;
         if (!lit_[i]) { lit_[i] = true; dirty_ = true; }

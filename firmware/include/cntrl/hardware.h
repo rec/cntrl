@@ -36,7 +36,7 @@ struct Circle {
 
 struct ToggleIcon {
     uint16_t x = 0, y = 0;
-    bool visible = false, enabled = false;
+    bool visible = false, enabled = false, disabled = false;
 };
 
 struct Pane {

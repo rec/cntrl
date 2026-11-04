@@ -566,7 +566,9 @@ MIDI Interface opens with the setup's current bridge setting. C temporarily
 toggles it; F advances and restores the setting. The setup is not edited. The
 page shows circular activity indicators in DIN/TRS rows and In/Out columns,
 with a small on/off toggle icon in the bottom-right corner. The body is greyed
-out when off; active indicators are bright green when on.
+out when off; active indicators are bright green when on. Without a configured
+USB host, the switch is also greyed out and C cannot toggle it. Reconnecting
+restores availability without changing the switch setting.
 Indicators remain lit for 100 ms after complete input packets or successful
 physical output submissions. USB configuration does not mean a DAW opened a port.
 Build with `MIDI_INTERFACE=0` to omit the page. See

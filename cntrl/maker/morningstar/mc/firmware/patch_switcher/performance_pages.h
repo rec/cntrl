@@ -103,17 +103,18 @@ public:
             return pane;
         }
         if (page_ == Page::interface) {
+            const bool active = interface.connected && interface.enabled;
             const unsigned font = settings_[R::status_font];
             line(pane, 1, "In", 32, 18, font, true, nullptr, 56, 100);
             line(pane, 2, "Out", 32, 18, font, true, nullptr, 106, 154);
             line(pane, 3, "DIN", 59, 18, font, false, nullptr, 8, 54);
             line(pane, 4, "TRS", 85, 18, font, false, nullptr, 8, 54);
             for (unsigned i = 1; i <= 4; ++i)
-                pane.lines[i].graphics.foreground = interface.enabled ? 0 : 0x8410;
+                pane.lines[i].graphics.foreground = active ? 0 : 0x8410;
             for (unsigned i = 0; i < 4; ++i)
                 pane.circles[i] = {uint16_t(i < 2 ? 78 : 130), uint16_t(i % 2 ? 94 : 68), 12, 0,
-                    uint16_t(interface.enabled && interface.lit[i] ? 0x07e0 : 0x8410), 0};
-            pane.toggle = {128, 110, true, interface.enabled};
+                    uint16_t(active && interface.lit[i] ? 0x07e0 : 0x8410), 0};
+            pane.toggle = {128, 110, true, interface.enabled, !interface.connected};
             return pane;
         }
         if (page_ == Page::firmware) {

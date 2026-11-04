@@ -166,7 +166,7 @@ private:
             if (dx * dx + dy * dy > 196) continue;
             int knob = 2 * col + 1 - (t.enabled ? 38 : 14);
             graphics_.getFrameBuffer()[y * 160 + x] = knob * knob + dy * dy <= 100
-                ? 0xffff : t.enabled ? 0x07e0 : 0x8410;
+                ? (t.disabled ? 0xc618 : 0xffff) : t.disabled ? 0x8410 : t.enabled ? 0x07e0 : 0;
         }
     }
     void write_column(unsigned panel, unsigned column, uint8_t *pixels) {
