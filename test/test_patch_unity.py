@@ -303,7 +303,7 @@ def test_composite_inherits_child_tags_but_keeps_parent_label(
     target: models.Target,
 ) -> None:
     show = {
-        'tags': {'sax': {}, 'whole-system': {}},
+        'tag_styles': {'sax': {}, 'whole-system': {}},
         'patches': {
             'child': {
                 'type': 'control-change',

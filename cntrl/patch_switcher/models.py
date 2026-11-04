@@ -481,7 +481,10 @@ class Setup(BaseModel, frozen=True):
     ] = 0.6
     windows: Windows = Field(default_factory=Windows)
     pages: dict[str, Page] = Field(default_factory=lambda: {'patch': Page()})
-    tags: dict[str, Style] = Field(default_factory=dict)
+    tags: Annotated[list[str], BeforeValidator(parse_tags)] = Field(
+        default_factory=list
+    )
+    tag_styles: dict[str, Style] = Field(default_factory=dict)
     parameters: dict[str, Parameter] = Field(default_factory=dict)
     switches: dict[str, object] = Field(default_factory=dict)
 

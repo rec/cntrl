@@ -63,7 +63,7 @@ class Library(BaseModel, frozen=True):
     definitions: models.Definitions | None = None
     patches: dict[str, object] = Field(default_factory=dict)
     fonts: dict[str, str] = Field(default_factory=dict)
-    tags: dict[str, models.Style] = Field(default_factory=dict)
+    tag_styles: dict[str, models.Style] = Field(default_factory=dict)
     songs: list[Song] = Field(default_factory=list)
     setlists: list[Setlist] = Field(default_factory=list)
     model_config = ConfigDict(extra='forbid')
@@ -156,8 +156,9 @@ def encode(
             'patches': library.patches,
             'patch_cycles': {'Songs': values_for_source} if values_for_source else {},
             'fonts': library.fonts,
-            'tags': {
-                k: v.model_dump(exclude_none=True) for k, v in library.tags.items()
+            'tag_styles': {
+                k: v.model_dump(exclude_none=True)
+                for k, v in library.tag_styles.items()
             },
         }
         if library.definitions is not None:
@@ -304,9 +305,9 @@ def decode(data: bytes) -> Library:
         renamed = {k: prefix + k for k in exported.get('fonts', {})}
         source_fonts.append(renamed)
         fonts.update({renamed[k]: v for k, v in exported.get('fonts', {}).items()})
-        tag_names = set(exported.get('tags', {}))
+        tag_names = set(exported.get('tag_styles', {}))
         source_tags.append(tag_names)
-        for key, value in exported.get('tags', {}).items():
+        for key, value in exported.get('tag_styles', {}).items():
             tags[prefix + key] = _rebind(value, prefix, renamed, tag_names)
         for key, value in exported.get('instruments', {}).items():
             value = dict(value)
@@ -327,7 +328,7 @@ def decode(data: bytes) -> Library:
     context['instruments'] = instruments
     context['patches'] = definitions
     context['fonts'] = fonts
-    context['tags'] = tags
+    context['tag_styles'] = tags
     if sources:
         context['definitions'] = {'profiles': profiles, 'programs': programs}
     songs = []

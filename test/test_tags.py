@@ -49,7 +49,7 @@ def show() -> dict[str, object]:
                 {'type': 'program-change', 'instrument': 'synth', 'program': 1},
             ]
         },
-        tags={'sax': models.Style(), 'whole-system': models.Style()},
+        tag_styles={'sax': models.Style(), 'whole-system': models.Style()},
         pages={
             'patch': models.Page(fields=['patch_cycle.name', 'tags', 'display_name'])
         },
@@ -81,6 +81,23 @@ def test_patch_inherits_program_tags_without_changing_patch_cycles(
     rebuilt = compiler.compile_show(changed, {}, [], target)
     assert b'sax, whole-system\0' not in rebuilt
     assert b'whole-system\0' in rebuilt
+
+
+@pytest.mark.parametrize('tags', [[], ['live', 'studio'], 'live, studio'])
+def test_setup_tags_round_trip_without_changing_patch_tags(
+    show: dict[str, object], target: models.Target, tags: list[str] | str
+) -> None:
+    show['tags'] = tags
+    show['tag_styles']['live'] = {'foreground_color': 'red'}
+    data = compiler.compile_show(show, {}, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['tags'] == ([] if tags == [] else ['live', 'studio'])
+    assert exported['tag_styles']['live'] == {'foreground_color': 'red'}
+    assert exported['definitions']['programs'][0]['tags'] == ['sax']
+    assert exported['patch_cycles']['Song 1'][0]['tags'] == ['whole-system']
+    assert b'sax, whole-system\0' in data
+    assert b'live, studio\0' not in data
+    assert compiler.compile_show(exported, {}, [], target) == data
 
 
 def test_tags_are_inherited_once_in_child_then_parent_order() -> None:
@@ -154,12 +171,12 @@ def test_icons_preserve_explicit_owners_through_recompilation(
     show: dict[str, object], target: models.Target, icon: str
 ) -> None:
     show = models.Setup.model_validate(show).model_dump(exclude_none=True)
-    show['tags']['sax'] = {'icon': 'images/sax.png'}
+    show['tag_styles']['sax'] = {'icon': 'images/sax.png'}
     show['definitions']['programs'][0]['style'] = {'icon': 'images/program.png'}
     show['patch_cycles']['Song 1'][0]['style'] = {'icon': icon}
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['tags']['sax'] == {'icon': 'images/sax.png'}
+    assert exported['tag_styles']['sax'] == {'icon': 'images/sax.png'}
     assert exported['definitions']['programs'][0]['style'] == {
         'icon': 'images/program.png'
     }

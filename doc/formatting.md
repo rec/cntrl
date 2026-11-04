@@ -10,8 +10,9 @@ parser, selector language or additional dependency is required.
 
 ## Styles
 
-Use the same optional `style` structure on shows, windows, pages, tags,
-programs, patches and shared parameters. Keep page-specific field overrides in
+Use the same optional `style` structure on setups, windows, pages,
+programs, patches and shared parameters. Named tag styles live directly in
+`[tag_styles.NAME]`. Top-level `tags` classifies the setup itself. Keep page-specific field overrides in
 `pages.PAGE.line_styles.FIELD`.
 
 | Property | Meaning |
@@ -44,10 +45,10 @@ foreground_color = 'black'
 background_color = 'white'
 font_name = 'Arial'
 
-[tags.sax]
+[tag_styles.sax]
 foreground_color = '0xD08000'
 
-[tags.whole-system]
+[tag_styles.whole-system]
 font_name = 'CourierPrimeBold'
 
 [pages.patch]

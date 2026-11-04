@@ -72,7 +72,7 @@ def compile_display(
     contexts: list[str] = []
     paired_lines: list[list[int]] = []
     for patch in patches:
-        tag = tag_style(patch.program_tags + patch.tags, show.tags)
+        tag = tag_style(patch.program_tags + patch.tags, show.tag_styles)
         for window in windows:
             page = (
                 show.pages.get(
@@ -404,5 +404,6 @@ SOURCE_FIELDS = (
     'windows',
     'pages',
     'tags',
+    'tag_styles',
     'parameters',
 )

@@ -34,7 +34,7 @@ fields = ["patch_cycle.name", "display_name"]
 
 [pages.patch.line_styles]
 
-[tags]
+[tag_styles]
 
 [parameters]
 

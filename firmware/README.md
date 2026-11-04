@@ -102,6 +102,22 @@ existing source files to the new names. Performance setups and `cntrl setup`
 commands retain their names. Compiled setup documents are unchanged, and
 editable exports use the new profile keys.
 
+A performance setup can carry its own tags:
+
+```toml
+tags = ['live', 'studio']
+
+[tag_styles.sax]
+foreground_color = 'yellow'
+```
+
+Setup tags default to an empty list and accept the same comma/colon-separated
+string shorthand as patch tags. They describe the setup itself; patches do not
+inherit them. Compilation, downloads and revision history preserve them as
+metadata. They do not currently filter or reorder the pedal's setup list.
+Style definitions now use `[tag_styles.NAME]` instead of `[tags.NAME]`, including
+in song libraries. Patch and program tag lists retain their existing meaning.
+
 Program numbers use 1..128 and channels 1..16. Definitions associate each
 instrument/profile pair with explicit bank mappings. Table entries identify
 `instrument`, `profile`, `program` and optional `bank`. When a table record omits
@@ -268,11 +284,11 @@ definitions. Program tags joined from multiple table files form a union.
 Configuration fragment:
 
 ```toml
-[tags.sax]
+[tag_styles.sax]
 foreground_color = 'yellow'
 
-[tags.whole-system]
-style = {font_name = 'CourierPrimeBold'}
+[tag_styles.whole-system]
+font_name = 'CourierPrimeBold'
 
 [[definitions.programs]]
 instrument = 'synth'
