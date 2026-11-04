@@ -747,7 +747,18 @@ static void test_performance_pages() {
     assert(view.lines[0].graphics.font == heading.font && view.lines[0].graphics.size == heading.size);
     assert(view.lines[1].y > 64 && view.lines[2].y > view.lines[1].y);
     assert(!pages.due(5000));
-    pages.tap(3900); // C on Firmware must not change the tap-tempo history.
+    pages.tap(3900);
+    assert(pages.page() == PerformancePages::Page::confirm_firmware);
+    view = pages.view(3900, 3900000, status);
+    assert(!std::strcmp(view.lines[0].text, "F for stock firmware."));
+    assert(!std::strcmp(view.lines[1].text, "C to cancel"));
+    assert(view.lines[0].y < 64 && view.lines[1].y >= 64);
+    assert(!pages.browse(true, "ignored"));
+    assert(pages.browse(false, "ignored")); // Only F confirms.
+    pages.tap(4000);
+    assert(pages.page() == PerformancePages::Page::firmware);
+    view = pages.view(4000, 4000000, status);
+    assert(!std::strcmp(view.lines[0].text, "Firmware"));
     pages.browse(false, "ignored"); assert(pages.page() == PerformancePages::Page::tap);
     pages.browse(true, "ignored"); assert(pages.page() == PerformancePages::Page::firmware);
     pages.browse(true, "a-very-long-setup-name-that-cannot-fit-at-the-smallest-font");

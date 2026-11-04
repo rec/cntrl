@@ -527,8 +527,9 @@ setups for format 26, which replaces flash duration with a cycle fraction.
 `flash_fraction` accepts 0.001..1 in steps of 0.001, including percentage strings.
 
 The Firmware page has the shared centered title and a two-line “Use stock firmware”
-label near the bottom center, above C. Press C to start the existing stock-firmware
-handoff. In stock firmware, A+F pressed within the configured 50 ms window returns
+label near the bottom center, above C. Press C to open a confirmation page with two centered lines: `F for stock firmware.`
+and `C to cancel`. Release C, then press F to start the stock-firmware handoff,
+or press C to return to the Firmware page. In stock firmware, A+F pressed within the configured 50 ms window returns
 to cntrl with no hold. This uses the same persistent boot selection and navigation
 continuation as the Original Firmware module. F and D+F browse away normally.
 

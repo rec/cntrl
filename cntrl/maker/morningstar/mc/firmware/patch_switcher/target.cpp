@@ -277,18 +277,19 @@ public:
     void configure_right_pages(const cntrl::RightPageSettings &settings) override { right_pages_.configure(settings); }
     void browse_right_page(bool reverse) override {
         if (!documents.document().valid()) return;
-        renderer_.transition(reverse, documents.document().transition_ms(), 2);
-        right_pages_.browse(reverse, documents.selected());
-    }
-    void tap_tempo(uint32_t now) override {
-        if (!documents.document().valid()) return;
-        if (right_pages_.page() == PerformancePages::Page::firmware) {
+        if (right_pages_.page() == PerformancePages::Page::confirm_firmware
+            && (held_controls & (1u << 2))) return;
+        if (right_pages_.browse(reverse, documents.selected())) {
 #if CNTRL_ORIGINAL_FIRMWARE
             if (!start_original_firmware()) error("Firmware switch failed");
 #else
             error("Stock firmware unavailable");
 #endif
-        } else right_pages_.tap(now);
+        } else renderer_.transition(reverse, documents.document().transition_ms(), 2);
+    }
+    void tap_tempo(uint32_t now) override {
+        if (!documents.document().valid()) return;
+        right_pages_.tap(now);
     }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
         throb_.configure(period, low, high, delay);

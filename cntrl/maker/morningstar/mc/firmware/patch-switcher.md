@@ -789,7 +789,7 @@ and uploading the setup.
 ## Four-button patch-manager navigation (setup format 23)
 
 Physical buttons A/B/D/E keep their primary actions: A sends the target, B browses
-patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status and Firmware, starting on Status. C on Firmware switches to stock; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
+patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status and Firmware, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
 are removed. Other modules keep their existing button assignments.
 
 The three right-hand pages share one heading font and size, with white

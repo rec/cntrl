@@ -15,7 +15,7 @@ struct PerformanceStatus {
 
 class PerformancePages {
 public:
-    enum class Page { tap, status, firmware };
+    enum class Page { tap, status, firmware, confirm_firmware };
     void configure(const cntrl::RightPageSettings &settings) {
         settings_ = settings;
         using R = cntrl::RightPageSettings;
@@ -23,17 +23,25 @@ public:
         clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
         dirty_ = true;
     }
-    void browse(bool reverse, const char *setup) {
+    bool browse(bool reverse, const char *setup) {
+        if (page_ == Page::confirm_firmware) return !reverse;
         page_ = Page((unsigned(page_) + (reverse ? 2 : 1)) % 3);
         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
         dirty_ = true;
+        return false;
     }
     Page page() const { return page_; }
     void revisit(const char *setup) {
         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
         dirty_ = true;
     }
-    void tap(uint32_t now) { if (page_ == Page::tap) { tap_.tap(now); dirty_ = true; } }
+    void tap(uint32_t now) {
+        if (page_ == Page::tap) tap_.tap(now);
+        else if (page_ == Page::firmware) page_ = Page::confirm_firmware;
+        else if (page_ == Page::confirm_firmware) page_ = Page::firmware;
+        else return;
+        dirty_ = true;
+    }
     void clock(unsigned source, uint32_t now_us) { clock_.clock(source, now_us); }
     void time(uint32_t now, uint32_t now_us) {
         uptime_ += uint32_t(now - previous_); previous_ = now;
@@ -52,6 +60,12 @@ public:
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = settings_[R::padding];
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
+        if (page_ == Page::confirm_firmware) {
+            const unsigned height = title * 3 / 2;
+            line(pane, 0, "F for stock firmware.", 64 - height, height, 0, true);
+            line(pane, 1, "C to cancel", 64, height, 0, true, nullptr, 0, 160, pane.lines[0].graphics.size);
+            return pane;
+        }
         const unsigned heading_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
         const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : "Firmware";
         line(pane, 0, heading, pad, heading_height, 0, true, "Tap Tempo");
