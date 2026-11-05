@@ -260,9 +260,8 @@ def _patch(
             value.update(midi_messages.decode(message))
     elif kind == 3:
         operation, argument = struct.unpack_from('<BI', data, cursor)
-        value.update(
-            type='state',
-            operation=next(k for k, v in STATE_OPERATIONS.items() if v == operation),
+        value['operation'] = next(
+            k for k, v in STATE_OPERATIONS.items() if v == operation
         )
         if operation == 1:
             value['value'] = argument

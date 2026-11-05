@@ -50,9 +50,8 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
             'note': 60,
             'velocity': 100,
         },
-        'brightness': {'type': 'state', 'operation': 'brightness', 'value': 255},
+        'brightness': {'operation': 'brightness', 'value': 255},
         'interface': {
-            'type': 'state',
             'operation': 'usb-midi-interface',
             'value': True,
         },
@@ -95,6 +94,7 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert compiler.compile_show(exported, {}, [], target) == data
     assert exported['patch_cycles']['Live'] == show['patch_cycles']['Live']
+    assert exported['patches']['brightness'] == patches['brightness']
     assert exported['patches']['sequence'] == patches['sequence']
     assert exported['patches']['nrpn'] == patches['nrpn']
     assert exported['patches']['sysex']['data'] == patches['sysex']['data']
@@ -136,6 +136,7 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
         {'type': 'other'},
         {'type': 'reference', 'patch': 'clean'},
         {'type': 'sequence', 'patches': []},
+        {'type': 'state', 'operation': 'brightness', 'value': 192},
         {'type': 'midi', 'output': 'din', 'bytes': [250]},
         {'type': 'note-on', 'output': 'din', 'channel': 0, 'note': 60, 'velocity': 90},
         {'type': 'note-on', 'output': 'din', 'channel': 1, 'note': 60, 'velocity': 128},
@@ -149,8 +150,8 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
             'channel': 1,
             'output': 'din',
         },
-        {'type': 'state', 'operation': 'brightness', 'value': True},
-        {'type': 'state', 'operation': 'next-patch', 'value': 1},
+        {'operation': 'brightness', 'value': True},
+        {'operation': 'next-patch', 'value': 1},
     ],
 )
 def test_patch_types_are_explicit_and_fields_are_closed(value: object) -> None:

@@ -476,6 +476,7 @@ class PatchCompiler:
             and 'type' not in raw
             and 'patch' not in raw
             and 'patches' not in raw
+            and 'operation' not in raw
             and 'name' in raw
         ):
             if 'program' in raw:
@@ -527,6 +528,10 @@ class PatchCompiler:
             default_label = 'sequence'
         elif isinstance(value, models.Reference):
             default_label = 'reference'
+        elif isinstance(
+            value, (models.Brightness, models.UsbMidiInterface, models.Navigation)
+        ):
+            default_label = 'state'
         else:
             default_label = value.type
         self.labels.append(value.display_name or value.name or name or default_label)

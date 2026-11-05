@@ -183,19 +183,16 @@ class SystemMessage(OutputMessage, frozen=True):
 
 
 class Brightness(Presentation, frozen=True):
-    type: Literal['state']
     operation: Literal['brightness']
     value: Annotated[int, Field(strict=True, ge=0, le=255)]
 
 
 class UsbMidiInterface(Presentation, frozen=True):
-    type: Literal['state']
     operation: Literal['usb-midi-interface']
     value: Annotated[bool, Field(strict=True)]
 
 
 class Navigation(Presentation, frozen=True):
-    type: Literal['state']
     operation: Literal[
         'next-patch',
         'previous-patch',
@@ -244,6 +241,9 @@ Patch = (
     Reference
     | Sequence
     | Annotated[
+        Brightness | UsbMidiInterface | Navigation, Field(discriminator='operation')
+    ]
+    | Annotated[
         Annotated[
             Annotated[ProgramChange, Tag('instrument')]
             | Annotated[ChannelProgramChange, Tag('channel')],
@@ -260,9 +260,6 @@ Patch = (
         | SongPositionPointer
         | SongSelect
         | SystemMessage
-        | Annotated[
-            Brightness | UsbMidiInterface | Navigation, Field(discriminator='operation')
-        ]
         | StockFirmware,
         Field(discriminator='type'),
     ]

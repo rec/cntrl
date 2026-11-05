@@ -6,9 +6,10 @@ optional `[tag_styles.NAME]` tables define styles for selected tags. Tags do not
 need a declaration to be used. Top-level `tags` describes the performance setup
 itself and is not inherited by its patches.
 
-A Patch table uses `patch` to refer to a named definition, `patches` to run a
-sequence, or `type` to specify an operation. All three forms work in a named
-definition, browser patch cycle, switch assignment, song position or sequence.
+A Patch table uses `patch` for a named reference, `patches` for a sequence,
+`operation` for a state change, and `type` for MIDI or stock-firmware actions.
+Each form works in a named definition, browser patch cycle, switch assignment,
+song position or sequence.
 A sequence executes all its children in order on one activation. A song
 advances one position at a time.
 
@@ -218,7 +219,7 @@ display_name = 'Clean piano'
 
 [patches.intro]
 patches = [
-    {type = 'state', operation = 'brightness', value = 192},
+    {operation = 'brightness', value = 192},
     {patch = 'clean'},
     {type = 'control-change', output = 'trs', channel = 2, controller = 11, value = 100},
 ]
@@ -253,7 +254,7 @@ dictionary order does not define the browser order. `patch_cycles` supplies that
 | `song-position-pointer` | `output`, `position` (0..16383, in six-clock MIDI beats) | None |
 | `song-select` | `output`, `song` (0..127) | None |
 | `tune-request`, `timing-clock`, `start`, `continue`, `stop`, `active-sensing`, `system-reset` | `output` | None |
-| `state` | `operation` and the fields below | None |
+| State change (omit `type`) | `operation` and the fields below | None |
 | `stock-firmware` | `exit_buttons`, such as `'A+F'` | None |
 | Sequence (omit `type`) | `patches`, a list of Patch tables | None |
 | Named reference (omit `type`) | `patch`, a stable definition key | `document` |
@@ -376,7 +377,8 @@ export/recompile cycles are stable.
 - Rename `groups` to `patch_cycles`, `group.name` to `patch_cycle.name`, and
   `categories` membership and style definitions to `tags`. Program catalogues
   use the same `tags` membership field as patches.
-- Use `type` for operations, `patch` for references and `patches` for sequences.
+- Use `operation` for state changes, `patch` for references, `patches` for
+  sequences and `type` for MIDI and stock-firmware actions.
   Replace delimiter shorthand with explicit program fields.
 - Replace `function = 'stock-firmware'` with `type = 'stock-firmware'`.
 - Replace `actions` with `switches`, and each old command with its complete Patch

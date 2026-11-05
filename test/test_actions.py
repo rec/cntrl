@@ -152,7 +152,7 @@ def test_stock_reference_is_rejected_inside_persistent_sequence() -> None:
                 'on': {
                     'patches': [{'patch': 'stock'}],
                 },
-                'off': {'type': 'state', 'operation': 'brightness', 'value': 192},
+                'off': {'operation': 'brightness', 'value': 192},
             }
         },
     }

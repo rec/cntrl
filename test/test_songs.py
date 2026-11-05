@@ -212,7 +212,6 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
                             {
                                 'patches': [
                                     {
-                                        'type': 'state',
                                         'operation': 'brightness',
                                         'value': 150,
                                     },
