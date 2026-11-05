@@ -215,7 +215,10 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
                                         'operation': 'brightness',
                                         'value': 150,
                                     },
-                                    {'type': 'stock-firmware', 'exit_buttons': 'A+F'},
+                                    {
+                                        'operation': 'stock-firmware',
+                                        'exit_buttons': 'A+F',
+                                    },
                                     {
                                         'type': 'control-change',
                                         'output': 'din',

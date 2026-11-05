@@ -55,7 +55,7 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
             'operation': 'usb-midi-interface',
             'value': True,
         },
-        'stock': {'type': 'stock-firmware', 'exit_buttons': 'F+A'},
+        'stock': {'operation': 'stock-firmware', 'exit_buttons': 'F+A'},
         'sequence': {
             'name': 'All together',
             'patches': [
@@ -263,7 +263,7 @@ def test_momentary_and_latched_off_can_target_different_controls(
     }
     assert compiler.compile_show(show, {}, [], target)
     show['switches']['test']['off'] = {
-        'patches': [{'type': 'stock-firmware', 'exit_buttons': 'A+F'}],
+        'patches': [{'operation': 'stock-firmware', 'exit_buttons': 'A+F'}],
     }
     with pytest.raises(compiler.CompilationError, match='only press assignments'):
         compiler.compile_show(show, {}, [], target)

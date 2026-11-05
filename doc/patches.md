@@ -7,7 +7,7 @@ need a declaration to be used. Top-level `tags` describes the performance setup
 itself and is not inherited by its patches.
 
 A Patch table uses `patch` for a named reference, `patches` for a sequence,
-`operation` for a state change, and `type` for MIDI or stock-firmware actions.
+`operation` for controller actions, and `type` for MIDI messages.
 Each form works in a named definition, browser patch cycle, switch assignment,
 song position or sequence.
 A sequence executes all its children in order on one activation. A song
@@ -295,8 +295,7 @@ exports the edited program in full.
 | `song-position-pointer` | `output`, `position` (0..16383, in six-clock MIDI beats) | None |
 | `song-select` | `output`, `song` (0..127) | None |
 | `tune-request`, `timing-clock`, `start`, `continue`, `stop`, `active-sensing`, `system-reset` | `output` | None |
-| State change (omit `type`) | `operation` and the fields below | None |
-| `stock-firmware` | `exit_buttons`, such as `'A+F'` | None |
+| Controller action (omit `type`) | `operation` and the fields below | None |
 | Sequence (omit `type`) | `patches`, a list of Patch tables | None |
 | Named reference (omit `type`) | `patch`, a stable definition key | `document` |
 
@@ -323,10 +322,11 @@ is rejected. Exporting an existing compiled message produces its named form.
 Long SysEx streams through the normal cooperative output scheduler. The target
 must support the named output; this format adds no output drivers.
 
-## State operations
+## Controller operations
 
 | Operation | Fields | Effect |
 | --- | --- | --- |
+| `stock-firmware` | `exit_buttons`, such as `'A+F'` | Switch to stock firmware with the specified return buttons |
 | `brightness` | `value`, integer 0..255 | Set active screen brightness |
 | `usb-midi-interface` | `value`, Boolean | Set the active USB MIDI bridge preference |
 | `next-patch`, `previous-patch` | None | Move the preview within its current patch cycle |
@@ -418,10 +418,10 @@ export/recompile cycles are stable.
 - Rename `groups` to `patch_cycles`, `group.name` to `patch_cycle.name`, and
   `categories` membership and style definitions to `tags`. Program catalogues
   use the same `tags` membership field as patches.
-- Use `operation` for state changes, `patch` for references, `patches` for
-  sequences and `type` for MIDI and stock-firmware actions.
+- Use `operation` for controller actions, `patch` for references, `patches` for
+  sequences and `type` for MIDI messages.
   Replace delimiter shorthand with explicit program fields.
-- Replace `function = 'stock-firmware'` with `type = 'stock-firmware'`.
+- Replace `function = 'stock-firmware'` or `type = 'stock-firmware'` with `operation = 'stock-firmware'`.
 - Replace `actions` with `switches`, and each old command with its complete Patch
   table. References use stable keys rather than display names. Use `pages.switches`
   and `switch.*` display fields for switch presentation.

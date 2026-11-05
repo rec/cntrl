@@ -228,7 +228,7 @@ id = 1
 name = 'Firmware visit'
 patches = [
     {output = 'din', channel = 1, program = 12},
-    {function = 'stock-firmware', exit_buttons = 'A+F'},
+    {operation = 'stock-firmware', exit_buttons = 'A+F'},
     {output = 'din', channel = 1, program = 34},
 ]
 ```

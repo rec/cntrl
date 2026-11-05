@@ -580,6 +580,8 @@ class PatchCompiler:
             value, (models.Brightness, models.UsbMidiInterface, models.Navigation)
         ):
             default_label = 'state'
+        elif isinstance(value, models.StockFirmware):
+            default_label = value.operation
         else:
             default_label = value.type
         self.labels.append(value.display_name or value.name or name or default_label)

@@ -155,7 +155,8 @@ original name is preserved as UTF-8 metadata without display-character limits.
 
 A sequence uses `{ patches = [...] }` and runs its children in order.
 State changes use `operation`, for example `{ operation = 'brightness', value = 192 }`.
-MIDI and stock-firmware actions use `type`. Use `{ patch = 'clean' }` for a local reference or
+To switch firmware, use `{ operation = 'stock-firmware', exit_buttons = 'A+F' }`.
+MIDI messages use `type`. Use `{ patch = 'clean' }` for a local reference or
 `{ document = 'live', patch = 'clean' }` for a patch in another setup. Named definitions use `patches`;
 ordered browser entries use `patch_cycles`. Delimiter shorthand, implicit string
 references and bare-list sequences are rejected. See

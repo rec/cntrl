@@ -13,7 +13,7 @@ id = 1
 name = 'Stock round trip'
 patches = [
     {type = 'program-change', instrument = 'piano', program = 1},
-    {type = 'stock-firmware', exit_buttons = 'A+F'},
+    {operation = 'stock-firmware', exit_buttons = 'A+F'},
     {type = 'program-change', instrument = 'piano', program = 2},
 ]
 
@@ -21,7 +21,7 @@ patches = [
 id = 2
 name = 'Stock B+E at end'
 patches = [
-    {type = 'stock-firmware', exit_buttons = 'B+E'},
+    {operation = 'stock-firmware', exit_buttons = 'B+E'},
 ]
 
 [[setlists]]

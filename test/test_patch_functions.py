@@ -22,7 +22,7 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
                     'exit_buttons': 'F+A',
                     'display_name': 'Original firmware',
                     'style': {'foreground_color': 'red'},
-                    'type': 'stock-firmware',
+                    'operation': 'stock-firmware',
                 }
             ]
         },
@@ -59,13 +59,18 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
 @pytest.mark.parametrize('pair', ['A+A', 'AF', 'A+G', 'A+B+C', 'a+f'])
 def test_invalid_exit_combinations_are_rejected(pair: str) -> None:
     with pytest.raises(ValueError, match='exit_buttons'):
-        models.StockFirmware(type='stock-firmware', exit_buttons=pair)
+        models.StockFirmware(operation='stock-firmware', exit_buttons=pair)
+
+
+def test_stock_firmware_requires_operation_instead_of_type() -> None:
+    with pytest.raises(ValueError):
+        compiler.normalize_patch({'type': 'stock-firmware', 'exit_buttons': 'A+F'})
 
 
 def test_function_patches_cannot_contain_midi_properties() -> None:
     with pytest.raises(ValueError):
         compiler.normalize_patch(
-            {'exit_buttons': 'A+F', 'program': 1, 'type': 'stock-firmware'}
+            {'exit_buttons': 'A+F', 'program': 1, 'operation': 'stock-firmware'}
         )
 
 
@@ -86,7 +91,7 @@ def test_song_with_function_and_repeated_patches_preserves_occurrences() -> None
                         'channel': 1,
                         'program': 1,
                     },
-                    {'type': 'stock-firmware', 'exit_buttons': 'E+B'},
+                    {'operation': 'stock-firmware', 'exit_buttons': 'E+B'},
                     {
                         'type': 'program-change',
                         'output': 'din',
@@ -101,5 +106,7 @@ def test_song_with_function_and_repeated_patches_preserves_occurrences() -> None
     restored = songs.decode(data)
     assert len({p['id'] for p in restored.songs[0].patches}) == 3
     function = restored.songs[0].patches[1]
-    assert function['type'] == 'stock-firmware' and function['exit_buttons'] == 'B+E'
+    assert (
+        function['operation'] == 'stock-firmware' and function['exit_buttons'] == 'B+E'
+    )
     assert songs.encode(restored, target) == data

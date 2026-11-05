@@ -206,7 +206,7 @@ class Navigation(Presentation, frozen=True):
 
 
 class StockFirmware(Presentation, frozen=True):
-    type: Literal['stock-firmware']
+    operation: Literal['stock-firmware']
     exit_buttons: str
 
     @field_validator('exit_buttons')
@@ -248,7 +248,8 @@ ConcretePatch = (
     Reference
     | Sequence
     | Annotated[
-        Brightness | UsbMidiInterface | Navigation, Field(discriminator='operation')
+        Brightness | UsbMidiInterface | Navigation | StockFirmware,
+        Field(discriminator='operation'),
     ]
     | Annotated[
         Annotated[
@@ -266,8 +267,7 @@ ConcretePatch = (
         | TimeCodeQuarterFrame
         | SongPositionPointer
         | SongSelect
-        | SystemMessage
-        | StockFirmware,
+        | SystemMessage,
         Field(discriminator='type'),
     ]
 )

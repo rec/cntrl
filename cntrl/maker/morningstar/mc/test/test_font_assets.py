@@ -336,7 +336,7 @@ def test_unicode_labels_compile_transfer_and_export(
             {
                 'exit_buttons': 'A+F',
                 'display_name': 'Été original',
-                'type': 'stock-firmware',
+                'operation': 'stock-firmware',
             }
         )
         target = target.model_copy(

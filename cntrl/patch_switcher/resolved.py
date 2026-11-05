@@ -285,7 +285,7 @@ def _patch(
             value['value'] = bool(argument)
     elif kind == 4:
         value.update(
-            type='stock-firmware',
+            operation='stock-firmware',
             exit_buttons='+'.join(
                 c for i, c in enumerate('ABCDEF') if data[cursor] & (1 << i)
             ),

@@ -144,7 +144,7 @@ def test_patch_references_use_stable_keys() -> None:
 def test_stock_reference_is_rejected_inside_persistent_sequence() -> None:
     root = Path(__file__).parents[1] / 'firmware/test'
     show = {
-        'patches': {'stock': {'type': 'stock-firmware', 'exit_buttons': 'A+F'}},
+        'patches': {'stock': {'operation': 'stock-firmware', 'exit_buttons': 'A+F'}},
         'switches': {
             'alternate': {
                 'button': 'C',
