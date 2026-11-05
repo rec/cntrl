@@ -8,22 +8,24 @@ public:
         window_ = window; taps_ = taps; minimum_ = minimum; gap_ = gap;
         count_ = next_ = 0; sum_ = 0; last_known_ = false;
     }
-    void tap(uint32_t now) {
-        if (!window_) return;
+    bool tap(uint32_t now) {
+        if (!window_) return false;
         const uint32_t interval = now - last_;
         if (!last_known_ || interval > gap_
             || (count_ && period_ && uint64_t(interval) > uint64_t(period_) * 2)) {
             count_ = next_ = 0; sum_ = 0; last_ = now; last_known_ = true;
-            beat_anchor_ = now; beat_known_ = true; return;
+            beat_anchor_ = now; beat_known_ = true; return false;
         }
-        if (interval < minimum_) return;
+        if (interval < minimum_) return false;
         last_ = now;
         beat_anchor_ = now; beat_known_ = true;
         if (count_ == window_) sum_ -= intervals_[next_];
         else ++count_;
         intervals_[next_] = interval; sum_ += interval;
         next_ = (next_ + 1) % window_;
-        if (count_ + 1 >= taps_) period_ = (sum_ + count_ / 2) / count_;
+        if (count_ + 1 < taps_) return false;
+        period_ = (sum_ + count_ / 2) / count_;
+        return true;
     }
     uint32_t period() const { return period_; }
     bool flash(uint32_t now, unsigned fraction) {

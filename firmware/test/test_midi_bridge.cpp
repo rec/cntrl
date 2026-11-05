@@ -1,3 +1,4 @@
+#include <cntrl/clock_generator.h>
 #include <cntrl/midi_bridge.h>
 #include <cntrl/midi_outputs.h>
 #include <cassert>
@@ -301,7 +302,63 @@ void test_usb_ports_enable_independently() {
     assert(!out.bytes[0].empty() && out.bytes[8].empty());
 }
 
+void test_generated_clock_under_load() {
+    cntrl::ClockGenerator clock;
+    Output out;
+    constexpr uint32_t start = UINT32_MAX - 40000;
+    clock.start(start, 3, false);
+    out.blocked[1] = true;
+    clock.poll(start, 3, out);
+    assert(out.bytes[0] == std::vector<uint8_t>{0xfa});
+    for (uint32_t t = 0; t < 500000;) {
+        // Vary scheduler latency across the microsecond-counter rollover.
+        t = std::min(500000u, t + ((t & 1) ? 1999u : 307u));
+        clock.poll(start + t, 3, out);
+        assert(out.bytes[0].size() == 1 + uint64_t(t) * 24 / 500000);
+    }
+    assert(clock.skipped == 0 && clock.late_us < 2000 && clock.blocked == 24);
+    assert(out.bytes[1].empty());
+    out.blocked[1] = false;
+    clock.set_tempo(250000);
+    clock.poll(start + 750000, 3, out);
+    assert(clock.skipped == 23 && out.bytes[0].size() == 26);
+    assert((out.bytes[1] == std::vector<uint8_t>{0xfa, 0xf8}));
+    clock.poll(start + 750000, 3, out);
+    assert(out.bytes[0].size() == 26);
+    clock.poll(start + 760000, 1, out);
+    clock.poll(start + 780000, 3, out);
+    assert(out.bytes[1].size() == 2); // Reconnect never replays missed clocks.
+    clock.stop();
+    out.blocked[0] = true;
+    clock.poll(start + 800000, 3, out);
+    assert(clock.stopping() == 1);
+    out.blocked[0] = false;
+    clock.poll(start + 810000, 3, out);
+    assert(out.bytes[0].back() == 0xfc && !clock.running() && !clock.stopping());
+    clock.start(start + 820000, 1, true);
+    clock.poll(start + 820000, 1, out);
+    assert(out.bytes[0].back() == 0xfb);
+}
+
+void test_clock_source_handoff() {
+    cntrl::midi::Bridge bridge; Output out;
+    bridge.configure(true); bridge.connected(true, 0);
+    input(bridge, 0, {0xfa, 0xf8, 0x90, 60, 100});
+    bridge.clock_owner(1);
+    input(bridge, 0, {0xf8, 0xfc, 0xfe});
+    input(bridge, 1, {0xf8});
+    for (unsigned i = 0; i < 6; ++i) bridge.service(out, i);
+    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0xfe}));
+    assert(out.bytes[1] == std::vector<uint8_t>{0xf8});
+    bridge.clock_owner(0);
+    input(bridge, 0, {0xfb, 0xf8});
+    bridge.service(out, 7); bridge.service(out, 8);
+    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0xfe, 0xfb, 0xf8}));
+}
+
 int main() {
+    test_generated_clock_under_load();
+    test_clock_source_handoff();
     test_usb_ports_enable_independently();
     test_automatic_interface_retries_without_replaying_waiting_traffic();
     test_interface_retry_clock_wrap();

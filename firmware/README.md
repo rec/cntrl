@@ -537,7 +537,7 @@ A zero channel denotes an unassigned jack.
 
 ### Auxiliary patch-manager pages (format 26)
 
-The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test and Panic using
+The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test, Panic, TRS Ports, Expression, MIDI Clock and Clock Tempo using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary utility page in place.
@@ -599,13 +599,15 @@ digits = 3
 decimals = 1
 ```
 
-The 23 metadata words are, in order: refresh milliseconds, clock-timeout
+The first 23 utility-page metadata words are, in order: refresh milliseconds, clock-timeout
 milliseconds, clocks per quarter, clock averaging beats, tap averaging intervals,
 minimum taps, minimum tap interval milliseconds, tap reset-gap milliseconds,
 flash fraction in thousandths, center diameter, annulus width, title height, tempo height,
 padding, tempo font ID, status font ID, off RGB565, on RGB565, ring RGB565,
 integer digits, decimal digits, page-background RGB565, and title font ID.
-Recompile saved setups for format 27, which adds the configurable title font.
+Clock preferences use an optional format 29 section with six words for the
+output mask, external-source flag and four zero-padded BPM slots. See
+[MIDI Clock](../doc/midi-clock.md) for transport controls and timing qualification.
 `flash_fraction` accepts 0.001..1 in steps of 0.001, including percentage strings.
 
 The Firmware page has the shared centered title and a two-line “Use stock firmware”

@@ -1,6 +1,8 @@
 #pragma once
 #include <cntrl/hardware.h>
 #include <cntrl/tempo.h>
+#include <cntrl/clock_generator.h>
+#include <cntrl/midi_outputs.h>
 #include <cntrl/cable_test.h>
 #include <cntrl/panic.h>
 #include "show_graphics.h"
@@ -17,10 +19,14 @@ struct PerformanceStatus {
 
 class UtilityPages {
 public:
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, confirm_firmware };
     void configure(const cntrl::UtilityPageSettings &settings) {
+        generator.stop();
+        slot_ = 0;
         settings_ = settings;
         using R = cntrl::UtilityPageSettings;
+        external_ = settings[R::clock_external];
+        recall_slot();
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
         clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
         dirty_ = true;
@@ -28,7 +34,8 @@ public:
     bool browse(bool reverse, const char *setup) {
         if (page_ == Page::confirm_firmware) return !reverse;
         do {
-            page_ = Page((unsigned(page_) + (reverse ? 6 : 1)) % 7);
+            constexpr unsigned count = unsigned(Page::confirm_firmware);
+            page_ = Page((unsigned(page_) + (reverse ? count - 1 : 1)) % count);
 #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
             if (page_ == Page::cable) continue;
 #endif
@@ -51,13 +58,44 @@ public:
         candidate = PortMode((unsigned(candidate) + 1) % 5);
         port_message_ = nullptr; dirty_ = true;
     }
+    cntrl::ClockGenerator generator;
+    unsigned clock_outputs() const { return settings_[cntrl::UtilityPageSettings::clock_outputs]; }
+    unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
+    bool clock_page() const { return page_ == Page::clock_transport || page_ == Page::clock_tempo; }
+    void clock_connections(unsigned available) {
+        available &= clock_outputs();
+        if (available != available_outputs_) {
+            available_outputs_ = available;
+            if (clock_page()) dirty_ = true;
+        }
+    }
+    void clock_button(unsigned button, uint32_t now_us, unsigned available) {
+        using R = cntrl::UtilityPageSettings;
+        if (page_ == Page::clock_transport) {
+            if (button == 2) generator.stop();
+            if (!external_ && button < 2)
+                generator.start(now_us, clock_outputs() & available, button == 1);
+            if (button == 4) { generator.stop(); external_ = !external_; }
+        } else if (page_ == Page::clock_tempo) {
+            if (button < 2) {
+                unsigned bpm = std::clamp(int(generator.bpm()) + (button ? 1 : -1), 20, 600);
+                generator.set_tempo((60000000u + bpm / 2) / bpm);
+            } else if (button == 2) {
+                if (++slot_ == 4 || !settings_.words[R::slot1 + slot_]) slot_ = 0;
+                recall_slot();
+            }
+        }
+        dirty_ = true;
+    }
     Page page() const { return page_; }
     void revisit(const char *setup) {
         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
         dirty_ = true;
     }
     void tap(uint32_t now) {
-        if (page_ == Page::tap) tap_.tap(now);
+        if (page_ == Page::tap) {
+            if (tap_.tap(now)) generator.set_tempo(tap_.period() * 1000);
+        }
         else if (page_ == Page::firmware) page_ = Page::confirm_firmware;
         else if (page_ == Page::confirm_firmware) page_ = Page::firmware;
         else return;
@@ -81,7 +119,7 @@ public:
     bool due(uint32_t now) {
         using R = cntrl::UtilityPageSettings;
         if (dirty_) return true;
-        if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
+        if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
     cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready) {
@@ -99,13 +137,45 @@ public:
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::expression ? "Expression" : "Firmware";
+        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::expression ? "Expression" : "Firmware";
         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
         pane.heading_band = true;
         auto &header = pane.lines[0];
         header.graphics.line_height += 4;
         header.graphics.foreground = 0xffff; header.graphics.background = 0;
         header.graphics.top = header.y; header.y = 0;
+        if (clock_page()) {
+            const unsigned font = settings_[R::status_font];
+            char tempo[32], detail[64];
+            std::snprintf(tempo, sizeof(tempo), "%u BPM", generator.bpm());
+            if (page_ == Page::clock_transport) {
+                const char *state = external_ ? (clock_.active() ? "External: receiving" : "External: waiting")
+                    : !clock_outputs() ? "No outputs configured" : !available_outputs_ ? "Outputs offline" : generator.running() ? "Internal: running" : "Internal: stopped";
+                line(pane, 1, state, 30, 19, font, true);
+                if (external_) number_text(tempo, sizeof(tempo), clock_.period_us(), true, true);
+                line(pane, 2, tempo, 48, 19, font, true);
+                detail[0] = 0;
+                auto output = [&](const cntrl::midi::OutputConnection &port) {
+                    if (!(clock_outputs() & (1u << port.route))) return;
+                    auto used = std::strlen(detail);
+                    std::snprintf(detail + used, sizeof(detail) - used, "%s%s%s", used ? " " : "",
+                        port.label, available_outputs_ & (1u << port.route) ? "" : "*");
+                };
+                for (const auto &port : cntrl::midi::output_connections) output(port);
+                for (const auto &port : cntrl::midi::usb_output_connections) output(port);
+                line(pane, 3, detail, 67, 14, font, true);
+                line(pane, 4, "A Start  B Continue", 82, 16, font, true);
+                line(pane, 5, "C Stop  E Source", 102, 16, font, true);
+            } else {
+                std::snprintf(detail, sizeof(detail), "Slot %u: %u BPM", slot_ + 1, settings_.words[R::slot1 + slot_]);
+                line(pane, 1, detail, 28, 18, font, true);
+                line(pane, 2, tempo, 50, 24, font, true);
+                line(pane, 3, "A -1   B +1   C Slot", 80, 17, font, true);
+                std::snprintf(detail, sizeof(detail), "Late %uus  Lost %u", generator.late_us, generator.skipped + generator.blocked);
+                line(pane, 4, detail, 102, 16, font, true);
+            }
+            return pane;
+        }
         if (page_ == Page::cable) {
             const bool active = cable.enabled;
             const unsigned font = settings_[R::status_font];
@@ -233,6 +303,12 @@ public:
 private:
     PortMode active_port_ = PortMode::off;
     const char *port_message_ = nullptr;
+    unsigned available_outputs_ = 0, slot_ = 0;
+    bool external_ = false;
+    void recall_slot() {
+        unsigned bpm = settings_.words[cntrl::UtilityPageSettings::slot1 + slot_];
+        if (bpm) generator.set_tempo((60000000u + bpm / 2) / bpm);
+    }
     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
         using R = cntrl::UtilityPageSettings;
         unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];

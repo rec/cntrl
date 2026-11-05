@@ -48,6 +48,32 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
     ]
 
 
+def pack_clock(show: models.Setup, target: models.Target) -> bytes:
+    r = show.utility_pages
+    if not r.clock_outputs and r.clock_source == 'internal' and r.clock_bpms == [120]:
+        return b''
+    if len(set(r.clock_outputs)) != len(r.clock_outputs):
+        raise ValueError('utility_pages.clock_outputs: duplicate output')
+    for name in r.clock_outputs:
+        if (
+            name not in CLOCK_ROUTES
+            or name not in target.outputs
+            or (
+                (name == 'usb-device' and not show.usb_device_midi)
+                or (name == 'usb-host' and not show.usb_host_midi)
+            )
+        ):
+            raise ValueError(
+                f'utility_pages.clock_outputs: unavailable output {name!r}'
+            )
+    return CLOCK.pack(
+        sum(1 << CLOCK_ROUTES[n] for n in r.clock_outputs),
+        int(r.clock_source == 'external'),
+        *r.clock_bpms,
+        *([0] * (4 - len(r.clock_bpms))),
+    )
+
+
 def unpack(data: bytes, offset: int) -> dict[str, object]:
     w = struct.unpack_from('<23H', data, offset)
     result: dict[str, object] = {}
@@ -84,6 +110,15 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         )
     result['digits'], result['decimals'] = w[19], w[20]
     return result
+
+
+def unpack_clock(data: bytes, offset: int) -> dict[str, object]:
+    mask, external, *slots = CLOCK.unpack_from(data, offset)
+    return {
+        'clock_outputs': [n for n, i in CLOCK_ROUTES.items() if mask & (1 << i)],
+        'clock_source': 'external' if external else 'internal',
+        'clock_bpms': [b for b in slots if b],
+    }
 
 
 def pack_expression(
@@ -152,3 +187,14 @@ def unpack_expression(
 EXPRESSION = struct.Struct('<32s6B')
 EXPRESSION_FLAG = 1 << 15
 CURVES = ('linear', 'slow', 'fast')
+
+
+CLOCK_FLAG = 1 << 13
+CLOCK = struct.Struct('<6H')
+CLOCK_ROUTES = {
+    'din': 0,
+    'trs': 1,
+    **{f'configurable-{i}': i + 1 for i in range(1, 5)},
+    'usb-device': 6,
+    'usb-host': 8,
+}

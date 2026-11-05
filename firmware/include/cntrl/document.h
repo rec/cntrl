@@ -6,8 +6,9 @@
 
 namespace cntrl {
 constexpr unsigned utility_page_settings_offset = 16;
-constexpr unsigned trs_modes_offset = utility_page_settings_offset + 2 * UtilityPageSettings::count;
+constexpr unsigned trs_modes_offset = utility_page_settings_offset + 2 * UtilityPageSettings::clock_outputs;
 constexpr unsigned metadata_header_size = trs_modes_offset + 4;
+constexpr unsigned clock_section_size = 2 * (UtilityPageSettings::count - UtilityPageSettings::clock_outputs);
 constexpr unsigned document_version = 29;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
@@ -62,7 +63,7 @@ public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
-            || u32(bytes + 8) != length || (bytes[19] & ~0x9f) || u32(bytes + 24) > 2147483000u
+            || u32(bytes + 8) != length || (bytes[19] & ~0xbf) || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 68 + np * 82;
@@ -78,7 +79,7 @@ public:
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
         UtilityPageSettings right;
-        for (unsigned i = 0; i < UtilityPageSettings::count; ++i) right.words[i] = u16(bytes + meta + utility_page_settings_offset + 2 * i);
+        for (unsigned i = 0; i < UtilityPageSettings::clock_outputs; ++i) right.words[i] = u16(bytes + meta + utility_page_settings_offset + 2 * i);
         using R = UtilityPageSettings;
         if (!right[R::refresh] || !right[R::clock_timeout] || !right[R::clocks_per_quarter]
             || right[R::clocks_per_quarter] > 960 || !right[R::clock_beats] || right[R::clock_beats] > 16
@@ -104,6 +105,23 @@ public:
                     || p[36] > 1 || p[37] > 2) return false;
             }
             names += expression_section_size;
+        }
+        if (bytes[19] & 0x20) {
+            if (names + clock_section_size > length) return false;
+            read_clock(right, bytes + names);
+            names += clock_section_size;
+            if (right[R::clock_external] > 1 || !right[R::slot1] || (right[R::clock_outputs] & ~0x17fu)
+                || ((right[R::clock_outputs] & (1u << 6)) && !(bytes[19] & 8))
+                || ((right[R::clock_outputs] & (1u << 8)) && !(bytes[19] & 16))) return false;
+            for (const auto &port : midi::output_connections)
+                if ((right[R::clock_outputs] & (1u << port.route))
+                    && !output_valid(bytes + meta + trs_modes_offset, reinterpret_cast<const uint8_t *>(port.name), hardware)) return false;
+            for (const auto &port : midi::usb_output_connections)
+                if ((right[R::clock_outputs] & (1u << port.route)) && !hardware.supports(port.name)) return false;
+            for (unsigned i = R::slot1; i <= R::slot4; ++i) {
+                unsigned bpm = right.words[i];
+                if (bpm && (bpm < 20 || bpm > 600 || (i > R::slot1 && !right.words[i - 1]))) return false;
+            }
         }
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
@@ -243,7 +261,7 @@ public:
     unsigned navigation_repeat_ms() const { return u16(data_ + metadata() + 12); }
     UtilityPageSettings utility_pages() const {
         UtilityPageSettings settings;
-        for (unsigned i = 0; i < UtilityPageSettings::count; ++i) settings.words[i] = u16(data_ + metadata() + utility_page_settings_offset + 2 * i);
+        for (unsigned i = 0; i < UtilityPageSettings::clock_outputs; ++i) settings.words[i] = u16(data_ + metadata() + utility_page_settings_offset + 2 * i);
         if (data_[19] & 0x80) for (unsigned i = 0; i < 4; ++i) {
             const uint8_t *p = bank(patches()) + i * expression_record_size;
             auto &a = settings.expression[i];
@@ -251,12 +269,14 @@ public:
             a.channel = p[32]; a.controller = p[33]; a.minimum = p[34]; a.maximum = p[35];
             a.reverse = p[36]; a.curve = ExpressionCurve(p[37]);
         }
+        settings.words[UtilityPageSettings::slot1] = 120;
+        if (data_[19] & 0x20) read_clock(settings, bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0));
         return settings;
     }
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
     bool usb_device_midi() const { return data_[19] & 8; }
-    unsigned expression_size() const { return (data_[19] & 0x80) ? expression_section_size : 0; }
+    unsigned utility_section_size() const { return ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0); }
     const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }
     bool usb_host_midi() const { return data_[19] & 16; }
     bool is_midi_interface() const { return data_[19] & 2; }
@@ -305,6 +325,9 @@ public:
     const uint8_t *mapping(unsigned i) const { return data_ + metadata() + metadata_header_size + instruments_ * 64 + i * 8; }
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
+    static void read_clock(UtilityPageSettings &settings, const uint8_t *p) {
+        for (unsigned i = UtilityPageSettings::clock_outputs; i < UtilityPageSettings::count; ++i, p += 2) settings.words[i] = u16(p);
+    }
     static bool graph_valid(const uint8_t *bytes, unsigned length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,
                             unsigned mappings, const Hardware &hardware) {

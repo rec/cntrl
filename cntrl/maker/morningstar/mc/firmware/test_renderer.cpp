@@ -662,6 +662,9 @@ static void test_utility_pages() {
     custom.configure(settings);
     assert(custom.view(0, 0, {}).lines[0].graphics.font == 1);
     settings.words[cntrl::UtilityPageSettings::title_font] = 0;
+    settings.words[cntrl::UtilityPageSettings::clock_outputs] = 1;
+    settings.words[cntrl::UtilityPageSettings::slot1] = 90;
+    settings.words[cntrl::UtilityPageSettings::slot2] = 144;
     UtilityPages pages; pages.configure(settings);
     PerformanceStatus status; status.cycles = 10; status.patches = 59;
     status.ram_used[0] = 49 * 1024; status.ram_free[0] = 463 * 1024;
@@ -819,7 +822,24 @@ static void test_utility_pages() {
     pages.expression_status("Jack 2  CC 11 Ch 1", "50%  Calibrated", "C: Calibrate");
     view = pages.view(4010, 4010000, status);
     assert(!std::strcmp(view.lines[0].text, "Expression") && !std::strcmp(view.lines[2].text, "50%  Calibrated"));
+    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
+    view = pages.view(4005, 4005000, status);
+    assert(!std::strcmp(view.lines[0].text, "MIDI Clock"));
+    assert(pages.generator.bpm() == 120); // Two taps changed the initial 90 BPM.
+    pages.clock_button(0, 4005000, 1);
+    assert(pages.generator.running() && pages.clock_owner() == 1);
+    pages.clock_button(4, 4006000, 1); // External mode stops the internal stream.
+    assert(!pages.generator.running());
+    pages.clock_button(0, 4007000, 1);
+    assert(!pages.generator.running());
+    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
+    pages.clock_button(2, 4008000, 1);
+    assert(pages.generator.bpm() == 144);
+    pages.clock_button(0, 4009000, 1);
+    assert(pages.generator.bpm() == 143);
     pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
+    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
+    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::expression);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::ports);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::panic);

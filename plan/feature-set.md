@@ -150,8 +150,7 @@ does not imply acknowledgement by an external instrument.
 
 **Outcome:** Generate MIDI Clock at 24 pulses per quarter note from a
 configured BPM or the Tap Tempo page, and send it to selected MIDI outputs.
-Currently we measure incoming clock and display tapped tempo without generating
-that clock.
+The controller can also measure incoming clock and display tapped tempo.
 
 **Scope:** Connect the existing tempo calculation to a scheduled clock source.
 Add MIDI Start, Stop and Continue, stored BPM slots and tempo adjustment.
@@ -166,6 +165,10 @@ forwarding.
 load; tempo changes do not create duplicate clock streams; missed deadlines
 cannot produce an unbounded burst of catch-up ticks. Test timer rollover and
 clock-source transitions, then qualify timing on physical outputs.
+
+The [MIDI Clock utility pages](../doc/midi-clock.md) implement this item.
+Independent timing measurements on the selected physical outputs remain part
+of hardware qualification.
 
 ## 11. MIDI CC waveform generators
 

@@ -156,6 +156,22 @@ public:
         b.delivery = Delivery::cancelled;
     }
     static constexpr unsigned destinations = 9, capacity = 256, pedal_capacity = 8;
+    // Only forwarded clock/transport is filtered. Notes, SysEx and other real-time
+    // bytes keep their order, including those queued before a source change.
+    void clock_owner(unsigned mask) {
+        unsigned acquired = mask & ~clock_owner_;
+        clock_owner_ = mask;
+        for (unsigned i = 0; i < destinations; ++i) if (acquired & (1u << i)) {
+            auto &r = routes_[i];
+            unsigned kept = 0;
+            for (unsigned j = 0; j < r.count; ++j) {
+                Packet packet = r.queue[(r.head + j) % capacity];
+                if (!clock_transport(packet))
+                    r.queue[(r.head + kept++) % capacity] = packet;
+            }
+            r.count = kept;
+        }
+    }
     bool enabled() const { return enabled_; }
     const Counters &counters(unsigned route) const { return routes_[route].counts; }
     bool idle() const {
@@ -385,7 +401,12 @@ private:
         for (unsigned i = 1; i < n; ++i) if (p.bytes[i] & 0x80) return false;
         return true;
     }
+    unsigned clock_owner_ = 0;
+    static bool clock_transport(const Packet &p) {
+        return p.cin == 15 && (p.bytes[0] == 0xf8 || (p.bytes[0] >= 0xfa && p.bytes[0] <= 0xfc));
+    }
     void enqueue(unsigned index, const Packet &p) {
+        if ((clock_owner_ & (1u << index)) && clock_transport(p)) return;
         auto &r = routes_[index]; ++r.counts.received;
         if (r.count == capacity) {
             ++r.counts.dropped;

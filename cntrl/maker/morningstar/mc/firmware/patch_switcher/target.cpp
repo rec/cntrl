@@ -308,10 +308,32 @@ public:
         if (utility_pages_.page() == UtilityPages::Page::panic) leave_panic();
 #endif
     }
+    unsigned clock_available() const {
+        unsigned mask = 0;
+        for (const auto &c : cntrl::midi::output_connections)
+            if (available(c.name)) mask |= 1u << c.route;
+        for (const auto &c : cntrl::midi::usb_output_connections)
+            if (available(c.name)) mask |= 1u << c.route;
+        return mask;
+    }
+    bool stop_clock() {
+        utility_pages_.generator.stop();
+        utility_pages_.generator.poll(micros(), clock_available(), *this);
+        return !utility_pages_.generator.stopping();
+    }
+    bool clock_control(unsigned button, bool pressed) {
+        if (!utility_pages_.clock_page()) return false;
+        if (pressed) {
+            if (button == 5) browse_utility_page(held_controls & (1u << 3));
+            else utility_pages_.clock_button(button, micros(), clock_available());
+        }
+        return true;
+    }
     void configure_utility_pages(const cntrl::UtilityPageSettings &settings) override {
         leave_utility_page();
         expression_.configure(settings);
         utility_pages_.configure(settings);
+        bridge_.clock_owner(utility_pages_.clock_owner());
         enter_utility_page();
     }
     void browse_utility_page(bool reverse) override {
@@ -326,6 +348,7 @@ public:
             error("Stock firmware unavailable");
 #endif
         } else renderer_.transition(reverse, documents.document().transition_ms(), 2);
+        if (utility_pages_.clock_page()) controller.cancel_gesture();
         enter_utility_page();
     }
     void tap_tempo(uint32_t now) override {
@@ -341,7 +364,7 @@ public:
         }
 #if CNTRL_CABLE_TEST
         if (utility_pages_.page() == UtilityPages::Page::cable) {
-            if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy())) return;
+            if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
             controller.cancel_gesture();
             cable_test.toggle(now);
             bridge_.configure(cable_test.enabled() ? false : runtime.interface);
@@ -350,7 +373,7 @@ public:
 #endif
 #if CNTRL_PANIC
         if (utility_pages_.page() == UtilityPages::Page::panic) {
-            if (!panic_owns_midi && (patch_work_pending() || !output_idle() || documents.busy())) return;
+            if (!panic_owns_midi && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
             controller.cancel_gesture();
             if (!panic_owns_midi) bridge_.configure(false);
             panic_owns_midi = true;
@@ -406,6 +429,11 @@ public:
         bridge_.host_connected(bool(host_midi));
         uint32_t begin = micros(), now = millis();
         bridge_.connected(usb_configuration != 0, now);
+        if (!documents.document().valid()) utility_pages_.generator.stop();
+        unsigned clock_routes = clock_available();
+        utility_pages_.clock_connections(clock_routes);
+        bridge_.clock_owner(utility_pages_.clock_owner());
+        utility_pages_.generator.poll(micros(), clock_routes, *this);
         // Separate source limits plus an aggregate time budget. Rotate the
         // first source, so a saturated cable cannot starve later sources.
         for (unsigned i = 0; i < 3 && uint32_t(micros() - begin) < 180; ++i) {
@@ -832,6 +860,7 @@ bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
     if (firmware_visit_stage || !valid_exit_pair(pair) || documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
     auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
     if (!can_enter_stock(state) || (continuation && !card.ready)) return false;
+    if (!board.stop_clock()) return false;
     firmware_visit = FirmwareVisitRecord(); firmware_exit_pair = pair; firmware_visit_offset = 0;
     if (continuation) {
         firmware_visit.token = state.next; firmware_visit.continuation = *continuation;
@@ -1233,6 +1262,7 @@ void poll_target() {
 #endif
                     if ((events[i] & press_event) && board.expression_button(i)) continue;
                     if ((events[i] & press_event) && board.trs_button(i)) continue;
+                    if (board.clock_control(i, events[i] & press_event)) continue;
                     if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
                     if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
                 }

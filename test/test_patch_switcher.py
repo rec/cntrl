@@ -85,6 +85,9 @@ def test_utility_page_settings_round_trip(
         'tap_intervals': 6,
         'minimum_taps': 3,
         'title_font': 'Arial',
+        'clock_bpms': [90, 123, 405],
+        'clock_outputs': ['din', 'trs'],
+        'clock_source': 'external',
         'minimum_interval': '80 ms',
         'reset_gap': 4,
         'flash_fraction': '20%',
@@ -100,6 +103,10 @@ def test_utility_page_settings_round_trip(
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     settings = models.Setup.model_validate(exported).utility_pages
     assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
+    assert settings.clock_bpms == [90, 123, 405]
+    assert (
+        settings.clock_outputs == ['din', 'trs'] and settings.clock_source == 'external'
+    )
     assert settings.title_font == 'Arial'
     assert settings.refresh_interval == 2 and settings.flash_fraction == 0.2
     assert settings.tempo_font == 'CourierPrimeBold'
@@ -110,6 +117,10 @@ def test_utility_page_settings_round_trip(
     'settings',
     [
         {'clocks_per_quarter': 0},
+        {'clock_outputs': ['din', 'din']},
+        {'clock_outputs': ['missing']},
+        {'clock_bpms': []},
+        {'clock_bpms': [0]},
         {'tap_intervals': 9},
         {'minimum_taps': 6},
         {'minimum_interval': 4, 'reset_gap': 3},
@@ -294,6 +305,32 @@ def test_trs_roles_control_routing_and_round_trip(target: models.Target) -> None
     for modes in ({}, {jack: 'expression'}, {jack: 'aux'}, {jack: 'off'}):
         with pytest.raises(compiler.CompilationError, match='unavailable output'):
             compiler.compile_show(setup | {'trs_ports': modes}, {}, [], capable)
+
+
+def test_clock_output_requires_enabled_trs_and_usb_routes(
+    target: models.Target,
+) -> None:
+    jack = 'configurable-1'
+    capable = target.model_copy(
+        update={
+            'outputs': [*target.outputs, jack, 'usb-device'],
+            'trs_ports': {jack: ['midi-a', 'expression']},
+        }
+    )
+    setup = {
+        'utility_pages': {'clock_outputs': [jack, 'usb-device']},
+        'trs_ports': {jack: 'midi-a'},
+    }
+    data = compiler.compile_show(setup, {}, [], capable)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['utility_pages']['clock_outputs'] == [jack, 'usb-device']
+    assert exported['trs_ports'] == {jack: 'midi-a'}
+    assert compiler.compile_show(exported, {}, [], capable) == data
+    for overrides in ({'trs_ports': {jack: 'expression'}}, {'usb_device_midi': False}):
+        with pytest.raises(
+            compiler.CompilationError, match='clock_outputs: unavailable output'
+        ):
+            compiler.compile_show(setup | overrides, {}, [], capable)
 
 
 @pytest.mark.parametrize('enabled', [None, False, True])

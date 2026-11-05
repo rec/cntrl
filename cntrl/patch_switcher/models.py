@@ -450,6 +450,12 @@ class ExpressionAssignment(BaseModel, frozen=True):
 
 class UtilityPages(BaseModel, frozen=True):
     expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)
+    clock_outputs: list[str] = Field(default_factory=list)
+    clock_bpms: Annotated[
+        list[Annotated[int, Field(strict=True, ge=20, le=600)]],
+        Field(min_length=1, max_length=4),
+    ] = Field(default_factory=lambda: [120])
+    clock_source: Literal['internal', 'external'] = 'internal'
     refresh_interval: Annotated[
         float,
         Field(strict=True, ge=0.001, le=65.535),
