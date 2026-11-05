@@ -3,6 +3,7 @@
 import json
 import re
 import struct
+from collections.abc import Mapping
 from pathlib import Path
 from zlib import crc32
 
@@ -60,6 +61,43 @@ def read_document(path: Path, *, _ancestors: tuple[Path, ...] = ()) -> object:
 def normalize_patch(value: object) -> models.Patch:
     """Parse a patch operation or a named patch reference."""
     return models.patch_adapter.validate_python(value)
+
+
+def resolve_midi_routing(
+    value: models.Patch, instruments: Mapping[str, object], path: str
+) -> models.Patch:
+    if isinstance(value, models.ProgramChange) and value.instrument is None:
+        if len(instruments) != 1:
+            raise CompilationError(
+                [
+                    f'{path}: program requires exactly one instrument '
+                    'or an explicit instrument'
+                ]
+            )
+        return value.model_copy(update={'instrument': next(iter(instruments))})
+    if isinstance(value, models.OutputMessage):
+        missing = []
+        if value.output is None:
+            missing.append('output')
+        if isinstance(value, models.ChannelMessage) and value.channel is None:
+            missing.append('channel')
+        if missing:
+            if len(instruments) != 1:
+                raise CompilationError(
+                    [
+                        f'{path}: missing {", ".join(missing)} '
+                        'requires exactly one instrument'
+                    ]
+                )
+            alias, raw = next(iter(instruments.items()))
+            try:
+                instrument = _instrument(alias, raw)
+            except ValidationError as error:
+                raise CompilationError(
+                    _validation_errors(f'instruments.{alias}', error)
+                ) from error
+            return value.model_copy(update={k: getattr(instrument, k) for k in missing})
+    return value
 
 
 def resolve_derivation(
@@ -553,6 +591,11 @@ class PatchCompiler:
             }
         if path.startswith('patch_cycles.') and isinstance(raw, str):
             raw = {'name': raw}
+        try:
+            raw = models.infer_patch_type(raw)
+        except ValueError as error:
+            self.errors.append(f'{path}: {error}')
+            return None
         if (
             path.startswith('patch_cycles.')
             and isinstance(raw, dict)
@@ -563,11 +606,6 @@ class PatchCompiler:
             and 'operation' not in raw
             and 'name' in raw
         ):
-            if 'program' in raw:
-                self.errors.append(
-                    f'{path}: specify a program name or number, not both'
-                )
-                return None
             matches = [
                 (a, e)
                 for a, i in self.instruments.items()
@@ -599,6 +637,7 @@ class PatchCompiler:
         return self.add(value, path, name)
 
     def add(self, value: models.Patch, path: str, name: str | None = None) -> int:
+        value = resolve_midi_routing(value, self.show.instruments, path)
         if isinstance(value, models.Derived):
             concrete = resolve_derivation(value, self.show.patches, path)
             index = self.add(concrete, path, name)
@@ -680,11 +719,13 @@ class PatchCompiler:
             )
         else:
             kind = 2
+            assert value.output is not None
             if value.output not in self.target.outputs:
                 self.errors.append(
                     f'{path}.output: unavailable output {value.output!r}'
                 )
             if isinstance(value, models.Nrpn):
+                assert value.channel is not None
                 flags = 4
                 data = b''.join(
                     bytes((0xB0 | (value.channel - 1), c, v))
@@ -715,8 +756,10 @@ class PatchCompiler:
         return index
 
     def program(self, patch: models.ProgramChange, index: int, path: str) -> bytes:
-        instrument = self.instruments.get(patch.instrument)
-        if instrument is None:
+        if (
+            patch.instrument is None
+            or (instrument := self.instruments.get(patch.instrument)) is None
+        ):
             self.errors.append(
                 f'{path}.instrument: unknown or invalid instrument {patch.instrument!r}'
             )
@@ -956,6 +999,7 @@ class PatchCompiler:
                 )
                 continue
             if not isinstance(value, models.Reference):
+                value = resolve_midi_routing(value, current.instruments, path)
                 leaves.append((value, path, current))
                 continue
             destination = value.document.casefold() if value.document else document
@@ -1086,7 +1130,11 @@ class PatchCompiler:
                         'only press assignments support this operation'
                     )
                 if isinstance(value, models.ProgramChange):
-                    raw = source.instruments.get(value.instrument)
+                    raw = (
+                        source.instruments.get(value.instrument)
+                        if value.instrument is not None
+                        else None
+                    )
                     try:
                         instrument = models.Instrument.model_validate(raw)
                     except ValidationError:
@@ -1099,16 +1147,24 @@ class PatchCompiler:
                                 resources.add(
                                     (instrument.output, instrument.channel, controller)
                                 )
-                elif isinstance(value, models.ControlChange):
-                    resources.add((value.output, value.channel, value.controller))
-                elif isinstance(value, models.PitchBend):
-                    resources.add((value.output, value.channel, 129))
-                elif isinstance(value, models.Nrpn):
-                    resources.update(
-                        (value.output, value.channel, c) for c in (99, 98, 6, 38)
-                    )
                 elif isinstance(value, models.OutputMessage):
-                    resources.add((value.output, 0, -1))
+                    output = value.output
+                    assert output is not None
+                    if isinstance(
+                        value, (models.ControlChange, models.PitchBend, models.Nrpn)
+                    ):
+                        channel = value.channel
+                        assert channel is not None
+                        if isinstance(value, models.ControlChange):
+                            resources.add((output, channel, value.controller))
+                        elif isinstance(value, models.PitchBend):
+                            resources.add((output, channel, 129))
+                        else:
+                            resources.update(
+                                (output, channel, c) for c in (99, 98, 6, 38)
+                            )
+                    else:
+                        resources.add((output, 0, -1))
             for previous, mode, other in ownership:
                 if assignment.mode == mode == 'press':
                     continue

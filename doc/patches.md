@@ -278,11 +278,57 @@ authored overrides. Volume and pan adjustments on the pedal export as overrides.
 An edit that changes the program or bank, or clears an inherited setting,
 exports the edited program in full.
 
+## Implied MIDI message types
+
+A patch may omit `type` when its fields identify the MIDI message.
+For a Program Change without output/channel fields, `instrument` may also be
+omitted when the setup contains exactly one instrument: `{program = 7}` selects
+program 7 through that instrument's configured profile and output. With zero or
+multiple instruments, specify `instrument` or use explicit `output` and `channel`
+fields.
+
+Other MIDI messages also inherit omitted routing fields from the sole instrument.
+For example, `{controller = 7, value = 100}` uses its output and channel. SysEx
+and system messages inherit only the output because they have no MIDI channel.
+Explicit output or channel fields take precedence independently. Without exactly
+one instrument, all routing fields required by the message must be explicit.
+
+| Fields | Implied type |
+| --- | --- |
+| `program` | `program-change` |
+| `controller`, `value` | `control-change` |
+| `note`, `velocity` | `note-on` |
+| `value` with no other message selector | `pitch-bend` |
+| `parameter`, `value` | `nrpn` |
+| `note`, `pressure` | `polyphonic-key-pressure` |
+| `pressure` | `channel-pressure` |
+| `piece`, `value` | `time-code-quarter-frame` |
+| `position` | `song-position-pointer` |
+| `song` | `song-select` |
+| `data` | `sysex` |
+
+For example, `{output = 'din', channel = 1, controller = 7, value = 100}`
+sends CC 7 with value 100. `{instrument = 'piano', program = 7}` selects
+program 7 through that instrument's configured profile and output.
+
+Explicit types take precedence and keep their normal field validation. Use
+`type = 'note-off'` to request Note Off. System events such as Start, Stop and
+Timing Clock require their explicit types. Conflicting message selectors are
+rejected rather than resolved by field order. Presentation fields such as
+`name`, `display_name`, `tags` and `style` work with implied types.
+
+Inference applies in named patches, patch cycles, sequences, switch assignments
+and song positions. Tables with `parent`, `patch`, `patches`, `operation` or
+`duration` keep their existing meanings. Downloads use the named MIDI types.
+
 ## Patch types
+
+Routing fields in this table may be inferred from the sole instrument as described
+above.
 
 | Type | Required fields | Optional executable fields |
 | --- | --- | --- |
-| `program-change` (instrument) | `instrument`, `program` | `bank`, `volume`, `pan` |
+| `program-change` (instrument) | `program`, `instrument` unless there is only one | `bank`, `volume`, `pan` |
 | `control-change` | `output`, `channel`, `controller`, `value` | None |
 | `pitch-bend` | `output`, `channel`, `value` | None |
 | `nrpn` | `output`, `channel`, `parameter`, `value` | None |

@@ -8,6 +8,8 @@ def encode(value: models.OutputMessage) -> bytes:
         return bytes((0xF0, *value.data, 0xF7))
     status, fields = MESSAGES[value.type]
     if isinstance(value, models.ChannelMessage):
+        if value.channel is None:
+            raise ValueError('MIDI channel must be resolved before encoding')
         status |= value.channel - 1
     if isinstance(value, models.ChannelProgramChange):
         return bytes((status, value.program - 1))

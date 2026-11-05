@@ -32,6 +32,25 @@ def parse_tags(value: object) -> object:
     return value
 
 
+def infer_patch_type(value: object) -> object:
+    if not isinstance(value, dict) or any(
+        k in value
+        for k in ('type', 'parent', 'patch', 'patches', 'operation', 'duration')
+    ):
+        return value
+    types = {t for k, t in IMPLIED_MIDI_TYPES.items() if k in value}
+    if 'note' in value:
+        types.add('polyphonic-key-pressure' if 'pressure' in value else 'note-on')
+        types.discard('channel-pressure')
+    if not types and 'value' in value:
+        types.add('pitch-bend')
+    if len(types) > 1:
+        raise ValueError('ambiguous patch fields; specify type explicitly')
+    if types:
+        return value | {'type': next(iter(types))}
+    return value
+
+
 class Bank(BaseModel, frozen=True):
     msb: Annotated[int, Field(strict=True, ge=0, le=127)] | None = None
     lsb: Annotated[int, Field(strict=True, ge=0, le=127)] | None = None
@@ -88,7 +107,7 @@ class Presentation(BaseModel, frozen=True):
 
 class ProgramChange(Presentation, frozen=True):
     type: Literal['program-change']
-    instrument: str
+    instrument: str | None = None
     program: Annotated[int, Field(strict=True, ge=1, le=128)] | StrictStr
     volume: Annotated[int, Field(strict=True, ge=0, le=127)] | None = None
     pan: Annotated[int, Field(strict=True, ge=-64, le=63)] | None = None
@@ -97,11 +116,11 @@ class ProgramChange(Presentation, frozen=True):
 
 class OutputMessage(Presentation, frozen=True):
     type: str
-    output: str
+    output: str | None = None
 
 
 class ChannelMessage(OutputMessage, frozen=True):
-    channel: Annotated[int, Field(strict=True, ge=1, le=16)]
+    channel: Annotated[int, Field(strict=True, ge=1, le=16)] | None = None
 
 
 class ControlChange(ChannelMessage, frozen=True):
@@ -133,7 +152,7 @@ class ChannelProgramChange(ChannelMessage, frozen=True):
 
 def program_address(value: object) -> str:
     if isinstance(value, dict):
-        return 'instrument' if 'instrument' in value else 'channel'
+        return 'channel' if 'output' in value or 'channel' in value else 'instrument'
     return 'instrument' if isinstance(value, ProgramChange) else 'channel'
 
 
@@ -282,9 +301,7 @@ ConcretePatch = (
         Field(discriminator='type'),
     ]
 )
-Patch = Derived | ConcretePatch
-Sequence.model_rebuild()
-patch_adapter = TypeAdapter(Patch)
+Patch = Annotated[Derived | ConcretePatch, BeforeValidator(infer_patch_type)]
 
 
 class TablePatch(BaseModel, frozen=True):
@@ -688,3 +705,18 @@ class Target(BaseModel, frozen=True):
     characters: str
 
     model_config = ConfigDict(extra='forbid')
+
+
+IMPLIED_MIDI_TYPES = {
+    'program': 'program-change',
+    'controller': 'control-change',
+    'parameter': 'nrpn',
+    'data': 'sysex',
+    'pressure': 'channel-pressure',
+    'piece': 'time-code-quarter-frame',
+    'position': 'song-position-pointer',
+    'song': 'song-select',
+}
+
+Sequence.model_rebuild()
+patch_adapter = TypeAdapter(Patch)

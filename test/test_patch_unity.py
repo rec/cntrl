@@ -132,7 +132,6 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
     [
         'clean',
         [],
-        {'instrument': 'a', 'program': 1},
         {'type': 'other'},
         {'type': 'reference', 'patch': 'clean'},
         {'type': 'sequence', 'patches': []},
@@ -154,7 +153,7 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
         {'operation': 'next-patch', 'value': 1},
     ],
 )
-def test_patch_types_are_explicit_and_fields_are_closed(value: object) -> None:
+def test_invalid_patch_fields_are_rejected(value: object) -> None:
     with pytest.raises(ValueError):
         compiler.normalize_patch(value)
 
