@@ -480,7 +480,7 @@ public:
 #endif
         bridge_.service(*this, now);
 #if CNTRL_SWITCHES
-        switches.tick();
+        switches.tick(now);
 #endif
         // Flush only already-buffered packets; this operation never waits.
         usb_midi_flush_output();
@@ -733,8 +733,8 @@ class SongSources : public cntrl::SongResolver, public cntrl::SongCapture {
 public:
     cntrl::PatchExecutor executor{board, board, patch_sources, 5};
     ~SongSources() override { executor.cancel(); std::free(embedded_); }
-    void tick() {
-        executor.tick();
+    void tick(uint32_t now) {
+        executor.tick(now);
         if (embedded_ && !executor.busy()) {
             std::free(embedded_); embedded_ = nullptr; embedded_document_ = cntrl::Document();
         }
@@ -1296,7 +1296,7 @@ void poll_target() {
     if (board.reply_ready()) songs_transfer.poll(now);
     if (feature_open()) controller.cancel_gesture();
     controller.tick(now);
-    song_sources.tick();
+    song_sources.tick(now);
     songs.tick();
     if (board.reply_ready()) font_files.poll(now, board);
     board.poll();

@@ -322,6 +322,8 @@ def _patch(
             )
             for i in range(children)
         ]
+    elif kind == 7:
+        value.update(duration=struct.unpack_from('<I', data, cursor)[0] / 1000)
     elif kind == 6:
         value['patch'] = _text(data, cursor + 64, 64)
         if document := _text(data, cursor, 64):

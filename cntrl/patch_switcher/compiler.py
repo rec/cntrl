@@ -605,7 +605,9 @@ class PatchCompiler:
             default_label = value.type
         self.labels.append(value.display_name or value.name or name or default_label)
         flags = 0
-        if isinstance(value, models.ProgramChange):
+        if isinstance(value, models.Delay):
+            kind, payload = 7, struct.pack('<I', round(value.duration * 1000))
+        elif isinstance(value, models.ProgramChange):
             kind, payload = 1, self.program(value, index, path)
         elif isinstance(value, models.Sequence):
             kind = 5

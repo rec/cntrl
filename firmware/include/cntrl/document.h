@@ -400,6 +400,9 @@ private:
                 if (n[1] || length < 2 || length != 2u + u16(p) * 2u) return false;
                 for (unsigned j = 0; j < u16(p); ++j) if (u16(p + 2 + j * 2) >= count) return false;
                 break;
+            case 7:
+                if (n[1] || length != 4 || !u32(p) || u32(p) > 65535) return false;
+                break;
             case 6:
                 if (n[1] || length != 128 || (p[0] && !text_valid(p, 64)) || !label_valid(p + 64, 64)) return false;
                 if (!p[0]) {

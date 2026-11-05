@@ -431,3 +431,38 @@ export/recompile cycles are stable.
 Automated tests and target builds qualify encoding, scheduling, source lifetimes
 and continuation logic. Physical MIDI reception, switch timing and stock-return
 behavior for this format still require separate hardware qualification.
+
+## Delays between patch operations
+
+A delay is a patch with a duration. Bare durations are seconds. Unit strings
+such as `'100 ms'` and `'0.1 seconds'` are accepted, from 1 ms through 65.535
+seconds in whole milliseconds. An explicit `type = 'delay'` is optional.
+
+```toml
+[patches.load-and-set-volume]
+patches = [
+    {type = 'program-change', output = 'din', channel = 1, program = 7},
+    {duration = '100 ms'},
+    {type = 'control-change', output = 'din', channel = 1, controller = 7, value = 100},
+]
+```
+
+The wait starts when the executor reaches the delay, after the preceding
+operation completes local output delivery. Instrument acknowledgement is not
+part of MIDI delivery. A congested output therefore postpones the start of the
+wait. The following operation waits for the full duration, including across
+the millisecond clock rollover. Polling drives the wait without sleeping, so
+other invocations, input handling, display updates and MIDI scheduling continue.
+
+The invocation reserves the controls in its complete patch graph throughout
+the wait. A delay itself reserves no additional MIDI controls. Canceling an
+invocation discards its pending delay and following operations. Releasing a
+momentary switch, toggling a latched switch off, or leaving Switches during an
+On delay cancels that On sequence and runs its explicit Off patch. Off cleanup
+may contain its own delays. An unavailable output follows the existing switch
+unknown-state and explicit cleanup policy. Setup sources stay pinned while
+an invocation is pending, and setup changes use the existing cancellation path.
+
+Completed delays are counted in stock-firmware continuation checkpoints.
+Returning from a stock visit skips waits already completed. Downloaded setups
+and song libraries preserve delay durations in seconds using the short form.

@@ -218,22 +218,6 @@ send advances the counter. Reuse the same value for display and transmission.
 multiple assignments referencing a counter share one value; failed or blocked
 sends follow the chosen advancement policy without display drift.
 
-## 14. Authored delays between patch operations
-
-**Outcome:** A patch sequence can send a Program Change, wait 100 ms for the
-instrument to load it, then send a CC. Input, display and unrelated MIDI work
-continue during the wait.
-
-**Scope:** Add a delay operation to the existing executor and scheduler. Define
-its units, timing origin, cancellation and resource ownership. Retain required
-momentary-release cleanup when a delayed sequence is interrupted.
-
-**Dependencies:** None.
-
-**Acceptance:** Following operations cannot execute early; independent work
-continues during the delay; cancellation, output congestion and timer rollover
-cannot strand resources or required releases.
-
 ## 15. USB HID keyboard shortcuts
 
 **Outcome:** Send keyboard shortcuts to a computer over USB HID, such as Space
@@ -276,8 +260,8 @@ offline workflow separately from serialization tests.
 
 ## Suggested implementation order
 
-Start with programmable switch gestures, counters and authored delays (items 8,
-13 and 14), which extend existing execution paths without new physical inputs.
+Start with programmable switch gestures and counters (items 8 and 13), which
+extend existing execution paths without new physical inputs.
 Next implement clock generation, waveforms and timed sequences (10 through 12).
 Routing and conversion (6 and 7) form a separate increment. Grouped switch
 state (9) can follow once its transition rules are agreed.

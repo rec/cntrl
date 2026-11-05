@@ -237,6 +237,16 @@ class Reference(Presentation, frozen=True):
     document: str | None = None
 
 
+class Delay(Presentation, frozen=True):
+    type: Literal['delay'] = 'delay'
+    duration: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ]
+
+
 class Derived(BaseModel, frozen=True):
     parent: str
     type: Literal['derived'] = 'derived'
@@ -245,7 +255,8 @@ class Derived(BaseModel, frozen=True):
 
 
 ConcretePatch = (
-    Reference
+    Delay
+    | Reference
     | Sequence
     | Annotated[
         Brightness | UsbMidiInterface | Navigation | StockFirmware,

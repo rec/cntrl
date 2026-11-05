@@ -87,7 +87,7 @@ public:
         closing_ = dirty_ = true;
         for (auto &s : states_) s.requested = false;
     }
-    void tick() {
+    void tick(uint32_t now = 0) {
         if (!open_) return;
         bool done = true;
         for (unsigned i = 0; i < count_; ++i) {
@@ -101,7 +101,9 @@ public:
                 s.active = s.requested = false; s.presses = 0;
                 disarmed_ |= held_ & (1u << s.record[0]); dirty_ = true;
             }
-            auto before = s.executor.status(); s.executor.tick();
+            if (s.executor.delaying() && s.record[1] && s.active && !s.requested)
+                s.executor.cancel();
+            auto before = s.executor.status(); s.executor.tick(now);
             auto status = s.executor.status();
             if (before != status) dirty_ = true;
             if (status == PatchExecutor::Status::completed && !s.active) s.resource_count = s.baseline_resources;

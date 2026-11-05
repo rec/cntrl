@@ -112,7 +112,8 @@ public:
         status_ = Status::pending;
         return true;
     }
-    void tick() {
+    bool delaying() const { return delaying_; }
+    void tick(uint32_t now = 0) {
         if (status_ != Status::pending) return;
         if (builtin_stock_) { dispatch_stock(builtin_stock_); return; }
         if (waiting_) {
@@ -123,6 +124,10 @@ public:
             if (delivered == midi::Bridge::Delivery::cancelled) { finish(Status::unknown); return; }
             if (delivered != midi::Bridge::Delivery::complete) return;
             waiting_ = false; complete_leaf();
+        }
+        if (delaying_) {
+            if (uint32_t(now - delay_started_) < delay_duration_) return;
+            delaying_ = false; complete_leaf();
         }
         const uint8_t *n = next_leaf(false);
         if (!n) {
@@ -150,6 +155,10 @@ public:
             if (!invoke(StatePatch{p[0], u32(p + 1)})) { fail("Application operation failed"); return; }
             started_ = true;
             complete_leaf(); return;
+        case 7:
+            delay_started_ = now; delay_duration_ = u32(p);
+            delaying_ = started_ = true;
+            return;
         case 4:
             dispatch_stock(p[0]);
             return;
@@ -160,7 +169,7 @@ public:
     }
     void cancel() {
         if (waiting_) outputs_.cancel_patch(owner_);
-        waiting_ = false; builtin_stock_ = 0; depth_ = 0;
+        waiting_ = delaying_ = false; builtin_stock_ = 0; depth_ = 0;
         finish(Status::idle);
     }
 private:
@@ -175,6 +184,8 @@ private:
     unsigned resource_capacity_ = 0, resource_count_ = 0;
     unsigned capacity_ = 0, depth_ = 0, root_ = 0, completed_ = 0;
     uint32_t fingerprint_ = 0;
+    uint32_t delay_started_ = 0, delay_duration_ = 0;
+    bool delaying_ = false;
     uint8_t program_[14] = {};
     uint8_t builtin_stock_ = 0;
     Status status_ = Status::idle;

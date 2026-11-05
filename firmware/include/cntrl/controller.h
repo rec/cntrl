@@ -148,7 +148,7 @@ public:
         }
     }
     void tick(uint32_t now) {
-        executor_.tick();
+        executor_.tick(now);
         if (sending_ >= 0 && c_held_ && executor_.started() && !flashing_) {
             flashing_ = true; hardware_.set_brightness(255, true);
         }
