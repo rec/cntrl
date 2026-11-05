@@ -144,7 +144,7 @@ def export(data: bytes) -> str:
         for position in range(start, start + count):
             root = roots[position]
             value = _patch(data, offset, root, metadata, set())
-            if value['type'] == 'reference' and _edited_program(
+            if 'patch' in value and _edited_program(
                 data, offset, root, metadata, named_nodes
             ):
                 cache = 76 + ni * 68 + nc * 68 + position * 82
@@ -291,7 +291,7 @@ def _patch(
             ],
         )
     elif kind == 6:
-        value.update(type='reference', patch=_text(data, cursor + 64, 64))
+        value['patch'] = _text(data, cursor + 64, 64)
         if document := _text(data, cursor, 64):
             value['document'] = document
     else:

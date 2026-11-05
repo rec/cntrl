@@ -189,9 +189,7 @@ def document_references(document: object) -> list[str]:
     while pending:
         value = pending.pop()
         if isinstance(value, dict):
-            if value.get('type') == 'reference' and isinstance(
-                name := value.get('document'), str
-            ):
+            if 'patch' in value and isinstance(name := value.get('document'), str):
                 if name not in result:
                     result.append(name)
             pending.extend(value.values())

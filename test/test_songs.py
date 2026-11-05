@@ -44,7 +44,6 @@ def library() -> songs.Library:
                 patches=[
                     {
                         'id': 11,
-                        'type': 'reference',
                         'document': 'pman',
                         'patch': 'clean',
                     }

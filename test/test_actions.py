@@ -68,8 +68,8 @@ def fixture_assignments() -> dict[str, object]:
         'alternate': {
             'button': 'C',
             'mode': 'momentary',
-            'on': {'type': 'reference', 'patch': 'Strings'},
-            'off': {'type': 'reference', 'patch': 'Pad'},
+            'on': {'patch': 'Strings'},
+            'off': {'patch': 'Pad'},
         },
     }
 
@@ -109,7 +109,7 @@ def test_switches_round_trip_and_native_fixture() -> None:
                 'value': True,
             },
         ),
-        ('off', {'type': 'reference', 'patch': 'absent'}),
+        ('off', {'patch': 'absent'}),
     ],
 )
 def test_invalid_assignment_is_rejected(field: str, value: object) -> None:
@@ -132,11 +132,11 @@ def test_patch_references_use_stable_keys() -> None:
     value = {
         'button': 'C',
         'mode': 'momentary',
-        'on': {'type': 'reference', 'patch': 'Sax'},
-        'off': {'type': 'reference', 'patch': 'Flute'},
+        'on': {'patch': 'Sax'},
+        'off': {'patch': 'Flute'},
     }
     assert compile_switches({'alternate': value})
-    value['off'] = {'type': 'reference', 'patch': 'absent'}
+    value['off'] = {'patch': 'absent'}
     with pytest.raises(ValueError, match='does not exist'):
         compile_switches({'alternate': value})
 
@@ -151,7 +151,7 @@ def test_stock_reference_is_rejected_inside_persistent_sequence() -> None:
                 'mode': 'momentary',
                 'on': {
                     'type': 'sequence',
-                    'patches': [{'type': 'reference', 'patch': 'stock'}],
+                    'patches': [{'patch': 'stock'}],
                 },
                 'off': {'type': 'state', 'operation': 'brightness', 'value': 192},
             }

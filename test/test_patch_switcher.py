@@ -430,13 +430,19 @@ def test_toml_json_and_explicit_patch_tables_agree(
         {'type': 'program-change', 'instrument': 'a', 'program': 12, 'bank': '-'},
         {'type': 'program-change', 'instrument': 'a', 'program': 129},
         {'type': 'program-change', 'instrument': 'a', 'program': 0},
-        {'patch': ':a:1:2:3:4:5'},
-        {'patch': ':'},
     ],
 )
 def test_invalid_shorthand_is_rejected(value: object) -> None:
     with pytest.raises(ValueError):
         compiler.normalize_patch(value)
+
+
+@pytest.mark.parametrize('key', [':a:1:2:3:4:5', ':'])
+def test_reference_uses_literal_patch_key(key: str, target: models.Target) -> None:
+    setup = {'patches': {'alias': {'patch': key}}}
+    with pytest.raises(compiler.CompilationError) as error:
+        compiler.compile_show(setup, {}, [], target)
+    assert f'{key!r} does not exist' in str(error.value)
 
 
 def test_reports_errors_across_all_patch_entries(

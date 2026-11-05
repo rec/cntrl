@@ -58,7 +58,7 @@ def read_document(path: Path, *, _ancestors: tuple[Path, ...] = ()) -> object:
 
 
 def normalize_patch(value: object) -> models.Patch:
-    """Parse only the explicit tagged authoring representation."""
+    """Parse a patch operation or a named patch reference."""
     return models.patch_adapter.validate_python(value)
 
 
@@ -474,6 +474,7 @@ class PatchCompiler:
             path.startswith('patch_cycles.')
             and isinstance(raw, dict)
             and 'type' not in raw
+            and 'patch' not in raw
             and 'name' in raw
         ):
             if 'program' in raw:
@@ -521,7 +522,10 @@ class PatchCompiler:
         self.nodes.append(b'')
         self.values.append(value)
         self.paths.append(path)
-        self.labels.append(value.display_name or value.name or name or value.type)
+        default_label = (
+            'reference' if isinstance(value, models.Reference) else value.type
+        )
+        self.labels.append(value.display_name or value.name or name or default_label)
         flags = 0
         if isinstance(value, models.ProgramChange):
             kind, payload = 1, self.program(value, index, path)

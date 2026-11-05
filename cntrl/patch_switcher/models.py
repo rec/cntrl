@@ -237,36 +237,37 @@ class Sequence(Presentation, frozen=True):
 
 
 class Reference(Presentation, frozen=True):
-    type: Literal['reference']
     patch: str
     document: str | None = None
 
 
-Patch = Annotated[
-    Annotated[
-        Annotated[ProgramChange, Tag('instrument')]
-        | Annotated[ChannelProgramChange, Tag('channel')],
-        Discriminator(program_address),
-    ]
-    | ControlChange
-    | PitchBend
-    | Nrpn
-    | SysEx
-    | Note
-    | ChannelPressure
-    | PolyphonicKeyPressure
-    | TimeCodeQuarterFrame
-    | SongPositionPointer
-    | SongSelect
-    | SystemMessage
+Patch = (
+    Reference
     | Annotated[
-        Brightness | UsbMidiInterface | Navigation, Field(discriminator='operation')
+        Annotated[
+            Annotated[ProgramChange, Tag('instrument')]
+            | Annotated[ChannelProgramChange, Tag('channel')],
+            Discriminator(program_address),
+        ]
+        | ControlChange
+        | PitchBend
+        | Nrpn
+        | SysEx
+        | Note
+        | ChannelPressure
+        | PolyphonicKeyPressure
+        | TimeCodeQuarterFrame
+        | SongPositionPointer
+        | SongSelect
+        | SystemMessage
+        | Annotated[
+            Brightness | UsbMidiInterface | Navigation, Field(discriminator='operation')
+        ]
+        | StockFirmware
+        | Sequence,
+        Field(discriminator='type'),
     ]
-    | StockFirmware
-    | Sequence
-    | Reference,
-    Field(discriminator='type'),
-]
+)
 Sequence.model_rebuild()
 patch_adapter = TypeAdapter(Patch)
 

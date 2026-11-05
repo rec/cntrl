@@ -339,7 +339,6 @@ def decode(data: bytes) -> Library:
                 if source != 0xFFFFFFFF:
                     raise ValueError('invalid external song Patch')
                 value = {
-                    'type': 'reference',
                     'document': _string(document),
                     'patch': _string(reference),
                 }
@@ -380,7 +379,7 @@ def _rebind(
         item = work.pop()
         if item.get('type') == 'program-change' and 'instrument' in item:
             item['instrument'] = _qualified(prefix, str(item['instrument']), 31)
-        elif item.get('type') == 'reference' and not item.get('document'):
+        elif 'patch' in item and not item.get('document'):
             item['patch'] = _qualified(prefix, str(item['patch']), 63)
         children = item.get('patches', [])
         if isinstance(children, list):
@@ -418,9 +417,7 @@ def references(library: Library) -> list[str]:
         item = work.pop()
         if not isinstance(item, dict):
             continue
-        if item.get('type') == 'reference' and isinstance(
-            document := item.get('document'), str
-        ):
+        if 'patch' in item and isinstance(document := item.get('document'), str):
             validate_name(document)
             result.add(document)
         children = item.get('patches', [])

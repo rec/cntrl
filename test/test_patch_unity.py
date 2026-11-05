@@ -61,12 +61,12 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
             'type': 'sequence',
             'name': 'All together',
             'patches': [
-                {'type': 'reference', 'patch': 'program'},
+                {'patch': 'program'},
                 {
                     'type': 'sequence',
                     'patches': [
-                        {'type': 'reference', 'patch': 'cc'},
-                        {'type': 'reference', 'patch': 'raw'},
+                        {'patch': 'cc'},
+                        {'patch': 'raw'},
                     ],
                 },
             ],
@@ -91,11 +91,12 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
             ]
         },
         'patches': patches,
-        'patch_cycles': {'Live': [{'type': 'reference', 'patch': n} for n in patches]},
+        'patch_cycles': {'Live': [{'patch': n} for n in patches]},
     }
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert compiler.compile_show(exported, {}, [], target) == data
+    assert exported['patch_cycles']['Live'] == show['patch_cycles']['Live']
     assert exported['patches']['nrpn'] == patches['nrpn']
     assert exported['patches']['sysex']['data'] == patches['sysex']['data']
     assert exported['patches']['stock']['exit_buttons'] == 'A+F'
@@ -134,6 +135,7 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
         [],
         {'instrument': 'a', 'program': 1},
         {'type': 'other'},
+        {'type': 'reference', 'patch': 'clean'},
         {'type': 'midi', 'output': 'din', 'bytes': [250]},
         {'type': 'note-on', 'output': 'din', 'channel': 0, 'note': 60, 'velocity': 90},
         {'type': 'note-on', 'output': 'din', 'channel': 1, 'note': 60, 'velocity': 128},
@@ -161,9 +163,9 @@ def test_reference_errors_are_aggregated_and_cycles_name_the_chain(
 ) -> None:
     show = {
         'patches': {
-            'a': {'type': 'reference', 'patch': 'b'},
-            'b': {'type': 'reference', 'patch': 'a'},
-            'missing': {'type': 'reference', 'patch': 'absent'},
+            'a': {'patch': 'b'},
+            'b': {'patch': 'a'},
+            'missing': {'patch': 'absent'},
             'channel': {
                 'type': 'control-change',
                 'output': 'din',
@@ -184,10 +186,10 @@ def test_reference_errors_are_aggregated_and_cycles_name_the_chain(
 def test_external_dependencies_use_stable_keys_and_detect_cross_document_cycles(
     target: models.Target,
 ) -> None:
-    local = {'patches': {'a': {'type': 'reference', 'document': 'OTHER', 'patch': 'b'}}}
+    local = {'patches': {'a': {'document': 'OTHER', 'patch': 'b'}}}
     other = {'patches': {'b': {'type': 'start', 'output': 'din'}}}
     assert compiler.compile_show(local, {}, [], target, documents={'other': other})
-    other['patches']['b'] = {'type': 'reference', 'document': 'local', 'patch': 'a'}
+    other['patches']['b'] = {'document': 'local', 'patch': 'a'}
     with pytest.raises(compiler.CompilationError, match='reference cycle'):
         compiler.compile_show(
             local, {}, [], target, documents={'local': local, 'other': other}
@@ -210,7 +212,7 @@ def test_persistent_switch_reserves_entire_raw_output_through_references(
             'raw': {
                 'button': 'A',
                 'mode': 'momentary',
-                'on': {'type': 'reference', 'patch': 'raw'},
+                'on': {'patch': 'raw'},
                 'off': {
                     'type': 'control-change',
                     'output': 'trs',
@@ -310,10 +312,10 @@ def test_composite_inherits_child_tags_but_keeps_parent_label(
                 'type': 'sequence',
                 'name': 'Parent',
                 'tags': ['whole-system'],
-                'patches': [{'type': 'reference', 'patch': 'child'}],
+                'patches': [{'patch': 'child'}],
             },
         },
-        'patch_cycles': {'Live': [{'type': 'reference', 'patch': 'parent'}]},
+        'patch_cycles': {'Live': [{'patch': 'parent'}]},
         'pages': {'patch': {'fields': ['display_name', 'tags']}},
     }
     data = compiler.compile_show(show, {}, [], target)
@@ -393,11 +395,7 @@ def test_named_program_bank_lookup_reserves_the_emitted_bank_control(
 def test_external_terminal_validation_uses_the_source_context(
     target: models.Target,
 ) -> None:
-    local = {
-        'patches': {
-            'borrowed': {'type': 'reference', 'document': 'other', 'patch': 'bad'}
-        }
-    }
+    local = {'patches': {'borrowed': {'document': 'other', 'patch': 'bad'}}}
     other = {
         'patches': {
             'bad': {
@@ -426,7 +424,6 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
     if reference_override:
         source['patches'] = {'clean': source['patch_cycles']['wind'][0]}
         source['patch_cycles']['wind'][0] = {
-            'type': 'reference',
             'patch': 'clean',
             'name': 'Special',
         }

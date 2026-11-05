@@ -6,9 +6,9 @@ optional `[tag_styles.NAME]` tables define styles for selected tags. Tags do not
 need a declaration to be used. Top-level `tags` describes the performance setup
 itself and is not inherited by its patches.
 
-A fully specified Patch is an executable table with a required `type`. The same table works in a
-named definition, a browser patch cycle, a switch assignment, a song position or a
-sequence. A sequence executes all its children on one activation. A song advances
+A Patch table uses `patch` to refer to a named definition or `type` to specify
+an operation. Both forms work in a named definition, browser patch cycle, switch
+assignment, song position or sequence. A sequence executes all its children on one activation. A song advances
 one position at a time.
 
 ## Patch window presentation
@@ -89,7 +89,7 @@ In a patch cycle, a string looks up an exact program name. If a name occurs more
 than once, qualify it with `{name = 'Flute', instrument = 'synth', bank = 3}`,
 using whichever qualifiers are needed to select one program. These shorthand
 entries can include presentation properties, volume and pan. Named patches,
-switch assignments, sequences and songs continue to use explicit typed Patches.
+switch assignments, sequences and songs accept patch operations and named references.
 
 For explicit banks, use a table whose keys are bank numbers:
 
@@ -219,16 +219,16 @@ display_name = 'Clean piano'
 type = 'sequence'
 patches = [
     {type = 'state', operation = 'brightness', value = 192},
-    {type = 'reference', patch = 'clean'},
+    {patch = 'clean'},
     {type = 'control-change', output = 'trs', channel = 2, controller = 11, value = 100},
 ]
 
 [patch_cycles]
-Live = [{type = 'reference', patch = 'intro'}]
+Live = [{patch = 'intro'}]
 
 [switches.intro]
 button = 'A'
-on = {type = 'reference', patch = 'intro'}
+on = {patch = 'intro'}
 ```
 
 Instrument declarations and their bank mappings retain their existing meaning.
@@ -256,7 +256,7 @@ dictionary order does not define the browser order. `patch_cycles` supplies that
 | `state` | `operation` and the fields below | None |
 | `stock-firmware` | `exit_buttons`, such as `'A+F'` | None |
 | `sequence` | `patches`, a list of Patch tables | None |
-| `reference` | `patch`, a stable definition key | `document` |
+| Named reference (omit `type`) | `patch`, a stable definition key | `document` |
 
 Every type can have `name`, `display_name`, `style` and `tags` presentation
 metadata. Named definitions default their label to their key. Inline patches use
@@ -323,7 +323,6 @@ press assignment leaves. See [switch controls](momentary-latched.md).
 
 ```toml
 [patches.borrowed]
-type = 'reference'
 document = 'other-setup'
 patch = 'clean'
 ```
@@ -377,15 +376,14 @@ export/recompile cycles are stable.
 - Rename `groups` to `patch_cycles`, `group.name` to `patch_cycle.name`, and
   `categories` membership and style definitions to `tags`. Program catalogues
   use the same `tags` membership field as patches.
-- Add `type` to every executable table. Replace delimiter shorthand with explicit
-  program fields; strings are not references and bare lists are not sequences.
+- Use `type` for operations and `patch` for named references. Replace delimiter
+  shorthand with explicit program fields; strings are not references and bare lists are not sequences.
 - Replace `function = 'stock-firmware'` with `type = 'stock-firmware'`.
 - Replace `actions` with `switches`, and each old command with its complete Patch
   table. References use stable keys rather than display names. Use `pages.switches`
   and `switch.*` display fields for switch presentation.
-- Replace song instrument/program references with `type = 'reference'`,
-  `document` and `patch`. Inline program selections use the song library's
-  instrument context.
+- Replace song instrument/program references with `document` and `patch`. Inline program
+  selections use the song library's instrument context.
 
 Automated tests and target builds qualify encoding, scheduling, source lifetimes
 and continuation logic. Physical MIDI reception, switch timing and stock-return

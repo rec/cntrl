@@ -153,7 +153,8 @@ patch's own `display_name`. They recompile without the original library files.
 Font sizing and precomputed offsets use the final display label only; a hidden
 original name is preserved as UTF-8 metadata without display-character limits.
 
-Executable values require an explicit `type`. Named definitions use `patches`;
+Patch operations use `type`. Use `{ patch = 'clean' }` for a local reference or
+`{ document = 'live', patch = 'clean' }` for a patch in another setup. Named definitions use `patches`;
 ordered browser entries use `patch_cycles`. Delimiter shorthand, implicit string
 references and bare-list sequences are rejected. See
 [the Patch schema and format 21 authoring changes](../doc/patches.md) for MIDI,

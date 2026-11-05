@@ -32,7 +32,7 @@ different Patch types, outputs and channels.
 
 Each branch accepts the common [Patch representation](patches.md), including
 inline program selections, sequences and stable references such as
-`{ type = 'reference', patch = 'clean' }`. Program selections use instrument
+`{ patch = 'clean' }`. Program selections use instrument
 aliases; other MIDI variants name their output directly. Definitions are keyed
 by `patches.clean`, independently of their display labels.
 

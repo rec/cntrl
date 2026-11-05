@@ -91,7 +91,7 @@ patches = [{type = 'program-change', instrument = 'piano', program = 12}]
 [[songs]]
 id = 2
 name = 'Linked sound'
-patches = [{type = 'reference', document = 'pman', patch = 'clean'}]
+patches = [{document = 'pman', patch = 'clean'}]
 
 [[setlists]]
 id = 3
@@ -99,7 +99,7 @@ name = 'Tonight'
 songs = [1, 2, 1]
 ```
 
-Each song requires a nonempty ordered `patches` list of tagged Patch tables.
+Each song requires a nonempty ordered `patches` list of operations or named patch references.
 Channels and program numbers are one-based. Program patches resolve logical
 bank mappings through their instrument context. A sequence at one position runs
 all its children on that activation; it does not add song positions.
