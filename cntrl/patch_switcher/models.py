@@ -232,7 +232,6 @@ class StockFirmware(Presentation, frozen=True):
 
 
 class Sequence(Presentation, frozen=True):
-    type: Literal['sequence']
     patches: list['Patch']
 
 
@@ -243,6 +242,7 @@ class Reference(Presentation, frozen=True):
 
 Patch = (
     Reference
+    | Sequence
     | Annotated[
         Annotated[
             Annotated[ProgramChange, Tag('instrument')]
@@ -263,8 +263,7 @@ Patch = (
         | Annotated[
             Brightness | UsbMidiInterface | Navigation, Field(discriminator='operation')
         ]
-        | StockFirmware
-        | Sequence,
+        | StockFirmware,
         Field(discriminator='type'),
     ]
 )

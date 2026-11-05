@@ -26,8 +26,8 @@ value = 'Atkinson / Barlow'
 
 [patch_cycles]
 samples = [
-    {type = 'sequence', name = 'Breathy Sax', patches = []},
-    {type = 'sequence', name = 'BowedSaw', patches = []},
-    {type = 'sequence', name = 'GuitHero 0123', patches = []},
-    {type = 'sequence', name = 'WX Clari', patches = []},
+    {name = 'Breathy Sax', patches = []},
+    {name = 'BowedSaw', patches = []},
+    {name = 'GuitHero 0123', patches = []},
+    {name = 'WX Clari', patches = []},
 ]

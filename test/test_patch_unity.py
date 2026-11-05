@@ -58,12 +58,10 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
         },
         'stock': {'type': 'stock-firmware', 'exit_buttons': 'F+A'},
         'sequence': {
-            'type': 'sequence',
             'name': 'All together',
             'patches': [
                 {'patch': 'program'},
                 {
-                    'type': 'sequence',
                     'patches': [
                         {'patch': 'cc'},
                         {'patch': 'raw'},
@@ -97,6 +95,7 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert compiler.compile_show(exported, {}, [], target) == data
     assert exported['patch_cycles']['Live'] == show['patch_cycles']['Live']
+    assert exported['patches']['sequence'] == patches['sequence']
     assert exported['patches']['nrpn'] == patches['nrpn']
     assert exported['patches']['sysex']['data'] == patches['sysex']['data']
     assert exported['patches']['stock']['exit_buttons'] == 'A+F'
@@ -136,6 +135,7 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
         {'instrument': 'a', 'program': 1},
         {'type': 'other'},
         {'type': 'reference', 'patch': 'clean'},
+        {'type': 'sequence', 'patches': []},
         {'type': 'midi', 'output': 'din', 'bytes': [250]},
         {'type': 'note-on', 'output': 'din', 'channel': 0, 'note': 60, 'velocity': 90},
         {'type': 'note-on', 'output': 'din', 'channel': 1, 'note': 60, 'velocity': 128},
@@ -204,7 +204,6 @@ def test_persistent_switch_reserves_entire_raw_output_through_references(
     show = {
         'patches': {
             'raw': {
-                'type': 'sequence',
                 'patches': [{'type': 'sysex', 'output': 'din', 'data': [125, 1]}],
             }
         },
@@ -263,7 +262,6 @@ def test_momentary_and_latched_off_can_target_different_controls(
     }
     assert compiler.compile_show(show, {}, [], target)
     show['switches']['test']['off'] = {
-        'type': 'sequence',
         'patches': [{'type': 'stock-firmware', 'exit_buttons': 'A+F'}],
     }
     with pytest.raises(compiler.CompilationError, match='only press assignments'):
@@ -309,7 +307,6 @@ def test_composite_inherits_child_tags_but_keeps_parent_label(
                 'tags': ['sax'],
             },
             'parent': {
-                'type': 'sequence',
                 'name': 'Parent',
                 'tags': ['whole-system'],
                 'patches': [{'patch': 'child'}],

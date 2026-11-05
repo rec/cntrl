@@ -150,7 +150,6 @@ def test_stock_reference_is_rejected_inside_persistent_sequence() -> None:
                 'button': 'C',
                 'mode': 'momentary',
                 'on': {
-                    'type': 'sequence',
                     'patches': [{'patch': 'stock'}],
                 },
                 'off': {'type': 'state', 'operation': 'brightness', 'value': 192},

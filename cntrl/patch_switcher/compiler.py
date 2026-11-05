@@ -475,6 +475,7 @@ class PatchCompiler:
             and isinstance(raw, dict)
             and 'type' not in raw
             and 'patch' not in raw
+            and 'patches' not in raw
             and 'name' in raw
         ):
             if 'program' in raw:
@@ -522,9 +523,12 @@ class PatchCompiler:
         self.nodes.append(b'')
         self.values.append(value)
         self.paths.append(path)
-        default_label = (
-            'reference' if isinstance(value, models.Reference) else value.type
-        )
+        if isinstance(value, models.Sequence):
+            default_label = 'sequence'
+        elif isinstance(value, models.Reference):
+            default_label = 'reference'
+        else:
+            default_label = value.type
         self.labels.append(value.display_name or value.name or name or default_label)
         flags = 0
         if isinstance(value, models.ProgramChange):

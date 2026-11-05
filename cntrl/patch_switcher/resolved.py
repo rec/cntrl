@@ -277,19 +277,16 @@ def _patch(
         )
     elif kind == 5:
         children = struct.unpack_from('<H', data, cursor)[0]
-        value.update(
-            type='sequence',
-            patches=[
-                _patch(
-                    data,
-                    offset,
-                    struct.unpack_from('<H', data, cursor + 2 + i * 2)[0],
-                    metadata,
-                    ancestors | {index},
-                )
-                for i in range(children)
-            ],
-        )
+        value['patches'] = [
+            _patch(
+                data,
+                offset,
+                struct.unpack_from('<H', data, cursor + 2 + i * 2)[0],
+                metadata,
+                ancestors | {index},
+            )
+            for i in range(children)
+        ]
     elif kind == 6:
         value['patch'] = _text(data, cursor + 64, 64)
         if document := _text(data, cursor, 64):

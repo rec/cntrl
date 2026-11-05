@@ -6,10 +6,11 @@ optional `[tag_styles.NAME]` tables define styles for selected tags. Tags do not
 need a declaration to be used. Top-level `tags` describes the performance setup
 itself and is not inherited by its patches.
 
-A Patch table uses `patch` to refer to a named definition or `type` to specify
-an operation. Both forms work in a named definition, browser patch cycle, switch
-assignment, song position or sequence. A sequence executes all its children on one activation. A song advances
-one position at a time.
+A Patch table uses `patch` to refer to a named definition, `patches` to run a
+sequence, or `type` to specify an operation. All three forms work in a named
+definition, browser patch cycle, switch assignment, song position or sequence.
+A sequence executes all its children in order on one activation. A song
+advances one position at a time.
 
 ## Patch window presentation
 
@@ -216,7 +217,6 @@ program = 1
 display_name = 'Clean piano'
 
 [patches.intro]
-type = 'sequence'
 patches = [
     {type = 'state', operation = 'brightness', value = 192},
     {patch = 'clean'},
@@ -255,7 +255,7 @@ dictionary order does not define the browser order. `patch_cycles` supplies that
 | `tune-request`, `timing-clock`, `start`, `continue`, `stop`, `active-sensing`, `system-reset` | `output` | None |
 | `state` | `operation` and the fields below | None |
 | `stock-firmware` | `exit_buttons`, such as `'A+F'` | None |
-| `sequence` | `patches`, a list of Patch tables | None |
+| Sequence (omit `type`) | `patches`, a list of Patch tables | None |
 | Named reference (omit `type`) | `patch`, a stable definition key | `document` |
 
 Every type can have `name`, `display_name`, `style` and `tags` presentation
@@ -376,8 +376,8 @@ export/recompile cycles are stable.
 - Rename `groups` to `patch_cycles`, `group.name` to `patch_cycle.name`, and
   `categories` membership and style definitions to `tags`. Program catalogues
   use the same `tags` membership field as patches.
-- Use `type` for operations and `patch` for named references. Replace delimiter
-  shorthand with explicit program fields; strings are not references and bare lists are not sequences.
+- Use `type` for operations, `patch` for references and `patches` for sequences.
+  Replace delimiter shorthand with explicit program fields.
 - Replace `function = 'stock-firmware'` with `type = 'stock-firmware'`.
 - Replace `actions` with `switches`, and each old command with its complete Patch
   table. References use stable keys rather than display names. Use `pages.switches`

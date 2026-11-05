@@ -201,7 +201,6 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
                 patches=[
                     {
                         'id': 20,
-                        'type': 'sequence',
                         'patches': [
                             {
                                 'type': 'control-change',
@@ -211,7 +210,6 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
                                 'value': 1,
                             },
                             {
-                                'type': 'sequence',
                                 'patches': [
                                     {
                                         'type': 'state',
