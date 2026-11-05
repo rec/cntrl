@@ -1,4 +1,5 @@
 #pragma once
+#define DMAMEM
 
 #include <stdint.h>
 

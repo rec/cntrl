@@ -4,6 +4,21 @@ The application is built and running on the pedal. It is not a fully
 hardware-qualified release. Dated sections below retain earlier image hashes,
 format numbers and measurements; they are historical, not the current build.
 
+## Browsing transitions
+
+Moving to the next cycle slides the candidate pane upward; moving to the
+previous cycle slides it downward. Browsing patches within a cycle scrolls
+horizontally. The vertical motion uses software redraws
+in the existing display orientation. Two alternating DMA buffers each hold at most
+eight columns (2 KiB of pixel data). The renderer prepares one band while SPI
+transmits the other. Completion releases the shared SPI/button pins before the
+next button scan and transfer. Every frame moves thirty-two pixels through four
+positions. Only the changed span of each band is transmitted, and all positions are displayed even when
+redrawing runs behind. Vertical motion defaults to 200 ms; an explicit
+`transition` setting supplies its requested duration. Actual duration can exceed
+the requested duration because a complete frame must finish before the next.
+The current-patch pane and utility pane stay in place during this motion.
+
 ## Scrolling investigation
 
 The [MC6 Pro scrolling investigation](../scrolling-scan-timing.md) is the single
@@ -341,8 +356,9 @@ classic font and patch-name size reduction are retained.
 Only the framebuffer graphics paths are used: no `initR`, hardware rotation,
 `updateScreen` or asynchronous flush is called. Drawing primitives and native/GFX
 font APIs are available on `Graphics`; selectable fonts are now show options.
-The library's static initialization reserves three inactive DMA channels, but no
-display DMA transfers are started. Our driver still owns panel initialization,
+The library's static initialization reserves three inactive DMA channels. Vertical
+browsing transitions now use the SPI library's asynchronous DMA transfer API;
+the graphics library still does not flush its framebuffer. Our driver owns panel initialization,
 chip selects, SPI timing, coordinate offsets and the shared GPIO/SPI pin handoff.
 
 Drawing is incremental: at most one glyph or one row per poll. Native tests use

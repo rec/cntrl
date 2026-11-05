@@ -1,5 +1,7 @@
 #pragma once
 #include <stdint.h>
+#include <EventResponder.h>
+#include <stddef.h>
 
 constexpr uint8_t MSBFIRST = 1;
 constexpr uint8_t SPI_MODE0 = 0;
@@ -15,6 +17,8 @@ struct SPIClass {
     void begin();
     void beginTransaction(SPISettings settings);
     uint8_t transfer(uint8_t value);
+    void transfer(const void *data, void *received, size_t count);
+    bool transfer(const void *data, void *received, size_t count, EventResponderRef completion);
     void endTransaction();
 };
 

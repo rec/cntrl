@@ -13,7 +13,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     std::vector<std::vector<uint8_t>> sent;
     std::vector<std::string> routes, replies;
     std::vector<bool> transitions;
-    std::vector<bool> target_transitions;
+    std::vector<bool> target_transitions, target_vertical;
     std::vector<bool> utility_page_moves;
     unsigned taps = 0;
     void browse_utility_page(bool reverse) override { utility_page_moves.push_back(reverse); }
@@ -39,8 +39,8 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1) override {
-        if (pane >= 0) { target_transitions.push_back(undo); return; }
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false) override {
+        if (pane >= 0) { target_transitions.push_back(undo); target_vertical.push_back(vertical); return; }
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
     void set_brightness(uint8_t value, bool) override { brightness = value; }
@@ -258,6 +258,7 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert((hw.target_transitions == std::vector<bool>{false, true}));
     app.action(1); app.action(0); // Browse forward and backward within the cycle.
     assert((hw.target_transitions == std::vector<bool>{false, true, false, true}));
+    assert((hw.target_vertical == std::vector<bool>{true, true, false, false}));
     assert(hw.panes[1].pending_patch == -1 && hw.panes[2].pending_patch == -1);
     assert(hw.panes[0].lines[0].graphics.background == hw.panes[0].lines[1].graphics.foreground);
     assert(hw.panes[0].lines[0].graphics.foreground == hw.panes[0].lines[1].graphics.background);

@@ -173,7 +173,7 @@ public:
         if (!document_.valid() || !document_.patch_cycles()) return false;
         if (operation == 5 || operation == 6) {
             if (document_.patch_cycles() > 1)
-                hardware_.transition(operation == 6, document_.transition_ms(), 0);
+                hardware_.transition(operation == 6, document_.transition_ms(), 0, true);
             selected_ = (selected_ + document_.patch_cycles() + (operation == 6 ? -1 : 1)) % document_.patch_cycles();
         } else if (operation == 3 || operation == 4) {
             unsigned count = u16(document_.patch_cycle(selected_) + 66);

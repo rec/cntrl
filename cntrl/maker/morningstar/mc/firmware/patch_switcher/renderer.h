@@ -8,14 +8,16 @@
 #include "panorama.h"
 
 constexpr unsigned DEFAULT_TRANSITION_MS = 75;
+constexpr unsigned DEFAULT_VERTICAL_TRANSITION_MS = 200;
+constexpr unsigned VERTICAL_STEP_PIXELS = 32;
 constexpr unsigned WINDOW_CORNER_RADIUS = 8;
 
-// One glyph/column per repaint poll; one three-panel column step per animation poll.
+// One glyph/column per repaint poll; up to eight columns per vertical animation poll.
 class DisplayRenderer {
 public:
     void target_brightness(uint8_t value) { requested_brightness_ = value; }
     bool ready() const {
-        return !preparing_ && !animating_ && drawing_ < 0 && !dirty_[0] && !dirty_[1] && !dirty_[2];
+        return !display_dma_pending() && !preparing_ && !animating_ && drawing_ < 0 && !dirty_[0] && !dirty_[1] && !dirty_[2];
     }
     void invalidate() {
         drawing_ = -1; rendering_ = false;
@@ -23,14 +25,15 @@ public:
         for (auto &ring : rings_) ring = 0;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool keep_right = false) {
-        if (preparing_ || animating_ || !valid_[0] || !valid_[1] || !valid_[2]) return;
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool keep_right = false, bool vertical = false) {
+        if (preparing_ || animating_ || display_dma_pending() || !valid_[0] || !valid_[1] || !valid_[2]) return;
         // Browsing may still be repainting the candidate. Animate from the
         // pixels already on screen instead of silently dropping the transition.
         drawing_ = -1; rendering_ = false;
         std::memcpy(previous_, cache_, sizeof(cache_));
         undo_ = undo; animation_pane_ = pane; keep_right_ = keep_right;
-        duration_ms_ = duration_ms.value_or(DEFAULT_TRANSITION_MS); preparing_ = true;
+        vertical_ = vertical && pane >= 0; vertical_column_ = 0;
+        duration_ms_ = duration_ms.value_or(vertical_ ? DEFAULT_VERTICAL_TRANSITION_MS : DEFAULT_TRANSITION_MS); preparing_ = true;
         for (auto &dirty : dirty_) dirty = true;
     }
     void show(unsigned pane, const cntrl::Pane &content) {
@@ -53,8 +56,15 @@ public:
     }
     // now is a microsecond timestamp, sampled before this bounded poll.
     void draw(uint32_t now = 0) {
+        poll_display_dma();
+        if (take_display_dma_error()) {
+            invalidate();
+            error("Display DMA failed");
+        }
+        start_display_dma();
+        if ((!animating_ || !vertical_) && display_dma_pending()) return;
         if (!native_ready_) { initialize_display_panorama(); native_ready_ = true; }
-        if (animating_) { animate(now); return; }
+        if (animating_) { animate(now); start_display_dma(); return; }
         if (drawing_ < 0) {
             for (unsigned i = 0; i < 3; ++i) if (dirty_[i]) {
                 drawing_ = int(i); dirty_[i] = false;
@@ -169,18 +179,20 @@ private:
                 ? (t.disabled ? 0xc618 : 0xffff) : t.disabled ? 0x8410 : t.enabled ? 0x07e0 : 0;
         }
     }
-    void write_column(unsigned panel, unsigned column, uint8_t *pixels) {
-        if (panel == 0 && pixel_brightness_ != 128) {
-            for (unsigned y = 0; y < 128; ++y) {
-                const uint16_t pixel = uint16_t(pixels[2 * y]) << 8 | pixels[2 * y + 1];
-                const unsigned red = ((pixel >> 11) * pixel_brightness_ + 64) / 128;
-                const unsigned green = (((pixel >> 5) & 63) * pixel_brightness_ + 64) / 128;
-                const unsigned blue = ((pixel & 31) * pixel_brightness_ + 64) / 128;
-                const uint16_t dimmed = uint16_t(red << 11 | green << 5 | blue);
-                pixels[2 * y] = uint8_t(dimmed >> 8); pixels[2 * y + 1] = uint8_t(dimmed);
-            }
+    uint16_t display_pixel(unsigned panel, uint16_t pixel) const {
+        if (panel != 0 || pixel_brightness_ == 128) return pixel;
+        const unsigned red = ((pixel >> 11) * pixel_brightness_ + 64) / 128;
+        const unsigned green = (((pixel >> 5) & 63) * pixel_brightness_ + 64) / 128;
+        const unsigned blue = ((pixel & 31) * pixel_brightness_ + 64) / 128;
+        return uint16_t(red << 11 | green << 5 | blue);
+    }
+    void write_column(unsigned panel, unsigned column, uint8_t *pixels, unsigned first = 0, unsigned count = 128) {
+        for (unsigned y = first; y < first + count; ++y) {
+            const uint16_t pixel = display_pixel(panel, uint16_t(pixels[2 * y]) << 8 | pixels[2 * y + 1]);
+            pixels[2 * y] = uint8_t(pixel >> 8); pixels[2 * y + 1] = uint8_t(pixel);
         }
-        write_display_column(panel, column, pixels);
+        if (first == 0 && count == 128) write_display_column(panel, column, pixels);
+        else write_display_column_segment(panel, column, first, pixels + 2 * first, count);
     }
     void dim_target() {
         if (!valid_[0]) return;
@@ -318,7 +330,57 @@ private:
         }
         return previous_[pane][index];
     }
+    uint16_t vertical_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
+        int source = int(y) + (undo_ ? -int(progress) : int(progress));
+        bool incoming = source < 0 || source >= 128;
+        source = (source + 128) % 128;
+        return incoming ? cache_[panel][unsigned(source) * 160 + x]
+                        : previous_[panel][unsigned(source) * 160 + x];
+    }
+    void animate_vertical(uint32_t now) {
+        if (!vertical_column_) {
+            if (display_dma_pending()) return;
+            // Finish every small displacement, even when a full redraw runs
+            // past its deadline. Skipping frames turns the movement into a wipe.
+            constexpr unsigned step = VERTICAL_STEP_PIXELS;
+            const uint64_t deadline = uint64_t(progress_ + step) * duration_ms_ * 1000 / 128;
+            if (uint32_t(now - started_) < deadline) return;
+            progress_ += step;
+        }
+        auto *band = acquire_display_band();
+        if (!band) return;
+        const unsigned panel = unsigned(animation_pane_);
+        const unsigned column = (rings_[panel] + vertical_column_) % display_ram_columns;
+        // A DMA rectangle cannot wrap across the controller's RAM boundary.
+        const unsigned width = std::min({8u, 160 - vertical_column_, display_ram_columns - (column + 1) % display_ram_columns});
+        unsigned first = 128, end = 0;
+        for (unsigned x = 0; x < width; ++x) for (unsigned y = 0; y < 128; ++y)
+            if (vertical_pixel(panel, vertical_column_ + x, y, progress_)
+                != vertical_pixel(panel, vertical_column_ + x, y, progress_ - VERTICAL_STEP_PIXELS)) {
+                first = std::min(first, y); end = std::max(end, y + 1);
+            }
+        if (end > first) {
+            band->panel = panel; band->column = column; band->columns = width;
+            band->first = first; band->count = end - first;
+            unsigned offset = 0;
+            for (unsigned x = 0; x < width; ++x) for (unsigned y = first; y < end; ++y) {
+                uint16_t pixel = display_pixel(panel, vertical_pixel(panel, vertical_column_ + x, y, progress_));
+                band->pixels[offset++] = uint8_t(pixel >> 8);
+                band->pixels[offset++] = uint8_t(pixel);
+            }
+            queue_display_band(*band);
+        }
+        vertical_column_ += width;
+        if (vertical_column_ == 160) {
+            vertical_column_ = 0;
+            if (progress_ == 128) {
+                animating_ = false;
+                for (auto &dirty : dirty_) dirty = true;
+            }
+        }
+    }
     void animate(uint32_t now) {
+        if (vertical_) { animate_vertical(now); return; }
         if (anchor_) {
             // Sample on the poll after the blocking scroll commands return.
             quiet_since_ = now;
@@ -381,7 +443,8 @@ private:
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
     int animation_pane_ = -1;
-    bool keep_right_ = false;
+    bool keep_right_ = false, vertical_ = false;
+    unsigned vertical_column_ = 0;
     uint8_t pixel_brightness_ = 128, requested_brightness_ = 128;
     unsigned dim_column_ = 160;
     unsigned rings_[3] = {}, progress_ = 0;

@@ -60,6 +60,30 @@ uint8_t SPIClass::transfer(uint8_t value) {
     return 0;
 }
 
+void SPIClass::transfer(const void *data, void *received, size_t count) {
+    assert(received == nullptr);
+    auto *bytes = static_cast<const uint8_t *>(data);
+    for (size_t i = 0; i < count; ++i) transfer(bytes[i]);
+}
+
+static const uint8_t *dma_pixels = nullptr;
+static size_t dma_count = 0;
+static EventResponder *dma_event = nullptr;
+static bool reject_dma = false;
+bool SPIClass::transfer(const void *data, void *received, size_t count, EventResponderRef completion) {
+    assert(received == nullptr && !dma_pixels && spi_active);
+    if (reject_dma) return false;
+    completion.clearEvent();
+    dma_pixels = static_cast<const uint8_t *>(data); dma_count = count; dma_event = &completion;
+    return true;
+}
+void complete_dma() {
+    assert(dma_pixels && dma_event);
+    for (size_t i = 0; i < dma_count; ++i) SPI.transfer(dma_pixels[i]);
+    dma_pixels = nullptr;
+    dma_event->triggerEvent(); dma_event = nullptr;
+}
+
 void SPIClass::endTransaction() {
     assert(spi_active && !levels[13] && bits == 0);
     for (uint8_t pin : chip_selects) assert(levels[pin]);
@@ -280,6 +304,40 @@ int main() {
     write_display_column(2, 159, column);
     assert((transfers[2][5].bytes == std::vector<uint8_t>{0x2b, 0, 160, 0, 160}));
     for (unsigned i = 0; i < 256; ++i) assert(transfers[2].back().bytes[i + 1] == column[i]);
+    write_display_column_segment(2, 159, 23, column + 46, 5);
+    const auto &cropped = transfers[2];
+    assert((cropped[cropped.size() - 3].bytes == std::vector<uint8_t>{0x2a, 0, 25, 0, 29}));
+    assert((cropped[cropped.size() - 2].bytes == std::vector<uint8_t>{0x2b, 0, 160, 0, 160}));
+    assert(cropped.back().bytes.size() == 11);
+    for (unsigned i = 0; i < 10; ++i) assert(cropped.back().bytes[i + 1] == column[46 + i]);
+    auto *first_band = acquire_display_band();
+    assert(first_band);
+    first_band->panel = 2; first_band->column = 4; first_band->columns = 8;
+    first_band->first = 23; first_band->count = 5;
+    for (unsigned i = 0; i < 80; ++i) first_band->pixels[i] = uint8_t(i);
+    queue_display_band(*first_band); start_display_dma();
+    assert(display_spi_busy() && spi_active && !levels[chip_selects[2]]);
+    poll_display_dma(); assert(display_spi_busy()); // Completion has not happened.
+    auto *second_band = acquire_display_band();
+    assert(second_band && second_band != first_band);
+    *second_band = *first_band; second_band->panel = 1;
+    queue_display_band(*second_band);
+    assert(!acquire_display_band()); // Neither buffer may be overwritten.
+    complete_dma(); poll_display_dma();
+    assert(!display_spi_busy() && !spi_active && levels[chip_selects[2]]);
+    const auto &dma_transfer = transfers[2];
+    assert((dma_transfer[dma_transfer.size() - 3].bytes == std::vector<uint8_t>{0x2a, 0, 25, 0, 29}));
+    assert((dma_transfer[dma_transfer.size() - 2].bytes == std::vector<uint8_t>{0x2b, 0, 5, 0, 12}));
+    assert(dma_transfer.back().bytes.size() == 81);
+    for (unsigned i = 0; i < 80; ++i) assert(dma_transfer.back().bytes[i + 1] == uint8_t(i));
+    assert(display_dma_pending() && acquire_display_band() == nullptr);
+    start_display_dma(); complete_dma(); poll_display_dma();
+    assert(!display_dma_pending() && !spi_active);
+    auto *failed_band = acquire_display_band(); *failed_band = *first_band;
+    queue_display_band(*failed_band); reject_dma = true; start_display_dma();
+    assert(take_display_dma_error() && !take_display_dma_error());
+    assert(!display_dma_pending() && !spi_active);
+    reject_dma = false;
     scroll_display_panorama(72);
     for (const auto &panel : transfers)
         assert((panel.back().bytes == std::vector<uint8_t>{0x37, 0, 90}));

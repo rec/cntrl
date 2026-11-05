@@ -418,7 +418,7 @@ public:
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
         throb_.configure(period, low, high, delay);
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane) override { renderer_.transition(undo, duration_ms, pane, true); }
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false) override { renderer_.transition(undo, duration_ms, pane, true, vertical); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
         if (enabled) {
@@ -570,9 +570,9 @@ public:
         utility_pages_.time(now, micros(), held_controls & (1u << 2));
         ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
-        if (scroll_timing.active()) { scroll_timing.poll(micros()); return; }
+        if (scroll_timing.active()) { if (!display_dma_pending()) scroll_timing.poll(micros()); return; }
 #endif
-        splash_visible_ = splash_session.poll(now, renderer_.ready(), transfer_busy);
+        if (!display_dma_pending()) splash_visible_ = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
 #if CNTRL_CABLE_TEST
         if (utility_pages_.page() == UtilityPages::Page::cable && cable_test.take_redraw())
@@ -1221,8 +1221,9 @@ void initialize_target() {
 
 void poll_target() {
     uint32_t now = millis();
+    poll_display_dma();
     board.poll_keyboard();
-    if (uint32_t(now - last_scan) >= 3) {
+    if (!display_spi_busy() && uint32_t(now - last_scan) >= 3) {
         if (last_scan) board.scanned(now - last_scan);
         last_scan = now;
         uint8_t raw = read_buttons();

@@ -100,8 +100,13 @@ void initialize_display_panorama() {
 }
 
 void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels) {
+    write_display_column_segment(panel, column, 0, pixels, 128);
+}
+
+void write_display_column_segment(unsigned panel, unsigned column, unsigned first, const uint8_t *pixels, unsigned count) {
+    assert(count && first + count <= 128);
     assert(panel < 3 && column < display_ram_columns);
-    ++writes; pixels_sent += 128;
+    ++writes; pixels_sent += count;
     unsigned x = (column + display_ram_columns - panel_rings[panel]) % display_ram_columns;
     if (audit_motion) {
         if (!panel) { scroll_trace.emplace_back(); scroll_trace.back().column = column; }
@@ -122,8 +127,8 @@ void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels
     // Column writes happen before the scroll register update. Updating a
     // visible column here produces the wrong-image sliver at the outgoing edge.
     if (check_motion && checked_progress < display_pitch) assert(x >= 160);
-    for (unsigned y = 0; y < 128; ++y) {
-        uint16_t pixel = uint16_t(pixels[2 * y]) << 8 | pixels[2 * y + 1];
+    for (unsigned y = first; y < first + count; ++y) {
+        uint16_t pixel = uint16_t(pixels[2 * (y - first)]) << 8 | pixels[2 * (y - first) + 1];
         if (patch_only) {
             assert(panel == 2);
             if (y < 90 || y >= 98) assert(screens[panel][y][x] == pixel);
@@ -131,6 +136,35 @@ void write_display_column(unsigned panel, unsigned column, const uint8_t *pixels
         ram[panel][y][column] = pixel;
         if (x < 160) screens[panel][y][x] = pixel;
     }
+}
+
+static DisplayBand simulated_bands[2];
+static unsigned active_dma = 2, queued_dma = 2, dma_polls = 0;
+static std::vector<uint8_t> in_flight_pixels;
+DisplayBand *acquire_display_band() {
+    if (queued_dma < 2) return nullptr;
+    for (unsigned i = 0; i < 2; ++i) if (i != active_dma) return &simulated_bands[i];
+    return nullptr;
+}
+void queue_display_band(DisplayBand &band) { queued_dma = unsigned(&band - simulated_bands); }
+bool display_spi_busy() { return active_dma < 2; }
+bool display_dma_pending() { return display_spi_busy() || queued_dma < 2; }
+bool take_display_dma_error() { return false; }
+void start_display_dma() {
+    if (active_dma < 2 || queued_dma >= 2) return;
+    active_dma = queued_dma; queued_dma = 2; dma_polls = 0;
+    auto &band = simulated_bands[active_dma];
+    assert(band.columns <= 8 && (band.column + 1) % 162 + band.columns <= 162);
+    in_flight_pixels.assign(band.pixels, band.pixels + 2 * band.columns * band.count);
+}
+void poll_display_dma() {
+    if (active_dma >= 2 || ++dma_polls < 2) return;
+    auto &band = simulated_bands[active_dma];
+    assert(!std::memcmp(band.pixels, in_flight_pixels.data(), in_flight_pixels.size()));
+    for (unsigned x = 0; x < band.columns; ++x)
+        write_display_column_segment(band.panel, (band.column + x) % 162,
+            band.first, band.pixels + x * band.count * 2, band.count);
+    active_dma = 2;
 }
 
 static void drain(DisplayRenderer &renderer) {
@@ -1159,6 +1193,42 @@ int main() {
             }
         }
         assert(renderer.ready()); blank(0, 0x4444);
+    }
+    for (bool backward : {false, true}) {
+        for (unsigned i = 0; i < 3; ++i) {
+            cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
+            renderer.show(i, pane);
+        }
+        drain(renderer);
+        const unsigned origin = panel_rings[0], before = writes, before_pixels = pixels_sent;
+        renderer.transition(backward, 500, 0, true, true);
+        cntrl::Pane next; next.graphics.background = 0x4444;
+        renderer.show(0, next);
+        bool intermediate = false;
+        unsigned previous_progress = 0;
+        for (unsigned poll = 0; poll < 12000 && !renderer.ready(); ++poll) {
+            const unsigned old_writes = writes;
+            renderer.draw(20000000 + poll * (backward ? 8000 : 100));
+            assert(writes - old_writes <= 8);
+            blank(1, 0x2222); blank(2, 0x3333);
+            assert(panel_rings[0] == origin);
+            if (writes != old_writes && (writes - before) % 160 == 0) {
+                unsigned progress = 0;
+                for (unsigned y = 0; y < 128; ++y) progress += screens[0][y][80] == 0x4444;
+                assert(progress == previous_progress + 32);
+                previous_progress = progress;
+                intermediate |= progress > 0 && progress < 128;
+                for (unsigned y = 0; y < 128; ++y) for (unsigned x = 0; x < 160; ++x) {
+                    int source = int(y) + (backward ? -int(progress) : int(progress));
+                    bool incoming = source < 0 || source >= 128;
+                    source = (source + 128) % 128;
+                    assert(screens[0][y][x] == rounded_background(x, unsigned(source), incoming ? 0x4444 : 0x1111));
+                }
+            }
+        }
+        assert(intermediate && previous_progress == 128 && renderer.ready());
+        assert(pixels_sent - before_pixels < 4 * 160 * 128 / 2);
+        blank(0, 0x4444);
     }
     for (unsigned i = 0; i < 3; ++i) {
         cntrl::Pane pane; pane.graphics.background = 0xffff;

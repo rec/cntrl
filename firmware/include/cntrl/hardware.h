@@ -78,7 +78,7 @@ struct Hardware {
     virtual unsigned display_height() const = 0;
     // Pane indices follow physical left-to-right order: 0, 1, 2.
     virtual void show(unsigned pane, const Pane &content) = 0;
-    virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1) { (void)undo; (void)duration_ms; (void)pane; }
+    virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false) { (void)undo; (void)duration_ms; (void)pane; (void)vertical; }
     virtual void configure_utility_pages(const UtilityPageSettings &) {}
     virtual void browse_utility_page(bool) {}
     virtual void tap_tempo(uint32_t) {}
