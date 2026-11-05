@@ -1,0 +1,21 @@
+--- a/cores/teensy4/usb_desc.h
++++ b/cores/teensy4/usb_desc.h
+@@ -517,0 +518,12 @@
++#ifdef CNTRL_USB_INTERFACE
++  #undef NUM_ENDPOINTS
++  #undef NUM_INTERFACE
++  #define NUM_ENDPOINTS 5
++  #define NUM_INTERFACE 4
++  #define KEYBOARD_INTERFACE 3
++  #define KEYBOARD_ENDPOINT 5
++  #define KEYBOARD_SIZE 8
++  #define KEYBOARD_INTERVAL 1
++  #define ENDPOINT5_CONFIG ENDPOINT_RECEIVE_UNUSED + ENDPOINT_TRANSMIT_INTERRUPT
++#endif
++
+--- a/cores/teensy4/usb_keyboard.c
++++ b/cores/teensy4/usb_keyboard.c
+@@ -577,0 +578,3 @@
++		#ifdef CNTRL_USB_INTERFACE
++		return -1; // Retry next poll without waiting for host capacity.
++#endif

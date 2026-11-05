@@ -19,11 +19,12 @@ struct PerformanceStatus {
 
 class UtilityPages {
 public:
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, confirm_firmware };
     void configure(const cntrl::UtilityPageSettings &settings) {
         generator.stop();
         slot_ = 0;
         settings_ = settings;
+        shortcut = 0;
         using R = cntrl::UtilityPageSettings;
         external_ = settings[R::clock_external];
         recall_slot();
@@ -87,6 +88,16 @@ public:
         }
         dirty_ = true;
     }
+    unsigned shortcut = 0;
+    bool shortcut_held = false;
+    void keyboard_select(bool reverse) {
+        if (settings_.keyboard_count) shortcut = (shortcut + (reverse ? settings_.keyboard_count - 1 : 1)) % settings_.keyboard_count;
+        dirty_ = true;
+    }
+    cntrl::KeyboardShortcut keyboard_shortcut() const {
+        return settings_.keyboard_shortcut(shortcut);
+    }
+    void keyboard_held(bool held) { if (held != shortcut_held) { shortcut_held = held; dirty_ = true; } }
     Page page() const { return page_; }
     void revisit(const char *setup) {
         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
@@ -137,7 +148,7 @@ public:
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::expression ? "Expression" : "Firmware";
+        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::keyboard ? "Keyboard" : page_ == Page::expression ? "Expression" : "Firmware";
         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
         pane.heading_band = true;
         auto &header = pane.lines[0];
@@ -192,6 +203,15 @@ public:
                 pane.circles[i] = {uint16_t(i < 2 ? 78 : 130), uint16_t(i % 2 ? 94 : 68), 12, 0, color, 0};
             }
             pane.toggle = {128, 110, true, cable.enabled, false};
+            return pane;
+        }
+        if (page_ == Page::keyboard) {
+            const auto shortcut = keyboard_shortcut();
+            const unsigned font = settings_[R::status_font];
+            line(pane, 1, shortcut.name[0] ? shortcut.name : "No shortcuts", 38, 24, font, true);
+            line(pane, 2, shortcut_held ? "Held" : "Ready", 66, 20, font, true);
+            line(pane, 3, "A/B: Select", 91, 16, font, true);
+            line(pane, 4, "Hold C: Send", 109, 16, font, true);
             return pane;
         }
         if (page_ == Page::expression) {

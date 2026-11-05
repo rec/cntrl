@@ -389,6 +389,7 @@ def compile_show(
         utility_settings = utility_pages.pack(show, target)
         clock = utility_pages.pack_clock(show, target)
         expression = utility_pages.pack_expression(show, target, TRS_JACKS)
+        keyboard = utility_pages.pack_keyboard(show, target)
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -463,6 +464,7 @@ def compile_show(
     body += (
         expression
         + clock
+        + keyboard
         + gestures
         + b'CNAM'
         + b''.join(names)

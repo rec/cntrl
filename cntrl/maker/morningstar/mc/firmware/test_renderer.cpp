@@ -837,7 +837,12 @@ static void test_utility_pages() {
     assert(pages.generator.bpm() == 144);
     pages.clock_button(0, 4009000, 1);
     assert(pages.generator.bpm() == 143);
+    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::keyboard);
+    view = pages.view(4005, 4005000, status);
+    assert(!std::strcmp(view.lines[0].text, "Keyboard"));
+    assert(!std::strcmp(view.lines[1].text, "No shortcuts"));
     pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
+    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::keyboard);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::expression);

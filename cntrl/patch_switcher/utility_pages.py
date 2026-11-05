@@ -184,9 +184,48 @@ def unpack_expression(
     return result
 
 
+def pack_keyboard(show: models.Setup, target: models.Target) -> bytes:
+    shortcuts = show.utility_pages.keyboard
+    if not shortcuts:
+        return b''
+    if 'usb-hid-keyboard' not in target.functions:
+        raise ValueError('USB HID keyboard unavailable on target')
+    if len(shortcuts) > 65535:
+        raise ValueError('keyboard shortcut list exceeds the setup format capacity')
+    data = bytearray(2 + len(shortcuts) * KEYBOARD.size)
+    struct.pack_into('<H', data, 0, len(shortcuts))
+    for i, shortcut in enumerate(shortcuts):
+        KEYBOARD.pack_into(
+            data,
+            2 + i * KEYBOARD.size,
+            shortcut.name.encode('ascii'),
+            shortcut.modifiers,
+            *shortcut.keys,
+            *([0] * (6 - len(shortcut.keys))),
+        )
+    return b'CKBD' + bytes(data)
+
+
+def unpack_keyboard(data: bytes, offset: int) -> list[dict[str, object]]:
+    return [
+        dict(
+            name=n.split(b'\0')[0].decode('ascii'),
+            modifiers=m,
+            keys=[v for v in k if v],
+        )
+        for n, m, *k in (
+            KEYBOARD.unpack_from(data, offset + 2 + i * KEYBOARD.size)
+            for i in range(struct.unpack_from('<H', data, offset)[0])
+        )
+    ]
+
+
 EXPRESSION = struct.Struct('<32s6B')
 EXPRESSION_FLAG = 1 << 15
 CURVES = ('linear', 'slow', 'fast')
+
+
+KEYBOARD = struct.Struct('<32s7B')
 
 
 CLOCK_FLAG = 1 << 13

@@ -514,7 +514,19 @@ class ExpressionAssignment(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class KeyboardShortcut(BaseModel, frozen=True):
+    name: Annotated[str, Field(min_length=1, max_length=31, pattern=r'^[ -~]+$')]
+    keys: Annotated[
+        list[Annotated[int, Field(strict=True, ge=4, le=115)]],
+        Field(min_length=1, max_length=6),
+    ]
+    modifiers: Annotated[int, Field(strict=True, ge=0, le=255)] = 0
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class UtilityPages(BaseModel, frozen=True):
+    keyboard: list[KeyboardShortcut] = Field(default_factory=list)
     expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)
     clock_outputs: list[str] = Field(default_factory=list)
     clock_bpms: Annotated[

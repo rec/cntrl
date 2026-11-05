@@ -201,24 +201,6 @@ send advances the counter. Reuse the same value for display and transmission.
 multiple assignments referencing a counter share one value; failed or blocked
 sends follow the chosen advancement policy without display drift.
 
-## 15. USB HID keyboard shortcuts
-
-**Outcome:** Send keyboard shortcuts to a computer over USB HID, such as Space
-for DAW playback or a modifier-key combination for recording.
-
-**Scope:** Add USB HID keyboard reports alongside the existing USB MIDI and
-serial interfaces on supported targets, with explicit key and modifier
-press/release operations. Distinguish physical key usages from text entry and
-document keyboard-layout dependence. Integrate held-key ownership and cleanup
-with the existing assignment lifecycle.
-
-**Dependencies:** None.
-
-**Acceptance:** Leaving an assignment releases owned keys; overlapping
-shortcuts do not release each other's keys prematurely; reconnection never
-replays a stale shortcut. Verify USB enumeration and key reports on macOS,
-Windows and Linux where supported.
-
 ## 16. Graphical configuration editor
 
 **Outcome:** Users can edit, validate, transfer and back up setups through a

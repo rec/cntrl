@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <cstring>
 #include "expression.h"
+#include "keyboard.h"
 
 namespace cntrl {
 struct UtilityPageSettings {
@@ -12,6 +14,18 @@ struct UtilityPageSettings {
     };
     uint16_t words[count] = {};
     ExpressionAssignment expression[4] = {};
+    const uint8_t *keyboard = nullptr;
+    unsigned keyboard_count = 0;
+    KeyboardShortcut keyboard_shortcut(unsigned index) const {
+        KeyboardShortcut result;
+        if (index < keyboard_count) {
+            const uint8_t *p = keyboard + index * 39;
+            std::memcpy(result.name, p, 32);
+            result.modifiers = p[32];
+            std::memcpy(result.keys, p + 33, 6);
+        }
+        return result;
+    }
     uint16_t operator[](Word word) const { return words[word]; }
 };
 } // namespace cntrl

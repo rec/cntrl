@@ -63,6 +63,7 @@ struct Hardware {
     virtual bool supports_function(unsigned) const { return false; }
     virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
     virtual void configure_trs_ports(const uint8_t *) {}
+    virtual bool supports_keyboard() const { return false; }
     virtual bool supports_trs_mode(unsigned, midi::TrsMode mode) const { return mode == midi::TrsMode::off; }
     virtual bool output_idle() const { return true; }
     virtual unsigned switch_capacity() const { return 0; }

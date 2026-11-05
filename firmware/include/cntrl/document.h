@@ -123,6 +123,17 @@ public:
                 if (bpm && (bpm < 20 || bpm > 600 || (i > R::slot1 && !right.words[i - 1]))) return false;
             }
         }
+        if (names + 4 <= length && !std::memcmp(bytes + names, "CKBD", 4)) {
+            if (!hardware.supports_keyboard() || names + 6 > length || !u16(bytes + names + 4)) return false;
+            unsigned count = u16(bytes + names + 4);
+            if (count > (length - names - 6) / 39) return false;
+            for (unsigned i = 0; i < count; ++i) {
+                const uint8_t *p = bytes + names + 6 + i * 39;
+                if (!text_valid(p, 32) || !p[33]) return false;
+                for (unsigned j = 33; j < 39; ++j) if (p[j] && (p[j] < 4 || p[j] > 115)) return false;
+            }
+            names += 6 + count * 39;
+        }
         unsigned gestures = names;
         if (bytes[19] & 0x40) names += 100;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
@@ -292,12 +303,20 @@ public:
         }
         settings.words[UtilityPageSettings::slot1] = 120;
         if (data_[19] & 0x20) read_clock(settings, bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0));
+        if (keyboard_size()) {
+            settings.keyboard_count = u16(keyboard_section() + 4);
+            settings.keyboard = keyboard_section() + 6;
+        }
         return settings;
     }
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
     bool usb_device_midi() const { return data_[19] & 8; }
-    unsigned utility_section_size() const { return ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0) + ((data_[19] & 0x40) ? 100 : 0); }
+    const uint8_t *keyboard_section() const {
+        return bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0);
+    }
+    unsigned keyboard_size() const { return !std::memcmp(keyboard_section(), "CKBD", 4) ? 6 + u16(keyboard_section() + 4) * 39 : 0; }
+    unsigned utility_section_size() const { return ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0) + keyboard_size() + ((data_[19] & 0x40) ? 100 : 0); }
     const uint8_t *switch_gestures(unsigned button) const {
         if (!(data_[19] & 0x40)) return nullptr;
         const uint8_t *p = bank(patches()) + utility_section_size() - 100 + button * 20;

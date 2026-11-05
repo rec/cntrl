@@ -53,6 +53,12 @@ def graph_offset(data: bytes) -> int:
         cursor += utility_pages.EXPRESSION.size * 4
     if flags & utility_pages.CLOCK_FLAG:
         cursor += utility_pages.CLOCK.size
+    if data[cursor : cursor + 4] == b'CKBD':
+        cursor += (
+            6
+            + struct.unpack_from('<H', data, cursor + 4)[0]
+            * utility_pages.KEYBOARD.size
+        )
     if flags & GESTURES_FLAG:
         cursor += 5 * GESTURES.size
     if data[cursor : cursor + 4] != b'CNAM':
@@ -115,6 +121,9 @@ def export(data: bytes) -> str:
         cursor += utility_pages.EXPRESSION.size * 4
     if flags & utility_pages.CLOCK_FLAG:
         pages.update(utility_pages.unpack_clock(data, cursor))
+        cursor += utility_pages.CLOCK.size
+    if data[cursor : cursor + 4] == b'CKBD':
+        pages['keyboard'] = utility_pages.unpack_keyboard(data, cursor + 4)
     result['utility_pages'] = pages
     modes = data[meta + METADATA.size - 4 : meta + METADATA.size]
     if any(m >= len(TRS_MODES) for m in modes):
@@ -207,6 +216,12 @@ def export(data: bytes) -> str:
                 address += utility_pages.EXPRESSION.size * 4
             if flags & utility_pages.CLOCK_FLAG:
                 address += utility_pages.CLOCK.size
+            if data[address : address + 4] == b'CKBD':
+                address += (
+                    6
+                    + struct.unpack_from('<H', data, address + 4)[0]
+                    * utility_pages.KEYBOARD.size
+                )
             fields = GESTURES.unpack_from(data, address + button * GESTURES.size)
             if fields[6]:
                 gesture: dict[str, object] = {

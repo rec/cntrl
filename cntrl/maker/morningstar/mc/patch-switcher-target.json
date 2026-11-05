@@ -1,5 +1,5 @@
 {
-  "functions": ["stock-firmware"],
+  "functions": ["stock-firmware", "usb-hid-keyboard"],
   "buttons": ["A", "B", "C", "D", "E", "F"],
   "outputs": [
     "din",

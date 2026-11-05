@@ -96,6 +96,8 @@ test-scroll-probe: tools
 	"$(ROOT)/build/test_scroll_displays"
 
 patch-switcher: tools
+	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/usb-keyboard.patch" > /dev/null 2>&1 || \
+		patch --force --fuzz=0 -d "$(CORE)" -p1 < "$(ROOT)/usb-keyboard.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/flex-serial-release.patch" > /dev/null 2>&1 || \
 		patch --force --fuzz=0 -d "$(CORE)" -p1 < "$(ROOT)/flex-serial-release.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/usb-midi-interface.patch" > /dev/null 2>&1 || \

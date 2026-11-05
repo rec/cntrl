@@ -4,6 +4,7 @@
 extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #endif
 #include <Arduino.h>
+#include <usb_keyboard.h>
 #include <SD.h>
 #include "expression_pedals.h"
 #include <USBHost_t36.h>
@@ -82,7 +83,7 @@ bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation);
 bool start_original_firmware();
 #endif
 DMAMEM cntrl::UsbSession usb_session;
-class Board : public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink, public cntrl::PatchOutputs
+class Board : public cntrl::KeyboardSink, public cntrl::Hardware, public cntrl::Replies, public cntrl::splash::Replies, public cntrl::midi::Sink, public cntrl::PatchOutputs
 #if CNTRL_PANIC
     , public cntrl::PanicOutputs
 #endif
@@ -156,6 +157,32 @@ public:
         cable_test.leave();
     }
 #endif
+    bool supports_keyboard() const override { return true; }
+    bool keyboard_report(const cntrl::KeyboardReport &report) override {
+        keyboard_modifier_keys = report.modifiers;
+        std::memcpy(keyboard_keys, report.keys, 6);
+        return usb_keyboard_send() == 0;
+    }
+    bool keyboard_button(unsigned i, bool pressed) {
+        if (utility_pages_.page() != UtilityPages::Page::keyboard || (i != 0 && i != 1 && i != 2)) return false;
+        if (i == 2) {
+            if (!pressed) keyboard_.release(0);
+            else {
+                const auto shortcut = utility_pages_.keyboard_shortcut();
+                pressed = shortcut.name[0] && keyboard_.press(0, shortcut);
+            }
+            utility_pages_.keyboard_held(pressed);
+        } else if (pressed) {
+            keyboard_.release(0);
+            utility_pages_.keyboard_held(false);
+            utility_pages_.keyboard_select(i == 0);
+        }
+        return true;
+    }
+    void poll_keyboard() {
+        keyboard_.poll(usb_configuration != 0, *this);
+        if (!usb_configuration) utility_pages_.keyboard_held(false);
+    }
     bool supports_trs_mode(unsigned jack, cntrl::midi::TrsMode mode) const override {
         return jack < 4 && mode <= cntrl::midi::TrsMode::aux;
     }
@@ -300,6 +327,7 @@ public:
 #endif
     }
     void leave_utility_page() {
+        keyboard_.clear(); utility_pages_.keyboard_held(false);
         if (utility_pages_.page() == UtilityPages::Page::expression) expression_.cancel();
 #if CNTRL_CABLE_TEST
         if (utility_pages_.page() == UtilityPages::Page::cable) leave_cable_test();
@@ -585,6 +613,7 @@ private:
     PixelThrob throb_;
     ExpressionPedals expression_;
     uint32_t expression_refresh_ = 0;
+    cntrl::Keyboard keyboard_;
     UtilityPages utility_pages_;
     bool port_save_pending_ = false;
     bool performance_visible_ = false;
@@ -1192,6 +1221,7 @@ void initialize_target() {
 
 void poll_target() {
     uint32_t now = millis();
+    board.poll_keyboard();
     if (uint32_t(now - last_scan) >= 3) {
         if (last_scan) board.scanned(now - last_scan);
         last_scan = now;
@@ -1202,6 +1232,7 @@ void poll_target() {
             if (buttons[i].pressed) pressed |= 1u << i;
         }
         held_controls = pressed;
+        if (events[2] & release_event) board.keyboard_button(2, false);
 #if CNTRL_PANIC
         if ((events[2] & release_event) && board.panic.open()) board.panic.button(false, now);
 #endif
@@ -1260,6 +1291,7 @@ void poll_target() {
 #if CNTRL_PANIC
                     if (board.panic_owns_midi && i != 2 && i != 5) continue;
 #endif
+                    if ((events[i] & (press_event | release_event)) && board.keyboard_button(i, events[i] & press_event)) continue;
                     if ((events[i] & press_event) && board.expression_button(i)) continue;
                     if ((events[i] & press_event) && board.trs_button(i)) continue;
                     if (board.clock_control(i, events[i] & press_event)) continue;
