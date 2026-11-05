@@ -384,6 +384,4 @@ def test_song_library_transfer_against_cpp_receiver(
         os.close(slave)
 
 
-COMPANIONS = {
-    'pman': {'patches': {'clean': {'type': 'midi', 'output': 'din', 'bytes': [250]}}}
-}
+COMPANIONS = {'pman': {'patches': {'clean': {'type': 'start', 'output': 'din'}}}}

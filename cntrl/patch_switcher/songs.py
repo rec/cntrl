@@ -378,7 +378,7 @@ def _rebind(
     work = [result]
     while work:
         item = work.pop()
-        if item.get('type') == 'program-change':
+        if item.get('type') == 'program-change' and 'instrument' in item:
             item['instrument'] = _qualified(prefix, str(item['instrument']), 31)
         elif item.get('type') == 'reference' and not item.get('document'):
             item['patch'] = _qualified(prefix, str(item['patch']), 63)

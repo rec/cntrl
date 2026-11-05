@@ -6,7 +6,7 @@ from zlib import crc32
 
 import tomlkit
 
-from . import utility_pages
+from . import midi_messages, utility_pages
 from .compiler import (
     DOCUMENT_VERSION,
     GRAPH,
@@ -249,17 +249,7 @@ def _patch(
         output = _text(data, cursor, 32)
         message = data[cursor + 32 : cursor + size]
         value.update(output=output)
-        if flags == 9:
-            value.update(type='sysex', data=list(message[1:-1]))
-        elif flags == 1:
-            value.update(type='midi', bytes=list(message))
-        elif flags == 2:
-            value.update(
-                type='pitch-bend',
-                channel=(message[0] & 15) + 1,
-                value=(message[1] | message[2] << 7) - 8192,
-            )
-        elif flags == 4:
+        if flags == 4:
             value.update(
                 type='nrpn',
                 channel=(message[0] & 15) + 1,
@@ -267,12 +257,7 @@ def _patch(
                 value=message[8] << 7 | message[11],
             )
         else:
-            value.update(
-                type='control-change',
-                channel=(message[0] & 15) + 1,
-                controller=message[1],
-                value=message[2],
-            )
+            value.update(midi_messages.decode(message))
     elif kind == 3:
         operation, argument = struct.unpack_from('<BI', data, cursor)
         value.update(

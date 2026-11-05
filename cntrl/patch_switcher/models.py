@@ -9,8 +9,10 @@ from pydantic import (
     BaseModel,
     BeforeValidator,
     ConfigDict,
+    Discriminator,
     Field,
     StrictStr,
+    Tag,
     TypeAdapter,
     field_validator,
     model_validator,
@@ -93,39 +95,91 @@ class ProgramChange(Presentation, frozen=True):
     bank: Annotated[int, Field(strict=True, ge=0)] | None = None
 
 
-class ControlChange(Presentation, frozen=True):
-    type: Literal['control-change']
+class OutputMessage(Presentation, frozen=True):
+    type: str
     output: str
+
+
+class ChannelMessage(OutputMessage, frozen=True):
     channel: Annotated[int, Field(strict=True, ge=1, le=16)]
+
+
+class ControlChange(ChannelMessage, frozen=True):
+    type: Literal['control-change']
     controller: Annotated[int, Field(strict=True, ge=0, le=127)]
     value: Annotated[int, Field(strict=True, ge=0, le=127)]
 
 
-class PitchBend(Presentation, frozen=True):
+class PitchBend(ChannelMessage, frozen=True):
     type: Literal['pitch-bend']
-    output: str
-    channel: Annotated[int, Field(strict=True, ge=1, le=16)]
     value: Annotated[int, Field(strict=True, ge=-8192, le=8191)]
 
 
-class Nrpn(Presentation, frozen=True):
+class Nrpn(ChannelMessage, frozen=True):
     type: Literal['nrpn']
-    output: str
-    channel: Annotated[int, Field(strict=True, ge=1, le=16)]
     parameter: Annotated[int, Field(strict=True, ge=0, le=16383)]
     value: Annotated[int, Field(strict=True, ge=0, le=16383)]
 
 
-class SysEx(Presentation, frozen=True):
+class SysEx(OutputMessage, frozen=True):
     type: Literal['sysex']
-    output: str
     data: list[Annotated[int, Field(strict=True, ge=0, le=127)]]
 
 
-class Midi(Presentation, frozen=True):
-    type: Literal['midi']
-    output: str
-    bytes: list[Annotated[int, Field(strict=True, ge=0, le=255)]]
+class ChannelProgramChange(ChannelMessage, frozen=True):
+    type: Literal['program-change']
+    program: Annotated[int, Field(strict=True, ge=1, le=128)]
+
+
+def program_address(value: object) -> str:
+    if isinstance(value, dict):
+        return 'instrument' if 'instrument' in value else 'channel'
+    return 'instrument' if isinstance(value, ProgramChange) else 'channel'
+
+
+class Note(ChannelMessage, frozen=True):
+    type: Literal['note-on', 'note-off']
+    note: Annotated[int, Field(strict=True, ge=0, le=127)]
+    velocity: Annotated[int, Field(strict=True, ge=0, le=127)]
+
+
+class ChannelPressure(ChannelMessage, frozen=True):
+    type: Literal['channel-pressure']
+    pressure: Annotated[int, Field(strict=True, ge=0, le=127)]
+
+
+class PolyphonicKeyPressure(ChannelMessage, frozen=True):
+    type: Literal['polyphonic-key-pressure']
+    note: Annotated[int, Field(strict=True, ge=0, le=127)]
+    pressure: Annotated[int, Field(strict=True, ge=0, le=127)]
+
+
+class TimeCodeQuarterFrame(OutputMessage, frozen=True):
+    type: Literal['time-code-quarter-frame']
+    piece: Annotated[int, Field(strict=True, ge=0, le=7)]
+    value: Annotated[int, Field(strict=True, ge=0, le=15)]
+
+
+class SongPositionPointer(OutputMessage, frozen=True):
+    type: Literal['song-position-pointer']
+    position: Annotated[int, Field(strict=True, ge=0, le=16383)]
+
+
+class SongSelect(OutputMessage, frozen=True):
+    type: Literal['song-select']
+    song: Annotated[int, Field(strict=True, ge=0, le=127)]
+
+
+class SystemMessage(OutputMessage, frozen=True):
+    type: Literal[
+        'tune-request',
+        'timing-clock',
+        'start',
+        'continue',
+        'stop',
+        'active-sensing',
+        'system-reset',
+    ]
 
 
 class Brightness(Presentation, frozen=True):
@@ -189,12 +243,22 @@ class Reference(Presentation, frozen=True):
 
 
 Patch = Annotated[
-    ProgramChange
+    Annotated[
+        Annotated[ProgramChange, Tag('instrument')]
+        | Annotated[ChannelProgramChange, Tag('channel')],
+        Discriminator(program_address),
+    ]
     | ControlChange
     | PitchBend
     | Nrpn
     | SysEx
-    | Midi
+    | Note
+    | ChannelPressure
+    | PolyphonicKeyPressure
+    | TimeCodeQuarterFrame
+    | SongPositionPointer
+    | SongSelect
+    | SystemMessage
     | Annotated[
         Brightness | UsbMidiInterface | Navigation, Field(discriminator='operation')
     ]

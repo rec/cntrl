@@ -21,7 +21,7 @@ off = { type = 'control-change', output = 'trs', channel = 2, controller = 7, va
 
 [switches.start]
 button = 'C'
-on = { type = 'midi', output = 'din', bytes = [0xFA] }
+on = { type = 'start', output = 'din' }
 ```
 
 `press` is the default mode and requires only `on`; it forbids `off`. Each new
@@ -37,7 +37,7 @@ aliases; other MIDI variants name their output directly. Definitions are keyed
 by `patches.clean`, independently of their display labels.
 
 Persistent assignments reserve the controls their reachable patches affect.
-Raw MIDI and SysEx reserve their entire destination output until Off cleanup or
+Notes, pressure, direct Program Change, system messages and SysEx reserve their entire destination output until Off cleanup or
 explicit abandonment. Other assignments cannot share those reserved resources.
 Two press assignments can share controls because each invocation completes its
 accepted work. Firmware visits and operations that leave this context are

@@ -80,9 +80,19 @@ def test_song_with_function_and_repeated_patches_preserves_occurrences() -> None
                 id=1,
                 name='Song',
                 patches=[
-                    {'type': 'midi', 'output': 'din', 'bytes': [0xC0, 0]},
+                    {
+                        'type': 'program-change',
+                        'output': 'din',
+                        'channel': 1,
+                        'program': 1,
+                    },
                     {'type': 'stock-firmware', 'exit_buttons': 'E+B'},
-                    {'type': 'midi', 'output': 'din', 'bytes': [0xC0, 0]},
+                    {
+                        'type': 'program-change',
+                        'output': 'din',
+                        'channel': 1,
+                        'program': 1,
+                    },
                 ],
             )
         ]

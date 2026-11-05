@@ -43,7 +43,13 @@ def test_every_variant_survives_export_and_recompile(target: models.Target) -> N
             'value': 388,
         },
         'sysex': {'type': 'sysex', 'output': 'din', 'data': list(range(128)) * 3},
-        'raw': {'type': 'midi', 'output': 'din', 'bytes': [0x90, 60, 100]},
+        'raw': {
+            'type': 'note-on',
+            'output': 'din',
+            'channel': 1,
+            'note': 60,
+            'velocity': 100,
+        },
         'brightness': {'type': 'state', 'operation': 'brightness', 'value': 255},
         'interface': {
             'type': 'state',
@@ -122,38 +128,25 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
 
 
 @pytest.mark.parametrize(
-    'message',
-    [
-        [],
-        [60, 100],
-        [0x90, 60],
-        [0x90, 60, 100, 0x90, 61, 100],
-        [0xF0, 1],
-        [0xF0, 128, 0xF7],
-        [0xF7],
-        [0xF4],
-        [0xF9],
-    ],
-)
-def test_raw_midi_requires_one_complete_message(
-    target: models.Target, message: list[int]
-) -> None:
-    with pytest.raises(compiler.CompilationError, match='complete MIDI message'):
-        compiler.compile_show(
-            {'patches': {'bad': {'type': 'midi', 'output': 'din', 'bytes': message}}},
-            {},
-            [],
-            target,
-        )
-
-
-@pytest.mark.parametrize(
     'value',
     [
         'clean',
         [],
         {'instrument': 'a', 'program': 1},
         {'type': 'other'},
+        {'type': 'midi', 'output': 'din', 'bytes': [250]},
+        {'type': 'note-on', 'output': 'din', 'channel': 0, 'note': 60, 'velocity': 90},
+        {'type': 'note-on', 'output': 'din', 'channel': 1, 'note': 60, 'velocity': 128},
+        {'type': 'start', 'output': 'din', 'bytes': [250]},
+        {'type': 'time-code-quarter-frame', 'output': 'din', 'piece': 8, 'value': 0},
+        {'type': 'song-position-pointer', 'output': 'din', 'position': 16384},
+        {
+            'type': 'program-change',
+            'instrument': 'a',
+            'program': 4,
+            'channel': 1,
+            'output': 'din',
+        },
         {'type': 'state', 'operation': 'brightness', 'value': True},
         {'type': 'state', 'operation': 'next-patch', 'value': 1},
     ],
@@ -192,7 +185,7 @@ def test_external_dependencies_use_stable_keys_and_detect_cross_document_cycles(
     target: models.Target,
 ) -> None:
     local = {'patches': {'a': {'type': 'reference', 'document': 'OTHER', 'patch': 'b'}}}
-    other = {'patches': {'b': {'type': 'midi', 'output': 'din', 'bytes': [250]}}}
+    other = {'patches': {'b': {'type': 'start', 'output': 'din'}}}
     assert compiler.compile_show(local, {}, [], target, documents={'other': other})
     other['patches']['b'] = {'type': 'reference', 'document': 'local', 'patch': 'a'}
     with pytest.raises(compiler.CompilationError, match='reference cycle'):
@@ -334,7 +327,7 @@ def test_composite_inherits_child_tags_but_keeps_parent_label(
 
 
 def test_press_switches_can_share_controls(target: models.Target) -> None:
-    value = {'type': 'midi', 'output': 'din', 'bytes': [250]}
+    value = {'type': 'start', 'output': 'din'}
     show = {
         'switches': {
             'a': {'button': 'A', 'on': value},
@@ -485,3 +478,69 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
     else:
         assert restored['patch_cycles']['wind'][0]['program'] == 2
     assert compiler.compile_show(restored, {}, [], target) == recompiled
+
+
+@pytest.mark.parametrize(
+    ('message', 'wire'),
+    [
+        ({'type': 'note-on', 'channel': 16, 'note': 60, 'velocity': 0}, '9f3c00'),
+        ({'type': 'note-off', 'channel': 1, 'note': 127, 'velocity': 80}, '807f50'),
+        (
+            {
+                'type': 'polyphonic-key-pressure',
+                'channel': 2,
+                'note': 60,
+                'pressure': 99,
+            },
+            'a13c63',
+        ),
+        ({'type': 'channel-pressure', 'channel': 3, 'pressure': 127}, 'd27f'),
+        ({'type': 'program-change', 'channel': 16, 'program': 128}, 'cf7f'),
+        ({'type': 'time-code-quarter-frame', 'piece': 6, 'value': 11}, 'f16b'),
+        ({'type': 'song-position-pointer', 'position': 513}, 'f20104'),
+        ({'type': 'song-select', 'song': 12}, 'f30c'),
+        ({'type': 'tune-request'}, 'f6'),
+        ({'type': 'timing-clock'}, 'f8'),
+        ({'type': 'start'}, 'fa'),
+        ({'type': 'continue'}, 'fb'),
+        ({'type': 'stop'}, 'fc'),
+        ({'type': 'active-sensing'}, 'fe'),
+        ({'type': 'system-reset'}, 'ff'),
+    ],
+)
+def test_named_message_wire_encoding_and_export(
+    target: models.Target, message: dict[str, object], wire: str
+) -> None:
+    patch = message | {'output': 'din'}
+    data = compiler.compile_show({'patches': {'event': patch}}, {}, [], target)
+    graph = resolved.graph_offset(data)
+    node = graph + struct.unpack_from('<I', data, graph + compiler.GRAPH.size)[0]
+    kind, flags, size = struct.unpack_from('<BBH', data, node)
+    assert (kind, flags) == (2, 1)
+    assert data[node + 36 : node + 4 + size] == bytes.fromhex(wire)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['patches']['event'] == patch
+    assert compiler.compile_show(exported, {}, [], target) == data
+
+
+@pytest.mark.parametrize(
+    'message',
+    [
+        {'type': 'control-change', 'channel': 4, 'controller': 64, 'value': 0},
+        {'type': 'pitch-bend', 'channel': 4, 'value': -4321},
+        {'type': 'sysex', 'data': [125, 1, 2]},
+    ],
+)
+def test_compiled_raw_message_exports_as_its_named_type(
+    target: models.Target, message: dict[str, object]
+) -> None:
+    patch = message | {'output': 'din'}
+    compiled = compiler.compile_show({'patches': {'event': patch}}, {}, [], target)
+    legacy = bytearray(compiled)
+    graph = resolved.graph_offset(compiled)
+    node = graph + struct.unpack_from('<I', compiled, graph + compiler.GRAPH.size)[0]
+    legacy[node + 1] = 1  # The former raw node carried the same MIDI bytes.
+    struct.pack_into('<I', legacy, 20, crc32(legacy[28:]))
+    exported = tomlkit.parse(resolved.export(bytes(legacy))).unwrap()
+    assert exported['patches']['event'] == patch
+    assert compiler.compile_show(exported, {}, [], target) == compiled

@@ -9,7 +9,7 @@ from zlib import crc32
 import tomlkit
 from pydantic import ValidationError
 
-from . import display, models, utility_pages
+from . import display, midi_messages, models, utility_pages
 
 
 class CompilationError(ValueError):
@@ -566,17 +566,10 @@ class PatchCompiler:
                 self.errors.append(
                     f'{path}.output: unavailable output {value.output!r}'
                 )
-            channel = getattr(value, 'channel', 1) - 1
-            if isinstance(value, models.ControlChange):
-                data = bytes((0xB0 | channel, value.controller, value.value))
-            elif isinstance(value, models.PitchBend):
-                flags = 2
-                bend = value.value + 8192
-                data = bytes((0xE0 | channel, bend & 127, bend >> 7))
-            elif isinstance(value, models.Nrpn):
+            if isinstance(value, models.Nrpn):
                 flags = 4
                 data = b''.join(
-                    bytes((0xB0 | channel, c, v))
+                    bytes((0xB0 | (value.channel - 1), c, v))
                     for c, v in (
                         (99, value.parameter >> 7),
                         (98, value.parameter & 127),
@@ -584,17 +577,11 @@ class PatchCompiler:
                         (38, value.value & 127),
                     )
                 )
-            elif isinstance(value, models.SysEx):
-                flags = 9
-                data = bytes((0xF0, *value.data, 0xF7))
             else:
-                flags = 1
-                data = bytes(value.bytes)
-                if not midi_message_valid(data):
-                    self.errors.append(
-                        f'{path}.bytes: expected one complete MIDI message '
-                        'with an explicit status and valid data bytes'
-                    )
+                flags = {'control-change': 0, 'pitch-bend': 2, 'sysex': 9}.get(
+                    value.type, 1
+                )
+                data = midi_messages.encode(value)
             payload = (
                 struct.pack(
                     '<32s',
@@ -988,8 +975,6 @@ class PatchCompiler:
                                 resources.add(
                                     (instrument.output, instrument.channel, controller)
                                 )
-                elif isinstance(value, (models.Midi, models.SysEx)):
-                    resources.add((value.output, 0, -1))
                 elif isinstance(value, models.ControlChange):
                     resources.add((value.output, value.channel, value.controller))
                 elif isinstance(value, models.PitchBend):
@@ -998,6 +983,8 @@ class PatchCompiler:
                     resources.update(
                         (value.output, value.channel, c) for c in (99, 98, 6, 38)
                     )
+                elif isinstance(value, models.OutputMessage):
+                    resources.add((value.output, 0, -1))
             for previous, mode, other in ownership:
                 if assignment.mode == mode == 'press':
                     continue
@@ -1049,34 +1036,6 @@ class PatchCompiler:
             + b''.join(NAMED.pack(k.encode('ascii'), v) for k, v in self.named.items())
             + b''.join(self.nodes)
         )
-
-
-def midi_message_valid(data: bytes) -> bool:
-    """Require one explicitly framed MIDI message, without inherited running status."""
-    if not data or data[0] < 0x80:
-        return False
-    status = data[0]
-    if status == 0xF0:
-        return len(data) >= 2 and data[-1] == 0xF7 and all(b < 128 for b in data[1:-1])
-    length = (
-        2
-        if 0xC0 <= status < 0xE0
-        else 3
-        if status < 0xF0
-        else {
-            0xF1: 2,
-            0xF2: 3,
-            0xF3: 2,
-            0xF6: 1,
-            0xF8: 1,
-            0xFA: 1,
-            0xFB: 1,
-            0xFC: 1,
-            0xFE: 1,
-            0xFF: 1,
-        }.get(status, 0)
-    )
-    return len(data) == length and all(b < 128 for b in data[1:])
 
 
 def _name_record(text: str | None, path: str, errors: list[str]) -> bytes:

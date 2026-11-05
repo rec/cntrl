@@ -240,12 +240,19 @@ dictionary order does not define the browser order. `patch_cycles` supplies that
 
 | Type | Required fields | Optional executable fields |
 | --- | --- | --- |
-| `program-change` | `instrument`, `program` | `bank`, `volume`, `pan` |
+| `program-change` (instrument) | `instrument`, `program` | `bank`, `volume`, `pan` |
 | `control-change` | `output`, `channel`, `controller`, `value` | None |
 | `pitch-bend` | `output`, `channel`, `value` | None |
 | `nrpn` | `output`, `channel`, `parameter`, `value` | None |
 | `sysex` | `output`, `data` | None |
-| `midi` | `output`, `bytes` | None |
+| `program-change` (direct) | `output`, `channel`, `program` (1..128) | None |
+| `note-on`, `note-off` | `output`, `channel`, `note`, `velocity` | None |
+| `polyphonic-key-pressure` | `output`, `channel`, `note`, `pressure` | None |
+| `channel-pressure` | `output`, `channel`, `pressure` | None |
+| `time-code-quarter-frame` | `output`, `piece` (0..7), `value` (0..15) | None |
+| `song-position-pointer` | `output`, `position` (0..16383, in six-clock MIDI beats) | None |
+| `song-select` | `output`, `song` (0..127) | None |
+| `tune-request`, `timing-clock`, `start`, `continue`, `stop`, `active-sensing`, `system-reset` | `output` | None |
 | `state` | `operation` and the fields below | None |
 | `stock-firmware` | `exit_buttons`, such as `'A+F'` | None |
 | `sequence` | `patches`, a list of Patch tables | None |
@@ -265,8 +272,12 @@ and optional pan, in that order. NRPN sends CC 99, 98, 6 and 38 as one ordered
 message sequence on its output, allowing MIDI real-time traffic to interleave.
 
 SysEx `data` contains 0..127 payload bytes, without F0/F7; the compiler adds those
-delimiters. `midi.bytes` contains exactly one complete message including its
-status and any delimiters. Running status from another patch is never inherited.
+delimiters. Notes, velocities and pressures use 0..127. Direct Program Change
+sends a single message on its specified output and channel. The instrument form
+resolves catalogue programs and supports bank, volume and pan.
+Use the named message in authored setups and songs, for example
+`{type = 'start', output = 'din'}` for MIDI Start. The former `type = 'midi'`
+is rejected. Exporting an existing compiled message produces its named form.
 Long SysEx streams through the normal cooperative output scheduler. The target
 must support the named output; this format adds no output drivers.
 
@@ -296,9 +307,10 @@ requests On at press, Off at release. `latched` requires both and alternates on
 successive presses. On and Off may use different Patch types, outputs and channels.
 
 The full reachable graph determines ownership, including both branches and
-referenced sequences. Readable MIDI reserves its known controls. Raw MIDI and
-SysEx in a persistent assignment reserve their entire output through Off cleanup
-or explicit abandonment. Other assignments cannot share that output. There is no
+referenced sequences. Instrument program selections, Control Change, Pitch Bend
+and NRPN reserve their known controls. Other MIDI messages, including direct
+Program Change and SysEx, reserve the entire output through Off cleanup or
+explicit abandonment. Other assignments cannot share that output. There is no
 automatic note ownership or inferred inverse. Accepted work completes before the
 required Off patch runs. A held entry switch must be released before it rearms.
 
