@@ -472,14 +472,16 @@ private:
                 || std::memcmp(old.named_patch(i), current.named_patch(i), 66)) ++patches;
         for (unsigned i = 0; i < old.instruments() || i < current.instruments(); ++i)
             if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
-        settings = std::memcmp(old.trs_modes(), current.trs_modes(), 4) || old.navigation_hold_ms() != current.navigation_hold_ms()
+        settings = old.expression_size() != current.expression_size()
+            || std::memcmp(old.bank(old.patches()), current.bank(current.patches()), old.expression_size())
+            || std::memcmp(old.trs_modes(), current.trs_modes(), 4) || old.navigation_hold_ms() != current.navigation_hold_ms()
             || old.navigation_repeat_ms() != current.navigation_repeat_ms() || old.brightness() != current.brightness()
             || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
             || old.animation_color_cycle() != current.animation_color_cycle()
             || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();
         auto names_end = [](const Document &d) {
-            unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + 4;
+            unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + d.expression_size() + 4;
             for (unsigned i = 0; i < d.patches() * 3; ++i) { unsigned n = u16(d.data() + cursor); cursor += 2 + (n == 65535 ? 0 : n); }
             return cursor;
         };

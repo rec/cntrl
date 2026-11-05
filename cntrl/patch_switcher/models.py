@@ -428,7 +428,28 @@ class NavigationSettings(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class ExpressionAssignment(BaseModel, frozen=True):
+    output: str
+    channel: Annotated[int, Field(strict=True, ge=1, le=16)]
+    controller: Annotated[int, Field(strict=True, ge=0, le=127)]
+    minimum: Annotated[int, Field(strict=True, ge=0, le=127)] = 0
+    maximum: Annotated[int, Field(strict=True, ge=0, le=127)] = 127
+    reverse: bool = Field(default=False, strict=True)
+    curve: Literal['linear', 'slow', 'fast'] = 'linear'
+
+    @model_validator(mode='after')
+    def ordered_range(self) -> 'ExpressionAssignment':
+        if self.maximum < self.minimum:
+            raise ValueError(
+                'minimum exceeds maximum; use reverse for toe-to-heel control'
+            )
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class UtilityPages(BaseModel, frozen=True):
+    expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)
     refresh_interval: Annotated[
         float,
         Field(strict=True, ge=0.001, le=65.535),

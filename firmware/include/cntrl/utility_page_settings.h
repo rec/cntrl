@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include "expression.h"
 
 namespace cntrl {
 struct UtilityPageSettings {
@@ -10,6 +11,7 @@ struct UtilityPageSettings {
         off_color, on_color, ring_color, digits, decimals, background, title_font, count
     };
     uint16_t words[count] = {};
+    ExpressionAssignment expression[4] = {};
     uint16_t operator[](Word word) const { return words[word]; }
 };
 } // namespace cntrl

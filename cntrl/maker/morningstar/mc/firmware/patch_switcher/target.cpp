@@ -5,6 +5,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #endif
 #include <Arduino.h>
 #include <SD.h>
+#include "expression_pedals.h"
 #include <USBHost_t36.h>
 #include <malloc.h>
 extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
@@ -299,6 +300,7 @@ public:
 #endif
     }
     void leave_utility_page() {
+        if (utility_pages_.page() == UtilityPages::Page::expression) expression_.cancel();
 #if CNTRL_CABLE_TEST
         if (utility_pages_.page() == UtilityPages::Page::cable) leave_cable_test();
 #endif
@@ -308,6 +310,7 @@ public:
     }
     void configure_utility_pages(const cntrl::UtilityPageSettings &settings) override {
         leave_utility_page();
+        expression_.configure(settings);
         utility_pages_.configure(settings);
         enter_utility_page();
     }
@@ -355,6 +358,10 @@ public:
             return;
         }
 #endif
+        if (utility_pages_.page() == UtilityPages::Page::expression) {
+            expression_.calibrate(trs_ports.expression_pin(expression_.selected()) >= 0);
+            return;
+        }
         utility_pages_.tap(now);
     }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
@@ -462,6 +469,34 @@ public:
         if (splash_session.take_redraw()) renderer_.invalidate();
         renderer_.draw(micros());
     }
+    void load_expression_calibrations() { expression_.load_calibrations(); }
+    bool expression_button(unsigned i) {
+        if (utility_pages_.page() != UtilityPages::Page::expression || i > 1) return false;
+        if (i == 0) expression_.next_jack(); else expression_.cancel();
+        return true;
+    }
+    void poll_expression(uint32_t now) {
+        if (!documents.document().valid()) return;
+        expression_.poll(now, [](unsigned i) { return trs_ports.expression_pin(i); },
+            [this](const char *out) {
+#if CNTRL_PANIC
+                if (panic_owns_midi) return false;
+#endif
+#if CNTRL_CABLE_TEST
+                if (cable_test.enabled()) return false;
+#endif
+                return available(out) && !documents.busy() && !documents.dirty();
+            },
+            [this](const char *out, const uint8_t *bytes) {
+                return !patch_work_pending() && output_idle() && send(out, bytes, 3);
+            });
+        if (utility_pages_.page() == UtilityPages::Page::expression && uint32_t(now - expression_refresh_) >= 80) {
+            expression_refresh_ = now;
+            char title[40], position[40], prompt[40];
+            expression_.status(trs_ports.expression_pin(expression_.selected()) >= 0, title, position, prompt);
+            utility_pages_.expression_status(title, position, prompt);
+        }
+    }
     void display(uint32_t now, bool transfer_busy) {
 #if CNTRL_CABLE_TEST
         transfer_busy = transfer_busy || cable_test.enabled();
@@ -520,6 +555,8 @@ private:
         }
     }
     PixelThrob throb_;
+    ExpressionPedals expression_;
+    uint32_t expression_refresh_ = 0;
     UtilityPages utility_pages_;
     bool port_save_pending_ = false;
     bool performance_visible_ = false;
@@ -1115,6 +1152,7 @@ void initialize_target() {
     initialize_displays(false);
     board.begin();
     card.ready = SD.begin(BUILTIN_SDCARD);
+    if (card.ready) board.load_expression_calibrations();
     capture_disk_space();
     font_files.ready = card.ready;
     splash_card.ready = card.ready;
@@ -1193,6 +1231,7 @@ void poll_target() {
 #if CNTRL_PANIC
                     if (board.panic_owns_midi && i != 2 && i != 5) continue;
 #endif
+                    if ((events[i] & press_event) && board.expression_button(i)) continue;
                     if ((events[i] & press_event) && board.trs_button(i)) continue;
                     if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
                     if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
@@ -1231,6 +1270,10 @@ void poll_target() {
     songs.tick();
     if (board.reply_ready()) font_files.poll(now, board);
     board.poll();
+#if CNTRL_ORIGINAL_FIRMWARE
+    if (!firmware_visit_stage)
+#endif
+        board.poll_expression(now);
 #if CNTRL_SWITCHES
     static bool switches_open = false;
     if (switches_open && !board.switches.open()) {

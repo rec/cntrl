@@ -39,6 +39,7 @@ public:
         }
         initialized_ = true;
     }
+    int expression_pin(unsigned i) const { return mode_[i] == Mode::expression ? tip[i] : -1; }
     Mode mode(unsigned i) const { return mode_[i]; }
     bool idle() const {
         for (const auto &tx : serial_) if (tx && tx->transmitting()) return false;

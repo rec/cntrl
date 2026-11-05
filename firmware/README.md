@@ -522,6 +522,19 @@ Interrupted and short writes are covered by host tests; filesystem and physical
 power-loss guarantees depend on the board's storage implementation and require
 separate qualification.
 
+### Expression pedal
+
+The Expression utility page selects a jack, shows live travel and calibration
+status, and captures its heel and toe. Setup assignments map movement to MIDI
+CCs with a range, direction and response curve. See the
+[expression pedal guide](../cntrl/maker/morningstar/mc/firmware/expression-pedal.md)
+for the setup fields, controls and hardware qualification limits.
+
+When expression assignments are present, setup flag bit 15 adds four 38-byte
+records between the bank indices and `CNAM`. Each record holds a 32-byte
+output name followed by channel, CC, minimum, maximum, reverse and curve bytes.
+A zero channel denotes an unassigned jack.
+
 ### Auxiliary patch-manager pages (format 26)
 
 The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test and Panic using

@@ -62,7 +62,7 @@ public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
-            || u32(bytes + 8) != length || bytes[19] > 31 || u32(bytes + 24) > 2147483000u
+            || u32(bytes + 8) != length || (bytes[19] & ~0x9f) || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 68 + np * 82;
@@ -91,6 +91,20 @@ public:
             || (right[R::tempo_font] != 8 && right[R::tempo_font] != 9) || right[R::status_font] > 2 || right[R::title_font] > 2
             || !right[R::digits] || right[R::digits] > 4 || right[R::decimals] > 2) return false;
         unsigned names = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
+        if (bytes[19] & 0x80) {
+            if (names + expression_section_size > length) return false;
+            for (unsigned i = 0; i < 4; ++i) {
+                const uint8_t *p = bytes + names + i * expression_record_size;
+                if (!p[32]) continue;
+                if (midi::TrsMode(bytes[meta + trs_modes_offset + i]) != midi::TrsMode::expression || !text_valid(p, 32)
+                    || !output_valid(bytes + meta + trs_modes_offset, p, hardware)
+                    || (!std::strcmp(reinterpret_cast<const char *>(p), "usb-device") && !(bytes[19] & 8))
+                    || (!std::strcmp(reinterpret_cast<const char *>(p), "usb-host") && !(bytes[19] & 16))
+                    || p[32] > 16 || p[33] > 127 || p[34] > p[35] || p[35] > 127
+                    || p[36] > 1 || p[37] > 2) return false;
+            }
+            names += expression_section_size;
+        }
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -230,11 +244,19 @@ public:
     UtilityPageSettings utility_pages() const {
         UtilityPageSettings settings;
         for (unsigned i = 0; i < UtilityPageSettings::count; ++i) settings.words[i] = u16(data_ + metadata() + utility_page_settings_offset + 2 * i);
+        if (data_[19] & 0x80) for (unsigned i = 0; i < 4; ++i) {
+            const uint8_t *p = bank(patches()) + i * expression_record_size;
+            auto &a = settings.expression[i];
+            std::memcpy(a.output, p, sizeof(a.output));
+            a.channel = p[32]; a.controller = p[33]; a.minimum = p[34]; a.maximum = p[35];
+            a.reverse = p[36]; a.curve = ExpressionCurve(p[37]);
+        }
         return settings;
     }
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
     bool usb_device_midi() const { return data_[19] & 8; }
+    unsigned expression_size() const { return (data_[19] & 0x80) ? expression_section_size : 0; }
     const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }
     bool usb_host_midi() const { return data_[19] & 16; }
     bool is_midi_interface() const { return data_[19] & 2; }

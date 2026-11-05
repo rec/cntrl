@@ -369,6 +369,7 @@ def compile_show(
             },
         )
         utility_settings = utility_pages.pack(show, target)
+        expression = utility_pages.pack_expression(show, target, TRS_JACKS)
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -436,7 +437,8 @@ def compile_show(
         + b''.join(struct.pack('<I', b) for b in banks)
     )
     body += (
-        b'CNAM'
+        expression
+        + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
         + display_records
@@ -462,7 +464,8 @@ def compile_show(
             | int(show.is_midi_interface) << 9
             | int(show.animation_color_cycle) << 10
             | int(show.usb_device_midi) << 11
-            | int(show.usb_host_midi) << 12,
+            | int(show.usb_host_midi) << 12
+            | (utility_pages.EXPRESSION_FLAG if expression else 0),
             crc32(body),
             show.screensaver_timeout * 1000,
         )

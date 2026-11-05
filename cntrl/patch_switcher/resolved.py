@@ -29,7 +29,7 @@ def graph_offset(data: bytes) -> int:
     if (
         magic != b'CSW1'
         or version != DOCUMENT_VERSION
-        or flags >> 13
+        or flags & ~(0x1FFF | utility_pages.EXPRESSION_FLAG)
         or length != len(data)
         or crc32(data[28:]) != crc
     ):
@@ -39,6 +39,8 @@ def graph_offset(data: bytes) -> int:
         raise ValueError('missing setup metadata')
     nb = struct.unpack_from('<H', data, meta + 4)[0]
     cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
+    if flags & utility_pages.EXPRESSION_FLAG:
+        cursor += utility_pages.EXPRESSION.size * 4
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -92,7 +94,12 @@ def export(data: bytes) -> str:
     }
     repeat = struct.unpack_from('<H', data, meta + 12)[0]
     result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
-    result['utility_pages'] = utility_pages.unpack(data, meta + 16)
+    pages = utility_pages.unpack(data, meta + 16)
+    if flags & utility_pages.EXPRESSION_FLAG:
+        pages['expression'] = utility_pages.unpack_expression(
+            data, meta + METADATA.size + ni * 64 + nb * 8 + np * 4, TRS_JACKS
+        )
+    result['utility_pages'] = pages
     modes = data[meta + METADATA.size - 4 : meta + METADATA.size]
     if any(m >= len(TRS_MODES) for m in modes):
         raise ValueError('invalid TRS port role')

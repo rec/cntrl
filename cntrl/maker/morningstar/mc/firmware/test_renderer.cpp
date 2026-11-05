@@ -815,7 +815,12 @@ static void test_utility_pages() {
     assert(!std::strcmp(view.lines[0].text, "TRS Ports"));
     assert(!std::strcmp(view.lines[1].text, "Jack 1: Off"));
     assert(!std::strcmp(view.lines[2].text, "MIDI Type A"));
+    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::expression);
+    pages.expression_status("Jack 2  CC 11 Ch 1", "50%  Calibrated", "C: Calibrate");
+    view = pages.view(4010, 4010000, status);
+    assert(!std::strcmp(view.lines[0].text, "Expression") && !std::strcmp(view.lines[2].text, "50%  Calibrated"));
     pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
+    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::expression);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::ports);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::panic);
     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::cable);

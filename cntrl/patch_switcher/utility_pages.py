@@ -84,3 +84,71 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         )
     result['digits'], result['decimals'] = w[19], w[20]
     return result
+
+
+def pack_expression(
+    show: models.Setup, target: models.Target, jacks: tuple[str, ...]
+) -> bytes:
+    assignments = show.utility_pages.expression
+    if not assignments:
+        return b''
+    data = bytearray(EXPRESSION.size * 4)
+    for jack, assignment in assignments.items():
+        if jack not in jacks or 'expression' not in target.trs_ports.get(jack, []):
+            raise ValueError(f'expression jack {jack} unavailable on target')
+        if show.trs_ports.get(jack) != 'expression':
+            raise ValueError(f'expression jack {jack} requires the expression TRS role')
+        if assignment.output not in target.outputs:
+            raise ValueError(
+                f'expression jack {jack}: unavailable output {assignment.output!r}'
+            )
+        if (
+            assignment.output == 'usb-device'
+            and not show.usb_device_midi
+            or assignment.output == 'usb-host'
+            and not show.usb_host_midi
+        ):
+            raise ValueError(
+                f'expression jack {jack}: disabled output {assignment.output!r}'
+            )
+        name = assignment.output.encode('ascii')
+        if not name or len(name) >= 32:
+            raise ValueError('expression output name must fit the MIDI output record')
+        EXPRESSION.pack_into(
+            data,
+            EXPRESSION.size * jacks.index(jack),
+            name,
+            assignment.channel,
+            assignment.controller,
+            assignment.minimum,
+            assignment.maximum,
+            assignment.reverse,
+            CURVES.index(assignment.curve),
+        )
+    return bytes(data)
+
+
+def unpack_expression(
+    data: bytes, offset: int, jacks: tuple[str, ...]
+) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for i in range(4):
+        output, channel, cc, low, high, reverse, curve = EXPRESSION.unpack_from(
+            data, offset + i * EXPRESSION.size
+        )
+        if channel:
+            result[jacks[i]] = dict(
+                output=output.split(b'\0')[0].decode('ascii'),
+                channel=channel,
+                controller=cc,
+                minimum=low,
+                maximum=high,
+                reverse=bool(reverse),
+                curve=CURVES[curve],
+            )
+    return result
+
+
+EXPRESSION = struct.Struct('<32s6B')
+EXPRESSION_FLAG = 1 << 15
+CURVES = ('linear', 'slow', 'fast')

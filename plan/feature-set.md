@@ -25,25 +25,6 @@ instead of hard-coded knowledge of particular instruments or effects.
 Dependencies below identify prerequisites, not a requirement to implement the
 entire plan. An item is complete only when its acceptance criteria are met.
 
-## 2. Expression-pedal input
-
-**Outcome:** An expression pedal sends MIDI CC messages for volume, wah, effect
-mix or another configured parameter.
-
-**Scope:** Implement calibration, stable sampling, heel/toe limits and
-assignment to MIDI CC numbers and channels. Provide per-assignment minimum,
-maximum, direction and response curve. Store calibration separately from setup-
-specific assignments. Show pedal position and calibration status. Define
-whether selecting a new assignment immediately sends its current value or waits
-for movement.
-
-**Dependencies:** The TRS Ports utility page provides socket role selection.
-
-**Acceptance:** Endpoints and reversed ranges produce the expected values;
-stationary input does not flood outputs; disconnected or uncalibrated inputs do
-not generate arbitrary changes. Verify full travel and noise behavior
-physically.
-
 ## 3. External auxiliary switches
 
 **Outcome:** External switches can invoke the same assignments as built-in
