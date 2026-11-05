@@ -348,6 +348,10 @@ Switches use A through E; F remains the context's Back control. `mode` defaults 
 requests On at press, Off at release. `latched` requires both and alternates on
 successive presses. On and Off may use different Patch types, outputs and channels.
 
+Press assignments also accept a `gestures` table for release, long press,
+double tap, their release patches and held repetition. See the timing,
+exclusivity and cancellation rules in [switch controls](momentary-latched.md#programmable-gestures).
+
 The full reachable graph determines ownership, including both branches and
 referenced sequences. Instrument program selections, Control Change, Pitch Bend
 and NRPN reserve their known controls. Other MIDI messages, including direct

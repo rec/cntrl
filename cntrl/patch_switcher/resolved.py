@@ -9,6 +9,10 @@ import tomlkit
 from . import midi_messages, utility_pages
 from .compiler import (
     DOCUMENT_VERSION,
+    GESTURE_EVENTS,
+    GESTURE_TIMINGS,
+    GESTURES,
+    GESTURES_FLAG,
     GRAPH,
     HEADER,
     METADATA,
@@ -29,7 +33,13 @@ def graph_offset(data: bytes) -> int:
     if (
         magic != b'CSW1'
         or version != DOCUMENT_VERSION
-        or flags & ~(0x1FFF | utility_pages.EXPRESSION_FLAG | utility_pages.CLOCK_FLAG)
+        or flags
+        & ~(
+            0x1FFF
+            | GESTURES_FLAG
+            | utility_pages.EXPRESSION_FLAG
+            | utility_pages.CLOCK_FLAG
+        )
         or length != len(data)
         or crc32(data[28:]) != crc
     ):
@@ -43,6 +53,8 @@ def graph_offset(data: bytes) -> int:
         cursor += utility_pages.EXPRESSION.size * 4
     if flags & utility_pages.CLOCK_FLAG:
         cursor += utility_pages.CLOCK.size
+    if flags & GESTURES_FLAG:
+        cursor += 5 * GESTURES.size
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -189,6 +201,23 @@ def export(data: bytes) -> str:
         if mode:
             value['mode'] = ('press', 'momentary', 'latched')[mode]
         value['on'] = _patch(data, offset, on, metadata, set())
+        if flags & GESTURES_FLAG:
+            address = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
+            if flags & utility_pages.EXPRESSION_FLAG:
+                address += utility_pages.EXPRESSION.size * 4
+            if flags & utility_pages.CLOCK_FLAG:
+                address += utility_pages.CLOCK.size
+            fields = GESTURES.unpack_from(data, address + button * GESTURES.size)
+            if fields[6]:
+                gesture: dict[str, object] = {
+                    t: fields[6 + j] / 1000 for j, t in enumerate(GESTURE_TIMINGS)
+                }
+                for j, event in enumerate(GESTURE_EVENTS):
+                    if fields[j] != 65535:
+                        gesture[event] = _patch(
+                            data, offset, fields[j], metadata, set()
+                        )
+                value['gestures'] = gesture
         if off != 65535:
             value['off'] = _patch(data, offset, off, metadata, set())
         switches[key] = value

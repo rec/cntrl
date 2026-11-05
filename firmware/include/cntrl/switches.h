@@ -1,5 +1,6 @@
 #pragma once
 #include "patch_executor.h"
+#include "switch_gestures.h"
 
 namespace cntrl {
 class Switches {
@@ -24,6 +25,7 @@ public:
             auto &s = states_[i];
             if (&s.executor == &invocation) continue;
             s.requested = false;
+            s.gesture.reset(); s.queued = 0;
             if (s.unknown) return midi::Bridge::Delivery::cancelled;
             if (s.executor.busy() || s.active || s.presses) done = false;
         }
@@ -37,10 +39,14 @@ public:
         for (unsigned i = 0; i < count_; ++i) {
             State &s = states_[i]; s.executor.cancel();
             s.record = document_.switch_assignment(i);
+            s.settings = document_.switch_gestures(s.record[0]);
+            s.gesture.reset(s.settings); s.queued = 0;
             s.requested = s.active = s.unknown = s.failed = false; s.presses = 0;
             s.resource_count = 0;
-            for (unsigned branch = 0; branch < (s.record[1] ? 2u : 1u); ++branch) {
-                if (!s.executor.start(document_, u16(s.record + 2 + branch * 2), s.record[1] != 0)) {
+            for (unsigned branch = 0; branch < (s.settings ? 7u : s.record[1] ? 2u : 1u); ++branch) {
+                unsigned node = branch && s.settings ? u16(s.settings + (branch - 1) * 2) : u16(s.record + 2 + branch * 2);
+                if (node == 65535) continue;
+                if (!s.executor.start(document_, node, s.record[1] != 0 || s.settings)) {
                     s.executor.cancel(); open_ = false; unpin(); return;
                 }
                 unsigned count = s.executor.resource_count();
@@ -62,7 +68,7 @@ public:
         }
         render();
     }
-    void button(unsigned button, bool down) {
+    void button(unsigned button, bool down, uint32_t now = 0) {
         if (!open_ || button >= 6) return;
         unsigned bit = 1u << button;
         if (bool(held_ & bit) == down) return;
@@ -72,6 +78,10 @@ public:
         if (closing_) return;
         for (unsigned i = 0; i < count_; ++i) {
             auto &s = states_[i]; if (s.record[0] != button || (disarmed_ & bit)) continue;
+            if (s.settings) {
+                if (!s.gesture.configured()) s.gesture.reset(s.settings);
+                s.gesture.input(down, now); continue;
+            }
             if (s.record[1] == 0) { if (down) ++s.presses; }
             else if (s.record[1] == 2) { if (down) s.requested = !s.requested; }
             else s.requested = down;
@@ -85,51 +95,69 @@ public:
             open_ = false; abandoned_ = true; unpin(); return;
         }
         closing_ = dirty_ = true;
-        for (auto &s : states_) s.requested = false;
+        for (auto &s : states_) { s.requested = false; s.gesture.reset(); s.queued = 0; }
     }
     void tick(uint32_t now = 0) {
         if (!open_) return;
         bool done = true;
         for (unsigned i = 0; i < count_; ++i) {
             auto &s = states_[i];
+            bool overflow = false;
+            s.gesture.tick(now, !s.executor.busy() && !s.queued, [&](unsigned event) {
+                unsigned node = event ? u16(s.settings + (event - 1) * 2) : u16(s.record + 2);
+                if (node == 65535) return;
+                if (s.queued == 16) { overflow = true; return; }
+                s.queue[s.queued++] = uint16_t(node); dirty_ = true;
+            });
+            if (overflow) {
+                s.gesture.reset(); s.queued = 0; s.failed = true; dirty_ = true;
+                disarmed_ |= held_ & (1u << s.record[0]);
+                hardware_.error("Switch gesture queue full");
+            }
             bool unavailable = false;
-            if (s.active || s.requested || s.executor.busy())
+            if (s.settings || s.active || s.requested || s.executor.busy() || s.queued)
                 for (unsigned r = 0; r < s.resource_count; ++r)
                     if (!outputs_.available(s.resources[r].output)) unavailable = true;
             if (unavailable) {
                 s.executor.cancel(); s.unknown = true; s.failed = false;
                 s.active = s.requested = false; s.presses = 0;
                 disarmed_ |= held_ & (1u << s.record[0]); dirty_ = true;
+                s.gesture.reset(); s.queued = 0;
             }
             if (s.executor.delaying() && s.record[1] && s.active && !s.requested)
                 s.executor.cancel();
             auto before = s.executor.status(); s.executor.tick(now);
             auto status = s.executor.status();
             if (before != status) dirty_ = true;
-            if (status == PatchExecutor::Status::completed && !s.active) s.resource_count = s.baseline_resources;
+            if (status == PatchExecutor::Status::completed && !s.active && !s.settings) s.resource_count = s.baseline_resources;
             if (status == PatchExecutor::Status::failed || status == PatchExecutor::Status::unknown) {
                 s.executor.cancel(); s.unknown = true; s.active = s.requested = false; s.presses = 0;
                 s.failed = status == PatchExecutor::Status::failed;
                 disarmed_ |= held_ & (1u << s.record[0]); dirty_ = true;
+                s.gesture.reset(); s.queued = 0;
             }
             if (!s.executor.busy()) {
                 bool press = s.record[1] == 0;
                 bool baseline = !press && s.unknown && s.requested;
-                if (press ? s.presses != 0 : baseline || s.requested != s.active) {
-                    unsigned node = u16(s.record + (press || (s.requested && !baseline) ? 2 : 4));
-                    if (s.executor.start(document_, node, !press)) {
+                if (s.queued || (press ? s.presses != 0 : baseline || s.requested != s.active)) {
+                    unsigned node = s.queued ? s.queue[0] : u16(s.record + (press || (s.requested && !baseline) ? 2 : 4));
+                    if (s.executor.start(document_, node, !press || s.settings)) {
                         if (!reserve(i)) {
                             s.executor.cancel(); s.failed = s.unknown = true;
                             s.active = s.requested = false; s.presses = 0;
+                            s.gesture.reset(); s.queued = 0;
                         } else {
-                            if (press) --s.presses; else s.active = !baseline && s.requested;
+                            if (s.queued) {
+                                --s.queued;
+                                for (unsigned q = 0; q < s.queued; ++q) s.queue[q] = s.queue[q + 1];
+                            } else if (press) --s.presses; else s.active = !baseline && s.requested;
                             s.unknown = s.failed = false;
                         }
                     }
                     dirty_ = true;
                 }
             }
-            if (s.executor.busy() || s.active || s.requested || s.presses) done = false;
+            if (s.executor.busy() || s.active || s.requested || s.presses || s.queued) done = false;
         }
         if (closing_ && done) {
             for (unsigned i = 0; i < count_; ++i) if (states_[i].unknown) abandoned_ = true;
@@ -147,6 +175,10 @@ private:
         unsigned resource_count = 0, baseline_resources = 0;
         const uint8_t *record = nullptr;
         unsigned presses = 0;
+        SwitchGestures gesture;
+        const uint8_t *settings = nullptr;
+        uint16_t queue[16] = {};
+        unsigned queued = 0;
         bool requested = false, active = false, unknown = false, failed = false;
     };
     Hardware &hardware_; PatchOutputs &outputs_; PatchSources &sources_; Document document_;
@@ -183,7 +215,7 @@ private:
         Pane panes[3];
         for (unsigned i = 0; i < count_; ++i) {
             const auto &s = states_[i]; Pane view; view.graphics = document_.graphics(1);
-            const char *state = s.failed ? "Failed / unknown" : s.unknown ? "Unknown remote state" : s.executor.busy() || s.presses || s.requested != s.active
+            const char *state = s.failed ? "Failed / unknown" : s.unknown ? "Unknown remote state" : s.executor.busy() || s.presses || s.queued || s.requested != s.active
                 ? "Pending" : s.record[1] == 0 ? "Completed locally" : s.active ? "On" : "Off";
             document_.page_record(view, u16(s.record + 70), 0, false, state);
             unsigned pane = s.record[0] % 3, group = s.record[0] / 3;

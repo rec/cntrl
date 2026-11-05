@@ -36,6 +36,61 @@ inline program selections, sequences and stable references such as
 aliases; other MIDI variants name their output directly. Definitions are keyed
 by `patches.clean`, independently of their display labels.
 
+## Programmable gestures
+
+A `press` assignment can include a `gestures` table. `on` is its single-press
+patch. The six optional gesture patches accept the same Patch representation.
+
+```toml
+[switches.lead]
+button = 'A'
+on = { patch = 'clean' }
+
+[switches.lead.gestures]
+release = { patch = 'clean-release' }
+long_press = { patch = 'solo' }
+long_release = { patch = 'solo-release' }
+double_tap = { patch = 'boost' }
+double_release = { patch = 'boost-release' }
+repeat = { patch = 'step' }
+debounce = '20 ms'
+long_delay = '500 ms'
+double_delay = '300 ms'
+repeat_interval = '100 ms'
+```
+
+Those timing values are the defaults. Times have millisecond resolution and
+must be at least the debounce interval. The debounce interval is 1 to 1000 ms,
+and the other intervals are at most 65.535 seconds.
+
+Without long press, double tap or repeat, `on` runs as soon as the press has
+debounced. An assignment without `gestures` keeps its existing immediate input
+handling. With long press or repeat, a short press runs `on` followed by
+`release` when released. Holding through `long_delay` runs `long_press`, then
+`repeat` if configured, and repeats at `repeat_interval` until release, when
+`long_release` runs. The long gesture excludes `on` and `release`.
+
+With `double_tap`, a short first release starts the double-tap window. A second
+debounced press strictly before `double_delay` runs `double_tap`, and its release
+runs `double_release`. That pair excludes the single and long gesture patches.
+Otherwise, when the window expires, `on` and `release` run in order. This adds
+up to `double_delay` after the first release to single-tap latency, plus input
+debouncing and the normal service interval. A press exactly at the deadline
+starts a new tap. `long_release` requires `long_press` or `repeat`, and
+`double_release` requires `double_tap`. Omit any unneeded patch.
+
+The gestures table is available only in `press` mode. Gesture patches stay in
+the switch context, so stock-firmware visits and menu/back navigation are
+rejected, including through references and sequences. F cancels pending
+recognition and queued gesture actions while already accepted work completes.
+Held entry switches require release before rearming. Disconnect or execution
+failure cancels pending gestures, and reconnection waits for a fresh press.
+
+Each assignment has a 16-action queue. Held repeats coalesce while an action is
+pending and resume without catching up missed intervals. If physical input
+fills the queue, the assignment reports an error and cancels its queued work.
+It rearms after release. MIDI delivery continues through the shared executor.
+
 Persistent assignments reserve the controls their reachable patches affect.
 Notes, pressure, direct Program Change, system messages and SysEx reserve their entire destination output until Off cleanup or
 explicit abandonment. Other assignments cannot share those reserved resources.

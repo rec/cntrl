@@ -1226,7 +1226,7 @@ void poll_target() {
         if (!consumed) {
             for (unsigned i = 0; i < 6; ++i) {
 #if CNTRL_SWITCHES
-                if (board.switches.open() && (events[i] & release_event)) board.switches.button(i, false);
+                if (board.switches.open() && (events[i] & release_event)) board.switches.button(i, false, now);
 #endif
                 if (module_controls_locked) continue;
                 if (module_menu.open()) {
@@ -1238,8 +1238,8 @@ void poll_target() {
                     }
 #if CNTRL_SWITCHES
                 } else if (board.switches.open()) {
-                    if (events[i] & press_event) board.switches.button(i, true);
-                    if (events[i] & release_event) board.switches.button(i, false);
+                    if (events[i] & press_event) board.switches.button(i, true, now);
+                    if (events[i] & release_event) board.switches.button(i, false, now);
 #endif
                 } else if (songs_ui.open()) {
                     constexpr UiOperation operations[] = {UiOperation::songs_previous, UiOperation::songs_next,

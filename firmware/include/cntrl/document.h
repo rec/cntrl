@@ -63,7 +63,7 @@ public:
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
-            || u32(bytes + 8) != length || (bytes[19] & ~0xbf) || u32(bytes + 24) > 2147483000u
+            || u32(bytes + 8) != length || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
         unsigned meta = 76 + ni * 68 + nc * 68 + np * 82;
@@ -123,6 +123,8 @@ public:
                 if (bpm && (bpm < 20 || bpm > 600 || (i > R::slot1 && !right.words[i - 1]))) return false;
             }
         }
+        unsigned gestures = names;
+        if (bytes[19] & 0x40) names += 100;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -136,6 +138,25 @@ public:
         if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware)) return false;
         unsigned switch_count = u16(bytes + graph + 10);
         unsigned switch_start = graph + 16 + u16(bytes + graph + 8) * 4 + np * 2;
+        if (bytes[19] & 0x40) {
+            for (unsigned b = 0; b < 5; ++b) {
+                const uint8_t *p = bytes + gestures + b * 20;
+                bool configured = u16(p + 12) != 0, assigned = false;
+                for (unsigned i = 0; i < switch_count; ++i) {
+                    const uint8_t *s = bytes + switch_start + i * 72;
+                    if (s[0] == b && s[1] == 0) assigned = true;
+                }
+                if (configured && !assigned) return false;
+                for (unsigned j = 0; j < 6; ++j)
+                    if (u16(p + j * 2) != 65535 && (!configured || u16(p + j * 2) >= u16(bytes + graph + 8))) return false;
+                if (configured) {
+                    unsigned debounce = u16(p + 12);
+                    if (debounce > 1000 || u16(p + 14) < debounce || u16(p + 16) < debounce || u16(p + 18) < debounce
+                        || (u16(p + 4) != 65535 && u16(p + 2) == 65535 && u16(p + 10) == 65535)
+                        || (u16(p + 8) != 65535 && u16(p + 6) == 65535)) return false;
+                }
+            }
+        }
         end += u32(bytes + graph + 4);
         if (end + 16 > length || std::memcmp(bytes + end, "CDSP", 4)) return false;
         unsigned styles = end + 16, ns = u16(bytes + end + 4), pages = u16(bytes + end + 6);
@@ -276,7 +297,12 @@ public:
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
     bool usb_device_midi() const { return data_[19] & 8; }
-    unsigned utility_section_size() const { return ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0); }
+    unsigned utility_section_size() const { return ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0) + ((data_[19] & 0x40) ? 100 : 0); }
+    const uint8_t *switch_gestures(unsigned button) const {
+        if (!(data_[19] & 0x40)) return nullptr;
+        const uint8_t *p = bank(patches()) + utility_section_size() - 100 + button * 20;
+        return u16(p + 12) ? p : nullptr;
+    }
     const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }
     bool usb_host_midi() const { return data_[19] & 16; }
     bool is_midi_interface() const { return data_[19] & 2; }

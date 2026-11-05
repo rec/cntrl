@@ -217,6 +217,8 @@ def compile_show(
     switch_records: list[bytes] = []
     switch_views: list[display.DisplayPatch] = []
     assignments: list[tuple[str, models.SwitchAssignment, int, int]] = []
+    gesture_records = [GESTURES.pack(*([65535] * 6), 0, 0, 0, 0) for _ in range(5)]
+    gesture_assignments: list[tuple[str, models.SwitchAssignment, int, int]] = []
     buttons: set[str] = set()
     for key, raw in show.switches.items():
         path = f'switches.{key}'
@@ -237,6 +239,22 @@ def compile_show(
             else 65535
         )
         assignments.append((key, assignment, on, off))
+        if assignment.gestures is not None:
+            gesture = assignment.gestures
+            events: list[int] = []
+            for event in GESTURE_EVENTS:
+                value = getattr(gesture, event)
+                node = (
+                    compiler.add(value, f'{path}.gestures.{event}')
+                    if value is not None
+                    else 65535
+                )
+                events.append(node)
+                if node != 65535:
+                    gesture_assignments.append((key, assignment, node, 65535))
+            gesture_records[ord(assignment.button) - ord('A')] = GESTURES.pack(
+                *events, *(round(getattr(gesture, t) * 1000) for t in GESTURE_TIMINGS)
+            )
         name = key if assignment.name is None else assignment.name
         switch_records.append(
             SWITCH.pack(
@@ -263,7 +281,7 @@ def compile_show(
             )
         )
     compiler.named = named
-    compiler.validate(assignments)
+    compiler.validate(assignments + gesture_assignments)
     for index, patch_cycle, path in compiler.browser:
         patch, presentation = compiler.presentation(index)
         label = presentation.display_name or presentation.name or compiler.labels[patch]
@@ -437,9 +455,15 @@ def compile_show(
         + b''.join(identities + mappings)
         + b''.join(struct.pack('<I', b) for b in banks)
     )
+    gestures = (
+        b''.join(gesture_records)
+        if any(a.gestures is not None for _, a, _, _ in assignments)
+        else b''
+    )
     body += (
         expression
         + clock
+        + gestures
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -468,7 +492,8 @@ def compile_show(
             | int(show.usb_device_midi) << 11
             | int(show.usb_host_midi) << 12
             | (utility_pages.EXPRESSION_FLAG if expression else 0)
-            | (utility_pages.CLOCK_FLAG if clock else 0),
+            | (utility_pages.CLOCK_FLAG if clock else 0)
+            | (GESTURES_FLAG if gestures else 0),
             crc32(body),
             show.screensaver_timeout * 1000,
         )
@@ -1049,7 +1074,7 @@ class PatchCompiler:
             for value, path, source in leaves[on] + (
                 [] if off == 65535 else leaves[off]
             ):
-                if assignment.mode != 'press' and (
+                if (assignment.mode != 'press' or assignment.gestures is not None) and (
                     isinstance(value, models.StockFirmware)
                     or isinstance(value, models.Navigation)
                     and value.operation in ('menu', 'back')
@@ -1146,6 +1171,17 @@ def _name_record(text: str | None, path: str, errors: list[str]) -> bytes:
 
 GRAPH = struct.Struct('<4sIHHHH')
 SWITCH = struct.Struct('<BBHH64sH')
+GESTURES_FLAG = 1 << 14
+GESTURES = struct.Struct('<10H')
+GESTURE_EVENTS = (
+    'release',
+    'long_press',
+    'long_release',
+    'double_tap',
+    'double_release',
+    'repeat',
+)
+GESTURE_TIMINGS = ('debounce', 'long_delay', 'double_delay', 'repeat_interval')
 NAMED = struct.Struct('<64sH')
 STATE_OPERATIONS = {
     n: i + 1

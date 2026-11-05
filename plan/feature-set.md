@@ -112,23 +112,6 @@ converted output out of its own input path.
 remain valid; transformed Note On messages have matching Note Off messages.
 Test multiple rules, real-time interleaving and bounded processing under load.
 
-## 8. Programmable switch gestures
-
-**Outcome:** A switch can invoke separate patches for press, release, long
-press, double tap and their release variants, plus repeated actions while held.
-
-**Scope:** Extend the existing assignment engine with configurable gesture
-timing. Specify which events are mutually exclusive and which occur in
-sequence. Keep immediate press behavior available when no delayed gesture is
-configured. Expose the latency introduced by double-tap recognition in the
-documentation.
-
-**Dependencies:** None. Item 3 supplies additional inputs when available.
-
-**Acceptance:** Boundary timings, bounce, held-entry rearming and cancellation
-produce deterministic actions. A double tap cannot accidentally also execute an
-exclusive single-tap action. Repetition remains bounded under backpressure.
-
 ## 9. Engagement hooks and grouped switch states
 
 **Outcome:** Assignments can react to entering or leaving an active selection,
@@ -140,7 +123,7 @@ assignment to set another assignment's state through the same state engine.
 Define execution order, repeat-selection behavior, persistence across
 navigation and cleanup before implementing the schema.
 
-**Dependencies:** None; item 8 is needed only for gesture-triggered shifts.
+**Dependencies:** None. Programmable switch gestures support gesture-triggered shifts.
 
 **Acceptance:** Group transitions run each required hook once; indirect state
 changes cannot recurse indefinitely; display state follows local execution and
@@ -260,8 +243,8 @@ offline workflow separately from serialization tests.
 
 ## Suggested implementation order
 
-Start with programmable switch gestures and counters (items 8 and 13), which
-extend existing execution paths without new physical inputs.
+Start with counters (item 13), which extend existing execution paths without
+new physical inputs.
 Next implement clock generation, waveforms and timed sequences (10 through 12).
 Routing and conversion (6 and 7) form a separate increment. Grouped switch
 state (9) can follow once its transition rules are agreed.

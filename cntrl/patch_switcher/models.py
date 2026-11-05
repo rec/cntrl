@@ -378,6 +378,58 @@ class FontFace(BaseModel, frozen=True):
     asset: int = 0
 
 
+class SwitchGestures(BaseModel, frozen=True):
+    release: Patch | None = None
+    long_press: Patch | None = None
+    long_release: Patch | None = None
+    double_tap: Patch | None = None
+    double_release: Patch | None = None
+    repeat: Patch | None = None
+    debounce: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=1),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.02
+    long_delay: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.5
+    double_delay: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.3
+    repeat_interval: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.1
+
+    @model_validator(mode='after')
+    def paired_events(self) -> 'SwitchGestures':
+        if (
+            self.long_release is not None
+            and self.long_press is None
+            and self.repeat is None
+        ):
+            raise ValueError('long_release requires long_press or repeat')
+        if self.double_release is not None and self.double_tap is None:
+            raise ValueError('double_release requires double_tap')
+        if (
+            min(self.long_delay, self.double_delay, self.repeat_interval)
+            < self.debounce
+        ):
+            raise ValueError('gesture timings must be at least debounce')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class SwitchAssignment(BaseModel, frozen=True):
     name: str | None = None
     button: Literal['A', 'B', 'C', 'D', 'E']
@@ -385,9 +437,12 @@ class SwitchAssignment(BaseModel, frozen=True):
     on: Patch
     off: Patch | None = None
     style: Style | None = None
+    gestures: SwitchGestures | None = None
 
     @model_validator(mode='after')
     def cleanup(self) -> 'SwitchAssignment':
+        if self.gestures is not None and self.mode != 'press':
+            raise ValueError('gestures require press mode')
         if self.mode == 'press' and self.off is not None:
             raise ValueError('press switches forbid off')
         if self.mode != 'press' and self.off is None:
