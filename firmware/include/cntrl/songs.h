@@ -507,7 +507,7 @@ private:
     static bool valid_selection(const SongSelection &s) {
         return s.occurrence && (!s.label[0] || label_valid(reinterpret_cast<const uint8_t *>(s.label), sizeof(s.label))) && (s.document[0]
             ? s.source == 0xffffffff && text_valid(reinterpret_cast<const uint8_t *>(s.document), 64) && setup_name(s.document)
-                && text_valid(reinterpret_cast<const uint8_t *>(s.key), 64)
+                && label_valid(reinterpret_cast<const uint8_t *>(s.key), 64)
             : !s.key[0] && s.source < 0xfffffffe && s.node < 65535);
     }
     bool advance_after_return() {

@@ -364,7 +364,7 @@ def decode(data: bytes) -> Library:
 
 
 def _string(value: bytes) -> str:
-    return value.split(b'\0')[0].decode('ascii')
+    return value.split(b'\0')[0].decode('utf-8')
 
 
 def _rebind(
@@ -377,7 +377,11 @@ def _rebind(
     work = [result]
     while work:
         item = work.pop()
-        if item.get('type') == 'program-change' and 'instrument' in item:
+        if 'parent' in item:
+            item['parent'] = _qualified(prefix, str(item['parent']), 63)
+        if 'instrument' in item and (
+            item.get('type') == 'program-change' or 'parent' in item
+        ):
             item['instrument'] = _qualified(prefix, str(item['instrument']), 31)
         elif 'patch' in item and not item.get('document'):
             item['patch'] = _qualified(prefix, str(item['patch']), 63)
@@ -402,10 +406,13 @@ def _rebind(
 
 def _qualified(prefix: str, name: str, maximum: int) -> str:
     value = prefix + name
-    if len(value) <= maximum:
+    if len(value.encode()) <= maximum:
         return value
     suffix = f'-{crc32(name.encode()):08x}'
-    return prefix + name[: maximum - len(prefix) - len(suffix)] + suffix
+    stem = name.encode()[: maximum - len(prefix) - len(suffix)].decode(
+        'utf-8', errors='ignore'
+    )
+    return prefix + stem + suffix
 
 
 def references(library: Library) -> list[str]:

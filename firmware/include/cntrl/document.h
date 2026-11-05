@@ -297,7 +297,7 @@ private:
         }
         for (unsigned i = 0; i < named; ++i) {
             const uint8_t *n = g + names + i * 66;
-            if (!text_valid(n, 64) || u16(n + 64) >= count) return false;
+            if (!label_valid(n, 64) || u16(n + 64) >= count) return false;
             for (unsigned j = 0; j < i; ++j) if (!std::strcmp(reinterpret_cast<const char *>(n),
                 reinterpret_cast<const char *>(g + names + j * 66))) return false;
         }
@@ -350,7 +350,7 @@ private:
                 for (unsigned j = 0; j < u16(p); ++j) if (u16(p + 2 + j * 2) >= count) return false;
                 break;
             case 6:
-                if (n[1] || length != 128 || (p[0] && !text_valid(p, 64)) || !text_valid(p + 64, 64)) return false;
+                if (n[1] || length != 128 || (p[0] && !text_valid(p, 64)) || !label_valid(p + 64, 64)) return false;
                 if (!p[0]) {
                     bool found = false;
                     for (unsigned j = 0; j < named; ++j)

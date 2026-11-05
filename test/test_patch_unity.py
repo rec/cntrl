@@ -539,3 +539,85 @@ def test_compiled_raw_message_exports_as_its_named_type(
     exported = tomlkit.parse(resolved.export(bytes(legacy))).unwrap()
     assert exported['patches']['event'] == patch
     assert compiler.compile_show(exported, {}, [], target) == compiled
+
+
+@pytest.mark.parametrize(
+    ('definitions', 'error'),
+    [
+        ({'A': {'parent': 'missing'}}, 'unknown parent'),
+        ({'A': {'parent': 'B'}, 'B': {'parent': 'A'}}, 'parent cycle'),
+        ({'A': {'patches': [{'parent': 'A'}]}}, 'parent cycle'),
+        (
+            {
+                'A': {'type': 'start', 'output': 'din'},
+                'B': {'parent': 'A', 'volume': 100},
+            },
+            'volume',
+        ),
+        ({'A': {'type': 'derived', 'volume': 100}}, 'parent'),
+    ],
+)
+def test_invalid_derivation_is_rejected(
+    target: models.Target, definitions: dict[str, object], error: str
+) -> None:
+    with pytest.raises(compiler.CompilationError, match=error):
+        compiler.compile_show({'patches': definitions}, {}, [], target)
+
+
+def test_chained_and_inline_derivations_inherit_and_validate(
+    target: models.Target,
+) -> None:
+    definitions = {
+        'base': {
+            'type': 'note-on',
+            'output': 'din',
+            'channel': 1,
+            'note': 64,
+            'velocity': 20,
+        },
+        'loud': {'parent': 'base', 'velocity': 90},
+    }
+    inline = {'parent': 'loud', 'note': 65}
+    compiled = compiler.compile_show(
+        {
+            'patches': definitions,
+            'switches': {'play': {'button': 'A', 'on': {'patches': [inline]}}},
+        },
+        {},
+        [],
+        target,
+    )
+    assert bytes.fromhex('90415a') in compiled
+    exported = tomlkit.parse(resolved.export(compiled)).unwrap()
+    assert exported['switches']['play']['on']['patches'] == [inline]
+    assert compiler.compile_show(exported, {}, [], target) == compiled
+
+
+def test_download_keeps_a_pedal_volume_edit_as_an_override(
+    target: models.Target,
+) -> None:
+    patches = {
+        'A': {
+            'type': 'program-change',
+            'instrument': 'piano',
+            'program': 7,
+            'volume': 80,
+        },
+        'loud': {'parent': 'A', 'volume': 100},
+    }
+    compiled = compiler.compile_show(
+        {'instruments': {'piano': {'output': 'din', 'channel': 1}}, 'patches': patches},
+        {},
+        [],
+        target,
+    )
+    edited = bytearray(compiled)
+    graph = resolved.graph_offset(compiled)
+    node = (
+        graph + struct.unpack_from('<I', compiled, graph + compiler.GRAPH.size + 4)[0]
+    )
+    edited[node + 4 + 5] = 105
+    struct.pack_into('<I', edited, 20, crc32(edited[28:]))
+    downloaded = tomlkit.parse(resolved.export(bytes(edited))).unwrap()
+    assert downloaded['patches']['loud'] == {'parent': 'A', 'volume': 105}
+    compiler.compile_show(downloaded, {}, [], target)

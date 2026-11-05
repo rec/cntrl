@@ -62,6 +62,41 @@ def normalize_patch(value: object) -> models.Patch:
     return models.patch_adapter.validate_python(value)
 
 
+def resolve_derivation(
+    value: models.Patch,
+    definitions: dict[str, object],
+    path: str,
+    parents: tuple[str, ...] = (),
+) -> models.ConcretePatch:
+    if isinstance(value, models.Sequence):
+        return value.model_copy(
+            update={
+                'patches': [
+                    resolve_derivation(p, definitions, path, parents)
+                    for p in value.patches
+                ]
+            }
+        )
+    if not isinstance(value, models.Derived):
+        return value
+    key = value.parent
+    if key in parents:
+        raise CompilationError(
+            [f'{path}: parent cycle: {" -> ".join((*parents, key))}']
+        )
+    if key not in definitions:
+        raise CompilationError([f'{path}: unknown parent {key!r}'])
+    try:
+        parent = resolve_derivation(
+            normalize_patch(definitions[key]), definitions, path, (*parents, key)
+        )
+        fields = parent.model_dump(exclude_unset=True) | (value.model_extra or {})
+        merged = type(parent).model_validate(fields)
+    except ValidationError as error:
+        raise CompilationError(_validation_errors(path, error)) from error
+    return resolve_derivation(merged, definitions, path, (*parents, key))
+
+
 def compile_show(
     document: object,
     definitions: object,
@@ -135,7 +170,7 @@ def compile_show(
     )
     named: dict[str, int] = {}
     for key, raw in show.patches.items():
-        _text(key, 64, target, f'patches.{key}', errors)
+        _text(key, 64, target, f'patches.{key}', errors, unicode=True)
         if (index := compiler.parse(raw, f'patches.{key}', key)) is not None:
             named[key] = index
     patch_cycles: list[bytes] = []
@@ -317,6 +352,7 @@ def compile_show(
                     if i in compiler.program_metadata
                     else {}
                 )
+                | compiler.derivations.get(i, {})
                 for i, p in enumerate(compiler.values)
             },
         )
@@ -441,7 +477,7 @@ class PatchCompiler:
             instruments,
         )
         self.target, self.errors, self.documents = target, errors, documents
-        self.values: list[models.Patch] = []
+        self.values: list[models.ConcretePatch] = []
         self.nodes: list[bytes] = []
         self.paths: list[str] = []
         self.labels: list[str] = []
@@ -451,6 +487,7 @@ class PatchCompiler:
             int, tuple[bytes, int, str | None, str | None, display.DisplayPatch]
         ] = {}
         self.browser: list[tuple[int, str, str]] = []
+        self.derivations: dict[int, dict[str, object]] = {}
         self.program_metadata: dict[int, dict[str, object]] = {}
         self.program_names: dict[
             tuple[str, str, int, int | None], list[str | None]
@@ -474,6 +511,7 @@ class PatchCompiler:
             path.startswith('patch_cycles.')
             and isinstance(raw, dict)
             and 'type' not in raw
+            and 'parent' not in raw
             and 'patch' not in raw
             and 'patches' not in raw
             and 'operation' not in raw
@@ -515,6 +553,16 @@ class PatchCompiler:
         return self.add(value, path, name)
 
     def add(self, value: models.Patch, path: str, name: str | None = None) -> int:
+        if isinstance(value, models.Derived):
+            concrete = resolve_derivation(value, self.show.patches, path)
+            index = self.add(concrete, path, name)
+            metadata: dict[str, object] = {
+                '_derived': {'parent': value.parent, **(value.model_extra or {})}
+            }
+            if index in self.programs:
+                metadata['_derived_program'] = self.nodes[index][4:].hex()
+            self.derivations[index] = metadata
+            return index
         for key in ('name', 'display_name'):
             if (text := getattr(value, key)) is not None:
                 _text(
@@ -554,7 +602,14 @@ class PatchCompiler:
                 _text(value.document, 64, self.target, path + '.document', self.errors)
                 if value.document
                 else b'',
-                _text(value.patch, 64, self.target, path + '.patch', self.errors),
+                _text(
+                    value.patch,
+                    64,
+                    self.target,
+                    path + '.patch',
+                    self.errors,
+                    unicode=True,
+                ),
             )
         elif isinstance(value, models.StockFirmware):
             kind, payload = 4, bytes((value.button_mask,))
@@ -813,6 +868,10 @@ class PatchCompiler:
                 and isinstance(named := raw.get('patches'), dict)
                 and isinstance(target := named.get(value.patch), dict)
             ):
+                if 'parent' in target:
+                    target = resolve_derivation(
+                        normalize_patch(target), named, f'patches.{value.patch}'
+                    ).model_dump(exclude_unset=True)
                 for k in models.Presentation.model_fields:
                     if k not in value.model_fields_set and k in target:
                         fields[k] = target[k]
@@ -838,6 +897,8 @@ class PatchCompiler:
         while pending:
             value, path, document, chain = pending.pop()
             current = documents[document]
+            if isinstance(value, models.Derived):
+                value = resolve_derivation(value, current.patches, path)
             if isinstance(value, models.Sequence):
                 pending.extend(
                     (p, f'{path}.patches[{i}]', document, chain)
@@ -1046,7 +1107,7 @@ class PatchCompiler:
             + b''.join(struct.pack('<I', o) for o in offsets)
             + b''.join(struct.pack('<H', r) for r in roots)
             + b''.join(switches)
-            + b''.join(NAMED.pack(k.encode('ascii'), v) for k, v in self.named.items())
+            + b''.join(NAMED.pack(k.encode('utf-8'), v) for k, v in self.named.items())
             + b''.join(self.nodes)
         )
 

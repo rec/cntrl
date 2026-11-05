@@ -237,6 +237,47 @@ Switch-only setups can omit instruments, definitions, named patches and patch cy
 when their patches do not use them. Named definitions have stable keys; their
 dictionary order does not define the browser order. `patch_cycles` supplies that order.
 
+## Derived patches in songs
+
+A derived patch names a local patch as its `parent`. It inherits the parent's
+fields and replaces the fields it specifies. Each override must be valid for
+the parent's concrete patch type. A parent may itself derive from another
+named patch. Forward references work; missing parents and cycles are errors.
+
+```toml
+[instruments.piano]
+output = 'din'
+channel = 1
+
+[patches.A]
+type = 'program-change'
+instrument = 'piano'
+program = 7
+volume = 80
+
+[patches."A′"]
+parent = 'A'
+volume = 100
+display_name = "A'"
+
+[[songs]]
+id = 1
+name = 'Example'
+patches = [{patch = 'A′'}, {patch = 'A'}, {patch = 'A′'}]
+```
+
+Writing `type = 'derived'` alongside `parent` is optional. In the song list,
+`patch` selects a named patch. Every press plays a complete selection, so A′
+can be first. The example sends program 7 at volumes 100, 80 and 100.
+The ASCII display name works with the classic font; the patch key uses the
+typographic prime.
+
+Inheritance is resolved when compiling the setup or song library. Editing A
+and recompiling updates its variations. Downloading preserves the parent and
+authored overrides. Volume and pan adjustments on the pedal export as overrides.
+An edit that changes the program or bank, or clears an inherited setting,
+exports the edited program in full.
+
 ## Patch types
 
 | Type | Required fields | Optional executable fields |

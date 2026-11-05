@@ -237,7 +237,14 @@ class Reference(Presentation, frozen=True):
     document: str | None = None
 
 
-Patch = (
+class Derived(BaseModel, frozen=True):
+    parent: str
+    type: Literal['derived'] = 'derived'
+    # Overrides are checked against the parent's concrete patch type at compile time.
+    model_config = ConfigDict(extra='allow')
+
+
+ConcretePatch = (
     Reference
     | Sequence
     | Annotated[
@@ -264,6 +271,7 @@ Patch = (
         Field(discriminator='type'),
     ]
 )
+Patch = Derived | ConcretePatch
 Sequence.model_rebuild()
 patch_adapter = TypeAdapter(Patch)
 

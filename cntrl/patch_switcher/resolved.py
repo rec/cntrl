@@ -132,7 +132,7 @@ def export(data: bytes) -> str:
     for _ in range(nn):
         key, index = NAMED.unpack_from(data, cursor)
         cursor += NAMED.size
-        identity = key.split(b'\0')[0].decode('ascii')
+        identity = key.split(b'\0')[0].decode('utf-8')
         named_nodes[identity] = index
         named[identity] = _patch(data, offset, index, metadata, set())
     result['patches'] = named
@@ -215,11 +215,27 @@ def _patch(
     cursor = address + 4
     if cursor + size > offset + section_size:
         raise ValueError('truncated Patch node')
-    value: dict[str, object] = {
-        k: v
-        for k, v in cast(dict[str, object], metadata.get(str(index), {})).items()
-        if k != '_program'
-    }
+    properties = cast(dict[str, object], metadata.get(str(index), {}))
+    if isinstance(authored := properties.get('_derived'), dict):
+        if kind != 1:
+            return dict(authored)
+        original = bytes.fromhex(str(properties['_derived_program']))
+        current = data[cursor : cursor + size]
+        if original == current:
+            return dict(authored)
+        # Volume and pan edits are expressible as ordinary overrides.
+        if original[:5] == current[:5] and original[7:] == current[7:]:
+            variation = dict(authored)
+            for field, position, bias in (('volume', 5, 0), ('pan', 6, 64)):
+                if current[position] != original[position]:
+                    if current[position] == 255:
+                        break
+                    variation[field] = current[position] - bias
+            else:
+                return variation
+        # Export the actual program when an edit changes its catalogue identity
+        # or clears an inherited setting (TOML has no null override).
+    value = {k: v for k, v in properties.items() if not k.startswith('_')}
     if kind == 1:
         instrument, program, msb, lsb, volume, pan, bank = struct.unpack_from(
             '<HBBBBBI', data, cursor
@@ -337,7 +353,7 @@ def _original_label(
         key, node = NAMED.unpack_from(data, cursor)
         cursor += NAMED.size
         if node == index:
-            return key.split(b'\0')[0].decode('ascii')
+            return key.split(b'\0')[0].decode('utf-8')
     bank = origin.get('bank')
     return (
         f'PC {origin["program"]}'

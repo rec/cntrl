@@ -381,3 +381,44 @@ def test_song_library_transfer_against_cpp_receiver(
 
 
 COMPANIONS = {'pman': {'patches': {'clean': {'type': 'start', 'output': 'din'}}}}
+
+
+@pytest.mark.parametrize('explicit', [False, True])
+def test_song_can_start_with_a_derived_patch_and_reuse_its_parent(
+    target: models.Target, explicit: bool
+) -> None:
+    base = {'type': 'program-change', 'instrument': 'piano', 'program': 7, 'volume': 80}
+    variation: dict[str, object] = {'parent': 'A', 'volume': 100, 'display_name': "A'"}
+    library = songs.Library.model_validate(
+        {
+            'instruments': {'piano': {'output': 'din', 'channel': 2}},
+            'patches': {
+                'A′': variation | ({'type': 'derived'} if explicit else {}),
+                'A': base,
+            },
+            'songs': [
+                {
+                    'id': 1,
+                    'name': 'Example',
+                    'patches': [{'patch': k} for k in ('A′', 'A', 'A′')],
+                }
+            ],
+        }
+    )
+    data = songs.encode(library, target)
+    restored = songs.decode(data)
+    assert restored.patches['A′'] == variation
+    assert [p['patch'] for p in restored.songs[0].patches] == ['A′', 'A', 'A′']
+    assert songs.encode(restored, target) == data
+
+    for program in (7, 12):
+        base['program'] = program
+        restored.patches['A'] = base
+        data = songs.encode(restored, target)
+        # The browser records in the embedded setup are the executable selections.
+        source = data[data.index(b'CSW1') :]
+        start = 76 + 68 + 68  # One instrument and one patch cycle.
+        assert [
+            (source[start + i * 82 + 4] + 1, source[start + i * 82 + 7])
+            for i in range(3)
+        ] == [(program, 100), (program, 80), (program, 100)]
