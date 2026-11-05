@@ -93,6 +93,7 @@ public:
         executor_.cancel(); sending_ = -1;
         cancel_gesture();
         document_ = document;
+        hardware_.configure_trs_ports(document.trs_modes());
         hardware_.configure_utility_pages(document.utility_pages());
         hardware_.set_target_pulse(document.pulse_period_ms(), document.pulse_minimum(), document.pulse_maximum(), document.pulse_delay_ms());
         hardware_.set_brightness(document.brightness());

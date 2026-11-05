@@ -32,6 +32,7 @@ extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 #include "switches.h"
 #include "renderer.h"
 #include "utility_pages.h"
+#include "trs_ports.h"
 #ifdef CNTRL_DIAGNOSTICS
 #include "scroll_timing.h"
 #endif
@@ -50,6 +51,7 @@ extern cntrl::Documents documents;
 extern cntrl::splash::Session splash_session;
 extern cntrl::splash::Panels splash_panels;
 font_assets::Files font_files;
+TrsPorts trs_ports;
 USBHost host;
 MIDIDevice host_midi(host);
 extern cntrl::StoredPatchSources patch_sources;
@@ -153,6 +155,14 @@ public:
         cable_test.leave();
     }
 #endif
+    bool supports_trs_mode(unsigned jack, cntrl::midi::TrsMode mode) const override {
+        return jack < 4 && mode <= cntrl::midi::TrsMode::aux;
+    }
+    void configure_trs_ports(const uint8_t *modes) override {
+        for (unsigned i = 0; i < 4; ++i)
+            if (uint8_t(trs_ports.mode(i)) != modes[i]) bridge_.disconnect_output(2 + i);
+        trs_ports.configure(modes);
+    }
     void begin() {
         Serial1.begin(31250);
         Serial2.begin(31250);
@@ -164,6 +174,7 @@ public:
         if (!connection) return false;
         switch (connection->transport) {
         case cntrl::midi::OutputTransport::physical:
+            if (connection->route >= 2 && !cntrl::midi::midi_output(trs_ports.mode(connection->route - 2))) return false;
 #if CNTRL_CABLE_TEST
             return !cable_test.enabled();
 #else
@@ -184,7 +195,7 @@ public:
         if (commit) renderer_.invalidate();
         font_assets::cache.finish(commit);
     }
-    bool output_idle() const override { return bridge_.idle(); }
+    bool output_idle() const override { return bridge_.idle() && trs_ports.idle(); }
     void set_usb_midi(bool device, bool host) override {
         bridge_.configure_usb(device, host, millis());
     }
@@ -218,7 +229,7 @@ public:
             switch (route) {
             case 0: serial = &Serial1; break;
             case 1: serial = &Serial2; break;
-            default: return false;
+            default: return trs_ports.send(route - 2, p.bytes, n);
             }
             if (unsigned(serial->availableForWrite()) < n) return false;
             if (serial->write(p.bytes, n) != n) return false;
@@ -233,12 +244,15 @@ public:
         if (route >= cntrl::midi::Bridge::destinations) { reply("CNTRL ERROR midi-route"); return; }
         const auto &c = bridge_.counters(route);
         char response[400];
+        unsigned init_errors = 0;
+        if (documents.document().valid()) for (unsigned i = 0; i < 4; ++i)
+            if (uint8_t(trs_ports.mode(i)) != documents.document().trs_modes()[i]) init_errors |= 1u << i;
         std::snprintf(response, sizeof(response),
             "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u",
             unsigned(bridge_.enabled()), route, (unsigned long)c.received,
             (unsigned long)c.transmitted, (unsigned long)c.dropped, (unsigned long)c.aborted,
             c.high_water, (unsigned long)max_midi_us_, (unsigned long)max_scan_gap_,
-            (unsigned long)scan_count_, (unsigned long)display_count_, 0u);
+            (unsigned long)scan_count_, (unsigned long)display_count_, init_errors);
         reply(response);
     }
     void scanned(uint32_t gap) {
@@ -262,7 +276,21 @@ public:
         }
         renderer_.show(pane, content);
     }
+    void select_trs_jack() {
+        auto &page = utility_pages_;
+        page.candidate = trs_ports.mode(page.jack);
+        page.port_status(page.candidate, documents.document().trs_modes()[page.jack] != uint8_t(page.candidate) ? "Driver failed" : nullptr);
+    }
+    bool trs_button(unsigned i) {
+        if (utility_pages_.page() != UtilityPages::Page::ports || i > 1) return false;
+        if (i == 0) {
+            utility_pages_.jack = (utility_pages_.jack + 1) % 4;
+            select_trs_jack();
+        } else utility_pages_.next_port_mode();
+        return true;
+    }
     void enter_utility_page() {
+        if (utility_pages_.page() == UtilityPages::Page::ports && documents.document().valid()) select_trs_jack();
 #if CNTRL_CABLE_TEST
         if (utility_pages_.page() == UtilityPages::Page::cable) cable_test.enter();
 #endif
@@ -299,6 +327,15 @@ public:
     }
     void tap_tempo(uint32_t now) override {
         if (!documents.document().valid()) return;
+        auto &page = utility_pages_;
+        if (page.page() == UtilityPages::Page::ports) {
+            auto active = trs_ports.mode(page.jack);
+            if (!output_idle() || configuration_locked() || documents.busy() || documents.dirty()) page.port_status(active, "Busy");
+            else if (active == page.candidate && documents.document().trs_modes()[page.jack] == uint8_t(active)) page.port_status(active, "Already set");
+            else if (!documents.save_trs_mode(page.jack, page.candidate, now)) page.port_status(active, "Cannot apply");
+            else { port_save_pending_ = true; page.port_status(active, "Saving"); }
+            return;
+        }
 #if CNTRL_CABLE_TEST
         if (utility_pages_.page() == UtilityPages::Page::cable) {
             if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy())) return;
@@ -378,8 +415,8 @@ public:
 #if CNTRL_PANIC
                     if (panic_owns_midi) continue;
 #endif
-                    // Omniport USB cables remain enumerated but are unused.
-                    if (cntrl::midi::physical_output((packet >> 4) & 15)) bridge_.usb(packet, now);
+                    const auto *output = cntrl::midi::physical_output((packet >> 4) & 15);
+                    if (output && available(output->name)) bridge_.usb(packet, now);
                 } else {
                     HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
                     int byte = serial.read(); if (byte < 0) break;
@@ -432,6 +469,13 @@ public:
 #if CNTRL_PANIC
         transfer_busy = transfer_busy || panic_owns_midi;
 #endif
+        if (port_save_pending_ && !documents.busy()) {
+            port_save_pending_ = false;
+            if (documents.dirty()) {
+                documents.edit_cancel();
+                utility_pages_.port_status(trs_ports.mode(utility_pages_.jack), "Save failed");
+            }
+        }
         utility_pages_.time(now, micros(), held_controls & (1u << 2));
         ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
@@ -477,6 +521,7 @@ private:
     }
     PixelThrob throb_;
     UtilityPages utility_pages_;
+    bool port_save_pending_ = false;
     bool performance_visible_ = false;
     int pending_patch_ = -1;
     bool splash_visible_ = false;
@@ -1148,6 +1193,7 @@ void poll_target() {
 #if CNTRL_PANIC
                     if (board.panic_owns_midi && i != 2 && i != 5) continue;
 #endif
+                    if ((events[i] & press_event) && board.trs_button(i)) continue;
                     if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
                     if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
                 }

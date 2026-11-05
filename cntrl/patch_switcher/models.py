@@ -498,6 +498,9 @@ class UtilityPages(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+TrsMode = Literal['off', 'midi-a', 'midi-b', 'expression', 'aux']
+
+
 class Setup(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
@@ -527,6 +530,7 @@ class Setup(BaseModel, frozen=True):
     ) = None
     splash: Annotated[bool, Field(strict=True)] = True
     animation_color_cycle: Annotated[bool, Field(strict=True)] = False
+    trs_ports: dict[str, TrsMode] = Field(default_factory=dict)
     is_midi_interface: Annotated[bool, Field(strict=True)] = False
     usb_device_midi: Annotated[bool, Field(strict=True)] = True
     usb_host_midi: Annotated[bool, Field(strict=True)] = True
@@ -570,6 +574,7 @@ class Target(BaseModel, frozen=True):
     display_height: units.Pixels = Field(gt=0, le=65535)
     fonts: list[FontFace]
     outputs: list[str]
+    trs_ports: dict[str, list[TrsMode]] = Field(default_factory=dict)
     max_document_bytes: units.Bytes = Field(gt=24, le=65536)
     max_instruments: int = Field(gt=0, le=32)
     max_patch_cycles: int = Field(gt=0, le=128)

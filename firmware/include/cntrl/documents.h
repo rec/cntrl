@@ -139,6 +139,14 @@ public:
         }
         return true;
     }
+    bool save_trs_mode(unsigned jack, midi::TrsMode mode, uint32_t now) {
+        if (jack >= 4 || dirty_ || !edit_begin()) return false;
+        staging_[document_.trs_modes() - document_.data() + jack] = uint8_t(mode);
+        put32(staging_ + 20, checksum(staging_ + 28, document_.length() - 28));
+        Document candidate;
+        if (candidate.load(staging_, document_.length(), hardware_) && edit_save(now)) return true;
+        edit_cancel(); return false;
+    }
     void edit_cancel() { dirty_ = false; }
     bool edit_save(uint32_t now) {
         if (!dirty_ || busy() || hardware_.configuration_locked()) return false;
@@ -464,7 +472,7 @@ private:
                 || std::memcmp(old.named_patch(i), current.named_patch(i), 66)) ++patches;
         for (unsigned i = 0; i < old.instruments() || i < current.instruments(); ++i)
             if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
-        settings = old.navigation_hold_ms() != current.navigation_hold_ms()
+        settings = std::memcmp(old.trs_modes(), current.trs_modes(), 4) || old.navigation_hold_ms() != current.navigation_hold_ms()
             || old.navigation_repeat_ms() != current.navigation_repeat_ms() || old.brightness() != current.brightness()
             || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
@@ -494,6 +502,7 @@ private:
     }
     void empty(bool startup = false) {
         document_ = Document(); controller_.deactivate();
+        constexpr uint8_t off[4] = {}; hardware_.configure_trs_ports(off);
         hardware_.begin_fonts(); hardware_.finish_fonts(true);
         hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
         hardware_.set_midi_interface(false);

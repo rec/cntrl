@@ -367,13 +367,15 @@ values do not determine vertical spacing.
 
 ## Binary and transfer protocol
 
-Format 28 adds `usb_device_midi` and `usb_host_midi`, both defaulting to true.
+Format 29 adds four per-setup TRS port roles, editable from the TRS Ports utility page.
+Recompile older setups for format 29.
+
+Format 28 introduced `usb_device_midi` and `usb_host_midi`, both defaulting to true.
 They independently enable MIDI communication on the USB Device and USB Host
 ports, with automatic connection and reconnection. USB serial commands remain
 available when MIDI is disabled. `is_midi_interface` separately controls
 computer-to-DIN/TRS forwarding and still defaults to false. See
-[USB MIDI configuration](../doc/midi-interface.md). Recompile older setups for
-format 28.
+[USB MIDI configuration](../doc/midi-interface.md).
 
 Version 14 stores resolved pages and line styles with foreground and background
 colors. Each display record ends with four reserved zero bytes. Authored
@@ -419,12 +421,12 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (25), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (29), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 60 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 22 u16 utility-page settings |
+| Metadata header, 66 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 utility-page settings and four u8 configurable jack roles |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |

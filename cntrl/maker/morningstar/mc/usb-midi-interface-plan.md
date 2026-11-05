@@ -1,10 +1,9 @@
 # Standard USB MIDI interface
 
-Current scope, 2026-10-27: the four omniports are temporarily unused. Their USB
-cables remain enumerated, but incoming traffic on cables 2 through 5 is discarded.
-cntrl does not initialize, read or transmit through those jacks. Only DIN and
-the dedicated TRS input/output paths participate in the physical USB bridge.
-This supersedes the configurable-output behavior in the original plan below.
+Current implementation: the active setup selects the role of each Omniport
+on the TRS Ports utility page. USB cables 2 through 5 forward only to jacks
+configured for MIDI output. See the [target guide](firmware/patch-switcher.md#trs-ports-utility-page).
+The dated plan below records the original implementation.
 
 Status, 2026-10-25: implemented, built, tested and flashed. macOS now exposes
 the intended two inputs and six outputs; both the user and native port listing

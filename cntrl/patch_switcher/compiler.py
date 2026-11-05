@@ -111,6 +111,18 @@ def compile_show(
         show = models.Setup.model_validate(document)
     except ValidationError as error:
         raise CompilationError(_validation_errors('show', error)) from error
+    for jack, mode in show.trs_ports.items():
+        if jack not in TRS_JACKS or mode not in target.trs_ports.get(jack, []):
+            errors.append(f'trs_ports.{jack}: unsupported role {mode!r}')
+    target = target.model_copy(
+        update={
+            'outputs': [
+                o
+                for o in target.outputs
+                if o not in TRS_JACKS or show.trs_ports.get(o) in ('midi-a', 'midi-b')
+            ]
+        }
+    )
     try:
         parsed = show.definitions or models.Definitions.model_validate(
             definitions if definitions else {'profiles': []}
@@ -415,6 +427,7 @@ def compile_show(
         round(show.navigation.repeat_interval * 1000),
         round(show.target_pulse.delay * 1000),
         *utility_settings,
+        bytes(TRS_MODES.index(show.trs_ports.get(j, 'off')) for j in TRS_JACKS),
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
     body += (
@@ -1408,5 +1421,7 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHHHBBHH23H')
-DOCUMENT_VERSION = 28
+METADATA = struct.Struct('<4sHHHBBHH23H4s')
+DOCUMENT_VERSION = 29
+TRS_JACKS = tuple(f'configurable-{i}' for i in range(1, 5))
+TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

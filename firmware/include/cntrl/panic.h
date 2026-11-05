@@ -47,7 +47,7 @@ public:
             if (progress.done) continue;
             const auto &connection = port < midi::output_connections.size() ? midi::output_connections[port]
                 : midi::usb_output_connections[port - midi::output_connections.size()];
-            if (!outputs_.available(connection.name)) progress.done = true;
+            if (!outputs_.available(connection.name)) { progress.done = true; continue; }
             else {
                 static constexpr uint8_t controllers[] = {123, 120, 121};
                 uint8_t bytes[] = {

@@ -14,7 +14,7 @@ struct Hardware : cntrl::Hardware, cntrl::PanicOutputs {
         for (unsigned i = 0; i < 4; ++i) if (!std::strcmp(output, names[i])) return i;
         assert(false); return 0;
     }
-    bool available(const char *output) const override { return connected[index(output)]; }
+    bool available(const char *output) const override { return std::strncmp(output, "configurable-", 13) && connected[index(output)]; }
     bool transmit(const char *output, const uint8_t *bytes) override {
         ++attempts;
         if (blocked[index(output)]) return false;

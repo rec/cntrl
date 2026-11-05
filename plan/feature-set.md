@@ -25,23 +25,6 @@ instead of hard-coded knowledge of particular instruments or effects.
 Dependencies below identify prerequisites, not a requirement to implement the
 entire plan. An item is complete only when its acceptance criteria are met.
 
-## 1. Configurable TRS ports
-
-**Outcome:** Configure each supported TRS socket as a MIDI output, expression
-pedal input or auxiliary footswitch input.
-
-**Scope:** Add capability declarations, role selection and target
-configuration. Expose additional TRS MIDI outputs through the existing port
-catalogue and scheduler. Input roles become usable through items 2 and 3.
-Validate conflicting assignments and document supported tip/ring wiring and
-MIDI Type A or Type B modes for each target.
-
-**Dependencies:** None.
-
-**Acceptance:** Unsupported roles fail compilation; configured outputs appear
-consistently in routing and diagnostics; changing roles cannot leave the
-previous driver active. Qualify each supported output mode on hardware.
-
 ## 2. Expression-pedal input
 
 **Outcome:** An expression pedal sends MIDI CC messages for volume, wah, effect
@@ -54,7 +37,7 @@ specific assignments. Show pedal position and calibration status. Define
 whether selecting a new assignment immediately sends its current value or waits
 for movement.
 
-**Dependencies:** Item 1 for sockets with selectable roles.
+**Dependencies:** The TRS Ports utility page provides socket role selection.
 
 **Acceptance:** Endpoints and reversed ranges produce the expected values;
 stationary input does not flood outputs; disconnected or uncalibrated inputs do
@@ -71,7 +54,7 @@ debounce inputs and give each switch a stable identifier. Reuse press,
 momentary and latched assignments. Document wiring and reject configurations
 exceeding the target's capabilities.
 
-**Dependencies:** Item 1 for sockets with selectable roles.
+**Dependencies:** The TRS Ports utility page provides socket role selection.
 
 **Acceptance:** One physical action produces one intended transition; held
 inputs are rearmed correctly on entry; release and disconnection have explicit

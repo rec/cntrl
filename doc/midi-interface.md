@@ -20,8 +20,8 @@ commands, setup transfers and firmware-update requests remain available even
 when USB Device MIDI is disabled. Connection and reconnection need no manual
 action when the corresponding MIDI setting is enabled.
 
-Setup format 28 stores these flags. Recompile older setups before using them
-with the new firmware.
+Setup format 29 also stores the four configurable jack roles. Recompile older setups
+for the new firmware.
 
 Set `is_midi_interface = true` in the setup to enable MIDI forwarding on startup.
 It defaults to `false`. The `usb-midi-interface` patch state operation can also

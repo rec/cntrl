@@ -1,4 +1,5 @@
 #pragma once
+#include "midi_outputs.h"
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -61,6 +62,8 @@ struct Hardware {
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
     virtual bool supports_function(unsigned) const { return false; }
     virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
+    virtual void configure_trs_ports(const uint8_t *) {}
+    virtual bool supports_trs_mode(unsigned, midi::TrsMode mode) const { return mode == midi::TrsMode::off; }
     virtual bool output_idle() const { return true; }
     virtual unsigned switch_capacity() const { return 0; }
     virtual bool configuration_locked() const { return false; }

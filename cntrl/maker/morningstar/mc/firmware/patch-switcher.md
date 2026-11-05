@@ -202,21 +202,35 @@ safety. Qualification must check cold boot, two different uploaded shows,
 interrupted transfers and interrupted commits. If there is no readable card,
 the application displays an error, sends no MIDI and rejects persistent uploads.
 
-Output IDs are `din`, `trs`, `usb-device` and `usb-host`. DIN uses Serial1 and
-the dedicated 3.5 mm output uses Serial2, both 31250 baud. The four omniports are
-temporarily unused: cntrl does not initialize their pins, read them, or transmit
-through them, even when the USB MIDI interface is enabled. Saved stock port
-settings are not imported. Switching from stock to cntrl resets the processor;
-leaving the ports untouched does not guarantee retention of stock configuration
-or a particular voltage or impedance at the jacks.
+DIN uses Serial1 and the dedicated 3.5 mm TRS output uses Serial2, both at
+31,250 baud. USB host supports one MIDI device. USB device exposes two inputs
+and six outputs. With USB MIDI forwarding enabled, USB output cables 0 and 1
+send to DIN and dedicated TRS. Cables 2 through 5 send to configurable jacks
+1 through 4 when their active setup selects a MIDI mode.
 
-USB host supports one MIDI device, not a host bridge or hubs.
-USB device has two computer inputs and six outputs; explicit pedal USB messages
-share input cable 0 with forwarded DIN input. `is_midi_interface = true` enables
-the two physical inputs and the DIN/TRS outputs as a computer interface. The four
-configurable USB output cables remain visible but their traffic is discarded.
-It defaults off
-and does not change enumeration. There is no automatic physical MIDI thru.
+### TRS Ports utility page
+
+From the performance screen, press F to reach **TRS Ports** after Panic.
+A selects a jack, B previews its next mode, and C saves it with the selected
+setup. The first row shows the active mode. Switching setups restores all four
+roles. An unused jack defaults to Off. If the setup routes an instrument or
+patch to a jack, change that route before switching the jack to an input.
+
+```toml
+[trs_ports]
+configurable-1 = 'midi-a'
+configurable-2 = 'expression'
+configurable-3 = 'aux'
+configurable-4 = 'midi-b'
+```
+
+Use the same jack name as a MIDI patch or instrument's `output`. The
+`CNTRL MIDI STATUS` counters use routes 2 through 5 in jack order.
+Type A sends data on tip with ring high. Type B swaps tip and ring.
+Expression uses tip as analog input and drives ring high. Aux uses tip and ring
+as switch inputs pulled up to detect contacts closing to sleeve. Off releases
+both conductors. Expression-to-CC and external switch assignments are separate
+features. Physical loopback qualification is pending for both Type A and Type B.
 
 The scheduler has independent destination queues, each with 256 forwarding
 packets and eight reserved pedal batches of up to 14 bytes. A complete pedal
@@ -529,7 +543,7 @@ DIN and TRS occupy the matrix rows, with Out then In columns and a bottom-right
 toggle. DIN test data is blue and TRS test data is green; each input shows the
 color of its latest matching test stream.
 The other two displays remain in place. DIN is Serial1 and the dedicated 3.5 mm
-TRS port is Serial2; Omniports are not used.
+TRS port is Serial2; the cable tester exercises only these two routes.
 
 The tester is included by default. Build `patch-switcher` with `CABLE_TEST=0` to
 exclude it and its page. See the generic
@@ -682,7 +696,7 @@ existing temporary feedback path. F cancels and goes Back. The center screen
 contains only Panic above B; the outer screens are black except for Back near F.
 
 Outputs are DIN, dedicated TRS, USB device cable 0 and the connected USB MIDI
-host device. Disconnected USB outputs are skipped. Omniports remain untouched.
+host device. Panic also sends to configurable jacks assigned a MIDI output role. Disconnected USB outputs are skipped.
 The module pauses the normal bridge while it owns the ports and restores the
 setup setting on exit. It does not edit the active setup or songs/setlists.
 See the [Panic behavior and test contract](../../../../../doc/panic.md).

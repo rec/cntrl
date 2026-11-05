@@ -181,6 +181,15 @@ void test_tool_handoff_waits_for_sysex_termination() {
     assert((out.bytes[0] == std::vector<uint8_t>{0xf0, 1, 2, 0xf7}));
     assert(b.handoff(out) && out.bytes[0].size() == 4);
 }
+void test_detaching_a_jack_discards_queued_bytes_and_sysex_termination() {
+    cntrl::midi::Bridge b; Output out; b.configure(true); b.connected(true, 0);
+    input(b, 2, {0xf0, 1, 2}); b.service(out, 0);
+    input(b, 2, {3, 4, 5});
+    b.disconnect_output(2); out.blocked[2] = true;
+    assert(b.handoff(out));
+    out.blocked[2] = false; b.service(out, 1);
+    assert((out.bytes[2] == std::vector<uint8_t>{0xf0, 1, 2}));
+}
 void test_owned_sysex_streams_and_abandonment_terminates() {
     cntrl::midi::Bridge bridge; Output output;
     std::vector<uint8_t> bytes(257, 0x12); bytes.front() = 0xf0; bytes.back() = 0xf7;
@@ -306,8 +315,9 @@ int main() {
         assert(cntrl::midi::find_output(connection.name) == &connection);
         assert(!cntrl::midi::physical_output(connection.route));
     }
-    assert(!cntrl::midi::find_output("omniport-1") && !cntrl::midi::physical_output(2));
+    assert(!cntrl::midi::find_output("omniport-1") && cntrl::midi::physical_output(2) == cntrl::midi::find_output("configurable-1"));
     test_tool_handoff_waits_for_sysex_termination();
+    test_detaching_a_jack_discards_queued_bytes_and_sysex_termination();
     test_host_disconnect_discards_pending_selection();
     test_malformed_pedal_batches_are_rejected_atomically();
     test_messages_and_running_status();

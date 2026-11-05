@@ -166,6 +166,14 @@ public:
     bool usb_enabled(unsigned route) const {
         return route == 8 ? usb_host_ : route == 6 || route == 7 ? usb_device_ : true;
     }
+    void disconnect_output(unsigned route) {
+        reset_route(route);
+        cancel_route(route);
+        auto &r = routes_[route];
+        r.counts.dropped += r.pedal_count;
+        r.pedal_count = r.pedal_head = r.pedal_offset = 0;
+        r.wire_sysex = r.terminate = false;
+    }
     void configure_usb(bool device, bool host, uint32_t now) {
         usb_device_ = device; usb_host_ = host;
         connected(device_present_, now);
@@ -309,13 +317,6 @@ private:
             --r.count; return true;
         }
         return false;
-    }
-    void disconnect_output(unsigned route) {
-        cancel_route(route);
-        auto &r = routes_[route];
-        r.counts.dropped += r.pedal_count;
-        r.pedal_count = r.pedal_head = r.pedal_offset = 0;
-        r.wire_sysex = r.terminate = false;
     }
     void cancel_route(unsigned route) {
         for (auto &b : owned_) if (b.route == route && b.delivery == Delivery::pending) b.delivery = Delivery::cancelled;

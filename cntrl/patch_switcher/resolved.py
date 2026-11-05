@@ -15,6 +15,8 @@ from .compiler import (
     NAMED,
     STATE_OPERATIONS,
     SWITCH,
+    TRS_JACKS,
+    TRS_MODES,
 )
 from .display import read_source
 
@@ -91,6 +93,13 @@ def export(data: bytes) -> str:
     repeat = struct.unpack_from('<H', data, meta + 12)[0]
     result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
     result['utility_pages'] = utility_pages.unpack(data, meta + 16)
+    modes = data[meta + METADATA.size - 4 : meta + METADATA.size]
+    if any(m >= len(TRS_MODES) for m in modes):
+        raise ValueError('invalid TRS port role')
+    if any(modes):
+        result['trs_ports'] = {
+            j: TRS_MODES[m] for j, m in zip(TRS_JACKS, modes, strict=True) if m
+        }
     result.update(source)
     instruments: dict[str, object] = {}
     profiles: list[dict[str, object]] = []

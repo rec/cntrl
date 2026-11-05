@@ -6,8 +6,9 @@
 
 namespace cntrl {
 constexpr unsigned utility_page_settings_offset = 16;
-constexpr unsigned metadata_header_size = utility_page_settings_offset + 2 * UtilityPageSettings::count;
-constexpr unsigned document_version = 28;
+constexpr unsigned trs_modes_offset = utility_page_settings_offset + 2 * UtilityPageSettings::count;
+constexpr unsigned metadata_header_size = trs_modes_offset + 4;
+constexpr unsigned document_version = 29;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -68,6 +69,10 @@ public:
         if (ni > max_instruments || nc > max_patch_cycles || bool(nc) != bool(np)
             || meta + metadata_header_size + ni * 64 + np * 4 > length
             || std::memcmp(bytes + meta, "CMTA", 4)) return false;
+        for (unsigned i = 0; i < 4; ++i) {
+            auto mode = midi::TrsMode(bytes[meta + trs_modes_offset + i]);
+            if (mode > midi::TrsMode::aux || !hardware.supports_trs_mode(i, mode)) return false;
+        }
         unsigned nb = u16(bytes + meta + 4);
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
@@ -150,7 +155,7 @@ public:
             const uint8_t *p = bytes + 76 + i * 68;
             if (!text_valid(p, 32) || !text_valid(p + 32, 32) || p[64] > 15
                 || p[65] || p[66] || p[67]
-                || !hardware.supports(reinterpret_cast<const char *>(p + 32))) return false;
+                || !output_valid(bytes + meta + trs_modes_offset, p + 32, hardware)) return false;
             for (unsigned j = 0; j < i; ++j)
                 if (!std::strcmp(reinterpret_cast<const char *>(p),
                                  reinterpret_cast<const char *>(bytes + 76 + j * 68))) return false;
@@ -230,6 +235,7 @@ public:
     bool splash() const { return data_[19] & 1; }
     bool animation_color_cycle() const { return data_[19] & 4; }
     bool usb_device_midi() const { return data_[19] & 8; }
+    const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }
     bool usb_host_midi() const { return data_[19] & 16; }
     bool is_midi_interface() const { return data_[19] & 2; }
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
@@ -325,7 +331,7 @@ private:
             case 2:
                 if ((n[1] != 0 && n[1] != 1 && n[1] != 2 && n[1] != 4 && n[1] != 9)
                     || length <= 32 || !text_valid(p, 32)
-                    || !hardware.supports(reinterpret_cast<const char *>(p))
+                    || !output_valid(bytes + metadata + trs_modes_offset, p, hardware)
                     || !(n[1] == 4 ? midi::stream_valid(p + 32, length - 32) : midi::message_valid(p + 32, length - 32))) return false;
                 if (n[1] == 0 && (length != 35 || p[32] >> 4 != 11)) return false;
                 if (n[1] == 2 && (length != 35 || p[32] >> 4 != 14)) return false;
@@ -386,6 +392,12 @@ private:
             } else if (u16(cache) != 65535 || cache[9]) return false;
         }
         return true;
+    }
+    static bool output_valid(const uint8_t *modes, const uint8_t *output, const Hardware &hardware) {
+        auto name = reinterpret_cast<const char *>(output);
+        auto *route = midi::find_output(name);
+        return hardware.supports(name) && (!route || route->route < 2 || route->route >= 6
+            || midi::midi_output(midi::TrsMode(modes[route->route - 2])));
     }
     static bool graphics_valid(const uint8_t *p, const Hardware &hardware) {
         return (p[0] == 255 ? u32(p + 12) && hardware.supports_font_asset(u32(p + 12), p[1])

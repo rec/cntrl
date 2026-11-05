@@ -17,7 +17,7 @@ struct PerformanceStatus {
 
 class UtilityPages {
 public:
-    enum class Page { tap, status, firmware, cable, panic, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, confirm_firmware };
     void configure(const cntrl::UtilityPageSettings &settings) {
         settings_ = settings;
         using R = cntrl::UtilityPageSettings;
@@ -28,7 +28,7 @@ public:
     bool browse(bool reverse, const char *setup) {
         if (page_ == Page::confirm_firmware) return !reverse;
         do {
-            page_ = Page((unsigned(page_) + (reverse ? 4 : 1)) % 5);
+            page_ = Page((unsigned(page_) + (reverse ? 5 : 1)) % 6);
 #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
             if (page_ == Page::cable) continue;
 #endif
@@ -40,6 +40,16 @@ public:
         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
         dirty_ = true;
         return false;
+    }
+    using PortMode = cntrl::midi::TrsMode;
+    unsigned jack = 0;
+    PortMode candidate = PortMode::off;
+    void port_status(PortMode active, const char *message = nullptr) {
+        active_port_ = active; port_message_ = message; dirty_ = true;
+    }
+    void next_port_mode() {
+        candidate = PortMode((unsigned(candidate) + 1) % 5);
+        port_message_ = nullptr; dirty_ = true;
     }
     Page page() const { return page_; }
     void revisit(const char *setup) {
@@ -80,7 +90,7 @@ public:
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : "Firmware";
+        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : "Firmware";
         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
         pane.heading_band = true;
         auto &header = pane.lines[0];
@@ -103,6 +113,17 @@ public:
                 pane.circles[i] = {uint16_t(i < 2 ? 78 : 130), uint16_t(i % 2 ? 94 : 68), 12, 0, color, 0};
             }
             pane.toggle = {128, 110, true, cable.enabled, false};
+            return pane;
+        }
+        if (page_ == Page::ports) {
+            constexpr const char *names[] = {"Off", "MIDI Type A", "MIDI Type B", "Expression", "Aux switch"};
+            char current[40];
+            std::snprintf(current, sizeof(current), "Jack %u: %s", jack + 1, names[unsigned(active_port_)]);
+            const unsigned font = settings_[R::status_font];
+            line(pane, 1, current, 34, 22, font, true);
+            line(pane, 2, port_message_ ? port_message_ : names[unsigned(candidate)], 60, 22, font, true);
+            line(pane, 3, "A: Jack   B: Mode", 87, 17, font, true);
+            line(pane, 4, "C: Apply", 106, 17, font, true);
             return pane;
         }
         if (page_ == Page::panic) {
@@ -194,6 +215,8 @@ public:
         return pane;
     }
 private:
+    PortMode active_port_ = PortMode::off;
+    const char *port_message_ = nullptr;
     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
         using R = cntrl::UtilityPageSettings;
         unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];

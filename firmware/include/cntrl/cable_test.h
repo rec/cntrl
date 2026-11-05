@@ -66,7 +66,7 @@ public:
     }
 private:
     static constexpr unsigned input_count = 2;
-    static constexpr unsigned output_count = midi::output_connections.size();
+    static constexpr unsigned output_count = 2;
     static constexpr uint8_t breath_controller = 2;
     static constexpr uint32_t interval_ms = 10, timeout_ms = 250;
     static constexpr unsigned history = 8;

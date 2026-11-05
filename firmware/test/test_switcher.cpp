@@ -9,6 +9,7 @@
 #include <cntrl/setup_ui.h>
 
 struct Fake : TestPatchHardware, cntrl::Replies {
+    bool supports_trs_mode(unsigned, cntrl::midi::TrsMode) const override { return true; }
     std::vector<std::vector<uint8_t>> sent;
     std::vector<std::string> routes, replies;
     std::vector<bool> transitions;
@@ -424,6 +425,11 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     assert(!recovered.dirty() && recovered.document().patch(0)[4] == 2);
     cntrl::Documents reboot(interrupted, hw, controller, hw); reboot.boot();
     assert(reboot.document().valid() && reboot.document().patch(0)[4] == 2);
+    assert(reboot.save_trs_mode(2, cntrl::midi::TrsMode::midi_b, 4));
+    while (reboot.busy()) reboot.tick(5);
+    cntrl::Documents ports(interrupted, hw, controller, hw); ports.boot();
+    assert(ports.document().trs_modes()[2] == uint8_t(cntrl::midi::TrsMode::midi_b));
+    assert(!ports.save_trs_mode(2, cntrl::midi::TrsMode(255), 6) && !ports.dirty());
     // Corrupt selection records are not treated as an unset selection.
     card.files[""][0][0] ^= 1;
     cntrl::Documents bad_selection(card, hw, controller, hw); bad_selection.boot();

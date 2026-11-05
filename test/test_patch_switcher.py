@@ -274,6 +274,28 @@ def test_usb_ports_round_trip_independently(
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
+def test_trs_roles_control_routing_and_round_trip(target: models.Target) -> None:
+    jack = 'configurable-1'
+    setup = {'patch_cycles': {'Live': [{'type': 'start', 'output': jack}]}}
+    capable = target.model_copy(
+        update={
+            'outputs': [*target.outputs, jack],
+            'trs_ports': {jack: ['midi-a', 'midi-b', 'expression', 'aux', 'off']},
+        }
+    )
+    for mode in ('midi-a', 'midi-b'):
+        configured = setup | {'trs_ports': {jack: mode}}
+        with pytest.raises(compiler.CompilationError, match='unsupported role'):
+            compiler.compile_show(configured, {}, [], target)
+        data = compiler.compile_show(configured, {}, [], capable)
+        exported = tomlkit.parse(resolved.export(data)).unwrap()
+        assert exported['trs_ports'] == {jack: mode}
+        assert compiler.compile_show(exported, {}, [], capable) == data
+    for modes in ({}, {jack: 'expression'}, {jack: 'aux'}, {jack: 'off'}):
+        with pytest.raises(compiler.CompilationError, match='unavailable output'):
+            compiler.compile_show(setup | {'trs_ports': modes}, {}, [], capable)
+
+
 @pytest.mark.parametrize('enabled', [None, False, True])
 def test_usb_midi_switch_round_trips(
     show: dict[str, object],

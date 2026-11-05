@@ -152,6 +152,13 @@ def encode(
         context: dict[str, object] = {
             # This is an execution container, not an authored browser cycle.
             'fill_in_styles': False,
+            # Song sources validate possible destinations. The selected setup
+            # owns the physical jack modes when the song plays.
+            'trs_ports': {
+                j: next(m for m in modes if m in ('midi-a', 'midi-b'))
+                for j, modes in target.trs_ports.items()
+                if 'midi-a' in modes or 'midi-b' in modes
+            },
             'instruments': library.instruments,
             'patches': library.patches,
             'patch_cycles': {'Songs': values_for_source} if values_for_source else {},
