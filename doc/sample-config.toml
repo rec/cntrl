@@ -1,0 +1,154 @@
+seed = 0
+fill_in_styles = true
+background_color = "0xFFF8D8"
+foreground_brightness_limit = 0.5
+take_first_match = false
+brightness = 192
+splash = true
+animation_color_cycle = false
+is_midi_interface = false
+usb_device_midi = true
+usb_host_midi = true
+
+# Idle seconds; 0 disables the screensaver.
+screensaver_timeout = 0
+
+pad = 4
+contrast = 0.6
+tags = []
+
+# Validate entries independently so one malformed patch cannot hide others.
+[instruments]
+
+[patches]
+
+[patch_cycles]
+
+[definitions]
+
+profiles = []
+programs = []
+
+[fonts]
+
+[target_pulse]
+
+delay = 2.0
+period = 4.0
+minimum = 64
+maximum = 128
+
+[navigation]
+
+hold_delay = 1.5
+repeat_interval = 1.0
+
+[utility_pages]
+
+keyboard = []
+clock_outputs = []
+clock_bpms = [120]
+clock_source = "internal"
+refresh_interval = 1.0
+clock_timeout = 1.0
+clocks_per_quarter = 24
+clock_average_beats = 1
+tap_intervals = 4
+minimum_taps = 2
+minimum_interval = 0.1
+reset_gap = 3.0
+flash_fraction = 0.4
+flasher_diameter = 40
+annulus = 5
+title_height = 12
+tempo_height = 40
+padding = 2
+tempo_font = "CourierPrime"
+status_font = "classic"
+title_font = "classic"
+off_color = "0x600000"
+on_color = "0xFF0000"
+ring_color = "black"
+background_color = "0xFFF085"
+digits = 3
+decimals = 1
+
+[utility_pages.expression]
+
+[scrolling]
+
+horizontal_duration = 0.075
+vertical_duration = 0.2
+send = "right"
+patches = "right"
+cycles = "up"
+
+[trs_ports]
+
+[style]
+
+icon = "sample"
+background_color = "sample"
+foreground_color = "sample"
+font_name = "sample"
+horizontal_scale = 1.0
+
+
+[windows.next]
+
+page = "patch"
+pad = 0
+
+[windows.next.style]
+
+icon = "sample"
+background_color = "sample"
+foreground_color = "sample"
+font_name = "sample"
+horizontal_scale = 1.0
+
+[windows.sent]
+
+page = "patch"
+pad = 0
+
+[windows.sent.style]
+
+icon = "sample"
+background_color = "sample"
+foreground_color = "sample"
+font_name = "sample"
+horizontal_scale = 1.0
+
+[windows.undo]
+
+page = "patch"
+pad = 0
+
+[windows.undo.style]
+
+icon = "sample"
+background_color = "sample"
+foreground_color = "sample"
+font_name = "sample"
+horizontal_scale = 1.0
+
+[pages.patch]
+
+fields = ["patch_cycle.name", "display_name"]
+
+[pages.patch.style]
+
+icon = "sample"
+background_color = "sample"
+foreground_color = "sample"
+font_name = "sample"
+horizontal_scale = 1.0
+
+[pages.patch.line_styles]
+
+[tag_styles]
+
+[parameters]
+
+[switches]
