@@ -24,6 +24,7 @@ dev = [
     "ruff",
     "ty",
     "pyupgrade",
+    "pytest-regressions>=2.11.0",
 ]
 
 [build-system]
