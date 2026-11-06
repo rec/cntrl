@@ -623,6 +623,26 @@ class UtilityPages(BaseModel, frozen=True):
 TrsMode = Literal['off', 'midi-a', 'midi-b', 'expression', 'aux']
 
 
+class Scrolling(BaseModel, frozen=True):
+    horizontal_duration: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.075
+    vertical_duration: Annotated[
+        float,
+        Field(strict=True, ge=0.001, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.2
+    send: Literal['right', 'left', 'up', 'down'] = 'right'
+    patches: Literal['right', 'left', 'up', 'down'] = 'right'
+    cycles: Literal['right', 'left', 'up', 'down'] = 'up'
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Setup(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
@@ -641,15 +661,7 @@ class Setup(BaseModel, frozen=True):
     utility_pages: UtilityPages = Field(default_factory=UtilityPages)
     take_first_match: Annotated[bool, Field(strict=True)] = False
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
-    transition: (
-        Annotated[
-            float,
-            Field(strict=True, ge=0.001, le=65.535),
-            units.unit_validator('second'),
-            AfterValidator(millisecond_resolution),
-        ]
-        | None
-    ) = None
+    scrolling: Scrolling = Field(default_factory=Scrolling)
     splash: Annotated[bool, Field(strict=True)] = True
     animation_color_cycle: Annotated[bool, Field(strict=True)] = False
     trs_ports: dict[str, TrsMode] = Field(default_factory=dict)

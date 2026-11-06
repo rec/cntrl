@@ -7,9 +7,10 @@
 namespace cntrl {
 constexpr unsigned utility_page_settings_offset = 16;
 constexpr unsigned trs_modes_offset = utility_page_settings_offset + 2 * UtilityPageSettings::clock_outputs;
-constexpr unsigned metadata_header_size = trs_modes_offset + 4;
+constexpr unsigned scrolling_offset = trs_modes_offset + 4;
+constexpr unsigned metadata_header_size = scrolling_offset + 5;
 constexpr unsigned clock_section_size = 2 * (UtilityPageSettings::count - UtilityPageSettings::clock_outputs);
-constexpr unsigned document_version = 29;
+constexpr unsigned document_version = 30;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -75,6 +76,8 @@ public:
             if (mode > midi::TrsMode::aux || !hardware.supports_trs_mode(i, mode)) return false;
         }
         unsigned nb = u16(bytes + meta + 4);
+        if (!u16(bytes + meta + 6) || !u16(bytes + meta + scrolling_offset)) return false;
+        for (unsigned i = 0; i < 3; ++i) if (bytes[meta + scrolling_offset + 2 + i] > 3) return false;
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
@@ -184,7 +187,7 @@ public:
             if (cursor + count * 8 > texts) return false;
             for (unsigned j = 0; j < count; ++j, cursor += 8) {
                 const uint8_t *p = bytes + cursor;
-                if ((p[0] > 7 && (p[0] < 16 || p[0] > 22) && p[0] != 255)
+                if ((p[0] > 7 && (p[0] < 16 || p[0] > 23) && p[0] != 255)
                     || p[1] > 1 || u16(p + 2) >= ns || u16(p + 6) >= nt) return false;
                 const uint8_t *g = bytes + styles + u16(p + 2) * 16;
                 if (u16(p + 4) < g[2] || u16(p + 4) >= hardware.display_width() - g[2]) return false;
@@ -326,10 +329,8 @@ public:
     bool usb_host_midi() const { return data_[19] & 16; }
     bool is_midi_interface() const { return data_[19] & 2; }
     uint32_t screensaver_timeout() const { return u32(data_ + 24); }
-    std::optional<unsigned> transition_ms() const {
-        unsigned value = u16(data_ + metadata() + 6);
-        return value ? std::optional<unsigned>(value) : std::nullopt;
-    }
+    unsigned scroll_ms(bool vertical = false) const { return u16(data_ + metadata() + (vertical ? scrolling_offset : 6)); }
+    unsigned scroll_direction(unsigned action) const { return data_[metadata() + scrolling_offset + 2 + action]; }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + 28 + slot * 16;
         return read_graphics(p);
@@ -356,7 +357,7 @@ public:
             TextLine &line = view.lines[i];
             line.graphics = read_graphics(data_ + styles_ + u16(p + 2) * 16);
             line.x = u16(p + 4);
-            line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 22);
+            line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 23);
             line.stippled = already_sent && p[1];
             if (p[0] == 22) std::snprintf(line.text, sizeof(line.text), "%s", state);
             else field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6));
@@ -519,9 +520,8 @@ private:
         case 16: std::snprintf(text, size, "%u", unsigned(brightness())); return;
         case 17: case 18: std::snprintf(text, size, "%s", (code == 17 ? splash() : is_midi_interface()) ? "true" : "false"); return;
         case 19: std::snprintf(text, size, "%lu", (unsigned long)(screensaver_timeout() / 1000)); return;
-        case 20: case 21: {
-            if (code == 21 && !transition_ms()) return;
-            unsigned ms = code == 20 ? navigation_hold_ms() : *transition_ms();
+        case 20: case 21: case 23: {
+            unsigned ms = code == 20 ? navigation_hold_ms() : scroll_ms(code == 23);
             if (ms % 1000) {
                 std::snprintf(text, size, "%u.%03u", ms / 1000, ms % 1000);
                 unsigned end = unsigned(std::strlen(text));

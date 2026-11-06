@@ -1230,6 +1230,24 @@ int main() {
         assert(pixels_sent - before_pixels < 4 * 160 * 128 / 2);
         blank(0, 0x4444);
     }
+    // Configured sends can move both performance panes vertically or leftward.
+    for (bool vertical : {false, true}) for (bool backward : {false, true}) {
+        for (unsigned i = 0; i < 3; ++i) {
+            cntrl::Pane pane; pane.graphics.background = uint16_t(0x1111 * (i + 1));
+            renderer.show(i, pane);
+        }
+        drain(renderer);
+        renderer.transition(backward, 500, -1, true, vertical, false);
+        for (unsigned i = 0; i < 2; ++i) {
+            cntrl::Pane pane; pane.graphics.background = uint16_t(0x4444 * (i + 1));
+            renderer.show(i, pane);
+        }
+        for (unsigned poll = 0; poll < 20000 && !renderer.ready(); ++poll) {
+            renderer.draw(40000000 + poll * 1000);
+            blank(2, 0x3333);
+        }
+        assert(renderer.ready()); blank(0, 0x4444); blank(1, 0x8888); blank(2, 0x3333);
+    }
     for (unsigned i = 0; i < 3; ++i) {
         cntrl::Pane pane; pane.graphics.background = 0xffff;
         renderer.show(i, pane);

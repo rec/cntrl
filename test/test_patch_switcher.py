@@ -167,27 +167,53 @@ def test_compiler_matches_shared_cpp_fixture(
     assert compiler.HEADER.unpack_from(result)[7] == 192 | 256 | 2048 | 4096
 
 
-@pytest.mark.parametrize('duration', [None, 1.0, 2.0, 0.75, 65.535])
-def test_transition_duration_survives_resolved_export(
+@pytest.mark.parametrize('duration', [0.001, 1.0, 2.0, 0.75, 65.535])
+def test_scroll_durations_and_directions_survive_resolved_export(
     show: dict[str, object],
     definitions: object,
     target: models.Target,
-    duration: float | None,
+    duration: float,
 ) -> None:
-    show['transition'] = duration
+    show['scrolling'] = {
+        'horizontal_duration': duration,
+        'vertical_duration': 0.375,
+        'send': 'up',
+        'patches': 'down',
+        'cycles': 'left',
+    }
     data = compiler.compile_show(show, definitions, [], target)
     _, _, _, _, ni, nc, np, _, _, _ = compiler.HEADER.unpack_from(data)
     meta = 76 + ni * 68 + nc * 68 + np * 82
-    assert struct.unpack_from('<H', data, meta + 6)[0] == round((duration or 0) * 1000)
+    assert struct.unpack_from('<H', data, meta + 6)[0] == round(duration * 1000)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported.get('transition') == duration
-    assert models.Setup.model_validate(exported).transition == duration
+    assert exported['scrolling'] == show['scrolling']
+    assert (
+        models.Setup.model_validate(exported).scrolling.horizontal_duration == duration
+    )
     assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
 
 
-def test_omitted_transition_duration_stays_unspecified(show: dict[str, object]) -> None:
-    assert 'transition' not in show
-    assert models.Setup.model_validate(show).transition is None
+def test_scroll_defaults_preserve_current_motion(show: dict[str, object]) -> None:
+    assert models.Setup.model_validate(show).scrolling.model_dump() == {
+        'horizontal_duration': 0.075,
+        'vertical_duration': 0.2,
+        'send': 'right',
+        'patches': 'right',
+        'cycles': 'up',
+    }
+
+
+@pytest.mark.parametrize('field', ['horizontal_duration', 'vertical_duration'])
+@pytest.mark.parametrize('value', ['1 Hz', '66 s', True, 0, '0.5 ms'])
+def test_invalid_scroll_duration_is_rejected(field: str, value: object) -> None:
+    with pytest.raises(ValueError, match=field):
+        models.Setup(scrolling={field: value})
+
+
+@pytest.mark.parametrize('field', ['send', 'patches', 'cycles'])
+def test_invalid_scroll_direction_is_rejected(field: str) -> None:
+    with pytest.raises(ValueError, match=field):
+        models.Setup(scrolling={field: 'diagonal'})
 
 
 def test_configuration_units_compile_to_the_same_document(
@@ -195,14 +221,14 @@ def test_configuration_units_compile_to_the_same_document(
 ) -> None:
     numeric = show | {
         'navigation': {'hold_delay': 1.5, 'repeat_interval': 1},
-        'transition': 0.5,
+        'scrolling': {'horizontal_duration': 0.5, 'vertical_duration': 0.25},
         'screensaver_timeout': 60,
         'pad': 4,
         'contrast': 0.6,
     }
     authored = show | {
         'navigation': {'hold_delay': '1500 ms', 'repeat_interval': '1 second'},
-        'transition': '500 ms',
+        'scrolling': {'horizontal_duration': '500 ms', 'vertical_duration': '250 ms'},
         'screensaver_timeout': '1:00',
         'pad': '4 px',
         'contrast': '60 percent',
@@ -215,9 +241,6 @@ def test_configuration_units_compile_to_the_same_document(
 @pytest.mark.parametrize(
     'field,value',
     [
-        ('transition', '1 Hz'),
-        ('transition', '66 s'),
-        ('transition', True),
         ('pad', '1 mm'),
         ('font_size', '8.5 px'),
         ('contrast', '101 percent'),

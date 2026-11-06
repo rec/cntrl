@@ -14,6 +14,8 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     std::vector<std::string> routes, replies;
     std::vector<bool> transitions;
     std::vector<bool> target_transitions, target_vertical;
+    std::vector<bool> scroll_vertical, scroll_panorama;
+    std::vector<std::optional<unsigned>> scroll_durations;
     std::vector<bool> utility_page_moves;
     unsigned taps = 0;
     void browse_utility_page(bool reverse) override { utility_page_moves.push_back(reverse); }
@@ -39,7 +41,8 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false) override {
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) override {
+        scroll_vertical.push_back(vertical); scroll_panorama.push_back(panorama); scroll_durations.push_back(duration_ms);
         if (pane >= 0) { target_transitions.push_back(undo); target_vertical.push_back(vertical); return; }
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
@@ -247,6 +250,37 @@ void test_four_button_navigation(const cntrl::Document &doc) {
     app.tick(300); assert(app.selected_patch() == 0);
 }
 
+void test_configured_scrolling(const cntrl::Document &source) {
+    for (unsigned direction = 0; direction < 4; ++direction) {
+        Fake hw;
+        std::vector<uint8_t> bytes(source.data(), source.data() + source.length());
+        const unsigned meta = source.metadata();
+        bytes[meta + 6] = 123; bytes[meta + 7] = 0;
+        bytes[meta + cntrl::scrolling_offset] = 234; bytes[meta + cntrl::scrolling_offset + 1] = 0;
+        for (unsigned i = 0; i < 3; ++i) bytes[meta + cntrl::scrolling_offset + 2 + i] = uint8_t((direction + i) % 4);
+        cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size()) - 28));
+        cntrl::Document doc; assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+        TestController app(hw); app.activate(doc);
+        app.action(4); app.action(3); // Cycles, forward and backward.
+        app.action(1); app.action(0); // Patches, forward and backward.
+        app.action(2); app.action(1); app.action(2); app.action(5); // Send twice, undo once.
+        const bool send_reverse = direction & 1, patch_reverse = (direction + 1) & 1, cycle_reverse = (direction + 2) & 1;
+        assert((hw.target_transitions == std::vector<bool>{cycle_reverse, !cycle_reverse, patch_reverse, !patch_reverse, patch_reverse}));
+        assert((hw.transitions == std::vector<bool>{send_reverse, send_reverse, !send_reverse}));
+        unsigned call = 0;
+        for (unsigned action : {2u, 2u, 1u, 1u, 0u, 1u, 0u, 0u}) {
+            const unsigned configured = (direction + action) % 4;
+            assert(hw.scroll_vertical[call] == (configured >= 2));
+            assert(hw.scroll_panorama[call] == (configured == 0));
+            assert(hw.scroll_durations[call] == (configured >= 2 ? 234u : 123u));
+            ++call;
+        }
+        bytes[meta + cntrl::scrolling_offset + 2] = 4;
+        cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size()) - 28));
+        assert(!doc.load(bytes.data(), unsigned(bytes.size()), hw));
+    }
+}
+
 void test_greyed_names(const cntrl::Document &doc) {
     Fake hw;
     TestController app(hw);
@@ -326,7 +360,7 @@ void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     assert(hw.sent.size() == sent); // No previous selection for Strings' instrument.
     assert(!std::strcmp(hw.panes[0].lines[1].text, "Strings"));
     assert((hw.transitions == std::vector<bool>{false, false, true}));
-    assert((hw.durations == std::vector<std::optional<unsigned>>{std::nullopt, std::nullopt, std::nullopt}));
+    assert((hw.durations == std::vector<std::optional<unsigned>>{75, 75, 75}));
     app.action(5);
     assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
     assert(!hw.panes[2].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
@@ -614,7 +648,7 @@ int main(int argc, char **argv) {
         assert(!std::strcmp(settings.lines[0].text, "false"));
         assert(!std::strcmp(settings.lines[1].text, "0"));
         assert(!std::strcmp(settings.lines[2].text, "1.5"));
-        assert(!settings.lines[3].text[0]);
+        assert(!std::strcmp(settings.lines[3].text, "0.075"));
         app.action(2);
         assert(output.panes[0].lines[1].stippled);
         assert(output.panes[0].lines[1].graphics.foreground == 65535);
@@ -664,6 +698,7 @@ int main(int argc, char **argv) {
     test_revision_history(bytes);
     test_program_change_brightness(doc);
     test_greyed_names(doc);
+    test_configured_scrolling(doc);
     test_undo_restores_undone_candidate(doc);
     test_greyed_aliases(bytes);
     test_setup_editing_and_empty_ui(bytes);

@@ -376,7 +376,7 @@ public:
 #else
             error("Stock firmware unavailable");
 #endif
-        } else renderer_.transition(reverse, documents.document().transition_ms(), 2);
+        } else renderer_.transition(reverse, documents.document().scroll_ms(), 2);
         if (utility_pages_.clock_page()) controller.cancel_gesture();
         enter_utility_page();
     }
@@ -419,7 +419,7 @@ public:
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
         throb_.configure(period, low, high, delay);
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false) override { renderer_.transition(undo, duration_ms, pane, true, vertical); }
+    FLASHMEM void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false, bool panorama = true) override { renderer_.transition(undo, duration_ms, pane, true, vertical, panorama); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
         if (enabled) {

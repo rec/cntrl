@@ -6,16 +6,25 @@ format numbers and measurements; they are historical, not the current build.
 
 ## Browsing transitions
 
-Moving to the next cycle slides the candidate pane upward; moving to the
+By default, moving to the next cycle slides the candidate pane upward; moving to the
 previous cycle slides it downward. Browsing patches within a cycle scrolls
-horizontally. The vertical motion uses software redraws
+rightward, as does sending a patch. The setup's `[scrolling]` table independently
+selects `send`, `patches`, and `cycles` directions (`left`, `right`, `up`, `down`).
+Backward browsing and undo reverse those directions. Vertical sends animate the
+candidate and current panes together while the utility pane stays still.
+Leftward sends slide each performance pane's new content into place; the default
+rightward send retains the continuous panorama movement.
+The transition-start routine resides in flash to keep the combined application
+within the target's RAM allocation; the animation loop remains in fast RAM.
+The vertical motion uses software redraws
 in the existing display orientation. Two alternating DMA buffers each hold at most
 eight columns (2 KiB of pixel data). The renderer prepares one band while SPI
 transmits the other. Completion releases the shared SPI/button pins before the
 next button scan and transfer. Every frame moves thirty-two pixels through four
 positions. Only the changed span of each band is transmitted, and all positions are displayed even when
-redrawing runs behind. Vertical motion defaults to 200 ms; an explicit
-`transition` setting supplies its requested duration. Actual duration can exceed
+redrawing runs behind. `scrolling.horizontal_duration` defaults to 75 ms and
+`scrolling.vertical_duration` to 200 ms. Both accept seconds or duration strings
+such as `'200 ms'`. Actual duration can exceed
 the requested duration because a complete frame must finish before the next.
 The current-patch pane and utility pane stay in place during this motion.
 

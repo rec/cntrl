@@ -120,7 +120,7 @@ def compile_display(
                     else str(value).lower()
                     if isinstance(value, bool)
                     else format(value, 'g')
-                    if code in (20, 21) and isinstance(value, float)
+                    if code in (20, 21, 23) and isinstance(value, float)
                     else str(value)
                 )
                 if len(text.encode('utf-8')) >= 64 or any(
@@ -327,6 +327,8 @@ def field_value(
 ) -> str | int | float | bool | None:
     if name == 'navigation.hold_delay':
         return show.navigation.hold_delay
+    if name.startswith('scrolling.'):
+        return getattr(show.scrolling, name.split('.')[1])
     if name in patch.values:
         return patch.values[name]
     if name.startswith('names.'):
@@ -358,7 +360,7 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
 
 MAX_LINES = 16
 CONSTANT = 255
-DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22)
+DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22, 23)
 WINDOW_NAMES = ('next', 'sent', 'undo')
 LINE = struct.Struct('<BBHHH')
 HEADER = struct.Struct('<4sHHHHI')
@@ -390,7 +392,8 @@ FIELDS = {
     'is_midi_interface': 18,
     'screensaver_timeout': 19,
     'navigation.hold_delay': 20,
-    'transition': 21,
+    'scrolling.horizontal_duration': 21,
+    'scrolling.vertical_duration': 23,
 }
 SOURCE_FIELDS = (
     'seed',

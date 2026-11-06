@@ -173,12 +173,12 @@ public:
         if (!document_.valid() || !document_.patch_cycles()) return false;
         if (operation == 5 || operation == 6) {
             if (document_.patch_cycles() > 1)
-                hardware_.transition(operation == 6, document_.transition_ms(), 0, true);
+                scroll(2, operation == 6, 0);
             selected_ = (selected_ + document_.patch_cycles() + (operation == 6 ? -1 : 1)) % document_.patch_cycles();
         } else if (operation == 3 || operation == 4) {
             unsigned count = u16(document_.patch_cycle(selected_) + 66);
             if (count > 1)
-                hardware_.transition(operation == 4, document_.transition_ms(), 0);
+                scroll(1, operation == 4, 0);
             cursors_[selected_] = (cursors_[selected_] + count + (operation == 4 ? -1 : 1)) % count;
         } else if (operation == 7) {
             if (executor_.busy()) return false;
@@ -213,6 +213,10 @@ public:
         for (auto &p : last_sent_) p = -1;
     }
 private:
+    void scroll(unsigned action, bool reverse, int pane = -1) {
+        const unsigned direction = document_.scroll_direction(action);
+        hardware_.transition(reverse != bool(direction & 1), document_.scroll_ms(direction >= 2), pane, direction >= 2, direction == 0);
+    }
     Hardware &hardware_;
     PatchExecutor executor_;
     Document document_;
@@ -277,7 +281,7 @@ private:
             current_[instrument] = last_sent_[instrument] = int(p);
         }
         center_ = int(p); sending_ = -1;
-        hardware_.transition(false, document_.transition_ms()); render();
+        scroll(0, false); render();
     }
     void complete_undo() {
         const ProgramHistory &a = history_[depth_ - 1];
@@ -287,7 +291,7 @@ private:
         selected_ = u16(document_.patch(a.patch) + 2);
         cursors_[selected_] = a.patch - u16(document_.patch_cycle(selected_) + 64);
         if (!--depth_) center_ = -1;
-        sending_ = -1; hardware_.transition(true, document_.transition_ms());
+        sending_ = -1; scroll(0, true);
     }
     void pane(unsigned slot, int index) {
         Pane view;

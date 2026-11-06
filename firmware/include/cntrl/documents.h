@@ -479,7 +479,9 @@ private:
             || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
             || old.animation_color_cycle() != current.animation_color_cycle()
-            || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();
+            || old.screensaver_timeout() != current.screensaver_timeout()
+            || old.scroll_ms() != current.scroll_ms()
+            || std::memcmp(old.data() + old.metadata() + scrolling_offset, current.data() + current.metadata() + scrolling_offset, 5);
         auto names_end = [](const Document &d) {
             unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + d.utility_section_size() + 4;
             for (unsigned i = 0; i < d.patches() * 3; ++i) { unsigned n = u16(d.data() + cursor); cursor += 2 + (n == 65535 ? 0 : n); }

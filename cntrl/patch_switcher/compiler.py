@@ -479,7 +479,7 @@ def compile_show(
     metadata = METADATA.pack(
         b'CMTA',
         min(len(mappings), 65535),
-        round(show.transition * 1000) if show.transition is not None else 0,
+        round(show.scrolling.horizontal_duration * 1000),
         round(show.target_pulse.period * 1000),
         show.target_pulse.minimum,
         show.target_pulse.maximum,
@@ -487,6 +487,15 @@ def compile_show(
         round(show.target_pulse.delay * 1000),
         *utility_settings,
         bytes(TRS_MODES.index(show.trs_ports.get(j, 'off')) for j in TRS_JACKS),
+        round(show.scrolling.vertical_duration * 1000),
+        *(
+            SCROLL_DIRECTIONS.index(d)
+            for d in (
+                show.scrolling.send,
+                show.scrolling.patches,
+                show.scrolling.cycles,
+            )
+        ),
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
     body += (
@@ -1523,7 +1532,8 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHHHBBHH23H4s')
-DOCUMENT_VERSION = 29
+METADATA = struct.Struct('<4sHHHBBHH23H4sH3B')
+DOCUMENT_VERSION = 30
+SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
 TRS_JACKS = tuple(f'configurable-{i}' for i in range(1, 5))
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

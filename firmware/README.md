@@ -280,7 +280,8 @@ page = 'patch'
 Field names share one namespace. Built-in patch attributes are `patch_cycle.name`, `tags`,
 `display_name`, `name`, `program`, `bank`, `volume`, `pan` and `instrument` (the
 routing alias). Built-in global settings are `brightness`, `splash`,
-`is_midi_interface`, `screensaver_timeout`, `navigation.hold_delay` and `transition`.
+`is_midi_interface`, `screensaver_timeout`, `navigation.hold_delay`,
+`scrolling.horizontal_duration` and `scrolling.vertical_duration`.
 These read the current document, including numeric edits. Additional shared
 display values are defined as `[parameters.tempo]` with `value = 120` and an
 optional `style` block; they are configuration values, not a tempo engine.
@@ -390,8 +391,11 @@ values do not determine vertical spacing.
 
 ## Binary and transfer protocol
 
-Format 29 adds four per-setup TRS port roles, editable from the TRS Ports utility page.
-Recompile older setups for format 29.
+Format 30 adds independent horizontal and vertical scroll durations and the
+send, patch-browsing, and cycle-browsing directions.
+Recompile older setups for format 30.
+
+Format 29 added four per-setup TRS port roles, editable from the TRS Ports utility page.
 
 Format 28 introduced `usb_device_midi` and `usb_host_midi`, both defaulting to true.
 They independently enable MIDI communication on the USB Device and USB Host
@@ -408,21 +412,34 @@ performance-setup setting, including in resolved exports and the pedal editor.
 `screensaver_timeout` remains an integer
 idle timeout in seconds.
 Configuration quantities use `reccy.configuration.units`: `navigation.hold_delay` and
-`transition` accept durations such as `"100 ms"` and `"0.5 s"`, while bare
+the two `scrolling` durations accept values such as `"100 ms"` and `"0.5 s"`, while bare
 numbers mean seconds. `screensaver_timeout` accepts whole seconds such
 as `"2 min"` or `"1:30"`; bare numbers remain seconds. Values must convert
 to whole milliseconds and satisfy the existing bounds.
 padding, target display dimensions and font metrics accept pixels (`"24 px"`);
 the target document-size limit accepts bytes (`"64 KiB"`). Contrast accepts
 dimensionless ratios or percentages (`"60 percent"`). Resolved exports contain
-normalized numbers. An unspecified transition duration remains unspecified.
+normalized numbers.
 
-`transition` optionally controls send/undo slide duration in seconds,
-with an allowed range of 0.001..65.535. An omitted or null setting stays unspecified
-through compilation and firmware decoding. Only the renderer supplies the
-75 ms default when starting a transition. Resolved TOML omits unspecified
-durations and retains explicit values, including 1.0. The target frame cadence remains 60 Hz;
-duration is a visual target, not a MIDI delay or a hard real-time guarantee.
+The setup's `[scrolling]` table controls animation speed and direction:
+
+```toml
+[scrolling]
+horizontal_duration = '75 ms'
+vertical_duration = '200 ms'
+send = 'right'
+patches = 'right'
+cycles = 'up'
+```
+
+These are the defaults. Each direction can be `left`, `right`, `up`, or `down`;
+it specifies the outgoing content's movement when sending or browsing forward.
+Undo and backward browsing use the opposite direction. The selected direction
+chooses the horizontal or vertical duration, each in the range 0.001..65.535
+seconds. Smaller durations are faster. The former `transition` setting is
+replaced by these two durations. Utility-page browsing uses the horizontal
+duration. Duration is a visual target, not a MIDI delay or a hard real-time
+guarantee; transfer and rendering time can extend it.
 Zero (the default) disables the screensaver. Positive values enable the installed
 animation after no physical input for that interval, independently of startup
 `splash`. The asset is transferred separately using the target's upload tooling. Older
@@ -449,7 +466,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 66 bytes | `CMTA`, u16 bank mapping count, u16 transition milliseconds (0 means unspecified), u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 utility-page settings and four u8 configurable jack roles |
+| Metadata header, 71 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 utility-page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3) |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |

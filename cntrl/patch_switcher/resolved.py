@@ -17,6 +17,7 @@ from .compiler import (
     HEADER,
     METADATA,
     NAMED,
+    SCROLL_DIRECTIONS,
     STATE_OPERATIONS,
     SWITCH,
     TRS_JACKS,
@@ -103,8 +104,15 @@ def export(data: bytes) -> str:
         'usb_host_midi': bool(flags & 4096),
         'screensaver_timeout': timeout // 1000,
     }
-    if duration := struct.unpack_from('<H', data, meta + 6)[0]:
-        result['transition'] = duration / 1000
+    scrolling = struct.unpack_from('<H3B', data, meta + METADATA.size - 5)
+    result['scrolling'] = {
+        'horizontal_duration': struct.unpack_from('<H', data, meta + 6)[0] / 1000,
+        'vertical_duration': scrolling[0] / 1000,
+        **{
+            k: SCROLL_DIRECTIONS[d]
+            for k, d in zip(('send', 'patches', 'cycles'), scrolling[1:], strict=True)
+        },
+    }
     period, minimum, maximum = struct.unpack_from('<HBB', data, meta + 8)
     result['target_pulse'] = {
         'period': period / 1000,
@@ -125,7 +133,7 @@ def export(data: bytes) -> str:
     if data[cursor : cursor + 4] == b'CKBD':
         pages['keyboard'] = utility_pages.unpack_keyboard(data, cursor + 4)
     result['utility_pages'] = pages
-    modes = data[meta + METADATA.size - 4 : meta + METADATA.size]
+    modes = data[meta + METADATA.size - 9 : meta + METADATA.size - 5]
     if any(m >= len(TRS_MODES) for m in modes):
         raise ValueError('invalid TRS port role')
     if any(modes):

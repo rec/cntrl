@@ -25,14 +25,15 @@ public:
         for (auto &ring : rings_) ring = 0;
         for (unsigned i = 0; i < 3; ++i) { valid_[i] = false; dirty_[i] = true; }
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool keep_right = false, bool vertical = false) {
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool keep_right = false, bool vertical = false, bool panorama = true) {
         if (preparing_ || animating_ || display_dma_pending() || !valid_[0] || !valid_[1] || !valid_[2]) return;
         // Browsing may still be repainting the candidate. Animate from the
         // pixels already on screen instead of silently dropping the transition.
         drawing_ = -1; rendering_ = false;
         std::memcpy(previous_, cache_, sizeof(cache_));
         undo_ = undo; animation_pane_ = pane; keep_right_ = keep_right;
-        vertical_ = vertical && pane >= 0; vertical_column_ = 0;
+        panorama_ = panorama;
+        vertical_ = vertical; vertical_column_ = 0; vertical_panel_ = 0;
         duration_ms_ = duration_ms.value_or(vertical_ ? DEFAULT_VERTICAL_TRANSITION_MS : DEFAULT_TRANSITION_MS); preparing_ = true;
         for (auto &dirty : dirty_) dirty = true;
     }
@@ -301,7 +302,7 @@ private:
         }
     }
     uint16_t moving_pixel(unsigned panel, unsigned x, unsigned y, unsigned progress) const {
-        if (animation_pane_ >= 0) {
+        if (animation_pane_ >= 0 || !panorama_) {
             int source = int(x) + (undo_ ? int(progress) : -int(progress));
             if (source >= 0 && source < 160) return previous_[panel][y * 160 + unsigned(source)];
             source += undo_ ? -160 : 160;
@@ -338,7 +339,7 @@ private:
                         : previous_[panel][unsigned(source) * 160 + x];
     }
     void animate_vertical(uint32_t now) {
-        if (!vertical_column_) {
+        if (!vertical_column_ && !vertical_panel_) {
             if (display_dma_pending()) return;
             // Finish every small displacement, even when a full redraw runs
             // past its deadline. Skipping frames turns the movement into a wipe.
@@ -349,7 +350,8 @@ private:
         }
         auto *band = acquire_display_band();
         if (!band) return;
-        const unsigned panel = unsigned(animation_pane_);
+        while (vertical_panel_ < 3 && !moving_panel(vertical_panel_)) ++vertical_panel_;
+        const unsigned panel = vertical_panel_;
         const unsigned column = (rings_[panel] + vertical_column_) % display_ram_columns;
         // A DMA rectangle cannot wrap across the controller's RAM boundary.
         const unsigned width = std::min({8u, 160 - vertical_column_, display_ram_columns - (column + 1) % display_ram_columns});
@@ -373,6 +375,9 @@ private:
         vertical_column_ += width;
         if (vertical_column_ == 160) {
             vertical_column_ = 0;
+            do { ++vertical_panel_; } while (vertical_panel_ < 3 && !moving_panel(vertical_panel_));
+            if (vertical_panel_ < 3) return;
+            vertical_panel_ = 0;
             if (progress_ == 128) {
                 animating_ = false;
                 for (auto &dirty : dirty_) dirty = true;
@@ -394,7 +399,7 @@ private:
             }
             waiting_ = false;
         }
-        const unsigned distance = animation_pane_ >= 0 ? 160 : display_pitch;
+        const unsigned distance = animation_pane_ >= 0 || !panorama_ ? 160 : display_pitch;
         if (progress_ == distance) {
             // Do not reconcile the final image until the final offset settles.
             for (unsigned panel = 0; panel < 3; ++panel) if (moving_panel(panel)) {
@@ -443,8 +448,8 @@ private:
     uint16_t previous_[3][160 * 128] = {};
     bool preparing_ = false, animating_ = false, undo_ = false, native_ready_ = false;
     int animation_pane_ = -1;
-    bool keep_right_ = false, vertical_ = false;
-    unsigned vertical_column_ = 0;
+    bool keep_right_ = false, vertical_ = false, panorama_ = true;
+    unsigned vertical_column_ = 0, vertical_panel_ = 0;
     uint8_t pixel_brightness_ = 128, requested_brightness_ = 128;
     unsigned dim_column_ = 160;
     unsigned rings_[3] = {}, progress_ = 0;
