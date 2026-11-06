@@ -21,6 +21,7 @@ struct PatchOutputs {
     virtual bool send_patch(unsigned owner, const char *output, const uint8_t *bytes, unsigned length) = 0;
     virtual midi::Bridge::Delivery patch_delivery(unsigned owner) const = 0;
     virtual void cancel_patch(unsigned owner) = 0;
+    virtual const midi::MidiState *midi_state() const { return nullptr; }
     virtual bool state(unsigned operation, uint32_t value) = 0;
     virtual void validation(bool) {}
     virtual void validation_context(PatchExecutor &, bool enabled) { validation(enabled); }
@@ -35,6 +36,7 @@ class PatchExecutor {
 public:
     struct Resource {
         char output[32]; unsigned channel, control;
+        int value = -1;
         // Channel/control 256 reserves the entire destination output.
         bool overlaps(const Resource &other) const {
             return !std::strcmp(output, other.output) && (channel == 256 || other.channel == 256
@@ -60,6 +62,7 @@ public:
     bool started() const { return started_; }
     unsigned resource_count() const { return resource_count_; }
     const Resource *resources() const { return resources_; }
+    bool state_complete() const { return state_complete_; }
     bool invoke(const StatePatch &patch) {
         return outputs_.state(patch.operation, patch.value);
     }
@@ -192,9 +195,10 @@ private:
     const char *error_ = "";
     const char *waiting_output_ = nullptr;
     bool waiting_ = false, pinned_ = false, persistent_ = false, validating_ = false, reconstructing_ = false, started_ = false;
+    bool state_complete_ = true;
 
     void reset() {
-        cancel(); error_ = ""; root_ = completed_ = resource_count_ = binding_count_ = binding_cursor_ = 0; started_ = false;
+        cancel(); error_ = ""; root_ = completed_ = resource_count_ = binding_count_ = binding_cursor_ = 0; started_ = false; state_complete_ = true;
     }
     void finish(Status status) {
         status_ = status;
@@ -285,17 +289,19 @@ private:
         builtin_stock_ = 0; started_ = true; status_ = Status::suspended;
         if (!outputs_.stock(buttons, *this)) fail("Firmware switch failed");
     }
-    bool resource(const char *output, unsigned channel, unsigned control) {
+    bool resource(const char *output, unsigned channel, unsigned control, int expected = -1) {
         Resource value = {}; std::memcpy(value.output, output, 32); value.channel = channel; value.control = control;
         for (unsigned i = 0; i < resource_count_; ++i)
-            if (resources_[i].channel == channel && resources_[i].control == control && !std::strcmp(resources_[i].output, output)) return true;
+            if (resources_[i].channel == channel && resources_[i].control == control && !std::strcmp(resources_[i].output, output)) {
+                resources_[i].value = expected; return true;
+            }
         if (resource_count_ == resource_capacity_) {
             unsigned capacity = resource_capacity_ ? resource_capacity_ * 2 : 8;
             void *memory = std::realloc(resources_, capacity * sizeof(Resource));
             if (!memory) return fail("Patch ownership memory exhausted");
             resources_ = static_cast<Resource *>(memory); resource_capacity_ = capacity;
         }
-        resources_[resource_count_++] = value; return true;
+        value.value = expected; resources_[resource_count_++] = value; return true;
     }
     bool collect(const uint8_t *node, const Document &document) {
         const uint8_t *p = node + 4;
@@ -303,18 +309,31 @@ private:
             const uint8_t *instrument = document.instrument(u16(p));
             const char *output = reinterpret_cast<const char *>(instrument + 32);
             unsigned channel = instrument[64];
-            if (!resource(output, channel, 128)) return false;
+            if (!resource(output, channel, 128, p[2])) return false;
             constexpr unsigned controllers[] = {0, 32, 7, 10};
             for (unsigned i = 0; i < 4; ++i)
-                if (p[3 + i] != 255 && !resource(output, channel, controllers[i])) return false;
+                if (p[3 + i] != 255 && !resource(output, channel, controllers[i], i < 2 ? -1 : p[3 + i])) return false;
+            if (p[3] != 255 && !resource(output, channel, 130, p[3])) return false;
+            if (p[4] != 255 && !resource(output, channel, 131, p[4])) return false;
         } else if (node[0] == 2) {
             const char *output = reinterpret_cast<const char *>(p);
-            if (node[1] & 1) return resource(output, 256, 256);
+            if (node[1] & 1) {
+                if (u16(node + 2) == 34 && p[32] >> 4 == 12)
+                    return resource(output, p[32] & 15, 128, p[33]);
+                state_complete_ = false; return resource(output, 256, 256);
+            }
+            if (node[1] == 4) {
+                if (!resource(output, p[32] & 15, 256 + (p[34] << 7) + p[37], (p[40] << 7) + p[43])) return false;
+                for (unsigned c : {99u, 98u, 6u, 38u}) if (!resource(output, p[32] & 15, c)) return false;
+                return true;
+            }
             for (unsigned offset = 32; offset < u16(node + 2); offset += 3) {
                 unsigned status = p[offset], control = status >> 4 == 14 ? 129 : p[offset + 1];
-                if (!resource(output, status & 15, control)) return false;
+                int expected = status >> 4 == 14 ? p[offset + 1] | (p[offset + 2] << 7) : p[offset + 2];
+                if ((control == 6 || control == 38 || control >= 96) && status >> 4 == 11) state_complete_ = false;
+                if (!resource(output, status & 15, control, expected)) return false;
             }
-        }
+        } else if (node[0] != 7) state_complete_ = false;
         return true;
     }
     bool leaving() {

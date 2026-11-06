@@ -1,8 +1,9 @@
 # Switch assignments
 
 Switches is an optional module for press, momentary and latched Patch assignments.
-Open it from the module menu. Every visit starts locally Off without transmitting
-anything. Held entry switches must be released before they activate an assignment.
+Open it from the module menu. Opening the page sends no MIDI. Indicators use
+the shared known MIDI state, including writes made before opening the page.
+Held entry switches must be released before they activate an assignment.
 
 Configure assignments in the performance setup:
 
@@ -35,6 +36,89 @@ inline program selections, sequences and stable references such as
 `{ patch = 'clean' }`. Program selections use instrument
 aliases; other MIDI variants name their output directly. Definitions are keyed
 by `patches.clean`, independently of their display labels.
+
+## Shared parameter state
+
+The output scheduler records submitted CC values, Pitch Bend, program selections
+and NRPN parameter values by destination and MIDI channel. Assignments referring
+to the same controls share that information, including named references,
+derived patches and sequences. Names and button labels do not define identity.
+Program bank selectors are captured when the Program Change is submitted.
+
+For example, if A and B both use CC 7 value 127 for `on` and value 0 for `off`,
+turning it on through A makes both indicators show On. Pressing a latched B
+then requests value 0. A separate toggle group is unnecessary. A program
+selection updates every matching program indicator on that output and channel.
+
+An indicator becoming On through a shared value does not acquire an additional
+Off cleanup obligation. Explicit Off cleanup belongs to assignments that
+actually ran their On action during this visit.
+
+A compound patch matches when all its specified final parameter values match.
+Repeated writes to a parameter use the last value in the sequence. The page
+shows On for an `on` match, Off for an `off` match, Partial match when some
+specified values match, Other values when known values differ, and Unknown
+remote state when values are unavailable. Pending work has its own indication.
+Latched presses request Off when their On values match and otherwise request On.
+
+These values record local submissions. Instrument controls and traffic from
+another controller can change an instrument without cntrl observing it. Incoming
+messages forwarded through cntrl update the destination state when submitted.
+There is no assumed connection between an input message and an instrument's
+feedback protocol. Disconnecting a detectable output invalidates its state.
+Physical MIDI plugs without connection detection require explicit user care.
+
+Program Changes invalidate previously known channel parameters because loading
+a program may change them. Subsequent CCs in the same patch establish the
+specified values again. SysEx and System Reset invalidate destination state.
+Reset Controllers invalidates affected controller state, and RPN/NRPN
+increment/decrement invalidates inferred parameter values.
+Cancelled pending output loses its known state. Reconnection establishes no
+values until fresh messages are submitted.
+
+Notes, transport, application operations and arbitrary SysEx have no inferred
+active-value state. Assignments containing those operations retain local
+execution status. Persistent assignments using opaque MIDI operations continue
+to reserve the destination. Known parameter controls may be shared. Runtime
+state is retained across page and setup changes while the same outputs remain
+available, and is lost on restart.
+
+## Enter and exit hooks
+
+Hooks follow assignment selection. Selecting a different assignment runs the
+previous assignment's `exit`, then the new assignment's `enter.action`, then
+the ordinary selecting action. Repeated actions on the same assignment use
+the ordinary action. The first selection after opening the page runs enter.
+Selecting an alias is a new selection even when its parameter values already
+match another assignment.
+
+```toml
+[switches.lead]
+button = 'A'
+on = { patch = 'lead' }
+enter = { action = { patch = 'prepare-lead' }, override = true }
+exit = { patch = 'finish-lead' }
+```
+
+`enter` and `exit` are optional. `enter.override` is a boolean, defaulting to
+false. When true, the selecting action is suppressed on that first selection.
+Further actions on the same assignment run normally. Each hook accepts the
+common Patch representation, including sequences and references. Exit has no
+override option.
+
+Presses and recognized gesture actions select assignments. A momentary release
+requests its Off cleanup without changing selection. Hook execution is
+serialized with accepted assignment work. A blocked exit delays the next enter
+and action. A failed exit or enter cancels the pending selection queue and
+reports the existing Failed / unknown or Unknown remote state indication.
+Hooks cannot leave the switch context or trigger selection recursively.
+
+The selection queue holds at most 16 actions and reports saturation. Held
+repeats coalesce while selection work is pending. F cancels future selection
+actions, finishes accepted work and explicit Off cleanup, then runs the selected
+assignment's exit once. F again abandons blocked work. Closing during an enter
+that has begun also runs that assignment's exit after accepted work completes.
+Selection is reset each time the page is opened.
 
 ## Programmable gestures
 
@@ -91,7 +175,7 @@ pending and resume without catching up missed intervals. If physical input
 fills the queue, the assignment reports an error and cancels its queued work.
 It rearms after release. MIDI delivery continues through the shared executor.
 
-Persistent assignments reserve the controls their reachable patches affect.
+Persistent assignments identify the controls their reachable patches affect.
 Notes, pressure, direct Program Change, system messages and SysEx reserve their entire destination output until Off cleanup or
 explicit abandonment. Other assignments cannot share those reserved resources.
 Two press assignments can share controls because each invocation completes its
@@ -107,8 +191,8 @@ in its label; `switch.button` exposes just that button. Status text is fitted
 against all possible status strings at compile time. Icons remain references
 for future use.
 
-The page displays On, Off, Pending, Completed locally, Unknown remote state or
-Failed / unknown. These describe local execution and scheduling;
+The page also displays Pending, Completed locally and Failed / unknown.
+These describe local execution and scheduling;
 completion does not acknowledge receipt by an instrument. Off executes its
 authored Patch and does not reconstruct the previous sound or roll back effects.
 

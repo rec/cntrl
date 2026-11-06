@@ -447,6 +447,13 @@ class SwitchGestures(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class SwitchEnter(BaseModel, frozen=True):
+    action: Patch
+    override: Annotated[bool, Field(strict=True)] = False
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class SwitchAssignment(BaseModel, frozen=True):
     name: str | None = None
     button: Literal['A', 'B', 'C', 'D', 'E']
@@ -455,6 +462,8 @@ class SwitchAssignment(BaseModel, frozen=True):
     off: Patch | None = None
     style: Style | None = None
     gestures: SwitchGestures | None = None
+    enter: SwitchEnter | None = None
+    exit: Patch | None = None
 
     @model_validator(mode='after')
     def cleanup(self) -> 'SwitchAssignment':

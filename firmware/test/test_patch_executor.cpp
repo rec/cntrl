@@ -222,8 +222,7 @@ int main(int argc, char **argv) {
     controller.action(0); initial_bytes = unsigned(board.wire[0].size()); controller.action(2);
     for (unsigned i = 22; i < 42; ++i) { controller.tick(i); board.bridge.service(board, i); }
     assert(board.wire[0].size() == initial_bytes + 14); // Unknown remote state permits resending the previously known program.
-    // A dynamic selection changed since entering the switch page must still
-    // respect another persistent assignment's reserved controls.
+    // A dynamic selection may share known MIDI controls with another assignment.
     Bytes switched = extend(base, {node(3, activate)}, board); cntrl::Document switched_document;
     assert(switched_document.load(switched.data(), unsigned(switched.size()), board));
     unsigned assignment = unsigned(switched_document.switch_assignment(0) - switched.data());
@@ -233,8 +232,10 @@ int main(int argc, char **argv) {
     controller.activate(switched_document); assert(controller.navigate(3));
     cntrl::Switches switches(board, board, board); switches.enter(switched_document, 0); assert(switches.open());
     assert(controller.navigate(4)); initial_bytes = unsigned(board.wire[0].size());
-    switches.button(0, true); switches.tick(); board.bridge.service(board, 0);
-    assert(board.last_error == "Selected patch overlaps another switch's MIDI controls");
-    assert(board.wire[0].size() == initial_bytes);
-    switches.close(); switches.tick(); assert(!switches.open() && board.pins == 0);
+    board.last_error.clear(); switches.button(0, true);
+    for (unsigned i = 0; i < 30; ++i) { switches.tick(i); board.bridge.service(board, i); }
+    assert(board.last_error.empty() && board.wire[0].size() > initial_bytes);
+    switches.close();
+    for (unsigned i = 30; i < 60; ++i) { switches.tick(i); board.bridge.service(board, i); }
+    assert(!switches.open() && board.pins == 0);
 }

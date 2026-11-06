@@ -336,7 +336,7 @@ def test_press_switches_can_share_controls(target: models.Target) -> None:
     assert compiler.compile_show(show, {}, [], target)
 
 
-def test_named_program_bank_lookup_reserves_the_emitted_bank_control(
+def test_named_program_bank_lookup_can_share_the_emitted_bank_control(
     target: models.Target,
 ) -> None:
     show = {
@@ -385,8 +385,7 @@ def test_named_program_bank_lookup_reserves_the_emitted_bank_control(
             },
         },
     }
-    with pytest.raises(compiler.CompilationError, match='ownership conflicts'):
-        compiler.compile_show(show, {}, [], target)
+    assert compiler.compile_show(show, {}, [], target)
 
 
 def test_external_terminal_validation_uses_the_source_context(

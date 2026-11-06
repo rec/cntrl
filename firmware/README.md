@@ -40,9 +40,23 @@ entries are removed.
 All Sound Off, All Notes Off and the Omni/Mono/Poly mode commands clear the
 channel's notes. Reset All Controllers invalidates controller values, pitch
 bend and pressure, preserving notes and program. System Reset removes that
-output's snapshot. These snapshots describe accepted channel messages, including
-USB acceptance into its transmit queue. Device-specific SysEx, RPN/NRPN parameter
-banks, sustain-held voices and receiver acknowledgements are outside the snapshot.
+output's snapshot. SysEx invalidates the destination snapshot as well. These
+snapshots describe accepted channel messages, including USB acceptance into its
+transmit queue. Receiver acknowledgements and sustain-held voices require
+information beyond these messages.
+
+Switch indicators query the same snapshot. Recorded controller and pitch values
+become uncertain after a Program Change until rewritten, while their last
+accepted data remains available in the snapshot. Program-bank MSB and LSB are
+captured when the program is sent. Standard NRPN selector/data-entry sequences
+also establish parameter values. RPN values and incomplete NRPN data entry
+have no inferred parameter value. Disconnects and cancelled pending output
+invalidate the destination before further scheduler submissions.
+
+Assignments addressing the same parameters share indicators and latched toggle
+decisions. Selection-based `enter` and `exit` hooks run through the existing
+executor, with `enter.override` optionally suppressing the selecting action.
+See [switch controls](../doc/momentary-latched.md) for configuration and lifecycle.
 
 ## Host command
 

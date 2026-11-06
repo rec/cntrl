@@ -139,6 +139,9 @@ public:
         }
         unsigned gestures = names;
         if (bytes[19] & 0x40) names += 100;
+        unsigned hooks = names;
+        bool has_hooks = names + 4 <= length && !std::memcmp(bytes + names, "CHOK", 4);
+        if (has_hooks) names += 29;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -152,6 +155,17 @@ public:
         if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware)) return false;
         unsigned switch_count = u16(bytes + graph + 10);
         unsigned switch_start = graph + 16 + u16(bytes + graph + 8) * 4 + np * 2;
+        if (has_hooks) {
+            for (unsigned b = 0; b < 5; ++b) {
+                const uint8_t *p = bytes + hooks + 4 + b * 5;
+                bool assigned = false;
+                for (unsigned i = 0; i < switch_count; ++i)
+                    if (bytes[switch_start + i * 72] == b) assigned = true;
+                for (unsigned j = 0; j < 2; ++j)
+                    if (u16(p + j * 2) != 65535 && (!assigned || u16(p + j * 2) >= u16(bytes + graph + 8))) return false;
+                if (p[4] > 1 || (p[4] && u16(p) == 65535)) return false;
+            }
+        }
         if (bytes[19] & 0x40) {
             for (unsigned b = 0; b < 5; ++b) {
                 const uint8_t *p = bytes + gestures + b * 20;
@@ -319,10 +333,21 @@ public:
         return bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0);
     }
     unsigned keyboard_size() const { return !std::memcmp(keyboard_section(), "CKBD", 4) ? 6 + u16(keyboard_section() + 4) * 39 : 0; }
-    unsigned utility_section_size() const { return ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0) + keyboard_size() + ((data_[19] & 0x40) ? 100 : 0); }
+    const uint8_t *switch_hook_section() const {
+        return bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0) + keyboard_size() + ((data_[19] & 0x40) ? 100 : 0);
+    }
+    const uint8_t *switch_hooks(unsigned button) const {
+        const uint8_t *p = switch_hook_section();
+        if (std::memcmp(p, "CHOK", 4)) return nullptr;
+        p += 4 + button * 5;
+        return u16(p) != 65535 || u16(p + 2) != 65535 ? p : nullptr;
+    }
+    unsigned utility_section_size() const {
+        return unsigned(switch_hook_section() - bank(patches())) + (!std::memcmp(switch_hook_section(), "CHOK", 4) ? 29 : 0);
+    }
     const uint8_t *switch_gestures(unsigned button) const {
         if (!(data_[19] & 0x40)) return nullptr;
-        const uint8_t *p = bank(patches()) + utility_section_size() - 100 + button * 20;
+        const uint8_t *p = switch_hook_section() - 100 + button * 20;
         return u16(p + 12) ? p : nullptr;
     }
     const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }

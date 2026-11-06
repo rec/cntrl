@@ -4,6 +4,8 @@
 extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #endif
 #include <Arduino.h>
+// Inline shared routines need distinct sections alongside strong FLASHMEM functions.
+#define CNTRL_FLASH_ROUTINE(name) __attribute__((section(".flashmem.cntrl_" #name), noinline))
 #include <usb_keyboard.h>
 #include <SD.h>
 #include "expression_pedals.h"
@@ -109,6 +111,7 @@ public:
     }
     cntrl::midi::Bridge::Delivery patch_delivery(unsigned owner) const override { return bridge_.delivery(owner); }
     void cancel_patch(unsigned owner) override { bridge_.cancel_owner(owner); }
+    const cntrl::midi::MidiState *midi_state() const override { return &cntrl::midi::Sink::state(); }
     bool state(unsigned operation, uint32_t value) override { return patch_state(operation, value); }
     bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override { return patch_stock(pair, invocation); }
     void validation(bool begin) override { controller.validation(begin); }
@@ -396,6 +399,8 @@ public:
             if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
             controller.cancel_gesture();
             cable_test.toggle(now);
+            if (cable_test.enabled())
+                for (const auto &output : cntrl::midi::output_connections) forget_output(output.route);
             bridge_.configure(cable_test.enabled() ? false : runtime.interface);
             return;
         }

@@ -128,6 +128,7 @@ struct Sink {
         return true;
     }
     const MidiState &state() const { return state_; }
+    void forget_output(unsigned output) { state_.forget(output); }
 protected:
     virtual bool write_packet(unsigned destination, const Packet &packet) = 0;
 private:
@@ -162,6 +163,7 @@ public:
     void cancel_owner(unsigned owner) {
         if (owner >= owned_.size()) return;
         auto &b = owned_[owner];
+        if (b.delivery == Delivery::pending) invalidated_ |= 1u << b.route;
         if (b.delivery == Delivery::pending && b.sysex) routes_[b.route].terminate = true;
         b.delivery = Delivery::cancelled;
     }
@@ -193,6 +195,7 @@ public:
         return route == 8 ? usb_host_ : route == 6 || route == 7 ? usb_device_ : true;
     }
     void disconnect_output(unsigned route) {
+        invalidated_ |= 1u << route;
         reset_route(route);
         cancel_route(route);
         auto &r = routes_[route];
@@ -275,6 +278,8 @@ public:
         return ready;
     }
     void service(Sink &sink, uint32_t now) {
+        for (unsigned i = 0; i < destinations; ++i) if (invalidated_ & (1u << i)) sink.forget_output(i);
+        invalidated_ = 0;
         for (unsigned i = 0; i < destinations; ++i) {
             unsigned index = (cursor_ + i) % destinations;
             auto &r = routes_[index];
@@ -314,6 +319,7 @@ public:
         cursor_ = (cursor_ + 1) % destinations;
     }
 private:
+    unsigned invalidated_ = 0;
     struct Owned {
         uint8_t bytes[14] = {};
         const uint8_t *source = nullptr;

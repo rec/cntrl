@@ -20,6 +20,7 @@ from .compiler import (
     SCROLL_DIRECTIONS,
     STATE_OPERATIONS,
     SWITCH,
+    SWITCH_HOOKS,
     TRS_JACKS,
     TRS_MODES,
 )
@@ -62,6 +63,8 @@ def graph_offset(data: bytes) -> int:
         )
     if flags & GESTURES_FLAG:
         cursor += 5 * GESTURES.size
+    if data[cursor : cursor + 4] == b'CHOK':
+        cursor += 4 + 5 * SWITCH_HOOKS.size
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -218,6 +221,30 @@ def export(data: bytes) -> str:
         if mode:
             value['mode'] = ('press', 'momentary', 'latched')[mode]
         value['on'] = _patch(data, offset, on, metadata, set())
+        hooks = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
+        if flags & utility_pages.EXPRESSION_FLAG:
+            hooks += utility_pages.EXPRESSION.size * 4
+        if flags & utility_pages.CLOCK_FLAG:
+            hooks += utility_pages.CLOCK.size
+        if data[hooks : hooks + 4] == b'CKBD':
+            hooks += (
+                6
+                + struct.unpack_from('<H', data, hooks + 4)[0]
+                * utility_pages.KEYBOARD.size
+            )
+        if flags & GESTURES_FLAG:
+            hooks += 5 * GESTURES.size
+        if data[hooks : hooks + 4] == b'CHOK':
+            enter, exit, override = SWITCH_HOOKS.unpack_from(
+                data, hooks + 4 + button * SWITCH_HOOKS.size
+            )
+            if enter != 65535:
+                value['enter'] = {
+                    'action': _patch(data, offset, enter, metadata, set()),
+                    'override': override,
+                }
+            if exit != 65535:
+                value['exit'] = _patch(data, offset, exit, metadata, set())
         if flags & GESTURES_FLAG:
             address = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
             if flags & utility_pages.EXPRESSION_FLAG:

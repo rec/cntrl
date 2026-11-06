@@ -119,11 +119,10 @@ def test_invalid_assignment_is_rejected(field: str, value: object) -> None:
         compile_switches({'sustain': value_assignment})
 
 
-def test_duplicate_output_ownership_and_unsupported_build_are_rejected() -> None:
+def test_shared_controls_compile_and_unsupported_build_is_rejected() -> None:
     second = assignment('latched')
     second['button'] = 'B'
-    with pytest.raises(ValueError, match='ownership'):
-        compile_switches({'first': assignment(), 'second': second})
+    assert compile_switches({'first': assignment(), 'second': second})
     with pytest.raises(ValueError, match='capacity'):
         compile_switches({'sustain': assignment()}, 0)
 

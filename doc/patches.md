@@ -398,10 +398,11 @@ Press assignments also accept a `gestures` table for release, long press,
 double tap, their release patches and held repetition. See the timing,
 exclusivity and cancellation rules in [switch controls](momentary-latched.md#programmable-gestures).
 
-The full reachable graph determines ownership, including both branches and
-referenced sequences. Instrument program selections, Control Change, Pitch Bend
-and NRPN reserve their known controls. Other MIDI messages, including direct
-Program Change and SysEx, reserve the entire output through Off cleanup or
+The full reachable graph identifies controls, including both branches and
+referenced sequences. Instrument and direct program selections, Control Change,
+Pitch Bend and NRPN use shared parameter state. Their indicators and latched
+actions follow the recorded values, so aliases stay synchronized automatically.
+Opaque MIDI operations such as SysEx reserve the entire output through Off cleanup or
 explicit abandonment. Other assignments cannot share that output. There is no
 automatic note ownership or inferred inverse. Accepted work completes before the
 required Off patch runs. A held entry switch must be released before it rearms.
@@ -410,6 +411,13 @@ Stock visits and context-leaving operations are allowed in press assignments and
 song positions. Either branch of a momentary or latched assignment must stay in
 its context. Other active assignments finish their explicit cleanup before a
 press assignment leaves. See [switch controls](momentary-latched.md).
+
+Assignments can define `enter = { action = <Patch>, override = false }` and
+`exit = <Patch>`. Selecting a different assignment runs exit, enter and the
+selecting action in order. `enter.override = true` suppresses that selecting
+action. Hooks follow selection independently of shared parameter state.
+Hooks must remain in the switch context. See the [hook lifecycle](momentary-latched.md#enter-and-exit-hooks)
+for repetition, cancellation and backpressure behavior.
 
 ## References and song libraries
 

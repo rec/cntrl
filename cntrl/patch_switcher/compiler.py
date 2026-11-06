@@ -257,6 +257,7 @@ def compile_show(
     assignments: list[tuple[str, models.SwitchAssignment, int, int]] = []
     gesture_records = [GESTURES.pack(*([65535] * 6), 0, 0, 0, 0) for _ in range(5)]
     gesture_assignments: list[tuple[str, models.SwitchAssignment, int, int]] = []
+    hook_records = [SWITCH_HOOKS.pack(65535, 65535, False) for _ in range(5)]
     buttons: set[str] = set()
     for key, raw in show.switches.items():
         path = f'switches.{key}'
@@ -277,6 +278,24 @@ def compile_show(
             else 65535
         )
         assignments.append((key, assignment, on, off))
+        enter = (
+            compiler.add(assignment.enter.action, path + '.enter.action')
+            if assignment.enter is not None
+            else 65535
+        )
+        exit = (
+            compiler.add(assignment.exit, path + '.exit')
+            if assignment.exit is not None
+            else 65535
+        )
+        hook_records[ord(assignment.button) - ord('A')] = SWITCH_HOOKS.pack(
+            enter,
+            exit,
+            assignment.enter.override if assignment.enter is not None else False,
+        )
+        for node in (enter, exit):
+            if node != 65535:
+                gesture_assignments.append((key, assignment, node, 65535))
         if assignment.gestures is not None:
             gesture = assignment.gestures
             events: list[int] = []
@@ -513,6 +532,13 @@ def compile_show(
         + clock
         + keyboard
         + gestures
+        + (
+            b'CHOK' + b''.join(hook_records)
+            if any(
+                a.enter is not None or a.exit is not None for _, a, _, _ in assignments
+            )
+            else b''
+        )
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -1129,7 +1155,12 @@ class PatchCompiler:
             for value, path, source in leaves[on] + (
                 [] if off == 65535 else leaves[off]
             ):
-                if (assignment.mode != 'press' or assignment.gestures is not None) and (
+                if (
+                    assignment.mode != 'press'
+                    or assignment.gestures is not None
+                    or assignment.enter is not None
+                    or assignment.exit is not None
+                ) and (
                     isinstance(value, models.StockFirmware)
                     or isinstance(value, models.Navigation)
                     and value.operation in ('menu', 'back')
@@ -1160,12 +1191,20 @@ class PatchCompiler:
                     output = value.output
                     assert output is not None
                     if isinstance(
-                        value, (models.ControlChange, models.PitchBend, models.Nrpn)
+                        value,
+                        (
+                            models.ControlChange,
+                            models.ChannelProgramChange,
+                            models.PitchBend,
+                            models.Nrpn,
+                        ),
                     ):
                         channel = value.channel
                         assert channel is not None
                         if isinstance(value, models.ControlChange):
                             resources.add((output, channel, value.controller))
+                        elif isinstance(value, models.ChannelProgramChange):
+                            resources.add((output, channel, 128))
                         elif isinstance(value, models.PitchBend):
                             resources.add((output, channel, 129))
                         else:
@@ -1178,7 +1217,7 @@ class PatchCompiler:
                 if assignment.mode == mode == 'press':
                     continue
                 if any(
-                    o == p and (c == 0 or d == 0 or c == d and r == s)
+                    o == p and (c == 0 or d == 0)
                     for o, c, r in resources
                     for p, d, s in other
                 ):
@@ -1240,6 +1279,7 @@ GRAPH = struct.Struct('<4sIHHHH')
 SWITCH = struct.Struct('<BBHH64sH')
 GESTURES_FLAG = 1 << 14
 GESTURES = struct.Struct('<10H')
+SWITCH_HOOKS = struct.Struct('<HH?')
 GESTURE_EVENTS = (
     'release',
     'long_press',

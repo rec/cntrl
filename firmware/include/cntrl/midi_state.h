@@ -12,6 +12,12 @@ struct NoteState {
 
 struct ControllerState {
     uint8_t controller, value;
+    bool known = true;
+};
+
+struct ParameterState {
+    uint16_t parameter;
+    std::optional<uint16_t> value;
 };
 
 struct ChannelState {
@@ -20,6 +26,9 @@ struct ChannelState {
     std::vector<ControllerState> controllers;
     std::optional<uint8_t> program, pressure;
     std::optional<uint16_t> pitch_bend;
+    std::optional<uint8_t> bank_msb, bank_lsb;
+    std::vector<ParameterState> parameters;
+    bool nrpn = false, pitch_known = true;
 };
 
 struct OutputState {
@@ -32,15 +41,41 @@ struct OutputState {
 class MidiState {
 public:
     std::vector<OutputState> outputs;
+    unsigned revision() const { return revision_; }
+    void forget(unsigned output) {
+        auto o = std::find_if(outputs.begin(), outputs.end(), [output](const auto &v) { return v.output == output; });
+        if (o != outputs.end()) { outputs.erase(o); ++revision_; }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_state_value)
+#endif
+    int value(unsigned output, unsigned channel, unsigned control) const {
+        auto o = std::find_if(outputs.begin(), outputs.end(), [output](const auto &v) { return v.output == output; });
+        if (o == outputs.end()) return -1;
+        auto c = std::find_if(o->channels.begin(), o->channels.end(), [channel](const auto &v) { return v.channel == channel; });
+        if (c == o->channels.end()) return -1;
+        if (control == 128) return c->program ? *c->program : -1;
+        if (control == 129) return c->pitch_bend && c->pitch_known ? *c->pitch_bend : -1;
+        if (control == 130) return c->bank_msb ? *c->bank_msb : -1;
+        if (control == 131) return c->bank_lsb ? *c->bank_lsb : -1;
+        if (control >= 256) {
+            for (const auto &p : c->parameters) if (p.parameter == control - 256) return p.value ? *p.value : -1;
+            return -1;
+        }
+        for (const auto &v : c->controllers)
+            if (v.controller == control && v.known) return v.value;
+        return -1;
+    }
 private:
     friend struct Sink;
+    unsigned revision_ = 0;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_state_record)
+#endif
     void record(unsigned output, const uint8_t *bytes, unsigned size) {
+        if (size && (bytes[0] == 0xf0 || bytes[0] == 0xff)) { forget(output); return; }
         if (!size || bytes[0] < 0x80 || (bytes[0] >= 0xf0 && bytes[0] != 0xff)) return;
         auto o = std::find_if(outputs.begin(), outputs.end(), [output](const auto &v) { return v.output == output; });
-        if (size == 1 && bytes[0] == 0xff) {
-            if (o != outputs.end()) outputs.erase(o);
-            return;
-        }
         if (bytes[0] >= 0xf0) return;
         const unsigned kind = bytes[0] >> 4;
         if (size != (kind == 12 || kind == 13 ? 2u : 3u)) return;
@@ -54,8 +89,10 @@ private:
         auto c = std::find_if(channels.begin(), channels.end(), [channel](const auto &v) { return v.channel == channel; });
         if (c == channels.end()) {
             if (off) return;
-            channels.push_back({channel, {}, {}, {}, {}, {}}); c = channels.end() - 1;
+            ChannelState state{}; state.channel = channel;
+            channels.push_back(state); c = channels.end() - 1;
         }
+        ++revision_;
         if (kind <= 10) {
             auto &notes = c->notes;
             auto n = std::find_if(notes.begin(), notes.end(), [bytes](const auto &v) { return v.note == bytes[1]; });
@@ -74,14 +111,45 @@ private:
                 // instead of claiming that the previous values still apply.
                 c->controllers.clear(); c->pressure.reset(); c->pitch_bend.reset();
                 for (auto &n : c->notes) n.pressure.reset();
+                c->parameters.clear();
             }
             auto &controllers = c->controllers;
             auto v = std::find_if(controllers.begin(), controllers.end(), [controller](const auto &s) { return s.controller == controller; });
             if (v == controllers.end()) controllers.push_back({bytes[1], bytes[2]});
-            else v->value = bytes[2];
-        } else if (kind == 12) c->program = bytes[1];
+            else { v->value = bytes[2]; v->known = true; }
+            if (controller == 99 || controller == 98 || controller == 101 || controller == 100) {
+                c->nrpn = controller == 99 || controller == 98;
+                for (auto &entry : controllers) if (entry.controller == 6 || entry.controller == 38) entry.known = false;
+            }
+            if (controller == 96 || controller == 97) {
+                c->parameters.clear();
+                for (auto &entry : controllers) if (entry.controller == 6 || entry.controller == 38) entry.known = false;
+            }
+            if ((controller == 6 || controller == 38) && c->nrpn) {
+                int high = value(output, channel, 99), low = value(output, channel, 98);
+                if (high >= 0 && low >= 0 && (high != 127 || low != 127)) {
+                    uint16_t parameter = uint16_t(high * 128 + low);
+                    std::optional<uint16_t> data;
+                    int msb = -1, lsb = -1;
+                    for (const auto &entry : controllers) if (entry.known) {
+                        if (entry.controller == 6) msb = entry.value;
+                        if (entry.controller == 38) lsb = entry.value;
+                    }
+                    if (msb >= 0 && lsb >= 0) data = uint16_t(msb * 128 + lsb);
+                    auto p = std::find_if(c->parameters.begin(), c->parameters.end(), [parameter](const auto &v) { return v.parameter == parameter; });
+                    if (p == c->parameters.end()) c->parameters.push_back({parameter, data});
+                    else p->value = data;
+                }
+            }
+        } else if (kind == 12) {
+            int msb = value(output, channel, 0), lsb = value(output, channel, 32);
+            c->bank_msb = msb >= 0 ? std::optional<uint8_t>(uint8_t(msb)) : std::nullopt;
+            c->bank_lsb = lsb >= 0 ? std::optional<uint8_t>(uint8_t(lsb)) : std::nullopt;
+            c->program = bytes[1]; c->parameters.clear(); c->pitch_known = false;
+            for (auto &entry : c->controllers) entry.known = entry.controller == 0 || entry.controller == 32;
+        }
         else if (kind == 13) c->pressure = bytes[1];
-        else c->pitch_bend = uint16_t(bytes[1] | unsigned(bytes[2]) << 7);
+        else { c->pitch_bend = uint16_t(bytes[1] | unsigned(bytes[2]) << 7); c->pitch_known = true; }
     }
 };
 } // namespace cntrl::midi
