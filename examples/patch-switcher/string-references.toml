@@ -1,0 +1,35 @@
+# Strings in patch positions refer to named patches in this setup.
+[patches]
+clean = {output = 'din', channel = 1, controller = 7, value = 80}
+lead = {parent = 'clean', value = 110}
+clean-alias = 'clean'
+prepare-lead = {output = 'din', channel = 1, controller = 20, value = 127}
+finish-lead = {output = 'din', channel = 1, controller = 20, value = 0}
+intro = {patches = [{operation = 'brightness', value = 192}, 'clean-alias']}
+
+[patch_cycles]
+Live = ['clean', 'lead', 'intro']
+
+[switches.intro]
+button = 'A'
+on = 'intro'
+
+[switches.lead]
+button = 'B'
+mode = 'latched'
+on = 'lead'
+off = 'clean'
+enter = {action = 'prepare-lead', override = false}
+exit = 'finish-lead'
+
+[switches.gestures]
+button = 'C'
+on = 'clean'
+
+[switches.gestures.gestures]
+release = 'finish-lead'
+long_press = 'lead'
+long_release = 'clean'
+double_tap = 'intro'
+double_release = 'clean'
+repeat = 'prepare-lead'

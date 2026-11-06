@@ -6,8 +6,9 @@ optional `[tag_styles.NAME]` tables define styles for selected tags. Tags do not
 need a declaration to be used. Top-level `tags` describes the performance setup
 itself and is not inherited by its patches.
 
-A Patch table uses `patch` for a named reference, `patches` for a sequence,
-`operation` for controller actions, and `type` for MIDI messages.
+A Patch can be a string naming a local patch or a table. Tables use `patch`
+for references with additional fields, `patches` for a sequence, `operation`
+for controller actions, and `type` for MIDI messages.
 Each form works in a named definition, browser patch cycle, switch assignment,
 song position or sequence.
 A sequence executes all its children in order on one activation. A song
@@ -74,7 +75,7 @@ output = 'din'
 programs = ['Piano', 'Flute', {}, 'Strings']
 
 [patch_cycles]
-Live = ['Piano', 'Flute', 'Strings']
+Live = [{name = 'Piano'}, {name = 'Flute'}, {name = 'Strings'}]
 ```
 
 Array positions are program numbers 1 through 128. An empty table `{}` leaves
@@ -87,8 +88,9 @@ An entry can also be a metadata table, for example
 string separated by commas or colons. Program numbers and instrument identities
 come from the containing structure and cannot be repeated inside these entries.
 
-In a patch cycle, a string looks up an exact program name. If a name occurs more
-than once, qualify it with `{name = 'Flute', instrument = 'synth', bank = 3}`,
+In a patch cycle, `{name = 'Flute'}` looks up an exact catalogue program name.
+If a name occurs more than once, qualify it with
+`{name = 'Flute', instrument = 'synth', bank = 3}`,
 using whichever qualifiers are needed to select one program. These shorthand
 entries can include presentation properties, volume and pan. Named patches,
 switch assignments, sequences and songs accept patch operations and named references.
@@ -115,7 +117,7 @@ lsb = 0
 lsb = 3
 
 [patch_cycles]
-Live = ['Piano', 'Lead']
+Live = [{name = 'Piano'}, {name = 'Lead'}]
 ```
 
 Explicit banks need mappings in the instrument profile. `msb` is the value sent on
@@ -220,22 +222,36 @@ display_name = 'Clean piano'
 [patches.intro]
 patches = [
     {operation = 'brightness', value = 192},
-    {patch = 'clean'},
+    'clean',
     {type = 'control-change', output = 'trs', channel = 2, controller = 11, value = 100},
 ]
 
 [patch_cycles]
-Live = [{patch = 'intro'}]
+Live = ['intro']
 
 [switches.intro]
 button = 'A'
-on = {patch = 'intro'}
+on = 'intro'
 ```
 
 Instrument declarations and their bank mappings retain their existing meaning.
 Switch-only setups can omit instruments, definitions, named patches and patch cycles
 when their patches do not use them. Named definitions have stable keys; their
 dictionary order does not define the browser order. `patch_cycles` supplies that order.
+
+A string is a named patch reference wherever a Patch is accepted, including
+named definitions, browser cycles, sequence children, switch On/Off actions,
+gesture actions, enter/exit hooks and song positions. For example,
+`on = 'lead'` selects the local patch named `lead`. A missing name is an error,
+even if a catalogue program has that name. Catalogue lookup uses an explicit
+`{name = 'lead'}` table in a browser cycle.
+
+Use a reference table when adding fields, such as
+`{patch = 'lead', display_name = 'Solo'}` or
+`{document = 'other-setup', patch = 'lead'}`. Editable exports normalize
+references to tables, and those tables remain accepted by the shared parser.
+See [string-references.toml](../examples/patch-switcher/string-references.toml)
+for a complete setup.
 
 ## Derived patches in songs
 
@@ -263,11 +279,11 @@ display_name = "A'"
 [[songs]]
 id = 1
 name = 'Example'
-patches = [{patch = 'A′'}, {patch = 'A'}, {patch = 'A′'}]
+patches = ['A′', 'A', 'A′']
 ```
 
 Writing `type = 'derived'` alongside `parent` is optional. In the song list,
-`patch` selects a named patch. Every press plays a complete selection, so A′
+strings select named patches. Every press plays a complete selection, so A′
 can be first. The example sends program 7 at volumes 100, 80 and 100.
 The ASCII display name works with the classic font; the patch key uses the
 typographic prime.
@@ -342,8 +358,8 @@ above.
 | `song-select` | `output`, `song` (0..127) | None |
 | `tune-request`, `timing-clock`, `start`, `continue`, `stop`, `active-sensing`, `system-reset` | `output` | None |
 | Controller action (omit `type`) | `operation` and the fields below | None |
-| Sequence (omit `type`) | `patches`, a list of Patch tables | None |
-| Named reference (omit `type`) | `patch`, a stable definition key | `document` |
+| Sequence (omit `type`) | `patches`, a list of patches, including string references | None |
+| Named reference (omit `type`) | A string containing the stable key, or a table with `patch` | `document`, presentation fields in a table |
 
 Every type can have `name`, `display_name`, `style` and `tags` presentation
 metadata. Named definitions default their label to their key. Inline patches use
@@ -436,7 +452,7 @@ pending work prevents replacement of its source data.
 
 Song libraries have optional `instruments`, `definitions`, `patches`, `fonts` and
 `tags` context using the same authoring models. Each song's `patches` list
-contains ordinary Patch tables, with an optional `id` for the position's persistent
+contains Patch strings or tables. A table can include an `id` for the position's persistent
 occurrence identity. A nonempty library is compiled with `--target`; companion
 setups and font assets follow the existing copy/download workflow. Inline captures
 retain their compiled source; live references retain their stable document/key.

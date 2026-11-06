@@ -193,10 +193,11 @@ original name is preserved as UTF-8 metadata without display-character limits.
 A sequence uses `{ patches = [...] }` and runs its children in order.
 State changes use `operation`, for example `{ operation = 'brightness', value = 192 }`.
 To switch firmware, use `{ operation = 'stock-firmware', exit_buttons = 'A+F' }`.
-MIDI messages use `type`. Use `{ patch = 'clean' }` for a local reference or
+MIDI messages use `type`. Use `'clean'` for a local reference or
 `{ document = 'live', patch = 'clean' }` for a patch in another setup. Named definitions use `patches`;
-ordered browser entries use `patch_cycles`. Delimiter shorthand, implicit string
-references and bare-list sequences are rejected. See
+ordered browser entries use `patch_cycles`. Strings select named patches in
+every patch position. Catalogue-name lookup in browser cycles uses an explicit
+`{ name = 'Flute' }` table. Delimiter shorthand and bare-list sequences are rejected. See
 [the Patch schema and format 21 authoring changes](../doc/patches.md) for MIDI,
 state, composition, switches and stable references. Independent authoring errors
 are reported together before any binary is written. Display text is checked

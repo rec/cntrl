@@ -624,8 +624,6 @@ class PatchCompiler:
                 'instrument': next(iter(self.instruments)),
                 'program': raw,
             }
-        if path.startswith('patch_cycles.') and isinstance(raw, str):
-            raw = {'name': raw}
         try:
             raw = models.infer_patch_type(raw)
         except ValueError as error:
@@ -994,8 +992,10 @@ class PatchCompiler:
             if (
                 isinstance(raw, dict)
                 and isinstance(named := raw.get('patches'), dict)
-                and isinstance(target := named.get(value.patch), dict)
+                and isinstance(target := named.get(value.patch), (dict, str))
             ):
+                if isinstance(target, str):
+                    target = {'patch': target}
                 if 'parent' in target:
                     target = resolve_derivation(
                         normalize_patch(target), named, f'patches.{value.patch}'

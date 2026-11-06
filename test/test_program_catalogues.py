@@ -30,7 +30,7 @@ def show() -> dict[str, object]:
                 ],
             }
         },
-        'patch_cycles': {'Live': ['Flute', 'Lead']},
+        'patch_cycles': {'Live': [{'name': 'Flute'}, {'name': 'Lead'}]},
     }
 
 
@@ -54,7 +54,7 @@ def test_keyed_bank_uses_configured_controller_mapping(target: models.Target) ->
         'instruments': {
             'synth': {'channel': 1, 'output': 'din', 'programs': {'3': ['Flute']}}
         },
-        'patch_cycles': {'Live': ['Flute']},
+        'patch_cycles': {'Live': [{'name': 'Flute'}]},
     }
     definitions = {
         'profiles': [
@@ -81,7 +81,7 @@ def test_name_lookup_is_exact_and_qualifies_ambiguous_instruments(
     show['patch_cycles'] = {'Live': [{'name': 'Flute', 'instrument': 'other'}]}
     data = compiler.compile_show(show, {}, [], target)
     assert resolved.patch(data, 0)['instrument'] == 'other'
-    show['patch_cycles'] = {'Live': ['Flut']}
+    show['patch_cycles'] = {'Live': [{'name': 'Flut'}]}
     with pytest.raises(compiler.CompilationError, match='found 0'):
         compiler.compile_show(show, {}, [], target)
 
@@ -125,7 +125,7 @@ def test_compact_catalogue_can_be_loaded_as_an_external_table(
 ) -> None:
     show = {
         'instruments': {'patchman': {'channel': 1, 'output': 'din'}},
-        'patch_cycles': {'Live': ['GuitHero']},
+        'patch_cycles': {'Live': [{'name': 'GuitHero'}]},
     }
     definitions = {
         'profiles': [
@@ -210,7 +210,7 @@ def test_tag_groups_resolve_after_catalogues_regardless_of_file_order(
     tags = {'instruments': {'synth': {'tags': {'wind': ['Flute', 'Flute']}}}}
     show = {
         'instruments': {'synth': {'channel': 1, 'output': 'din'}},
-        'patch_cycles': {'Live': ['Flute']},
+        'patch_cycles': {'Live': [{'name': 'Flute'}]},
     }
     first = compiler.compile_show(show, {}, [tags, catalogue], target)
     second = compiler.compile_show(show, {}, [catalogue, tags], target)

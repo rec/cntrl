@@ -8,7 +8,14 @@ from zlib import crc32
 
 import tomlkit
 import tyro
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
 
 from . import compiler, models, resolved, transport
 from .data_files import validate_name
@@ -17,7 +24,9 @@ from .data_files import validate_name
 class Song(BaseModel, frozen=True):
     id: int = Field(gt=0, lt=0xFFFFFFFF)
     name: str
-    patches: list[dict[str, object]] = Field(min_length=1)
+    patches: list[
+        Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)]
+    ] = Field(min_length=1)
 
     @field_validator('patches')
     @classmethod

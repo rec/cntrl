@@ -130,7 +130,6 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
 @pytest.mark.parametrize(
     'value',
     [
-        'clean',
         [],
         {'type': 'other'},
         {'type': 'reference', 'patch': 'clean'},

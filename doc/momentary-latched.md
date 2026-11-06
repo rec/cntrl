@@ -33,7 +33,7 @@ different Patch types, outputs and channels.
 
 Each branch accepts the common [Patch representation](patches.md), including
 inline program selections, sequences and stable references such as
-`{ patch = 'clean' }`. Program selections use instrument
+`'clean'`. Program selections use instrument
 aliases; other MIDI variants name their output directly. Definitions are keyed
 by `patches.clean`, independently of their display labels.
 
@@ -95,9 +95,9 @@ match another assignment.
 ```toml
 [switches.lead]
 button = 'A'
-on = { patch = 'lead' }
-enter = { action = { patch = 'prepare-lead' }, override = true }
-exit = { patch = 'finish-lead' }
+on = 'lead'
+enter = { action = 'prepare-lead', override = true }
+exit = 'finish-lead'
 ```
 
 `enter` and `exit` are optional. `enter.override` is a boolean, defaulting to
@@ -128,15 +128,15 @@ patch. The six optional gesture patches accept the same Patch representation.
 ```toml
 [switches.lead]
 button = 'A'
-on = { patch = 'clean' }
+on = 'clean'
 
 [switches.lead.gestures]
-release = { patch = 'clean-release' }
-long_press = { patch = 'solo' }
-long_release = { patch = 'solo-release' }
-double_tap = { patch = 'boost' }
-double_release = { patch = 'boost-release' }
-repeat = { patch = 'step' }
+release = 'clean-release'
+long_press = 'solo'
+long_release = 'solo-release'
+double_tap = 'boost'
+double_release = 'boost-release'
+repeat = 'step'
 debounce = '20 ms'
 long_delay = '500 ms'
 double_delay = '300 ms'

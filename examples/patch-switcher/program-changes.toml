@@ -10,4 +10,4 @@ programs = [
 ]
 
 [patch_cycles]
-Live = ['Piano', 'Flute', 'Strings']
+Live = [{name = 'Piano'}, {name = 'Flute'}, {name = 'Strings'}]

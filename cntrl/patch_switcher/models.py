@@ -33,6 +33,8 @@ def parse_tags(value: object) -> object:
 
 
 def infer_patch_type(value: object) -> object:
+    if isinstance(value, str):
+        return {'patch': value}
     if not isinstance(value, dict) or any(
         k in value
         for k in ('type', 'parent', 'patch', 'patches', 'operation', 'duration')
