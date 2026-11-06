@@ -6,6 +6,7 @@
 #include <cntrl/cable_test.h>
 #include <cntrl/panic.h>
 #include "show_graphics.h"
+#include "startup_counter.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -14,6 +15,8 @@ struct PerformanceStatus {
     uint32_t ram_used[2] = {}, ram_free[2] = {};
     uint64_t disk_used = 0, disk_free = 0;
     bool disk_valid = false;
+    uint64_t starts = 0;
+    StartupCounter::Status starts_status = StartupCounter::Status::unavailable;
     unsigned cycles = 0, patches = 0;
 };
 
@@ -261,7 +264,7 @@ public:
             pane.circles[0].color = settings_[flashing_ ? R::on_color : R::off_color];
             pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
-            char rows[5][64] = {};
+            char rows[6][64] = {};
             std::snprintf(rows[0], sizeof(rows[0]), "Setup: %.56s", setup_);
             std::snprintf(rows[1], sizeof(rows[1]), "Cycles: %u  Patches: %u", status.cycles, status.patches);
             char tap[24], clock[24], tap_label[32];
@@ -284,13 +287,17 @@ public:
             unsigned disk_length = std::strlen(rows[4]);
             std::snprintf(rows[4] + disk_length, sizeof(rows[4]) - disk_length, " Up:%lu:%02u:%02u",
                 (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
+            if (status.starts_status == StartupCounter::Status::ready)
+                std::snprintf(rows[5], sizeof(rows[5]), "Starts: %llu", (unsigned long long)status.starts);
+            else std::snprintf(rows[5], sizeof(rows[5]), "Starts: %s",
+                status.starts_status == StartupCounter::Status::error ? "error" : "--");
             std::snprintf(tap_label, sizeof(tap_label), "Tap: %s", tap);
             const unsigned body_top = pad + heading_height;
             const unsigned body_height = 128 - pad - body_top;
             auto body = [&](unsigned maximum_size) {
-                for (unsigned i = 0; i < 5; ++i) {
-                    const unsigned y = body_top + body_height * i / 5;
-                    const unsigned height = body_height * (i + 1) / 5 - body_height * i / 5;
+                for (unsigned i = 0; i < 6; ++i) {
+                    const unsigned y = body_top + body_height * i / 6;
+                    const unsigned height = body_height * (i + 1) / 6 - body_height * i / 6;
                     if (i == 2) {
                         line(pane, 3, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, 80, maximum_size);
                         line(pane, 4, tap_label, y, height, settings_[R::status_font], false, nullptr, 80, 160, maximum_size);
@@ -302,9 +309,9 @@ public:
             };
             body(96);
             unsigned shared_size = pane.lines[1].graphics.size;
-            for (unsigned i = 2; i <= 6; ++i) shared_size = std::min(shared_size, unsigned(pane.lines[i].graphics.size));
+            for (unsigned i = 2; i <= 7; ++i) shared_size = std::min(shared_size, unsigned(pane.lines[i].graphics.size));
             body(shared_size);
-            for (unsigned i = 1; i <= 6; ++i) {
+            for (unsigned i = 1; i <= 7; ++i) {
                 auto &l = pane.lines[i];
                 l.graphics.foreground = 0x0011; // Dark blue, #00008B.
                 l.alternate_color = 0x0400; // Green, #008000.

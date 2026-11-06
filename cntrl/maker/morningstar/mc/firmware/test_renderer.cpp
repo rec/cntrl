@@ -752,13 +752,13 @@ static void test_utility_pages() {
     assert(!std::strcmp(view.lines[2].text, "Cycles: 10  Patches: 59"));
     assert(!std::strcmp(view.lines[5].text, "RAM: 49/512k 25/512k"));
     assert(!std::strcmp(view.lines[6].text, "Disk:1.1/29G Up:0:00:01"));
-    assert(!view.lines[7].text[0]);
+    assert(!std::strcmp(view.lines[7].text, "Starts: --") && !view.lines[8].text[0]);
     assert(view.lines[0].graphics.line_height == settings[cntrl::UtilityPageSettings::title_height] * 3 / 2 + 4);
     assert(view.lines[0].graphics.font == heading.font && view.lines[0].graphics.size == heading.size);
-    for (unsigned i = 1; i <= 6; ++i) {
+    for (unsigned i = 1; i <= 7; ++i) {
         assert(view.lines[i].graphics.font == view.lines[1].graphics.font);
         assert(view.lines[i].graphics.size == view.lines[1].graphics.size);
-        assert(view.lines[i].graphics.line_height >= 20 && view.lines[i].graphics.line_height <= 21);
+        assert(view.lines[i].graphics.line_height >= 16 && view.lines[i].graphics.line_height <= 18);
     }
     assert(view.lines[1].y < 30);
     assert(view.lines[2].y > view.lines[1].y && view.lines[5].y > view.lines[3].y);
@@ -786,6 +786,15 @@ static void test_utility_pages() {
     status.disk_valid = false;
     view = pages.view(1205000, 1205000000, status);
     assert(!std::strcmp(view.lines[6].text, "Disk:--/--G Up:0:20:05"));
+    assert(!std::strcmp(view.lines[7].text, "Starts: --"));
+    status.starts = 42; status.starts_status = StartupCounter::Status::ready;
+    view = pages.view(1205000, 1205000000, status);
+    assert(!std::strcmp(view.lines[7].text, "Starts: 42"));
+    assert(view.lines[7].graphics.size == view.lines[1].graphics.size);
+    assert(view.lines[7].graphics.foreground == 0x0011 && view.lines[7].alternate_color == 0x0400);
+    status.starts_status = StartupCounter::Status::error;
+    view = pages.view(1205000, 1205000000, status);
+    assert(!std::strcmp(view.lines[7].text, "Starts: error"));
     pages.time(0xfffffff0u, 0, false);
     pages.time(0x000003e8u, 1000000, false);
     view = pages.view(1000, 1000000, status);

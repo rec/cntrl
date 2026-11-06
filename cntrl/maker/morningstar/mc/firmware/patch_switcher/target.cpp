@@ -74,6 +74,7 @@ bool patch_work_pending();
 bool feature_open();
 PerformanceStatus performance_status();
 void capture_disk_space();
+StartupCounter startup_counter;
 DMAMEM cntrl::Controller::NavigationState invocation_navigation[6];
 bool restoring_invocation = false;
 unsigned pending_ui_operation = 0;
@@ -1169,6 +1170,7 @@ void capture_disk_space() {
 
 PerformanceStatus performance_status() {
     PerformanceStatus result = cached_disk;
+    result.starts = startup_counter.count; result.starts_status = startup_counter.status;
     uintptr_t stack;
     __asm__ volatile("mov %0, sp" : "=r"(stack));
     uintptr_t end = reinterpret_cast<uintptr_t>(&_ebss);
@@ -1209,13 +1211,20 @@ uint32_t last_scan = 0;
 
 } // namespace
 
-void initialize_target() {
+FLASHMEM void initialize_target() {
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session = cntrl::UsbSession{};
     initialize_switches();
     initialize_displays(false);
     board.begin();
     card.ready = SD.begin(BUILTIN_SDCARD);
+    if (card.ready) {
+        if (!SD.sdfs.exists("/cntrl") && !SD.sdfs.mkdir("/cntrl", true)) startup_counter.status = StartupCounter::Status::error;
+        else {
+            auto file = SD.sdfs.open(StartupCounter::path, O_CREAT | O_RDWR);
+            startup_counter.start(file);
+        }
+    }
     if (card.ready) board.load_expression_calibrations();
     capture_disk_space();
     font_files.ready = card.ready;

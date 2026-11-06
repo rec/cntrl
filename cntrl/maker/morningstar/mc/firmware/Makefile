@@ -31,6 +31,13 @@ export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
 .PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe button-timing test-button-timing boot-switch test-switch-gesture test-boot-selection
 
+.PHONY: test-startup-counter
+test-startup-counter:
+	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+		"$(ROOT)/test_startup_counter.cpp" -o "$(ROOT)/build/test_startup_counter"
+	"$(ROOT)/build/test_startup_counter"
+
 boot-switch: tools test-switch-gesture test-boot-selection
 	cd "$(ROOT)/../../../../.." && uv run --frozen -m cntrl.maker.morningstar.mc.boot_switch
 
@@ -125,7 +132,7 @@ inspect-patch-switcher: patch-switcher
 	"$(ARM)-size" -A "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf"
 	"$(ARM)-nm" -n -C "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" > "$(ROOT)/build/patch-switcher/symbols.txt"
 
-test: tools test-button-timing test-switch-gesture test-boot-selection
+test: tools test-button-timing test-switch-gesture test-boot-selection test-startup-counter
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined "$(ROOT)/test_pixel_throb.cpp" -o "$(ROOT)/build/test_pixel_throb"
 	"$(ROOT)/build/test_pixel_throb"

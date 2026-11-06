@@ -830,6 +830,19 @@ Physical buttons A/B/D/E keep their primary actions: A sends the target, B brows
 patches forward, D undoes the latest send, and E browses cycles forward. C taps tempo on the Tap Tempo page; F cycles Tap Tempo, Status, Firmware, MIDI Cable Test and Panic, starting on Status. C on Firmware opens a confirmation page; release C, then press F to switch to stock or C to cancel; A+F returns to cntrl. Old C/F browsing and the C+F module-menu shortcut
 are removed. Other modules keep their existing button assignments.
 
+Status includes a persistent **Starts** count in its final row. It increments
+once whenever cntrl starts, including restarts when returning from stock
+firmware. The first successful save on a new card records 1. Opening Status,
+changing setups and browsing pages do not increment it.
+
+The counter belongs to the card and is stored in `/cntrl/starts.toml`, separately
+from setups and songs. It alternates two checked records in separate 512-byte
+sectors and verifies each update after syncing it. An interrupted update can
+recover from the previous valid record. A nonempty file without a valid record
+is reported as an error rather than silently resetting the count. `Starts: --` means no
+card was mounted; `Starts: error` means reading or saving the counter failed.
+Startup continues in either case. The counter uses card storage exclusively.
+
 The utility pages share one heading font and size, with white
 text on a black heading band. All titles fit against the same reference text.
 Status labels are dark blue and values are green. Their text has one additional
