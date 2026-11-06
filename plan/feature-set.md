@@ -129,30 +129,6 @@ navigation and cleanup before implementing the schema.
 changes cannot recurse indefinitely; display state follows local execution and
 does not imply acknowledgement by an external instrument.
 
-## 10. MIDI Clock generation
-
-**Outcome:** Generate MIDI Clock at 24 pulses per quarter note from a
-configured BPM or the Tap Tempo page, and send it to selected MIDI outputs.
-The controller can also measure incoming clock and display tapped tempo.
-
-**Scope:** Connect the existing tempo calculation to a scheduled clock source.
-Add MIDI Start, Stop and Continue, stored BPM slots and tempo adjustment.
-Define internal versus external clock ownership, loss-of-clock behavior and
-interaction with incoming clock forwarding. Preserve the two-tap rule after a
-pause.
-
-**Dependencies:** None. Item 6 is needed only for configurable clock
-forwarding.
-
-**Acceptance:** Measure timing accuracy and jitter under display and transfer
-load; tempo changes do not create duplicate clock streams; missed deadlines
-cannot produce an unbounded burst of catch-up ticks. Test timer rollover and
-clock-source transitions, then qualify timing on physical outputs.
-
-The [MIDI Clock utility pages](../doc/midi-clock.md) implement this item.
-Independent timing measurements on the selected physical outputs remain part
-of hardware qualification.
-
 ## 11. MIDI CC waveform generators
 
 **Outcome:** Start or stop an LFO that sends MIDI CC values, such as a
@@ -163,7 +139,8 @@ shapes, with configurable range, rate and destination. Support one-shot and
 repeating operation, with either an independent rate or clock divisions. Define
 replacement, cancellation and final-value behavior.
 
-**Dependencies:** Item 10 for clock-synchronized operation only.
+**Dependencies:** The existing [MIDI Clock generator](../doc/midi-clock.md)
+for clock-synchronized operation only.
 
 **Acceptance:** Values remain within bounds; one-shot completion and stopping
 are deterministic; unchanged values are not sent unnecessarily. Output pressure
@@ -179,7 +156,8 @@ Add an explicit timed operation with step values, duration, one-shot/repeat
 mode, start/stop and restart policy. Support independent timing and clock
 divisions. Define how overdue steps are handled before implementation.
 
-**Dependencies:** Item 10 for clock-synchronized operation only.
+**Dependencies:** The existing [MIDI Clock generator](../doc/midi-clock.md)
+for clock-synchronized operation only.
 
 **Acceptance:** Steps run in order at the requested rate; stopping cancels
 future steps; restart and tempo changes follow documented rules. Backpressure
@@ -227,11 +205,11 @@ offline workflow separately from serialization tests.
 
 Start with counters (item 13), which extend existing execution paths without
 new physical inputs.
-Next implement clock generation, waveforms and timed sequences (10 through 12).
+Next implement waveforms and timed sequences (items 11 and 12).
 Routing and conversion (6 and 7) form a separate increment. Grouped switch
 state (9) can follow once its transition rules are agreed.
 
-Hardware-dependent work (1 through 5 and 15) should follow available test
+Hardware-dependent work (items 3 through 5) should follow available test
 hardware and actual connection needs. The graphical editor (16) can begin
 against the current schema without waiting for the other items.
 
