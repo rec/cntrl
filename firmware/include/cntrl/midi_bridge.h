@@ -1,4 +1,5 @@
 #pragma once
+#include "midi_state.h"
 #include <cstdint>
 #include <array>
 #include <cstring>
@@ -121,7 +122,16 @@ struct Counters {
 
 struct Sink {
     virtual ~Sink() = default;
-    virtual bool submit(unsigned destination, const Packet &packet) = 0;
+    bool submit(unsigned destination, const Packet &packet) {
+        if (!write_packet(destination, packet)) return false;
+        state_.record(destination, packet.bytes, packet.size());
+        return true;
+    }
+    const MidiState &state() const { return state_; }
+protected:
+    virtual bool write_packet(unsigned destination, const Packet &packet) = 0;
+private:
+    MidiState state_;
 };
 
 // Routes 0..5 are physical outputs, 6..7 computer inputs, 8 USB host output.

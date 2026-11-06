@@ -21,6 +21,29 @@ Python sender to the actual C++ receiver through a pseudo-terminal. They never
 access a physical serial device. `test/show.golden` is the shared binary fixture,
 stored as hexadecimal text; Python and C++ both verify it.
 
+## Outgoing MIDI state
+
+`midi::Sink::submit()` records each packet after the transport accepts it.
+Patch actions, forwarded MIDI, expression pedals and diagnostics share this
+path. Callers submit messages as before and can read the snapshot through
+`Sink::state()`.
+
+The snapshot contains a vector of used `OutputState` objects, each with a vector
+of used `ChannelState` objects. Each channel stores used notes and controllers
+in vectors, plus optional program, channel pressure and 14-bit pitch bend.
+Channels use the MIDI wire numbering, 0 through 15. Repeated messages update
+existing entries. Note Off, including zero-velocity Note On, removes the note.
+Polyphonic pressure can create a note entry with unknown velocity. Empty
+vectors allocate no element storage; vector capacity can be retained after
+entries are removed.
+
+All Sound Off, All Notes Off and the Omni/Mono/Poly mode commands clear the
+channel's notes. Reset All Controllers invalidates controller values, pitch
+bend and pressure, preserving notes and program. System Reset removes that
+output's snapshot. These snapshots describe accepted channel messages, including
+USB acceptance into its transmit queue. Device-specific SysEx, RPN/NRPN parameter
+banks, sustain-held voices and receiver acknowledgements are outside the snapshot.
+
 ## Host command
 
 Install the Python distribution with `uv tool install cntrl-VERSION.whl`, or use

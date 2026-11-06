@@ -30,7 +30,7 @@ struct PatchBoard : TestPatchHardware, cntrl::midi::Sink {
     }
     cntrl::midi::Bridge::Delivery patch_delivery(unsigned owner) const override { return bridge.delivery(owner); }
     void cancel_patch(unsigned owner) override { bridge.cancel_owner(owner); }
-    bool submit(unsigned route, const cntrl::midi::Packet &packet) override {
+    bool write_packet(unsigned route, const cntrl::midi::Packet &packet) override {
         if (!writable) return false;
         wire[route].insert(wire[route].end(), packet.bytes, packet.bytes + packet.size()); return true;
     }

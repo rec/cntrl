@@ -247,7 +247,8 @@ public:
         if (!connection || length > 14 || !available(output)) return false;
         return bridge_.pedal(connection->route, data, length);
     }
-    bool submit(unsigned route, const cntrl::midi::Packet &p) override {
+    // Keep the transport backend in flash to leave RAM1 for runtime state.
+    FLASHMEM bool write_packet(unsigned route, const cntrl::midi::Packet &p) override {
         if (!bridge_.usb_enabled(route)) return false;
         if (route >= 6 && route < 8) return usb_midi_try_write_packed(p.packed(route - 6));
         if (route == 8) return host_midi.try_write_packed(p.packed());

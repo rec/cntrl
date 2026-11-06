@@ -24,7 +24,7 @@ struct Board : TestPatchHardware, cntrl::midi::Sink, cntrl::Replies {
     bool send_patch(unsigned owner, const char *, const uint8_t *bytes, unsigned n) override { return bridge.owned_send(owner, 0, bytes, n); }
     cntrl::midi::Bridge::Delivery patch_delivery(unsigned owner) const override { return bridge.delivery(owner); }
     void cancel_patch(unsigned owner) override { bridge.cancel_owner(owner); }
-    bool submit(unsigned route, const cntrl::midi::Packet &p) override { if (!writable || route == blocked_route) return false; sent.push_back(p); return true; }
+    bool write_packet(unsigned route, const cntrl::midi::Packet &p) override { if (!writable || route == blocked_route) return false; sent.push_back(p); return true; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned pane, const cntrl::Pane &view) override { views[pane] = view; }

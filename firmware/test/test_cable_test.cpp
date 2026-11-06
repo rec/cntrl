@@ -7,7 +7,7 @@ struct Hardware : cntrl::midi::Sink {
     struct Message { std::string route; std::vector<uint8_t> bytes; };
     std::vector<Message> messages;
     bool available = true;
-    bool submit(unsigned route, const cntrl::midi::Packet &packet) override {
+    bool write_packet(unsigned route, const cntrl::midi::Packet &packet) override {
         if (!available) return false;
         messages.push_back({cntrl::midi::output_connections[route].name,
             {packet.bytes, packet.bytes + packet.size()}}); return true;

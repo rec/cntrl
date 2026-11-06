@@ -9,7 +9,7 @@ struct Output : cntrl::midi::Sink {
     std::vector<uint8_t> bytes[9];
     bool blocked[9] = {};
     unsigned attempts = 0;
-    bool submit(unsigned route, const cntrl::midi::Packet &p) override {
+    bool write_packet(unsigned route, const cntrl::midi::Packet &p) override {
         ++attempts;
         if (blocked[route]) return false;
         bytes[route].insert(bytes[route].end(), p.bytes, p.bytes + p.size()); return true;
