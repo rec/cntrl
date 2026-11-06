@@ -317,7 +317,7 @@ public:
             const auto layout = documents.document().app_layout();
             const int destination = layout.app_window(rendering_app(), pane, pages_.windows());
             if (destination < 0) return;
-            if (!performance_visible_) { pages_.revisit(documents.selected()); enter_page(); }
+            if (!performance_visible_) { pages_.revisit(); enter_page(); }
             performance_visible_ = true;
             if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
             renderer_.show(unsigned(destination), content);
@@ -343,7 +343,7 @@ public:
         for (unsigned i = 0; i < 3; ++i) renderer_.show(i, empty);
         pending_patch_ = -1;
         performance_visible_ = true;
-        pages_.revisit(documents.selected());
+        pages_.revisit();
     }
     void select_trs_jack() {
         auto &page = pages_;
@@ -409,7 +409,7 @@ public:
         if (pages_.page() == Pages::Page::confirm_firmware
             && (held_controls & (1u << 2))) return;
         leave_page();
-        if (pages_.browse(reverse, documents.selected())) {
+        if (pages_.browse(reverse)) {
 #if CNTRL_ORIGINAL_FIRMWARE
             if (!start_original_firmware()) error("Firmware switch failed");
 #else
@@ -648,11 +648,11 @@ public:
         apply_brightness(now);
 #if CNTRL_CABLE_TEST
         if (pages_.page() == Pages::Page::cable && cable_test.take_redraw())
-            pages_.revisit(documents.selected());
+            pages_.revisit();
 #endif
 #if CNTRL_PANIC
         if (pages_.page() == Pages::Page::panic && panic.take_redraw())
-            pages_.revisit(documents.selected());
+            pages_.revisit();
 #endif
         if (!splash_visible_ && !feature_open() && documents.document().valid()
             && pages_.windows() && pages_.due(now)) {

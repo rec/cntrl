@@ -124,6 +124,7 @@ public:
                                 || (line.color_mask && pixels[y * 160 + x] == line.alternate_color))
                                 pixels[(y + 1) * 160 + x] = pixels[y * 160 + x];
                 }
+                if (line.taller && length) stretch_text(line);
                 letter_ = 0;
                 if (++field_ == cntrl::max_lines) {
                     // Mask after composing all glyphs so italic overlaps keep
@@ -152,6 +153,28 @@ public:
         }
     }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_stretch_text)
+#endif
+    void stretch_text(const cntrl::TextLine &line) {
+        const auto &settings = line.graphics;
+        int16_t left, top; uint16_t width, height;
+        graphics_.getTextBounds(line.text, line.x, text_y(field_, 0), &left, &top, &width, &height);
+        const unsigned extra = std::max(1u, unsigned(height) / 8);
+        const unsigned source_height = height + line.heavier;
+        const unsigned stretched_height = source_height + extra;
+        auto *pixels = graphics_.getFrameBuffer();
+        for (int x = std::max(int(settings.pad), int(left)); x < std::min(160 - int(settings.pad), int(left) + width); ++x) {
+            uint16_t column[128];
+            for (unsigned y = 0; y < source_height && y < 128; ++y)
+                column[y] = top + int(y) >= 0 && top + int(y) < 128 ? pixels[(top + y) * 160 + x] : settings.background;
+            for (unsigned y = 0; y < stretched_height; ++y) {
+                const int target = top + int(y);
+                if (target >= settings.pad && target < 128 - settings.pad)
+                    pixels[target * 160 + x] = column[std::min(127u, y * source_height / stretched_height)];
+            }
+        }
+    }
     bool moving_panel(unsigned panel) const {
         return animation_pane_ >= 0 ? panel == unsigned(animation_pane_) : !(keep_right_ && panel == 2);
     }
@@ -281,6 +304,7 @@ private:
                     graphics_.select_font(line.graphics.font, line.graphics.size);
                     int16_t left, top; uint16_t width, height;
                     graphics_.getTextBounds(line.text, line.x, text_y(i, 0), &left, &top, &width, &height);
+                    if (line.taller) height += std::max(1u, unsigned(height) / 8);
                     height += line.heavier;
                     for (int y = std::max(0, int(top)); y < std::min(128, int(top) + height); ++y)
                         for (int x = std::max(0, int(left)); x < std::min(160, int(left) + width); ++x)
