@@ -112,22 +112,6 @@ converted output out of its own input path.
 remain valid; transformed Note On messages have matching Note Off messages.
 Test multiple rules, real-time interleaving and bounded processing under load.
 
-## 9. Shifted assignment actions: implemented
-
-One shared shift layer selects complete alternate action sets. Idempotent
-shift/unshift operations reuse the Patch executor, including gesture and hook
-invocations. Press/release pairs retain their layer; accepted work and latched
-Off cleanup finish before an assignment changes layers. Shift resets on exit
-and is never persisted. Operations change the flag without invoking actions
-or recursively selecting assignments. Indicators retain local execution and
-shared known MIDI semantics.
-
-See [shifted actions](../doc/momentary-latched.md#shared-shift-layer) for the
-schema and lifecycle. Python round-trip tests and native sanitizer tests cover
-alternate actions, held release pairing, backpressure, indirect transitions,
-rearming, cleanup and malformed records. Physical switch latency and external
-instrument behavior remain hardware qualification tasks.
-
 ## 11. MIDI CC waveform generators
 
 **Outcome:** Start or stop an LFO that sends MIDI CC values, such as a
@@ -205,8 +189,7 @@ offline workflow separately from serialization tests.
 Start with counters (item 13), which extend existing execution paths without
 new physical inputs.
 Next implement waveforms and timed sequences (items 11 and 12).
-Routing and conversion (6 and 7) form a separate increment. Shifted assignment
-actions (9) are implemented with the shared-layer lifecycle documented above.
+Routing and conversion (6 and 7) form a separate increment.
 
 Hardware-dependent work (items 3 through 5) should follow available test
 hardware and actual connection needs. The graphical editor (16) can begin
