@@ -22,6 +22,12 @@ struct PerformanceStatus {
 
 class Pages {
 public:
+    static std::optional<bool> navigation(unsigned button, bool pressed, unsigned held) {
+        if (!pressed) return std::nullopt;
+        if (button == 5) return false;
+        if (button == 3 && (held & (1u << 5))) return true;
+        return std::nullopt;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_window_view)
 #endif

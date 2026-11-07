@@ -399,10 +399,7 @@ public:
     }
     bool clock_control(unsigned button, bool pressed) {
         if (!pages_.clock_page()) return false;
-        if (pressed) {
-            if (button == 5) browse_page(held_controls & (1u << 3));
-            else pages_.clock_button(button, micros(), clock_available());
-        }
+        if (pressed) pages_.clock_button(button, micros(), clock_available());
         return true;
     }
     FLASHMEM void configure_page_settings(const cntrl::PageSettings &settings) override {
@@ -1450,6 +1447,11 @@ void poll_target() {
                         else if (i == 5) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_back)});
                     }
                 } else {
+                    if (i == 3 || i == 5) {
+                        if (auto reverse = Pages::navigation(i, events[i] & press_event, pressed))
+                            board.browse_page(*reverse);
+                        continue;
+                    }
 #if CNTRL_CABLE_TEST
                     if (board.cable_test.enabled() && i != 2 && i != 5) continue;
 #endif
@@ -1464,8 +1466,7 @@ void poll_target() {
                         if (events[i] & press_event) app_controller().button(mirrored_button(i), true, now);
                         if (events[i] & release_event) app_controller().button(mirrored_button(i), false, now);
                     } else if (events[i] & press_event) {
-                        if (i == 5) board.browse_page(false);
-                        else if (i == 2) board.tap_tempo(now);
+                        if (i == 2) board.tap_tempo(now);
                     }
                 }
             }

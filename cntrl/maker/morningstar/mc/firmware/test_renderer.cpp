@@ -886,6 +886,12 @@ static void test_page_settings() {
     pages.clock_button(0, 4007000, 1);
     assert(!pages.generator.running());
     pages.browse(false); assert(pages.page() == Pages::Page::clock_tempo);
+    // Physical D is reserved for backward browsing while F is held, on every page.
+    assert(!Pages::navigation(3, true, 1u << 3).has_value());
+    assert(Pages::navigation(5, true, 1u << 5) == false);
+    assert(Pages::navigation(3, true, (1u << 3) | (1u << 5)) == true);
+    assert(!Pages::navigation(3, false, 1u << 5).has_value());
+    assert(!Pages::navigation(5, false, 0).has_value());
     pages.clock_button(2, 4008000, 1);
     assert(pages.generator.bpm() == 144);
     pages.clock_button(0, 4009000, 1);

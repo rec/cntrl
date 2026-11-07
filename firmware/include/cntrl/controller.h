@@ -89,7 +89,7 @@ public:
         --depth_;
     }
     void cancel_gesture() { release_c(); held_ = 0; reverse_ = false; }
-    void refresh() override { cancel_gesture(); if (document_.valid()) render(); }
+    void refresh() override { if (document_.valid()) render(); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(controller_activate)
 #endif

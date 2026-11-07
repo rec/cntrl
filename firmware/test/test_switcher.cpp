@@ -178,8 +178,10 @@ void test_four_button_navigation(const cntrl::Document &doc) {
     assert(app.selected_patch() == 0 && hw.sent.empty());
     hw.page_moves.clear();
     app.button(3, true, 11000);
+    app.refresh(); // Page browsing redraws the app while F remains held.
     app.tick(111000); assert((hw.page_moves == std::vector<bool>{false}));
     app.button(5, true, 111001);
+    app.refresh(); // The reverse modifier also survives the backward redraw.
     assert((hw.page_moves == std::vector<bool>{false, true}) && app.depth() == 0);
     app.button(3, false, 111002); app.button(3, true, 111003);
     assert((hw.page_moves == std::vector<bool>{false, true, true}));
