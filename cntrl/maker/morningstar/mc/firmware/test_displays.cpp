@@ -33,6 +33,10 @@ static bool spi_started = false, spi_active = false;
 static bool clock_gpio = true, data_gpio = true;
 static unsigned transactions = 0;
 static std::vector<unsigned> selections;
+#ifdef CNTRL_PANORAMA
+static bool scan_due = false;
+bool switch_scan_due() { return scan_due; }
+#endif
 
 void SPIClass::begin() {
     assert(!spi_active);
@@ -323,6 +327,9 @@ int main() {
     *second_band = *first_band; second_band->panel = 1;
     queue_display_band(*second_band);
     assert(!acquire_display_band()); // Neither buffer may be overwritten.
+    scan_due = true;
+    start_display_dma(); // A due scan must not interrupt an active transfer.
+    assert(display_spi_busy());
     complete_dma(); poll_display_dma();
     assert(!display_spi_busy() && !spi_active && levels[chip_selects[2]]);
     const auto &dma_transfer = transfers[2];
@@ -331,6 +338,11 @@ int main() {
     assert(dma_transfer.back().bytes.size() == 81);
     for (unsigned i = 0; i < 80; ++i) assert(dma_transfer.back().bytes[i + 1] == uint8_t(i));
     assert(display_dma_pending() && acquire_display_band() == nullptr);
+    const auto before_scan = transactions;
+    start_display_dma();
+    assert(!display_spi_busy() && !spi_active && transactions == before_scan);
+    // A scan can use GPIO here; the queued band must remain intact until after it.
+    scan_due = false;
     start_display_dma(); complete_dma(); poll_display_dma();
     assert(!display_dma_pending() && !spi_active);
     auto *failed_band = acquire_display_band(); *failed_band = *first_band;

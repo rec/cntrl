@@ -625,6 +625,7 @@ public:
         }
     }
     void display(uint32_t now, bool transfer_busy) {
+        if (switch_scan_due()) return;
 #if CNTRL_CABLE_TEST
         transfer_busy = transfer_busy || cable_test.enabled();
 #endif
@@ -1341,6 +1342,8 @@ uint32_t last_scan = 0;
 
 } // namespace
 
+bool switch_scan_due() { return uint32_t(millis() - last_scan) >= 1; }
+
 FLASHMEM void initialize_target() {
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session = cntrl::UsbSession{};
@@ -1370,7 +1373,8 @@ void poll_target() {
     uint32_t now = millis();
     poll_display_dma();
     board.poll_keyboard();
-    if (!display_spi_busy() && uint32_t(now - last_scan) >= 3) {
+    if (!display_spi_busy() && switch_scan_due()) {
+        now = millis();
         if (last_scan) board.scanned(now - last_scan);
         last_scan = now;
         uint8_t raw = read_buttons();

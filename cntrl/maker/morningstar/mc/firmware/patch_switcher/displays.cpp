@@ -5,6 +5,7 @@
 #undef write_display_group
 #undef write_display_segment
 #include "panorama.h"
+#include "target.h"
 #include <EventResponder.h>
 
 namespace {
@@ -33,7 +34,7 @@ void poll_display_dma() {
     active_band = 2;
 }
 void start_display_dma() {
-    if (display_spi_busy() || queued_band >= 2) return;
+    if (display_spi_busy() || queued_band >= 2 || switch_scan_due()) return;
     active_band = queued_band; queued_band = 2;
     const auto &band = bands[active_band];
     const auto &panel = panorama_panels[band.panel];

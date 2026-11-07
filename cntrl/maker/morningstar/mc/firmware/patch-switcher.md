@@ -32,7 +32,11 @@ With `fast_switches = false`, both edges wait for stable input before triggering
 Switch assignments with a `gestures` table use its configured `debounce`
 duration (20 ms by default); other buttons retain 15 ms. The recognizer adds
 only the waits required by configured double taps, long presses and repeats.
-The 3 ms scan interval is unchanged. Fast mode accepts an isolated first-edge
+Switch scans are due every 1 ms. A due scan takes priority when an active
+display DMA transfer finishes, before another queued band starts. The renderer
+also yields before starting work when a scan is due. Active transfers finish
+normally; shared-pin occupancy and other work can extend the actual scan gap.
+Fast mode accepts an isolated first-edge
 glitch as a real transition; debounce cannot retract an action already sent.
 
 The compiled setup format is version 32. Recompile setups with the matching

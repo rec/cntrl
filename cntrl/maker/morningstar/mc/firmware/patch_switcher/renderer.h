@@ -6,6 +6,7 @@
 #include "displays.h"
 #include "show_graphics.h"
 #include "panorama.h"
+#include "target.h"
 
 constexpr unsigned DEFAULT_TRANSITION_MS = 75;
 constexpr unsigned DEFAULT_VERTICAL_TRANSITION_MS = 200;
@@ -58,6 +59,8 @@ public:
     // now is a microsecond timestamp, sampled before this bounded poll.
     void draw(uint32_t now = 0) {
         poll_display_dma();
+        // Completion releases the shared pins; a due switch scan gets them next.
+        if (switch_scan_due()) return;
         if (take_display_dma_error()) {
             invalidate();
             error("Display DMA failed");

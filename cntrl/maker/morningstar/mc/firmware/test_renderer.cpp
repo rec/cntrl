@@ -15,6 +15,8 @@ static unsigned panel_rings[3] = {};
 static bool check_motion = false, check_undo = false;
 static unsigned checked_progress = 0;
 static unsigned writes = 0, pixels_sent = 0;
+static bool scan_due = false;
+bool switch_scan_due() { return scan_due; }
 static unsigned scroll_updates = 0;
 static bool patch_only = false;
 static bool audit_motion = false, audit_right = false;
@@ -945,7 +947,27 @@ static void test_page_window_allocation() {
     }
 }
 
+void test_due_scan_gets_display_handoff() {
+    DisplayRenderer renderer;
+    auto *first = acquire_display_band(); assert(first);
+    *first = {}; first->columns = 1; first->count = 128;
+    queue_display_band(*first); start_display_dma();
+    auto *second = acquire_display_band(); assert(second && second != first);
+    *second = *first; second->column = 1;
+    queue_display_band(*second);
+    scan_due = true;
+    renderer.draw(); assert(display_spi_busy());
+    renderer.draw(); // DMA completes inside the renderer, after the loop's scan attempt.
+    assert(!display_spi_busy() && display_dma_pending());
+    assert(!acquire_display_band()); // The queued band still owns its buffer.
+    scan_due = false;
+    start_display_dma(); assert(display_spi_busy());
+    poll_display_dma(); poll_display_dma();
+    assert(!display_dma_pending());
+}
+
 int main() {
+    test_due_scan_gets_display_handoff();
     test_page_settings();
     test_page_window_allocation();
     writes = pixels_sent = 0;
