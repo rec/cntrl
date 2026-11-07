@@ -98,20 +98,20 @@ int main(int argc, char **argv) {
     for (uint8_t b : bytes) documents.receive(b, 0);
     for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
     assert(!documents.busy() && transfer.response == "CNTRL OK");
-    documents.tick(0); assert(cntrl::document_memory_used == 0);
+    documents.tick(0); assert(cntrl::memory_used == 0);
     assert(documents.select("Test"));
-    documents.tick(0); assert(cntrl::document_memory_used == bytes.size());
+    documents.tick(0); assert(cntrl::memory_used == bytes.size());
     assert(documents.edit_begin() && documents.edit_adjust(0, 5, 1));
-    assert(cntrl::document_memory_used == 3 * bytes.size());
-    documents.edit_cancel(); assert(cntrl::document_memory_used == bytes.size());
-    cntrl::DocumentBuffer occupied;
-    assert(occupied.resize(cntrl::document_memory_budget - unsigned(bytes.size())));
+    assert(cntrl::memory_used == 3 * bytes.size());
+    documents.edit_cancel(); assert(cntrl::memory_used == bytes.size());
+    cntrl::MemoryBuffer occupied;
+    assert(occupied.resize(cntrl::memory_budget - unsigned(bytes.size())));
     command(put); assert(transfer.response == "CNTRL ERROR document-memory");
     assert(documents.document().length() == bytes.size());
     assert(!std::memcmp(documents.document().data(), bytes.data(), bytes.size()));
     command("CNTRL STATUS"); assert(transfer.response.find("CNTRL READY ") == 0);
     occupied.clear();
     assert(documents.select("Test"));
-    documents.tick(0); assert(cntrl::document_memory_used == bytes.size());
+    documents.tick(0); assert(cntrl::memory_used == bytes.size());
     return 0;
 }

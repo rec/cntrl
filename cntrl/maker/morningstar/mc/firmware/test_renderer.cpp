@@ -656,13 +656,14 @@ static void sparse_text() {
     entry.bytes[9] = 1; entry.bytes[11] = 1;
     entry.bytes[13] = 3; entry.bytes[14] = 2;
     entry.bytes[15] = 46; entry.bytes[19] = 2;
-    auto data = std::make_unique<uint8_t[]>(48);
-    data[0] = 9; data[4] = 2; data[6] = 2; data[10] = 2;
-    data[16] = '1'; data[22] = 3;
-    data[24] = 2; data[28] = 5; data[30] = 2;
-    data[32] = 0xc3; data[33] = 0xa9; data[42] = 3;
-    data[46] = 128; data[47] = 64;
-    assert(font_assets::valid_pixels(entry, data.get()));
+    cntrl::MemoryBuffer data;
+    assert(data.resize(48)); std::memset(data.data, 0, data.size);
+    data.data[0] = 9; data.data[4] = 2; data.data[6] = 2; data.data[10] = 2;
+    data.data[16] = '1'; data.data[22] = 3;
+    data.data[24] = 2; data.data[28] = 5; data.data[30] = 2;
+    data.data[32] = 0xc3; data.data[33] = 0xa9; data.data[42] = 3;
+    data.data[46] = 128; data.data[47] = 64;
+    assert(font_assets::valid_pixels(entry, data.data));
     font_assets::cache.begin();
     assert(font_assets::cache.add(123, entry, std::move(data)));
     font_assets::cache.finish(true);
@@ -970,7 +971,50 @@ void test_due_scan_gets_display_handoff() {
     assert(!display_dma_pending());
 }
 
+static void shared_font_memory() {
+    font_assets::Entry entry;
+    entry.bytes[0] = 24; entry.bytes[1] = 2; entry.bytes[13] = 128; entry.bytes[14] = 128;
+    constexpr unsigned glyphs = 41, pixels = 20 * 128, index = glyphs * 16;
+    entry.bytes[7] = glyphs;
+    cntrl::put32(entry.bytes + 15, index);
+    cntrl::put32(entry.bytes + 19, glyphs * pixels);
+    cntrl::MemoryBuffer data;
+    assert(data.resize(entry.length()) && data.size > 96 * 1024);
+    std::memset(data.data, 0, data.size);
+    for (unsigned i = 0; i < glyphs; ++i) {
+        auto *g = data.data + i * 16;
+        cntrl::put32(g, i); g[4] = 160; g[6] = 128;
+        cntrl::put32(g + 12, i * pixels);
+    }
+    font_assets::cache.begin();
+    assert(font_assets::cache.add(456, entry, std::move(data)));
+    font_assets::cache.finish(true);
+    assert(cntrl::memory_used == entry.length());
+    const auto *original = font_assets::cache.get(456, 24)->data.data;
+    font_assets::Entry small;
+    small.bytes[0] = 13; small.bytes[1] = 2; small.bytes[7] = 1;
+    small.bytes[13] = 1; small.bytes[15] = 16;
+    cntrl::MemoryBuffer setup, pending, candidate;
+    assert(pending.resize(16)); std::memset(pending.data, 0, pending.size);
+    font_assets::cache.begin();
+    assert(font_assets::cache.add(789, small, std::move(pending)));
+    assert(setup.resize(cntrl::memory_budget - cntrl::memory_used));
+    assert(!candidate.resize(1));
+    font_assets::cache.finish(false);
+    assert(cntrl::memory_used == cntrl::memory_budget - 16);
+    assert(font_assets::cache.get(456, 24)->data.data == original);
+    setup.clear();
+    font_assets::cache.begin(); assert(font_assets::cache.reuse(456, 24));
+    font_assets::cache.finish(true);
+    assert(font_assets::cache.get(456, 24)->data.data == original);
+    assert(cntrl::memory_used == entry.length());
+    font_assets::cache.begin(); font_assets::cache.finish(true);
+    assert(cntrl::memory_used == 0);
+}
+
 int main() {
+    cntrl::memory_budget = 192 * 1024;
+    shared_font_memory();
     test_due_scan_gets_display_handoff();
     test_page_settings();
     test_page_window_allocation();

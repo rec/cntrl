@@ -109,7 +109,14 @@ int main(int argc, char **argv) {
     Board board; File file(argv[1]); cntrl::SetupTable table;
     if (argc == 4) { File second(argv[3]); test_history_after_reindex(file, second, board); return 0; }
     test_saving_and_history(file, board);
+    unsigned initial_budget = cntrl::memory_budget;
+    assert(cntrl::memory_used == 0);
+    unsigned setup_length = cntrl::u32(file.bytes.data() + 40 + 64);
+    if (argv[2][0] == '0') cntrl::memory_budget = 2 * setup_length;
     assert(table.open(file, board));
+    assert(cntrl::memory_used >= table.resident_bytes());
+    cntrl::MemoryBuffer competing;
+    assert(!competing.resize(cntrl::memory_budget - cntrl::memory_used + 1));
     assert(table.count() == 3 && table.index("B") == 1 && table.index("missing") == -1);
     assert(!std::strcmp(table.name(0), "a") && !std::strcmp(table.name(2), "c"));
     assert(table.all_resident() == (argv[2][0] == '1'));
@@ -132,7 +139,13 @@ int main(int argc, char **argv) {
         assert(table.get(1)->brightness() == 101 && file.reads > reads);
         table.unpin(2);
         assert(table.resident_bytes() <= table.total_free_ram2());
+        table.clear();
+        assert(cntrl::memory_used == 0);
+        cntrl::memory_budget = initial_budget;
         return 0;
     }
     table.unpin(0);
+    table.clear();
+    assert(cntrl::memory_used == 0);
+    cntrl::memory_budget = initial_budget;
 }

@@ -4,6 +4,7 @@
 // Host-only sink: a successful fake write is delivered immediately. Production
 // targets supply the MIDI scheduler and pin real external documents instead.
 struct TestPatchHardware : cntrl::Hardware, cntrl::PatchOutputs, cntrl::PatchSources {
+    TestPatchHardware() { if (!cntrl::memory_budget) cntrl::memory_budget = 192 * 1024; }
     cntrl::Controller *controller = nullptr;
     uint32_t names_signature() const override { return 0; }
     bool available(const char *output) const override { return supports(output); }
@@ -42,7 +43,7 @@ public:
 private:
     uint32_t now_ = 0;
     void drain() {
-        for (unsigned i = 0; i < cntrl::document_memory_budget && executor().status() == cntrl::PatchExecutor::Status::pending; ++i)
+        for (unsigned i = 0; i < cntrl::memory_budget && executor().status() == cntrl::PatchExecutor::Status::pending; ++i)
             cntrl::Controller::tick(now_);
     }
 };

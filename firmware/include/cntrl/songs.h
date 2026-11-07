@@ -423,7 +423,7 @@ private:
             uint8_t header[32];
             if (position > length || 32 > length - position || !storage.read(slot, base + position, header, 32)) return false;
             unsigned n = u32(header);
-            if (n < 76 || n > document_memory_budget || n > length - position - 4 || std::memcmp(header + 4, "CSW1", 4)
+            if (n < 76 || n > memory_budget || n > length - position - 4 || std::memcmp(header + 4, "CSW1", 4)
                 || u16(header + 8) != document_version || u32(header + 12) != n) return false;
             source_expected = u32(header + 24); source_crc = 0xffffffff;
             source_remaining = n - 28; position += 32; ++sources;

@@ -16,12 +16,11 @@ endif
 PATCH_BUILD ?= $(ROOT)/build/patch-switcher
 PATCH_OUTPUT ?= $(ROOT)/build/patch-switcher.hex
 PATCH_LINKER ?= $(CORE)/cores/teensy4/imxrt1062_t41.ld
-DOCUMENT_MEMORY ?= 196608
 CABLE_TEST ?= 1
 ORIGINAL_FIRMWARE ?= 1
 PANIC ?= 1
 SWITCHES ?= 1
-PATCH_LINK_OPTION = --build-property 'build.flags.ld=-Wl,--gc-sections,--relax,--no-warn-rwx-segments,--defsym=cntrl_document_memory_budget=$(DOCUMENT_MEMORY) -T$(PATCH_LINKER) -T$(ROOT)/document_memory.ld'
+PATCH_LINK_OPTION = --build-property 'build.flags.ld=-Wl,--gc-sections,--relax,--no-warn-rwx-segments -T$(PATCH_LINKER) -T$(ROOT)/memory.ld'
 
 export ARDUINO_DIRECTORIES_DATA := $(ROOT)/.tools/data
 export ARDUINO_DIRECTORIES_DOWNLOADS := $(ROOT)/.tools/downloads
@@ -116,7 +115,7 @@ patch-switcher: tools
 		--build-path "$(PATCH_BUILD)" \
 		$(PATCH_LINK_OPTION) \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -DCNTRL_USB_INTERFACE -I$(ROOT)/usb_probe' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_USB_INTERFACE $(DIAGNOSTIC_FLAGS) -DCNTRL_DOCUMENT_MEMORY_BYTES=$(DOCUMENT_MEMORY) -DCNTRL_CABLE_TEST=$(CABLE_TEST) -DCNTRL_ORIGINAL_FIRMWARE=$(ORIGINAL_FIRMWARE) -DCNTRL_PANIC=$(PANIC) -DCNTRL_SWITCHES=$(SWITCHES) -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_USB_INTERFACE $(DIAGNOSTIC_FLAGS) -DCNTRL_CABLE_TEST=$(CABLE_TEST) -DCNTRL_ORIGINAL_FIRMWARE=$(ORIGINAL_FIRMWARE) -DCNTRL_PANIC=$(PANIC) -DCNTRL_SWITCHES=$(SWITCHES) -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/patch_switcher"

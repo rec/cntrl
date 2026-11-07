@@ -1,5 +1,6 @@
 #pragma once
 #include "document.h"
+#include "memory.h"
 #include "setup_names.h"
 #include <cassert>
 #include <cstdlib>
@@ -8,7 +9,7 @@
 namespace cntrl {
 constexpr unsigned setup_table_ram_overhead(unsigned count) {
     // Resident names/views plus the manifest and size arrays used during saves.
-    return count ? count * (148 + 85) + 2 + 4 * (count - 1) + 32 : 0;
+    return count ? count * (156 + 85) + 2 + 4 * (count - 1) + 32 : 0;
 }
 struct SetupBundleFile {
     virtual ~SetupBundleFile() = default;
@@ -38,7 +39,6 @@ public:
         uint64_t needs = uint64_t(general_) + active_ + setup_table_ram_overhead(count_);
         if (needs + margin_ >= 524288 || needs != u32(header + 28)
             || 524288 - needs - margin_ != u32(header + 36)) return false;
-        capacity_ = unsigned(524288 - needs - margin_);
         uint32_t crc = 0xffffffff;
         for (unsigned offset = 40; offset < file.size();) {
             uint8_t block[512]; unsigned n = std::min(uint32_t(512), file.size() - offset);
@@ -64,7 +64,7 @@ public:
             if (i && name_compare(setup_names_[i - 1], setup_names_[i]) >= 0) return false;
             auto &entry = entries_[i]; entry.length = u32(record + 64); entry.prefill = record[72]; entry.ram2 = u32(record + 68);
             peak = std::max(peak, entry.ram2);
-            if ((entry.length && entry.length < 116) || entry.length > capacity_ || position + entry.length > file.size()) return false;
+            if ((entry.length && entry.length < 116) || entry.length > memory_budget || position + entry.length > file.size()) return false;
             entry.offset = uint32_t(position); position += entry.length;
             if (i + 1 < count_ && (!file.read(table + 2 + i * 4, word, 4)
                 || u32(word) != position - table - prefix)) return false;
@@ -77,18 +77,20 @@ public:
             for (unsigned b = 0; b < 8; ++b) signature = signature & 1 ? (signature >> 1) ^ 0xedb88320 : signature >> 1;
         }
         signature_ = ~signature;
-        if (total_setup_ram_ <= capacity_) {
-            static_setups_ = static_cast<uint8_t *>(std::malloc(prefix + total_setup_ram_));
-            if (!static_setups_ || !file.read(table, static_setups_, prefix + total_setup_ram_)) return false;
+        if (static_setups_.resize(prefix + total_setup_ram_)) {
+            if (!file.read(table, static_setups_.data, prefix + total_setup_ram_)) return false;
             for (auto &entry : entries_) {
-                entry.bytes = static_setups_ + entry.offset - table;
+                entry.bytes = static_setups_.data + entry.offset - table;
                 if (entry.length && !entry.document.load(entry.bytes, entry.length, hardware)) return false;
                 entry.revision = checksum(entry.bytes, entry.length);
             }
             resident_ = total_setup_ram_;
         } else {
-            for (unsigned i = 0; i < count_; ++i)
-                if (entries_[i].prefill && !get(uint16_t(i))) return false;
+            for (unsigned i = 0; i < count_; ++i) {
+                if (!entries_[i].prefill) continue;
+                if (entries_[i].length > memory_budget - memory_used) break;
+                if (!get(uint16_t(i))) return false;
+            }
         }
         return true;
     }
@@ -97,22 +99,21 @@ public:
         auto &entry = entries_[index];
         if (!entry.length) return nullptr;
         if (!entry.bytes) {
-            while (resident_ + entry.length > capacity_) {
+            while (!entry.allocation.resize(entry.length)) {
                 unsigned victim = tail_;
                 while (victim != none && entries_[victim].pins) victim = entries_[victim].previous;
                 if (victim == none) return nullptr;
                 auto &old = entries_[victim]; unlink(victim);
-                resident_ -= old.length; std::free(old.bytes); old.bytes = nullptr; old.document = Document();
+                resident_ -= old.length; old.allocation.clear(); old.bytes = nullptr; old.document = Document();
             }
-            auto *bytes = static_cast<uint8_t *>(std::malloc(entry.length));
-            if (!bytes) return nullptr;
+            auto *bytes = entry.allocation.data;
             if (!file_->read(entry.offset, bytes, entry.length) || !entry.document.load(bytes, entry.length, *hardware_)) {
-                std::free(bytes); return nullptr;
+                entry.allocation.clear(); return nullptr;
             }
             entry.bytes = bytes; resident_ += entry.length;
             entry.revision = checksum(bytes, entry.length);
         }
-        if (!static_setups_) {
+        if (!static_setups_.data) {
             unlink(index); entry.next = head_;
             if (head_ != none) entries_[head_].previous = index;
             else tail_ = index;
@@ -137,9 +138,9 @@ public:
     }
     unsigned total_setup_ram() const { return total_setup_ram_; }
     unsigned total_ram2_needs() const { return count_ ? general_ + active_ + setup_table_ram_overhead(count_) : 0; }
-    unsigned total_free_ram2() const { return capacity_; }
+    unsigned total_free_ram2() const { return memory_budget; }
     unsigned resident_bytes() const { return resident_; }
-    bool all_resident() const { return static_setups_ != nullptr; }
+    bool all_resident() const { return static_setups_.data != nullptr; }
     unsigned length(unsigned i) const { return entries_[i].length; }
     unsigned offset(unsigned i) const { return entries_[i].offset; }
     unsigned ram2(unsigned i) const { return entries_[i].ram2; }
@@ -152,29 +153,29 @@ public:
     CNTRL_FLASH_ROUTINE(setup_table_clear)
 #endif
     void clear() {
-        if (!static_setups_) for (auto &entry : entries_) std::free(entry.bytes);
-        std::free(static_setups_); static_setups_ = nullptr;
+        static_setups_.clear();
         std::vector<Entry>().swap(entries_); std::vector<char>().swap(names_);
         std::vector<const char *>().swap(setup_names_);
-        count_ = resident_ = capacity_ = total_setup_ram_ = 0; head_ = tail_ = none;
+        count_ = resident_ = total_setup_ram_ = 0; head_ = tail_ = none;
     }
 private:
     static constexpr unsigned none = 65535;
     struct Entry {
         Document document;
+        MemoryBuffer allocation;
         uint8_t *bytes = nullptr;
         unsigned offset = 0, length = 0, previous = none, next = none, pins = 0, ram2 = 0;
         uint32_t revision = 0;
         bool prefill = false;
     };
-    static_assert(sizeof(void *) != 4 || sizeof(Entry) <= 80, "Update the RAM2 entry estimate");
+    static_assert(sizeof(void *) != 4 || sizeof(Entry) <= 88, "Update the RAM2 entry estimate");
     SetupBundleFile *file_ = nullptr;
     const Hardware *hardware_ = nullptr;
     std::vector<Entry> entries_;
     std::vector<char> names_;
     std::vector<const char *> setup_names_;
-    uint8_t *static_setups_ = nullptr;
-    unsigned count_ = 0, resident_ = 0, capacity_ = 0, total_setup_ram_ = 0;
+    MemoryBuffer static_setups_;
+    unsigned count_ = 0, resident_ = 0, total_setup_ram_ = 0;
     unsigned margin_ = 0, general_ = 0, active_ = 0, head_ = none, tail_ = none;
     uint32_t signature_ = 0;
     void unlink(unsigned index) {

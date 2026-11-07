@@ -83,10 +83,10 @@ public:
         unsigned glyph; int dx, dy;
         if (!font->position(text, index, glyph, dx, dy)) return false;
         if (centered) { int left, width; font->bounds(text, left, width); x = (160 - width) / 2 - left; }
-        const auto *g = font->data.get() + glyph * 16;
+        const auto *g = font->data.data + glyph * 16;
         unsigned width = cntrl::u16(g + 4), height = cntrl::u16(g + 6);
         x += dx + font_assets::signed16(g + 8); y += dy - font_assets::signed16(g + 10);
-        const auto *pixels = font->data.get() + font->entry.index_length() + cntrl::u32(g + 12);
+        const auto *pixels = font->data.data + font->entry.index_length() + cntrl::u32(g + 12);
         for (unsigned row = 0; row < height; ++row) for (unsigned col = 0; col < width; ++col) {
             int px = x + int(col), py = y + int(row);
             if (px >= settings.pad && px < 160 - settings.pad && py >= settings.pad && py < 128 - settings.pad

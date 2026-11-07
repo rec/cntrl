@@ -26,13 +26,13 @@ def test_static_table_is_sorted_and_offsets_address_every_setup() -> None:
 
 
 def test_prefill_maximizes_bytes_when_largest_first_would_waste_space() -> None:
-    # Metadata/save workspace occupy 741 bytes. Leave a ten-byte cache.
+    # Metadata/save workspace occupy 765 bytes. Leave a ten-byte cache.
     bundle = setup_bundle.SetupBundle(
         setups={'a': b'a' * 8, 'b': b'b' * 6, 'c': b'c' * 4},
         app_ram2=[0, 0, 0],
         page_ram2=[0, 0, 0],
         cntrl_ram2=0,
-        memory_margin=524288 - 741 - 10,
+        memory_margin=524288 - 765 - 10,
     )
     assert bundle.total_free_ram2() == 10
     assert bundle.prefill == [1, 2]
@@ -46,13 +46,14 @@ def test_active_setup_accounting_does_not_sum_mutually_exclusive_apps() -> None:
             'b': {'apps': {}, 'pages': [{'type': 'status', 'ram2_bytes': 80}]},
         },
     )
-    assert bundle.total_ram2_needs() == 294912 + 504 + 100
+    assert bundle.total_ram2_needs() == 294912 + 520 + 100
     assert bundle.total_free_ram2() == 524288 - 16192 - bundle.total_ram2_needs()
 
 
-def test_setup_larger_than_cache_is_rejected() -> None:
-    with pytest.raises(ValueError, match='exceeds'):
-        setup_bundle.build({'large': bytes(300000)}, {'large': {}})
+def test_setup_fit_is_decided_by_the_linked_firmware_budget() -> None:
+    bundle = setup_bundle.build({'large': bytes(300000)}, {'large': {}})
+    assert bundle.total_setup_ram > bundle.total_free_ram2()
+    assert setup_bundle.unpack(bundle.pack()) == bundle.setups
 
 
 @pytest.mark.parametrize('all_resident', [True, False])
@@ -64,7 +65,7 @@ def test_native_table_and_lru_preserve_pinned_views(all_resident: bool) -> None:
     sources = {n: {'brightness': 100 + i} for i, n in enumerate(('a', 'b', 'c'))}
     setups = {n: compiler.compile_show(s, {}, [], target) for n, s in sources.items()}
     size = len(setups['a'])
-    margin = 16192 if all_resident else 524288 - 294912 - 741 - size * 2
+    margin = 16192 if all_resident else 524288 - 294912 - 765 - size * 2
     bundle = setup_bundle.build(setups, sources, margin)
     with TemporaryDirectory(prefix='cntrl-setup-table-test-') as directory:
         image = Path(directory) / 'setups.bin'

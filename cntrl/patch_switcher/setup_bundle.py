@@ -16,8 +16,8 @@ class SetupBundle(BaseModel, frozen=True):
     app_ram2: list[int]
     page_ram2: list[int]
     memory_margin: units.Bytes = Field(default=16192, ge=0, le=524288)
-    # Includes fixed RAM2, temporary document buffers, fonts and runtime heaps.
-    # This is an estimate until the target reports measured high-water usage.
+    # Prefill planning hint only. The pedal enforces its linked shared heap
+    # budget for setup, document and font allocations.
     cntrl_ram2: units.Bytes = Field(default=294912, ge=0, le=524288)
 
     @model_validator(mode='after')
@@ -32,8 +32,6 @@ class SetupBundle(BaseModel, frozen=True):
             raise ValueError('duplicate setup name')
         if self.total_free_ram2() <= 0:
             raise ValueError('non-setup RAM2 use and memory margin exhaust RAM2')
-        if any(n > self.total_free_ram2() for n in self.setup_sizes):
-            raise ValueError('a setup exceeds the RAM2 cache capacity')
         return self
 
     @cached_property
@@ -51,7 +49,7 @@ class SetupBundle(BaseModel, frozen=True):
     def total_ram2_needs(self) -> int:
         # Names/pointers, validated views/cache entries, and packed-table prefix.
         metadata = (
-            len(self.names) * (64 + 4 + 80 + 85) + 2 + 4 * (len(self.names) - 1) + 32
+            len(self.names) * (64 + 4 + 88 + 85) + 2 + 4 * (len(self.names) - 1) + 32
         )
         active = max(a + p for a, p in zip(self.app_ram2, self.page_ram2, strict=True))
         return self.cntrl_ram2 + metadata + active

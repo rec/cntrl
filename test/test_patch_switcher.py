@@ -255,9 +255,7 @@ def test_configuration_units_retain_constraints(
 
 def test_target_units_normalize_before_compilation(target: models.Target) -> None:
     data = target.model_dump()
-    data.update(
-        display_width='160 px', display_height='128 px', max_document_bytes='192 KiB'
-    )
+    data.update(display_width='160 px', display_height='128 px')
     data['fonts'][0]['sizes']['8 px'] = data['fonts'][0]['sizes'].pop(8)
     data['fonts'][0]['sizes']['8 px'].update(line_height='8 px', top='0 px')
     assert models.Target.model_validate(data) == target
@@ -803,7 +801,7 @@ def test_bankless_pc_is_not_bank_zero_and_omission_sends_no_bank(
     assert b'Bank 0 / PC 12' in data
 
 
-def test_capacity_and_all_display_fields_are_checked(
+def test_all_display_fields_are_checked(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
     show['patch_cycles'] = {
@@ -816,10 +814,9 @@ def test_capacity_and_all_display_fields_are_checked(
             }
         ]
     }
-    small = target.model_copy(update={'max_document_bytes': 100})
     with pytest.raises(compiler.CompilationError) as failure:
-        compiler.compile_show(show, definitions, [], small)
-    assert len(failure.value.errors) >= 3
+        compiler.compile_show(show, definitions, [], target)
+    assert len(failure.value.errors) >= 2
 
 
 def test_profile_sysex_files_are_not_read_or_encoded(

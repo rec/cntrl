@@ -3,7 +3,6 @@
     "din",
     "trs"
   ],
-  "max_document_bytes": 196608,
   "max_instruments": 32,
   "max_patch_cycles": 128,
   "max_patches": 796,

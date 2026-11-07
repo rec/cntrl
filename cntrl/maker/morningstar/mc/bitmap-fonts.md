@@ -116,10 +116,13 @@ Adding text or choosing a size absent from a subset requires rebuilding with
 the original TTF/OTF file. Original outline files are not stored on the pedal.
 
 Only sizes referenced by the active show are loaded into RAM, before activation.
-Rendering does not read the SD card. The compiler and pedal enforce a maximum of
-32 distinct asset/size pairs and 96 KiB of loaded bitmap data. A single SD asset
-is limited to 256 KiB. Candidate fonts are loaded separately before replacing the
-active fonts, so a failed load preserves the current show. Missing assets prevent
+Rendering does not read the SD card. The compiler and pedal support up to
+32 distinct asset/size pairs. Loaded bitmap data shares the setup allocation
+budget, derived by the linker from RAM2 remaining after static firmware data.
+Active and candidate allocations count together; reused font data counts once.
+There is no separate font RAM allowance. A single SD asset file is limited to
+256 KiB. Candidate fonts are loaded before replacing the active fonts, so a
+failed load preserves the current show. Missing assets prevent
 show upload; corrupt pixel data or insufficient memory prevent activation.
 Unused font files remain on SD when a show is deleted.
 

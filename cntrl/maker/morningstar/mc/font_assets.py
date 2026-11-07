@@ -93,7 +93,6 @@ def entries(data: bytes) -> dict[int, tuple[list[int], bytes, bytes]]:
             or fields[1:7] != [2, 0, 0, 0, 0, 0]
             or not fields[13]
             or fields[14] > 128
-            or ni + nd > 96 * 1024
             or offset + ni + nd > len(data)
         ):
             raise ValueError('invalid font descriptor')
@@ -336,21 +335,14 @@ class Preparation:
         return self.show.model_copy(update={'fonts': paths}), keys, assets
 
 
-def validate_budget(
-    windows: list[bytes], display: bytes, assets: dict[int, bytes]
-) -> None:
+def validate_font_count(windows: list[bytes], display: bytes) -> None:
     count = struct.unpack_from('<H', display, 4)[0]
     records = windows + [display[16 + i * 16 : 32 + i * 16] for i in range(count)]
     selected = {
         (struct.unpack_from('<I', r, 12)[0], r[1]) for r in records if r[0] == 255
     }
-    total = sum(
-        len(index) + len(pixels)
-        for k, s in selected
-        for _, index, pixels in [entries(assets[k])[s]]
-    )
-    if len(selected) > 32 or total > 96 * 1024:
-        raise ValueError('selected font sizes exceed the 32-font / 96 KiB RAM budget')
+    if len(selected) > 32:
+        raise ValueError('selected font sizes exceed the 32-font limit')
 
 
 HEADER = struct.Struct('<4sI')

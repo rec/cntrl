@@ -38,18 +38,18 @@ public:
     bool success() const { return good_; }
     bool memory_failed() const { return memory_failed_; }
     const Revision &info() const { return info_; }
-    void read(const char *name, uint64_t number, DocumentBuffer &data) {
+    void read(const char *name, uint64_t number, MemoryBuffer &data) {
         initialize(name, &data); info_.number = number; operation_ = Operation::read;
         storage_.choose_revision(name_, number); phase_ = Phase::header;
     }
-    void current(const char *name, unsigned slot, DocumentBuffer &data) {
+    void current(const char *name, unsigned slot, MemoryBuffer &data) {
         initialize(name, &data); operation_ = Operation::current; slot_ = slot;
         storage_.choose(name_); phase_ = Phase::header;
     }
-    void next(const char *name, uint64_t before, DocumentBuffer &data) {
+    void next(const char *name, uint64_t before, MemoryBuffer &data) {
         initialize(name, &data); operation_ = Operation::next; scan(before);
     }
-    void append(const char *name, const char *label, uint32_t modified, DocumentBuffer &data, unsigned length) {
+    void append(const char *name, const char *label, uint32_t modified, MemoryBuffer &data, unsigned length) {
         initialize(name, &data); operation_ = Operation::append;
         names_count_ = storage_.setup_count();
         info_.length = length; info_.modified = modified;
@@ -95,7 +95,7 @@ public:
             info_.length = u32(header_ + length_offset);
             if (std::memcmp(header_, current ? "CNST" : "CREV", 4)
                 || checksum(header_, width - 4) != u32(header_ + width - 4)
-                || info_.length < 116 || info_.length > document_memory_budget
+                || info_.length < 116 || info_.length > memory_budget
                 || (!current && u32(header_ + 16) > 65535)) { invalid(); return; }
             names_count_ = current ? 0 : u32(header_ + 16);
             body_offset_ = width + names_count_ * 64;
@@ -206,7 +206,7 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(revisions_remap)
 #endif
-    bool remap(DocumentBuffer &buffer, const Document &document) const {
+    bool remap(MemoryBuffer &buffer, const Document &document) const {
         if (!names_count_) return true;
         for (unsigned i = 0; i < document.nodes(); ++i) {
             const auto *node = document.node(i);
@@ -229,7 +229,7 @@ private:
     Revision info_;
     char name_[64] = {};
     uint8_t header_[96] = {};
-    DocumentBuffer *buffer_ = nullptr;
+    MemoryBuffer *buffer_ = nullptr;
     unsigned offset_ = 0, slot_ = 0;
     unsigned names_count_ = 0, name_position_ = 0, body_offset_ = 0;
     std::vector<uint16_t> remap_;
@@ -238,7 +238,7 @@ private:
     bool good_ = false, opened_ = false, memory_failed_ = false;
     inline static const uint8_t zeros_[64] = {};
     unsigned amount() const { unsigned n = info_.length - offset_; return n > 512 ? 512 : n; }
-    void initialize(const char *name, DocumentBuffer *data) {
+    void initialize(const char *name, MemoryBuffer *data) {
         std::snprintf(name_, sizeof(name_), "%s", name); buffer_ = data;
         info_ = Revision(); offset_ = slot_ = 0; crc_ = 0xffffffff; good_ = opened_ = false;
         names_count_ = name_position_ = body_offset_ = 0; remap_.clear();
