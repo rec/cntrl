@@ -919,7 +919,12 @@ from setups and songs. It alternates two checked records in separate 512-byte
 sectors and verifies each update after syncing it. An interrupted update can
 recover from the previous valid record. A nonempty file without a valid record
 is reported as an error rather than silently resetting the count. `Starts: --` means no
-card was mounted; `Starts: error` means reading or saving the counter failed.
+card was mounted. Failures show the operation and slot, for example
+`Starts: sync s1` or `Starts: decode s0`. Short reads and writes include the
+actual byte count out of 512; a read-back mismatch includes the first differing
+byte offset, for example `Starts: mismatch s0 @37`. The diagnostic is retained
+for that boot. If neither existing record is usable, the first failure is shown;
+recovering from one valid record and saving successfully clears the diagnostic.
 Startup continues in either case. The counter uses card storage exclusively.
 
 The pages share one heading font and size, with white

@@ -813,6 +813,12 @@ static void test_page_settings() {
     status.starts_status = StartupCounter::Status::error;
     view = pages.view(1205000, 1205000000, status);
     assert(!std::strcmp(view.lines[6].text, "Starts: error"));
+    std::strcpy(status.starts_error, "readback s1 17/512");
+    view = pages.view(1205000, 1205000000, status);
+    assert(!std::strcmp(view.lines[6].text, "Starts: readback s1 17/512"));
+    std::strcpy(status.starts_error, "mismatch s0 @37");
+    view = pages.view(1205000, 1205000000, status);
+    assert(!std::strcmp(view.lines[6].text, "Starts: mismatch s0 @37"));
     pages.time(0xfffffff0u, 0, false);
     pages.time(0x000003e8u, 1000000, false);
     view = pages.view(1000, 1000000, status);

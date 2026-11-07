@@ -17,6 +17,7 @@ struct PerformanceStatus {
     bool disk_valid = false;
     uint64_t starts = 0;
     StartupCounter::Status starts_status = StartupCounter::Status::unavailable;
+    char starts_error[32] = {};
     unsigned cycles = 0, patches = 0;
 };
 
@@ -327,7 +328,7 @@ public:
             if (status.starts_status == StartupCounter::Status::ready)
                 std::snprintf(rows[4], sizeof(rows[4]), "Starts: %llu", (unsigned long long)status.starts);
             else std::snprintf(rows[4], sizeof(rows[4]), "Starts: %s",
-                status.starts_status == StartupCounter::Status::error ? "error" : "--");
+                status.starts_status == StartupCounter::Status::error ? (status.starts_error[0] ? status.starts_error : "error") : "--");
             std::snprintf(tap_label, sizeof(tap_label), "Tap: %s", tap);
             const unsigned body_top = pad + heading_height;
             const unsigned body_height = 128 - pad - body_top;

@@ -1302,6 +1302,7 @@ void capture_disk_space() {
 PerformanceStatus performance_status() {
     PerformanceStatus result = cached_disk;
     result.starts = startup_counter.count; result.starts_status = startup_counter.status;
+    std::snprintf(result.starts_error, sizeof(result.starts_error), "%s", startup_counter.error);
     uintptr_t stack;
     __asm__ volatile("mov %0, sp" : "=r"(stack));
     uintptr_t end = reinterpret_cast<uintptr_t>(&_ebss);
@@ -1356,7 +1357,10 @@ FLASHMEM void initialize_target() {
     board.begin();
     card.ready = SD.begin(BUILTIN_SDCARD);
     if (card.ready) {
-        if (!SD.sdfs.exists("/cntrl") && !SD.sdfs.mkdir("/cntrl", true)) startup_counter.status = StartupCounter::Status::error;
+        if (!SD.sdfs.exists("/cntrl") && !SD.sdfs.mkdir("/cntrl", true)) {
+            startup_counter.status = StartupCounter::Status::error;
+            std::strcpy(startup_counter.error, "mkdir");
+        }
         else {
             auto file = SD.sdfs.open(StartupCounter::path, O_CREAT | O_RDWR);
             startup_counter.start(file);
