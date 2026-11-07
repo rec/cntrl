@@ -5,7 +5,7 @@
 #include <optional>
 #include "page_settings.h"
 #include "app_layout.h"
-#include "document_memory.h"
+#include "memory.h"
 
 namespace cntrl {
 constexpr unsigned max_instruments = 32;

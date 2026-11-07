@@ -241,10 +241,10 @@ private:
         unsigned needs = table_.cntrl_ram2() + active + setup_table_ram_overhead(count);
         if (uint64_t(needs) + table_.memory_margin() >= 524288) return false;
         unsigned capacity = 524288 - needs - table_.memory_margin();
-        if (replacement_length_ > capacity) return false;
+        if (replacement_length_ > memory_budget) return false;
         std::vector<unsigned> sizes(count);
         for (unsigned i = 0; i < count; ++i) sizes[i] = int(i) == index_ ? replacement_length_ : table_.length(i);
-        for (unsigned n : sizes) if (n > capacity) return false;
+        for (unsigned n : sizes) if (n > memory_budget) return false;
         auto chosen = prefill(sizes, capacity);
         std::vector<uint8_t> manifest(count * 76 + prefix);
         unsigned offset = 0;

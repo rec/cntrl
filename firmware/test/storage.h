@@ -6,6 +6,7 @@
 #include <vector>
 
 struct TestStorage : cntrl::SetupStorage {
+    TestStorage() { if (!cntrl::memory_budget) cntrl::memory_budget = 192 * 1024; }
     std::map<std::string, std::array<std::vector<uint8_t>, 4>> files;
     std::string directory;
     unsigned slot = 0;

@@ -2,7 +2,6 @@
 #include "font_asset.h"
 #include <cntrl/documents.h>
 #include <SD.h>
-#include <new>
 
 namespace font_assets {
 class Files {
@@ -23,11 +22,11 @@ public:
     bool stage(uint32_t key, unsigned size) {
         if (cache.contains(key, size)) return true;
         auto file = open(key); Entry entry; unsigned offset;
-        if (!file || !find(file, size, entry, offset) || !cache.fits(entry)
+        if (!file || !find(file, size, entry, offset) || !cache.fits()
             || (!cache.verified(key) && !verify(file, key))) return false;
         if (cache.reuse(key, size)) return true;
-        std::unique_ptr<uint8_t[]> data(new (std::nothrow) uint8_t[entry.length()]);
-        return data && file.seekSet(offset) && file.read(data.get(), entry.length()) == int(entry.length())
+        cntrl::MemoryBuffer data;
+        return data.resize(entry.length()) && file.seekSet(offset) && file.read(data.data, entry.length()) == int(entry.length())
             && cache.add(key, entry, std::move(data));
     }
     bool command(const char *line, cntrl::Replies &replies, uint32_t now = 0) {
@@ -139,8 +138,8 @@ private:
             if (cursor + 23 > file.size() || !file.seekSet(cursor) || file.read(entry.bytes, 23) != 23
                 || !entry.valid() || seen[entry.size()] || entry.length() > file.size() - cursor - 23) return false;
             seen[entry.size()] = true;
-            std::unique_ptr<uint8_t[]> data(new (std::nothrow) uint8_t[entry.length()]);
-            if (!data || file.read(data.get(), entry.length()) != int(entry.length()) || !valid_pixels(entry, data.get())) return false;
+            cntrl::MemoryBuffer data;
+            if (!data.resize(entry.length()) || file.read(data.data, entry.length()) != int(entry.length()) || !valid_pixels(entry, data.data)) return false;
             cursor += 23 + entry.length();
         }
         return cursor == file.size();

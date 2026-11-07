@@ -14,6 +14,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <malloc.h>
 #include <new>
 extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
+extern "C" char cntrl_memory_budget;
 #include <cntrl/documents.h>
 #include <cntrl/patch_sources.h>
 #include <cntrl/bundle_transfer.h>
@@ -957,7 +958,7 @@ public:
 private:
     cntrl::SongContinuation context_;
     cntrl::Document embedded_document_;
-    cntrl::DocumentBuffer embedded_;
+    cntrl::MemoryBuffer embedded_;
 };
 SongFiles song_files;
 SongSources song_sources;
@@ -1344,6 +1345,7 @@ uint32_t last_scan = 0;
 bool switch_scan_due() { return uint32_t(millis() - last_scan) >= 1; }
 
 FLASHMEM void initialize_target() {
+    cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session = cntrl::UsbSession{};
     for (unsigned i = 1; i < cntrl::AppLayout::max_apps; ++i)

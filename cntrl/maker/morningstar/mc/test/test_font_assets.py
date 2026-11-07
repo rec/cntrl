@@ -291,25 +291,28 @@ def test_show_activation_requires_assets_and_releases_previous_fonts(
         os.close(slave)
 
 
-def test_rejects_selected_fonts_that_exceed_the_loaded_ram_budget(
+def test_selected_fonts_can_exceed_the_former_separate_budget(
     bitmap: bytes,
 ) -> None:
     key = crc32(bitmap)
-    # Exercise the combined budget independently of individual file validation.
+    # Font bytes share the linked firmware heap rather than a separate 96 KiB cap.
     fields, index, pixels = font_assets.entries(bitmap)[24]
-    fields[-1] += 48000
+    fields[-1] += 100000
     large = (
         font_assets.HEADER.pack(b'CFN2', 1)
         + font_assets.ENTRY.pack(*fields)
         + index
         + pixels
-        + bytes(48000)
+        + bytes(100000)
     )
     records = [
         bytes([255, 24]) + bytes(10) + struct.pack('<I', k) for k in (key, key + 1)
     ]
-    with pytest.raises(ValueError, match='96 KiB RAM budget'):
-        font_assets.validate_budget(records, bytes(16), {key: large, key + 1: large})
+    assert len(font_assets.entries(large)[24][2]) > 96 * 1024
+    font_assets.validate_font_count(records, bytes(16))
+    records = [bytes([255, 24]) + bytes(10) + struct.pack('<I', k) for k in range(33)]
+    with pytest.raises(ValueError, match='32-font limit'):
+        font_assets.validate_font_count(records, bytes(16))
 
 
 ROOT = Path(__file__).resolve().parents[5]

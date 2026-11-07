@@ -17,7 +17,6 @@
     "configurable-3": ["off", "midi-a", "midi-b", "expression", "aux"],
     "configurable-4": ["off", "midi-a", "midi-b", "expression", "aux"]
   },
-  "max_document_bytes": 196608,
   "max_instruments": 32,
   "max_patch_cycles": 128,
   "max_patches": 796,

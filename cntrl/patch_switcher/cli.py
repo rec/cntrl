@@ -414,7 +414,7 @@ def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
     print(f'total_setup_ram = {bundle.total_setup_ram}')
     print(
         f'total_ram2_needs() = {bundle.total_ram2_needs()} '
-        '(includes estimated cntrl RAM2)'
+        '(prefill estimate, not the linked allocation budget)'
     )
     print(f'total_free_ram2() = {bundle.total_free_ram2()}')
     print(

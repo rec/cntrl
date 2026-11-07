@@ -333,14 +333,14 @@ private:
     Revision history_revision_;
     HistoryComparison comparison_;
     // History reads/current bytes and deletion names have exclusive lifetimes.
-    DocumentBuffer scratch_;
+    MemoryBuffer scratch_;
     char history_name_[64] = {}, history_label_[64] = {};
     uint64_t history_number_ = 0;
     unsigned history_slot_ = 0, current_length_ = 0, current_slot_ = 0;
     uint32_t current_generation_ = 0, history_progress_ = 0;
     bool history_reply_ = false;
     SetupStorage &storage_; Hardware &hardware_; Controller &controller_; Replies &replies_;
-    DocumentBuffer active_, staging_;
+    MemoryBuffer active_, staging_;
     uint8_t header_[96] = {};
     Document document_;
     char selected_[64] = {}, record_name_[64] = {}, cursor_[64] = {}, line_[256] = {}, last_error_[64] = {}, boot_error_[64] = {};
@@ -352,7 +352,7 @@ private:
     bool receiving_ = false, writing_ = false, overflow_ = false, dirty_ = false, quiet_ = false, listing_ = false, deleting_ = false, erasing_ = false, present_ = false;
     inline static const uint8_t zero_[64] = {};
     bool allocation_failed_ = false;
-    bool allocate(DocumentBuffer &buffer, unsigned length) {
+    bool allocate(MemoryBuffer &buffer, unsigned length) {
         allocation_failed_ = !buffer.resize(length);
         return !allocation_failed_;
     }
@@ -554,7 +554,7 @@ private:
     }
     bool header_valid(const uint8_t *h) const {
         return !std::memcmp(h, "CNST", 4) && checksum(h, 92) == u32(h + 92)
-            && u32(h + 8) <= document_memory_budget && text_valid(h + 20, 64)
+            && u32(h + 8) <= memory_budget && text_valid(h + 20, 64)
             && setup_name(reinterpret_cast<const char *>(h + 20)) && !u32(h + 84) && !u32(h + 88);
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -774,7 +774,7 @@ private:
             download_ = 1; replies_.reply(response); return;
         }
         if (std::sscanf(line_, "CNTRL SETUP PUT %126s %u %lx %u%n", hex, &length, &crc, &overwrite, &end) == 4
-            && end && !line_[end] && unhex_name(hex, name) && overwrite <= 1 && length >= 116 && length <= document_memory_budget && crc <= 0xfffffffful) {
+            && end && !line_[end] && unhex_name(hex, name) && overwrite <= 1 && length >= 116 && length <= memory_budget && crc <= 0xfffffffful) {
             bool exists = load(name);
             if (allocation_failed_) { error("document-memory"); return; }
             if ((exists && (!overwrite || std::strcmp(record_name_, name))) || (present_ && !generation_ && !overwrite)) { error("setup-exists"); return; }
@@ -784,7 +784,7 @@ private:
             receiving_ = true; replies_.reply("CNTRL SEND"); return;
         }
         if (std::sscanf(line_, "CNTRL SETUP DELETE %u %lx%n", &length, &crc, &end) == 2
-            && end && !line_[end] && length && length <= document_memory_budget && crc <= 0xfffffffful) {
+            && end && !line_[end] && length && length <= memory_budget && crc <= 0xfffffffful) {
             if (!allocate(staging_, length)) { error("document-memory"); return; }
             expected_ = length; expected_crc_ = uint32_t(crc); received_ = 0; deleting_ = true;
             receiving_ = true; replies_.reply("CNTRL SEND"); return;

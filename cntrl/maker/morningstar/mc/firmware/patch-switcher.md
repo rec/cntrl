@@ -10,7 +10,8 @@ Runtime setups come from one bundle in `/cntrl/setups/.bundle/0.bin` and `1.bin`
 The build includes requested setups and their companions in a sorted index table.
 A fitting collection stays resident in RAM2; otherwise the bounded LRU is
 prefilled to maximize resident bytes. App/page RAM declarations and the configurable
-16192-byte memory margin participate in the budget. The other cntrl RAM2 reserve
+16192-byte memory margin guide the initial prefill plan only. Actual setup,
+document and font allocations share the linked heap budget. The other cntrl RAM2 reserve
 is currently an explicit 288 KiB estimate, not a measured peak.
 
 On-pedal saves rewrite the inactive bundle copy. CRC validation and the completion
@@ -357,23 +358,23 @@ code, display buffers and stack. Exact link measurements are printed by
 `inspect-patch-switcher`. No external RAM is allocated. Final link
 measurements are printed by `inspect-patch-switcher` and may vary as code changes.
 
-Document data shares a build-time allocation budget, configured with
-`DOCUMENT_MEMORY` in bytes (default 196608, or 192 KiB). The linker rejects a
-budget larger than the available RAM2 heap. Active setups, staging, scratch,
-cross-setup reference copies and embedded song documents all count towards this
-budget. Each buffer is sized to its contents; staging and scratch are released
-when idle. Allocation failure preserves the active setup and reports an error.
-There is no separate 64 KiB document limit. Loading, editing or replacing a setup
-can require several live buffers, so a document that fits alone may not fit during
-those operations. Fonts and execution state also need heap space, and an exhausted
-heap can reject an allocation before the document budget is reached.
+Setups and fonts share one allocation budget. The linker derives it as
+`_heap_end - _heap_start`, the RAM2 heap remaining after this firmware's static
+allocations. There is no manually configured document or font byte ceiling.
+Active setups, cached setup images, staging, scratch, embedded song
+documents and loaded font data all count towards the same budget. Each buffer
+is sized to its contents; staging and scratch are released when idle. Reusing an
+active font retains its allocation and counts it once. During a setup change,
+both old and newly loaded data count until the change commits or is cancelled.
+Allocation failure preserves the active setup and fonts and reports an error.
+Other runtime allocations and allocator overhead also consume the physical heap,
+so an allocation may fail before the tracked payload bytes reach the linked limit.
 
 The target supports 32 routed instruments, 128 categories and 128 Undo entries.
 Record sizes impose an upper bound that depends on instrument/category tables,
 banks and variable-length metadata. The advertised patch-count limit is not a
-promise that that many fit. The target manifest's `max_document_bytes` describes
-the largest standalone document allowed by its build's budget; match it to
-`DOCUMENT_MEMORY` when building a different budget. Instrument and
+promise that that many fit. Memory fit is enforced on the pedal using the budget
+from its firmware build. Instrument and
 output IDs occupy at most 31 printable ASCII characters; category/patch labels
 occupy at most 63 UTF-8 bytes. The compiler fits each line independently; category
 and patch names are centered on separate lines using saved cursor offsets,

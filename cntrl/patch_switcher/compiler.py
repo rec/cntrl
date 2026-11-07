@@ -484,9 +484,9 @@ def compile_show(
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
-        from ..maker.morningstar.mc.font_assets import validate_budget
+        from ..maker.morningstar.mc.font_assets import validate_font_count
 
-        validate_budget(screen_records, display_records, generated)
+        validate_font_count(screen_records, display_records)
     if assets is not None:
         assets.update(generated)
     records = [r + struct.pack('<3H', *references[i]) for i, r in enumerate(records)]
@@ -598,11 +598,6 @@ def compile_show(
         + compiler.pack(roots, switch_records)
         + display_records
     )
-    if len(body) + HEADER.size > target.max_document_bytes:
-        errors.append(
-            f'document: {len(body) + HEADER.size} bytes exceeds target capacity '
-            f'{target.max_document_bytes}'
-        )
     if errors:
         raise CompilationError(errors)
     return (

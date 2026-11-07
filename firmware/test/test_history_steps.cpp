@@ -15,13 +15,14 @@ struct BoundedStorage : TestStorage {
 };
 
 int main() {
+    cntrl::memory_budget = 192 * 1024;
     static_assert(sizeof(cntrl::Documents) < 4096);
     {
-        cntrl::DocumentBuffer a, b, c;
-        assert(a.resize(cntrl::document_memory_budget * 2 / 3));
+        cntrl::MemoryBuffer a, b, c;
+        assert(a.resize(cntrl::memory_budget * 2 / 3));
         a.data[0] = 42;
         assert(a.size > 65536);
-        assert(b.resize(cntrl::document_memory_budget - a.size));
+        assert(b.resize(cntrl::memory_budget - a.size));
         assert(!c.resize(1) && !a.resize(a.size + 1));
         assert(a.data[0] == 42 && !c.data);
         a.swap(b);
@@ -29,7 +30,7 @@ int main() {
         b.clear();
         assert(c.resize(1));
     }
-    assert(cntrl::document_memory_used == 0);
+    assert(cntrl::memory_used == 0);
     uint64_t number; char text[21];
     assert(cntrl::parse_revision("18446744073709551615", number) && number == UINT64_MAX);
     cntrl::revision_text(number, text); assert(!std::strcmp(text, "18446744073709551615"));
@@ -39,7 +40,7 @@ int main() {
     cntrl::revision_text(0, text); assert(!std::strcmp(text, "0"));
     BoundedStorage storage;
     cntrl::Revisions revisions(storage);
-    cntrl::DocumentBuffer source, downloaded;
+    cntrl::MemoryBuffer source, downloaded;
     assert(source.resize(80 * 1024));
     for (unsigned i = 0; i < source.size; ++i) source.data[i] = uint8_t(i);
     // Include many reserved/incomplete entries. Scanning must not process the
