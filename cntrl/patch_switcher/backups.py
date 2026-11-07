@@ -1,4 +1,4 @@
-"""Restore and verify pedal backups without recompiling saved setups."""
+"""Back up, restore and verify pedal data without recompiling saved setups."""
 
 from pathlib import Path
 from typing import Annotated
@@ -7,7 +7,14 @@ import tomlkit
 import tyro
 from pydantic import BaseModel
 
-from . import compiler, resolved, setup_bundle, songs, transport
+from . import compiler, models, resolved, setup_bundle, songs, transport
+
+
+class Backup(BaseModel, frozen=True):
+    """Save setups, assets, songs and selection into a new backup directory."""
+
+    directory: Annotated[Path, tyro.conf.Positional]
+    port: Path
 
 
 class Restore(BaseModel, frozen=True):
@@ -22,6 +29,51 @@ class Verify(BaseModel, frozen=True):
 
     directory: Annotated[Path, tyro.conf.Positional]
     port: Path
+
+
+def backup_pedal(directory: Path, port: Path) -> None:
+    from .cli import save_asset
+
+    directory.mkdir(parents=True)
+    setups = directory / 'setups'
+    setups.mkdir()
+    print(f'Backup: {directory}', flush=True)
+    with transport.SerialConnection(port, timeout=5) as connection:
+        client = transport.SetupClient(connection)
+        selected = client.current()
+        entries = client.catalogue()
+        (directory / 'selected.txt').write_text(selected)
+        (directory / 'catalogue.txt').write_text(
+            '\n'.join(f'{e.name} {e.valid}' for e in entries)
+        )
+        status = client.request('CNTRL STATUS')
+        (directory / 'status.txt').write_text(status)
+        fonts: set[int] = set()
+        movies: set[int] = set()
+        for entry in entries:
+            if not entry.valid:
+                print(f'Skipped invalid setup: {entry.name}', flush=True)
+                continue
+            data = client.download(entry.name)
+            (setups / f'{entry.name}.bin').write_bytes(data)
+            text = resolved.export(data)
+            (setups / f'{entry.name}.toml').write_text(text)
+            settings = models.Setup.model_validate(tomlkit.parse(text).unwrap())
+            for value in settings.fonts.values():
+                key = int(Path(value).stem, 16)
+                if key not in fonts:
+                    save_asset(
+                        setups / 'fonts' / f'{key:08x}.cfont', client.download_font(key)
+                    )
+                    fonts.add(key)
+            for value in settings.splash_movie + settings.idle_movie:
+                key = int(Path(value).stem, 16)
+                if key not in movies:
+                    save_asset(setups / value, client.download_movie(key))
+                    movies.add(key)
+            print(f'Saved {entry.name}: {len(data)} bytes', flush=True)
+        (directory / 'songs.bin').write_bytes(songs.download(client))
+    print(f'Selected: {selected}\n{status}\nBackup complete.', flush=True)
 
 
 def restore_setups(directory: Path, port: Path) -> None:

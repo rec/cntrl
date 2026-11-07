@@ -98,6 +98,7 @@ class SetupCLI(BaseModel, frozen=True):
         | Annotated[Delete, tyro.conf.subcommand(name='del')]
         | Annotated[Rotate, tyro.conf.subcommand(name='rotate')]
         | Annotated[Download, tyro.conf.subcommand(name='download')]
+        | Annotated[backups.Backup, tyro.conf.subcommand(name='backup')]
         | Annotated[backups.Restore, tyro.conf.subcommand(name='restore')]
         | Annotated[backups.Verify, tyro.conf.subcommand(name='verify')]
     )
@@ -226,9 +227,13 @@ def run_setup(
     | Rotate
     | Download
     | history.History
+    | backups.Backup
     | backups.Restore
     | backups.Verify,
 ) -> None:
+    if isinstance(command, backups.Backup):
+        backups.backup_pedal(command.directory, command.port)
+        return
     if isinstance(command, backups.Restore):
         backups.restore_setups(command.directory, command.port)
         return

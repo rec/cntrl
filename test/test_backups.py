@@ -3,8 +3,9 @@
 from pathlib import Path
 
 import pytest
+import tyro
 
-from cntrl.patch_switcher import backups, compiler
+from cntrl.patch_switcher import backups, cli, compiler
 
 
 def test_backup_reader_preserves_exact_setup_bytes(tmp_path: Path) -> None:
@@ -28,3 +29,23 @@ def test_backup_reader_rejects_an_old_document_format(tmp_path: Path) -> None:
     (folder / 'Evening.bin').write_bytes(data)
     with pytest.raises(ValueError, match='invalid setup header'):
         backups.read_setup_binaries(tmp_path)
+
+
+def test_backup_command_accepts_a_destination_and_port() -> None:
+    options = tyro.cli(
+        cli.SetupCLI,
+        args=['backup', 'backups/before-flash', '--port', '/unused'],
+        config=(tyro.conf.OmitSubcommandPrefixes,),
+    )
+    assert isinstance(options.command, backups.Backup)
+    assert options.command.directory == Path('backups/before-flash')
+    assert options.command.port == Path('/unused')
+
+
+def test_backup_refuses_to_overwrite_an_existing_directory(tmp_path: Path) -> None:
+    saved = tmp_path / 'selected.txt'
+    saved.write_text('Evening')
+    with pytest.raises(FileExistsError):
+        backups.backup_pedal(tmp_path, Path('/unused'))
+    assert saved.read_text() == 'Evening'
+    assert not (tmp_path / 'setups').exists()
