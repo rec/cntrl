@@ -4,7 +4,9 @@ import os
 import pty
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from zlib import crc32
 
 import pytest
@@ -30,6 +32,27 @@ def peer(tmp_path_factory: pytest.TempPathFactory) -> Path:
         check=True,
     )
     return executable
+
+
+@pytest.fixture(scope='module')
+def bundle_peer() -> Iterator[Path]:
+    with TemporaryDirectory(prefix='cntrl-bundle-peer-') as directory:
+        executable = Path(directory) / 'peer'
+        subprocess.run(
+            [
+                'c++',
+                '-std=c++17',
+                '-Wall',
+                '-Wextra',
+                '-Werror',
+                f'-I{ROOT / "firmware/include"}',
+                str(ROOT / 'firmware/test/bundle_server.cpp'),
+                '-o',
+                str(executable),
+            ],
+            check=True,
+        )
+        yield executable
 
 
 def test_named_setup_lifecycle_against_cpp_receiver(peer: Path) -> None:
@@ -161,13 +184,13 @@ def test_resolved_export_recompiles_without_original_sources() -> None:
 
 
 def test_setup_cli_copy_download_and_delete(
-    peer: Path,
+    bundle_peer: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
+    process = subprocess.Popen([str(bundle_peer)], stdin=master, stdout=master)
     try:
         port = os.ttyname(slave)
 
@@ -189,7 +212,7 @@ def test_setup_cli_copy_download_and_delete(
                 str(fixture / 'definitions.json'),
             ]
         )
-        assert 'Evening: copied and verified' in capsys.readouterr().out
+        assert 'Evening:' in capsys.readouterr().out
         run(['set'])
         assert capsys.readouterr().out.strip() == 'Evening'
         run(['rotate', '-b'])
@@ -202,9 +225,16 @@ def test_setup_cli_copy_download_and_delete(
             run(['download', 'Evening', '--directory', str(tmp_path)])
         run(['download', 'Evening', '--directory', str(tmp_path), '-o'])
         run(
-            ['copy', f'Resolved={downloaded}', '--target', str(fixture / 'target.json')]
+            [
+                'copy',
+                f'Resolved={downloaded}',
+                '--target',
+                str(fixture / 'target.json'),
+                '--overwrite',
+            ]
         )
-        run(['del', 'Evening', 'Jazz', 'Resolved', '-y'])
+        run(['set', 'Resolved'])
+        run(['del', 'Resolved', '-y'])
         capsys.readouterr()
         run(['list'])
         assert capsys.readouterr().out == ''

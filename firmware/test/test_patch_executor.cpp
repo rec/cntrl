@@ -43,8 +43,8 @@ struct PatchBoard : TestPatchHardware, cntrl::midi::Sink {
     }
     void begin() override { ++pins; }
     void end() override { assert(pins); --pins; }
-    bool acquire(const char *name, const cntrl::Document *&document, uint32_t &revision) override {
-        if (std::strcmp(name, "foreign") || !foreign) return false;
+    bool acquire(uint16_t index, const cntrl::Document *&document, uint32_t &revision) override {
+        if (index != 0 || !foreign) return false;
         document = foreign; revision = cntrl::u32(document->data() + 20); return true;
     }
     bool state(unsigned operation, uint32_t) override {
@@ -87,8 +87,8 @@ Bytes sequence(std::initializer_list<unsigned> children) {
     return node(5, payload);
 }
 Bytes reference(const char *document, const char *key) {
-    Bytes payload(128); std::memcpy(payload.data(), document, std::strlen(document));
-    std::memcpy(payload.data() + 64, key, std::strlen(key)); return node(6, payload);
+    Bytes payload(66); payload[0] = payload[1] = document[0] ? 0 : 255;
+    std::memcpy(payload.data() + 2, key, std::strlen(key)); return node(6, payload);
 }
 Bytes extend(const Bytes &base, const std::vector<Bytes> &extra, PatchBoard &board) {
     cntrl::Document document; assert(document.load(base.data(), unsigned(base.size()), board));

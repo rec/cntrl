@@ -443,6 +443,11 @@ def compile_show(
                     else {}
                 )
                 | compiler.derivations.get(i, {})
+                | (
+                    {'_document': p.document}
+                    if isinstance(p, models.Reference) and p.document
+                    else {}
+                )
                 for i, p in enumerate(compiler.values)
             },
         )
@@ -499,6 +504,16 @@ def compile_show(
             )
     if len(mappings) > 65535:
         errors.append('too many bank mappings')
+    from .data_files import validate_name
+
+    setup_name_bytes = bytearray()
+    for name in sorted(documents or {}, key=str.lower):
+        try:
+            validate_name(name)
+        except ValueError as error:
+            errors.append(str(error))
+        else:
+            setup_name_bytes.extend(name.lower().encode('ascii').ljust(64, b'\0'))
     metadata = METADATA.pack(
         b'CMTA',
         min(len(mappings), 65535),
@@ -520,6 +535,9 @@ def compile_show(
             )
         ),
         show.fast_switches,
+        sum(a.ram2_bytes for a in show.apps.values())
+        + sum(p.ram2_bytes for p in show.pages),
+        crc32(setup_name_bytes),
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
     body += (
@@ -762,11 +780,18 @@ class PatchCompiler:
             )
         elif isinstance(value, models.Reference):
             kind = 6
+            setup_names = sorted(self.documents, key=str.lower)
+            setup_index = next(
+                (
+                    i
+                    for i, n in enumerate(setup_names)
+                    if value.document and n.lower() == value.document.lower()
+                ),
+                65535,
+            )
             payload = struct.pack(
-                '<64s64s',
-                _text(value.document, 64, self.target, path + '.document', self.errors)
-                if value.document
-                else b'',
+                '<H64s',
+                setup_index,
                 _text(
                     value.patch,
                     64,
@@ -1703,8 +1728,8 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHHHBBHH23H4sH4B')
-DOCUMENT_VERSION = 32
+METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
+DOCUMENT_VERSION = 33
 SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
 TRS_JACKS = tuple(f'configurable-{i}' for i in range(1, 5))
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

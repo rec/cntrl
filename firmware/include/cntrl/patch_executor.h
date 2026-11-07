@@ -12,7 +12,8 @@ struct PatchSources {
     virtual ~PatchSources() = default;
     virtual void begin() {}
     virtual void end() {}
-    virtual bool acquire(const char *name, const Document *&document, uint32_t &revision) = 0;
+    virtual uint32_t names_signature() const = 0;
+    virtual bool acquire(uint16_t index, const Document *&document, uint32_t &revision) = 0;
 };
 
 struct PatchOutputs {
@@ -275,11 +276,14 @@ private:
                 if (f.child) { --depth_; continue; }
                 ++f.child;
                 uint32_t revision = 0;
-                if (p[0] && !sources_.acquire(reinterpret_cast<const char *>(p), document, revision)) {
+                if (u16(p) != 65535 && document->names_signature() != sources_.names_signature()) {
+                    fail("Setup table changed; rebuild captured patches"); return nullptr;
+                }
+                if (u16(p) != 65535 && !sources_.acquire(u16(p), document, revision)) {
                     fail("Referenced setup is missing or invalid"); return nullptr;
                 }
                 if (validating) hash(revision);
-                int node = document->named_patch(reinterpret_cast<const char *>(p + 64));
+                int node = document->named_patch(reinterpret_cast<const char *>(p + 2));
                 if (node < 0) { fail("Referenced patch does not exist"); return nullptr; }
                 if (!push(document, unsigned(node))) return nullptr;
             } else {

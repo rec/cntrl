@@ -12,7 +12,15 @@ import tomlkit
 
 from cntrl.maker.morningstar.mc import font_assets
 from cntrl.maker.morningstar.mc.sparse_fonts import Outline, text_runs
-from cntrl.patch_switcher import cli, compiler, display, models, resolved, transport
+from cntrl.patch_switcher import (
+    cli,
+    compiler,
+    display,
+    models,
+    resolved,
+    setup_bundle,
+    transport,
+)
 
 
 @pytest.fixture(scope='module')
@@ -145,7 +153,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
         definitions=[str(ROOT / 'firmware/test/definitions.json')],
     )
     assets: dict[str, dict[int, bytes]] = {}
-    data = cli.compile_inputs(command, assets)['show']
+    data = cli.compile_inputs(command, assets).setups['show']
     assert assets['show']
     key, bitmap = next(iter(assets['show'].items()))
     assert data[28] == 0  # Window records only paint backgrounds.
@@ -157,7 +165,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     (tmp_path / 'fonts').mkdir()
     (tmp_path / 'fonts' / f'{key:08x}.cfont').write_bytes(bitmap)
     document.write_text(exported)
-    assert cli.compile_inputs(command)['show'] == data
+    assert cli.compile_inputs(command).setups['show'] == data
 
 
 def test_sparse_font_contains_only_requested_sizes_and_runs(bitmap: bytes) -> None:
@@ -525,7 +533,10 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
     command = cli.Sources(
         document=[str(path)], target=[str(MC / 'patch-switcher-target.json')]
     )
-    assert cli.compile_inputs(command)['exported'] == data
+    assert (
+        cli.compile_inputs(command).setups['exported']
+        == setup_bundle.reindex({'exported': data})['exported']
+    )
 
 
 def test_outline_scaling_changes_width_without_changing_height() -> None:

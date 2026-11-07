@@ -455,12 +455,53 @@ load another setup from the pedal's card. Changes to a source setup require
 recompiling and uploading its callers. Downloading an inlined setup exports the
 embedded actions.
 
-Set `inline_patches = false` to retain runtime references. On the pedal, source
-setups are loaded, checked and pinned before execution, so subsequent invocations
-can use independently updated source setups. Missing references and cycles fail
-before effects; pending work prevents replacement of its source data. This
+Set `inline_patches = false` to retain runtime references. These compile to
+indices in the bundle's sorted setup table. Resident setups are reused without
+disk reads; an LRU miss loads and validates the setup. Active invocations pin
+their source views until completion. Missing references and cycles fail before
+effects; pending work prevents replacement of its source data. This
 setting controls patch dependencies within a compiled setup; song library live
 references still resolve their source setup at playback time.
+
+## Setup bundles and RAM2
+
+`compile` and `setup copy` collect every requested setup and all transitive
+companions into one bundle, sorted by case-insensitive logical name. Authoring
+and UI retain the original names; executable cross-setup references use uint16
+indices. A rebuild replaces the complete bundle. Use `--overwrite` when copying
+over an existing collection. Backup restore merges saved setups with the current
+collection and relinks their indices.
+
+The build reports each setup's compiled RAM size and `total_setup_ram`.
+Each app and page declares `ram2_bytes`, defaulting to zero. The planner reserves
+the largest combined app/page total for any one active setup, plus name/table/cache
+metadata and a **288 KiB estimate** for cntrl's fixed and temporary RAM2 use.
+That estimate includes document editing buffers, font and other runtime storage;
+it is not a measured high-water value.
+
+`total_free_ram2() = 524288 - memory_margin - total_ram2_needs()`.
+The build option `--memory-margin` defaults to **16192 bytes** and accepts byte
+quantities. Setup payloads are excluded from `total_ram2_needs()`.
+
+If `total_setup_ram` fits, the bundle's count, offsets and setup bytes are loaded
+into one resident `static_setups` slab with validated document views. Otherwise,
+the same indices address a bounded LRU cache. Its initial contents use an exact
+subset-sum calculation to maximize occupied bytes, rather than a largest-first
+heuristic. A setup larger than the cache is a build error. If all possible
+eviction candidates are pinned, a new acquisition fails without invalidating
+the running patches.
+
+On-pedal saves and per-setup history remain available. Saves build an inactive
+bundle copy; the previous copy remains bootable until validation and completion.
+History stores the name ordering so restoring an older setup translates its
+indices into the current table. Deletes retain an empty index slot until the
+next host rebuild. Captured song sources with runtime references carry a table
+signature: rebuild/copy them again if the table's names change. A stale capture
+fails before sending MIDI rather than addressing a different setup by accident.
+Live song selections continue resolving their authored setup names at activation.
+No simultaneous hand/computer editing is assumed, and no
+conflict detection or merge protocol is used. Compiled setups now use format 33;
+recompile older configurations before deploying the matching firmware.
 
 Song libraries have optional `instruments`, `definitions`, `patches`, `fonts` and
 `tags` context using the same authoring models. Each song's `patches` list

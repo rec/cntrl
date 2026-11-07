@@ -30,17 +30,6 @@ public:
         }
     }
     const Document &document() const { return document_; }
-    bool reference_document(const char *name, Document &candidate) {
-        if (busy() || dirty_ || !setup_name(name)) return false;
-        unsigned length = length_, slot = slot_;
-        uint32_t generation = generation_, modified = modified_;
-        bool present = present_;
-        char record_name[64]; std::memcpy(record_name, record_name_, sizeof(record_name));
-        bool valid = load(name) && candidate.load(staging_.data, length_, hardware_);
-        length_ = length; slot_ = slot; generation_ = generation; modified_ = modified; present_ = present;
-        std::memcpy(record_name_, record_name, sizeof(record_name));
-        return valid;
-    }
     const char *selected() const { return selected_; }
     bool busy() const { return browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
     bool dirty() const { return dirty_; }
@@ -227,8 +216,8 @@ private:
         for (unsigned visited = 0; visited < document.nodes(); ++visited) {
             const uint8_t *p = document.node(node);
             if (p[0] == 1) return int(node);
-            if (p[0] != 6 || p[4]) return -1;
-            int referenced = document.named_patch(reinterpret_cast<const char *>(p + 68));
+            if (p[0] != 6 || u16(p + 4) != 65535) return -1;
+            int referenced = document.named_patch(reinterpret_cast<const char *>(p + 6));
             if (referenced < 0) return -1;
             node = unsigned(referenced);
         }
@@ -268,6 +257,9 @@ private:
             replies_.reply("CNTRL WAIT"); browse_.progress = now;
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_browse_step)
+#endif
     void browse_step() {
         switch (browse_phase_) {
         case BrowsePhase::idle: return;
@@ -403,6 +395,9 @@ private:
             replies_.reply(response);
         } else replies_.reply("CNTRL OK");
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_archive_ready)
+#endif
     void archive_ready(uint32_t now) {
         if (history_action_ == HistoryAction::save) {
             if (!current_length_) { history_complete(false); return; }
@@ -416,6 +411,9 @@ private:
         history_phase_ = HistoryPhase::append;
         revisions_.append(history_name_, history_label_, epoch_, scratch_, current_length_);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_history_tick)
+#endif
     void history_tick(uint32_t now) {
         revisions_.tick();
         if (revisions_.memory_failed()) { history_complete(false); return; }
@@ -449,6 +447,11 @@ private:
                 return;
             }
             history_revision_ = revisions_.info();
+            if (history_action_ == HistoryAction::restore || history_action_ == HistoryAction::compare) {
+                Document original;
+                if (!original.load(staging_.data, history_revision_.length, hardware_)
+                    || !revisions_.remap(staging_, original)) { history_complete(false); return; }
+            }
             if (history_action_ == HistoryAction::restore) {
                 Document candidate;
                 if (!candidate.load(staging_.data, history_revision_.length, hardware_) || !candidate.prepare_fonts(hardware_)) { history_complete(false); return; }
@@ -465,6 +468,9 @@ private:
             else { history_action_ = HistoryAction::none; begin_write(now); }
         } else history_complete(revisions_.success());
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_compare_history)
+#endif
     bool compare_history() {
         Document old, current;
         if (!old.load(staging_.data, history_revision_.length, hardware_) || !current.load(scratch_.data, current_length_, hardware_)) return false;
@@ -496,6 +502,7 @@ private:
             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
             || old.animation_color_cycle() != current.animation_color_cycle()
             || old.fast_switches() != current.fast_switches()
+            || old.app_page_ram2() != current.app_page_ram2()
             || old.screensaver_timeout() != current.screensaver_timeout()
             || old.scroll_ms() != current.scroll_ms()
             || std::memcmp(old.data() + old.metadata() + scrolling_offset, current.data() + current.metadata() + scrolling_offset, 5);
@@ -511,6 +518,9 @@ private:
             || std::memcmp(old.data() + old.metadata(), current.data() + current.metadata(), old_names);
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_current_ready)
+#endif
     void current_ready(uint32_t now) {
         if (history_action_ == HistoryAction::restore || history_action_ == HistoryAction::compare) {
             history_phase_ = HistoryPhase::revision; revisions_.read(history_name_, history_number_, staging_);
@@ -547,6 +557,9 @@ private:
             && u32(h + 8) <= document_memory_budget && text_valid(h + 20, 64)
             && setup_name(reinterpret_cast<const char *>(h + 20)) && !u32(h + 84) && !u32(h + 88);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_read_slot)
+#endif
     bool read_slot(unsigned slot) {
         uint8_t trailer[4];
         if (!storage_.read(slot, 0, header_, 96) || !header_valid(header_)) return false;
@@ -557,6 +570,9 @@ private:
             || checksum(staging_.data, length) != u32(header_ + 12)) return false;
         Document candidate; return !length || candidate.load(staging_.data, length, hardware_);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_load)
+#endif
     bool load(const char *name) {
         allocation_failed_ = false;
         storage_.choose(name); int best = -1; uint32_t gen = 0;
@@ -602,7 +618,13 @@ private:
         if (!expected_) return begin_write(now);
         return begin_history(HistoryAction::archive, record_name_, 0);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_begin_write)
+#endif
     bool begin_write(uint32_t now) {
+        Document prepared;
+        if (expected_ && !prepared.load(staging_.data, expected_, hardware_)) return false;
+        storage_.prepare_document(prepared);
         if (dirty_ && !allocate(scratch_, expected_)) { error("document-memory"); return false; }
         last_error_[0] = 0;
         std::memset(header_, 0, sizeof(header_)); std::memcpy(header_, "CNST", 4);
@@ -683,6 +705,9 @@ private:
             (unsigned long)modified_, length_, (unsigned long)checksum(staging_.data, length_));
         replies_.reply(response);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_command)
+#endif
     void command(uint32_t now) {
         char hex[127] = {}, name[64] = {}; unsigned length = 0, overwrite = 0; unsigned long crc = 0, epoch = 0; int end = 0;
         if (!std::strcmp(line_, "CNTRL STATUS")) {

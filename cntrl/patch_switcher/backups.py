@@ -3,10 +3,11 @@
 from pathlib import Path
 from typing import Annotated
 
+import tomlkit
 import tyro
 from pydantic import BaseModel
 
-from . import compiler, resolved, songs, transport
+from . import compiler, resolved, setup_bundle, songs, transport
 
 
 class Restore(BaseModel, frozen=True):
@@ -37,8 +38,22 @@ def restore_setups(directory: Path, port: Path) -> None:
         client = transport.SetupClient(connection)
         for key, data in fonts.items():
             client.copy_font(key, data)
-        for name, data in setups.items():
-            client.copy(name, data, overwrite=True)
+        current_bundle = client.download_bundle()
+        existing = setup_bundle.unpack(current_bundle) if current_bundle else {}
+        combined = setup_bundle.reindex(existing | setups)
+        if combined:
+            source: dict[str, object] = {
+                n: tomlkit.parse(resolved.export(d)).unwrap()
+                for n, d in combined.items()
+            }
+            margin = (
+                setup_bundle.HEADER.unpack_from(current_bundle)[5]
+                if current_bundle
+                else 16192
+            )
+            bundle = setup_bundle.build(combined, source, margin)
+            client.copy_bundle(bundle.pack(), overwrite=True)
+        for name in setups:
             print(f'{name}: restored and read-back verified', flush=True)
         if setups:
             client.ok('CNTRL SETUP FINISH')

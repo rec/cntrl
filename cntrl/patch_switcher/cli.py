@@ -11,8 +11,19 @@ from typing import Annotated
 import tomlkit
 import tyro
 from pydantic import BaseModel, ConfigDict, Field
+from reccy.configuration import units
 
-from . import backups, compiler, data_files, history, models, resolved, songs, transport
+from . import (
+    backups,
+    compiler,
+    data_files,
+    history,
+    models,
+    resolved,
+    setup_bundle,
+    songs,
+    transport,
+)
 
 
 class Sources(BaseModel, frozen=True):
@@ -23,6 +34,7 @@ class Sources(BaseModel, frozen=True):
         default_factory=list
     )
     avoid_confict: bool = True
+    memory_margin: units.Bytes = Field(default=16192, ge=0, le=524288)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -104,7 +116,7 @@ class Status(BaseModel, frozen=True):
 
 def compile_inputs(
     command: Sources, assets: dict[str, dict[int, bytes]] | None = None
-) -> dict[str, bytes]:
+) -> setup_bundle.SetupBundle:
     errors: list[str] = []
 
     documents = data_files.expressions(command.document, errors)
@@ -182,7 +194,10 @@ def compile_inputs(
                 errors.extend(f'{e.paths[0]} ({e.name}): {x}' for x in error.errors)
     if errors:
         raise compiler.CompilationError(errors)
-    return result
+    try:
+        return setup_bundle.build(result, sources, command.memory_margin)
+    except ValueError as error:
+        raise compiler.CompilationError([str(error)]) from error
 
 
 def document_references(document: object) -> list[str]:
@@ -221,7 +236,7 @@ def run_setup(
         history.run(command)
         return
     assets: dict[str, dict[int, bytes]] = {}
-    compiled = compile_inputs(command, assets) if isinstance(command, Copy) else {}
+    bundle = compile_inputs(command, assets) if isinstance(command, Copy) else None
     with transport.SerialConnection(command.port) as connection:
         client = transport.SetupClient(connection)
         if isinstance(command, Set):
@@ -242,6 +257,8 @@ def run_setup(
                 )
                 print(f'{e.name}  {stamp}' + ('' if e.valid else ' (invalid setup)'))
         elif isinstance(command, Copy):
+            assert bundle is not None
+            compiled = bundle.setups
             existing = {e.name.lower(): e.name for e in client.catalogue()}
             errors = [
                 f'{n}: setup exists; use --overwrite/-o'
@@ -258,13 +275,11 @@ def run_setup(
             client.ok(f'CNTRL TIME {int(time.time())}')
             failures: list[str] = []
             try:
-                for name, data in compiled.items():
+                for name in bundle.names:
                     for key, font in assets[name].items():
                         client.copy_font(key, font)
-                    client.copy(name, data, command.overwrite)
-                    print(
-                        f'{name}: copied and verified ({len(data)} bytes)', flush=True
-                    )
+                client.copy_bundle(bundle.pack(), command.overwrite)
+                report_bundle(bundle)
             except (OSError, ValueError) as error:
                 failures.append(str(error))
             try:
@@ -381,6 +396,34 @@ def save_font(directory: Path, key: int, data: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
+    for i, (name, size) in enumerate(
+        zip(bundle.names, bundle.setup_sizes, strict=True)
+    ):
+        data = bundle.setups[name]
+        ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
+        print(
+            f'{i}: {name}: {size} RAM bytes; {ni} instruments, '
+            f'{nc} patch cycles, {np} patches'
+        )
+        for j in range(ni):
+            offset = 76 + j * 68
+            alias = data[offset : offset + 32].split(b'\0')[0].decode('ascii')
+            route = data[offset + 32 : offset + 64].split(b'\0')[0].decode('ascii')
+            print(f'  {alias}: channel {data[offset + 64] + 1} to {route}')
+    print(f'total_setup_ram = {bundle.total_setup_ram}')
+    print(
+        f'total_ram2_needs() = {bundle.total_ram2_needs()} '
+        '(includes estimated cntrl RAM2)'
+    )
+    print(f'total_free_ram2() = {bundle.total_free_ram2()}')
+    print(
+        'static_setups'
+        if bundle.total_setup_ram <= bundle.total_free_ram2()
+        else 'LRU cache'
+    )
+
+
 def main() -> None:
     command = tyro.cli(
         Annotated[Compile, tyro.conf.subcommand(name='compile')]
@@ -392,27 +435,12 @@ def main() -> None:
     try:
         if isinstance(command, Compile):
             assets: dict[str, dict[int, bytes]] = {}
-            results = compile_inputs(command, assets)
-            if len(results) != 1:
-                raise ValueError(
-                    'compile accepts one expression; use setup copy for multiple setups'
-                )
-            data = next(iter(results.values()))
+            bundle = compile_inputs(command, assets)
             for fonts in assets.values():
                 for key, font in fonts.items():
                     save_font(command.output.parent, key, font)
-            command.output.write_bytes(data)
-            ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
-            print(
-                f'{command.output}: {len(data)} bytes; '
-                f'{ni} instruments, {nc} patch cycles, {np} patches'
-            )
-            # Report the actual compiled routes, including composition overrides.
-            for i in range(ni):
-                offset = 76 + i * 68
-                alias = data[offset : offset + 32].split(b'\0')[0].decode('ascii')
-                route = data[offset + 32 : offset + 64].split(b'\0')[0].decode('ascii')
-                print(f'  {alias}: channel {data[offset + 64] + 1} to {route}')
+            command.output.write_bytes(bundle.pack())
+            report_bundle(bundle)
         elif isinstance(command, Songs):
             songs.run(command.command)
         elif isinstance(command, SetupCLI):

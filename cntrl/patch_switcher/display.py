@@ -402,6 +402,8 @@ FIELDS = {
     'scrolling.vertical_duration': 23,
 }
 SOURCE_FIELDS = (
+    'apps',
+    'pages',
     'seed',
     'fill_in_styles',
     'background_color',

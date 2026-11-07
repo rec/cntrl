@@ -106,10 +106,10 @@ def export(data: bytes) -> str:
         'is_midi_interface': bool(flags & 512),
         'usb_device_midi': bool(flags & 2048),
         'usb_host_midi': bool(flags & 4096),
-        'fast_switches': bool(data[meta + METADATA.size - 1]),
+        'fast_switches': bool(data[meta + METADATA.size - 9]),
         'screensaver_timeout': timeout // 1000,
     }
-    scrolling = struct.unpack_from('<H3B', data, meta + METADATA.size - 6)
+    scrolling = struct.unpack_from('<H3B', data, meta + METADATA.size - 14)
     result['scrolling'] = {
         'horizontal_duration': struct.unpack_from('<H', data, meta + 6)[0] / 1000,
         'vertical_duration': scrolling[0] / 1000,
@@ -148,7 +148,7 @@ def export(data: bytes) -> str:
     if data[cursor : cursor + 4] == b'CHOK':
         cursor += 4 + 5 * SWITCH_HOOKS.size
     result.update(layout.unpack(data, cursor))
-    modes = data[meta + METADATA.size - 10 : meta + METADATA.size - 6]
+    modes = data[meta + METADATA.size - 18 : meta + METADATA.size - 14]
     if any(m >= len(TRS_MODES) for m in modes):
         raise ValueError('invalid TRS port role')
     if any(modes):
@@ -444,8 +444,8 @@ def _patch(
     elif kind == 7:
         value.update(duration=struct.unpack_from('<I', data, cursor)[0] / 1000)
     elif kind == 6:
-        value['patch'] = _text(data, cursor + 64, 64)
-        if document := _text(data, cursor, 64):
+        value['patch'] = _text(data, cursor + 2, 64)
+        if document := properties.get('_document'):
             value['document'] = document
     else:
         raise ValueError('unknown Patch type')
@@ -474,9 +474,12 @@ def _edited_program(
             return origin['program'] != data[address + 6] + 1 or origin.get('bank') != (
                 None if bank == 0xFFFFFFFF else bank
             )
-        if data[address] != 6 or data[address + 4]:
+        if (
+            data[address] != 6
+            or struct.unpack_from('<H', data, address + 4)[0] != 65535
+        ):
             return False
-        key = _text(data, address + 68, 64)
+        key = _text(data, address + 6, 64)
         if key not in named:
             return False
         index = named[key]

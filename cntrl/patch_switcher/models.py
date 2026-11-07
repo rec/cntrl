@@ -713,6 +713,7 @@ class Scrolling(BaseModel, frozen=True):
 
 class App(BaseModel, frozen=True):
     type: Literal['patch-switcher'] = 'patch-switcher'
+    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=524288)
     give_up_windows: Annotated[
         list[Literal['left', 'center', 'right']], Field(min_length=3, max_length=3)
     ] = ['right', 'center', 'left']
@@ -727,6 +728,7 @@ class App(BaseModel, frozen=True):
 
 
 class Page(BaseModel, frozen=True):
+    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=524288)
     type: Literal[
         'tap-tempo',
         'status',

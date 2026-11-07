@@ -2,6 +2,7 @@
 #include "document.h"
 #include "setup_names.h"
 #include <cstdio>
+#include <vector>
 
 namespace cntrl {
 // The target's nano C library does not support long-long scanf conversions.
@@ -50,9 +51,10 @@ public:
     }
     void append(const char *name, const char *label, uint32_t modified, DocumentBuffer &data, unsigned length) {
         initialize(name, &data); operation_ = Operation::append;
+        names_count_ = storage_.setup_count();
         info_.length = length; info_.modified = modified;
         std::snprintf(info_.label, sizeof(info_.label), "%s", label);
-        phase_ = Phase::hash;
+        phase_ = names_count_ ? Phase::hash_names : Phase::hash;
     }
     void erase(const char *name, uint64_t number) {
         initialize(name, nullptr); operation_ = number ? Operation::erase : Operation::clear;
@@ -60,6 +62,9 @@ public:
         if (number) phase_ = Phase::remove;
         else { scan(UINT64_MAX); phase_ = Phase::clear_scan; }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(revisions_tick)
+#endif
     void tick() {
         uint8_t block[512];
         switch (phase_) {
@@ -91,7 +96,10 @@ public:
             if (std::memcmp(header_, current ? "CNST" : "CREV", 4)
                 || checksum(header_, width - 4) != u32(header_ + width - 4)
                 || info_.length < 116 || info_.length > document_memory_budget
-                || storage_.size(slot_) != info_.length + width + 4) { invalid(); return; }
+                || (!current && u32(header_ + 16) > 65535)) { invalid(); return; }
+            names_count_ = current ? 0 : u32(header_ + 16);
+            body_offset_ = width + names_count_ * 64;
+            if (uint64_t(body_offset_) + info_.length + 4 != storage_.size(slot_)) { invalid(); return; }
             if (current) {
                 if (!text_valid(header_ + 20, 64) || name_compare(reinterpret_cast<const char *>(header_ + 20), name_)) { invalid(); return; }
                 info_.number = u32(header_ + 4); info_.modified = u32(header_ + 16);
@@ -101,24 +109,43 @@ public:
             }
             expected_crc_ = u32(header_ + crc_offset); offset_ = 0; crc_ = 0xffffffff;
             if (!buffer_->resize(info_.length)) { memory_failed_ = true; finish(false); return; }
-            phase_ = Phase::read; return;
+            remap_.assign(names_count_, 65535); name_position_ = 0;
+            phase_ = names_count_ ? Phase::read_names : Phase::read; return;
+        }
+        case Phase::read_names: {
+            char name[64];
+            if (!storage_.read(slot_, 88 + name_position_ * 64, reinterpret_cast<uint8_t *>(name), 64)
+                || !text_valid(reinterpret_cast<const uint8_t *>(name), 64) || !setup_name(name)) { invalid(); return; }
+            update(reinterpret_cast<const uint8_t *>(name), 64);
+            for (unsigned i = 0; i < storage_.setup_count(); ++i)
+                if (!name_compare(name, storage_.setup_name_at(i))) { remap_[name_position_] = uint16_t(i); break; }
+            if (++name_position_ == names_count_) phase_ = Phase::read;
+            return;
         }
         case Phase::read: {
-            unsigned n = amount(); unsigned width = operation_ == Operation::current ? 96 : 88;
-            if (!storage_.read(slot_, width + offset_, buffer_->data + offset_, n)) { invalid(); return; }
+            unsigned n = amount();
+            if (!storage_.read(slot_, body_offset_ + offset_, buffer_->data + offset_, n)) { invalid(); return; }
             update(buffer_->data + offset_, n); offset_ += n;
             if (offset_ == info_.length) phase_ = Phase::read_end;
             return;
         }
         case Phase::read_end:
-            if (!storage_.read(slot_, (operation_ == Operation::current ? 96 : 88) + info_.length, block, 4)
+            if (!storage_.read(slot_, body_offset_ + info_.length, block, 4)
                 || std::memcmp(block, "DONE", 4) || (crc_ ^ 0xffffffff) != expected_crc_) { invalid(); return; }
             finish(true); return;
+        case Phase::hash_names: {
+            uint8_t name[64] = {};
+            std::snprintf(reinterpret_cast<char *>(name), 64, "%s", storage_.setup_name_at(name_position_));
+            update(name, 64);
+            if (++name_position_ == names_count_) phase_ = Phase::hash;
+            return;
+        }
         case Phase::hash: {
             unsigned n = amount(); update(buffer_->data + offset_, n); offset_ += n;
             if (offset_ == info_.length) {
                 std::memcpy(header_, "CREV", 4); put32(header_ + 4, info_.length);
                 put32(header_ + 8, crc_ ^ 0xffffffff); put32(header_ + 12, info_.modified);
+                put32(header_ + 16, names_count_);
                 std::memcpy(header_ + 20, info_.label, 64); put32(header_ + 84, checksum(header_, 84));
                 scan(UINT64_MAX);
             }
@@ -129,7 +156,14 @@ public:
             opened_ = true; phase_ = Phase::write_header; return;
         case Phase::write_header:
             if (!storage_.write(header_, 88)) { finish(false); return; }
-            offset_ = 0; phase_ = Phase::write; return;
+            offset_ = name_position_ = 0; phase_ = names_count_ ? Phase::write_names : Phase::write; return;
+        case Phase::write_names: {
+            uint8_t name[64] = {};
+            std::snprintf(reinterpret_cast<char *>(name), 64, "%s", storage_.setup_name_at(name_position_));
+            if (!storage_.write(name, 64)) { finish(false); return; }
+            if (++name_position_ == names_count_) phase_ = Phase::write;
+            return;
+        }
         case Phase::write: {
             unsigned n = amount(); if (!storage_.write(buffer_->data + offset_, n)) { finish(false); return; }
             offset_ += n; if (offset_ == info_.length) phase_ = Phase::write_end; return;
@@ -143,17 +177,25 @@ public:
             phase_ = Phase::size; return;
         }
         case Phase::size:
-            if (storage_.size(0) != info_.length + 92) { finish(false); return; }
+            if (storage_.size(0) != info_.length + 92 + names_count_ * 64) { finish(false); return; }
             offset_ = 0; phase_ = Phase::verify; return;
         case Phase::verify: {
-            unsigned n = info_.length + 92 - offset_; if (n > 512) n = 512;
+            unsigned total = info_.length + 92 + names_count_ * 64;
+            unsigned n = total - offset_; if (n > 512) n = 512;
             if (!storage_.read(0, offset_, block, n)) { finish(false); return; }
             for (unsigned i = 0; i < n; ++i) {
                 unsigned p = offset_ + i;
-                uint8_t expected = p < 88 ? header_[p] : p < 88 + info_.length ? buffer_->data[p - 88] : uint8_t("DONE"[p - 88 - info_.length]);
+                uint8_t expected;
+                unsigned body = 88 + names_count_ * 64;
+                if (p < 88) expected = header_[p];
+                else if (p < body) {
+                    const char *name = storage_.setup_name_at((p - 88) / 64);
+                    unsigned at = (p - 88) % 64;
+                    expected = at < std::strlen(name) ? uint8_t(name[at]) : 0;
+                } else expected = p < body + info_.length ? buffer_->data[p - body] : uint8_t("DONE"[p - body - info_.length]);
                 if (block[i] != expected) { finish(false); return; }
             }
-            offset_ += n; if (offset_ == info_.length + 92) finish(true); return;
+            offset_ += n; if (offset_ == total) finish(true); return;
         }
         case Phase::remove:
             if (!storage_.remove_revision(name_, info_.number)) { finish(false); return; }
@@ -161,9 +203,26 @@ public:
             return;
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(revisions_remap)
+#endif
+    bool remap(DocumentBuffer &buffer, const Document &document) const {
+        if (!names_count_) return true;
+        for (unsigned i = 0; i < document.nodes(); ++i) {
+            const auto *node = document.node(i);
+            if (node[0] != 6 || u16(node + 4) == 65535) continue;
+            unsigned old = u16(node + 4);
+            if (old >= remap_.size() || remap_[old] == 65535) return false;
+            auto *p = buffer.data + (node - document.data()) + 4;
+            p[0] = uint8_t(remap_[old]); p[1] = uint8_t(remap_[old] >> 8);
+        }
+        put32(buffer.data + document.metadata() + scrolling_offset + 10, storage_.setup_names_signature());
+        put32(buffer.data + 20, checksum(buffer.data + 28, document.length() - 28));
+        return true;
+    }
 private:
     enum class Operation { read, current, next, append, erase, clear };
-    enum class Phase { idle, scan, clear_scan, header, read, read_end, hash, begin, write_header, write, write_end, close, size, verify, remove };
+    enum class Phase { idle, scan, clear_scan, header, read_names, read, read_end, hash_names, hash, begin, write_header, write_names, write, write_end, close, size, verify, remove };
     SetupStorage &storage_;
     Phase phase_ = Phase::idle;
     Operation operation_ = Operation::read;
@@ -172,6 +231,8 @@ private:
     uint8_t header_[96] = {};
     DocumentBuffer *buffer_ = nullptr;
     unsigned offset_ = 0, slot_ = 0;
+    unsigned names_count_ = 0, name_position_ = 0, body_offset_ = 0;
+    std::vector<uint16_t> remap_;
     uint32_t crc_ = 0xffffffff, expected_crc_ = 0;
     uint64_t best_ = 0;
     bool good_ = false, opened_ = false, memory_failed_ = false;
@@ -180,6 +241,7 @@ private:
     void initialize(const char *name, DocumentBuffer *data) {
         std::snprintf(name_, sizeof(name_), "%s", name); buffer_ = data;
         info_ = Revision(); offset_ = slot_ = 0; crc_ = 0xffffffff; good_ = opened_ = false;
+        names_count_ = name_position_ = body_offset_ = 0; remap_.clear();
         memory_failed_ = false;
         std::memset(header_, 0, sizeof(header_));
     }

@@ -9,9 +9,9 @@ namespace cntrl {
 constexpr unsigned pages_offset = 16;
 constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_outputs;
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
-constexpr unsigned metadata_header_size = scrolling_offset + 6;
+constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 32;
+constexpr unsigned document_version = 33;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -325,6 +325,8 @@ public:
     unsigned patches() const { return patches_; }
     unsigned navigation_hold_ms() const { return u16(data_ + 6); }
     bool fast_switches() const { return data_[metadata() + scrolling_offset + 5] != 0; }
+    unsigned app_page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
+    uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 10); }
     uint8_t brightness() const { return data_[18]; }
     unsigned pulse_delay_ms() const { return u16(data_ + metadata() + 14); }
     unsigned pulse_period_ms() const { return u16(data_ + metadata() + 8); }
@@ -525,11 +527,11 @@ private:
                 if (n[1] || length != 4 || !u32(p) || u32(p) > 65535) return false;
                 break;
             case 6:
-                if (n[1] || length != 128 || (p[0] && !text_valid(p, 64)) || !label_valid(p + 64, 64)) return false;
-                if (!p[0]) {
+                if (n[1] || length != 66 || !label_valid(p + 2, 64)) return false;
+                if (u16(p) == 65535) {
                     bool found = false;
                     for (unsigned j = 0; j < named; ++j)
-                        if (!std::strcmp(reinterpret_cast<const char *>(p + 64), reinterpret_cast<const char *>(g + names + j * 66))) found = true;
+                        if (!std::strcmp(reinterpret_cast<const char *>(p + 2), reinterpret_cast<const char *>(g + names + j * 66))) found = true;
                     if (!found) return false;
                 }
                 break;
@@ -542,10 +544,10 @@ private:
             const uint8_t *node = nullptr;
             while (visited++ <= count) {
                 node = g + u32(g + 16 + root * 4);
-                if (node[0] != 6 || node[4]) break;
+                if (node[0] != 6 || u16(node + 4) != 65535) break;
                 bool found = false;
                 for (unsigned j = 0; j < named; ++j)
-                    if (!std::strcmp(reinterpret_cast<const char *>(node + 68), reinterpret_cast<const char *>(g + names + j * 66))) {
+                    if (!std::strcmp(reinterpret_cast<const char *>(node + 6), reinterpret_cast<const char *>(g + names + j * 66))) {
                         root = u16(g + names + j * 66 + 64); found = true; break;
                     }
                 if (!found) return false;

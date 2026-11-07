@@ -105,8 +105,14 @@ struct Storage {
     virtual bool begin(unsigned slot) = 0;
     virtual bool write(const uint8_t *data, unsigned length) = 0;
     virtual bool finish() = 0;
+    virtual bool patch(unsigned, const uint8_t *, unsigned) { return false; }
+    virtual bool flush() { return false; }
 };
 struct SetupStorage : Storage {
+    virtual void prepare_document(const Document &) {}
+    virtual unsigned setup_count() const { return 0; }
+    virtual const char *setup_name_at(unsigned) const { return nullptr; }
+    virtual uint32_t setup_names_signature() const { return 0; }
     virtual void choose_revision(const char *name, uint64_t number) = 0;
     virtual void revision_scan(const char *name, uint64_t before, bool records_only) = 0;
     virtual bool revision_scan_step(uint64_t &best) = 0;

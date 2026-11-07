@@ -279,6 +279,33 @@ class SetupClient:
         if self.download(name) != data:
             raise ValueError(f'{name}: read-back verification failed')
 
+    def copy_bundle(self, data: bytes, overwrite: bool) -> None:
+        response = self.request(
+            f'CNTRL BUNDLE BEGIN {len(data)} {crc32(data):08x} {int(overwrite)}'
+        )
+        if response != 'CNTRL SEND':
+            raise ValueError(response)
+        for i in range(0, len(data), 128):
+            self.ok('CNTRL BUNDLE DATA ' + data[i : i + 128].hex())
+        self.ok('CNTRL BUNDLE END')
+        if self.download_bundle() != data:
+            raise ValueError('bundle read-back verification failed')
+
+    def download_bundle(self) -> bytes:
+        parts = self.request('CNTRL BUNDLE SIZE').split()
+        if len(parts) != 4 or parts[:2] != ['CNTRL', 'BUNDLE']:
+            raise ValueError('invalid bundle size response')
+        length, checksum = int(parts[2]), int(parts[3], 16)
+        result = bytearray()
+        for i in range(0, length, 128):
+            response = self.request(f'CNTRL BUNDLE GET {i} {min(128, length - i)}')
+            if not response.startswith('CNTRL BUNDLE '):
+                raise ValueError('invalid bundle data response')
+            result.extend(bytes.fromhex(response[13:]))
+        if len(result) != length or crc32(result) != checksum:
+            raise ValueError('bundle checksum mismatch')
+        return bytes(result)
+
     def download(self, name: str, revision: int | None = None) -> bytes:
         hex_name = validate_name(name).encode('ascii').hex()
         response = self.request(

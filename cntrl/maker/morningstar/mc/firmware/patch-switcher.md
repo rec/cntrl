@@ -4,6 +4,22 @@ The application is built and running on the pedal. It is not a fully
 hardware-qualified release. Dated sections below retain earlier image hashes,
 format numbers and measurements; they are historical, not the current build.
 
+## Setup residency and saves
+
+Runtime setups come from one bundle in `/cntrl/setups/.bundle/0.bin` and `1.bin`.
+The build includes requested setups and their companions in a sorted index table.
+A fitting collection stays resident in RAM2; otherwise the bounded LRU is
+prefilled to maximize resident bytes. App/page RAM declarations and the configurable
+16192-byte memory margin participate in the budget. The other cntrl RAM2 reserve
+is currently an explicit 288 KiB estimate, not a measured peak.
+
+On-pedal saves rewrite the inactive bundle copy. CRC validation and the completion
+marker preserve the previous bootable copy after an interrupted write. History
+remains per setup and includes the index-to-name context needed for a later table
+reordering. Setup selection uses resident bytes on a cache hit; fonts and other
+assets retain their existing storage paths. Whole-bundle validation and saves
+perform SD I/O; physical timing during those operations remains unqualified.
+
 ## Preparing an upload image
 
 After building the combined firmware, stage it for the existing upload helper:
@@ -39,7 +55,7 @@ normally; shared-pin occupancy and other work can extend the actual scan gap.
 Fast mode accepts an isolated first-edge
 glitch as a real transition; debounce cannot retract an action already sent.
 
-The compiled setup format is version 32. Recompile setups with the matching
+The compiled setup format is version 33. Recompile setups with the matching
 compiler before deploying this firmware.
 
 Accepted button actions and MIDI output service run before serial transfers and

@@ -16,6 +16,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 #include <cntrl/documents.h>
 #include <cntrl/patch_sources.h>
+#include <cntrl/bundle_transfer.h>
 #include <cntrl/setup_ui.h>
 #include <cntrl/midi_bridge.h>
 #include <cntrl/midi_outputs.h>
@@ -739,30 +740,10 @@ public:
         revision_ = false;
         std::snprintf(directory_, sizeof(directory_), name[0] ? "/cntrl/setups/%s" : "/cntrl/selection", name);
     }
-    bool next(const char *after, char *name) override {
-        if (!ready) return false;
-        auto root = SD.sdfs.open("/cntrl/setups", O_RDONLY);
-        if (!root) return false;
-        char best[64] = {}, candidate[128]; FsFile entry;
-        while (entry.openNext(&root, O_RDONLY)) {
-            if (entry.isDirectory() && entry.getName(candidate, sizeof(candidate))
-                && cntrl::setup_name(candidate) && cntrl::name_compare(candidate, after) > 0
-                && (!best[0] || cntrl::name_compare(candidate, best) < 0))
-                std::snprintf(best, sizeof(best), "%.63s", candidate);
-            entry.close();
-        }
-        std::snprintf(name, 64, "%s", best); return best[0];
-    }
-    void catalogue_begin() override {
-        catalogue_.close(); catalogue_ = SD.sdfs.open("/cntrl/setups", O_RDONLY);
-    }
-    bool catalogue_step(char *name) override {
-        name[0] = 0; FsFile entry; char candidate[128];
-        if (!catalogue_ || !entry.openNext(&catalogue_, O_RDONLY)) { catalogue_.close(); return true; }
-        if (entry.isDirectory() && entry.getName(candidate, sizeof(candidate)) && cntrl::setup_name(candidate))
-            std::snprintf(name, 64, "%.63s", candidate);
-        return false;
-    }
+    // Runtime setup enumeration belongs to the indexed bundle, not SD folders.
+    bool next(const char *, char *) override { return false; }
+    void catalogue_begin() override {}
+    bool catalogue_step(char *name) override { name[0] = 0; return true; }
     unsigned size(unsigned slot) override {
         if (!ready) return 0;
         char path[144]; filename(slot, path);
@@ -793,8 +774,14 @@ public:
         file_.close();
         return synced; // Documents also reopens and verifies all bytes.
     }
+    bool flush() override { return file_ && file_.sync(); }
+    bool patch(unsigned offset, const uint8_t *data, unsigned length) override {
+        if (!file_) return false;
+        auto position = file_.curPosition();
+        return file_.seekSet(offset) && file_.write(data, length) == length && file_.seekSet(position);
+    }
 private:
-    FsFile file_, history_directory_, catalogue_;
+    FsFile file_, history_directory_;
     uint64_t history_before_ = 0;
     bool history_records_ = false;
     bool revision_ = false;
@@ -804,10 +791,12 @@ private:
 
 Board board;
 Card card;
+cntrl::BundledStorage setup_storage(card, board);
 cntrl::Controller primary_controller(board, board, patch_sources);
 // Document bytes are allocated from RAM2's heap as needed.
-DMAMEM cntrl::Documents documents(card, board, primary_controller, board);
-cntrl::StoredPatchSources patch_sources(documents, board);
+DMAMEM cntrl::Documents documents(setup_storage, board, primary_controller, board);
+cntrl::StoredPatchSources patch_sources(setup_storage.setups());
+cntrl::BundleTransfer bundle_transfer(setup_storage, documents, board, board);
 alignas(cntrl::Controller) DMAMEM unsigned char extra_apps[cntrl::AppLayout::max_apps - 1][sizeof(cntrl::Controller)];
 cntrl::AppLayout app_layout;
 unsigned visible_app = 0, processing_app = cntrl::AppLayout::max_apps;
@@ -899,7 +888,7 @@ public:
         if (reference) {
             const char *key = nullptr;
             const uint8_t *node = d.node(song.node);
-            if (node[0] == 6 && !node[4]) key = reinterpret_cast<const char *>(node + 68);
+            if (node[0] == 6 && cntrl::u16(node + 4) == 65535) key = reinterpret_cast<const char *>(node + 6);
             for (unsigned i = 0; !key && i < d.named_patches(); ++i)
                 if (cntrl::u16(d.named_patch(i) + 64) == song.node) key = reinterpret_cast<const char *>(d.named_patch(i));
             if (!key) return false;
@@ -915,7 +904,8 @@ public:
     bool revision(const cntrl::SongSelection &song, uint32_t &crc) override {
         patch_sources.begin();
         const cntrl::Document *source = nullptr;
-        bool valid = song.document[0] && patch_sources.acquire(song.document, source, crc);
+        int index = setup_storage.setups().index(song.document);
+        bool valid = song.document[0] && index >= 0 && patch_sources.acquire(uint16_t(index), source, crc);
         patch_sources.end(); return valid;
     }
     bool activate(const cntrl::SongSelection &song, const cntrl::SongContinuation &context, bool resume) override {
@@ -927,7 +917,8 @@ public:
         uint32_t revision = 0;
         bool valid = false;
         if (song.document[0]) {
-            valid = patch_sources.acquire(song.document, source, revision);
+            int index = setup_storage.setups().index(song.document);
+            valid = index >= 0 && patch_sources.acquire(uint16_t(index), source, revision);
             if (valid) {
                 int root = source->named_patch(song.key);
                 valid = root >= 0; node = valid ? unsigned(root) : 0;
@@ -1315,6 +1306,7 @@ PerformanceStatus performance_status() {
 
 void midi_status(unsigned route) { board.midi_status(route); }
 bool asset_command(const char *line) {
+    if (!std::strncmp(line, "CNTRL BUNDLE ", 13)) return bundle_transfer.command(line, millis());
     if (!std::strcmp(line, "CNTRL STORAGE NEXT")) {
         char response[600]; storage_listing.next(response, sizeof(response)); board.reply(response); return true;
     }
@@ -1364,6 +1356,7 @@ FLASHMEM void initialize_target() {
     font_files.ready = card.ready;
     splash_card.ready = card.ready;
     splash_assets.boot();
+    if (card.ready && !setup_storage.boot()) board.error("Setup bundle invalid");
     documents.boot();
     if (card.ready && !songs.boot()) board.error("Song storage invalid");
 }
@@ -1471,7 +1464,7 @@ void poll_target() {
     for (unsigned i = 0; i < 512 && !usb_session.output_pending() && Serial.available(); ++i)
         usb_session.receive(Serial.read());
     if (usb_session.resetting() && serial_router.accepts_input() && !songs_transfer.processing()) {
-        serial_router.cancel_transfer(); songs_transfer.cancel_transfer(); font_files.cancel_transfer(); storage_listing.cancel();
+        serial_router.cancel_transfer(); songs_transfer.cancel_transfer(); bundle_transfer.cancel(); font_files.cancel_transfer(); storage_listing.cancel();
         usb_session.reset_done();
     }
     for (unsigned i = 0; i < 128 && usb_session.input_size() && board.reply_ready()
@@ -1486,11 +1479,13 @@ void poll_target() {
     // replaces it. USB outages must not expire staged bytes or list cursors.
     if (usb_session.active()) {
         serial_router.keepalive(now); songs_transfer.keepalive(now); font_files.keepalive(now);
+        bundle_transfer.keepalive(now);
     }
     // Preserve the current serial frame under host backpressure. MIDI/buttons
     // continue while command input and reply-producing jobs wait for room.
     if (board.reply_ready()) serial_router.poll(now);
     if (board.reply_ready()) songs_transfer.poll(now);
+    if (board.reply_ready()) bundle_transfer.poll(now);
     song_sources.tick(now);
     songs.tick();
     if (board.reply_ready()) font_files.poll(now, board);

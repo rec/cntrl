@@ -80,55 +80,66 @@ decimals = 1
 [apps.patch-switcher]
 
 type = "patch-switcher"
+ram2_bytes = 0
 give_up_windows = ["right", "center", "left"]
 
 [[pages]]
 
+ram2_bytes = 0
 type = "status"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "firmware"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "cable-test"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "panic"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "trs-ports"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "expression"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "clock-transport"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "clock-tempo"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "keyboard"
 windows = 1
 
 [[pages]]
 
+ram2_bytes = 0
 type = "tap-tempo"
 windows = 1
 

@@ -17,7 +17,7 @@ from pydantic import (
     field_validator,
 )
 
-from . import compiler, models, resolved, transport
+from . import compiler, models, resolved, setup_bundle, transport
 from .data_files import validate_name
 
 
@@ -500,32 +500,46 @@ def run(command: Copy | Download) -> None:
                     companion_names.append(name)
             index += 1
         assets: dict[int, bytes] = {}
-        data = encode(library, target, companions, assets)
-        if not command.overwrite:
-            with transport.SerialConnection(command.port) as connection:
-                existing = decode(download(transport.SetupClient(connection)))
-            if existing.songs or existing.setlists:
-                raise ValueError('song library exists; use --overwrite')
-        if companion_names:
-            if command.target is None:
-                raise ValueError('reference imports require --target')
-            # The companion setup documents are copied with their font assets.
-            cli.run_setup(
-                cli.Copy(
-                    document=[
-                        f'{n.replace("=", "==")}='
-                        f'{command.document.parent / (n + ".toml")}'
-                        for n in companion_names
-                    ],
-                    target=[str(command.target)],
-                    port=command.port,
-                    overwrite=command.overwrite,
-                )
-            )
+        if companion_names and target is None:
+            raise ValueError('reference imports require --target')
         with transport.SerialConnection(command.port) as connection:
             client = transport.SetupClient(connection)
+            if not command.overwrite:
+                existing = decode(download(client))
+                if existing.songs or existing.setlists:
+                    raise ValueError('song library exists; use --overwrite')
+            current_bundle = client.download_bundle() if companion_names else b''
+            compiled = setup_bundle.unpack(current_bundle) if current_bundle else {}
+            known = {n.lower() for n in compiled}
+            if not command.overwrite and any(
+                n.lower() in known for n in companion_names
+            ):
+                raise ValueError('companion setup exists; use --overwrite')
+            # The execution container and its companions use the complete deployed
+            # index table, including setups unrelated to this song import.
+            documents: dict[str, object] = {n: {} for n in compiled} | companions
+            data = encode(library, target, documents, assets)
+            if companion_names:
+                assert target is not None
+                imported = {
+                    n: compiler.compile_show(s, {}, [], target, assets, documents)
+                    for n, s in companions.items()
+                }
+                combined = setup_bundle.reindex(compiled | imported)
+                sources: dict[str, object] = {
+                    n: tomlkit.parse(resolved.export(d)).unwrap()
+                    for n, d in combined.items()
+                }
+                margin = (
+                    setup_bundle.HEADER.unpack_from(current_bundle)[5]
+                    if current_bundle
+                    else 16192
+                )
+                bundle = setup_bundle.build(combined, sources, margin)
             for key, font in assets.items():
                 client.copy_font(key, font)
+            if companion_names:
+                client.copy_bundle(bundle.pack(), overwrite=True)
             client.ok(
                 f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} '
                 f'{int(command.overwrite)}'

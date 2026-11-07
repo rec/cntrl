@@ -69,4 +69,13 @@ struct TestStorage : cntrl::SetupStorage {
         return amount == n;
     }
     bool finish() override { return true; }
+    bool flush() override { return true; }
+    bool patch(unsigned offset, const uint8_t *data, unsigned n) override {
+        auto &bytes = files[directory][slot];
+        if (offset > bytes.size() || n > bytes.size() - offset) return false;
+        if (remaining >= 0 && unsigned(remaining) < n) return false;
+        std::memcpy(bytes.data() + offset, data, n);
+        if (remaining >= 0) remaining -= int(n);
+        return true;
+    }
 };

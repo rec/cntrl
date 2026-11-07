@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import cli, compiler, models, resolved
+from cntrl.patch_switcher import cli, compiler, models, resolved, setup_bundle
 
 
 @pytest.fixture
@@ -866,7 +866,11 @@ def test_cli_compiles_and_reports_counts_and_routes(
         ],
     )
     cli.main()
-    assert output.read_bytes().hex() == (FIXTURES / 'show.golden').read_text().strip()
+    expected = bytes.fromhex((FIXTURES / 'show.golden').read_text())
+    assert (
+        setup_bundle.unpack(output.read_bytes())['show'].hex()
+        == setup_bundle.reindex({'show': expected})['show'].hex()
+    )
     report = capsys.readouterr().out
     assert '2 instruments, 2 patch cycles, 4 patches' in report
     assert 'a: channel 1 to din' in report and 'b: channel 2 to trs' in report
@@ -928,7 +932,9 @@ def test_cli_preserves_repeated_table_inputs(
         ],
     )
     cli.main()
-    assert compiler.HEADER.unpack_from(output.read_bytes())[4:7] == (1, 2, 3)
+    assert compiler.HEADER.unpack_from(
+        setup_bundle.unpack(output.read_bytes())['patches']
+    )[4:7] == (1, 2, 3)
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'firmware' / 'test'

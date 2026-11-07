@@ -2,8 +2,8 @@
 
 The portable C++ implementation is under `include/cntrl/`. It contains no
 Arduino headers or target pin numbers. `Hardware` accepts complete MIDI message
-sequences and semantic panes; `SetupStorage` provides named pairs of document
-slots and an application-owned persistent selection record.
+sequences and semantic panes; `BundledStorage` exposes setup records from one
+indexed bundle, plus per-setup history and a persistent selection record.
 `PatchExecutor` owns executable dispatch, ordered composition, pending delivery
 and source pinning. Switch timing, browser activation and songs all use it.
 The controller owns navigation, gestures, known program Undo and layout. A board adapter owns
@@ -142,8 +142,8 @@ treated as an empty card. No automatic migration of old single-show files occurs
 
 Listings show commit dates as local `YYYY-MM-DD HH:MM:SS`, or `unknown`. Copy
 syncs the pedal's clock from the Mac. Without a persistent clock, on-pedal edits
-after an offline reboot have unknown dates. Each copy is individually durable;
-multi-setup batches can partially succeed and report those results.
+after an offline reboot have unknown dates. A compile/copy batch is one bundle;
+the complete replacement is validated before it becomes the bootable copy.
 
 Both TOML and JSON accept the same show, definition and table structures.
 User-adjustable controller settings belong in the show configuration whenever
@@ -502,12 +502,12 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (32), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI, bit 5 clock settings, bit 6 gestures, bit 7 expression assignments), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (33), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI, bit 5 clock settings, bit 6 gestures, bit 7 expression assignments), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 72 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3), u8 fast-switches boolean |
+| Metadata header, 80 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3), u8 fast-switches boolean, u32 combined app/page RAM2 declaration, u32 sorted-name-table signature |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
