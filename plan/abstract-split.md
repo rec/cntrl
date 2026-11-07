@@ -30,19 +30,26 @@ Use one explicit target selection on the command line, conceptually:
 uv run cntrl build --target-dir cntrl/maker/morningstar/mc --output build/pedal
 ```
 
-This is a proposed command, not an existing CLI contract. It is the sole place in
-the executable workflow that names that directory. Generic orchestration receives
-an opaque target directory, reads its capability description and invokes its
-local build entry point using the same relative entry-point contract for every
-target. The entry point supplies local source paths, toolchain flags and generated
-capability data. Subsequent compile/copy operations use the produced generic target
-description, not a second reference to the source adapter directory.
+The command above is proposed. Its argument is the only place the workflow names
+the implementation. Give the build a single direction of control:
 
-Do not add a maker registry, hard-coded default target, target-name switch,
-conditional import, source-path search or alternate legacy entry point. References
-within the adapter to its own local files are implementation details. This plan's
-inventory names existing files to explain their migration; those documentation
-references are not executable dependencies.
+1. The generic CLI resolves the supplied directory and output directory. It calls
+   the executable at `<target-dir>/build` with absolute paths to the portable
+   firmware sources and the output directory. A failed build returns a nonzero
+   status. The CLI never imports adapter Python.
+2. That executable owns compiler selection, flags, linking, startup files and
+   native asset conversion. It validates the target using the existing
+   `models.Target` schema and produces the firmware image, a host-readable target
+   description and any required font resources in the output directory. Generate
+   firmware capability constants from the same validated values. Keep pins and
+   linker details private to the executable.
+3. Run the ordinary setup compiler and copy commands using the exported target
+   description. Resolve its resource paths relative to the export. As a build
+   acceptance check, relocate the output and compile a setup with the original
+   adapter sources and SDK unavailable.
+
+Use this same executable convention for a new CPU. The CLI needs no per-board
+registration, package discovery or hard-coded default.
 
 ## What is coupled today
 
@@ -154,65 +161,70 @@ they never reach into an adapter source tree or a cached compiler installation.
 The board-local build entry point prepares any native font inputs before invoking
 these functions.
 
-Use the existing Pydantic model and CLI patterns. Define only the capability and
-build request/result records needed for this boundary, using TOML for persisted
-descriptions. Keep the host and firmware view of capabilities consistent through
-generated generic data. Report unsupported requirements during compilation.
+Extend `models.Target` only when a current consumer needs another capability.
+For each value, identify the host validator and firmware consumer. For example,
+compile a button binding from its label to its declared input index. The adapter
+reports that index when the switch changes. Page prompts use the label bound to
+the action, so a confirmation screen and its dispatch cannot disagree.
 
-Use a portable glyph/bitmap representation for shared generated font data.
-For movies, put dimensions, frame durations and logical image data in the generic
-representation. Resolve screen grouping through layout; handle physical rotation,
-mirroring and wire byte order in the output adapter. A core asset must not mean
-"outer pair plus mirrored center". Preserve current visible results with fixtures.
+Separate the logical movie frame from its transfer encoding. Dimensions, frame
+durations and logical screen assignments belong to the portable representation.
+An adapter can precompute physical mirroring and byte order during the host
+build when needed to meet playback timing. Measure CPU work, bus bytes and peak
+buffer use before replacing the current precomputed rows with runtime conversion.
 
-Separate generic build orchestration from the CPU compiler/linker/uploader.
-The adapter supplies its build entry point and CPU-specific image preparation.
-Generic compilation, backup, setup copy and asset transfer work without importing
-that entry point. Keep the existing device uploader and recovery tools local;
-extract their reusable parsing or transport only where it has a clear current use.
+## Implementation sequence and review gates
 
-## Implementation sequence
+Budget roughly 15 to 25 focused commits across these eight stages. Each stage
+should end with a working path through the existing application.
 
-1. **Record the boundary and baseline.** Inventory reverse imports, includes,
-   build paths, generated files and hidden hardware constants. Record current
-   protocol versions, golden bytes, rendering fixtures, switch timing requirements
-   and firmware memory results. Classify product behavior versus physical facts.
-2. **Establish the capability and service contracts.** Adapt the current hardware
-   implementation and native test fakes to the same contracts. Introduce the single
-   target-selection build entry point. Document memory and display-buffer ownership
-   before moving runtime code. Keep construction in the adapter; no generic code
-   looks up a target implementation.
-3. **Extract Python assets.** Move shaping, font packing, movie preparation and
-   inspection first. Update compiler/display/transport imports and tests together.
-   Separate native font converters from generic rasterization. Generic Python tests
-   must no longer depend on the adapter's cached toolchain or generated headers.
-4. **Extract storage policy and protocols.** Move counters, recording selection,
-   calibration persistence, font/file policy and splash transfer logic. Bind them
-   to the existing storage interfaces extended only for demonstrated operations.
-   Preserve bundle save durability and history behavior.
-5. **Extract pages, application composition and scheduling.** Move UI state,
-   commands, app lifecycle, song capture/resolution and poll order out of
-   `target.cpp`. Leave physical input, transport and device-control bindings.
-   Preserve immediate MIDI dispatch and scan priority between display transfers.
-6. **Extract layout and rendering.** Replace display-library inheritance with
-   portable raster operations and the display submission contract. Move text,
-   wrapping, effects, scrolling, transitions and movie playback. Keep optimized
-   hardware scrolling/DMA behind optional services with a portable rendering path
-   that every conforming target can use.
-7. **Remove embedded board assumptions.** Make button lookup/masks, logical windows,
-   endpoint ordering and memory accounting derive from capabilities. Update host
-   packing and firmware decoding together wherever current fixed records prevent
-   this. Put RAM2 totals/placement into the current adapter's memory description;
-   keep residency planning generic. Do not confuse estimates with measurements.
-8. **Finish the boundary audit.** Remove replaced implementations and old imports,
-   migrate generic tests/docs/build recipes and verify the acceptance criteria.
-   Reduce the local entry point to hardware construction and calls into the core.
+1. **Capture a baseline.** Record firmware size and memory headroom alongside
+   existing document, bundle, font and movie fixtures. Trace one switch press to
+   its outgoing MIDI message and one Status page through pixel submission. Mark
+   where each path reads physical IDs, time, geometry and memory limits.
+2. **Prove the build boundary.** Implement the build entry-point contract above
+   with the current adapter. Add a small host test adapter with one display of a
+   different size, three named switches, one MIDI output and a smaller setup
+   budget. Use that same fixture throughout extraction. First prove both builds
+   receive their own capabilities and the generic launcher can select either.
+3. **Remove Python reverse imports.** Extract font preparation and movie handling
+   one asset family at a time. Exercise normal compile, copy and download paths
+   using exported resources. Check current-target asset bytes before changing
+   their encoding. Device-specific SDK font parsing stays in the exporter.
+4. **Prove a complete UI path.** Bring Status through page construction, logical
+   window assignment, text measurement, clipping and display submission on both
+   targets. A one-window setup must fit the fake display and every submitted
+   region must lie within its bounds. Validate requested window counts against
+   the target at compile time. Introduce display services as this path needs them.
+   Move the remaining pages, transitions and movie playback through the same path.
+5. **Extract input dispatch and runtime coordination.** Drive a bound switch
+   through sampling, debounce, gesture recognition, patch execution and output
+   on both adapters. Advance a fake clock across a scan deadline while display
+   I/O is pending. After transfer completion, assert the scan and due MIDI work
+   precede the next display submission. Then move menu ownership, song resolution,
+   app lifecycle and command routing out of the board poll loop.
+6. **Extract persistence and budgeting.** Move counter, calibration, file naming,
+   font and listing policies behind the storage primitives. Pass the target's
+   capacity and reserved bytes into both bundle planner and firmware validator.
+   Exercise the same setup collection under budgets selecting static residency
+   and LRU. Keep tests for interrupted saves, per-setup history and backup/restore.
+7. **Finish capability-dependent records.** Remove remaining physical endpoint
+   orders, switch masks and fixed window counts from models, packers, firmware
+   readers and prompts. Change each producer and all its consumers together.
+   Preserve limits imposed by MIDI or by a documented file format. A change
+   to either needs a reason independent of the hardware's current dimensions.
+8. **Qualify the porting contract.** Build and run the portable suites from a
+   source tree containing only the core, its assets and the test adapter. Build
+   the real image and compare with the baseline. Document the services a port
+   implements and the build outputs it must supply. Audit remaining board files
+   against the ownership table.
 
-Keep each commit buildable. Pure moves should preserve bytes and behavior.
-Capability-driven record changes and neutral movie/font formats may require a
-format-version bump; isolate these changes and regenerate fixtures together.
-Recompile affected assets/setups rather than adding a legacy-format compatibility
-layer. State deployment implications before implementing format changes.
+Keep format decisions separate from mechanical moves. Before changing a record,
+try expressing the capability with its existing encoding. If that fails, identify
+the affected reader, writer and persistent data, then specify how to recover an
+edited setup, history entry or captured song from the old firmware. Rebuilding
+authored TOML alone cannot recover pedal-only edits. Verify the agreed recovery
+path with a saved fixture before publishing a format change.
 
 ## Verification and acceptance
 
