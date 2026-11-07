@@ -59,9 +59,12 @@ def prepare_movie(source: Path) -> bytes:
     with Image.open(source) as image:
         if image.format not in ('GIF', 'WEBP', 'PNG', 'JPEG'):
             raise ValueError(f'{source}: expected GIF, WebP, PNG or JPEG')
+        default_duration = 100 if getattr(image, 'is_animated', False) else 1000
         for f in ImageSequence.Iterator(image):
             f.load()
-            durations.append(int(f.info.get('duration', 1000) or 1000))
+            durations.append(
+                int(f.info.get('duration', default_duration) or default_duration)
+            )
             # Enlarge by 120%, preserving proportions, then take the centre.
             scale = max(192 / f.width, 154 / f.height)
             enlarged = f.convert('RGB').resize(

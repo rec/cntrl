@@ -29,6 +29,13 @@ def test_mac_prepares_outer_and_mirrored_centre_rows() -> None:
             assert list(struct.unpack('>160H', centre)) == list(reversed(range(160)))
 
 
+def test_spiral_with_zero_frame_delays_plays_at_ten_frames_per_second() -> None:
+    data = asset.prepare_movie(ROOT.parents[4] / 'assets/spiral.gif')
+    info = asset.inspect_asset(data)
+    assert info.frames == 16
+    assert info.duration_ms == 1600
+
+
 def test_gif_is_enlarged_and_centre_cropped(tmp_path: Path) -> None:
     source = tmp_path / 'border.gif'
     image = Image.new('RGB', (160, 128), 'blue')
