@@ -11,8 +11,8 @@ These files have not been compared with a fresh read-back from the pedal.
 - `sd-font-demo.toml` preserves the SD font aliases and display configuration,
   with font paths pointing to the repository's original TTF files. Compilation
   regenerates compatible font assets instead of reusing old bitmap files.
-- `songs.toml` preserves the empty saved song library and its next occurrence ID.
-  It compiles to the current CSG4 song format without inventing any songs.
+- `songs.toml` preserves the empty saved song library with no songs or setlists.
+  It compiles to the current CSG5 song format without inventing any songs.
 
 Compile a setup from the repository root, for example:
 

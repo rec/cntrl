@@ -5,6 +5,7 @@ import pty
 import struct
 import subprocess
 from pathlib import Path
+from unittest.mock import Mock
 from zlib import crc32
 
 import pytest
@@ -27,11 +28,9 @@ def library() -> songs.Library:
         ),
         songs=[
             songs.Song(
-                id=1,
                 name='Simple',
                 patches=[
                     {
-                        'id': 10,
                         'type': 'program-change',
                         'instrument': 'piano',
                         'program': 34,
@@ -39,18 +38,16 @@ def library() -> songs.Library:
                 ],
             ),
             songs.Song(
-                id=2,
                 name='Linked',
                 patches=[
                     {
-                        'id': 11,
                         'document': 'pman',
                         'patch': 'clean',
                     }
                 ],
             ),
         ],
-        setlists=[songs.Setlist(id=3, name='Tonight', songs=[1, 2, 1])],
+        setlists=[songs.Setlist(name='Tonight', songs=['Simple', 'Linked', 'Simple'])],
     )
 
 
@@ -73,8 +70,7 @@ def test_inline_and_reference_selections_and_repeated_occurrences_round_trip(
     )
     restored = songs.decode(data)
     assert restored.songs == library().songs
-    assert restored.setlists[0].songs == [1, 2, 1]
-    assert len(set(restored.setlists[0].entry_ids)) == 3
+    assert restored.setlists[0].songs == ['Simple', 'Linked', 'Simple']
     assert (
         songs.encode(
             restored,
@@ -83,34 +79,22 @@ def test_inline_and_reference_selections_and_repeated_occurrences_round_trip(
         )
         == data
     )
-    # Deleted IDs are never reused after a computer round-trip.
-    restored = restored.model_copy(update={'next_id': 1000})
-    assert (
-        songs.decode(
-            songs.encode(
-                restored,
-                target,
-                COMPANIONS,
-            )
-        ).next_id
-        == 1000
-    )
 
 
-def test_missing_songs_and_duplicate_identities_are_rejected() -> None:
+def test_names_are_unique(target: models.Target) -> None:
     value = library()
-    with pytest.raises(ValueError, match='unknown song'):
-        songs.encode(
-            value.model_copy(
-                update={'setlists': [songs.Setlist(id=3, name='Bad', songs=[999])]}
-            )
-        )
-    with pytest.raises(ValueError, match='unique'):
-        songs.encode(
-            value.model_copy(update={'setlists': [songs.Setlist(id=1, name='Bad')]})
-        )
-    with pytest.raises(ValueError, match='patches'):
-        songs.Song.model_validate({'id': 1, 'name': 'Missing'})
+    for field, items in (('songs', value.songs), ('setlists', value.setlists)):
+        with pytest.raises(ValueError, match='unique'):
+            songs.encode(value.model_copy(update={field: [items[0], items[0]]}), target)
+
+
+def test_setlists_store_names_without_resolving_them(target: models.Target) -> None:
+    value = library().model_copy(
+        update={'setlists': [songs.Setlist(name='Later', songs=['Missing'])]}
+    )
+    assert (
+        songs.decode(songs.encode(value, target, COMPANIONS)).setlists == value.setlists
+    )
 
 
 @pytest.mark.parametrize('alias', ['piano', 'p' * 31])
@@ -123,11 +107,9 @@ def test_captured_sources_with_colliding_instrument_aliases_export_independently
             'instruments': {alias: library().instruments['piano']},
             'songs': [
                 songs.Song(
-                    id=1,
                     name='First',
                     patches=[
                         {
-                            'id': 10,
                             'type': 'program-change',
                             'instrument': alias,
                             'program': 34,
@@ -150,11 +132,9 @@ def test_captured_sources_with_colliding_instrument_aliases_export_independently
             },
             'songs': [
                 songs.Song(
-                    id=2,
                     name='Other',
                     patches=[
                         {
-                            'id': 11,
                             'type': 'program-change',
                             'instrument': alias,
                             'program': 35,
@@ -165,15 +145,15 @@ def test_captured_sources_with_colliding_instrument_aliases_export_independently
         }
     )
     left, right = songs.encode(first, target), songs.encode(second, target)
-    end = 12 + songs.SELECTION.size + songs.SONG.size
-    position = list(songs.SELECTION.unpack_from(right, 12))
+    end = 8 + songs.SELECTION.size + songs.SONG.size
+    position = list(songs.SELECTION.unpack_from(right, 8))
     position[3] = 1
     merged = (
-        struct.pack('<III', 12, 2, 0)
-        + left[12:end]
+        struct.pack('<II', 2, 0)
+        + left[8:end]
         + songs.SELECTION.pack(*position)
-        + right[12 + songs.SELECTION.size : end]
-        + b'CSP4'
+        + right[8 + songs.SELECTION.size : end]
+        + b'CSP5'
         + left[end + 4 :]
         + right[end + 4 :]
     )
@@ -196,11 +176,9 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
     selection = songs.Library(
         songs=[
             songs.Song(
-                id=1,
                 name='Nested visit',
                 patches=[
                     {
-                        'id': 20,
                         'patches': [
                             {
                                 'type': 'control-change',
@@ -238,7 +216,6 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
                         ],
                     },
                     {
-                        'id': 21,
                         'type': 'control-change',
                         'output': 'din',
                         'channel': 1,
@@ -248,7 +225,7 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
                 ],
             )
         ],
-        setlists=[songs.Setlist(id=2, name='Set', songs=[1], entry_ids=[3])],
+        setlists=[songs.Setlist(name='Set', songs=['Nested visit'])],
     )
     data = songs.encode(selection, target)
     assert songs.encode(songs.decode(data), target) == data
@@ -302,7 +279,6 @@ def test_song_library_transfer_against_cpp_receiver(
         value = songs.Library(
             songs=[
                 songs.Song(
-                    id=i + 1,
                     name=f'Song {i}',
                     patches=[
                         {
@@ -317,7 +293,7 @@ def test_song_library_transfer_against_cpp_receiver(
                 for i in range(130)
             ],
             setlists=[
-                songs.Setlist(id=131 + i, name=f'Set {i}', songs=list(range(1, 131)))
+                songs.Setlist(name=f'Set {i}', songs=[f'Song {j}' for j in range(130)])
                 for i in range(20)
             ],
         )
@@ -347,29 +323,15 @@ def test_song_library_transfer_against_cpp_receiver(
             with pytest.raises(ValueError, match='songs'):
                 client.ok(f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} 0')
             assert songs.download(client) == data
-            if not large:
-                for duplicate in (True, False):
-                    malformed = bytearray(data)
-                    if duplicate:
-                        struct.pack_into('<I', malformed, 12 + songs.SELECTION.size, 2)
-                    else:
-                        struct.pack_into(
-                            '<I',
-                            malformed,
-                            12
-                            + 2 * (songs.SONG.size + songs.SELECTION.size)
-                            + songs.SET.size
-                            + 4,
-                            3,
-                        )
-                    client.ok(
-                        f'CNTRL SONGS BEGIN {len(malformed)} {crc32(malformed):08x} 1'
-                    )
-                    for i in range(0, len(malformed), 128):
-                        client.ok('CNTRL SONGS DATA ' + malformed[i : i + 128].hex())
-                    with pytest.raises(ValueError, match='songs'):
-                        client.ok('CNTRL SONGS END')
-                    assert songs.download(client) == data
+            # Reject counts that would read beyond the payload.
+            malformed = bytearray(data)
+            struct.pack_into('<I', malformed, 8 + songs.SELECTION.size + 64, 0xFFFFFFFF)
+            client.ok(f'CNTRL SONGS BEGIN {len(malformed)} {crc32(malformed):08x} 1')
+            for i in range(0, len(malformed), 128):
+                client.ok('CNTRL SONGS DATA ' + malformed[i : i + 128].hex())
+            with pytest.raises(ValueError, match='songs'):
+                client.ok('CNTRL SONGS END')
+            assert songs.download(client) == data
             # An incomplete replacement cannot change the committed library.
             client.ok(f'CNTRL SONGS BEGIN {len(data)} 00000000 1')
             client.ok('CNTRL SONGS DATA ' + data[:128].hex())
@@ -401,7 +363,6 @@ def test_song_can_start_with_a_derived_patch_and_reuse_its_parent(
             },
             'songs': [
                 {
-                    'id': 1,
                     'name': 'Example',
                     'patches': [{'patch': k} for k in ('A′', 'A', 'A′')],
                 }
@@ -425,3 +386,14 @@ def test_song_can_start_with_a_derived_patch_and_reuse_its_parent(
             (source[start + i * 82 + 4] + 1, source[start + i * 82 + 7])
             for i in range(3)
         ] == [(program, 100), (program, 80), (program, 100)]
+
+
+def test_empty_song_library_downloads() -> None:
+    data = songs.encode(songs.Library())
+    client = Mock(spec=transport.SetupClient)
+    client.request.side_effect = [
+        f'CNTRL SONGS {len(data)} {crc32(data):08x}',
+        'CNTRL DATA ' + data.hex(),
+    ]
+    assert songs.download(client) == data
+    assert not songs.decode(data).songs

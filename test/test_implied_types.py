@@ -53,7 +53,7 @@ def test_implied_type_compiles_and_round_trips_like_explicit_type(
     assert data == compiler.compile_show(setup(explicit), {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert compiler.compile_show(exported, {}, [], target) == data
-    library = songs.Library(songs=[songs.Song(id=1, name='Example', patches=[implied])])
+    library = songs.Library(songs=[songs.Song(name='Example', patches=[implied])])
     encoded = songs.encode(library, target)
     assert songs.encode(songs.decode(encoded), target) == encoded
 
@@ -70,10 +70,10 @@ def test_implied_type_compiles_and_round_trips_like_explicit_type(
     assert compiler.compile_show(exported, {}, [], target) == inferred_data
     inferred_library = songs.Library(
         instruments=instruments,
-        songs=[songs.Song(id=1, name='Example', patches=[fields])],
+        songs=[songs.Song(name='Example', patches=[fields])],
     )
     explicit_library = inferred_library.model_copy(
-        update={'songs': [songs.Song(id=1, name='Example', patches=[fields | route])]}
+        update={'songs': [songs.Song(name='Example', patches=[fields | route])]}
     )
     assert songs.encode(inferred_library, target) == songs.encode(
         explicit_library, target
@@ -144,7 +144,7 @@ def test_sole_instrument_is_inferred_everywhere_programs_are_used() -> None:
     def library(patch: dict[str, object]) -> songs.Library:
         return songs.Library(
             instruments=instruments,
-            songs=[songs.Song(id=1, name='Example', patches=[patch])],
+            songs=[songs.Song(name='Example', patches=[patch])],
         )
 
     encoded = songs.encode(library(implied), target)

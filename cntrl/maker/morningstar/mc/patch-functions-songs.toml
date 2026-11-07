@@ -9,7 +9,6 @@ instrument = 'piano'
 name = 'default'
 
 [[songs]]
-id = 1
 name = 'Stock round trip'
 patches = [
     {type = 'program-change', instrument = 'piano', program = 1},
@@ -18,13 +17,11 @@ patches = [
 ]
 
 [[songs]]
-id = 2
 name = 'Stock B+E at end'
 patches = [
     {operation = 'stock-firmware', exit_buttons = 'B+E'},
 ]
 
 [[setlists]]
-id = 3
 name = 'Firmware switching'
-songs = [1, 2]
+songs = ['Stock round trip', 'Stock B+E at end']

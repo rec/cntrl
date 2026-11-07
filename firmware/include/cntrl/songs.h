@@ -6,21 +6,21 @@ namespace cntrl {
 #pragma pack(push, 1)
 struct SongSelection {
     char document[64] = {}, key[64] = {}, label[64] = {};
-    uint32_t source = 0xffffffff, node = 0, occurrence = 0;
+    uint32_t source = 0xffffffff, node = 0;
 };
 struct Song : SongSelection {
-    uint32_t id = 0;
     char name[64] = {};
     uint32_t count = 1;
 };
 struct SongContinuation {
-    uint32_t generation = 0, crc = 0, set = 0, entry = 0, song = 0, patch = 0, next = 0, source_crc = 0;
+    uint32_t generation = 0, crc = 0, entry = 0xffffffff, patch = 0, source_crc = 0;
     uint32_t node = 0, completed = 0, sources_crc = 0, caller = 0, source = 0xffffffff;
     char document[64] = {};
+    char set[64] = {}, song[64] = {};
 };
-struct SongEntry { uint32_t id = 0, song = 0; };
-struct Setlist { uint32_t id = 0; char name[64] = {}; uint32_t count = 0; };
-struct SongCounts { uint32_t next_id = 1, songs = 0, sets = 0; };
+struct SongEntry { char song[64] = {}; };
+struct Setlist { char name[64] = {}; uint32_t count = 0; };
+struct SongCounts { uint32_t songs = 0, sets = 0; };
 #pragma pack(pop)
 enum class SongExecution { pending, completed, failed, unknown, suspended };
 inline bool read_song_record(Storage &storage, unsigned slot, unsigned offset, void *destination, unsigned length) {
@@ -85,7 +85,7 @@ public:
         if (!found && (storage_.size(0) || storage_.size(1) || storage_.size(2))) { ready_ = true; invalid_ = true; return false; }
         generation_ = best; ready_ = true;
         if (!found) {
-            if (!commit(active_, 16, counts_, 12, 0, "CSP4", 4, nullptr, nullptr)) return false;
+            if (!commit(active_, 12, counts_, 8, 0, "CSP5", 4, nullptr, nullptr)) return false;
             while (busy()) tick(); // Initialization precedes the live main loop.
             return success();
         }
@@ -95,36 +95,36 @@ public:
         unsigned offset;
         return song_offset(index, offset) && payload(active_, offset, &result, sizeof(result));
     }
-    bool patch_at(uint32_t id, unsigned index, SongSelection &result) const {
+    bool patch_at(const char *name, unsigned index, SongSelection &result) const {
         Song item; unsigned position;
-        if (!find_song(id, item, position) || index >= item.count) return false;
+        if (!find_song(name, item, position) || index >= item.count) return false;
         if (!index) { result = item; return true; }
         unsigned offset; return song_offset(position, offset)
             && payload(active_, offset + sizeof(Song) + (index - 1) * sizeof(SongSelection), &result, sizeof(result));
     }
-    bool insert_patch(uint32_t id, unsigned after, const SongSelection &selection) {
-        if (counts_.next_id == 0xffffffff || length_ > 0xffffffffu - 20 - sizeof(SongSelection)
-            || !prepare(Edit::insert_patch, id)) return false;
+    bool insert_patch(const char *name, unsigned after, const SongSelection &selection) {
+        if (length_ > 0xffffffffu - 20 - sizeof(SongSelection)
+            || !prepare(Edit::insert_patch, name)) return false;
         job_.at = after; job_.selection = selection; return prepare_source(job_.selection);
     }
-    bool replace_patch(uint32_t id, unsigned at, const SongSelection &selection) {
-        if (!prepare(Edit::replace_patch, id)) return false;
+    bool replace_patch(const char *name, unsigned at, const SongSelection &selection) {
+        if (!prepare(Edit::replace_patch, name)) return false;
         job_.at = at; job_.selection = selection; return prepare_source(job_.selection);
     }
-    bool remove_patch(uint32_t id, unsigned at) {
-        if (!prepare(Edit::remove_patch, id)) return false;
+    bool remove_patch(const char *name, unsigned at) {
+        if (!prepare(Edit::remove_patch, name)) return false;
         job_.at = at; return true;
     }
-    bool move_patch(uint32_t id, unsigned at, bool earlier) {
-        if ((earlier && !at) || (!earlier && at == 0xffffffffu) || !prepare(Edit::move_patch, id)) return false;
+    bool move_patch(const char *name, unsigned at, bool earlier) {
+        if ((earlier && !at) || (!earlier && at == 0xffffffffu) || !prepare(Edit::move_patch, name)) return false;
         job_.at = at; job_.to = earlier ? at - 1 : at + 1; return true;
     }
-    const Song *song(uint32_t id) const {
-        if (!id) return nullptr;
-        if (song_cache_.id == id) return &song_cache_;
+    const Song *song(const char *name) const {
+        if (!name[0]) return nullptr;
+        if (!std::strcmp(song_cache_.name, name)) return &song_cache_;
         for (unsigned i = 0; i < counts_.songs; ++i) {
             if (!song_at(i, song_cache_)) return nullptr;
-            if (song_cache_.id == id) return &song_cache_;
+            if (!std::strcmp(song_cache_.name, name)) return &song_cache_;
         }
         return nullptr;
     }
@@ -137,132 +137,134 @@ public:
         }
         return false;
     }
-    const Setlist *setlist(uint32_t id) const {
-        if (!id) return nullptr;
+    const Setlist *setlist(const char *name) const {
+        if (!name[0]) return nullptr;
+        char requested[64]; std::snprintf(requested, 64, "%s", name);
         for (unsigned i = 0; i < counts_.sets; ++i) {
             if (!set_at(i, set_cache_, &set_offset_)) return nullptr;
-            if (set_cache_.id == id) return &set_cache_;
+            if (!std::strcmp(set_cache_.name, requested)) return &set_cache_;
         }
         return nullptr;
     }
-    bool entry(uint32_t set, unsigned index, SongEntry &result) const {
+    bool entry(const char *set, unsigned index, SongEntry &result) const {
         const Setlist *s = setlist(set);
         return s && index < s->count && payload(active_, set_offset_ + sizeof(Setlist) + index * sizeof(SongEntry), &result, sizeof(result));
     }
-    uint32_t browse(uint32_t from, bool backward, bool letter = false) const {
+    bool browse(const char *from, char *result, bool backward, bool letter = false) const {
         Song selected; bool has = false;
         if (const auto *s = song(from)) { selected = *s; has = true; }
         Song best, wrap; bool have_best = false, have_wrap = false;
         auto compare = [](const Song &a, const Song &b) {
-            int c = name_compare(a.name, b.name); return c ? c : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+            int c = name_compare(a.name, b.name); return c ? c : std::strcmp(a.name, b.name);
         };
         auto initial = [](const Song &s) { char c = s.name[0]; return c >= 'A' && c <= 'Z' ? c + 32 : c; };
         for (unsigned i = 0; i < counts_.songs; ++i) {
-            Song value; if (!song_at(i, value)) return 0;
+            Song value; if (!song_at(i, value)) return false;
             if (!have_wrap || (backward ? compare(value, wrap) > 0 : compare(value, wrap) < 0)) { wrap = value; have_wrap = true; }
             int relation = has ? compare(value, selected) : (backward ? -1 : 1);
             if ((backward ? relation < 0 : relation > 0) && (!letter || !has || initial(value) != initial(selected))
                 && (!have_best || (backward ? compare(value, best) > 0 : compare(value, best) < 0))) { best = value; have_best = true; }
         }
-        return have_best ? best.id : have_wrap ? wrap.id : 0;
+        std::snprintf(result, 64, "%s", have_best ? best.name : have_wrap ? wrap.name : "");
+        return have_best || have_wrap;
     }
     bool save_song(const char *name, const SongSelection &selection) {
-        if (counts_.next_id >= 0xfffffffe || length_ > 0xffffffffu - 20 - sizeof(Song)) return false;
+        if (song(name)) { error_ = "Song name exists"; return false; }
+        if (length_ > 0xffffffffu - 20 - sizeof(Song)) return false;
         Song s; static_cast<SongSelection &>(s) = selection;
-        s.id = counts_.next_id; s.occurrence = counts_.next_id + 1;
         std::snprintf(s.name, 64, "%s", name);
-        SongCounts counts = counts_; counts.next_id += 2; ++counts.songs;
-        if (!prepare(Edit::append_song, s.id)) return false;
+        SongCounts counts = counts_; ++counts.songs;
+        if (!prepare(Edit::append_song, name)) return false;
         if (!prepare_source(s) || !valid_song(s)) { finish_job(false); return false; }
         job_.counts = counts; std::memcpy(job_.inserted, &s, sizeof(s)); return true;
     }
-    bool rename_song(uint32_t id, const char *name) {
-        if (!prepare(Edit::rename_song, id)) return false;
+    bool rename_song(const char *from, const char *name) {
+        char previous[64]; std::snprintf(previous, 64, "%s", from);
+        if (std::strcmp(previous, name) && song(name)) { error_ = "Song name exists"; return false; }
+        if (!prepare(Edit::rename_song, previous)) return false;
         std::snprintf(job_.name, 64, "%s", name); return true;
     }
-    bool change_song(uint32_t id, const SongSelection &selection) {
-        if (!prepare(Edit::change_song, id)) return false;
+    bool change_song(const char *name, const SongSelection &selection) {
+        if (!prepare(Edit::change_song, name)) return false;
         job_.selection = selection; return prepare_source(job_.selection);
     }
-    uint32_t new_setlist() {
-        if (counts_.next_id == 0xffffffff) return 0;
-        Setlist s; s.id = counts_.next_id; std::snprintf(s.name, 64, "Setlist %lu", (unsigned long)s.id);
-        SongCounts counts = counts_; ++counts.next_id; ++counts.sets;
-        return edit(records_end_, 0, &s, sizeof(s), counts) ? s.id : 0;
+    bool new_setlist(char *name) {
+        Setlist s;
+        for (unsigned n = counts_.sets + 1;; ++n) {
+            std::snprintf(s.name, 64, "Setlist %u", n);
+            if (!setlist(s.name)) break;
+        }
+        SongCounts counts = counts_; ++counts.sets;
+        if (!edit(records_end_, 0, &s, sizeof(s), counts)) return false;
+        std::snprintf(name, 64, "%s", s.name); return true;
     }
-    bool rename_setlist(uint32_t id, const char *name) {
-        if (!prepare(Edit::rename_set, id)) return false;
+    bool rename_setlist(const char *from, const char *name) {
+        char previous[64]; std::snprintf(previous, 64, "%s", from);
+        if (std::strcmp(previous, name) && setlist(name)) { error_ = "Setlist name exists"; return false; }
+        if (!prepare(Edit::rename_set, previous)) return false;
         std::snprintf(job_.name, 64, "%s", name); return true;
     }
-    bool insert(uint32_t set, unsigned at, uint32_t song_id) {
-        if (counts_.next_id == 0xffffffff || !prepare(Edit::insert, set)) return false;
-        job_.at = at; job_.song = song_id; return true;
+    bool insert(const char *set, unsigned at, const char *song_name) {
+        if (!prepare(Edit::insert, set)) return false;
+        job_.at = at; std::snprintf(job_.song, 64, "%s", song_name); return true;
     }
-    bool remove(uint32_t set, unsigned at) {
+    bool remove(const char *set, unsigned at) {
         if (!prepare(Edit::remove, set)) return false;
         job_.at = at; return true;
     }
-    bool move(uint32_t set, unsigned from, unsigned to) {
+    bool move(const char *set, unsigned from, unsigned to) {
         if (!prepare(Edit::move, set)) return false;
         job_.at = from; job_.to = to; return true;
     }
     bool undo() {
         if (busy() || !can_undo_) return false;
         uint8_t header[16];
-        if (!storage_.read(undo_slot_, 0, header, 16) || std::memcmp(header, "CSG4", 4)) return false;
+        if (!storage_.read(undo_slot_, 0, header, 16) || std::memcmp(header, "CSG5", 4)) return false;
         unsigned length = u32(header + 8);
-        if (length < 16 || length > 0xffffffffu - 20 || storage_.size(undo_slot_) != length + 20) return false;
+        if (length < 12 || length > 0xffffffffu - 20 || storage_.size(undo_slot_) != length + 20) return false;
         initialize_job(); job_.source = undo_slot_; job_.length = length; job_.crc = u32(header + 12);
         job_.undo = true;
-        if (active_set_ == undo_set_ && current_entry_ == undo_entry_) job_.continuation = undo_continuation_;
+        job_.playback = undo_cursor_; job_.removed = undo_removed_;
         phase_ = Phase::source_hash; return true;
     }
-    void choose(uint32_t set) {
+    void choose(const char *set) {
         if (executing()) { error_ = "Patch pending"; return; }
-        if (busy()) { job_.choose = set; return; }
-        current_song_ = current_patch_ = patch_position_ = 0;
-        active_set_ = set; current_entry_ = 0; continuation_ = 0; removed_ = false; current_name_[0] = 0;
+        if (busy()) { std::snprintf(job_.choose, 64, "%s", set); return; }
+        current_song_[0] = 0; patch_position_ = 0;
+        if (set != active_set_) std::snprintf(active_set_, 64, "%s", set);
+        position_ = 0xffffffffu; removed_ = false;
     }
     unsigned next_position() const {
-        const auto *p = setlist(active_set_); if (!p) return 0; unsigned count = p->count, offset = set_offset_ + sizeof(Setlist);
-        SongEntry value;
-        for (unsigned i = 0; i < count; ++i) {
-            if (!payload(active_, offset + i * sizeof(SongEntry), &value, sizeof(value))) return 0xffffffffu;
-            if (value.id == current_entry_) return i + 1;
-        }
-        return std::min(continuation_, count);
+        const auto *p = setlist(active_set_); if (!p) return 0;
+        return position_ == 0xffffffffu ? 0 : std::min(position_ + unsigned(!removed_), unsigned(p->count));
     }
-    SongContinuation continuation() const { return {generation_, crc_, active_set_, current_entry_, current_song_, current_patch_, 0}; }
+    SongContinuation continuation() const {
+        SongContinuation result; result.generation = generation_; result.crc = crc_;
+        result.entry = position_; result.patch = patch_position_;
+        std::snprintf(result.set, 64, "%s", active_set_); std::snprintf(result.song, 64, "%s", current_song_);
+        return result;
+    }
     void cancel_function() {
         if (!pending_function_) return;
-        active_set_ = previous_cursor_.set; current_entry_ = previous_cursor_.entry; current_song_ = previous_cursor_.song; current_patch_ = previous_cursor_.patch;
-        patch_position_ = previous_patch_position_; continuation_ = previous_continuation_; removed_ = previous_removed_;
-        std::memcpy(current_name_, previous_name_, sizeof(current_name_)); pending_function_ = invocation_pending_ = false; error_ = "Firmware switch failed";
+        restore_cursor(previous_cursor_); removed_ = previous_removed_;
+        pending_function_ = invocation_pending_ = false; error_ = "Firmware switch failed";
     }
     bool resume(const SongContinuation &saved) {
         if (saved.generation != generation_ || saved.crc != crc_) { error_ = "Song data changed"; return false; }
         const Song *item = song(saved.song);
         if (!item) { error_ = "Song missing"; return false; }
-        SongSelection current;
-        unsigned at = 0;
-        for (; at < item->count; ++at) { if (!patch_at(saved.song, at, current)) return false; if (current.occurrence == saved.patch) break; }
-        if (at == item->count) return false;
-        SongEntry entry_value; bool found = false;
-        const auto *set = setlist(saved.set);
-        if (!set) return false;
-        unsigned count = set->count;
-        for (unsigned i = 0; i < count; ++i) if (entry(saved.set, i, entry_value) && entry_value.id == saved.entry && entry_value.song == saved.song) found = true;
-        if (!found) return false;
-        if (at + 1 == item->count) { if (saved.next) return false; }
-        else {
+        SongSelection current; SongEntry entry_value;
+        unsigned at = saved.patch, count = item->count;
+        if (!patch_at(saved.song, at, current) || !entry(saved.set, saved.entry, entry_value)
+            || std::strcmp(entry_value.song, saved.song)) return false;
+        if (at + 1 < count) {
             SongSelection upcoming;
-            if (!patch_at(saved.song, at + 1, upcoming) || upcoming.occurrence != saved.next) return false;
+            if (!patch_at(saved.song, at + 1, upcoming)) return false;
             uint32_t revision = 0;
             if (upcoming.document[0] && (!resolver_.revision(upcoming, revision) || revision != saved.source_crc)) { error_ = "Source changed"; return false; }
         }
         if (!resolver_.activate(current, saved, true)) { error_ = "Patch return unavailable"; return false; }
-        active_set_ = saved.set; current_entry_ = saved.entry; current_song_ = saved.song; current_patch_ = saved.patch; patch_position_ = at; removed_ = false;
-        std::snprintf(current_name_, 64, "%s", item->name);
+        restore_cursor(saved); removed_ = false;
         resume_pending_ = true;
         if (resolver_.execution_status() == SongExecution::completed) { resume_pending_ = false; return advance_after_return(); }
         return true;
@@ -271,52 +273,35 @@ public:
         if (busy() || executing()) { error_ = "Song work pending"; return false; }
         const auto *current = song(current_song_);
         if (current && !removed_) {
-            unsigned count = current->count; SongSelection value; bool found = false;
-            for (unsigned i = 0; i < count; ++i) {
-                if (!patch_at(current_song_, i, value)) return false;
-                if (value.occurrence == current_patch_) { patch_position_ = i; found = true; break; }
-            }
-            if (!found) { error_ = "Current patch removed"; return false; }
-            if (patch_position_ + 1 < count) return activate_patch(current_song_, patch_position_ + 1, current_entry_);
+            if (patch_position_ == 0xffffffffu) { error_ = "Current patch removed"; return false; }
+            if (patch_position_ + 1 < current->count) return activate_patch(current_song_, patch_position_ + 1, position_);
         }
         SongEntry value;
         const auto *set = setlist(active_set_);
-        if (!set) { error_ = active_set_ ? "Setlist read failed" : "Choose a setlist"; return false; }
+        if (!set) { error_ = active_set_[0] ? "Setlist read failed" : "Choose a setlist"; return false; }
         unsigned count = set->count, position = next_position();
         if (position == 0xffffffffu) { error_ = "Setlist read failed"; return false; }
         if (position >= count) { error_ = "End of set"; return false; }
         if (!entry(active_set_, position, value)) { error_ = "Setlist read failed"; return false; }
         const auto *p = song(value.song); if (!p) { error_ = "Song missing"; return false; }
-        if (!activate_patch(p->id, 0, value.id)) return false;
-        continuation_ = position + 1; return true;
+        return activate_patch(value.song, 0, position);
     }
     bool current_patch(SongSelection &result) const {
-        const auto *item = song(current_song_); if (!item) return false;
-        unsigned count = item->count;
-        for (unsigned i = 0; i < count; ++i) {
-            if (!patch_at(current_song_, i, result)) return false;
-            if (result.occurrence == current_patch_) return true;
-        }
-        return false;
+        return patch_at(current_song_, patch_position_, result);
     }
     bool upcoming_patch(SongSelection &result) const {
         const auto *item = song(current_song_);
         if (!item || removed_) return false;
-        unsigned count = item->count;
-        SongSelection current;
-        for (unsigned i = 0; i + 1 < count; ++i) {
-            if (!patch_at(current_song_, i, current)) return false;
-            if (current.occurrence == current_patch_) return patch_at(current_song_, i + 1, result);
-        }
-        return false;
+        return patch_position_ != 0xffffffffu && patch_position_ + 1 < item->count
+            && patch_at(current_song_, patch_position_ + 1, result);
     }
-    uint32_t active_set() const { return active_set_; }
+    const char *active_set() const { return active_set_; }
     bool executing() const {
         auto state = resolver_.execution_status();
         return state == SongExecution::pending || state == SongExecution::suspended;
     }
     bool invalid() const { return invalid_; }
-    const char *current_name() const { return current_name_; }
+    const char *current_name() const { return current_song_; }
     bool removed() const { return removed_; }
     unsigned length() const { return length_; }
     uint32_t crc() const { return crc_; }
@@ -334,12 +319,13 @@ public:
         if (!generation_) { if (offset + n > sizeof(counts_)) return false; std::memcpy(data, reinterpret_cast<const uint8_t *>(&counts_) + offset, n); return true; }
         return payload(active_, offset, data, n);
     }
-    bool import_begin(unsigned length) { return !busy() && !executing() && ready_ && length >= 16 && length <= 0xffffffffu - 20 && storage_.begin(3); }
+    bool import_begin(unsigned length) { return !busy() && !executing() && ready_ && length >= 12 && length <= 0xffffffffu - 20 && storage_.begin(3); }
     bool import_write(const uint8_t *bytes, unsigned n) { return storage_.write(bytes, n); }
     void import_abort() { storage_.finish(); }
     bool import_finish(unsigned length, uint32_t crc) {
         if (busy() || !storage_.finish() || storage_.size(3) != length) return false;
         initialize_job(); job_.source = 3; job_.length = length; job_.crc = crc;
+        job_.playback = SongContinuation(); job_.removed = false;
         phase_ = Phase::source_hash; return true;
     }
 private:
@@ -351,63 +337,61 @@ private:
         SongSelection selection_value;
         SongCounts counts;
         unsigned position = 0, song = 0, set = 0, entries = 0, entry = 0;
-        uint32_t id = 0, reference = 0, set_id = 0;
         unsigned set_count = 0;
         unsigned patches = 0, patch_index = 0;
-        unsigned sources = 0, source_remaining = 0, greatest_source = 0, records_end = 12;
+        unsigned sources = 0, source_remaining = 0, greatest_source = 0, records_end = 8;
         uint32_t source_crc = 0xffffffff, source_expected = 0;
         bool graph_started = false, inline_source = false, verify_sources = true;
-        bool first_occurrence = false;
-        bool done = false, item = false, is_song = false, is_selection = false;
+        bool first_selection = false;
+        bool done = false, item = false, is_song = false, is_selection = false, is_entry = false;
         bool step(Storage &storage, unsigned slot, unsigned base, unsigned length) {
             item = false;
             if (!position) {
-                if (length < 12 || !storage.read(slot, base, reinterpret_cast<uint8_t *>(&counts), 12)
-                    || !counts.next_id || counts.songs > (length - 12) / sizeof(Song)) return false;
-                position = 12; return true;
+                if (length < 8 || !storage.read(slot, base, reinterpret_cast<uint8_t *>(&counts), 8)
+                    || counts.songs > (length - 8) / sizeof(Song)) return false;
+                position = 8; return true;
             }
-            reference = 0; is_song = is_selection = false;
-            if (first_occurrence) {
-                first_occurrence = false; selection_value = song_value; patch_index = 0;
-                remember_source(); id = selection_value.occurrence; item = is_selection = true; return true;
+            is_song = is_selection = is_entry = false;
+            if (first_selection) {
+                first_selection = false; selection_value = song_value; patch_index = 0;
+                remember_source(); item = is_selection = true; return true;
             }
             if (patches) {
                 if (!storage.read(slot, base + position, reinterpret_cast<uint8_t *>(&selection_value), sizeof(selection_value))
-                    || !valid_selection(selection_value) || selection_value.occurrence >= counts.next_id) return false;
+                    || !valid_selection(selection_value)) return false;
                 position += sizeof(selection_value); --patches; ++patch_index;
-                remember_source(); id = selection_value.occurrence; item = is_selection = true; return true;
+                remember_source(); item = is_selection = true; return true;
             }
             if (song < counts.songs) {
                 Song value;
                 if (position > length || sizeof(value) > length - position
                     || !read_song_record(storage, slot, base + position, &value, sizeof(value))
-                    || !valid_song(value) || value.id >= counts.next_id || value.occurrence >= counts.next_id) return false;
+                    || !valid_song(value)) return false;
                 song_value = value; position += sizeof(value);
                 if (value.count - 1 > (length - position) / sizeof(SongSelection)) return false;
-                patches = value.count - 1; first_occurrence = true;
-                ++song; id = value.id; is_song = item = true; return true;
+                patches = value.count - 1; first_selection = true;
+                ++song; is_song = item = true; return true;
             }
             if (entries) {
                 SongEntry value;
                 if (!storage.read(slot, base + position, reinterpret_cast<uint8_t *>(&value), sizeof(value))
-                    || !value.id || value.id >= counts.next_id || !value.song || value.song >= counts.next_id) return false;
+                    || !text_valid(reinterpret_cast<const uint8_t *>(value.song), 64)) return false;
                 entry_value = value; position += sizeof(value); --entries; ++entry;
-                id = value.id; reference = value.song; item = true; return true;
+                item = is_entry = true; return true;
             }
             if (set < counts.sets) {
                 Setlist value;
                 if (position > length || sizeof(value) > length - position
                     || !storage.read(slot, base + position, reinterpret_cast<uint8_t *>(&value), sizeof(value))
-                    || !value.id || value.id >= counts.next_id
                     || !text_valid(reinterpret_cast<const uint8_t *>(value.name), 64)) return false;
                 position += sizeof(value);
                 if (value.count > (length - position) / sizeof(SongEntry)) return false;
-                set_value = value; ++set; entries = set_count = value.count; entry = 0; set_id = id = value.id; item = true; return true;
+                set_value = value; ++set; entries = set_count = value.count; entry = 0; item = true; return true;
             }
             if (!graph_started) {
                 uint8_t magic[4];
                 if (position > length || 4 > length - position || !storage.read(slot, base + position, magic, 4)
-                    || std::memcmp(magic, "CSP4", 4)) return false;
+                    || std::memcmp(magic, "CSP5", 4)) return false;
                 records_end = position; position += 4; graph_started = true; return true;
             }
             if (source_remaining) {
@@ -434,9 +418,9 @@ private:
             if (!selection_value.document[0]) { inline_source = true; greatest_source = std::max(greatest_source, unsigned(selection_value.source)); }
         }
     };
-    enum class Edit { append_song, rename_song, change_song, rename_set, insert, remove, move,
+    enum class Edit { none, append_song, rename_song, change_song, rename_set, insert, remove, move,
         insert_patch, replace_patch, remove_patch, move_patch };
-    enum class Phase { idle, prepare, source_hash, source_structure, identities, identity_scan,
+    enum class Phase { idle, prepare, source_hash, source_structure,
         hash, begin, header, write, footer, close, verify_header, verify_hash, verify_structure };
     struct Job {
         unsigned source = 0, destination = 0, length = 0, offset = 0, erased = 0, inserted_size = 0, position = 0;
@@ -446,16 +430,16 @@ private:
         uint8_t inserted[2 * sizeof(SongSelection)] = {};
         HeaderChange change = {}; Move move = {};
         bool has_change = false, has_move = false, undo = false, opened = false;
-        uint32_t crc = 0, running_crc = 0xffffffff, choose = 0;
-        unsigned continuation = 0, matches = 0, references = 0, set_count = 0;
-        bool found_set = false, found_entry = false;
-        Edit edit = Edit::rename_song;
-        uint32_t target = 0, song = 0;
+        uint32_t crc = 0, running_crc = 0xffffffff;
+        SongContinuation playback;
+        bool removed = false;
+        char choose[64] = {};
+        Edit edit = Edit::none;
+        char target[64] = {}, song[64] = {};
         unsigned at = 0, to = 0;
         char name[64] = {};
         SongSelection selection, previous;
-        bool song_exists = false;
-        Cursor cursor, scan;
+        Cursor cursor;
     } job_;
     Phase phase_ = Phase::idle;
     bool good_ = true;
@@ -465,47 +449,54 @@ private:
     mutable Setlist set_cache_;
     mutable unsigned set_offset_ = 0;
     uint32_t generation_ = 0, crc_ = checksum(reinterpret_cast<const uint8_t *>(&counts_), sizeof(counts_));
-    unsigned active_ = 0, length_ = 16, undo_slot_ = 0;
-    unsigned source_count_ = 0, records_end_ = 12;
-    mutable unsigned verified_source_count_ = 0, verified_records_end_ = 12;
-    uint32_t active_set_ = 0, current_entry_ = 0, undo_set_ = 0, undo_entry_ = 0;
-    unsigned continuation_ = 0, undo_continuation_ = 0, patch_position_ = 0;
-    uint32_t current_song_ = 0, current_patch_ = 0;
+    unsigned active_ = 0, length_ = 12, undo_slot_ = 0;
+    unsigned source_count_ = 0, records_end_ = 8;
+    mutable unsigned verified_source_count_ = 0, verified_records_end_ = 8;
+    char active_set_[64] = {}, current_song_[64] = {};
+    unsigned position_ = 0xffffffffu, patch_position_ = 0;
+    SongContinuation undo_cursor_;
+    bool undo_removed_ = false;
     bool ready_ = false, can_undo_ = false, removed_ = false, invalid_ = false;
-    char current_name_[64] = {}, previous_name_[64] = {};
     SongContinuation previous_cursor_;
-    unsigned previous_patch_position_ = 0, previous_continuation_ = 0;
     bool pending_function_ = false, previous_removed_ = false, resume_pending_ = false, invocation_pending_ = false;
     const char *error_ = "";
-    bool activate_patch(uint32_t id, unsigned position, uint32_t entry_id) {
+    void restore_cursor(const SongContinuation &cursor) {
+        std::snprintf(active_set_, 64, "%s", cursor.set);
+        std::snprintf(current_song_, 64, "%s", cursor.song);
+        position_ = cursor.entry; patch_position_ = cursor.patch;
+    }
+    static void move_position(uint32_t &position, unsigned from, unsigned to) {
+        if (position == from) position = to;
+        else if (from < position && position <= to) --position;
+        else if (to <= position && position < from) ++position;
+    }
+    bool activate_patch(const char *name, unsigned position, unsigned entry_index) {
         SongSelection item;
-        if (!patch_at(id, position, item)) { error_ = "Song patch missing"; return false; }
-        SongContinuation saved{generation_, crc_, active_set_, entry_id, id, item.occurrence, 0};
+        if (!patch_at(name, position, item)) { error_ = "Song patch missing"; return false; }
+        SongContinuation saved = continuation(); saved.entry = entry_index; saved.patch = position;
+        std::snprintf(saved.song, 64, "%s", name);
         saved.caller = 1; saved.source = item.source; saved.node = item.node;
         std::snprintf(saved.document, sizeof(saved.document), "%s", item.document);
         SongSelection upcoming;
-        const auto *current = song(id);
+        const auto *current = song(name);
         if (!current) return false;
         if (position + 1 < current->count) {
-            if (!patch_at(id, position + 1, upcoming)) return false;
-            saved.next = upcoming.occurrence;
+            if (!patch_at(name, position + 1, upcoming)) return false;
             if (upcoming.document[0] && !resolver_.revision(upcoming, saved.source_crc)) { error_ = "Source unavailable"; return false; }
         }
-        previous_cursor_ = continuation(); previous_patch_position_ = patch_position_; previous_continuation_ = continuation_; previous_removed_ = removed_;
-        std::memcpy(previous_name_, current_name_, sizeof(previous_name_));
+        previous_cursor_ = continuation(); previous_removed_ = removed_;
         if (!resolver_.activate(item, saved, false)) { error_ = "Patch unavailable"; return false; }
         pending_function_ = resolver_.execution_status() == SongExecution::suspended;
         invocation_pending_ = executing();
-        const auto *song_item = song(id); if (!song_item) return false;
-        std::snprintf(current_name_, 64, "%s", song_item->name);
-        current_song_ = id; current_patch_ = item.occurrence; patch_position_ = position; current_entry_ = entry_id; removed_ = false;
+        std::memcpy(current_song_, saved.song, 64);
+        patch_position_ = position; position_ = entry_index; removed_ = false;
         error_ = resolver_.execution_status() == SongExecution::completed ? "Completed locally" : "Pending"; return true;
     }
     static bool valid_song(const Song &s) {
-        return s.id && s.count && s.occurrence && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64) && valid_selection(s);
+        return s.count && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64) && valid_selection(s);
     }
     static bool valid_selection(const SongSelection &s) {
-        return s.occurrence && (!s.label[0] || label_valid(reinterpret_cast<const uint8_t *>(s.label), sizeof(s.label))) && (s.document[0]
+        return (!s.label[0] || label_valid(reinterpret_cast<const uint8_t *>(s.label), sizeof(s.label))) && (s.document[0]
             ? s.source == 0xffffffff && text_valid(reinterpret_cast<const uint8_t *>(s.document), 64) && setup_name(s.document)
                 && label_valid(reinterpret_cast<const uint8_t *>(s.key), 64)
             : !s.key[0] && s.source < 0xfffffffe && s.node < 65535);
@@ -514,7 +505,7 @@ private:
         const auto *item = song(current_song_);
         if (!item) { error_ = "Song missing"; return false; }
         if (patch_position_ + 1 == item->count) { error_ = "End of song"; return true; }
-        return activate_patch(current_song_, patch_position_ + 1, current_entry_);
+        return activate_patch(current_song_, patch_position_ + 1, position_);
     }
     bool source_offset(unsigned index, unsigned &offset, unsigned &length) const {
         offset = records_end_ + 4;
@@ -537,13 +528,13 @@ private:
         job_.appended = source; job_.appended_length = source->length() + 4;
         return true;
     }
-    bool find_song(uint32_t id, Song &s, unsigned &index) const {
+    bool find_song(const char *name, Song &s, unsigned &index) const {
         for (index = 0; index < counts_.songs; ++index)
-            if (!song_at(index, s)) return false; else if (s.id == id) return true;
+            if (!song_at(index, s)) return false; else if (!std::strcmp(s.name, name)) return true;
         return false;
     }
     bool song_offset(unsigned index, unsigned &offset) const {
-        offset = 12;
+        offset = 8;
         if (index >= counts_.songs) return false;
         for (unsigned i = 0; i < index; ++i) {
             Song item; if (!payload(active_, offset, &item, sizeof(item))) return false;
@@ -552,7 +543,7 @@ private:
         return true;
     }
     bool songs_end(unsigned &offset) const {
-        offset = 12;
+        offset = 8;
         if (!counts_.songs) return true;
         if (!song_offset(counts_.songs - 1, offset)) return false;
         Song item; if (!payload(active_, offset, &item, sizeof(item))) return false;
@@ -582,22 +573,22 @@ private:
 
     bool record(unsigned slot, uint32_t &generation, unsigned &length, uint32_t &crc, SongCounts &counts) const {
         uint8_t header[16], tail[4];
-        if (!storage_.read(slot, 0, header, 16) || std::memcmp(header, "CSG4", 4)) return false;
+        if (!storage_.read(slot, 0, header, 16) || std::memcmp(header, "CSG5", 4)) return false;
         length = u32(header + 8); crc = u32(header + 12); generation = u32(header + 4);
         uint32_t actual;
         return length <= 0xffffffffu - 20 && storage_.size(slot) == length + 20
             && storage_.read(slot, 16 + length, tail, 4) && !std::memcmp(tail, "DONE", 4)
             && crc_range(slot, 16, length, actual) && actual == crc && validate(slot, length, 16)
-            && storage_.read(slot, 16, reinterpret_cast<uint8_t *>(&counts), 12);
+            && storage_.read(slot, 16, reinterpret_cast<uint8_t *>(&counts), 8);
     }
     bool edit(unsigned offset, unsigned erased, const void *bytes, unsigned n, const SongCounts &counts) {
         if (offset > length_ || erased > length_ - offset || n > 0xffffffffu - 20 - (length_ - erased)) return false;
         return commit(active_, length_ - erased + n, counts, offset, erased, bytes, n, nullptr, nullptr);
     }
-    bool prepare(Edit edit, uint32_t target) {
-        if (!ready_ || invalid_ || busy() || executing() || !target) return false;
+    bool prepare(Edit edit, const char *target) {
+        if (!ready_ || invalid_ || busy() || executing() || !target[0]) return false;
         initialize_job(); job_.source = active_; job_.length = length_; job_.counts = counts_;
-        job_.edit = edit; job_.target = target; phase_ = Phase::prepare; return true;
+        job_.edit = edit; std::snprintf(job_.target, 64, "%s", target); phase_ = Phase::prepare; return true;
     }
     void plan(unsigned offset, unsigned erased, const void *bytes, unsigned n) {
         job_.offset = offset; job_.erased = erased; job_.inserted_size = n;
@@ -606,27 +597,29 @@ private:
     }
     void prepare_step() {
         auto &c = job_.cursor;
-        if (job_.edit == Edit::append_song && c.position && c.song == counts_.songs && !c.first_occurrence && !c.patches) {
+        if (job_.edit == Edit::append_song && c.position && c.song == counts_.songs && !c.first_selection && !c.patches) {
             plan(c.position, 0, job_.inserted, sizeof(Song)); return;
         }
         if (!c.step(storage_, active_, 16, length_) || c.done) { finish_job(false); return; }
         if (!c.item) return;
-        if (patch_edit() && c.song_value.id == job_.target) { prepare_patch(c); return; }
+        if (patch_edit() && !std::strcmp(c.song_value.name, job_.target)) { prepare_patch(c); return; }
         if (c.is_selection) return;
         if (c.is_song) {
-            if (c.id == job_.song) job_.song_exists = true;
-            if (c.id != job_.target || (job_.edit != Edit::rename_song && job_.edit != Edit::change_song)) return;
+            if (std::strcmp(c.song_value.name, job_.target) || (job_.edit != Edit::rename_song && job_.edit != Edit::change_song)) return;
             Song s = c.song_value;
             if (job_.edit == Edit::rename_song) { std::memset(s.name, 0, 64); std::snprintf(s.name, 64, "%s", job_.name); }
-            else { uint32_t occurrence = s.occurrence; static_cast<SongSelection &>(s) = job_.selection; s.occurrence = occurrence; }
+            else static_cast<SongSelection &>(s) = job_.selection;
             if (!valid_song(s)) { finish_job(false); return; }
+            if (job_.edit == Edit::rename_song && !std::strcmp(job_.playback.song, job_.target))
+                std::snprintf(job_.playback.song, 64, "%s", job_.name);
             plan(c.position - sizeof(Song), sizeof(Song), &s, sizeof(s)); return;
         }
-        if (c.set_id != job_.target) return;
-        if (!c.reference) {
+        if (std::strcmp(c.set_value.name, job_.target)) return;
+        if (!c.is_entry) {
             if (job_.edit == Edit::rename_set) {
                 Setlist s = c.set_value; std::memset(s.name, 0, 64); std::snprintf(s.name, 64, "%s", job_.name);
                 if (!text_valid(reinterpret_cast<const uint8_t *>(s.name), 64)) { finish_job(false); return; }
+                if (!std::strcmp(job_.playback.set, job_.target)) std::snprintf(job_.playback.set, 64, "%s", job_.name);
                 plan(c.position - sizeof(Setlist), sizeof(Setlist), &s, sizeof(s)); return;
             }
             if (job_.edit != Edit::insert && job_.edit != Edit::remove && job_.edit != Edit::move) return;
@@ -634,10 +627,11 @@ private:
                 || (job_.edit == Edit::move && job_.to >= c.set_count)) { finish_job(false); return; }
             job_.change = HeaderChange(); job_.change.offset = c.position - unsigned(sizeof(Setlist)); job_.change.value = c.set_value;
             if (job_.edit == Edit::insert) {
-                if (!job_.song_exists || length_ > 0xffffffffu - 20 - sizeof(SongEntry)) { finish_job(false); return; }
-                ++job_.change.value.count; job_.has_change = true; ++job_.counts.next_id;
-                SongEntry e{counts_.next_id, job_.song};
-                if (active_set_ == job_.target && removed_ && job_.at < continuation_) ++job_.continuation;
+                if (length_ > 0xffffffffu - 20 - sizeof(SongEntry)) { finish_job(false); return; }
+                ++job_.change.value.count; job_.has_change = true;
+                SongEntry e; std::snprintf(e.song, 64, "%s", job_.song);
+                if (!std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu
+                    && (job_.at < position_ || (!removed_ && job_.at == position_))) ++job_.playback.entry;
                 plan(c.position + job_.at * sizeof(SongEntry), 0, &e, sizeof(e));
             } else if (job_.edit == Edit::move && job_.at == job_.to) finish_job(true);
             return;
@@ -645,17 +639,19 @@ private:
         if (c.entry != job_.at + 1) return;
         if (job_.edit == Edit::remove) {
             --job_.change.value.count; job_.has_change = true;
-            if (active_set_ == job_.target) {
-                if (c.id == current_entry_) job_.continuation = job_.at;
-                else if (removed_ && job_.at < continuation_) --job_.continuation;
+            if (!std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu) {
+                if (job_.at == position_) job_.removed = true;
+                else if (job_.at < position_) --job_.playback.entry;
             }
             plan(c.position - sizeof(SongEntry), sizeof(SongEntry), nullptr, 0);
         } else if (job_.edit == Edit::move) {
             job_.has_move = true;
             job_.move = {job_.change.offset + unsigned(sizeof(Setlist)), job_.at, job_.to, c.entry_value};
-            if (active_set_ == job_.target && removed_) {
-                if (job_.at < job_.continuation) --job_.continuation;
-                if (job_.to < job_.continuation) ++job_.continuation;
+            if (!std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu) {
+                if (removed_) {
+                    if (job_.at < job_.playback.entry) --job_.playback.entry;
+                    if (job_.to < job_.playback.entry) ++job_.playback.entry;
+                } else move_position(job_.playback.entry, job_.at, job_.to);
             }
             start_hash();
         }
@@ -671,16 +667,17 @@ private:
             job_.change = HeaderChange(); job_.change.offset = c.position - sizeof(Song);
             job_.change.song = true; job_.change.song_value = c.song_value;
             if (job_.edit == Edit::insert_patch) {
-                auto value = job_.selection; value.occurrence = counts_.next_id;
+                auto value = job_.selection;
                 if (!valid_selection(value)) { finish_job(false); return; }
-                job_.has_change = true; ++job_.change.song_value.count; ++job_.counts.next_id;
+                job_.has_change = true; ++job_.change.song_value.count;
+                if (!std::strcmp(current_song_, job_.target) && patch_position_ != 0xffffffffu && job_.at < patch_position_) ++job_.playback.patch;
                 plan(c.position + job_.at * sizeof(SongSelection), 0, &value, sizeof(value));
             }
             return;
         }
         if (!c.is_selection) return;
         if (job_.edit == Edit::replace_patch && c.patch_index == job_.at) {
-            auto value = job_.selection; value.occurrence = c.selection_value.occurrence;
+            auto value = job_.selection;
             if (!valid_selection(value)) { finish_job(false); return; }
             if (!job_.at) {
                 auto s = c.song_value; static_cast<SongSelection &>(s) = value;
@@ -688,12 +685,18 @@ private:
             } else plan(c.position - sizeof(SongSelection), sizeof(SongSelection), &value, sizeof(value));
         } else if (job_.edit == Edit::remove_patch && c.patch_index == (job_.at ? job_.at : 1)) {
             job_.has_change = true; --job_.change.song_value.count;
+            if (!std::strcmp(current_song_, job_.target) && patch_position_ != 0xffffffffu) {
+                if (job_.at == patch_position_) job_.playback.patch = 0xffffffffu;
+                else if (job_.at < patch_position_) --job_.playback.patch;
+            }
             if (!job_.at) static_cast<SongSelection &>(job_.change.song_value) = c.selection_value;
             plan(job_.change.offset + sizeof(Song) + (job_.at ? job_.at - 1 : 0) * sizeof(SongSelection), sizeof(SongSelection), nullptr, 0);
         } else if (job_.edit == Edit::move_patch) {
             unsigned first = std::min(job_.at, job_.to);
             if (c.patch_index == first) job_.previous = c.selection_value;
             if (c.patch_index != first + 1) return;
+            if (!std::strcmp(current_song_, job_.target) && patch_position_ != 0xffffffffu)
+                move_position(job_.playback.patch, job_.at, job_.to);
             if (!first) {
                 job_.has_change = true; static_cast<SongSelection &>(job_.change.song_value) = c.selection_value;
                 plan(job_.change.offset + sizeof(Song), sizeof(SongSelection), &job_.previous, sizeof(SongSelection));
@@ -714,7 +717,7 @@ private:
         phase_ = Phase::hash; return true;
     }
     void initialize_job() {
-        job_ = Job(); job_.continuation = continuation_; good_ = false; error_ = "";
+        job_ = Job(); job_.playback = continuation(); job_.removed = removed_; good_ = false; error_ = "";
         while (job_.destination == active_ || (can_undo_ && job_.destination == undo_slot_)) ++job_.destination;
     }
     void finish_job(bool good) {
@@ -723,7 +726,7 @@ private:
         phase_ = Phase::idle;
     }
     void header(uint8_t *bytes) const {
-        std::memcpy(bytes, "CSG4", 4); put32(bytes + 4, generation_ + 1);
+        std::memcpy(bytes, "CSG5", 4); put32(bytes + 4, generation_ + 1);
         put32(bytes + 8, job_.length); put32(bytes + 12, job_.crc);
     }
     bool stream(uint8_t *buffer, unsigned n) {
@@ -738,7 +741,7 @@ private:
                 if (relative < 4) { put32(appended_size, job_.appended->length()); memory = appended_size + relative; take = 4 - relative; }
                 else { memory = job_.appended->data() + relative - 4; take = job_.appended_length - relative; }
             }
-            else if (at < 12) { memory = reinterpret_cast<const uint8_t *>(&job_.counts) + at; take = 12 - at; }
+            else if (at < 8) { memory = reinterpret_cast<const uint8_t *>(&job_.counts) + at; take = 8 - at; }
             else if (job_.has_change && at >= change.offset && at < change.offset + (change.song ? sizeof(Song) : sizeof(Setlist))) {
                 memory = (change.song ? reinterpret_cast<const uint8_t *>(&change.song_value)
                     : reinterpret_cast<const uint8_t *>(&change.value)) + (at - change.offset);
@@ -762,6 +765,16 @@ private:
                 } else if (job_.has_move && at < move.offset) take = std::min(take, move.offset - at);
             }
             take = std::min(take, n - j);
+            if (job_.edit == Edit::rename_song && !memory && original < records_end_) {
+                auto &c = job_.cursor;
+                while (!c.done && (!c.item || c.position <= original))
+                    if (!c.step(storage_, job_.source, 16, length_)) return false;
+                if (c.is_entry && !std::strcmp(c.entry_value.song, job_.target)) {
+                    unsigned start = c.position - sizeof(SongEntry);
+                    if (original < start) take = std::min(take, start - original);
+                    else { memory = reinterpret_cast<const uint8_t *>(job_.name) + original - start; take = std::min(take, c.position - original); }
+                } else if (c.item && original < c.position) take = std::min(take, c.position - original);
+            }
             if (job_.appended && at < append_at) take = std::min(take, append_at - at);
             if (memory) std::memcpy(buffer + j, memory, take);
             else if (!payload(job_.source, original, buffer + j, take)) return false;
@@ -770,21 +783,19 @@ private:
         return true;
     }
     void start_hash() {
-        job_.position = 0; job_.running_crc = 0xffffffff; phase_ = Phase::hash;
+        job_.position = 0; job_.running_crc = 0xffffffff; job_.cursor = Cursor(); job_.cursor.verify_sources = false; phase_ = Phase::hash;
     }
     void publish() {
-        undo_slot_ = active_; undo_set_ = active_set_; undo_entry_ = current_entry_; undo_continuation_ = continuation_;
+        undo_slot_ = active_; undo_cursor_ = continuation(); undo_removed_ = removed_;
         can_undo_ = generation_ != 0 && !job_.undo;
         active_ = job_.destination; ++generation_; length_ = job_.length; crc_ = job_.crc; counts_ = job_.counts;
         source_count_ = job_.cursor.sources; records_end_ = job_.cursor.records_end;
         song_cache_ = Song(); set_cache_ = Setlist(); invalid_ = false;
-        if (job_.choose) {
-            current_song_ = current_patch_ = patch_position_ = 0;
-            active_set_ = job_.choose; current_entry_ = continuation_ = 0; removed_ = false; current_name_[0] = 0;
-        } else if (job_.found_set) {
-            continuation_ = std::min(job_.continuation, job_.set_count);
-            removed_ = current_entry_ && !job_.found_entry;
-        } else active_set_ = current_entry_ = 0;
+        restore_cursor(job_.playback); removed_ = job_.removed;
+        if (job_.choose[0]) {
+            current_song_[0] = 0; patch_position_ = 0;
+            std::snprintf(active_set_, 64, "%s", job_.choose); position_ = 0xffffffffu; removed_ = false;
+        }
         finish_job(true);
     }
     void step() {
@@ -810,38 +821,17 @@ private:
             if (!job_.cursor.step(storage_, source ? job_.source : job_.destination,
                     source && job_.source == 3 ? 0 : 16, job_.length)) { finish_job(false); return; }
             const auto &c = job_.cursor;
-            if (!source && c.item && !c.is_song && c.set_id == (job_.choose ? job_.choose : active_set_)) {
-                job_.found_set = true; job_.set_count = c.set_count;
-                if (c.reference && c.id == current_entry_) job_.found_entry = true;
-            }
             if (!c.done) return;
             if (!source) { publish(); return; }
             job_.counts = c.counts;
-            if (job_.undo) { job_.counts.next_id = std::max(job_.counts.next_id, counts_.next_id); start_hash(); }
-            else { job_.cursor = Cursor(); job_.cursor.verify_sources = false; phase_ = Phase::identities; }
+            start_hash();
             return;
         }
-        case Phase::identities:
-            if (!job_.cursor.step(storage_, 3, 0, job_.length)) { finish_job(false); return; }
-            if (job_.cursor.done) { start_hash(); return; }
-            if (job_.cursor.item) {
-                job_.matches = job_.references = 0; job_.scan = Cursor(); job_.scan.verify_sources = false; phase_ = Phase::identity_scan;
-            }
-            return;
-        case Phase::identity_scan:
-            if (!job_.scan.step(storage_, 3, 0, job_.length)) { finish_job(false); return; }
-            if (job_.scan.item) {
-                if (job_.scan.id == job_.cursor.id) ++job_.matches;
-                if (job_.scan.is_song && job_.scan.id == job_.cursor.reference) ++job_.references;
-            }
-            if (job_.scan.done) {
-                if (job_.matches != 1 || (job_.cursor.reference && job_.references != 1)) { finish_job(false); return; }
-                phase_ = Phase::identities;
-            }
-            return;
         case Phase::hash:
         case Phase::write: {
-            unsigned n = std::min(256u, job_.length - job_.position);
+            // Renaming also walks records to rewrite setlist references.
+            unsigned chunk = job_.edit == Edit::rename_song ? 128u : 256u;
+            unsigned n = std::min(chunk, job_.length - job_.position);
             if (!stream(buffer, n)) { finish_job(false); return; }
             update_crc(job_.running_crc, buffer, n);
             if (phase_ == Phase::write && !storage_.write(buffer, n)) { finish_job(false); return; }
@@ -858,7 +848,7 @@ private:
         case Phase::header:
             header(buffer);
             if (!storage_.write(buffer, 16)) { finish_job(false); return; }
-            job_.position = 0; job_.running_crc = 0xffffffff; phase_ = Phase::write; return;
+            job_.position = 0; job_.running_crc = 0xffffffff; job_.cursor = Cursor(); job_.cursor.verify_sources = false; phase_ = Phase::write; return;
         case Phase::footer:
             if (!storage_.write(reinterpret_cast<const uint8_t *>("DONE"), 4)) { finish_job(false); return; }
             phase_ = Phase::close; return;
