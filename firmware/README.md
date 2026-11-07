@@ -86,6 +86,7 @@ cntrl setup list --port /dev/YOUR_SERIAL_PORT
 cntrl setup set Evening --port /dev/YOUR_SERIAL_PORT
 cntrl setup rotate -b --port /dev/YOUR_SERIAL_PORT
 cntrl setup download Evening --port /dev/YOUR_SERIAL_PORT
+cntrl setup backup backups/before-flash --port /dev/YOUR_SERIAL_PORT
 cntrl setup restore backups/before-flash --port /dev/YOUR_SERIAL_PORT
 cntrl setup verify backups/before-flash --port /dev/YOUR_SERIAL_PORT
 cntrl setup del Evening --port /dev/YOUR_SERIAL_PORT
@@ -98,15 +99,24 @@ command is replaced by named setup management. Close other serial users before
 transferring data. A status response reports format version, active byte
 count and CRC32. Recheck status after a power cycle to verify persistence.
 
-`setup restore` reads backups produced by `rescued_scripts/backup-pedal.py`.
-It uploads `setups/fonts/*.cfont`, overwrites the saved `setups/*.bin` with
+`setup backup` reads the pedal without changing its saved data. The destination
+must not exist. It receives `selected.txt`, `catalogue.txt`, `status.txt`,
+`songs.bin`, and a `setups/` directory containing every valid current setup as
+binary and editable TOML, with referenced fonts under `setups/fonts/` and
+splash/idle animations under `setups/movies/`. Invalid setups are listed in the
+catalogue and skipped. Revision history, firmware and
+other SD-card files are outside its scope. An interrupted backup leaves partial
+files in the destination; use a new destination when trying again.
+
+`setup restore` reads these backup directories. It uploads `setups/fonts/*.cfont`
+and `setups/movies/*.cnsa`, overwrites the saved `setups/*.bin` with
 read-back verification, and restores a nonempty `selected.txt` selection.
 Binaries must already use the current document format. Songs and unrelated
 setups are retained. An empty saved selection leaves the current selection alone.
 
 After flashing, `setup verify` requires a READY response for the document version
 used by the installed host code, the same selection and catalogue, and identical
-setup binaries, font assets and song-library bytes. It reports the first mismatch
+setup binaries, font and animation assets, and song-library bytes. It reports the first mismatch
 as an error and never restores or recompiles data. A backup from an older format
 must be updated separately before it can pass verification against new-format
 firmware.
