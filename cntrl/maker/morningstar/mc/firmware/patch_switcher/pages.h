@@ -325,8 +325,10 @@ public:
             unsigned disk_length = std::strlen(rows[3]);
             std::snprintf(rows[3] + disk_length, sizeof(rows[3]) - disk_length, " Up:%lu:%02u:%02u",
                 (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
-            if (status.starts_status == StartupCounter::Status::ready)
-                std::snprintf(rows[4], sizeof(rows[4]), "Starts: %llu", (unsigned long long)status.starts);
+            if (status.starts_status == StartupCounter::Status::ready) {
+                char number[21]; *std::to_chars(number, number + 20, status.starts).ptr = 0;
+                std::snprintf(rows[4], sizeof(rows[4]), "Starts: %s", number);
+            }
             else std::snprintf(rows[4], sizeof(rows[4]), "Starts: %s",
                 status.starts_status == StartupCounter::Status::error ? (status.starts_error[0] ? status.starts_error : "error") : "--");
             std::snprintf(tap_label, sizeof(tap_label), "Tap: %s", tap);

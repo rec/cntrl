@@ -73,8 +73,24 @@ void test_raw_reads_preserve_every_byte() {
     assert(!std::strcmp(response, "CNTRL ERROR starts-offset") && !empty.writes);
 }
 
+void test_counter_text_preserves_values_above_32_bits() {
+    File file; file.data.assign(512, ' '); file.data.back() = '\n';
+    constexpr char saved[] = "[slot0]\nstarts = 4294967295\ncheck = \"ffffffff00000000\"\n";
+    std::memcpy(file.data.data(), saved, sizeof(saved) - 1);
+    StartupCounter counter; counter.start(file);
+    assert(counter.status == StartupCounter::Status::ready && counter.count == 4294967296ull);
+    constexpr char expected[] = "[slot1]\nstarts = 4294967296\ncheck = \"fffffffeffffffff\"\n";
+    assert(!std::memcmp(file.data.data() + 512, expected, sizeof(expected) - 1));
+    StartupCounter reboot; reboot.start(file);
+    assert(reboot.status == StartupCounter::Status::ready && reboot.count == 4294967297ull);
+    counter.count = UINT64_MAX;
+    char response[160]; counter.usb_status("CNTRL READY 34 123 aabbccdd", response, sizeof(response));
+    assert(!std::strcmp(response, "CNTRL READY 34 123 aabbccdd starts=18446744073709551615 starts_status=ready"));
+}
+
 int main() {
     test_raw_reads_preserve_every_byte();
+    test_counter_text_preserves_values_above_32_bits();
     char response[160];
     StartupCounter absent; absent.usb_status("CNTRL READY 33 0 00000000", response, sizeof(response));
     assert(!std::strcmp(response, "CNTRL READY 33 0 00000000 starts=0 starts_status=unavailable"));
@@ -137,10 +153,14 @@ int main() {
     StartupCounter unread; unread.start(failed_read);
     assert(unread.status == StartupCounter::Status::error && !std::strcmp(unread.error, "read s0 -1/512") && !failed_read.writes);
     File full; full.data.assign(StartupCounter::record_size, ' ');
-    int length = std::snprintf(full.data.data(), full.data.size(), "[slot0]\nstarts = %llu\ncheck = \"%016llx\"\n",
-        (unsigned long long)INT64_MAX, (unsigned long long)~uint64_t(INT64_MAX));
-    full.data[unsigned(length)] = ' '; full.data.back() = '\n';
+    constexpr char near_limit[] = "[slot0]\nstarts = 9223372036854775806\ncheck = \"8000000000000001\"\n";
+    std::memcpy(full.data.data(), near_limit, sizeof(near_limit) - 1); full.data.back() = '\n';
+    StartupCounter penultimate; penultimate.start(full);
+    assert(penultimate.status == StartupCounter::Status::ready && penultimate.count == INT64_MAX);
+    constexpr char at_limit[] = "[slot1]\nstarts = 9223372036854775807\ncheck = \"8000000000000000\"\n";
+    assert(!std::memcmp(full.data.data() + 512, at_limit, sizeof(at_limit) - 1));
+    unsigned writes = full.writes;
     StartupCounter limit; limit.start(full);
-    assert(limit.status == StartupCounter::Status::error && limit.count == INT64_MAX && !full.writes);
+    assert(limit.status == StartupCounter::Status::error && limit.count == INT64_MAX && full.writes == writes);
     assert(!std::strcmp(limit.error, "limit"));
 }

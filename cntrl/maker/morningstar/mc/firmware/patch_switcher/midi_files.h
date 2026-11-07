@@ -63,7 +63,8 @@ public:
         if (starts.status != StartupCounter::Status::ready
             || (!SD.sdfs.exists(directory) && !SD.sdfs.mkdir(directory, true))) return false;
         if (count_ == UINT32_MAX) return false;
-        std::snprintf(recording_name_, sizeof(recording_name_), "%llu-%lu.mid", (unsigned long long)starts.count, (unsigned long)++count_);
+        char number[21]; *std::to_chars(number, number + 20, starts.count).ptr = 0;
+        std::snprintf(recording_name_, sizeof(recording_name_), "%s-%lu.mid", number, (unsigned long)++count_);
         char path[128]; std::snprintf(path, sizeof(path), "%s/%s", directory, recording_name_);
         recording_.file.close(); recording_.invalidate(); recording_.file = SD.sdfs.open(path, O_CREAT | O_EXCL | O_RDWR);
         for (auto &parser : parsers_) parser.reset();

@@ -15,8 +15,9 @@ public:
 
     void usb_status(const char *setup, char *response, unsigned size) const {
         const char *state = status == Status::ready ? "ready" : status == Status::error ? "error" : "unavailable";
-        std::snprintf(response, size, "%s starts=%llu starts_status=%s%s%s", setup,
-            (unsigned long long)count, state, status == Status::error ? " starts_error=" : "",
+        char number[21]; *std::to_chars(number, number + 20, count).ptr = 0;
+        std::snprintf(response, size, "%s starts=%s starts_status=%s%s%s", setup,
+            number, state, status == Status::error ? " starts_error=" : "",
             status == Status::error ? error : "");
     }
 
@@ -27,7 +28,8 @@ public:
     static void read_command(const char *line, File &file, char (&response)[280]) {
         if (!file) { std::strcpy(response, "CNTRL ERROR starts-open"); return; }
         if (!std::strcmp(line, "CNTRL STARTS SIZE")) {
-            std::snprintf(response, sizeof(response), "CNTRL STARTS SIZE %llu", (unsigned long long)file.size()); return;
+            char number[21]; *std::to_chars(number, number + 20, uint64_t(file.size())).ptr = 0;
+            std::snprintf(response, sizeof(response), "CNTRL STARTS SIZE %s", number); return;
         }
         unsigned offset = 0; int end = 0;
         if (std::sscanf(line, "CNTRL STARTS READ %u%n", &offset, &end) != 1 || !end || line[end]) {
@@ -79,8 +81,11 @@ public:
         unsigned slot = latest < 0 ? 0 : unsigned(latest) ^ 1;
         uint64_t next = count + 1;
         std::memset(record, ' ', record_size);
-        int length = std::snprintf(record, sizeof(record), "[slot%u]\nstarts = %llu\ncheck = \"%016llx\"\n",
-            slot, (unsigned long long)next, (unsigned long long)~next);
+        // The pedal's nano printf does not support long-long conversions.
+        char number[21]; *std::to_chars(number, number + 20, next).ptr = 0;
+        uint64_t check = ~next;
+        int length = std::snprintf(record, sizeof(record), "[slot%u]\nstarts = %s\ncheck = \"%08lx%08lx\"\n",
+            slot, number, (unsigned long)(check >> 32), (unsigned long)uint32_t(check));
         if (length < 0 || unsigned(length) >= record_size) { std::strcpy(error, "format"); return; }
         record[length] = ' '; record[record_size - 1] = '\n';
         // Each copy occupies its own card sector. Never truncate the older one.

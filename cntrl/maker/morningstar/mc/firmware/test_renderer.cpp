@@ -794,6 +794,9 @@ static void test_page_settings() {
     assert(!std::strcmp(view.lines[6].text, "Starts: 42"));
     assert(view.lines[6].graphics.size == view.lines[1].graphics.size);
     assert(view.lines[6].graphics.foreground == 0x0011 && view.lines[6].alternate_color == 0x0400);
+    status.starts = 4294967296ull;
+    view = pages.view(1205000, 1205000000, status);
+    assert(!std::strcmp(view.lines[6].text, "Starts: 4294967296"));
     status.starts_status = StartupCounter::Status::error;
     view = pages.view(1205000, 1205000000, status);
     assert(!std::strcmp(view.lines[6].text, "Starts: error"));

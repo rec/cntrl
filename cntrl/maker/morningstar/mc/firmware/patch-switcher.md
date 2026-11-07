@@ -929,6 +929,10 @@ recovering from one valid record and saving successfully clears the diagnostic.
 appending `starts`, `starts_status` and, on failure, `starts_error` to the
 `CNTRL READY` reply. The count is the last confirmed value, so it can remain zero
 when writing or verifying the first update fails.
+Counts are converted to decimal text without 64-bit `printf` conversions, which
+the pedal's C library does not support. The checksum is written as two eight-digit
+32-bit hex words. This preserves the existing record format. Previously malformed
+records containing `lu` or `lx` remain invalid and are not silently reset.
 
 Raw counter bytes can be inspected over the same USB command transport without
 changing the file. `CNTRL STARTS SIZE` returns `CNTRL STARTS SIZE <bytes>`.
