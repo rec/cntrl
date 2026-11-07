@@ -9,7 +9,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field
 
-from ....patch_switcher.transport import SerialConnection
+from .transport import SerialConnection
 
 
 class Options(BaseModel, frozen=True):

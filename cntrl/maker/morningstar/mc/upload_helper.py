@@ -14,7 +14,7 @@ from tempfile import TemporaryDirectory
 import tyro
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from .firmware import FirmwareImage, read_hex
+from ....firmware.intel_hex import FirmwareImage, read_hex
 
 
 class Serve(BaseModel, frozen=True):

@@ -10,8 +10,8 @@ import tyro
 from pydantic import AfterValidator, BaseModel, Field
 from reccy.configuration import units
 
+from ....firmware.intel_hex import FirmwareImage, encode_hex, read_hex
 from ....patch_switcher.models import millisecond_resolution
-from .firmware import FirmwareImage, read_hex
 from .upload_helper import validate_firmware
 
 
@@ -67,24 +67,7 @@ def combine(
     return bytes(result)
 
 
-def encode_hex(data: bytes) -> str:
-    lines: list[str] = []
-    upper = -1
-    for offset in range(0, len(data), 16):
-        address = 0x60000000 + offset
-        if address >> 16 != upper:
-            upper = address >> 16
-            record = bytes([2, 0, 0, 4]) + upper.to_bytes(2, 'big')
-            lines.append(':' + (record + bytes([-sum(record) & 255])).hex().upper())
-        chunk = data[offset : offset + 16]
-        record = bytes([len(chunk)]) + (address & 65535).to_bytes(2, 'big')
-        record += b'\x00' + chunk
-        lines.append(':' + (record + bytes([-sum(record) & 255])).hex().upper())
-    lines.extend([':040000056000100087', ':00000001FF'])
-    return '\n'.join(lines) + '\n'
-
-
-def build(command: Build) -> None:
+def build(command: Build, *, source_root: Path | None = None) -> None:
     root = Path(__file__).parent / 'firmware'
     work = root / 'build/boot-switch'
     work.mkdir(parents=True, exist_ok=True)
@@ -109,6 +92,7 @@ def build(command: Build) -> None:
             f'PATCH_BUILD={work / "cntrl"}',
             f'PATCH_OUTPUT={work / "cntrl.hex"}',
             f'PATCH_LINKER={linker}',
+            *([f'SOURCE_ROOT={source_root}'] if source_root is not None else []),
         ],
         check=True,
     )
@@ -162,7 +146,7 @@ def build(command: Build) -> None:
         stock, custom, binary.read_bytes(), addresses['stock_reader'] | 1
     )
     output = work / 'combined.hex'
-    output.write_text(encode_hex(combined))
+    output.write_text(encode_hex(combined, 0x60000000, 0x60001000))
     image = read_hex(output)
     validate_firmware(image)
     if image.data != combined:

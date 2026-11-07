@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from cntrl.firmware.intel_hex import AddressRange, FirmwareImage, encode_hex, read_hex
 from cntrl.maker.morningstar.mc import boot_switch
-from cntrl.maker.morningstar.mc.firmware import AddressRange, FirmwareImage, read_hex
 
 
 def test_switch_window_configuration() -> None:
@@ -68,7 +68,7 @@ def test_combined_image_preserves_stock_outside_the_patch_fields(
     assert struct.unpack_from('<I', combined, 0x15F0)[0] == 0x20013DA0
     assert struct.unpack_from('<I', combined, 0x1990)[0] == 0x20013DA0
     path = tmp_path / 'combined.hex'
-    path.write_text(boot_switch.encode_hex(combined))
+    path.write_text(encode_hex(combined, 0x60000000, 0x60001000))
     decoded = read_hex(path)
     assert decoded.data == combined
     assert decoded.entry == 0x60001000

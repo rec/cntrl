@@ -11,8 +11,8 @@ import pytest
 import tyro
 from test_firmware import hex_record
 
+from cntrl.firmware.intel_hex import read_hex
 from cntrl.maker.morningstar.mc import upload_helper
-from cntrl.maker.morningstar.mc.firmware import read_hex
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@
 
 import pytest
 
-from cntrl.maker.morningstar.mc.storage_info import (
+from cntrl.patch_switcher.storage_info import (
     parse_storage_info,
     read_storage_report,
 )

@@ -84,7 +84,7 @@ an unapplied required patch cannot silently pass the build check.
 Completed checks:
 
 - Validated all stock HEX records using
-  `cntrl.maker.morningstar.mc.firmware.read_hex`, and verified
+  `cntrl.firmware.intel_hex.read_hex`, and verified
   the source SHA-256 against `228d73e768fad383bc205c8fc1ef52f3a49de08c754aca11d4a069ca1aab9fc8`.
 - Compared all 512 stock FCB bytes with the decoded new HEX: exact equality.
 - Rebuilt the previous generic configuration separately; its raw SHA-256
