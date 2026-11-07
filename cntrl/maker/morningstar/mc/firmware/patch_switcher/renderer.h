@@ -171,7 +171,9 @@ private:
             for (unsigned y = 0; y < stretched_height; ++y) {
                 const int target = top + int(y);
                 if (target >= settings.pad && target < 128 - settings.pad)
-                    pixels[target * 160 + x] = column[std::min(127u, y * source_height / stretched_height)];
+                    // Sample row centers so the extra height is distributed
+                    // through the glyph instead of always doubling its top row.
+                    pixels[target * 160 + x] = column[std::min(127u, (2 * y + 1) * source_height / (2 * stretched_height))];
             }
         }
     }

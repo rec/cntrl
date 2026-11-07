@@ -736,6 +736,14 @@ static void test_page_settings() {
     renderer.show(2, weight); drain(renderer);
     assert(screens[2][38][10] == 0 && screens[2][39][10] == 0xffff);
     assert(screens[2][30][9] == 0xffff && screens[2][30][15] == 0xffff);
+    std::strcpy(weight.lines[0].text, "T");
+    weight.lines[0].heavier = false;
+    weight.lines[0].taller = false;
+    renderer.show(2, weight); drain(renderer);
+    assert(std::memcmp(screens[2][30], screens[2][31], sizeof(screens[2][30])));
+    weight.lines[0].taller = true;
+    renderer.show(2, weight); drain(renderer);
+    assert(std::memcmp(screens[2][30], screens[2][31], sizeof(screens[2][30])));
     assert(!std::strcmp(view.lines[1].text, "---.-") && view.circles[0].color == 0x4000);
     pages.time(50, 50000, true); assert(pages.due(50));
     view = pages.view(50, 50000, status);
