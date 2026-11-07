@@ -358,6 +358,62 @@ class SetupClient:
         if self.download_font(key) != data:
             raise ValueError('font asset read-back mismatch or checksum collision')
 
+    def copy_movie(self, data: bytes) -> str:
+        from ..maker.morningstar.mc.splash.asset import inspect_asset
+
+        inspect_asset(data)
+        key = crc32(data)
+        response = self.request(f'CNTRL SPLASH BEGIN {len(data)} {key:08x}')
+        if response == 'CNTRL SPLASH SEND':
+            for i in range(0, len(data), 512):
+                self.connection.write(data[i : i + 512])
+                received = min(i + 512, len(data))
+                expected = (
+                    f'CNTRL SPLASH NEXT {received}'
+                    if received < len(data)
+                    else f'CNTRL SPLASH DONE {len(data)} {key:08x}'
+                )
+                if (response := self.connection.line()) != expected:
+                    raise ValueError(response)
+        elif response != 'CNTRL SPLASH EXISTS':
+            raise ValueError(response)
+        if self.download_movie(key) != data:
+            raise ValueError('movie asset read-back mismatch or checksum collision')
+        return f'CNTRL SPLASH READY {len(data)} {key:08x}'
+
+    def download_movie(self, key: int) -> bytes:
+        from ..maker.morningstar.mc.splash.asset import (
+            FRAME_BYTES,
+            HEADER,
+            inspect_asset,
+        )
+
+        response = self.request(f'CNTRL SPLASH SIZE {key:08x}')
+        parts = response.split()
+        if len(parts) != 4 or parts[:3] != ['CNTRL', 'SPLASH', 'SIZE']:
+            raise ValueError(f'invalid movie response: {response}')
+        length = int(parts[3])
+        if (
+            not HEADER.size + FRAME_BYTES
+            <= length
+            <= min(0xFFFFFFFF - 20, HEADER.size + 65535 * FRAME_BYTES)
+        ):
+            raise ValueError('invalid movie asset length')
+        result = bytearray()
+        while len(result) < length:
+            response = self.request(f'CNTRL SPLASH READ {key:08x} {len(result)}')
+            if not response.startswith('CNTRL DATA '):
+                raise ValueError(response)
+            chunk = bytes.fromhex(response[11:])
+            if not 1 <= len(chunk) <= min(128, length - len(result)):
+                raise ValueError('invalid movie asset chunk')
+            result.extend(chunk)
+        if crc32(result) != key:
+            raise ValueError('movie asset checksum mismatch')
+        data = bytes(result)
+        inspect_asset(data)
+        return data
+
     def download_font(self, key: int) -> bytes:
         response = self.request(f'CNTRL FONT SIZE {key:08x}')
         parts = response.split()

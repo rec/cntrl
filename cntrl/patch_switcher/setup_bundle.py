@@ -47,6 +47,8 @@ class SetupBundle(BaseModel, frozen=True):
         return sum(self.setup_sizes)
 
     def total_ram2_needs(self) -> int:
+        # Movie keys and filenames are part of the compiled setup sizes. Full
+        # movies stay on SD; there is no size-dependent RAM2 allocation.
         # Names/pointers, validated views/cache entries, and packed-table prefix.
         metadata = (
             len(self.names) * (64 + 4 + 88 + 85) + 2 + 4 * (len(self.names) - 1) + 32

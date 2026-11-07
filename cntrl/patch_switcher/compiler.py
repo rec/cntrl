@@ -42,6 +42,14 @@ def read_document(path: Path, *, _ancestors: tuple[Path, ...] = ()) -> object:
         for n, f in fonts.items():
             if isinstance(f, str):
                 fonts[n] = str((path.parent / f).resolve())
+    if isinstance(document, dict):
+        for n in ('splash_movie', 'idle_movie'):
+            if n in document:
+                movies = models.parse_movies(document[n])
+                if isinstance(movies, list) and all(
+                    isinstance(m, str) and m for m in movies
+                ):
+                    document[n] = [str((path.parent / m).resolve()) for m in movies]
     if isinstance(document, dict) and isinstance(
         instruments := document.get('instruments'), dict
     ):
@@ -142,6 +150,7 @@ def compile_show(
     target: models.Target,
     assets: dict[int, bytes] | None = None,
     documents: dict[str, object] | None = None,
+    movie_assets: dict[int, bytes] | None = None,
 ) -> bytes:
     errors: list[str] = []
     generated: dict[int, bytes] = {}
@@ -449,6 +458,11 @@ def compile_show(
         if count > maximum:
             errors.append(f'{label}: {count} exceeds target capacity {maximum}')
     try:
+        from ..maker.morningstar.mc.splash.movies import prepare
+
+        show, movie_records = prepare(
+            show, movie_assets if movie_assets is not None else {}
+        )
         screen_records, references, display_records = display.compile_display(
             show,
             views + switch_views,
@@ -593,6 +607,7 @@ def compile_show(
             else b''
         )
         + app_layout
+        + movie_records
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -610,7 +625,7 @@ def compile_show(
             len(patch_cycles),
             len(roots),
             show.brightness
-            | int(show.splash) << 8
+            | int(bool(show.splash_movie)) << 8
             | int(show.is_midi_interface) << 9
             | int(show.animation_color_cycle) << 10
             | int(show.usb_device_midi) << 11
@@ -1777,7 +1792,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 33
+DOCUMENT_VERSION = 34
 SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
 TRS_JACKS = tuple(f'configurable-{i}' for i in range(1, 5))
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

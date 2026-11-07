@@ -318,7 +318,7 @@ view = 'patch'
 
 Field names share one namespace. Built-in patch attributes are `patch_cycle.name`, `tags`,
 `display_name`, `name`, `program`, `bank`, `volume`, `pan` and `instrument` (the
-routing alias). Built-in global settings are `brightness`, `splash`,
+routing alias). Built-in global settings are `brightness`, `splash_movie` (enabled),
 `is_midi_interface`, `screensaver_timeout`, `navigation.hold_delay`,
 `scrolling.horizontal_duration` and `scrolling.vertical_duration`.
 These read the current document, including numeric edits. Additional shared
@@ -481,20 +481,21 @@ seconds. Smaller durations are faster. The former `transition` setting is
 replaced by these two durations. Page browsing uses the horizontal
 duration. Duration is a visual target, not a MIDI delay or a hard real-time
 guarantee; transfer and rendering time can extend it.
-Zero (the default) disables the screensaver. Positive values enable the installed
-animation after no physical input for that interval, independently of startup
-`splash`. The asset is transferred separately using the target's upload tooling. Older
-documents are rejected; recompile the source show and upload it after installing
-version 25 firmware. Replace old `screens.NAME` color tables with
+Zero (the default) disables the screensaver. Positive values enable `idle_movie`
+after no physical input for that interval, independently of `splash_movie`.
+Older documents are rejected; recompile the source setup and upload it after
+installing current firmware. Replace old `screens.NAME` color tables with
 `windows.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
-Startup `splash` defaults to true: an omitted setting uses the currently installed
-animation. Explicit `splash = false` disables it. A boot without a selected setup
-also uses the installed animation. If no valid animation is installed, the normal
-UI appears immediately. Returning to the empty state through deletion or closing
-management does not replay the startup animation. Existing compiled documents
-retain their encoded true/false setting until recompiled.
+Startup and idle playback use `splash_movie` and `idle_movie`: an empty string,
+a colon-separated filename string, or a list of non-empty filenames. Both
+default to empty and disable that category. Setup copying prepares and uploads
+the files automatically. Each playback session randomly selects one movie from
+its category and retains the existing fades. Pixels stream from SD rather than
+occupying RAM2; movie references are included in setup sizes. See the
+[movie workflow](../cntrl/maker/morningstar/mc/splash/README.md).
+Recompile setups for document version 34; the former `splash` setting is removed.
 
 All integers are little-endian; fixed-width strings are NUL-terminated,
 zero-padded ASCII. Name metadata uses length-prefixed UTF-8 instead.
@@ -502,7 +503,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (33), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI, bit 5 clock settings, bit 6 gestures, bit 7 expression assignments), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (34), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI, bit 5 clock settings, bit 6 gestures, bit 7 expression assignments), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
@@ -512,6 +513,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
 | App/page layout, after optional expression, clock, keyboard, gesture and hook sections | `CLAY`, u8 app count, u8 page count; each app has name[32] and three u8 logical windows in surrender order; each page has u8 type and u8 window count. At most four apps and 32 pages. Logical windows are left=0, center=1, right=2. Page types follow `layout.PAGE_TYPES` |
+| Movie lists, after app/page layout | `CMOV`, u16 startup count, u16 idle count, then startup and idle CRC32 asset keys as u32 values |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
 | Display header, 16 bytes | `CDSP`, u16 style count, page count, text count, page-data byte count; u32 source-metadata byte count |
 | Resolved style, 16 bytes | Same layout as a screen record, one per distinct resolved style |

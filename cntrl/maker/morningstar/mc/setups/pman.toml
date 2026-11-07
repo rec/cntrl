@@ -1,5 +1,6 @@
 brightness = 192
-splash = true
+splash_movie = '../../../../../assets/spiral.gif'
+idle_movie = '../../../../../assets/spiral.gif'
 is_midi_interface = false
 screensaver_timeout = 3
 pad = 4

@@ -32,6 +32,12 @@ def parse_tags(value: object) -> object:
     return value
 
 
+def parse_movies(value: object) -> object:
+    if isinstance(value, str):
+        return value.split(':') if value else []
+    return value
+
+
 def infer_patch_type(value: object) -> object:
     if isinstance(value, str):
         return {'patch': value}
@@ -819,7 +825,16 @@ class Setup(BaseModel, frozen=True):
     fast_switches: Annotated[bool, Field(strict=True)] = True
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     scrolling: Scrolling = Field(default_factory=Scrolling)
-    splash: Annotated[bool, Field(strict=True)] = True
+    splash_movie: Annotated[
+        list[Annotated[str, Field(strict=True, min_length=1)]],
+        BeforeValidator(parse_movies),
+        Field(strict=True, max_length=65535),
+    ] = Field(default_factory=list)
+    idle_movie: Annotated[
+        list[Annotated[str, Field(strict=True, min_length=1)]],
+        BeforeValidator(parse_movies),
+        Field(strict=True, max_length=65535),
+    ] = Field(default_factory=list)
     animation_color_cycle: Annotated[bool, Field(strict=True)] = False
     trs_ports: dict[str, TrsMode] = Field(default_factory=dict)
     is_midi_interface: Annotated[bool, Field(strict=True)] = False

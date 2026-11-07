@@ -406,7 +406,7 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     TestStorage card; Fake hw; TestController controller(hw);
     cntrl::Documents docs(card, hw, controller, hw);
     docs.boot();
-    assert(hw.splash); // No setup still uses the installed startup animation.
+    assert(!hw.splash); // No configured movie means no startup animation.
     for (const auto &pane : hw.panes) assert(pane.lines[1].centered && !std::strcmp(pane.lines[1].text, "No setups"));
     controller.button(0, true, 0);
     controller.button(3, true, 50); // Unassigned even without a document.
@@ -667,12 +667,12 @@ static void test_apps_run_independently(const std::string &path) {
     auto empty = bytes;
     empty.erase(empty.begin() + offset + 6, empty.begin() + offset + 6 + 70 + 10);
     empty[offset + 4] = empty[offset + 5] = 0;
-    empty[19] &= ~1u; // An empty setup must animate even when splash is disabled.
+    empty[19] &= ~1u;
     cntrl::put32(empty.data() + 8, unsigned(empty.size()));
     cntrl::put32(empty.data() + 20, cntrl::checksum(empty.data() + 28, unsigned(empty.size()) - 28));
     cntrl::Document idle; assert(idle.load(empty.data(), unsigned(empty.size()), hw));
     hw.controller = hw.visible = &first; first.activate(idle);
-    assert(hw.splash && hw.idle_timeout == 1);
+    assert(!hw.splash && hw.idle_timeout == 0);
 }
 
 int main(int argc, char **argv) {
@@ -705,7 +705,7 @@ int main(int argc, char **argv) {
         assert(!std::strcmp(view.lines[1].text, "Flute"));
         assert(!view.lines[2].text[0]);
         assert(!std::strcmp(view.lines[3].text, "120"));
-        assert(!std::strcmp(view.lines[4].text, "true"));
+        assert(!std::strcmp(view.lines[4].text, "false"));
         assert(view.lines[0].graphics.size == 16 && view.lines[1].graphics.size == 16);
         assert(view.lines[1].graphics.background == 31 && view.lines[1].graphics.foreground == 65535);
         cntrl::Pane numeric, settings;
@@ -838,16 +838,16 @@ int main(int argc, char **argv) {
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
     app.activate(doc);
     assert(hw.brightness == 192);
-    assert(hw.splash);
+    assert(!hw.splash);
     assert(!hw.animation_color_cycle);
     auto cycling = bytes;
     cycling[19] |= 4;
     cntrl::Document colors;
     assert(colors.load(cycling.data(), unsigned(cycling.size()), hw));
     app.activate(colors);
-    assert(hw.animation_color_cycle && hw.splash && hw.sent.empty());
+    assert(hw.animation_color_cycle && !hw.splash && hw.sent.empty());
     app.activate(doc);
-    assert(!hw.animation_color_cycle && hw.splash);
+    assert(!hw.animation_color_cycle && !hw.splash);
     auto no_animation = bytes;
     no_animation[19] = 0;
     cntrl::Document disabled;

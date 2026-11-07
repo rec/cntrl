@@ -20,14 +20,20 @@ struct Replies {
     virtual void reply(const char *line) = 0;
 };
 
-// Separate SD-sized transfer protocol. Only the inactive slot is overwritten.
-// Boot and commit verification each read at most 512 asset bytes per poll.
+// Movies are immutable SD assets addressed by their CRC32. Commit verification
+// reads at most 512 asset bytes per poll; playback reads one row at a time.
 class Receiver : public Source {
 public:
     Receiver(cntrl::Storage &storage, Replies &replies) : storage_(storage), replies_(replies) {}
     void boot() {
-        active_ = -1; generation_ = length_ = checksum_ = 0;
-        state_ = State::boot; slot_ = 0; offset_ = 0;
+        active_ = -1; length_ = checksum_ = 0;
+        state_ = State::command; slot_ = 0; offset_ = 0;
+    }
+    bool choose(uint32_t key) {
+        uint32_t length;
+        if (busy() || !asset_info(key, length)) return false;
+        active_ = key; length_ = length; checksum_ = key;
+        return true;
     }
     void keepalive(uint32_t now) { last_ = now; }
     void cancel_transfer() {
@@ -85,7 +91,7 @@ public:
         if (state_ == State::receiving && uint32_t(now - last_) > 10000) {
             fail("timeout"); return;
         }
-        if (state_ != State::boot && state_ != State::verify) return;
+        if (state_ != State::verify) return;
         if (!offset_) {
             uint8_t trailer[4], asset_header[header_bytes];
             if (!storage_.read(slot_, 0, envelope_, 16)
@@ -107,13 +113,43 @@ public:
         if (offset_ == u32(envelope_ + 8)) verified(~crc_ == u32(envelope_ + 12));
     }
 private:
-    enum class State { command, boot, receiving, verify };
+    enum class State { command, receiving, verify };
+    bool asset_info(uint32_t key, uint32_t &length) {
+        uint8_t envelope[16], header[header_bytes], trailer[4];
+        if (!storage_.read(key, 0, envelope, sizeof(envelope)) || std::memcmp(envelope, "CNSP", 4)
+            || u32(envelope + 12) != key) return false;
+        length = u32(envelope + 8);
+        return uint64_t(length) + 20 == storage_.size(key)
+            && storage_.read(key, 16, header, sizeof(header)) && valid_header(header, length)
+            && storage_.read(key, 16 + length, trailer, 4) && !std::memcmp(trailer, "DONE", 4);
+    }
     void command(uint32_t now) {
         if (!std::strcmp(line_, "CNTRL SPLASH STATUS")) {
             report("READY"); return;
         }
         unsigned long size, crc;
         int end = 0;
+        unsigned offset = 0;
+        if (std::sscanf(line_, "CNTRL SPLASH SIZE %lx%n", &crc, &end) == 1 && end && !line_[end]
+            && crc <= 0xfffffffful) {
+            uint32_t length;
+            if (!asset_info(uint32_t(crc), length)) { replies_.reply("CNTRL SPLASH ERROR missing"); return; }
+            char response[64]; std::snprintf(response, sizeof(response), "CNTRL SPLASH SIZE %lu", (unsigned long)length);
+            replies_.reply(response); return;
+        }
+        end = 0;
+        if (std::sscanf(line_, "CNTRL SPLASH READ %lx %u%n", &crc, &offset, &end) == 2
+            && end && !line_[end] && crc <= 0xfffffffful) {
+            uint32_t length;
+            if (!asset_info(uint32_t(crc), length) || offset >= length) { replies_.reply("CNTRL SPLASH ERROR missing"); return; }
+            uint8_t bytes[128]; unsigned n = length - offset;
+            if (n > sizeof(bytes)) n = sizeof(bytes);
+            if (!storage_.read(uint32_t(crc), 16 + offset, bytes, n)) { replies_.reply("CNTRL SPLASH ERROR read"); return; }
+            char response[280] = "CNTRL DATA ";
+            for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", bytes[i]);
+            replies_.reply(response); return;
+        }
+        end = 0;
         if (std::sscanf(line_, "CNTRL SPLASH BEGIN %lu %lx%n", &size, &crc, &end) != 2
             || line_[end] || size > 0xfffffffful || crc > 0xfffffffful
             || size < header_bytes + frame_bytes || size > 0xffffffffu - 20
@@ -122,10 +158,14 @@ private:
             replies_.reply("CNTRL SPLASH ERROR command"); return;
         }
         incoming_ = uint32_t(size); expected_ = uint32_t(crc);
-        slot_ = active_ == 0 ? 1 : 0;
+        uint32_t existing;
+        if (asset_info(expected_, existing)) {
+            replies_.reply(existing == incoming_ ? "CNTRL SPLASH EXISTS" : "CNTRL SPLASH ERROR collision"); return;
+        }
+        slot_ = expected_;
         uint8_t envelope[16];
         std::memcpy(envelope, "CNSP", 4);
-        put32(envelope + 4, generation_ + 1); put32(envelope + 8, incoming_);
+        put32(envelope + 4, 0); put32(envelope + 8, incoming_);
         put32(envelope + 12, expected_);
         if (!storage_.begin(slot_) || !storage_.write(envelope, sizeof(envelope))) {
             storage_.finish(); replies_.reply("CNTRL SPLASH ERROR storage-begin"); return;
@@ -146,25 +186,20 @@ private:
         replies_.reply(response);
     }
     void verified(bool valid) {
-        if (valid && (active_ < 0 || int32_t(u32(envelope_ + 4) - generation_) > 0)) {
-            active_ = int(slot_); generation_ = u32(envelope_ + 4);
+        if (valid) {
+            active_ = slot_;
             length_ = u32(envelope_ + 8); checksum_ = u32(envelope_ + 12);
         }
-        if (state_ == State::boot) {
-            if (++slot_ < 2) { offset_ = 0; return; }
-            state_ = State::command;
-        } else {
-            state_ = State::command;
-            if (valid) report("DONE");
-            else replies_.reply("CNTRL SPLASH ERROR storage-verify");
-        }
+        state_ = State::command;
+        if (valid) report("DONE");
+        else replies_.reply("CNTRL SPLASH ERROR storage-verify");
     }
     cntrl::Storage &storage_;
     Replies &replies_;
     State state_ = State::command;
-    int active_ = -1;
+    int64_t active_ = -1;
     unsigned slot_ = 0, used_ = 0, line_used_ = 0;
-    uint32_t generation_ = 0, length_ = 0, checksum_ = 0, incoming_ = 0, expected_ = 0;
+    uint32_t length_ = 0, checksum_ = 0, incoming_ = 0, expected_ = 0;
     uint32_t offset_ = 0, crc_ = 0, last_ = 0, frame_duration_ = 0;
     uint8_t buffer_[512], envelope_[16], header_[header_bytes];
     char line_[96];

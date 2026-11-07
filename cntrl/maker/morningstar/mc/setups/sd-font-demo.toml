@@ -1,5 +1,5 @@
 brightness = 192
-splash = false
+splash_movie = ''
 is_midi_interface = false
 screensaver_timeout = 0
 pad = 4

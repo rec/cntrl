@@ -14,7 +14,7 @@ name = 'Flute'
 style = {foreground_color = 'white'}
 
 [patch_views.patch]
-fields = ['brightness', 'display_name', 'volume', 'tempo', 'splash']
+fields = ['brightness', 'display_name', 'volume', 'tempo', 'splash_movie']
 
 [parameters.tempo]
 value = 120

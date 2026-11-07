@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from cntrl.patch_switcher import compiler, models, resolved, songs
-from cntrl.patch_switcher.cli import save_font
+from cntrl.patch_switcher.cli import save_asset
 
 
 @pytest.mark.parametrize(
@@ -41,15 +41,19 @@ def test_authored_setups_compile_and_round_trip(
 ) -> None:
     target = models.Target.model_validate(compiler.read_document(TARGET))
     assets: dict[int, bytes] = {}
+    movies: dict[int, bytes] = {}
     data = compiler.compile_show(
         compiler.read_document(Path(path)),
         compiler.read_document(Path(definitions)) if definitions else {},
         [compiler.read_document(Path(p)) for p in tables],
         target,
         assets,
+        movie_assets=movies,
     )
     for key, font in assets.items():
-        save_font(tmp_path, key, font)
+        save_asset(tmp_path / 'fonts' / f'{key:08x}.cfont', font)
+    for key, movie in movies.items():
+        save_asset(tmp_path / 'movies' / f'{key:08x}.cnsa', movie)
     exported_path = tmp_path / 'exported.toml'
     exported_path.write_text(resolved.export(data))
     exported = compiler.read_document(exported_path)

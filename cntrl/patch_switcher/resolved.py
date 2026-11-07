@@ -69,6 +69,10 @@ def graph_offset(data: bytes) -> int:
     if data[cursor : cursor + 4] == b'CSHF':
         cursor += 4 + 5 * SHIFTED_ACTIONS.size
     cursor = layout.section_end(data, cursor)
+    if cursor + 8 > len(data) or data[cursor : cursor + 4] != b'CMOV':
+        raise ValueError('missing movie metadata')
+    startup, idle = struct.unpack_from('<HH', data, cursor + 4)
+    cursor += 8 + 4 * (startup + idle)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -104,7 +108,6 @@ def export(data: bytes) -> str:
     authored_switches = cast(dict[str, object], source.pop('switches', {}))
     result: dict[str, object] = {
         'brightness': flags & 255,
-        'splash': bool(flags & 256),
         'animation_color_cycle': bool(flags & 1024),
         'is_midi_interface': bool(flags & 512),
         'usb_device_midi': bool(flags & 2048),

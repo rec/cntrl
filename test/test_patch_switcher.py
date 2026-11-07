@@ -164,7 +164,7 @@ def test_compiler_matches_shared_cpp_fixture(
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
     assert compiler.HEADER.unpack_from(result)[2:7] == (1500, len(result), 2, 2, 4)
     assert compiler.HEADER.unpack_from(result)[1] == compiler.DOCUMENT_VERSION
-    assert compiler.HEADER.unpack_from(result)[7] == 192 | 256 | 2048 | 4096
+    assert compiler.HEADER.unpack_from(result)[7] == 192 | 2048 | 4096
 
 
 @pytest.mark.parametrize('duration', [0.001, 1.0, 2.0, 0.75, 65.535])
@@ -400,7 +400,7 @@ def test_animation_color_cycle_round_trips_independently_of_splash(
     assert bool(compiler.HEADER.unpack_from(data)[7] & 1024) is bool(enabled)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['animation_color_cycle'] is bool(enabled)
-    assert exported['splash'] is True
+    assert exported['splash_movie'] == []
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
@@ -422,18 +422,18 @@ def test_brightness_is_encoded_in_show(
     assert compiler.HEADER.unpack_from(result)[7] & 255 == brightness
 
 
-@pytest.mark.parametrize('splash', [None, True, False])
-def test_splash_defaults_to_enabled_unless_explicitly_disabled(
+@pytest.mark.parametrize('movie', [None, '', []])
+def test_movies_default_to_disabled(
     show: dict[str, object],
     definitions: object,
     target: models.Target,
-    splash: bool | None,
+    movie: str | list[str] | None,
 ) -> None:
-    assert models.Setup.model_validate(show).splash
-    if splash is not None:
-        show['splash'] = splash
+    assert models.Setup.model_validate(show).splash_movie == []
+    if movie is not None:
+        show['splash_movie'] = movie
     result = compiler.compile_show(show, definitions, [], target)
-    assert bool(result[19] & 1) is (splash is not False)
+    assert not result[19] & 1
 
 
 @pytest.mark.parametrize('seconds', [0, 3, 2147483])
