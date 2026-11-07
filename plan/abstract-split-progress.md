@@ -54,14 +54,17 @@ boundaries and rejects deliberately injected violations. Ruff, formatting, Ty,
 Python-version checks and the real CPU image build pass. The service/build/format
 contracts and validation procedure are in `doc/porting.md`.
 
-## Remaining acceptance work
+## Device qualification
 
-Flash the qualified image, restore the converted backup and verify the selection,
-setup bytes, assets, history metadata/bodies, songs, startup counter and diagnostics.
-Hardware appearance and physical switch feel require human observation separately
-from automated qualification.
+The final image was flashed through the existing uploader using the previously
+approved command form. The converted backup was restored, including both setups,
+all 15 history revisions, fonts, movies, songs and the saved selection. Restore
+read-back checks and the independent backup verifier pass. Both setups were then
+selected and loaded successfully; `simple-setup` was restored as the selection.
+The pedal reports format 35 and `starts=3 starts_status=ready`.
 
-The hardware step is blocked by execution permissions; no new image has been
-flashed. Do not retry denied commands or ask for further permissions while the
-user is away. The implementation-specific requirement audit, final image hash,
-memory comparison and recovery artifacts are recorded alongside the baseline.
+The implementation-specific requirement audit, final image hash, memory comparison,
+recovery artifacts and exact hardware results are recorded alongside the baseline.
+No implementation or automated deployment work remains. Display appearance,
+physical switch feel and MIDI cable/gear behavior remain outside the automated
+checks and require human observation.

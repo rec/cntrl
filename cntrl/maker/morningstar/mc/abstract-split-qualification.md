@@ -4,9 +4,8 @@ Date: 2026-11-07. Portable implementation: `4ea6e30`, with the warning and
 porting-guide correction in `38a5bd5`. Additional work beyond the prompt: None.
 
 The source/build/conversion portion of `plan/abstract-split.md` is implemented.
-Deployment is incomplete: the new image has not been flashed and the converted
-backup has not been restored to the pedal. Do not infer hardware qualification
-from the host tests below.
+The final image has also been flashed and the converted backup restored and
+verified on the pedal. Host and hardware evidence are distinguished below.
 
 ## Requirement audit
 
@@ -23,7 +22,7 @@ from the host tests below.
 | Capability-dependent records | CLAY v2, CEND and CINP carry window IDs, MIDI endpoints and input IDs in document format 35. Tests vary input labels/positions, MIDI topology, window counts and memory. An adapter regression permutes all nine MIDI routes and verifies physical bindings independently of route numbers. Wire limits are documented in the porting guide. |
 | Existing data recovery | `setup upgrade-backup` converts saved compiled graphs, editable exports, historical records, embedded songs and movie references. Tests preserve an edited volume byte and its authoritative graph across historical formats. All 17 actual converted setup/history images pass the native decoder using the exported capabilities. |
 | Published API | `doc/porting.md` covers build artifacts, capabilities, services, buffer lifetime, work bounds, input phases, file operations, optional features, memory and formats. A port implements the core interfaces and executable convention without maker registration. |
-| Hardware deployment and checks | Pending. The software bootloader command was denied by the execution permission system. No further permission request or alternate invocation was attempted after that denial. |
+| Hardware deployment and checks | The existing approved shell-form bootloader command succeeded. The existing uploader flashed the final digest. Restore and independent verification pass; both saved setups load, and the startup counter reports ready. Physical appearance, feel and external MIDI wiring were not observed. |
 
 ## Image and memory comparison
 
@@ -50,7 +49,7 @@ added another framebuffer or a full in-memory movie. The existing target's
 buffer dimensions are generated from its capability description. Memory figures
 are linker measurements; they do not establish runtime stack high-water usage.
 
-## Recovery artifacts and remaining work
+## Recovery artifacts and device results
 
 - Immutable original backup:
   `/Users/tom/code/cntrl/build/abstract-split/before-complete`.
@@ -61,16 +60,36 @@ are linker measurements; they do not establish runtime stack high-water usage.
   numbers, labels and timestamps; source and converted hashes are recorded.
 - The old firmware last reported
   `CNTRL READY 34 23084 a4c4967e starts=2 starts_status=ready`.
-- The existing uploader service's staged image predates `38a5bd5`. Before any
-  later flash, prepare the final image above and verify its digest rather than
-  blindly uploading the staged file.
+- The uploader's staged image was replaced with the final image above. The
+  preparation snapshot is at
+  `/Users/tom/code/cntrl/build/abstract-split/flash35-final`; the helper checked
+  the exact digest before uploading to `14468280-Teensy`.
 
-Remaining deployment sequence: prepare and flash the final image through the
-existing uploader, restore `converted-native` through `cntrl setup restore`,
-run `cntrl setup verify`, then check READY format, startup counter, memory/storage
-and MIDI diagnostics. History restore writes the alternate slot and retains the
-old slot. Physical switch feel, display appearance and real MIDI wiring require
-separate observation; automated host evidence does not prove those properties.
+The uploader sent the image and reset command, then returned status 1 because
+the board disappeared while re-enumerating. Subsequent USB responses establish
+that the new firmware booted. Before restoration it correctly rejected the old
+selected setup. The new image then accepted the converted setup bundle/assets
+and alternate history slots. The original history slots remain intact.
+
+`cntrl setup restore` reported all 15 revisions and both setups restored and
+read-back verified. `cntrl setup verify` then independently compared setup
+binaries, history bodies/metadata, fonts, movies, songs, catalogue and selection;
+it reported all equal. This repeated the movie read-back unnecessarily: restore
+already verifies those bytes. No additional asset transfer/backup pass was run.
+
+Both setups were selected separately and returned READY:
+
+```text
+readability-demo: CNTRL READY 35 3604 5d6e7b5a starts=3 starts_status=ready
+simple-setup:    CNTRL READY 35 23998 2a24cf36 starts=3 starts_status=ready
+```
+
+The final selection is `simple-setup`. Counter continuity is verified from the
+old value 2 to the new value 3; the counter was not reset. These device checks
+cover boot, USB protocol, setup loading, persistent storage and converted data.
+Physical switch feel, display appearance and external MIDI cable/gear behavior
+require separate observation. MIDI ordering, state, recording/playback and input
+timing are covered by the host/native tests, not by a physical loopback test.
 
 Local qualification logs live under `build/abstract-split/`. They are build
 artifacts rather than committed source. The original baseline log/source paths
