@@ -7,7 +7,9 @@ application owns musical behavior, UI policy, layout, rendering, asset formats,
 storage protocols and scheduling. The pedal implementation supplies hardware
 capabilities, low-level I/O, CPU startup, memory placement and its toolchain.
 
-A developer porting cntrl to another CPU and pedal should implement the published
+The existing pedal is the only hardware target for this project.
+
+A future developer porting cntrl to another CPU and pedal should implement the published
 adapter API, describe the hardware and compile the existing application. They
 should not copy pages, rewrite the event loop or edit portable source files.
 
@@ -183,23 +185,20 @@ should end with a working path through the existing application.
    its outgoing MIDI message and one Status page through pixel submission. Mark
    where each path reads physical IDs, time, geometry and memory limits.
 2. **Prove the build boundary.** Implement the build entry-point contract above
-   with the current adapter. Add a small host test adapter with one display of a
-   different size, three named switches, one MIDI output and a smaller setup
-   budget. Use that same fixture throughout extraction. First prove both builds
-   receive their own capabilities and the generic launcher can select either.
+   with the existing adapter. Build its firmware, relocate the exported target
+   description and assets, then compile a setup using only those exports.
 3. **Remove Python reverse imports.** Extract font preparation and movie handling
    one asset family at a time. Exercise normal compile, copy and download paths
    using exported resources. Check current-target asset bytes before changing
    their encoding. Device-specific SDK font parsing stays in the exporter.
 4. **Prove a complete UI path.** Bring Status through page construction, logical
-   window assignment, text measurement, clipping and display submission on both
-   targets. A one-window setup must fit the fake display and every submitted
-   region must lie within its bounds. Validate requested window counts against
+   window assignment, text measurement, clipping and display submission. Use existing renderer
+   tests to check each submitted region against the declared bounds. Validate requested window counts against
    the target at compile time. Introduce display services as this path needs them.
    Move the remaining pages, transitions and movie playback through the same path.
 5. **Extract input dispatch and runtime coordination.** Drive a bound switch
-   through sampling, debounce, gesture recognition, patch execution and output
-   on both adapters. Advance a fake clock across a scan deadline while display
+   through sampling, debounce, gesture recognition, patch execution and MIDI output
+   in the native tests. Advance a fake clock across a scan deadline while display
    I/O is pending. After transfer completion, assert the scan and due MIDI work
    precede the next display submission. Then move menu ownership, song resolution,
    app lifecycle and command routing out of the board poll loop.
@@ -214,7 +213,7 @@ should end with a working path through the existing application.
    Preserve limits imposed by MIDI or by a documented file format. A change
    to either needs a reason independent of the hardware's current dimensions.
 8. **Qualify the porting contract.** Build and run the portable suites from a
-   source tree containing only the core, its assets and the test adapter. Build
+   source tree containing only the core, its assets and its native tests. Build
    the real image and compare with the baseline. Document the services a port
    implements and the build outputs it must supply. Audit remaining board files
    against the ownership table.
@@ -235,9 +234,8 @@ path with a saved fixture before publishing a format change.
   includes, build recipes and generated source. Scan for disguised coupling too:
   CPU registers, linker symbols, platform memory attributes and fixed geometry.
   No allowlist of MC references in generic code is permitted.
-- Use native fake hardware with a different input count, screen count/size and
-  memory budget. Run the same application, page navigation, layout and asset
-  pipeline. This is a contract test, not a new production pedal backend.
+- In relevant existing tests, vary an individual capability such as viewport
+  width or available memory and check that layout or residency follows it.
 - Preserve current render fixtures and visible layout through the configured
   current-target geometry. Test region buffer lifetime/backpressure, clipping,
   input priority, gesture timing, expression mapping and MIDI ordering.
