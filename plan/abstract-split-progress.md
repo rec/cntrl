@@ -46,7 +46,7 @@ writes the alternate slot, and checks interrupted/corrupt writes. The original
 backup is immutable. The actual saved data contains two setups and 15 revisions;
 all 17 converted images pass the native decoder against the exported capabilities.
 
-Validation: 884 repository Python tests pass, as does the native ASan/UBSan suite.
+Validation: 885 repository Python tests pass, as does the native ASan/UBSan suite.
 With the implementation tree and SDK absent, 655 portable Python tests and the
 native suite pass. The relocated export compiles a setup and prepares outline
 font assets. The qualification tool enforces import/include/build/generated-code
@@ -60,3 +60,8 @@ Flash the qualified image, restore the converted backup and verify the selection
 setup bytes, assets, history metadata/bodies, songs, startup counter and diagnostics.
 Hardware appearance and physical switch feel require human observation separately
 from automated qualification.
+
+The hardware step is blocked by execution permissions; no new image has been
+flashed. Do not retry denied commands or ask for further permissions while the
+user is away. The implementation-specific requirement audit, final image hash,
+memory comparison and recovery artifacts are recorded alongside the baseline.
