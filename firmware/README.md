@@ -80,6 +80,7 @@ cntrl setup set Evening --port /dev/YOUR_SERIAL_PORT
 cntrl setup rotate -b --port /dev/YOUR_SERIAL_PORT
 cntrl setup download Evening --port /dev/YOUR_SERIAL_PORT
 cntrl setup restore backups/before-flash --port /dev/YOUR_SERIAL_PORT
+cntrl setup verify backups/before-flash --port /dev/YOUR_SERIAL_PORT
 cntrl setup del Evening --port /dev/YOUR_SERIAL_PORT
 cntrl status --port /dev/YOUR_SERIAL_PORT
 ```
@@ -95,6 +96,13 @@ It uploads `setups/fonts/*.cfont`, overwrites the saved `setups/*.bin` with
 read-back verification, and restores a nonempty `selected.txt` selection.
 Binaries must already use the current document format. Songs and unrelated
 setups are retained. An empty saved selection leaves the current selection alone.
+
+After flashing, `setup verify` requires a READY response for the document version
+used by the installed host code, the same selection and catalogue, and identical
+setup binaries, font assets and song-library bytes. It reports the first mismatch
+as an error and never restores or recompiles data. A backup from an older format
+must be updated separately before it can pass verification against new-format
+firmware.
 
 Data files can be combined using a standalone ` + ` argument wherever the CLI
 accepts them. Put positional expressions before options, for example
