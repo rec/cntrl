@@ -1,6 +1,6 @@
 #pragma once
 #include "midi_bridge.h"
-#include <array>
+#include <vector>
 
 namespace cntrl {
 // Transport is retried per destination. Expired clock ticks are never queued.
@@ -16,6 +16,9 @@ public:
 
     void start(uint32_t now, unsigned outputs, bool resume) {
         if (running_ || stopping() || !outputs) return;
+        unsigned routes = 0;
+        for (unsigned mask = outputs; mask; mask >>= 1) ++routes;
+        pending_.assign(routes, 0);
         running_ = true; active_ = outputs; previous_ = now; phase_ = 0;
         skipped = blocked = late_us = 0;
         for (unsigned i = 0; i < pending_.size(); ++i)
@@ -56,7 +59,7 @@ public:
         }
     }
 private:
-    std::array<uint8_t, midi::Bridge::destinations> pending_{};
+    std::vector<uint8_t> pending_;
     uint64_t phase_ = 0;
     uint32_t previous_ = 0, quarter_us_ = 500000;
     unsigned active_ = 0;

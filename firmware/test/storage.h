@@ -26,7 +26,7 @@ struct TestStorage : cntrl::SetupStorage {
     bool revision_scan_step(uint64_t &best) override {
         if (scan_ == scan_end_) return true;
         if (scan_->first < scan_before_ && scan_->first > best
-            && (!scan_records_ || files[scan_->second][0].size() >= 208)) best = scan_->first;
+            && (!scan_records_ || (files[scan_->second][0].size() >= 208 || files[scan_->second][1].size() >= 208))) best = scan_->first;
         ++scan_; return false;
     }
     bool remove_revision(const char *name, uint64_t number) override {
@@ -62,7 +62,7 @@ struct TestStorage : cntrl::SetupStorage {
         if (f == files.end() || offset + n > f->second[s].size()) return false;
         std::memcpy(data, f->second[s].data() + offset, n); return true;
     }
-    bool begin(unsigned s) override { if (revision && !files[directory][s].empty()) return false; slot = s; files[directory][s].clear(); return ready; }
+    bool begin(unsigned s) override { if (revision && s == 0 && !files[directory][s].empty()) return false; slot = s; files[directory][s].clear(); return ready; }
     bool write(const uint8_t *data, unsigned n) override {
         unsigned amount = remaining < 0 ? n : std::min(n, unsigned(remaining));
         auto &bytes = files[directory][slot]; bytes.insert(bytes.end(), data, data + amount);

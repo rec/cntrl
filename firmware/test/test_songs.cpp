@@ -1,10 +1,12 @@
+#include "input_hardware.h"
+#include "midi_endpoints.h"
 #include <cntrl/songs_ui.h>
 #include <cntrl/songs_transfer.h>
 #include "storage.h"
 #include <cassert>
 #include <vector>
 
-struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::SongCapture {
+struct Board : TestInputHardware, cntrl::SongResolver, cntrl::SongCapture {
     unsigned sends = 0, switches = 0; cntrl::SongContinuation saved; bool missing = false, writable = true;
     std::string feedback;
     bool send(const char *, const uint8_t *, unsigned) override { if (!writable) return false; ++sends; return true; }
@@ -13,8 +15,13 @@ struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::SongCapture {
     }
     bool supports(const char *s) const override { return !std::strcmp(s, "din"); }
     bool supports_font(unsigned, unsigned) const override { return true; }
+    cntrl::midi::Outputs midi_outputs() const override { return test_midi_outputs; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned pane, const cntrl::Pane &view) override { if (!pane) feedback = view.lines[2].text; }
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}

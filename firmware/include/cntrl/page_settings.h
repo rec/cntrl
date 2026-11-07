@@ -5,6 +5,9 @@
 #include "keyboard.h"
 
 namespace cntrl {
+inline bool ui_font_valid(unsigned face) {
+    return face <= 2 || face == 5 || face == 8 || face == 9 || face == 16;
+}
 struct PageSettings {
     enum Word : unsigned {
         refresh, clock_timeout, clocks_per_quarter, clock_beats,

@@ -1,14 +1,29 @@
+ui_fonts = ["classic", "CourierPrime", "AtkinsonNextSemiBold"]
 memory = {capacity = 400000, runtime = 240000}
 functions = ["stock-firmware", "usb-hid-keyboard"]
 buttons = ["A", "B", "C", "D", "E", "F"]
-outputs = ["din", "trs", "configurable-1", "configurable-2", "configurable-3", "configurable-4", "usb-device", "usb-host"]
+default_midi_output = 'din'
+midi_endpoints = [
+    {name = 'din', label = 'DIN', route = 0, input = true},
+    {name = 'trs', label = 'TRS', route = 1, input = true},
+    {name = 'configurable-1', label = 'Port 1', route = 2, port = 0},
+    {name = 'configurable-2', label = 'Port 2', route = 3, port = 1},
+    {name = 'configurable-3', label = 'Port 3', route = 4, port = 2},
+    {name = 'configurable-4', label = 'Port 4', route = 5, port = 3},
+    {name = 'usb-device', label = 'USB device', route = 6, input = true, transport = 'usb-device'},
+    {name = 'usb-return', label = 'USB return', route = 7, output = false, transport = 'usb-device'},
+    {name = 'usb-host', label = 'USB host', route = 8, input = true, transport = 'usb-host'},
+]
 max_instruments = 32
 max_patch_cycles = 128
 max_patches = 796
 history_depth = 128
 characters = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
-display_width = 160
-display_height = 128
+displays = [
+    {id = 'left', label = 'Left', width = 160, height = 128},
+    {id = 'center', label = 'Center', width = 160, height = 128},
+    {id = 'right', label = 'Right', width = 160, height = 128},
+]
 
 [font_sources]
 classic = "fonts/Arial.cfont"

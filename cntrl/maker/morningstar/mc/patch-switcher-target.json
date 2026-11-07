@@ -1,36 +1,194 @@
 {
-  "memory": {"capacity": 524288, "runtime": 294912},
+  "memory": {
+    "capacity": 524288,
+    "runtime": 294912
+  },
   "font_sources": {
     "classic": "font_sources/classic.cfont",
     "Arial": "font_sources/Arial.cfont",
     "ComicSansMS": "font_sources/ComicSansMS.cfont"
   },
-  "animation": {"width": 160, "height": 128, "streams": [{}, {"mirror_x": true}]},
-  "functions": ["stock-firmware", "usb-hid-keyboard"],
-  "buttons": ["A", "B", "C", "D", "E", "F"],
-  "outputs": [
-    "din",
-    "trs",
-    "configurable-1",
-    "configurable-2",
-    "configurable-3",
-    "configurable-4",
-    "usb-device",
-    "usb-host"
+  "animation": {
+    "width": 160,
+    "height": 128,
+    "streams": [
+      {},
+      {
+        "mirror_x": true
+      }
+    ]
+  },
+  "functions": [
+    "stock-firmware",
+    "usb-hid-keyboard"
+  ],
+  "buttons": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
+  "controls": {
+    "previous": "A",
+    "next": "B",
+    "confirm": "C",
+    "previous_section": "D",
+    "next_section": "E",
+    "back": "F",
+    "next_page": "F",
+    "reverse_page": "D",
+    "tap": "C",
+    "app_actions": {
+      "A": "activate-selection",
+      "B": "next-patch",
+      "C": "previous-patch",
+      "D": "undo",
+      "E": "next-group",
+      "F": "previous-group"
+    }
+  },
+  "default_midi_output": "din",
+  "midi_endpoints": [
+    {
+      "name": "din",
+      "label": "DIN",
+      "route": 0,
+      "transport": "physical",
+      "input": true,
+      "output": true
+    },
+    {
+      "name": "trs",
+      "label": "TRS",
+      "route": 1,
+      "transport": "physical",
+      "input": true,
+      "output": true
+    },
+    {
+      "name": "configurable-1",
+      "label": "TRS 1",
+      "route": 2,
+      "transport": "physical",
+      "input": false,
+      "output": true,
+      "port": 0
+    },
+    {
+      "name": "configurable-2",
+      "label": "TRS 2",
+      "route": 3,
+      "transport": "physical",
+      "input": false,
+      "output": true,
+      "port": 1
+    },
+    {
+      "name": "configurable-3",
+      "label": "TRS 3",
+      "route": 4,
+      "transport": "physical",
+      "input": false,
+      "output": true,
+      "port": 2
+    },
+    {
+      "name": "configurable-4",
+      "label": "TRS 4",
+      "route": 5,
+      "transport": "physical",
+      "input": false,
+      "output": true,
+      "port": 3
+    },
+    {
+      "name": "usb-device",
+      "label": "USB device",
+      "route": 6,
+      "transport": "usb-device",
+      "input": true,
+      "output": true
+    },
+    {
+      "name": "usb-return",
+      "label": "USB return",
+      "route": 7,
+      "transport": "usb-device",
+      "input": false,
+      "output": false
+    },
+    {
+      "name": "usb-host",
+      "label": "USB host",
+      "route": 8,
+      "transport": "usb-host",
+      "input": true,
+      "output": true
+    }
   ],
   "trs_ports": {
-    "configurable-1": ["off", "midi-a", "midi-b", "expression", "aux"],
-    "configurable-2": ["off", "midi-a", "midi-b", "expression", "aux"],
-    "configurable-3": ["off", "midi-a", "midi-b", "expression", "aux"],
-    "configurable-4": ["off", "midi-a", "midi-b", "expression", "aux"]
+    "configurable-1": [
+      "off",
+      "midi-a",
+      "midi-b",
+      "expression",
+      "aux"
+    ],
+    "configurable-2": [
+      "off",
+      "midi-a",
+      "midi-b",
+      "expression",
+      "aux"
+    ],
+    "configurable-3": [
+      "off",
+      "midi-a",
+      "midi-b",
+      "expression",
+      "aux"
+    ],
+    "configurable-4": [
+      "off",
+      "midi-a",
+      "midi-b",
+      "expression",
+      "aux"
+    ]
   },
   "max_instruments": 32,
   "max_patch_cycles": 128,
   "max_patches": 796,
   "history_depth": 128,
   "characters": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
-  "display_width": 160,
-  "display_height": 128,
+  "displays": [
+    {
+      "id": "left",
+      "label": "Left",
+      "width": 160,
+      "height": 128,
+      "gap": 72,
+      "corner_radius": 8
+    },
+    {
+      "id": "center",
+      "label": "Center",
+      "width": 160,
+      "height": 128,
+      "gap": 72,
+      "corner_radius": 8
+    },
+    {
+      "id": "right",
+      "label": "Right",
+      "width": 160,
+      "height": 128,
+      "gap": 72,
+      "corner_radius": 8
+    }
+  ],
   "fonts": [
     {
       "name": "classic",
@@ -920,5 +1078,14 @@
         }
       }
     }
+  ],
+  "ui_fonts": [
+    "classic",
+    "Arial",
+    "ComicSansMS",
+    "StillTime",
+    "CourierPrime",
+    "CourierPrimeBold",
+    "AtkinsonNextSemiBold"
   ]
 }

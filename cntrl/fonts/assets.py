@@ -222,15 +222,21 @@ class Preparation:
         for name, texts in names.items():
             family, scale = variants[name]
             source = show.fonts.get(name, show.fonts.get(family))
-            path = Path(source) if source is not None else builtins.get(family)
+            resource = resources.get(family)
+            if source is not None:
+                path = Path(source)
+            elif resource is not None:
+                path = resource if resource.suffix.lower() != '.cfont' else None
+            else:
+                path = builtins.get(family)
             native = (
                 source is None
-                and family not in builtins
-                and family in resources
+                and resource is not None
+                and resource.suffix.lower() == '.cfont'
                 and scale != 1
             )
             if native:
-                path = resources[family]
+                path = resource
             if path is None:
                 if name not in faces:
                     errors.append(f'unknown font {name!r}')
@@ -281,7 +287,14 @@ class Preparation:
                             f'{name}: {error} ({", ".join(locations[name, t])})'
                         )
                 sizes = {}
-                for s in faces[family].sizes if native else SIZES:
+                available_sizes = (
+                    outline.tables
+                    if isinstance(outline, BitmapRaster)
+                    else faces[family].sizes
+                    if source is None and resource is not None and family in faces
+                    else SIZES
+                )
+                for s in available_sizes:
                     runs = {t: outline.shape(s, t) for t in valid}
                     top = min((r.top for r in runs.values()), default=0)
                     bottom = max(1, max((r.bottom for r in runs.values()), default=0))

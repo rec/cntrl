@@ -1,10 +1,12 @@
+#include "input_hardware.h"
+#include "midi_endpoints.h"
 #include <cntrl/panic.h>
 #include <array>
 #include <cassert>
 #include <cstring>
 #include <vector>
 
-struct Hardware : cntrl::Hardware, cntrl::PanicOutputs {
+struct Hardware : TestInputHardware, cntrl::PanicOutputs {
     std::vector<std::array<uint8_t, 3>> messages[4];
     std::vector<std::pair<uint8_t, bool>> brightness;
     bool connected[4] = {true, true, true, true}, blocked[4] = {};
@@ -23,8 +25,13 @@ struct Hardware : cntrl::Hardware, cntrl::PanicOutputs {
     bool send(const char *, const uint8_t *, unsigned) override { assert(false); return false; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned, unsigned) const override { return true; }
+    cntrl::midi::Outputs midi_outputs() const override { return test_midi_outputs; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned, const cntrl::Pane &) override { assert(false); }
     void set_brightness(uint8_t value, bool temporary = false) override { brightness.emplace_back(value, temporary); }
     void set_splash(bool, uint32_t) override { assert(false); }

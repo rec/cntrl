@@ -23,7 +23,7 @@ def test_switches_round_trip_and_native_fixture() -> None:
 @pytest.mark.parametrize(
     'field,value',
     [
-        ('button', 'F'),
+        ('button', 'unknown'),
         ('mode', 'toggle'),
         ('name', ''),
         (

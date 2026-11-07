@@ -390,7 +390,7 @@ class SetupClient:
         return f'CNTRL SPLASH READY {len(data)} {key:08x}'
 
     def download_movie(self, key: int) -> bytes:
-        from ..animation.asset import HEADER, inspect_asset
+        from ..animation.asset import HEADER
 
         response = self.request(f'CNTRL SPLASH SIZE {key:08x}')
         parts = response.split()
@@ -410,9 +410,7 @@ class SetupClient:
             result.extend(chunk)
         if crc32(result) != key:
             raise ValueError('movie asset checksum mismatch')
-        data = bytes(result)
-        inspect_asset(data)
-        return data
+        return bytes(result)
 
     def download_font(self, key: int) -> bytes:
         response = self.request(f'CNTRL FONT SIZE {key:08x}')

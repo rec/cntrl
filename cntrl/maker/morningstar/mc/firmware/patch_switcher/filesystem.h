@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CNTRL_DEVICE_FILESYSTEM_H
+#define CNTRL_DEVICE_FILESYSTEM_H
 #include <SD.h>
 #include <cntrl/filesystem.h>
 
@@ -16,12 +17,23 @@ public:
     void close() override { file_.close(); }
     bool opened() const override { return bool(file_); }
     uint32_t size() const override { return const_cast<FsFile &>(file_).size(); }
+    int read_some(uint32_t offset, uint8_t *data, unsigned length) override {
+        if (!file_) return -1;
+        if (!file_.seekSet(offset)) return files::position_error;
+        return file_.read(data, length);
+    }
     bool read(uint32_t offset, uint8_t *data, unsigned length) override {
-        return file_ && file_.seekSet(offset) && file_.read(data, length) == int(length);
+        return read_some(offset, data, length) == int(length);
+    }
+    int write_some(uint32_t offset, const uint8_t *data, unsigned length) override {
+        if (!file_) return 0;
+        if (!file_.seekSet(offset)) return files::position_error;
+        return int(file_.write(data, length));
     }
     bool write(uint32_t offset, const uint8_t *data, unsigned length) override {
-        return file_ && file_.seekSet(offset) && file_.write(data, length) == length;
+        return write_some(offset, data, length) == int(length);
     }
+    bool resize(uint32_t length) override { return file_ && file_.truncate(length); }
     bool sync() override { return file_ && file_.sync(); }
 private:
     FsFile file_;
@@ -58,3 +70,4 @@ public:
     std::unique_ptr<files::Directory> directory() override { return std::make_unique<SdDirectory>(); }
 };
 } // namespace cntrl::device
+#endif

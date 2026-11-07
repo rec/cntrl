@@ -1,4 +1,4 @@
-"""Read the pedal's SD-card identity and filesystem information over USB."""
+"""Read storage capacity, optional implementation details, and directory entries."""
 
 import sys
 import termios
@@ -33,18 +33,11 @@ class DirectoryTotal(BaseModel, frozen=True):
 
 class StorageInfo(BaseModel, frozen=True):
     capacity_bytes: int
-    card_type: str
-    manufacturer_id: str
-    oem_id: str
-    product: str
-    revision: str
-    serial_number: str
-    manufactured: str
-    filesystem: str
     allocation_unit_bytes: int
     usable_bytes: int
     free_bytes: int | None
     used_bytes: int | None
+    details: dict[str, str] = Field(default_factory=dict)
     files_bytes: int = 0
     estimated_file_allocation_bytes: int = 0
     other_allocation_bytes: int = 0
@@ -54,38 +47,21 @@ class StorageInfo(BaseModel, frozen=True):
 
 def parse_storage_info(response: str) -> StorageInfo:
     fields = response.split()
-    if len(fields) != 9 or fields[:2] != ['CNTRL', 'STORAGE']:
+    if len(fields) != 6 or fields[:2] != ['CNTRL', 'STORAGE']:
         raise ValueError(response)
-    sectors, kind, identity, fat, cluster_bytes, clusters, free = fields[2:]
-    cid = bytes.fromhex(identity)
-    if len(cid) != 16:
-        raise ValueError('Expected a 16-byte SD identification register')
-    capacity = int(sectors) * 512
-    unit, count = int(cluster_bytes), int(clusters)
+    capacity, usable, free, unit = fields[2:]
+    capacity, usable, unit = int(capacity), int(usable), int(unit)
     available = None if free == '-' else int(free)
-    if available is not None and not 0 <= available <= count:
-        raise ValueError('Invalid free cluster count')
-    if kind not in ('1', '2', '3') or fat not in ('16', '32', '64'):
-        raise ValueError('Unsupported card or filesystem type')
-    card_type = {'1': 'SD v1', '2': 'SD v2', '3': 'SDHC'}[kind]
-    if kind == '3' and capacity > 32 * 1024**3:
-        card_type = 'SDXC'
+    if not 0 <= usable <= capacity or unit <= 0:
+        raise ValueError('Invalid storage capacity or allocation unit')
+    if available is not None and not 0 <= available <= usable:
+        raise ValueError('Invalid free byte count')
     return StorageInfo(
         capacity_bytes=capacity,
-        card_type=card_type,
-        manufacturer_id=f'0x{cid[0]:02X}',
-        oem_id=cid[1:3].decode('ascii'),
-        product=cid[3:8].decode('ascii'),
-        revision=f'{cid[8] >> 4}.{cid[8] & 15}',
-        serial_number=f'0x{int.from_bytes(cid[9:13], "big"):08X}',
-        manufactured=(
-            f'{2000 + ((cid[13] & 15) << 4) + (cid[14] >> 4)}-{cid[14] & 15:02d}'
-        ),
-        filesystem={'16': 'FAT16', '32': 'FAT32', '64': 'exFAT'}[fat],
         allocation_unit_bytes=unit,
-        usable_bytes=count * unit,
-        free_bytes=None if available is None else available * unit,
-        used_bytes=None if available is None else (count - available) * unit,
+        usable_bytes=usable,
+        free_bytes=available,
+        used_bytes=None if available is None else usable - available,
     )
 
 
@@ -94,12 +70,19 @@ def read_storage_report(read_line: Callable[[], str]) -> StorageInfo:
     paths: dict[int, str] = {0: ''}
     totals: dict[str, list[int]] = {'/': [0, 0, 0]}
     entries: list[CardEntry] = []
+    details: dict[str, str] = {}
     unit = info.allocation_unit_bytes
     while True:
         response = read_line()
         if response == f'CNTRL STORAGE END {len(entries)}':
             break
         fields = response.split()
+        if len(fields) == 4 and fields[:2] == ['CNTRL', 'DETAIL']:
+            key, value = (bytes.fromhex(x).decode('utf-8') for x in fields[2:])
+            if entries or not key or key in details:
+                raise ValueError('Invalid storage detail order or duplicate key')
+            details[key] = value
+            continue
         if len(fields) != 7 or fields[:2] != ['CNTRL', 'ENTRY']:
             raise ValueError(response)
         identifier, parent, kind, size, encoded = fields[2:]
@@ -135,6 +118,7 @@ def read_storage_report(read_line: Callable[[], str]) -> StorageInfo:
     total = totals['/']
     return info.model_copy(
         update={
+            'details': details,
             'entries': sorted(entries, key=lambda e: e.path),
             'directories': [
                 DirectoryTotal(

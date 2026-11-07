@@ -1,10 +1,17 @@
+#include "input_hardware.h"
 #pragma once
 #include <cntrl/controller.h>
+#include "midi_endpoints.h"
 
 // Host-only sink: a successful fake write is delivered immediately. Production
 // targets supply the MIDI scheduler and pin real external documents instead.
-struct TestPatchHardware : cntrl::Hardware, cntrl::PatchOutputs, cntrl::PatchSources {
+struct TestPatchHardware : TestInputHardware, cntrl::PatchOutputs, cntrl::PatchSources {
     TestPatchHardware() { if (!cntrl::memory_budget) cntrl::memory_budget = 192 * 1024; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
+    cntrl::midi::Outputs midi_outputs() const override { return test_midi_outputs; }
     unsigned memory_capacity() const override { return 400000; }
     unsigned memory_runtime() const override { return 240000; }
     cntrl::Controller *controller = nullptr;

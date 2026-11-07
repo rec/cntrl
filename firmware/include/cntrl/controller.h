@@ -118,8 +118,8 @@ public:
         if (configure) hardware_.configure_apps(document);
         render();
     }
-    // Adapters map send/patch/undo/cycle to logical inputs 2/1/5/4.
-    // Logical inputs 0/3 map to physical C (tap) and F (page).
+    // These six application actions are independent of physical inputs. Target
+    // control bindings supply the action index for each declared input.
     void button(unsigned button, bool pressed, uint32_t now) override {
         if (button >= 6) return;
         const unsigned mask = 1u << button;

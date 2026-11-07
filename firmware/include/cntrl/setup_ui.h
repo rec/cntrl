@@ -1,4 +1,6 @@
 #pragma once
+#include "ui/presentation.h"
+#include "ui/prompts.h"
 #include "documents.h"
 
 namespace cntrl {
@@ -132,6 +134,8 @@ private:
         if (docs_.browse(name_, backward)) browsing_ = true;
     }
     void render() {
+        ui::Prompt prompt(hardware_);
+        using Role = ControlRole;
         const char *title = "Setups", *value = browsing_ ? "Working..." : name_[0] ? name_ : "No setups";
         const char *value_label = "Action";
         char number[64] = {};
@@ -162,7 +166,7 @@ private:
                 char id[21]; revision_text(revision_.number, id);
                 std::snprintf(number, sizeof(number), "%s @%lu %.24s", id, (unsigned long)revision_.modified, revision_.label);
             }
-            else std::snprintf(number, sizeof(number), "Current: C snapshot");
+            else std::snprintf(number, sizeof(number), "Current: %.54s", prompt.clear().add(Role::confirm, "snapshot").text());
             value = number;
         } else if (mode_ == Mode::comparison) {
             title = "Compare to current"; value_label = "Change";
@@ -170,7 +174,7 @@ private:
             else if (item_ == 1) std::snprintf(number, sizeof(number), "%u changed routes", changed_routes_);
             else if (item_ == 2) std::snprintf(number, sizeof(number), "Settings: %s", changed_settings_ ? "changed" : "same");
             else if (item_ == 3) std::snprintf(number, sizeof(number), "Authored data: %s", changed_formatting_ ? "changed" : "same");
-            else std::snprintf(number, sizeof(number), "C Restore, F Back");
+            else std::snprintf(number, sizeof(number), "%s", prompt.clear().add(Role::confirm, "Restore").add(Role::back, "Back", ", ").text());
             value = number;
         }
         // Management has its own readable defaults; performance typography may
@@ -181,9 +185,9 @@ private:
                 view.lines[i].graphics.size = view.lines[i].graphics.line_height = 16;
             view.lines[1].wrap = true;
         }
-        std::snprintf(views[0].lines[0].text, 64, "A/B browse");
-        std::snprintf(views[0].lines[1].text, 64, "C OK, F back");
-        if (mode_ == Mode::value) std::snprintf(views[0].lines[0].text, 64, "A/B adjust");
+        std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, "browse").text());
+        std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, "OK").add(Role::back, "back", ", ").text());
+        if (mode_ == Mode::value) std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, "adjust").text());
         if (mode_ == Mode::catalogue) {
             std::snprintf(views[1].lines[0].text, 64, "Setups");
             std::snprintf(views[1].lines[1].text, 64, "%s", value);
@@ -195,7 +199,7 @@ private:
             std::snprintf(views[2].lines[0].text, 64, "%s", value_label);
             std::snprintf(views[2].lines[1].text, 64, "%s", value);
         }
-        for (unsigned i = 0; i < 3; ++i) hardware_.show(i, views[i]);
+        ui::present(hardware_, views, 1);
     }
 };
 }

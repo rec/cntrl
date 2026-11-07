@@ -53,7 +53,7 @@ void test_calibration_survives_reload(TestFileSystem &filesystem) {
         recovered.poll(now, [](unsigned) { return true; }, [](unsigned, unsigned) { return 500; },
             [](const char *) { return true; }, [](const char *, const uint8_t *) { return true; });
     char title[40], position[40], prompt[40];
-    recovered.status(true, title, position, prompt);
+    recovered.status("Pedal", true, title, position, prompt);
     assert(std::strstr(position, "Calibrated"));
     assert(!std::strstr(position, "Uncalibrated"));
     assert(!std::strcmp(prompt, "Confirm: Calibrate"));

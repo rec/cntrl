@@ -37,7 +37,7 @@ public:
         active_ = u32(header + 24); total_setup_ram_ = u32(header + 32);
         unsigned prefix = 2 + 4 * (count_ - 1);
         uint64_t needs = uint64_t(general_) + active_ + setup_table_ram_overhead(count_);
-        if (needs + margin_ >= hardware.memory_capacity() || needs != u32(header + 28)
+        if (general_ != hardware.memory_runtime() || needs + margin_ >= hardware.memory_capacity() || needs != u32(header + 28)
             || hardware.memory_capacity() - needs - margin_ != u32(header + 36)) return false;
         uint32_t crc = 0xffffffff;
         for (unsigned offset = 40; offset < file.size();) {

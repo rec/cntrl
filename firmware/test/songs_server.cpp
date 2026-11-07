@@ -1,16 +1,23 @@
+#include "input_hardware.h"
+#include "midi_endpoints.h"
 #include <cntrl/songs_transfer.h>
 #include "storage.h"
 #include "usb_peer.h"
 #include <iostream>
 #include <string>
-struct Board : cntrl::Hardware, cntrl::SongResolver, cntrl::Replies {
+struct Board : TestInputHardware, cntrl::SongResolver, cntrl::Replies {
     cntrl::UsbSession usb;
     bool reply_ready() const override { return usb.reply_ready(); }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned, unsigned) const override { return true; }
+    cntrl::midi::Outputs midi_outputs() const override { return test_midi_outputs; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}

@@ -43,6 +43,8 @@ int main() {
     cntrl::MemoryBuffer source, downloaded;
     assert(source.resize(80 * 1024));
     for (unsigned i = 0; i < source.size; ++i) source.data[i] = uint8_t(i);
+    std::memcpy(source.data, "CSW1", 4);
+    source.data[4] = uint8_t(cntrl::document_version); source.data[5] = uint8_t(cntrl::document_version >> 8);
     // Include many reserved/incomplete entries. Scanning must not process the
     // directory in a single tick, and the next revision must skip every number.
     for (uint64_t i = 1; i <= 2000; ++i) storage.choose_revision("Test", i);

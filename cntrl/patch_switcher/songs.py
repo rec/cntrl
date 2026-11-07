@@ -425,8 +425,18 @@ def download(client: transport.SetupClient) -> bytes:
         result.extend(chunk)
     if len(result) != length or crc32(result) != int(response[3], 16):
         raise ValueError('song library checksum mismatch')
-    decode(bytes(result))
     return bytes(result)
+
+
+def upload(client: transport.SetupClient, data: bytes, overwrite: bool) -> None:
+    """Upload an exact current-format library and verify the stored bytes."""
+    decode(data)
+    client.ok(f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} {int(overwrite)}')
+    for offset in range(0, len(data), 128):
+        client.ok('CNTRL SONGS DATA ' + data[offset : offset + 128].hex())
+    client.ok('CNTRL SONGS END')
+    if download(client) != data:
+        raise ValueError('song library read-back mismatch')
 
 
 def run(command: Copy | Download) -> None:
@@ -502,15 +512,7 @@ def run(command: Copy | Download) -> None:
                 client.copy_font(key, font)
             if companion_names:
                 client.copy_bundle(bundle.pack(), overwrite=True)
-            client.ok(
-                f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} '
-                f'{int(command.overwrite)}'
-            )
-            for i in range(0, len(data), 128):
-                client.ok('CNTRL SONGS DATA ' + data[i : i + 128].hex())
-            client.ok('CNTRL SONGS END')
-            if download(client) != data:
-                raise ValueError('song library read-back mismatch')
+            upload(client, data, command.overwrite)
         print('Song library copied and verified')
     else:
         command.directory.mkdir(parents=True, exist_ok=True)

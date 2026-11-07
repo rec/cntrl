@@ -1,0 +1,161 @@
+#define CNTRL_CABLE_TEST 1
+#define CNTRL_PANIC 1
+#define CNTRL_SWITCHES 1
+#include <cntrl/midi_runtime.h>
+#include <algorithm>
+#include <cassert>
+#include <deque>
+#include <sstream>
+#include <string>
+#include <vector>
+
+constexpr cntrl::midi::OutputConnection endpoints[] = {
+    {"wire", "Wire", 0, cntrl::midi::OutputTransport::physical, true},
+    {"computer", "Computer", 1, cntrl::midi::OutputTransport::usb_device, true},
+};
+struct Recorder {
+    std::vector<std::string> *log;
+    bool failure = false;
+    bool failed() const { return failure; }
+    void poll(uint32_t) { log->push_back("record"); }
+};
+struct Player {
+    std::vector<std::string> *log;
+    unsigned clock_outputs() const { return 0; }
+    unsigned sysex_outputs() const { return 0; }
+    template<class Sink> void poll(uint32_t, unsigned, Sink &) { log->push_back("play"); }
+};
+struct Files {
+    Recorder recorder;
+    Player player;
+    explicit Files(std::vector<std::string> &log) : recorder{&log}, player{&log} {}
+    void receive(unsigned, const cntrl::midi::Packet &, uint32_t) { recorder.log->push_back("input"); }
+    void receive(unsigned, uint8_t, uint32_t) { recorder.log->push_back("input"); }
+};
+struct Generator {
+    std::vector<std::string> *log;
+    void stop() {}
+    template<class Sink> void poll(uint32_t, unsigned, Sink &) { log->push_back("clock"); }
+};
+struct Pages {
+    Generator generator;
+    void clock_connections(unsigned) {}
+    unsigned clock_owner() const { return 0; }
+    void clock(unsigned, uint32_t) {}
+};
+struct Cable {
+    bool running = false;
+    unsigned received = 0, ticks = 0;
+    bool enabled() const { return running; }
+    void receive(unsigned, uint8_t, uint32_t) { ++received; }
+    void tick(uint32_t) { ++ticks; }
+};
+struct Panic {
+    bool running = false;
+    unsigned ticks = 0;
+    bool active() const { return running; }
+    void tick(uint32_t, bool ready) { ++ticks; if (ready) running = false; }
+};
+struct Services : cntrl::midi::Sink {
+    std::vector<std::string> log, replies;
+    std::vector<unsigned> reads, writes;
+    std::vector<std::deque<cntrl::midi::InputEvent>> sources;
+    cntrl::midi::Bridge bridge{{endpoints, 2}};
+    Files files{log};
+    Pages pages{{&log}};
+    Cable cable_test;
+    Panic panic;
+    bool panic_owns_midi = false;
+    struct { bool interface = true; } runtime;
+    uint32_t time = 0, timer_step = 1;
+    unsigned errors = 0;
+    explicit Services(unsigned count = 3) : sources(count) {
+        bridge.configure(true);
+        for (unsigned i = 0; i < count; ++i) {
+            cntrl::midi::InputEvent event;
+            event.packetized = true; event.forward = 0;
+            event.packet = {11, {0xb0, 1, uint8_t(i)}};
+            sources[i].push_back(event); sources[i].push_back(event);
+        }
+    }
+    uint32_t milliseconds() const { return time / 1000; }
+    uint32_t microseconds() { time += timer_step; return time; }
+    void midi_transport_poll() { log.push_back("transport"); }
+    bool midi_host_connected() const { return false; }
+    bool midi_device_connected() const { return true; }
+    bool midi_document_valid() const { return true; }
+    cntrl::midi::Bridge &midi_bridge() { return bridge; }
+    Files &runtime_midi_files() { return files; }
+    Pages &runtime_pages() { return pages; }
+    cntrl::midi::Outputs midi_outputs() const { return {endpoints, 2}; }
+    unsigned midi_source_count() const { return unsigned(sources.size()); }
+    unsigned clock_available() const { return 3; }
+    bool available(const char *) const { return true; }
+    void midi_switch_tick(uint32_t) { log.push_back("switches"); }
+    void midi_flush() { log.push_back("flush"); }
+    void error(const char *) { ++errors; }
+    void reply(const char *text) { replies.emplace_back(text); }
+    unsigned port_mode(unsigned) const { return 0; }
+    bool midi_read_event(unsigned source, cntrl::midi::InputEvent &event) {
+        if (sources[source].empty()) return false;
+        event = sources[source].front(); sources[source].pop_front(); reads.push_back(source); return true;
+    }
+    bool write_packet(unsigned route, const cntrl::midi::Packet &) override {
+        writes.push_back(route); log.push_back("send"); return true;
+    }
+};
+
+void test_rotating_sources_and_delivery_precede_file_work() {
+    Services services;
+    cntrl::midi::Runtime runtime(1, 180);
+    runtime.poll(services);
+    assert((services.reads == std::vector<unsigned>{0, 1, 2}));
+    assert(services.writes.size() == 1);
+    auto position = [&](const char *name) { return std::find(services.log.begin(), services.log.end(), name); };
+    assert(position("clock") < position("input"));
+    assert(position("input") < position("switches") && position("switches") < position("send"));
+    assert(position("send") < position("record") && position("record") < position("play"));
+    runtime.poll(services);
+    assert((services.reads == std::vector<unsigned>{0, 1, 2, 1, 2, 0}));
+}
+void test_time_budget_zero_sources_and_failure_edges() {
+    Services services(5);
+    cntrl::midi::Runtime runtime(1, 180);
+    services.timer_step = 200;
+    runtime.poll(services);
+    assert(services.reads.empty());
+    services.sources.clear(); services.timer_step = 1;
+    services.files.recorder.failure = true;
+    runtime.poll(services); runtime.poll(services);
+    assert(services.errors == 1);
+    services.files.recorder.failure = false; runtime.poll(services);
+    services.files.recorder.failure = true; runtime.poll(services);
+    assert(services.errors == 2);
+}
+void test_exclusive_utilities_and_diagnostics() {
+    Services services;
+    cntrl::midi::Runtime runtime(1, 180);
+    services.panic_owns_midi = services.panic.running = true;
+    runtime.poll(services);
+    assert(services.writes.empty() && services.panic.ticks == 1 && !services.panic_owns_midi);
+    services.cable_test.running = true;
+    services.sources[1].front().packetized = false;
+    services.sources[1].front().byte = 0xb0;
+    services.sources[1].front().cable_input = 0;
+    runtime.poll(services);
+    assert(services.writes.empty() && services.cable_test.received == 1 && services.cable_test.ticks == 1);
+    runtime.scanned(42); runtime.displayed();
+    cntrl::Document document;
+    runtime.status(services.bridge, 0, document, services);
+    std::istringstream stream(services.replies.back());
+    std::vector<std::string> fields{std::istream_iterator<std::string>(stream), {}};
+    assert(fields[10] == "42" && fields[11] == "1" && fields[12] == "1");
+    runtime.reset(services); assert(services.replies.back() == "CNTRL OK");
+    runtime.status(services.bridge, 2, document, services);
+    assert(services.replies.back() == "CNTRL ERROR midi-route");
+}
+int main() {
+    test_rotating_sources_and_delivery_precede_file_work();
+    test_time_budget_zero_sources_and_failure_edges();
+    test_exclusive_utilities_and_diagnostics();
+}

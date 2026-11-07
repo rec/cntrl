@@ -414,3 +414,40 @@ def test_midi_file_operations_survive_cpp_storage(peer: Path) -> None:
         process.wait(timeout=5)
         os.close(master)
         os.close(slave)
+
+
+def test_history_import_preserves_metadata_and_refuses_conflicting_retries(
+    bundle_peer: Path,
+) -> None:
+    from cntrl.patch_switcher import history
+
+    target = models.Target.model_validate(
+        compiler.read_document(ROOT / 'firmware/test/target.json')
+    )
+    data = compiler.compile_show({}, {}, [], target)
+    revision = history.Revision(
+        number=42, modified=1234567890, length=len(data), label='Before soundcheck'
+    )
+    master, slave = pty.openpty()
+    process = subprocess.Popen([str(bundle_peer)], stdin=master, stdout=master)
+    try:
+        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+            client = transport.SetupClient(connection)
+            expected = history.import_revision(client, 'Evening', revision, data)
+            assert history.revisions(client, 'Evening') == [revision]
+            assert (
+                history.import_revision(client, 'Evening', revision, data) == expected
+            )
+            with pytest.raises(ValueError, match='history-import-conflict'):
+                history.import_revision(
+                    client,
+                    'Evening',
+                    revision.model_copy(update={'label': 'Conflicting'}),
+                    data,
+                )
+            assert client.download('Evening', 42) == expected
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+        os.close(master)
+        os.close(slave)

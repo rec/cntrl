@@ -1,6 +1,7 @@
 #pragma once
 #include "hardware.h"
 #include "midi_outputs.h"
+#include <vector>
 
 namespace cntrl {
 struct PanicOutputs {
@@ -13,7 +14,8 @@ class Panic {
 public:
     enum class Status { ready, sending, incomplete };
     Status status() const { return active() ? Status::sending : incomplete_ ? Status::incomplete : Status::ready; }
-    Panic(Hardware &hardware, PanicOutputs &outputs) : hardware_(hardware), outputs_(outputs) {}
+    Panic(Hardware &hardware, PanicOutputs &outputs) : hardware_(hardware), outputs_(outputs),
+        connections_(hardware.midi_outputs()), progress_(connections_.count) {}
     bool take_redraw() { bool result = dirty_; dirty_ = false; return result; }
     bool open() const { return open_; }
     bool active() const { return phase_ != Phase::idle; }
@@ -40,14 +42,13 @@ public:
             phase_ = Phase::idle; incomplete_ = dirty_ = true; return;
         }
         if (!outputs_ready) return;
-        for (unsigned attempt = 0; attempt < port_count; ++attempt) {
+        for (unsigned attempt = 0; attempt < connections_.count; ++attempt) {
             unsigned port = cursor_;
-            cursor_ = (cursor_ + 1) % port_count;
+            cursor_ = (cursor_ + 1) % connections_.count;
             auto &progress = progress_[port];
             if (progress.done) continue;
-            const auto &connection = port < midi::output_connections.size() ? midi::output_connections[port]
-                : midi::usb_output_connections[port - midi::output_connections.size()];
-            if (!outputs_.available(connection.name)) { progress.done = true; continue; }
+            const auto &connection = connections_.data[port];
+            if (!connection.output || !outputs_.available(connection.name)) { progress.done = true; continue; }
             else {
                 static constexpr uint8_t controllers[] = {123, 120, 121};
                 uint8_t bytes[] = {
@@ -72,12 +73,12 @@ public:
         reset_progress();
     }
 private:
-    static constexpr unsigned port_count = midi::output_connections.size() + midi::usb_output_connections.size();
     enum class Phase { idle, controllers, notes };
     struct Progress { unsigned channel = 0, index = 0; bool done = false; };
     Hardware &hardware_;
     PanicOutputs &outputs_;
-    Progress progress_[port_count];
+    midi::Outputs connections_;
+    std::vector<Progress> progress_;
     Phase phase_ = Phase::idle;
     bool dirty_ = true, incomplete_ = false;
     uint32_t released_ = 0;

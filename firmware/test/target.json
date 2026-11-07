@@ -1,16 +1,120 @@
 {
-  "memory": {"capacity": 400000, "runtime": 240000},
-  "outputs": [
-    "din",
-    "trs"
+  "buttons": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
+  "memory": {
+    "capacity": 400000,
+    "runtime": 240000
+  },
+  "default_midi_output": "din",
+  "midi_endpoints": [
+    {
+      "name": "din",
+      "label": "DIN",
+      "route": 0,
+      "transport": "physical",
+      "input": true,
+      "output": true
+    },
+    {
+      "name": "trs",
+      "label": "TRS",
+      "route": 1,
+      "transport": "physical",
+      "input": true,
+      "output": true
+    },
+    {
+      "name": "configurable-1",
+      "label": "Port 1",
+      "route": 2,
+      "transport": "physical",
+      "input": false,
+      "output": false,
+      "port": 0
+    },
+    {
+      "name": "configurable-2",
+      "label": "Port 2",
+      "route": 3,
+      "transport": "physical",
+      "input": false,
+      "output": false,
+      "port": 1
+    },
+    {
+      "name": "configurable-3",
+      "label": "Port 3",
+      "route": 4,
+      "transport": "physical",
+      "input": false,
+      "output": false,
+      "port": 2
+    },
+    {
+      "name": "configurable-4",
+      "label": "Port 4",
+      "route": 5,
+      "transport": "physical",
+      "input": false,
+      "output": false,
+      "port": 3
+    },
+    {
+      "name": "usb-device",
+      "label": "USB device",
+      "route": 6,
+      "transport": "usb-device",
+      "input": true,
+      "output": false
+    },
+    {
+      "name": "usb-return",
+      "label": "USB return",
+      "route": 7,
+      "transport": "usb-device",
+      "input": false,
+      "output": false
+    },
+    {
+      "name": "usb-host",
+      "label": "USB host",
+      "route": 8,
+      "transport": "usb-host",
+      "input": true,
+      "output": false
+    }
   ],
   "max_instruments": 32,
   "max_patch_cycles": 128,
   "max_patches": 796,
   "history_depth": 128,
   "characters": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
-  "display_width": 160,
-  "display_height": 128,
+  "displays": [
+    {
+      "id": "left",
+      "label": "Left",
+      "width": 160,
+      "height": 128
+    },
+    {
+      "id": "center",
+      "label": "Center",
+      "width": 160,
+      "height": 128
+    },
+    {
+      "id": "right",
+      "label": "Right",
+      "width": 160,
+      "height": 128
+    }
+  ],
   "fonts": [
     {
       "name": "classic",
@@ -78,5 +182,14 @@
         }
       }
     }
+  ],
+  "ui_fonts": [
+    "classic",
+    "Arial",
+    "ComicSansMS",
+    "StillTime",
+    "CourierPrime",
+    "CourierPrimeBold",
+    "AtkinsonNextSemiBold"
   ]
 }

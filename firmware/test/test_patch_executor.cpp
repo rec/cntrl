@@ -1,3 +1,4 @@
+#include "midi_endpoints.h"
 #include "patch_hardware.h"
 #include <cntrl/switches.h>
 #include <cassert>
@@ -8,7 +9,7 @@
 using Bytes = std::vector<uint8_t>;
 
 struct PatchBoard : TestPatchHardware, cntrl::midi::Sink {
-    cntrl::midi::Bridge bridge;
+    cntrl::midi::Bridge bridge{test_midi_outputs};
     const cntrl::Document *foreign = nullptr;
     bool online = true, writable = true;
     std::string unavailable_output;
@@ -66,6 +67,10 @@ struct PatchBoard : TestPatchHardware, cntrl::midi::Sink {
     }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}

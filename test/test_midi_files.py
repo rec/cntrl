@@ -50,10 +50,10 @@ def test_midi_file_operations_round_trip(target: models.Target) -> None:
 def test_midi_file_defaults() -> None:
     play = models.PlayMidiFile(operation='play-midi-file')
     record = models.RecordMidiFile(operation='record-midi-file')
-    assert play.filename == '' and play.outputs == ['din'] and play.loops == 1
+    assert play.filename == '' and play.outputs is None and play.loops == 1
     assert play.speed == 1 and play.pre_delay == play.post_delay == play.transpose == 0
     assert record.channels == list(range(1, 17))
-    assert record.inputs == ['din', 'trs', 'usb-device', 'usb-host']
+    assert record.inputs is None
 
 
 @pytest.mark.parametrize(
@@ -95,7 +95,14 @@ def test_unavailable_file_output_is_rejected(target: models.Target) -> None:
 def test_file_output_respects_usb_enable_flags(
     target: models.Target, output: str, setting: str
 ) -> None:
-    capable = target.model_copy(update={'outputs': [*target.outputs, output]})
+    capable = target.model_copy(
+        update={
+            'midi_endpoints': [
+                e.model_copy(update={'output': e.output or e.name == output})
+                for e in target.midi_endpoints
+            ]
+        }
+    )
     with pytest.raises(compiler.CompilationError, match='unavailable MIDI file output'):
         compiler.compile_show(
             {

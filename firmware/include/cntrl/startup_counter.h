@@ -1,4 +1,5 @@
 #pragma once
+#include "filesystem.h"
 #include <charconv>
 #include <cstdint>
 #include <cstdio>
@@ -23,32 +24,64 @@ public:
             status == Status::error ? error : "");
     }
 
-    template<class File>
-    bool reset(File &file) {
+    template<class Replies>
+    void reply(const char *text, Replies &output) const {
+        if (!std::strncmp(text, "CNTRL READY ", 12)) {
+            char response[160]; usb_status(text, response, sizeof(response)); output.reply(response);
+        } else output.reply(text);
+    }
+
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(startup_counter_read)
+#endif
+    static void read_command(const char *line, files::File &file, char (&response)[280]) {
+        if (!file.opened()) { std::strcpy(response, "CNTRL ERROR starts-open"); return; }
+        if (!std::strcmp(line, "CNTRL STARTS SIZE")) {
+            char number[21]; *std::to_chars(number, number + 20, uint64_t(file.size())).ptr = 0;
+            std::snprintf(response, sizeof(response), "CNTRL STARTS SIZE %s", number); return;
+        }
+        unsigned offset = 0; int end = 0;
+        if (std::sscanf(line, "CNTRL STARTS READ %u%n", &offset, &end) != 1 || !end || line[end]) {
+            std::strcpy(response, "CNTRL ERROR starts-command"); return;
+        }
+        if (offset >= file.size()) { std::strcpy(response, "CNTRL ERROR starts-offset"); return; }
+        uint64_t remaining = file.size() - offset;
+        unsigned n = remaining < 128 ? unsigned(remaining) : 128;
+        char bytes[128];
+        int read = file.read_some(offset, reinterpret_cast<uint8_t *>(bytes), n);
+        if (read == files::position_error) { std::strcpy(response, "CNTRL ERROR starts-seek"); return; }
+        if (read != int(n)) {
+            std::snprintf(response, sizeof(response), "CNTRL ERROR starts-read %d/%u", read, n); return;
+        }
+        std::strcpy(response, "CNTRL DATA ");
+        for (unsigned i = 0; i < n; ++i)
+            std::snprintf(response + 11 + i * 2, 3, "%02x", uint8_t(bytes[i]));
+    }
+
+    bool reset(files::File &file) {
         status = Status::error;
-        if (!file) { std::strcpy(error, "open"); return false; }
-        if (!file.truncate(0)) { std::strcpy(error, "truncate"); return false; }
+        if (!file.opened()) { std::strcpy(error, "open"); return false; }
+        if (!file.resize(0)) { std::strcpy(error, "truncate"); return false; }
         start(file);
         return status == Status::ready;
     }
 
-    template<class File>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(startup_counter_start)
 #endif
-    void start(File &file) {
+    void start(files::File &file) {
         count = 0; status = Status::error; std::strcpy(error, "open");
-        if (!file) return;
+        if (!file.opened()) return;
         error[0] = 0;
         char record[record_size + 1] = {};
         int latest = -1;
         for (unsigned slot = 0; slot < 2; ++slot) {
             uint64_t saved = 0;
-            if (!file.seekSet(slot * record_size)) {
+            int read = file.read_some(slot * record_size, reinterpret_cast<uint8_t *>(record), record_size);
+            if (read == files::position_error) {
                 if (!error[0]) std::snprintf(error, sizeof(error), "seek-read s%u", slot);
                 continue;
             }
-            int read = file.read(record, record_size);
             if (read != record_size) {
                 if (!error[0]) std::snprintf(error, sizeof(error), "read s%u %d/512", slot, read);
                 continue;
@@ -74,14 +107,14 @@ public:
         // Each copy occupies its own card sector. Never truncate the older one.
         char verify[record_size];
         std::snprintf(error, sizeof(error), "seek-write s%u", slot);
-        if (!file.seekSet(slot * record_size)) return;
-        unsigned written = file.write(record, record_size);
-        if (written != record_size) { std::snprintf(error, sizeof(error), "write s%u %u/512", slot, written); return; }
+        int written = file.write_some(slot * record_size, reinterpret_cast<const uint8_t *>(record), record_size);
+        if (written == files::position_error) return;
+        if (written != record_size) { std::snprintf(error, sizeof(error), "write s%u %d/512", slot, written); return; }
         std::snprintf(error, sizeof(error), "sync s%u", slot);
         if (!file.sync()) return;
         std::snprintf(error, sizeof(error), "seek-verify s%u", slot);
-        if (!file.seekSet(slot * record_size)) return;
-        int read = file.read(verify, record_size);
+        int read = file.read_some(slot * record_size, reinterpret_cast<uint8_t *>(verify), record_size);
+        if (read == files::position_error) return;
         if (read != record_size) { std::snprintf(error, sizeof(error), "readback s%u %d/512", slot, read); return; }
         for (unsigned i = 0; i < record_size; ++i) if (record[i] != verify[i]) {
             std::snprintf(error, sizeof(error), "mismatch s%u @%u", slot, i); return;

@@ -9,14 +9,22 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/runtime.h>
 #include <cntrl/ui/controls.h>
 #include <cntrl/ui/application.h>
+#include <cntrl/ui/page_host.h>
+#include <cntrl/ui/application_hardware.h>
+#include <cntrl/ui/song_sources.h>
+#include <cntrl/ui/firmware_visit.h>
+#include <cntrl/ui/input.h>
 #include <usb_keyboard.h>
 #include <SD.h>
 #include "expression_pedals.h"
 #include "midi_files.h"
-#include "startup_counter.h"
+#include <cntrl/startup_counter.h>
 #include <cntrl/setup_files.h>
+#include <cntrl/history_import.h>
+#include <cntrl/asset_commands.h>
 #include <USBHost_t36.h>
 #include <malloc.h>
+#include <charconv>
 #include <new>
 extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 extern "C" char cntrl_memory_budget;
@@ -26,6 +34,9 @@ extern "C" char cntrl_memory_budget;
 #include <cntrl/setup_ui.h>
 #include <cntrl/midi_bridge.h>
 #include <cntrl/midi_outputs.h>
+#include "midi_binding.h"
+#include <cntrl/midi_runtime.h>
+#include "target_capabilities.h"
 #include <cntrl/module_menu.h>
 #if CNTRL_SWITCHES
 #include <cntrl/switches.h>
@@ -51,7 +62,8 @@ extern "C" char cntrl_memory_budget;
 #ifdef CNTRL_DIAGNOSTICS
 #include "scroll_timing.h"
 #endif
-#include "storage_listing.h"
+#include <cntrl/storage_listing.h>
+#include <cntrl/slot_storage.h>
 #include "font_storage.h"
 #include "../../splash/board.h"
 #include <cntrl/animation/router.h>
@@ -67,8 +79,10 @@ cntrl::ui::AssetFonts fonts(embedded_fonts, sizeof(embedded_fonts) / sizeof(*emb
 ScrollTimingProbe scroll_timing;
 #endif
 extern cntrl::Documents documents;
+extern cntrl::HistoryImport history_import;
 extern cntrl::SongsTransfer songs_transfer;
 extern cntrl::animation::Session splash_session;
+extern cntrl::animation::Player splash_player;
 extern cntrl::splash::Panels splash_panels;
 font_assets::Files font_files;
 TrsPorts trs_ports;
@@ -77,31 +91,102 @@ MIDIDevice host_midi(host);
 extern cntrl::StoredPatchSources patch_sources;
 using UiOperation = cntrl::ui::Operation;
 extern cntrl::ui::Application application;
-bool patch_stock(uint8_t pair, cntrl::PatchExecutor &invocation);
 PerformanceStatus performance_status();
 void capture_disk_space();
-StartupCounter startup_counter;
+cntrl::StartupCounter startup_counter;
 MidiFileStorage midi_storage;
 cntrl::midi::MidiFiles midi_files(midi_storage.filesystem, midi_storage.source,
-    midi_storage.index, midi_storage.recording, midi_storage.entries, 9,
+    midi_storage.index, midi_storage.recording, midi_storage.entries, cntrl::target::midi_connections.count,
     "/cntrl/midi", "/cntrl/midi/.playback-index");
-DMAMEM cntrl::Controller::NavigationState invocation_navigation[9];
+DMAMEM cntrl::Controller::NavigationState invocation_navigation[cntrl::target::max_switches + cntrl::AppLayout::max_apps];
 bool restoring_invocation = false;
 cntrl::PatchExecutor *visiting_invocation = nullptr;
 
 #if CNTRL_ORIGINAL_FIRMWARE
-bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation);
-bool start_original_firmware();
+extern cntrl::ui::FirmwareVisit firmware_visit;
+bool append_boot_record(uint32_t value);
 #endif
 DMAMEM cntrl::UsbSession usb_session;
-class Board : public cntrl::KeyboardSink, public cntrl::Hardware, public cntrl::Replies, public cntrl::animation::Replies, public cntrl::midi::Sink, public cntrl::PatchOutputs, public cntrl::ui::ApplicationServices
+static_assert(cntrl::target::button_count == sizeof(button_bits), "Button declaration must match the input wiring");
+
+
+class Board : public cntrl::KeyboardSink, public cntrl::ui::ApplicationHardware<Board>, public cntrl::Replies, public cntrl::animation::Replies, public cntrl::midi::Sink, public cntrl::PatchOutputs, public cntrl::ui::ApplicationServices
 #if CNTRL_PANIC
     , public cntrl::PanicOutputs
 #endif
+#if CNTRL_ORIGINAL_FIRMWARE
+    , public cntrl::ui::FirmwareVisitServices
+#endif
 {
 public:
-    unsigned memory_capacity() const override { return 524288; }
-    unsigned memory_runtime() const override { return 294912; }
+    auto &page_host() { return ui_; }
+    void blank_performance() override { cntrl::ui::ApplicationHardware<Board>::blank_performance(); }
+    bool stop_clock() { return cntrl::ui::ApplicationHardware<Board>::stop_clock(); }
+    uint32_t milliseconds() const { return millis(); }
+    uint32_t microseconds() const { return micros(); }
+    unsigned midi_file_clock_outputs() const { return midi_files.player.clock_outputs(); }
+    bool keyboard_connected() const { return usb_configuration != 0; }
+    cntrl::midi::Bridge &midi_bridge() { return bridge_; }
+    cntrl::midi::TrsMode port_mode(unsigned jack) const { return trs_ports.mode(jack); }
+    unsigned port_count() const { return cntrl::target::port_count; }
+    auto &expression_controls() { return expression_.controls(); }
+    bool expression_available(unsigned jack) const { return trs_ports.expression_pin(jack) >= 0; }
+    auto &animation_session() { return splash_session; }
+    bool display_priority_due() const { return switch_scan_due(); }
+    bool display_busy() const { return display_dma_pending(); }
+    PerformanceStatus status() const { return performance_status(); }
+    void display_brightness(uint8_t value) { analogWrite(6, value); }
+    void displayed() { midi_runtime_.displayed(); }
+    bool switch_firmware() {
+#if CNTRL_ORIGINAL_FIRMWARE
+        return firmware_visit.start(33);
+#else
+        return false;
+#endif
+    }
+#if CNTRL_ORIGINAL_FIRMWARE
+    cntrl::ui::FirmwareSelection firmware_selection() const override {
+        const auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
+        return {state.next, state.returned, can_enter_stock(state), state.choice == BootChoice::cntrl};
+    }
+    bool valid_exit(uint8_t pair) const override { return valid_exit_pair(pair); }
+    bool storage_available() const override { return midi_storage.filesystem.available(); }
+    bool configure_return(uint8_t pair, uint32_t token) override { return append_boot_record(visit_config | pair | (token ? 0x8000 : 0)); }
+    bool choose_external_firmware() override { return append_boot_record(uint32_t(BootChoice::stock)); }
+    bool consume_return(uint32_t token) override { return append_boot_record(visit_consumed | token); }
+    void handoff_firmware() override {
+        USB1_USBCMD = 2; USBPHY1_CTRL_SET = 0x80000000;
+        delay(100); __disable_irq(); SCB_AIRCR = 0x05fa0004;
+        __asm__ volatile("dsb" ::: "memory");
+        while (true) __asm__ volatile("wfi");
+    }
+    bool switch_invocation(cntrl::PatchExecutor &execution) const override {
+#if CNTRL_SWITCHES
+        return switches.owns(execution);
+#else
+        (void)execution; return false;
+#endif
+    }
+#endif
+    unsigned display_count() const override { return display_.count(); }
+    const char *display_id(unsigned index) const override {
+        return index < cntrl::target::display_count ? cntrl::target::display_ids[index] : nullptr;
+    }
+    unsigned input_count() const override { return cntrl::target::button_count; }
+    const char *input_label(unsigned index) const override {
+        return index < cntrl::target::button_count ? cntrl::target::button_labels[index] : "";
+    }
+    unsigned control_input(cntrl::ControlRole role) const override {
+        const auto &controls = cntrl::target::controls;
+        const unsigned indices[] = {controls.previous, controls.next, controls.confirm,
+            controls.previous_section, controls.next_section, controls.back};
+        return indices[unsigned(role)];
+    }
+    const char *control_label(cntrl::ControlRole role) const override { return input_label(control_input(role)); }
+
+    cntrl::midi::Outputs midi_outputs() const override { return cntrl::target::midi_connections; }
+    unsigned memory_capacity() const override { return cntrl::target::memory_capacity; }
+    unsigned memory_runtime() const override { return cntrl::target::memory_runtime; }
     uint32_t application_time() const override { return millis(); }
     bool song_transfer_busy() const override { return songs_transfer.busy(); }
     bool switch_editor_open() const override {
@@ -125,22 +210,23 @@ public:
         (void)backwards; return false;
 #endif
     }
-    struct RuntimeState { uint8_t brightness = 192; bool interface = false; } runtime;
+    using RuntimeState = cntrl::ui::RuntimeState;
+    RuntimeState runtime;
 #if CNTRL_ORIGINAL_FIRMWARE
     bool supports_function(unsigned function) const override { return function == 1; }
-    bool stock_firmware(uint8_t pair, const cntrl::SongContinuation *continuation = nullptr) override { return request_stock(pair, continuation); }
+    bool stock_firmware(uint8_t pair, const cntrl::SongContinuation *continuation = nullptr) override { return firmware_visit.request(pair, continuation); }
 #endif
 #if CNTRL_SWITCHES
     cntrl::Switches switches{*this, *this, patch_sources};
-    unsigned switch_capacity() const override { return 5; }
+    unsigned switch_capacity() const override { return cntrl::target::max_switches; }
 #endif
-    bool configuration_locked() const override { return application.patch_pending()
+    bool configuration_locked() const override { return history_import.busy() || application.patch_pending()
 #if CNTRL_SWITCHES
         || switches.open()
 #endif
         ; }
     bool send_patch(unsigned owner, const char *output, const uint8_t *bytes, unsigned n) override {
-        const auto *connection = cntrl::midi::find_output(output);
+        const auto *connection = midi_outputs().find(output);
         return connection && available(output) && bridge_.owned_stream(owner, connection->route, bytes, n);
     }
     cntrl::midi::Bridge::Delivery patch_delivery(unsigned owner) const override { return bridge_.delivery(owner); }
@@ -153,10 +239,16 @@ public:
     void cancel_midi_file(unsigned owner) override { if (owner == midi_files.player.owner()) midi_files.player.cancel(); }
     bool record_midi_file(const cntrl::midi::RecordMidiFilePatch &settings) override {
         return midi_files.record(settings, startup_counter.count,
-            startup_counter.status == StartupCounter::Status::ready, micros());
+            startup_counter.status == cntrl::StartupCounter::Status::ready, micros());
     }
     FLASHMEM bool state(unsigned operation, uint32_t value) override { return application.state(operation, value, *this); }
-    bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override { return patch_stock(pair, invocation); }
+    bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override {
+#if CNTRL_ORIGINAL_FIRMWARE
+        return firmware_visit.stock(pair, invocation);
+#else
+        (void)pair; (void)invocation; return false;
+#endif
+    }
     void validation(bool begin) override { application.controller().validation(begin); }
     void validation_context(cntrl::PatchExecutor &invocation, bool begin) override {
         if (begin && !restoring_invocation && !invocation.reconstructing())
@@ -198,12 +290,12 @@ public:
         panic_owns_midi = false;
     }
     bool transmit(const char *output, const uint8_t *bytes) override {
-        const auto *connection = cntrl::midi::find_output(output);
+        const auto *connection = midi_outputs().find(output);
         return connection && submit(connection->route, {uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}});
     }
 #endif
 #if CNTRL_CABLE_TEST
-    cntrl::CableTest cable_test{*this};
+    cntrl::CableTest cable_test{*this, cntrl::target::cable_connections, cntrl::target::cable_connections.count};
     void leave_cable_test() {
         if (cable_test.enabled()) bridge_.configure(runtime.interface);
         cable_test.leave();
@@ -215,32 +307,16 @@ public:
         std::memcpy(keyboard_keys, report.keys, 6);
         return usb_keyboard_send() == 0;
     }
-    bool keyboard_button(unsigned i, bool pressed) {
-        if (pages_.page() != Pages::Page::keyboard || (i != 0 && i != 1 && i != 2)) return false;
-        if (i == 2) {
-            if (!pressed) keyboard_.release(0);
-            else {
-                const auto shortcut = pages_.keyboard_shortcut();
-                pressed = shortcut.name[0] && keyboard_.press(0, shortcut);
-            }
-            pages_.keyboard_held(pressed);
-        } else if (pressed) {
-            keyboard_.release(0);
-            pages_.keyboard_held(false);
-            pages_.keyboard_select(i == 0);
-        }
-        return true;
-    }
-    void poll_keyboard() {
-        keyboard_.poll(usb_configuration != 0, *this);
-        if (!usb_configuration) pages_.keyboard_held(false);
-    }
     bool supports_trs_mode(unsigned jack, cntrl::midi::TrsMode mode) const override {
-        return jack < 4 && mode <= cntrl::midi::TrsMode::aux;
+        return jack < cntrl::target::port_count && mode <= cntrl::midi::TrsMode::aux;
     }
     void configure_trs_ports(const uint8_t *modes) override {
-        for (unsigned i = 0; i < 4; ++i)
-            if (uint8_t(trs_ports.mode(i)) != modes[i]) bridge_.disconnect_output(2 + i);
+        for (const auto &endpoint : midi_outputs()) {
+            const auto binding = cntrl::device::midi_binding(endpoint);
+            if (binding.driver == cntrl::device::MidiDriver::configurable &&
+                uint8_t(trs_ports.mode(binding.index)) != modes[binding.index])
+                bridge_.disconnect_output(endpoint.route);
+        }
         trs_ports.configure(modes);
     }
     void begin() {
@@ -248,13 +324,18 @@ public:
         Serial2.begin(31250);
         host.begin();
     }
-    bool supports(const char *output) const override { return cntrl::midi::find_output(output) != nullptr; }
+    bool supports(const char *output) const override { const auto *endpoint = midi_outputs().find(output); return endpoint && endpoint->output; }
     bool available(const char *output) const {
-        const auto *connection = cntrl::midi::find_output(output);
-        if (!connection) return false;
+        const auto *connection = midi_outputs().find(output);
+        if (!connection || !connection->output) return false;
         switch (connection->transport) {
         case cntrl::midi::OutputTransport::physical:
-            if (connection->route >= 2 && !cntrl::midi::midi_output(trs_ports.mode(connection->route - 2))) return false;
+            {
+                const auto binding = cntrl::device::midi_binding(*connection);
+                if (binding.driver == cntrl::device::MidiDriver::missing) return false;
+                if (binding.driver == cntrl::device::MidiDriver::configurable &&
+                    !cntrl::midi::midi_output(trs_ports.mode(binding.index))) return false;
+            }
 #if CNTRL_CABLE_TEST
             return !cable_test.enabled();
 #else
@@ -292,213 +373,34 @@ public:
 #endif
         bridge_.configure(enabled);
     }
-    unsigned display_width() const override { return 160; }
-    unsigned display_height() const override { return 128; }
+    unsigned display_width() const override { return cntrl::ui::minimum_display_width(display_); }
+    unsigned display_height() const override { return cntrl::ui::minimum_display_height(display_); }
     bool send(const char *output, const uint8_t *data, unsigned length) override {
-        const auto *connection = cntrl::midi::find_output(output);
+        const auto *connection = midi_outputs().find(output);
         if (!connection || length > 14 || !available(output)) return false;
         return bridge_.pedal(connection->route, data, length);
     }
     // Keep the transport backend in flash to leave RAM1 for runtime state.
     FLASHMEM bool write_packet(unsigned route, const cntrl::midi::Packet &p) override {
         if (!bridge_.usb_enabled(route)) return false;
-        if (route >= 6 && route < 8) return usb_midi_try_write_packed(p.packed(route - 6));
-        if (route == 8) return host_midi.try_write_packed(p.packed());
-        unsigned n = p.size();
-        if (cntrl::midi::physical_output(route)) {
-            HardwareSerial *serial;
-            switch (route) {
-            case 0: serial = &Serial1; break;
-            case 1: serial = &Serial2; break;
-            default: return trs_ports.send(route - 2, p.bytes, n);
-            }
-            if (unsigned(serial->availableForWrite()) < n) return false;
-            if (serial->write(p.bytes, n) != n) return false;
-            return true;
+        const auto *connection = midi_outputs().route(route);
+        if (!connection) return false;
+        const auto binding = cntrl::device::midi_binding(*connection);
+        const unsigned n = p.size();
+        HardwareSerial *serial;
+        switch (binding.driver) {
+        case cntrl::device::MidiDriver::usb_device: return usb_midi_try_write_packed(p.packed(binding.index));
+        case cntrl::device::MidiDriver::usb_host: return host_midi.try_write_packed(p.packed(binding.index));
+        case cntrl::device::MidiDriver::configurable: return trs_ports.send(binding.index, p.bytes, n);
+        case cntrl::device::MidiDriver::din: serial = &Serial1; break;
+        case cntrl::device::MidiDriver::trs: serial = &Serial2; break;
+        default: return false;
         }
-        return false;
+        return unsigned(serial->availableForWrite()) >= n && serial->write(p.bytes, n) == n;
     }
-    void midi_status(unsigned route) {
-        if (route == cntrl::midi::Bridge::destinations) {
-            max_midi_us_ = max_scan_gap_ = 0; reply("CNTRL OK"); return;
-        }
-        if (route >= cntrl::midi::Bridge::destinations) { reply("CNTRL ERROR midi-route"); return; }
-        const auto &c = bridge_.counters(route);
-        char response[400];
-        unsigned init_errors = 0;
-        if (documents.document().valid()) for (unsigned i = 0; i < 4; ++i)
-            if (uint8_t(trs_ports.mode(i)) != documents.document().trs_modes()[i]) init_errors |= 1u << i;
-        std::snprintf(response, sizeof(response),
-            "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u",
-            unsigned(bridge_.enabled()), route, (unsigned long)c.received,
-            (unsigned long)c.transmitted, (unsigned long)c.dropped, (unsigned long)c.aborted,
-            c.high_water, (unsigned long)max_midi_us_, (unsigned long)max_scan_gap_,
-            (unsigned long)scan_count_, (unsigned long)display_count_, init_errors);
-        reply(response);
-    }
-    void scanned(uint32_t gap) {
-        if (gap > max_scan_gap_) max_scan_gap_ = gap;
-        ++scan_count_;
-    }
-    void show(unsigned pane, const cntrl::Pane &content) override {
-        if (content.performance) {
-            if (!application.visible() || application.feature_open(*this)) return;
-            const auto layout = documents.document().app_layout();
-            const int destination = layout.app_window(application.rendering(), pane, pages_.windows());
-            if (destination < 0) return;
-            if (!performance_visible_) { pages_.revisit(); enter_page(); }
-            performance_visible_ = true;
-            if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
-            renderer_.show(unsigned(destination), content);
-            return;
-        }
-        if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
-        if (pane == 2) {
-            if (performance_visible_) leave_page();
-            performance_visible_ = false;
-        }
-        renderer_.show(pane, content);
-    }
-    void configure_apps(const cntrl::Document &document) override {
-        pages_.layout(document.valid() ? document.app_layout() : cntrl::AppLayout{});
-        application.configure(document, *this);
-        performance_visible_ = true;
-        if (document.valid()) enter_page();
-    }
-    bool refresh_apps() override { application.refresh(*this); return true; }
-    void blank_performance() {
-        cntrl::Pane empty;
-        empty.graphics.background = 0;
-        for (unsigned i = 0; i < 3; ++i) renderer_.show(i, empty);
-        pending_patch_ = -1;
-        performance_visible_ = true;
-        pages_.revisit();
-    }
-    void select_trs_jack() {
-        auto &page = pages_;
-        page.candidate = trs_ports.mode(page.jack);
-        page.port_status(page.candidate, documents.document().trs_modes()[page.jack] != uint8_t(page.candidate) ? "Driver failed" : nullptr);
-    }
-    bool trs_button(unsigned i) {
-        if (pages_.page() != Pages::Page::ports || i > 1) return false;
-        if (i == 0) {
-            pages_.jack = (pages_.jack + 1) % 4;
-            select_trs_jack();
-        } else pages_.next_port_mode();
-        return true;
-    }
-    void enter_page() {
-        if (pages_.page() == Pages::Page::ports && documents.document().valid()) select_trs_jack();
-#if CNTRL_CABLE_TEST
-        if (pages_.page() == Pages::Page::cable) cable_test.enter();
-#endif
-#if CNTRL_PANIC
-        if (pages_.page() == Pages::Page::panic) panic.enter(runtime.brightness);
-#endif
-    }
-    void leave_page() {
-        keyboard_.clear(); pages_.keyboard_held(false);
-        if (pages_.page() == Pages::Page::expression) expression_.controls().cancel();
-#if CNTRL_CABLE_TEST
-        if (pages_.page() == Pages::Page::cable) leave_cable_test();
-#endif
-#if CNTRL_PANIC
-        if (pages_.page() == Pages::Page::panic) leave_panic();
-#endif
-    }
-    unsigned clock_available() const {
-        unsigned mask = 0;
-        for (const auto &c : cntrl::midi::output_connections)
-            if (available(c.name)) mask |= 1u << c.route;
-        for (const auto &c : cntrl::midi::usb_output_connections)
-            if (available(c.name)) mask |= 1u << c.route;
-        return mask;
-    }
-    bool stop_clock() {
-        pages_.generator.stop();
-        pages_.generator.poll(micros(), clock_available(), *this);
-        return !pages_.generator.stopping();
-    }
-    bool clock_control(unsigned button, bool pressed) {
-        if (!pages_.clock_page()) return false;
-        if (pressed) pages_.clock_button(button, micros(), clock_available());
-        return true;
-    }
-    FLASHMEM void configure_page_settings(const cntrl::PageSettings &settings) override {
-        leave_page();
-        expression_.controls().configure(settings.expression);
-        pages_.configure(settings);
-        bridge_.clock_owner(pages_.clock_owner() | midi_files.player.clock_outputs());
-    }
-    void browse_page(bool reverse) override {
-        if (!documents.document().valid()) return;
-        if (pages_.page() == Pages::Page::confirm_firmware
-            && (application.held & (1u << 2))) return;
-        leave_page();
-        if (pages_.browse(reverse)) {
-#if CNTRL_ORIGINAL_FIRMWARE
-            if (!start_original_firmware()) error("Firmware switch failed");
-#else
-            error("Stock firmware unavailable");
-#endif
-        } else {
-            renderer_.transition(reverse, documents.document().scroll_ms(), pages_.windows() == 1 ? 2 : -1);
-            application.refresh(*this);
-        }
-        if (pages_.clock_page()) application.controller().cancel_gesture();
-        enter_page();
-    }
-    void tap_tempo(uint32_t now) override {
-        if (!documents.document().valid()) return;
-        auto &page = pages_;
-        if (page.page() == Pages::Page::ports) {
-            auto active = trs_ports.mode(page.jack);
-            if (!output_idle() || configuration_locked() || documents.busy() || documents.dirty()) page.port_status(active, "Busy");
-            else if (active == page.candidate && documents.document().trs_modes()[page.jack] == uint8_t(active)) page.port_status(active, "Already set");
-            else if (!documents.save_trs_mode(page.jack, page.candidate, now)) page.port_status(active, "Cannot apply");
-            else { port_save_pending_ = true; page.port_status(active, "Saving"); }
-            return;
-        }
-#if CNTRL_CABLE_TEST
-        if (pages_.page() == Pages::Page::cable) {
-            if (!cable_test.enabled() && (application.patch_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
-            application.controller().cancel_gesture();
-            cable_test.toggle(now);
-            if (cable_test.enabled())
-                for (const auto &output : cntrl::midi::output_connections) forget_output(output.route);
-            bridge_.configure(cable_test.enabled() ? false : runtime.interface);
-            return;
-        }
-#endif
-#if CNTRL_PANIC
-        if (pages_.page() == Pages::Page::panic) {
-            if (!panic_owns_midi && (application.patch_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
-            application.controller().cancel_gesture();
-            if (!panic_owns_midi) bridge_.configure(false);
-            panic_owns_midi = true;
-            panic.button(true, now);
-            return;
-        }
-#endif
-        if (pages_.page() == Pages::Page::expression) {
-            expression_.controls().calibrate(trs_ports.expression_pin(expression_.controls().selected()) >= 0);
-            return;
-        }
-        pages_.tap(now);
-    }
-    void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
-        throb_.configure(period, low, high, delay);
-    }
-    FLASHMEM void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false, bool panorama = true) override {
-        if (!application.visible() || application.feature_open(*this)) return;
-        const unsigned occupied = pages_.windows();
-        if (occupied == 3) return;
-        if (pane >= 0) {
-            pane = documents.document().app_layout().app_window(application.rendering(), unsigned(pane), occupied);
-            if (pane < 0) return;
-        } else if (occupied == 2) pane = 0;
-        renderer_.transition(undo, duration_ms, pane, occupied == 1, vertical, panorama);
-    }
+    void midi_reset() { midi_runtime_.reset(*this); }
+    void midi_status(unsigned route) { midi_runtime_.status(bridge_, route, documents.document(), *this); }
+    void scanned(uint32_t gap) { midi_runtime_.scanned(gap); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
         if (enabled) {
@@ -508,117 +410,77 @@ public:
         else {
             scroll_timing.stop(); renderer_.invalidate();
             documents.redraw();
-            analogWrite(6, applied_brightness_);
+            analogWrite(6, ui_.hardware_brightness());
         }
     }
 
 #endif
-    void set_brightness(uint8_t value, bool temporary = false) override {
-        brightness_feedback_ = temporary;
-        if (temporary) feedback_brightness_ = value;
-        else { runtime.brightness = value; application.brightness(value); }
-        if (temporary) splash_session.stop();
-        apply_brightness(millis());
-    }
-    void set_splash(bool enabled, uint32_t idle_ms) override {
-        splash_session.configure(enabled, idle_ms, millis());
-    }
-    void set_movies(const uint8_t *startup, unsigned startup_count, const uint8_t *idle, unsigned idle_count) override {
-        splash_session.movies(startup, startup_count, idle, idle_count);
-    }
     void set_animation_color_cycle(bool enabled) override {
-        splash_panels.set_color_cycle(enabled);
-    }
-    void error(const char *message) override {
-        pending_patch_ = -1;
-        renderer_.error(message);
+        splash_player.set_color_cycle(enabled);
     }
     bool reply_ready() const override { return usb_session.reply_ready(); }
-    void reply(const char *text) override {
-        if (!std::strncmp(text, "CNTRL READY ", 12)) {
-            char response[160]; startup_counter.usb_status(text, response, sizeof(response));
-            usb_session.reply(response);
-        } else usb_session.reply(text);
+    void reply(const char *text) override { startup_counter.reply(text, usb_session); }
+    void midi_transport_poll() { host.Task(); }
+    bool midi_host_connected() const { return bool(host_midi); }
+    bool midi_device_connected() const { return usb_configuration != 0; }
+    bool midi_document_valid() const { return documents.document().valid(); }
+    unsigned midi_source_count() const { return 4; }
+    cntrl::midi::MidiFiles &runtime_midi_files() { return midi_files; }
+    cntrl::ui::Pages &runtime_pages() { return ui_.pages_; }
+    void midi_flush() { usb_midi_flush_output(); }
+#if CNTRL_SWITCHES
+    void midi_switch_tick(uint32_t now) { switches.tick(now); }
+#endif
+    bool midi_read_event(unsigned source, cntrl::midi::InputEvent &event) {
+        if (source == 0) {
+            uint32_t packet = usb_midi_read_message();
+            if (!packet) return false;
+            const auto *input = cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::usb_device);
+            event.input = input ? input->route : cntrl::midi::InputEvent::absent;
+            event.clock_source = (packet >> 4) & 15;
+            event.packetized = true;
+            event.packet = {uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}};
+            const auto *output = event.clock_source < 2 ?
+                cntrl::device::midi_endpoint(midi_outputs(), event.clock_source ? cntrl::device::MidiDriver::trs : cntrl::device::MidiDriver::din) :
+                cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::configurable, event.clock_source - 2);
+            if (output) event.forward = output->route;
+            return true;
+        }
+        if (source < 3) {
+            HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
+            int byte = serial.read(); if (byte < 0) return false;
+            const auto *input = cntrl::device::midi_endpoint(midi_outputs(), source == 1 ? cntrl::device::MidiDriver::din : cntrl::device::MidiDriver::trs);
+            const auto *output = cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::usb_device, source - 1);
+            event.input = input ? input->route : cntrl::midi::InputEvent::absent; event.byte = uint8_t(byte);
+            event.forward = output ? output->route : cntrl::midi::InputEvent::absent; event.clock_source = source + 15;
+            event.cable_input = source - 1;
+            return true;
+        }
+        // Driver storage stays unchanged until the next read(). Consume a
+        // decoded SysEx array incrementally before requesting another message.
+        const auto *input = cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::usb_host);
+        event.input = input ? input->route : cntrl::midi::InputEvent::absent;
+        if (host_sysex_offset_ < host_sysex_length_) {
+            event.byte = host_midi.getSysExArray()[host_sysex_offset_++];
+            event.clock_source = 18 + host_midi.getCable();
+            return true;
+        }
+        if (!host_midi.read()) return false;
+        unsigned type = host_midi.getType();
+        event.clock_source = 18 + host_midi.getCable();
+        if (type == 0xf0) {
+            host_sysex_offset_ = 0; host_sysex_length_ = host_midi.getSysExArrayLength();
+            if (!host_sysex_length_) return false;
+            event.byte = host_midi.getSysExArray()[host_sysex_offset_++];
+        } else {
+            uint8_t cin = type < 0xf0 ? type >> 4 : type == 0xf1 || type == 0xf3 ? 2 : type == 0xf2 ? 3 : type == 0xf6 ? 5 : 15;
+            event.packetized = true;
+            event.packet = {cin, {uint8_t(type < 0xf0 ? type | (host_midi.getChannel() - 1) : type), host_midi.getData1(), host_midi.getData2()}};
+        }
+        return true;
     }
     void poll() {
-        host.Task();
-        bridge_.host_connected(bool(host_midi));
-        uint32_t begin = micros(), now = millis();
-        bridge_.connected(usb_configuration != 0, now);
-        if (!documents.document().valid()) pages_.generator.stop();
-        unsigned clock_routes = clock_available();
-        pages_.clock_connections(clock_routes);
-        bridge_.clock_owner(pages_.clock_owner() | midi_files.player.clock_outputs());
-        pages_.generator.poll(micros(), clock_routes & ~midi_files.player.clock_outputs(), *this);
-        // Separate source limits plus an aggregate time budget. Rotate the
-        // first source, so a saturated cable cannot starve later sources.
-        for (unsigned i = 0; i < 3 && uint32_t(micros() - begin) < 180; ++i) {
-            unsigned source = (source_cursor_ + i) % 3;
-            for (unsigned n = 0; n < 64 && uint32_t(micros() - begin) < 180; ++n) {
-                if (source == 0) {
-                    uint32_t packet = usb_midi_read_message();
-                    if (!packet) break;
-                    if (!bridge_.usb_enabled(6)) continue;
-                    midi_files.receive(6, cntrl::midi::Packet{uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}}, micros());
-                    if (((packet >> 8) & 255) == 0xf8) pages_.clock((packet >> 4) & 15, micros());
-#if CNTRL_CABLE_TEST
-                    if (cable_test.enabled()) continue;
-#endif
-#if CNTRL_PANIC
-                    if (panic_owns_midi) continue;
-#endif
-                    const auto *output = cntrl::midi::physical_output((packet >> 4) & 15);
-                    if (output && available(output->name)) bridge_.usb(packet, now);
-                } else {
-                    HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
-                    int byte = serial.read(); if (byte < 0) break;
-                    midi_files.receive(source - 1, uint8_t(byte), micros());
-                    if (byte == 0xf8) pages_.clock(source + 15, micros());
-#if CNTRL_CABLE_TEST
-                    if (cable_test.enabled()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
-#endif
-                    bridge_.receive(source + 5, uint8_t(byte), now);
-                }
-            }
-        }
-        source_cursor_ = (source_cursor_ + 1) % 3;
-        // Existing USB-host input is deliberately not bridged.
-        if (host_midi.read() && bridge_.usb_enabled(8)) {
-            unsigned type = host_midi.getType();
-            if (type == 0xf8) pages_.clock(18 + host_midi.getCable(), micros());
-            if (type == 0xf0) {
-                for (unsigned i = 0; i < host_midi.getSysExArrayLength(); ++i) midi_files.receive(8, host_midi.getSysExArray()[i], micros());
-            } else {
-                uint8_t cin = type < 0xf0 ? type >> 4 : type == 0xf1 || type == 0xf3 ? 2 : type == 0xf2 ? 3 : type == 0xf6 ? 5 : 15;
-                cntrl::midi::Packet packet{cin, {uint8_t(type < 0xf0 ? type | (host_midi.getChannel() - 1) : type), host_midi.getData1(), host_midi.getData2()}};
-                midi_files.receive(8, packet, micros());
-            }
-        }
-#if CNTRL_SWITCHES
-        switches.tick(now);
-#endif
-#if CNTRL_PANIC
-        if (panic_owns_midi) {
-            panic.tick(now, bridge_.handoff(*this));
-            if (!panic.active()) { bridge_.configure(runtime.interface); panic_owns_midi = false; }
-        }
-        else
-#endif
-#if CNTRL_CABLE_TEST
-        if (cable_test.enabled()) { if (bridge_.handoff(*this)) cable_test.tick(now); }
-        else
-#endif
-        bridge_.service(*this, now, midi_files.player.sysex_outputs());
-        // Flush only already-buffered packets; this operation never waits.
-        usb_midi_flush_output();
-        // File I/O follows delivery of accepted button actions.
-        midi_files.recorder.poll(micros());
-        if (midi_files.recorder.failed() && !recording_failed_) error("MIDI recording write failed");
-        recording_failed_ = midi_files.recorder.failed();
-        if (bridge_.sysex_ready(midi_files.player.sysex_outputs())) midi_files.player.poll(micros(), clock_available(), *this);
-        usb_midi_flush_output();
-        uint32_t elapsed = micros() - begin;
-        if (elapsed > max_midi_us_) max_midi_us_ = elapsed;
+        midi_runtime_.poll(*this);
         if (usb_session.output_pending() && Serial.availableForWrite() > 0) {
             unsigned n = std::strlen(usb_session.output());
             unsigned room = Serial.availableForWrite();
@@ -626,16 +488,7 @@ public:
             usb_session.sent(Serial.write(usb_session.output(), n));
         }
     }
-    void draw() {
-        if (splash_session.take_redraw()) renderer_.invalidate();
-        renderer_.draw(micros());
-    }
     void load_expression_calibrations() { expression_.controls().load_calibrations(); }
-    bool expression_button(unsigned i) {
-        if (pages_.page() != Pages::Page::expression || i > 1) return false;
-        if (i == 0) expression_.controls().next_jack(); else expression_.controls().cancel();
-        return true;
-    }
     void poll_expression(uint32_t now) {
         if (!documents.document().valid()) return;
         expression_.poll(now, [](unsigned i) { return trs_ports.expression_pin(i); },
@@ -651,91 +504,23 @@ public:
             [this](const char *out, const uint8_t *bytes) {
                 return !application.patch_pending() && output_idle() && send(out, bytes, 3);
             });
-        if (pages_.page() == Pages::Page::expression && uint32_t(now - expression_refresh_) >= 80) {
-            expression_refresh_ = now;
-            char title[40], position[40], prompt[40];
-            expression_.controls().status(trs_ports.expression_pin(expression_.controls().selected()) >= 0, title, position, prompt);
-            pages_.expression_status(title, position, prompt);
-        }
     }
     void display(uint32_t now, bool transfer_busy) {
-        if (switch_scan_due()) return;
-#if CNTRL_CABLE_TEST
-        transfer_busy = transfer_busy || cable_test.enabled();
-#endif
-#if CNTRL_PANIC
-        transfer_busy = transfer_busy || panic_owns_midi;
-#endif
-        if (port_save_pending_ && !documents.busy()) {
-            port_save_pending_ = false;
-            if (documents.dirty()) {
-                documents.edit_cancel();
-                pages_.port_status(trs_ports.mode(pages_.jack), "Save failed");
-            }
-        }
-        pages_.time(now, micros(), application.held & (1u << 2));
-        ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) { if (!display_dma_pending()) scroll_timing.poll(micros()); return; }
 #endif
-        if (!display_dma_pending()) splash_visible_ = splash_session.poll(now, renderer_.ready(), transfer_busy);
-        apply_brightness(now);
-#if CNTRL_CABLE_TEST
-        if (pages_.page() == Pages::Page::cable && cable_test.take_redraw())
-            pages_.revisit();
-#endif
-#if CNTRL_PANIC
-        if (pages_.page() == Pages::Page::panic && panic.take_redraw())
-            pages_.revisit();
-#endif
-        if (!splash_visible_ && !application.feature_open(*this) && documents.document().valid()
-            && pages_.windows() && pages_.due(now)) {
-            // Prepare the incoming card during the renderer's bounded transition preparation.
-            PerformanceStatus status = pages_.page() == Pages::Page::status ? performance_status() : PerformanceStatus{};
-            const cntrl::Pane content = pages_.view(now, micros(), status
-#if CNTRL_CABLE_TEST
-                , cable_test.status()
-#else
-                , {}
-#endif
-#if CNTRL_PANIC
-                , panic.status()
-#else
-                , cntrl::Panic::Status::ready
-#endif
-            );
-            for (unsigned i = 0; i < pages_.windows(); ++i)
-                renderer_.show(3 - pages_.windows() + i, Pages::window_view(content, i, pages_.windows()));
-        }
-        if (!splash_visible_) draw();
+        cntrl::ui::ApplicationHardware<Board>::display(now, transfer_busy);
     }
 private:
-    void apply_brightness(uint32_t now) {
-        renderer_.target_brightness(throb_.brightness(
-            !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128, application.held));
-        uint8_t brightness = brightness_feedback_ ? feedback_brightness_ : splash_session.brightness(runtime.brightness, now);
-        if (brightness != applied_brightness_) {
-            analogWrite(6, brightness); applied_brightness_ = brightness;
-        }
-    }
-    PixelThrob throb_;
+
     ExpressionPedals expression_;
-    uint32_t expression_refresh_ = 0;
-    cntrl::Keyboard keyboard_;
     BoardDisplay display_;
-    Pages pages_{fonts, display_.viewport(2)};
-    bool port_save_pending_ = false, recording_failed_ = false;
-    bool performance_visible_ = false;
-    int pending_patch_ = -1;
-    bool splash_visible_ = false;
-    bool brightness_feedback_ = false;
-    uint8_t feedback_brightness_ = 255;
-    int applied_brightness_ = -1;
-    cntrl::midi::Bridge bridge_;
-    unsigned source_cursor_ = 0;
-    uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
+    cntrl::midi::Bridge bridge_{cntrl::target::midi_connections};
+    cntrl::midi::Runtime midi_runtime_;
+    unsigned host_sysex_offset_ = 0, host_sysex_length_ = 0;
     RenderPixels pixels_;
-    cntrl::ui::Renderer renderer_{display_, fonts, pixels_.work, 160 * 128, pixels_.cache, pixels_.previous, 3 * 160 * 128};
+    cntrl::ui::Renderer renderer_{display_, fonts, pixels_.work, cntrl::target::maximum_display_area, pixels_.cache, pixels_.previous, cntrl::target::total_display_area};
+    cntrl::ui::PageHost<Board> ui_{*this, application, documents, display_, fonts, renderer_, cntrl::target::controls};
 };
 
 Board board;
@@ -744,146 +529,28 @@ cntrl::device::SdFile setup_reader, setup_writer;
 cntrl::device::SdDirectory setup_history;
 cntrl::SetupFiles card(setup_filesystem, setup_reader, setup_writer, setup_history);
 cntrl::BundledStorage setup_storage(card, board);
-cntrl::Controller primary_controller(board, board, patch_sources);
+cntrl::Controller primary_controller(board, board, patch_sources, cntrl::target::max_switches);
 // Document bytes are allocated from RAM2's heap as needed.
 DMAMEM cntrl::Documents documents(setup_storage, board, primary_controller, board);
 cntrl::StoredPatchSources patch_sources(setup_storage.setups());
 cntrl::BundleTransfer bundle_transfer(setup_storage, documents, board, board);
+cntrl::HistoryImport history_import(card, documents, board, board);
 alignas(cntrl::Controller) DMAMEM unsigned char extra_apps[cntrl::AppLayout::max_apps - 1][sizeof(cntrl::Controller)];
-class SongFiles : public cntrl::Storage {
-public:
-    unsigned size(unsigned slot) override { return open(slot) ? unsigned(readers_[slot].size()) : 0; }
-    bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned n) override {
-        return open(slot) && readers_[slot].seekSet(offset) && readers_[slot].read(data, n) == int(n);
-    }
-    bool begin(unsigned slot) override {
-        if (!card.ready || (!SD.sdfs.exists("/cntrl/songs") && !SD.sdfs.mkdir("/cntrl/songs", true))) return false;
-        readers_[slot].close();
-        char path[40]; filename(slot, path); writer_ = SD.sdfs.open(path, O_RDWR | O_CREAT | O_TRUNC); return bool(writer_);
-    }
-    bool write(const uint8_t *data, unsigned n) override { return writer_ && writer_.write(data, n) == n; }
-    bool finish() override { bool good = writer_ && writer_.sync(); writer_.close(); return good; }
-private:
-    FsFile writer_, readers_[4];
-    static void filename(unsigned slot, char *path) { std::snprintf(path, 40, "/cntrl/songs/%u.bin", slot); }
-    bool open(unsigned slot) {
-        if (!card.ready) return false;
-        if (!readers_[slot]) { char path[40]; filename(slot, path); readers_[slot] = SD.sdfs.open(path, O_RDONLY); }
-        return bool(readers_[slot]);
-    }
-};
 extern cntrl::Songs songs;
-class SongSources : public cntrl::SongResolver, public cntrl::SongCapture {
-public:
-    cntrl::PatchExecutor executor{board, board, patch_sources, 5};
-    ~SongSources() override { executor.cancel(); }
-    void tick(uint32_t now) {
-        executor.tick(now);
-        if (embedded_.data && !executor.busy()) {
-            embedded_.clear(); embedded_document_ = cntrl::Document();
-        }
-    }
-    const cntrl::SongContinuation &context() const { return context_; }
-    void recalled() override { application.controller().cancel_gesture(); }
-    bool capture(cntrl::Song &song, bool reference) override {
-        const auto &d = documents.document();
-        if (!d.valid() || !application.layout.apps() || !d.patches() || documents.busy() || documents.dirty() || application.patch_pending()) return false;
-        unsigned index = application.controller().selected_patch();
-        const uint8_t *p = d.patch(index);
-        std::snprintf(song.name, 64, "%s", reinterpret_cast<const char *>(p + 12));
-        std::snprintf(song.label, 64, "%s", song.name);
-        song.node = d.browser_root(index);
-        if (reference) {
-            const char *key = nullptr;
-            const uint8_t *node = d.node(song.node);
-            if (node[0] == 6 && cntrl::u16(node + 4) == 65535) key = reinterpret_cast<const char *>(node + 6);
-            for (unsigned i = 0; !key && i < d.named_patches(); ++i)
-                if (cntrl::u16(d.named_patch(i) + 64) == song.node) key = reinterpret_cast<const char *>(d.named_patch(i));
-            if (!key) return false;
-            std::snprintf(song.document, 64, "%s", documents.selected());
-            std::snprintf(song.key, 64, "%s", key); song.source = 0xffffffff;
-        } else song.source = 0xfffffffe;
-        return true;
-    }
-    bool capture_source(const cntrl::Document *&source) override {
-        if (documents.busy() || documents.dirty() || application.busy() || songs.executing()) return false;
-        source = &documents.document(); return source->valid();
-    }
-    bool revision(const cntrl::SongSelection &song, uint32_t &crc) override {
-        patch_sources.begin();
-        const cntrl::Document *source = nullptr;
-        int index = setup_storage.setups().index(song.document);
-        bool valid = song.document[0] && index >= 0 && patch_sources.acquire(uint16_t(index), source, crc);
-        patch_sources.end(); return valid;
-    }
-    bool activate(const cntrl::SongSelection &song, const cntrl::SongContinuation &context, bool resume) override {
-        if (application.busy() || executor.busy() || documents.busy() || documents.dirty()) return false;
-        embedded_.clear();
-        patch_sources.begin();
-        const cntrl::Document *source = nullptr;
-        unsigned node = song.node;
-        uint32_t revision = 0;
-        bool valid = false;
-        if (song.document[0]) {
-            int index = setup_storage.setups().index(song.document);
-            valid = index >= 0 && patch_sources.acquire(uint16_t(index), source, revision);
-            if (valid) {
-                int root = source->named_patch(song.key);
-                valid = root >= 0; node = valid ? unsigned(root) : 0;
-            }
-        } else {
-            unsigned size = songs.source_size(song.source);
-            if (size && embedded_.resize(size) && songs.read_source(song.source, 0, embedded_.data, size)
-                && embedded_document_.load(embedded_.data, size, board)) {
-                source = &embedded_document_; valid = true;
-            }
-        }
-        context_ = context;
-        if (valid) {
-            auto previous = application.controller().navigation();
-            if (!resume) application.controller().external_selection();
-            valid = resume ? node == context.node && executor.resume(*source, node, context.completed, context.sources_crc)
-                           : executor.start(*source, node);
-            if (!valid && !resume) application.controller().navigation(previous);
-        }
-        patch_sources.end(); return valid;
-    }
-    cntrl::SongExecution execution_status() const override {
-        switch (executor.status()) {
-        case cntrl::PatchExecutor::Status::pending: return cntrl::SongExecution::pending;
-        case cntrl::PatchExecutor::Status::failed: return cntrl::SongExecution::failed;
-        case cntrl::PatchExecutor::Status::unknown: return cntrl::SongExecution::unknown;
-        case cntrl::PatchExecutor::Status::suspended: return cntrl::SongExecution::suspended;
-        default: return cntrl::SongExecution::completed;
-        }
-    }
-private:
-    cntrl::SongContinuation context_;
-    cntrl::Document embedded_document_;
-    cntrl::MemoryBuffer embedded_;
-};
-SongFiles song_files;
-SongSources song_sources;
+
+cntrl::device::SdFile song_writer, song_readers[4];
+cntrl::files::File *song_reader_handles[] = {&song_readers[0], &song_readers[1], &song_readers[2], &song_readers[3]};
+cntrl::SlotStorage song_files(setup_filesystem, song_writer, song_reader_handles, 4, "/cntrl/songs", card.ready);
+cntrl::ui::SongSources song_sources(board, board, patch_sources, setup_storage.setups(), documents, application, songs, cntrl::target::max_switches);
 DMAMEM cntrl::Songs songs(song_files, song_sources);
 DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
 cntrl::ui::Application application(board, documents, primary_controller, extra_apps, songs, song_sources, CNTRL_SWITCHES);
 #if CNTRL_ORIGINAL_FIRMWARE
-struct FirmwareVisitRecord {
-    uint32_t magic = 0x46564933, token = 0, setup_crc = 0;
-    char setup[64] = {};
-    cntrl::SongContinuation continuation;
-    cntrl::Controller::NavigationState initial_navigation, return_navigation;
-    Board::RuntimeState runtime;
-    uint32_t ui_operation = 0;
-    uint32_t app = 0;
-    uint32_t crc = 0;
-};
-DMAMEM FirmwareVisitRecord firmware_visit;
-FsFile firmware_visit_file;
-unsigned firmware_visit_stage = 0;
-unsigned firmware_visit_offset = 0;
-uint8_t firmware_exit_pair = 33;
-bool firmware_resume_checked = false;
+DMAMEM cntrl::ui::FirmwareVisitRecord firmware_visit_record;
+cntrl::device::SdFile firmware_visit_file;
+cntrl::ui::FirmwareVisit firmware_visit(firmware_visit_record, firmware_visit_file, board, board,
+    documents, application, songs, song_sources, board.runtime, invocation_navigation,
+    visiting_invocation, restoring_invocation);
 bool append_boot_record(uint32_t value) {
     auto words = reinterpret_cast<const volatile uint32_t *>(0x60084000);
     auto state = inspect_boot_selection(words);
@@ -892,152 +559,8 @@ bool append_boot_record(uint32_t value) {
     eepromemu_flash_write(reinterpret_cast<void *>(0x60084000 + state.next * 8), record, sizeof(record));
     return words[state.next * 2] == value && words[state.next * 2 + 1] == ~value;
 }
-bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
-    if (firmware_visit_stage || !valid_exit_pair(pair) || documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
-    for (unsigned i = 0; i < application.layout.apps(); ++i)
-        if (i != application.rendering() && application.at(i).busy()) return false;
-    auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
-    if (!can_enter_stock(state) || (continuation && !card.ready)) return false;
-    if (!board.stop_clock()) return false;
-    firmware_visit = FirmwareVisitRecord(); firmware_exit_pair = pair; firmware_visit_offset = 0;
-    if (continuation) {
-        firmware_visit.token = state.next; firmware_visit.continuation = *continuation;
-        firmware_visit.initial_navigation = invocation_navigation[visiting_invocation->owner()];
-        firmware_visit.return_navigation = application.controller().navigation();
-        firmware_visit.runtime = board.runtime; firmware_visit.ui_operation = application.pending_operation;
-        firmware_visit.app = application.rendering();
-        std::snprintf(firmware_visit.setup, 64, "%s", documents.selected());
-        const auto &document = documents.document();
-        firmware_visit.setup_crc = document.valid() ? cntrl::checksum(document.data(), document.length()) : 0;
-        firmware_visit.crc = cntrl::checksum(reinterpret_cast<const uint8_t *>(&firmware_visit), sizeof(firmware_visit) - 4);
-        firmware_visit_stage = 1;
-    } else firmware_visit_stage = 5;
-    return true;
-}
-bool start_original_firmware() { return application.controller().executor().invoke(cntrl::StockFirmwarePatch{33}); }
-void poll_firmware_visit(bool released) {
-    auto fail = [&]() {
-        firmware_visit_file.close(); firmware_visit_stage = 0; songs.cancel_function();
-        if (visiting_invocation) visiting_invocation->cancel();
-        visiting_invocation = nullptr; board.error("Firmware switch failed");
-    };
-    if (firmware_visit_stage >= 8) {
-        static uint32_t token = 0;
-        static bool valid = false;
-        switch (firmware_visit_stage) {
-        case 8:
-            token = firmware_visit.token;
-            firmware_visit_file = SD.sdfs.open("/cntrl/firmware-visit.bin", O_RDONLY);
-            valid = firmware_visit_file && firmware_visit_file.size() == sizeof(firmware_visit);
-            firmware_visit_offset = 0;
-            break;
-        case 9: {
-            unsigned n = sizeof(firmware_visit) - firmware_visit_offset; if (n > 512) n = 512;
-            valid = valid && firmware_visit_file.read(reinterpret_cast<uint8_t *>(&firmware_visit) + firmware_visit_offset, n) == int(n);
-            firmware_visit_offset += n;
-            if (valid && firmware_visit_offset < sizeof(firmware_visit)) return;
-            firmware_visit_file.close(); break;
-        }
-        case 10: {
-            const auto &document = documents.document();
-            valid = valid && firmware_visit.magic == 0x46564933 && firmware_visit.token == token
-                && firmware_visit.crc == cntrl::checksum(reinterpret_cast<const uint8_t *>(&firmware_visit), sizeof(firmware_visit) - 4)
-                && !std::strncmp(firmware_visit.setup, documents.selected(), 64)
-                && firmware_visit.setup_crc == (document.valid() ? cntrl::checksum(document.data(), document.length()) : 0);
-            break;
-        }
-        case 11:
-            if (!append_boot_record(visit_consumed | token)) { fail(); return; }
-            break;
-        case 12: {
-            auto continuation = firmware_visit.continuation;
-            firmware_visit_stage = 0;
-            if (firmware_visit.app >= application.layout.apps()) { board.error("App return unavailable"); return; }
-            application.visible_index = firmware_visit.app;
-            if (!valid || !application.controller().navigation(firmware_visit.initial_navigation)) { board.error("Patch return unavailable"); return; }
-            restoring_invocation = true;
-            bool resumed = continuation.caller == 1 ? songs.resume(continuation)
-                : application.controller().executor().resume(documents.document(), continuation.node, continuation.completed, continuation.sources_crc);
-            restoring_invocation = false;
-            if (!resumed || !application.controller().navigation(firmware_visit.return_navigation)) {
-                application.controller().executor().cancel(); song_sources.executor.cancel();
-                board.error("Patch return unavailable"); return;
-            }
-            invocation_navigation[application.controller().executor().owner()] = firmware_visit.initial_navigation;
-            board.set_brightness(firmware_visit.runtime.brightness);
-            board.set_midi_interface(firmware_visit.runtime.interface);
-            application.pending_operation = firmware_visit.ui_operation;
-            if (continuation.caller == 1) application.song_ui.perform();
-            else application.return_to_switches = continuation.caller == 2;
-            return;
-        }
-        }
-        ++firmware_visit_stage; return;
-    }
-    if (firmware_visit_stage) {
-        switch (firmware_visit_stage) {
-        case 1:
-            firmware_visit_file = SD.sdfs.open("/cntrl/firmware-visit.bin", O_RDWR | O_CREAT | O_TRUNC);
-            if (!firmware_visit_file) { fail(); return; }
-            break;
-        case 2: {
-            unsigned n = sizeof(firmware_visit) - firmware_visit_offset; if (n > 512) n = 512;
-            if (firmware_visit_file.write(reinterpret_cast<const uint8_t *>(&firmware_visit) + firmware_visit_offset, n) != n) { fail(); return; }
-            firmware_visit_offset += n;
-            if (firmware_visit_offset < sizeof(firmware_visit)) return;
-            break;
-        }
-        case 3:
-            if (!firmware_visit_file.sync()) { fail(); return; }
-            if (!firmware_visit_file.seekSet(0)) { fail(); return; }
-            firmware_visit_offset = 0;
-            break;
-        case 4: {
-            uint8_t verify[512]; unsigned n = sizeof(firmware_visit) - firmware_visit_offset; if (n > sizeof(verify)) n = sizeof(verify);
-            if (firmware_visit_file.read(verify, n) != int(n)
-                || std::memcmp(verify, reinterpret_cast<const uint8_t *>(&firmware_visit) + firmware_visit_offset, n)) { fail(); return; }
-            firmware_visit_offset += n;
-            if (firmware_visit_offset < sizeof(firmware_visit)) return;
-            firmware_visit_file.close(); break;
-        }
-        case 5:
-            if (!append_boot_record(visit_config | firmware_exit_pair | (firmware_visit.token ? 0x8000 : 0))) { fail(); return; }
-            break;
-        case 6:
-            if (!append_boot_record(uint32_t(BootChoice::stock))) { fail(); return; }
-            break;
-        case 7:
-            USB1_USBCMD = 2; USBPHY1_CTRL_SET = 0x80000000;
-            delay(100); __disable_irq(); SCB_AIRCR = 0x05fa0004;
-            __asm__ volatile("dsb" ::: "memory");
-            while (true) __asm__ volatile("wfi");
-        }
-        ++firmware_visit_stage; return;
-    }
-    if (firmware_resume_checked || !released || documents.busy()) return;
-    firmware_resume_checked = true;
-    auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
-    if (state.returned && state.choice == BootChoice::cntrl) {
-        firmware_visit = FirmwareVisitRecord(); firmware_visit.token = state.returned;
-        firmware_visit_stage = 8;
-    }
-}
 #endif
-bool patch_stock(uint8_t pair, cntrl::PatchExecutor &invocation) {
-#if CNTRL_ORIGINAL_FIRMWARE
-    visiting_invocation = &invocation;
-    if (!invocation.document().valid()) return request_stock(pair, nullptr);
-    cntrl::SongContinuation saved;
-    if (&invocation == &song_sources.executor) saved = song_sources.context();
-#if CNTRL_SWITCHES
-    else if (board.switches.owns(invocation)) saved.caller = 2;
-#endif
-    saved.node = invocation.root(); saved.completed = invocation.completed(); saved.sources_crc = invocation.fingerprint();
-    return request_stock(pair, &saved);
-#else
-    (void)pair; (void)invocation; return false;
-#endif
-}
+
 cntrl::splash::SdSlots splash_card;
 cntrl::animation::Receiver splash_assets(splash_card, board);
 cntrl::splash::Panels splash_panels;
@@ -1045,7 +568,7 @@ cntrl::animation::Player splash_player(splash_assets, splash_panels);
 unsigned random_movie(unsigned count) { return unsigned(random(count)); }
 cntrl::animation::Session splash_session(splash_assets, splash_player, random_movie);
 
-StorageListing storage_listing;
+cntrl::StorageListing storage_listing(setup_filesystem);
 void storage_info(bool scan) {
     if (!card.ready) { board.reply("CNTRL ERROR storage-unavailable"); return; }
     auto *device = SD.sdfs.card();
@@ -1054,23 +577,45 @@ void storage_info(bool scan) {
     if (!sectors || !device->readCID(&cid)) {
         board.reply("CNTRL ERROR storage-read"); return;
     }
-    char identity[33];
     const uint8_t *bytes = reinterpret_cast<const uint8_t *>(&cid);
-    for (unsigned i = 0; i < 16; ++i) std::snprintf(identity + 2 * i, 3, "%02x", bytes[i]);
-    char free[12] = "-";
+    const uint64_t capacity = uint64_t(sectors) * 512;
+    const uint32_t unit = SD.sdfs.bytesPerCluster();
+    const uint64_t usable = uint64_t(SD.sdfs.clusterCount()) * unit;
+    char free[24] = "-";
     if (scan) {
         // Explicit opt-in: this library call can scan the FAT/allocation bitmap.
         uint32_t count = SD.sdfs.freeClusterCount();
         if (count > SD.sdfs.clusterCount() || device->errorCode()) {
             board.reply("CNTRL ERROR storage-scan"); return;
         }
-        std::snprintf(free, sizeof(free), "%lu", (unsigned long)count);
+        auto end = std::to_chars(free, free + sizeof(free) - 1, uint64_t(count) * unit).ptr; *end = 0;
     }
+    // Identification registers and filesystem classification belong to this driver.
+    static char values[9][40];
+    static const cntrl::StorageListing::Detail details[] = {
+        {"card_type", values[0]}, {"manufacturer_id", values[1]}, {"oem_id", values[2]},
+        {"product", values[3]}, {"revision", values[4]}, {"serial_number", values[5]},
+        {"manufactured", values[6]}, {"filesystem", values[7]}, {"identity", values[8]},
+    };
+    unsigned kind = device->type();
+    std::snprintf(values[0], sizeof(values[0]), "%s", kind == 1 ? "SD v1" : kind == 2 ? "SD v2" : capacity > (uint64_t(32) << 30) ? "SDXC" : "SDHC");
+    std::snprintf(values[1], sizeof(values[1]), "0x%02X", bytes[0]);
+    std::memcpy(values[2], bytes + 1, 2); values[2][2] = 0;
+    std::memcpy(values[3], bytes + 3, 5); values[3][5] = 0;
+    std::snprintf(values[4], sizeof(values[4]), "%u.%u", bytes[8] >> 4, bytes[8] & 15);
+    uint32_t serial = uint32_t(bytes[9]) << 24 | uint32_t(bytes[10]) << 16 | uint32_t(bytes[11]) << 8 | bytes[12];
+    std::snprintf(values[5], sizeof(values[5]), "0x%08lX", (unsigned long)serial);
+    std::snprintf(values[6], sizeof(values[6]), "%u-%02u", 2000 + ((bytes[13] & 15) << 4) + (bytes[14] >> 4), bytes[14] & 15);
+    unsigned fat = SD.sdfs.fatType();
+    std::snprintf(values[7], sizeof(values[7]), "%s", fat == 16 ? "FAT16" : fat == 32 ? "FAT32" : "exFAT");
+    for (unsigned i = 0; i < 16; ++i) std::snprintf(values[8] + 2 * i, 3, "%02x", bytes[i]);
+    char capacity_text[24], usable_text[24];
+    *std::to_chars(capacity_text, capacity_text + sizeof(capacity_text) - 1, capacity).ptr = 0;
+    *std::to_chars(usable_text, usable_text + sizeof(usable_text) - 1, usable).ptr = 0;
     char response[128];
-    std::snprintf(response, sizeof(response), "CNTRL STORAGE %lu %u %s %u %lu %lu %s",
-        (unsigned long)sectors, unsigned(device->type()), identity, unsigned(SD.sdfs.fatType()),
-        (unsigned long)SD.sdfs.bytesPerCluster(), (unsigned long)SD.sdfs.clusterCount(), free);
-    if (scan && !storage_listing.begin()) { board.reply("CNTRL ERROR storage-list"); return; }
+    std::snprintf(response, sizeof(response), "CNTRL STORAGE %s %s %s %lu",
+        capacity_text, usable_text, free, (unsigned long)unit);
+    if (scan && !storage_listing.begin(details, sizeof(details) / sizeof(*details))) { board.reply("CNTRL ERROR storage-list"); return; }
     board.reply(response);
 }
 
@@ -1102,32 +647,8 @@ PerformanceStatus performance_status() {
 }
 
 void midi_status(unsigned route) { board.midi_status(route); }
-bool asset_command(const char *line) {
-    if (!std::strcmp(line, "CNTRL MEMORY")) {
-        char response[80];
-        std::snprintf(response, sizeof(response), "CNTRL MEMORY %u %u", board.memory_capacity(), board.memory_runtime());
-        board.reply(response); return true;
-    }
-    if (!std::strcmp(line, "CNTRL STARTS RESET")) {
-        if (midi_files.recorder.active()) { board.reply("CNTRL ERROR starts-recording"); return true; }
-        auto file = SD.sdfs.open(StartupCounter::path, O_CREAT | O_RDWR);
-        if (startup_counter.reset(file)) board.reply("CNTRL OK");
-        else {
-            char response[80]; std::snprintf(response, sizeof(response), "CNTRL ERROR starts-reset %s", startup_counter.error);
-            board.reply(response);
-        }
-        return true;
-    }
-    if (!std::strncmp(line, "CNTRL STARTS ", 13)) {
-        auto file = SD.sdfs.open(StartupCounter::path, O_RDONLY);
-        char response[280]; StartupCounter::read_command(line, file, response);
-        board.reply(response); return true;
-    }
-    if (!std::strncmp(line, "CNTRL BUNDLE ", 13)) return bundle_transfer.command(line, millis());
-    if (!std::strcmp(line, "CNTRL STORAGE NEXT")) {
-        char response[600]; storage_listing.next(response, sizeof(response)); board.reply(response); return true;
-    }
-    if (board.configuration_locked()) { board.reply("CNTRL ERROR close-switches-first"); return true; }
+void midi_reset() { board.midi_reset(); }
+bool native_asset_command(const char *line) {
 #ifdef CNTRL_DIAGNOSTICS
     if (!std::strcmp(line, "CNTRL DISPLAY EDGE")) {
         if (application.feature_open(board) || documents.busy()) { board.reply("CNTRL ERROR busy"); return true; }
@@ -1137,38 +658,54 @@ bool asset_command(const char *line) {
         board.timing_mode(false); board.reply("CNTRL OK"); return true;
     }
 
+#else
+    (void)line;
 #endif
-    if (!std::strncmp(line, "CNTRL SONGS ", 12)) {
-        if (application.song_ui.open()) { board.reply("CNTRL ERROR close-song-editor"); return true; }
-        return songs_transfer.command(line, millis());
-    }
-    return font_files.command(line, board, millis());
+    return false;
 }
-cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command);
-ButtonState buttons[6];
-uint32_t last_scan = 0;
+cntrl::device::SdFile counter_command_file;
+struct AssetServices {
+    Board &hardware, &replies;
+    cntrl::StartupCounter &counter;
+    cntrl::files::File &counter_file;
+    cntrl::midi::MidiFileRecorder &recorder;
+    decltype(history_import) &history;
+    decltype(bundle_transfer) &bundle;
+    cntrl::StorageListing &listing;
+    cntrl::SongsUi &song_editor;
+    decltype(songs_transfer) &songs;
+    font_assets::Storage &fonts;
+    bool (*native_extension)(const char *);
+} asset_services{board, board, startup_counter, counter_command_file, midi_files.recorder,
+    history_import, bundle_transfer, storage_listing, application.song_ui, songs_transfer,
+    font_files, native_asset_command};
+cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
+bool asset_command(const char *line) { return asset_commands.command(line, millis()); }
+cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset);
+cntrl::ButtonState buttons[cntrl::target::button_count];
+cntrl::CooperativeRuntime cooperative_runtime(cntrl::target::scan_interval_ms);
 
 } // namespace
 
-bool switch_scan_due() { return uint32_t(millis() - last_scan) >= 1; }
+bool switch_scan_due() { return cooperative_runtime.scan_due(millis()); }
 
 FLASHMEM void initialize_target() {
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session = cntrl::UsbSession{};
     for (unsigned i = 1; i < cntrl::AppLayout::max_apps; ++i)
-        new (extra_apps[i - 1]) cntrl::Controller(board, board, patch_sources, 5 + i);
+        new (extra_apps[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::target::max_switches + i);
     initialize_switches();
     initialize_displays(false);
     board.begin();
     card.ready = SD.begin(BUILTIN_SDCARD);
     if (card.ready) {
         if (!SD.sdfs.exists("/cntrl") && !SD.sdfs.mkdir("/cntrl", true)) {
-            startup_counter.status = StartupCounter::Status::error;
+            startup_counter.status = cntrl::StartupCounter::Status::error;
             std::strcpy(startup_counter.error, "mkdir");
         }
         else {
-            auto file = SD.sdfs.open(StartupCounter::path, O_CREAT | O_RDWR);
+            cntrl::device::SdFile file; file.open(cntrl::StartupCounter::path, cntrl::files::Mode::create);
             startup_counter.start(file);
         }
     }
@@ -1184,8 +721,6 @@ FLASHMEM void initialize_target() {
 }
 
 namespace {
-constexpr cntrl::ui::ControlBinding control_bindings[] = {{2, "A"}, {1, "B"}, {0, "C"}, {5, "D"}, {4, "E"}, {3, "F"}};
-constexpr cntrl::ui::Controls controls{0, 1, 2, 3, 4, 5, 5, 3, 2, control_bindings, 6};
 class TargetControls {
 public:
     bool switches_open() const {
@@ -1202,7 +737,7 @@ public:
         (void)i; (void)pressed; (void)now;
 #endif
     }
-    bool controls_locked() const { return application.controls_locked; }
+    bool controls_locked() const { return application.controls_locked || history_import.busy(); }
     bool menu_open() const { return application.menu.open(); }
     bool songs_open() const { return application.song_ui.open(); }
     bool setup_open() const { return application.setups.open(); }
@@ -1241,60 +776,71 @@ public:
     void error(const char *message) { board.error(message); }
 };
 TargetControls target_controls;
-cntrl::ui::ControlRouter control_router(controls);
+cntrl::ui::InputCoordinator input_coordinator(buttons, cntrl::target::controls, documents.document(), application, board);
 class TargetRuntime {
 public:
     uint32_t now() const { return millis(); }
     void complete_display() { poll_display_dma(); }
     void keyboard() { board.poll_keyboard(); }
     bool scan_available() const { return !display_spi_busy(); }
-    bool scan_due() const { return switch_scan_due(); }
-    void scan(uint32_t now) {
-        if (last_scan) board.scanned(now - last_scan);
-        last_scan = now;
-        uint8_t raw = read_buttons();
-        uint8_t events[6], pressed = 0;
-        const auto &document = documents.document();
-        bool fast_switches = !document.valid() || document.fast_switches();
-        for (unsigned i = 0; i < 6; ++i) {
-            unsigned debounce_ms = 15;
+    void scan(uint32_t now, uint32_t gap) {
+        if (gap) board.scanned(gap);
+        const uint8_t raw = read_buttons();
+        uint8_t logical = 0;
+        for (unsigned i = 0; i < cntrl::target::button_count; ++i)
+            if (!(raw & (1u << button_bits[i]))) logical |= uint8_t(1u << i);
+        input_coordinator.scan(logical, now, *this);
+    }
+    std::optional<unsigned> debounce(unsigned i) const {
 #if CNTRL_SWITCHES
-            debounce_ms = board.switches.debounce_ms(i).value_or(15);
+        return board.switches.debounce_ms(i);
+#else
+        (void)i; return std::nullopt;
 #endif
-            events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now, debounce_ms, fast_switches);
-            if (buttons[i].pressed) pressed |= 1u << i;
-        }
-        application.held = pressed;
-        if (events[2] & release_event) board.keyboard_button(2, false);
+    }
+    void keyboard_release(unsigned input) { board.keyboard_button(input, false); }
+    bool panic_open() const {
 #if CNTRL_PANIC
-        if ((events[2] & release_event) && board.panic.open()) board.panic.button(false, now);
+        return board.panic.open();
+#else
+        return false;
 #endif
-        bool consumed = splash_session.controls(pressed, now, !application.feature_open(board) && pressed == (1u << 0));
+    }
+    void panic_release(uint32_t now) {
+#if CNTRL_PANIC
+        board.panic.button(false, now);
+#else
+        (void)now;
+#endif
+    }
+    bool animation_controls(uint8_t pressed, uint32_t now, bool replay) { return splash_session.controls(pressed, now, replay); }
+    bool diagnostic_controls(const uint8_t *events, uint8_t, uint32_t) {
 #ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) {
-            if (events[5] & press_event) board.timing_mode(false);
-            else if (events[2] & press_event) scroll_timing.start();
-            consumed = true;
+            if (cntrl::target::controls.back < cntrl::target::button_count && (events[cntrl::target::controls.back] & cntrl::press_event)) board.timing_mode(false);
+            else if (cntrl::target::controls.confirm < cntrl::target::button_count && (events[cntrl::target::controls.confirm] & cntrl::press_event)) scroll_timing.start();
+            return true;
         }
-
+#else
+        (void)events;
 #endif
-        if (consumed) application.controller().cancel_gesture();
-        application.setups.poll(pressed);
-        application.menu.poll(pressed);
-        application.song_ui.poll(pressed);
-        if (!pressed) application.controls_locked = false;
-#if CNTRL_ORIGINAL_FIRMWARE
-        poll_firmware_visit(!pressed);
-        consumed = consumed || firmware_visit_stage;
-#endif
-        if (!consumed) control_router.route(target_controls, events, pressed, now);
+        return false;
     }
-    void apps(uint32_t now) { if (application.feature_open(board)) application.controller().cancel_gesture(); application.tick(now); }
+    cntrl::ui::FirmwareVisit *visit() {
+#if CNTRL_ORIGINAL_FIRMWARE
+        return &firmware_visit;
+#else
+        return nullptr;
+#endif
+    }
+    TargetControls &actions() { return target_controls; }
+    void apps(uint32_t now) { if (application.feature_open(board) || history_import.busy()) application.controller().cancel_gesture(); application.tick(now); }
     void midi() { board.poll(); }
     auto &session() { return usb_session; }
     auto &commands() { return serial_router; }
     auto &song_transfer() { return songs_transfer; }
     auto &bundle_transfer() { return ::bundle_transfer; }
+    auto &history_transfer() { return history_import; }
     auto &fonts() { return font_files; }
     auto &song_sources() { return ::song_sources; }
     auto &songs() { return ::songs; }
@@ -1305,17 +851,16 @@ public:
     void cancel_listing() { storage_listing.cancel(); }
     bool commands_allowed() const {
 #if CNTRL_ORIGINAL_FIRMWARE
-        return !firmware_visit_stage;
+        return !firmware_visit.busy();
 #else
         return true;
 #endif
     }
     bool expression_allowed() const { return commands_allowed(); }
     void expression(uint32_t now) { board.poll_expression(now); }
-    void navigation() { control_router.finish(target_controls, application.pending_operation, application.return_to_switches, application.controls_locked); }
+    void navigation() { if (!history_import.busy()) input_coordinator.finish(target_controls); }
     void display(uint32_t now) { board.display(now, documents.busy() || application.feature_open(board) || application.patch_pending()); }
 };
-cntrl::CooperativeRuntime cooperative_runtime;
 TargetRuntime target_runtime;
 } // namespace
 

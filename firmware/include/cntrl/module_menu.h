@@ -1,4 +1,6 @@
 #pragma once
+#include "ui/presentation.h"
+#include "ui/prompts.h"
 #include "hardware.h"
 #include <cstdio>
 
@@ -30,17 +32,19 @@ private:
     unsigned count_, selected_ = 0;
     bool open_ = false, locked_ = false;
     void render() {
+        ui::Prompt prompt(hardware_);
+        using Role = ControlRole;
         Pane views[3];
         for (auto &view : views) for (auto &line : view.lines)
             line.graphics.size = line.graphics.line_height = 16;
-        std::snprintf(views[0].lines[0].text, 64, "A/B browse");
-        std::snprintf(views[0].lines[1].text, 64, "C OK, F back");
+        std::snprintf(views[0].lines[0].text, 64, "%s", prompt.pair(Role::previous, Role::next, "browse").text());
+        std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, "OK").add(Role::back, "back", ", ").text());
         std::snprintf(views[1].lines[0].text, 64, "Apps and tools");
         std::snprintf(views[1].lines[1].text, 64, "%s", names_[selected_]);
         for (unsigned i = 0; i < 3; ++i) {
             for (auto &line : views[i].lines) line.wrap = true;
-            hardware_.show(i, views[i]);
         }
+        ui::present(hardware_, views, 1);
     }
 };
 }

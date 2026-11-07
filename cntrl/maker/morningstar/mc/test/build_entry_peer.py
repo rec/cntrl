@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-
 directory = Path(sys.argv[1]).resolve()
 for suffix in ('', '.build_target', '.boot_switch', '.firmware'):
     name = 'cntrl.maker.morningstar.mc' + suffix

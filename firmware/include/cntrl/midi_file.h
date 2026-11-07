@@ -21,7 +21,7 @@ struct PlayMidiFilePatch {
     bool reverse = false;
     int8_t transpose = 0;
 };
-struct RecordMidiFilePatch { uint16_t channels = 0xffff, inputs = 0x143; };
+struct RecordMidiFilePatch { uint16_t channels = 0xffff, inputs = 0xffff; };
 
 // SMF tracks are merged into fixed-size records on disk. RAM holds track heads
 // and currently held notes, independently of the length of the sequence.
@@ -87,7 +87,7 @@ public:
     void poll(uint32_t now, unsigned available, Sink &sink) {
         if (!active()) {
             if (terminate_outputs_) {
-                for (unsigned route = 0; route < Bridge::destinations; ++route)
+                for (unsigned route = 0; route < max_routes; ++route)
                     if ((terminate_outputs_ & (1u << route)) && (!(available & (1u << route)) || sink.submit(route, {5, {0xf7, 0, 0}}))) terminate_outputs_ &= ~(1u << route);
                 return;
             }
@@ -105,7 +105,7 @@ public:
         double progress = double(elapsed_ - uint64_t(settings_.pre_delay) * 1000000) * settings_.speed;
         // One packet per poll, retried independently on each destination.
         if (packet_pending_) {
-            for (unsigned route = 0; route < Bridge::destinations; ++route)
+            for (unsigned route = 0; route < max_routes; ++route)
                 if ((pending_outputs_ & (1u << route)) && sink.submit(route, packet_)) {
                     pending_outputs_ &= ~(1u << route);
                     remember_packet(route);

@@ -2,11 +2,15 @@
 
 import struct
 
-from . import graphics, models
+from ..fonts.catalogue import UI_FONTS
+from . import graphics, midi_endpoints, models
 
 
 def pack(show: models.Setup, target: models.Target) -> list[int]:
     r = show.page_settings
+    for field in ('tempo_font', 'status_font', 'title_font'):
+        if (name := getattr(r, field)) not in target.ui_fonts:
+            raise ValueError(f'page_settings.{field}: unavailable font {name!r}')
     if (
         r.title_height * 3 // 2
         + 4
@@ -36,15 +40,15 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
         r.title_height,
         r.tempo_height,
         r.padding,
-        8 if r.tempo_font == 'CourierPrime' else 9,
-        PAGE_FONTS[r.status_font],
+        UI_FONTS[r.tempo_font],
+        UI_FONTS[r.status_font],
         graphics.rgb565(graphics.color(r.off_color)),
         graphics.rgb565(graphics.color(r.on_color)),
         graphics.rgb565(graphics.color(r.ring_color)),
         r.digits,
         r.decimals,
         graphics.rgb565(graphics.color(r.background_color)),
-        PAGE_FONTS[r.title_font],
+        UI_FONTS[r.title_font],
     ]
 
 
@@ -54,20 +58,18 @@ def pack_clock(show: models.Setup, target: models.Target) -> bytes:
         return b''
     if len(set(r.clock_outputs)) != len(r.clock_outputs):
         raise ValueError('page_settings.clock_outputs: duplicate output')
+    routes = {
+        e.name: e.route
+        for e in target.midi_endpoints
+        if midi_endpoints.enabled(e, show)
+    }
     for name in r.clock_outputs:
-        if (
-            name not in CLOCK_ROUTES
-            or name not in target.outputs
-            or (
-                (name == 'usb-device' and not show.usb_device_midi)
-                or (name == 'usb-host' and not show.usb_host_midi)
-            )
-        ):
+        if name not in routes:
             raise ValueError(
                 f'page_settings.clock_outputs: unavailable output {name!r}'
             )
     return CLOCK.pack(
-        sum(1 << CLOCK_ROUTES[n] for n in r.clock_outputs),
+        sum(1 << routes[n] for n in r.clock_outputs),
         int(r.clock_source == 'external'),
         *r.clock_bpms,
         *([0] * (4 - len(r.clock_bpms))),
@@ -95,9 +97,9 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     ]
     for i, n in enumerate(names):
         result[n] = w[i] / 1000 if i in (0, 1, 6, 7, 8) else w[i]
-    result['tempo_font'] = 'CourierPrime' if w[14] == 8 else 'CourierPrimeBold'
-    result['status_font'] = next(n for n, i in PAGE_FONTS.items() if i == w[15])
-    result['title_font'] = next(n for n, i in PAGE_FONTS.items() if i == w[22])
+    result['tempo_font'] = next(n for n, i in UI_FONTS.items() if i == w[14])
+    result['status_font'] = next(n for n, i in UI_FONTS.items() if i == w[15])
+    result['title_font'] = next(n for n, i in UI_FONTS.items() if i == w[22])
     for i, n in (
         (16, 'off_color'),
         (17, 'on_color'),
@@ -112,17 +114,17 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     return result
 
 
-def unpack_clock(data: bytes, offset: int) -> dict[str, object]:
+def unpack_clock(data: bytes, offset: int, names: dict[int, str]) -> dict[str, object]:
     mask, external, *slots = CLOCK.unpack_from(data, offset)
     return {
-        'clock_outputs': [n for n, i in CLOCK_ROUTES.items() if mask & (1 << i)],
+        'clock_outputs': [n for i, n in names.items() if mask & (1 << i)],
         'clock_source': 'external' if external else 'internal',
         'clock_bpms': [b for b in slots if b],
     }
 
 
 def pack_expression(
-    show: models.Setup, target: models.Target, jacks: tuple[str, ...]
+    show: models.Setup, target: models.Target, jacks: list[str]
 ) -> bytes:
     assignments = show.page_settings.expression
     if not assignments:
@@ -137,12 +139,8 @@ def pack_expression(
             raise ValueError(
                 f'expression jack {jack}: unavailable output {assignment.output!r}'
             )
-        if (
-            assignment.output == 'usb-device'
-            and not show.usb_device_midi
-            or assignment.output == 'usb-host'
-            and not show.usb_host_midi
-        ):
+        endpoint = next(e for e in target.midi_endpoints if e.name == assignment.output)
+        if not midi_endpoints.enabled(endpoint, show):
             raise ValueError(
                 f'expression jack {jack}: disabled output {assignment.output!r}'
             )
@@ -163,9 +161,7 @@ def pack_expression(
     return bytes(data)
 
 
-def unpack_expression(
-    data: bytes, offset: int, jacks: tuple[str, ...]
-) -> dict[str, object]:
+def unpack_expression(data: bytes, offset: int, jacks: list[str]) -> dict[str, object]:
     result: dict[str, object] = {}
     for i in range(4):
         output, channel, cc, low, high, reverse, curve = EXPRESSION.unpack_from(
@@ -230,13 +226,3 @@ KEYBOARD = struct.Struct('<32s7B')
 
 CLOCK_FLAG = 1 << 13
 CLOCK = struct.Struct('<6H')
-CLOCK_ROUTES = {
-    'din': 0,
-    'trs': 1,
-    **{f'configurable-{i}': i + 1 for i in range(1, 5)},
-    'usb-device': 6,
-    'usb-host': 8,
-}
-
-
-PAGE_FONTS = {'classic': 0, 'Arial': 1, 'ComicSansMS': 2, 'AtkinsonNextSemiBold': 16}

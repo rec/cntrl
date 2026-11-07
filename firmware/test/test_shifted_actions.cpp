@@ -1,3 +1,4 @@
+#include "midi_endpoints.h"
 #include <cntrl/switches.h>
 #include "patch_hardware.h"
 #include <cassert>
@@ -6,7 +7,7 @@
 
 struct Board : TestPatchHardware, cntrl::midi::Sink {
     cntrl::Switches *switches = nullptr;
-    cntrl::midi::Bridge bridge;
+    cntrl::midi::Bridge bridge{test_midi_outputs};
     std::vector<cntrl::midi::Packet> sent;
     cntrl::Pane views[3];
     bool writable = true, connected = true;
@@ -30,6 +31,10 @@ struct Board : TestPatchHardware, cntrl::midi::Sink {
     }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned panel, const cntrl::Pane &view) override { views[panel] = view; }
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}

@@ -125,9 +125,7 @@ def main() -> None:
         for f in faces
     ]
     data = json.loads(options.output.read_text())
-    data.update(
-        display_width=160, display_height=128, fonts=[f.model_dump() for f in faces]
-    )
+    data.update(fonts=[f.model_dump() for f in faces])
     options.output.write_text(json.dumps(data, indent=2) + '\n')
 
 

@@ -2,6 +2,7 @@
 #include "storage.h"
 #include "usb_peer.h"
 #include <cntrl/bundle_transfer.h>
+#include <cntrl/history_import.h>
 
 struct Peer : TestPatchHardware, cntrl::Replies {
     cntrl::UsbSession usb;
@@ -11,6 +12,10 @@ struct Peer : TestPatchHardware, cntrl::Replies {
     bool supports_font(unsigned, unsigned) const override { return true; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
@@ -23,6 +28,7 @@ int main() {
     assert(storage.boot()); TestController controller(peer);
     cntrl::Documents documents(storage, peer, controller, peer); documents.boot();
     cntrl::BundleTransfer transfer(storage, documents, peer, peer);
+    cntrl::HistoryImport history(disk, documents, peer, peer);
     char line[320] = {}; unsigned used = 0;
     return usb_peer(peer.usb, [&](uint8_t byte) {
         if (documents.busy()) { documents.receive(byte, 0); return; }
@@ -31,13 +37,13 @@ int main() {
             if (!std::strcmp(line, "CNTRL MEMORY")) {
                 char response[64]; std::snprintf(response, sizeof(response), "CNTRL MEMORY %u %u", peer.memory_capacity(), peer.memory_runtime());
                 peer.reply(response);
-            } else if (!transfer.command(line, 0)) {
+            } else if (!history.command(line, 0) && !transfer.command(line, 0)) {
                 for (unsigned i = 0; i < used; ++i) documents.receive(uint8_t(line[i]), 0);
                 documents.receive('\n', 0);
             }
             used = 0;
         } else if (used + 1 < sizeof(line)) line[used++] = char(byte);
-    }, [&]() { documents.tick(0); transfer.poll(0); },
+    }, [&]() { documents.tick(0); transfer.poll(0); history.tick(0); },
        [&]() { return documents.accepts_input(); },
-       [&]() { documents.cancel_transfer(); transfer.cancel(); });
+       [&]() { documents.cancel_transfer(); transfer.cancel(); history.cancel(); });
 }

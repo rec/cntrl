@@ -40,7 +40,7 @@ public:
     const Revision &info() const { return info_; }
     void read(const char *name, uint64_t number, MemoryBuffer &data) {
         initialize(name, &data); info_.number = number; operation_ = Operation::read;
-        storage_.choose_revision(name_, number); phase_ = Phase::header;
+        storage_.choose_revision(name_, number); choose_record(); phase_ = Phase::header;
     }
     void current(const char *name, unsigned slot, MemoryBuffer &data) {
         initialize(name, &data); operation_ = Operation::current; slot_ = slot;
@@ -84,7 +84,7 @@ public:
             else {
                 info_.number = best_;
                 if (operation_ == Operation::clear) phase_ = Phase::remove;
-                else { storage_.choose_revision(name_, best_); phase_ = Phase::header; }
+                else { storage_.choose_revision(name_, best_); choose_record(); phase_ = Phase::header; }
             }
             return;
         case Phase::header: {
@@ -132,6 +132,7 @@ public:
         case Phase::read_end:
             if (!storage_.read(slot_, body_offset_ + info_.length, block, 4)
                 || std::memcmp(block, "DONE", 4) || (crc_ ^ 0xffffffff) != expected_crc_) { invalid(); return; }
+            if (operation_ != Operation::current && (info_.length < 6 || u16(buffer_->data + 4) != document_version)) { invalid(); return; }
             finish(true); return;
         case Phase::hash_names: {
             uint8_t name[64] = {};
@@ -235,14 +236,14 @@ private:
     std::vector<uint16_t> remap_;
     uint32_t crc_ = 0xffffffff, expected_crc_ = 0;
     uint64_t best_ = 0;
-    bool good_ = false, opened_ = false, memory_failed_ = false;
+    bool good_ = false, opened_ = false, memory_failed_ = false, fallback_ = false;
     inline static const uint8_t zeros_[64] = {};
     unsigned amount() const { unsigned n = info_.length - offset_; return n > 512 ? 512 : n; }
     void initialize(const char *name, MemoryBuffer *data) {
         std::snprintf(name_, sizeof(name_), "%s", name); buffer_ = data;
         info_ = Revision(); offset_ = slot_ = 0; crc_ = 0xffffffff; good_ = opened_ = false;
         names_count_ = name_position_ = body_offset_ = 0; remap_.clear();
-        memory_failed_ = false;
+        memory_failed_ = fallback_ = false;
         std::memset(header_, 0, sizeof(header_));
     }
     void update(const uint8_t *data, unsigned n) {
@@ -252,7 +253,11 @@ private:
         }
     }
     void scan(uint64_t before) { best_ = 0; storage_.revision_scan(name_, before, operation_ == Operation::next); phase_ = Phase::scan; }
-    void invalid() { if (operation_ == Operation::next) scan(info_.number); else finish(false); }
+    void choose_record() { slot_ = storage_.size(1) ? 1 : 0; fallback_ = slot_ == 1; }
+    void invalid() {
+        if (fallback_) { fallback_ = false; slot_ = 0; phase_ = Phase::header; return; }
+        if (operation_ == Operation::next) scan(info_.number); else finish(false);
+    }
     void finish(bool good) { if (opened_) { storage_.finish(); opened_ = false; } good_ = good; phase_ = Phase::idle; }
 };
 }

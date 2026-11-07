@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
+#include "color_cycle.h"
 
 namespace cntrl::animation {
 constexpr uint32_t header_bytes = 20, packet_bytes = 320;
@@ -43,8 +44,11 @@ public:
         count_ = u16(header + 12); frame_bytes_ = uint32_t(payload_frame_bytes(header));
         frame_ = row_ = x_ = 0; started_ = now;
         active_ = output_.begin(width_, height_, streams_) && duration();
+        if (active_) colors_.begin(streams_);
+        frame_tint_ready_ = false;
         return active_;
     }
+    void set_color_cycle(bool enabled) { colors_.enable(enabled); }
     void stop() { active_ = false; }
     bool frame_ready() const { return row_ == height_ * streams_ && output_.ready(); }
     Step poll(uint32_t now, bool pressed) {
@@ -55,12 +59,15 @@ public:
             if (uint32_t(now - started_) < duration_) return Step::playing;
             frame_ = (frame_ + 1) % count_; row_ = x_ = 0; started_ = now;
             if (!duration()) { active_ = false; return Step::failed; }
+            frame_tint_ready_ = false;
         }
         unsigned count = width_ - x_;
         if (count > packet_bytes / 2) count = packet_bytes / 2;
         if (!source_.read(header_bytes + frame_ * frame_bytes_ + 4 + (row_ * width_ + x_) * 2, pixels_, count * 2)) {
             active_ = false; return Step::failed;
         }
+        if (!frame_tint_ready_) { colors_.frame(now); frame_tint_ready_ = true; }
+        colors_.pixels(row_ % streams_, pixels_, count);
         if (output_.pixels(row_ % streams_, x_, row_ / streams_, pixels_, count)) {
             x_ += count;
             if (x_ == width_) { x_ = 0; ++row_; }
@@ -79,6 +86,7 @@ private:
     uint32_t width_ = 0, height_ = 0, streams_ = 0, frame_bytes_ = 0;
     uint32_t count_ = 0, frame_ = 0, row_ = 0, x_ = 0, started_ = 0, duration_ = 0;
     uint8_t pixels_[packet_bytes];
-    bool active_ = false;
+    ColorCycle colors_;
+    bool active_ = false, frame_tint_ready_ = false;
 };
 } // namespace cntrl::animation

@@ -15,6 +15,10 @@ struct Board : TestPatchHardware, cntrl::Replies {
     bool supports_font(unsigned, unsigned) const override { return true; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
@@ -112,6 +116,14 @@ int main(int argc, char **argv) {
         File incompatible(argv[1]); cntrl::SetupTable rejected;
         cntrl::put32(incompatible.bytes.data() + 36, cntrl::u32(incompatible.bytes.data() + 36) + 1);
         assert(!rejected.open(incompatible, board));
+    }
+    {
+        struct DifferentRuntime : Board {
+            unsigned memory_runtime() const override { return Board::memory_runtime() + 1; }
+        } changed;
+        assert(changed.memory_capacity() == board.memory_capacity());
+        File same_capacity(argv[1]); cntrl::SetupTable rejected;
+        assert(!rejected.open(same_capacity, changed));
     }
     test_saving_and_history(file, board);
     unsigned initial_budget = cntrl::memory_budget;

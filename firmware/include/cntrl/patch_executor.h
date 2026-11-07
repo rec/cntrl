@@ -73,7 +73,7 @@ public:
         return outputs_.state(patch.operation, patch.value);
     }
     bool invoke(const StockFirmwarePatch &patch) {
-        if (busy() || !button_pair_valid(patch.exit_buttons)) return false;
+        if (busy() || !button_pair_valid(patch.exit_buttons) || hardware_.input_count() > 8 || unsigned(patch.exit_buttons) >= (1u << hardware_.input_count())) return false;
         reset(); document_ = Document(); builtin_stock_ = patch.exit_buttons;
         status_ = Status::pending; return true;
     }
@@ -368,8 +368,7 @@ private:
         } else if (node[0] == 8) {
             state_complete_ = false;
             unsigned mask = u16(p + 96);
-            for (const auto &out : midi::output_connections) if ((mask & (1u << out.route)) && !resource(out.name, 256, 256)) return false;
-            for (const auto &out : midi::usb_output_connections) if ((mask & (1u << out.route)) && !resource(out.name, 256, 256)) return false;
+            for (const auto &out : hardware_.midi_outputs()) if ((mask & (1u << out.route)) && !resource(out.name, 256, 256)) return false;
         } else if (node[0] != 7) state_complete_ = false;
         return true;
     }

@@ -82,7 +82,7 @@ decimals = 1
 
 type = "patch-switcher"
 ram2_bytes = 0
-give_up_windows = ["right", "center", "left"]
+give_up_windows = []
 
 [[pages]]
 

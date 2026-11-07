@@ -1,9 +1,17 @@
+#include "midi_endpoints.h"
 #include <cntrl/clock_generator.h>
 #include <cntrl/midi_bridge.h>
 #include <cntrl/midi_outputs.h>
 #include <cassert>
 #include <vector>
 #include <iostream>
+
+void forward(cntrl::midi::Bridge &bridge, uint32_t packed, uint32_t now) {
+    unsigned route = (packed >> 4) & 15;
+    const auto *connection = test_midi_outputs.route(route);
+    if (!connection || connection->transport != cntrl::midi::OutputTransport::physical) return;
+    bridge.forward_packet(route, {uint8_t(packed & 15), {uint8_t(packed >> 8), uint8_t(packed >> 16), uint8_t(packed >> 24)}}, now);
+}
 
 struct Output : cntrl::midi::Sink {
     std::vector<uint8_t> bytes[9];
@@ -21,7 +29,7 @@ void input(cntrl::midi::Bridge &b, unsigned route, std::initializer_list<uint8_t
 }
 
 void test_messages_and_running_status() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0);
     input(b, 6, {0x90, 60, 0xf8, 100, 61, 101, 0xc0, 12, 13, 0xf1, 2, 0xf2, 3, 4, 0xf3, 5, 0xf6});
     for (unsigned i = 0; i < 20; ++i) b.service(out, 0);
@@ -32,17 +40,17 @@ void test_messages_and_running_status() {
             unsigned cin = kind;
             uint32_t packet = cin | route << 4 | (kind << 4 | channel) << 8 | 1 << 16;
             if (kind != 12 && kind != 13) packet |= 2 << 24;
-            b.usb(packet, 0); b.service(out, 0);
+            forward(b, packet, 0); b.service(out, 0);
             assert(out.bytes[route].back() == (kind == 12 || kind == 13 ? 1 : 2));
         }
     }
-    b.usb(0x0000006f, 0); // nonexistent cable
-    b.usb(0x00803c09, 0); // data byte has high bit
+    forward(b, 0x0000006f, 0); // nonexistent cable
+    forward(b, 0x00803c09, 0); // data byte has high bit
     assert(b.counters(0).dropped == 1);
 }
 
 void test_independent_outputs_and_pedal_reservation() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0); out.blocked[0] = true;
     for (unsigned i = 0; i < 1000; ++i) input(b, 0, {0x90, 60, 100});
     assert(b.counters(0).high_water == b.capacity);
@@ -54,13 +62,13 @@ void test_independent_outputs_and_pedal_reservation() {
     for (unsigned i = 0; i < 4; ++i) b.service(out, 0);
     assert(out.bytes[0].empty());
     assert((out.bytes[1] == std::vector<uint8_t>{0xb0, 0, 1, 0xb0, 32, 2, 0xc0, 3, 0x90, 64, 127}));
-    assert(out.attempts <= 4 * b.destinations);
+    assert(out.attempts <= 4 * b.destinations());
     out.blocked[0] = false; b.service(out, 0);
     assert(out.bytes[0][0] == 0xb0); // pedal precedes existing bridge backlog
 }
 
 void test_sysex_streaming_and_pedal_ownership() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0);
     std::vector<uint8_t> expected{0xf0};
     input(b, 0, {0xf0, 1, 2}); b.service(out, 0);
@@ -77,14 +85,14 @@ void test_sysex_streaming_and_pedal_ownership() {
     assert((out.bytes[1] == std::vector<uint8_t>{0xc0, 12}));
     assert(b.idle());
     // USB chunks, including short terminal packets and in-stream realtime.
-    b.usb(0x0201f004, 200); b.usb(0x0000f80f, 200); b.usb(0x00f70306, 200);
+    forward(b, 0x0201f004, 200); forward(b, 0x0000f80f, 200); forward(b, 0x00f70306, 200);
     for (unsigned i = 0; i < 4; ++i) b.service(out, 200);
     assert(out.bytes[0][expected.size()] == 0xf0);
     assert(out.bytes[0].back() == 0xf7);
 }
 
 void test_sysex_timeout_overflow_and_disconnect() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0);
     input(b, 0, {0xf0, 1, 2}); b.service(out, 0);
     uint8_t patch[] = {0xc0, 9}; assert(b.pedal(0, patch, 2));
@@ -108,8 +116,8 @@ void test_sysex_timeout_overflow_and_disconnect() {
 }
 
 void test_default_off_and_disabled_explicit_usb() {
-    cntrl::midi::Bridge b; Output out;
-    b.connected(true, 0); input(b, 6, {0x90, 60, 100}); b.usb(0x00643c09, 0);
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
+    b.connected(true, 0); input(b, 6, {0x90, 60, 100}); forward(b, 0x00643c09, 0);
     b.service(out, 0); assert(out.bytes[0].empty() && out.bytes[6].empty());
     uint8_t patch[] = {0xc0, 12}; assert(b.pedal(6, patch, 2)); b.service(out, 0);
     assert((out.bytes[6] == std::vector<uint8_t>{0xc0, 12}));
@@ -124,24 +132,24 @@ void test_default_off_and_disabled_explicit_usb() {
     assert(b.pedal(0, patch, 2));
     unsigned before = out.attempts;
     b.service(out, 0);
-    assert(out.attempts - before <= b.destinations);
+    assert(out.attempts - before <= b.destinations());
     assert(out.bytes[0].back() == 12);
     std::cout << "Bridge storage: " << sizeof(b) << " bytes\n";
 }
 
 void test_usb_sysex_resynchronizes_after_overflow() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0); out.blocked[0] = true;
-    b.usb(0x0201f004, 0);
-    for (unsigned i = 0; i < 300; ++i) b.usb(0x03020104, 0);
-    b.usb(0x0000f705, 0);
+    forward(b, 0x0201f004, 0);
+    for (unsigned i = 0; i < 300; ++i) forward(b, 0x03020104, 0);
+    forward(b, 0x0000f705, 0);
     out.blocked[0] = false;
-    b.usb(0x00f7f006, 1); b.service(out, 1);
+    forward(b, 0x00f7f006, 1); b.service(out, 1);
     assert((out.bytes[0] == std::vector<uint8_t>{0xf0, 0xf7}));
 }
 
 void test_malformed_pedal_batches_are_rejected_atomically() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     const std::vector<std::vector<uint8_t>> invalid = {
         {0xc0}, {0x90}, {0x90, 60}, {0xc0, 1, 0x90, 60},
         {0xc0, 1, 0xf8}, {0x70, 1, 2}, {0xc0, 0x80}, {0x90, 60, 0x80},
@@ -160,7 +168,7 @@ void test_malformed_pedal_batches_are_rejected_atomically() {
     assert(out.attempts == 7);
 }
 void test_host_disconnect_discards_pending_selection() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     uint8_t bytes[] = {0xb0, 0, 1, 0xc0, 2};
     b.host_connected(true); assert(b.pedal(8, bytes, sizeof(bytes)));
     b.service(out, 0); // Bank delivered; program still pending.
@@ -173,7 +181,7 @@ void test_host_disconnect_discards_pending_selection() {
     assert(b.idle() && b.counters(8).dropped == 2);
 }
 void test_tool_handoff_waits_for_sysex_termination() {
-    cntrl::midi::Bridge b; Output out; b.configure(true); b.connected(true, 0);
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out; b.configure(true); b.connected(true, 0);
     input(b, 0, {0xf0, 1, 2}); b.service(out, 0);
     b.configure(false); out.blocked[0] = true;
     assert(!b.handoff(out));
@@ -183,7 +191,7 @@ void test_tool_handoff_waits_for_sysex_termination() {
     assert(b.handoff(out) && out.bytes[0].size() == 4);
 }
 void test_detaching_a_jack_discards_queued_bytes_and_sysex_termination() {
-    cntrl::midi::Bridge b; Output out; b.configure(true); b.connected(true, 0);
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out; b.configure(true); b.connected(true, 0);
     input(b, 2, {0xf0, 1, 2}); b.service(out, 0);
     input(b, 2, {3, 4, 5});
     b.disconnect_output(2); out.blocked[2] = true;
@@ -192,7 +200,7 @@ void test_detaching_a_jack_discards_queued_bytes_and_sysex_termination() {
     assert((out.bytes[2] == std::vector<uint8_t>{0xf0, 1, 2}));
 }
 void test_owned_sysex_streams_and_abandonment_terminates() {
-    cntrl::midi::Bridge bridge; Output output;
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output output;
     std::vector<uint8_t> bytes(257, 0x12); bytes.front() = 0xf0; bytes.back() = 0xf7;
     assert(bridge.owned_stream(5, 0, bytes.data(), unsigned(bytes.size())));
     bridge.service(output, 0);
@@ -209,7 +217,7 @@ void test_owned_sysex_streams_and_abandonment_terminates() {
     assert(bridge.delivery(5) == cntrl::midi::Bridge::Delivery::cancelled);
 }
 void test_owned_nrpn_is_not_interleaved_with_other_owners() {
-    cntrl::midi::Bridge bridge; Output output;
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output output;
     uint8_t nrpn[] = {0xb0, 99, 1, 0xb0, 98, 2, 0xb0, 6, 3, 0xb0, 38, 4};
     uint8_t other[] = {0xb0, 99, 7};
     assert(bridge.owned_stream(0, 0, nrpn, sizeof(nrpn)));
@@ -225,10 +233,10 @@ void test_owned_nrpn_is_not_interleaved_with_other_owners() {
     assert(!cntrl::midi::message_valid(invalid, sizeof(invalid)));
 }
 void test_automatic_interface_retries_without_replaying_waiting_traffic() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(false, 0);
     b.connected(false, 2000); b.connected(true, 3999);
-    input(b, 6, {0x90, 60, 100}, 3999); b.usb(0x643c9009, 3999);
+    input(b, 6, {0x90, 60, 100}, 3999); forward(b, 0x643c9009, 3999);
     b.service(out, 3999);
     assert(out.bytes[0].empty() && out.bytes[6].empty());
     // Explicit pedal USB traffic stays available during the interface wait.
@@ -239,7 +247,7 @@ void test_automatic_interface_retries_without_replaying_waiting_traffic() {
     b.connected(true, 4000);
     input(b, 6, {2, 0xf7}, 4000); b.service(out, 4000);
     assert(out.bytes[6].size() == 2); // No partial SysEx crosses the retry boundary.
-    input(b, 6, {0x90, 61, 100}, 4000); b.usb(0x643d9009, 4000); b.service(out, 4000);
+    input(b, 6, {0x90, 61, 100}, 4000); forward(b, 0x643d9009, 4000); b.service(out, 4000);
     assert(out.bytes[6].size() == 5 && out.bytes[0].size() == 3);
     b.connected(false, 4100); b.connected(true, 6099);
     input(b, 6, {0xf8}, 6099); b.service(out, 6099);
@@ -254,7 +262,7 @@ void test_automatic_interface_retries_without_replaying_waiting_traffic() {
 }
 
 void test_interface_retry_clock_wrap() {
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(false, 0xffffff00u);
     b.connected(true, 1743); input(b, 6, {0xf8}, 1743); b.service(out, 1743);
     assert(out.bytes[6].empty());
@@ -264,7 +272,7 @@ void test_interface_retry_clock_wrap() {
 
 void test_usb_ports_enable_independently() {
     for (bool device : {false, true}) for (bool host : {false, true}) {
-        cntrl::midi::Bridge b; Output out;
+        cntrl::midi::Bridge b{test_midi_outputs}; Output out;
         b.connected(true, 0); b.host_connected(true); b.configure(true);
         b.configure_usb(device, host, 0);
         const uint8_t note[] = {0x90, 60, 100};
@@ -272,7 +280,7 @@ void test_usb_ports_enable_independently() {
         assert(b.owned_send(1, 8, note, sizeof(note)) == host);
         assert(b.pedal(7, note, sizeof(note)) == device);
         assert(b.pedal(8, note, sizeof(note)) == host);
-        b.usb(0x643c9009, 0);
+        forward(b, 0x643c9009, 0);
         b.service(out, 0);
         assert(out.bytes[0].empty() == !device);
         assert(out.bytes[6].empty() == !device);
@@ -292,7 +300,7 @@ void test_usb_ports_enable_independently() {
         assert(!out.bytes[6].empty() && !out.bytes[8].empty());
     }
     // Disable also cancels accepted work while the cable is already absent.
-    cntrl::midi::Bridge b; Output out;
+    cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     const uint8_t note[] = {0x90, 60, 100};
     assert(b.owned_send(0, 8, note, sizeof(note)));
     b.configure_usb(true, false, 0);
@@ -341,7 +349,7 @@ void test_generated_clock_under_load() {
 }
 
 void test_clock_source_handoff() {
-    cntrl::midi::Bridge bridge; Output out;
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output out;
     bridge.configure(true); bridge.connected(true, 0);
     input(bridge, 0, {0xfa, 0xf8, 0x90, 60, 100});
     bridge.clock_owner(1);
@@ -357,7 +365,7 @@ void test_clock_source_handoff() {
 }
 
 void test_file_sysex_waits_for_previous_stream_and_allows_realtime() {
-    cntrl::midi::Bridge bridge; Output out;
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output out;
     bridge.configure(true); bridge.connected(true, 0);
     input(bridge, 0, {0xf0, 1, 2}); bridge.service(out, 0);
     assert(!bridge.sysex_ready(1));
@@ -373,6 +381,12 @@ void test_file_sysex_waits_for_previous_stream_and_allows_realtime() {
 }
 
 int main() {
+    const cntrl::midi::OutputConnection connections[] = {
+        {"input-only", "Input", 0, cntrl::midi::OutputTransport::physical, true, false},
+        {"synth", "Synth", 1, cntrl::midi::OutputTransport::physical, false, true},
+        {"offline", "Offline", 2, cntrl::midi::OutputTransport::usb_device, false, true},
+    };
+    assert(cntrl::midi::available_outputs({connections, 3}, [](const char *name) { return std::strcmp(name, "offline"); }) == (1u << 1));
     test_file_sysex_waits_for_previous_stream_and_allows_realtime();
     test_generated_clock_under_load();
     test_clock_source_handoff();
@@ -381,15 +395,21 @@ int main() {
     test_interface_retry_clock_wrap();
     test_owned_sysex_streams_and_abandonment_terminates();
     test_owned_nrpn_is_not_interleaved_with_other_owners();
-    for (const auto &connection : cntrl::midi::output_connections) {
-        assert(cntrl::midi::find_output(connection.name) == &connection);
-        assert(cntrl::midi::physical_output(connection.route) == &connection);
+    for (const auto &connection : test_midi_outputs) {
+        assert(test_midi_outputs.find(connection.name) == &connection);
+        assert(test_midi_outputs.route(connection.route) == &connection);
     }
-    for (const auto &connection : cntrl::midi::usb_output_connections) {
-        assert(cntrl::midi::find_output(connection.name) == &connection);
-        assert(!cntrl::midi::physical_output(connection.route));
-    }
-    assert(!cntrl::midi::find_output("omniport-1") && cntrl::midi::physical_output(2) == cntrl::midi::find_output("configurable-1"));
+    assert(!test_midi_outputs.find("missing"));
+    const cntrl::midi::OutputConnection reordered[] = {
+        {"host", "Host", 0, cntrl::midi::OutputTransport::usb_host},
+        {"wire", "Wire", 1, cntrl::midi::OutputTransport::physical},
+        {"computer", "Computer", 2, cntrl::midi::OutputTransport::usb_device},
+    };
+    cntrl::midi::Bridge differently_ordered({reordered, 3});
+    assert(differently_ordered.destinations() == 3);
+    differently_ordered.configure_usb(false, true, 0);
+    assert(differently_ordered.usb_enabled(0) && differently_ordered.usb_enabled(1));
+    assert(!differently_ordered.usb_enabled(2) && !differently_ordered.usb_enabled(3));
     test_tool_handoff_waits_for_sysex_termination();
     test_detaching_a_jack_discards_queued_bytes_and_sysex_termination();
     test_host_disconnect_discards_pending_selection();

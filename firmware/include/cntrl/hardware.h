@@ -52,15 +52,20 @@ struct Pane {
 };
 
 inline bool button_pair_valid(unsigned mask) {
-    return mask < 64 && mask && (mask & (mask - 1)) && !( (mask & (mask - 1)) & ((mask & (mask - 1)) - 1));
+    return mask < 256 && mask && (mask & (mask - 1)) && !( (mask & (mask - 1)) & ((mask & (mask - 1)) - 1));
 }
 
 struct SongContinuation;
 class Document;
+enum class ControlRole { previous, next, confirm, previous_section, next_section, back };
 struct Hardware {
     virtual ~Hardware() = default;
     virtual unsigned memory_capacity() const { return 0; }
     virtual unsigned memory_runtime() const { return 0; }
+    virtual unsigned input_count() const { return 0; }
+    virtual const char *input_label(unsigned) const { return ""; }
+    virtual unsigned control_input(ControlRole) const { return ~0u; }
+    virtual midi::Outputs midi_outputs() const { return {}; }
     // Accept the complete message sequence, or accept none of it.
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
     virtual bool supports_function(unsigned) const { return false; }
@@ -79,6 +84,9 @@ struct Hardware {
     virtual void finish_fonts(bool) {}
     virtual unsigned display_width() const = 0;
     virtual unsigned display_height() const = 0;
+    virtual unsigned display_count() const { return 0; }
+    virtual const char *display_id(unsigned) const { return nullptr; }
+    virtual const char *control_label(ControlRole) const { return ""; }
     // Pane indices follow physical left-to-right order: 0, 1, 2.
     virtual void show(unsigned pane, const Pane &content) = 0;
     virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) { (void)undo; (void)duration_ms; (void)pane; (void)vertical; (void)panorama; }

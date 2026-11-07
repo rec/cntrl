@@ -3,49 +3,27 @@
 #include <cassert>
 #include <vector>
 
-struct Session {
-    unsigned received = 0, consumed_count = 0;
-    bool blocked = false, reset = false;
-    bool output_pending() const { return blocked; }
-    void receive(int) { ++received; }
-    bool resetting() const { return reset; }
-    void reset_done() { reset = false; }
-    unsigned input_size() const { return received - consumed_count; }
-    char input() const { return 'x'; }
-    void consumed() { ++consumed_count; }
-    bool active() const { return true; }
-};
-struct Job {
-    unsigned polls = 0, keepalives = 0, cancellations = 0;
-    bool processing() const { return false; }
-    bool accepts_input() const { return true; }
-    void cancel_transfer() { ++cancellations; }
-    void cancel() { ++cancellations; }
-    void keepalive(uint32_t) { ++keepalives; }
-    void receive(char, uint32_t) {}
-    void poll(uint32_t) { ++polls; }
-    template<class Replies> void poll(uint32_t, Replies &) { ++polls; }
-    void tick(uint32_t) { ++polls; }
-    void tick() { ++polls; }
-};
+#include "runtime_services.h"
+
 struct Services {
     Session usb;
-    Job command, transfer, bundle, font, source, song;
+    Job command, transfer, bundle, history, font, source, song;
     std::vector<unsigned> order;
     unsigned serial_reads = 0;
-    bool reply = true, bus = true, due = true;
-    uint32_t now() const { return 42; }
+    bool reply = true, bus = true;
+    uint32_t timestamp = 42, scan_gap = 0;
+    uint32_t now() const { return timestamp; }
     void complete_display() { order.push_back(0); }
     void keyboard() { order.push_back(1); }
     bool scan_available() const { return bus; }
-    bool scan_due() const { return due; }
-    void scan(uint32_t) { order.push_back(2); }
+    void scan(uint32_t, uint32_t gap) { scan_gap = gap; order.push_back(2); }
     void apps(uint32_t) { order.push_back(3); }
     void midi() { order.push_back(4); }
     Session &session() { return usb; }
     Job &commands() { return command; }
     Job &song_transfer() { return transfer; }
     Job &bundle_transfer() { return bundle; }
+    Job &history_transfer() { return history; }
     Job &fonts() { return font; }
     Job &song_sources() { return source; }
     Job &songs() { return song; }
@@ -91,6 +69,16 @@ int main() {
     assert(blocked.serial_reads == 0 && blocked.command.polls == 0 && blocked.transfer.polls == 0);
     assert(blocked.order == std::vector<unsigned>({0, 1, 3, 4, 5, 6, 7}));
     assert(blocked.source.polls == 1 && blocked.song.polls == 1);
+    assert(!runtime.scan_due(42) && runtime.scan_due(43));
+    blocked.timestamp = 43; blocked.bus = false; runtime.poll(blocked);
+    assert(runtime.scan_due(43)); // A busy bus does not consume the deadline.
+    blocked.order.clear(); blocked.bus = true; blocked.timestamp = 44; runtime.poll(blocked);
+    assert(blocked.scan_gap == 2);
+    assert(blocked.order == std::vector<unsigned>({0, 1, 2, 3, 4, 5, 6, 7}));
+    cntrl::CooperativeRuntime wrapping(10); Services wrap;
+    wrap.timestamp = 0xfffffff0; wrapping.poll(wrap);
+    assert(!wrapping.scan_due(0xfffffff5));
+    wrap.timestamp = 5; wrapping.poll(wrap); assert(wrap.scan_gap == 21);
     constexpr cntrl::ui::ControlBinding bindings[] = {{7, "Left"}, {3, "Right"}, {4, "Back"}, {1, "Confirm"}};
     cntrl::ui::ControlRouter router({0, 1, 3, 0, 1, 2, 2, 0, 3, bindings, 4}); Actions actions;
     uint8_t events[4] = {1, 0, 0, 0}; router.route(actions, events, 1, 0);

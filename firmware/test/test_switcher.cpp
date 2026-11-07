@@ -41,6 +41,10 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     bool supports_font(unsigned font, unsigned size) const override { return font == 0 && size >= 8 && size <= 96 && size % 8 == 0; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
     void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) override {
         scroll_vertical.push_back(vertical); scroll_panorama.push_back(panorama); scroll_durations.push_back(duration_ms);
@@ -659,15 +663,17 @@ static void test_apps_run_independently(const std::string &path) {
     assert((hw.sent == std::vector<std::vector<uint8_t>>{{0xb0, 7, 100}, {0xc0, 1}}));
     assert(hw.hidden_draws && first.navigation().center == 0 && second.navigation().center == 1);
     const unsigned offset = unsigned(layout.records - bytes.data());
+    const unsigned app_offset = unsigned(reinterpret_cast<const uint8_t *>(layout.app_name(0)) - layout.records);
+    const unsigned page_offset = unsigned(layout.page(0) - layout.records);
     for (const auto &bad : std::vector<std::pair<unsigned, uint8_t>>{
-            {4, 5}, {5, 33}, {6 + 32, 3}, {6 + 33, 2},
-            {6 + 70, 11}, {6 + 71, 1}, {6 + 73, 4}}) {
+            {4, 5}, {5, 33}, {6, 0}, {7, 1}, {app_offset + 32, 3}, {app_offset + 33, 2},
+            {page_offset, 11}, {page_offset + 1, 1}, {page_offset + 3, 4}}) {
         auto corrupt = bytes; corrupt[offset + bad.first] = bad.second;
         cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
         cntrl::Document rejected; assert(!rejected.load(corrupt.data(), unsigned(corrupt.size()), hw));
     }
     auto empty = bytes;
-    empty.erase(empty.begin() + offset + 6, empty.begin() + offset + 6 + 70 + 10);
+    empty.erase(empty.begin() + offset + app_offset, empty.begin() + offset + layout.length());
     empty[offset + 4] = empty[offset + 5] = 0;
     empty[19] &= ~1u;
     cntrl::put32(empty.data() + 8, unsigned(empty.size()));

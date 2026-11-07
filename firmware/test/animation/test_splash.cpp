@@ -115,6 +115,7 @@ void test_bounded_async_packets() {
         }
     } output;
     Player player(source, output);
+    player.set_color_cycle(true);
     assert(player.start(0));
     for (unsigned i = 0; i < 10; ++i) {
         assert(player.poll(0, false) == Step::playing);
@@ -128,8 +129,63 @@ void test_bounded_async_packets() {
     assert(output.calls == 9 && player.frame_ready() && source.maximum <= packet_bytes);
 }
 
+// Fixed native colors are the former two-stream adapter's output, before
+// moving that policy into Player's existing bounded transfer packet.
+void test_player_color_cycle_matches_legacy_golden() {
+    constexpr unsigned pixels_per_stream = 333;
+    struct Scene : Source {
+        std::vector<uint8_t> bytes = std::vector<uint8_t>(header_bytes + 4 + pixels_per_stream * 4, 0);
+        uint32_t size() override { return unsigned(bytes.size()); }
+        bool read(uint32_t offset, uint8_t *data, uint32_t count) override {
+            if (offset + count > bytes.size()) return false;
+            std::copy_n(bytes.data() + offset, count, data); return true;
+        }
+    } source;
+    std::memcpy(source.bytes.data(), "CNSA", 4);
+    source.bytes[4] = 2; source.bytes[6] = uint8_t(pixels_per_stream); source.bytes[7] = pixels_per_stream >> 8;
+    source.bytes[8] = 1; source.bytes[10] = 2; source.bytes[12] = 1; source.bytes[14] = 1;
+    put32(source.bytes.data() + 16, source.size()); put32(source.bytes.data() + header_bytes, 1000);
+    for (unsigned i = 0; i < pixels_per_stream * 2; ++i) {
+        uint16_t pixel = i == 0 ? 0xffff : i == 1 ? 0x07e0 : i == 2 ? uint16_t(16 << 11 | 47 << 5 | 16) : uint16_t(i * 977);
+        source.bytes[header_bytes + 4 + i * 2] = uint8_t(pixel >> 8);
+        source.bytes[header_bytes + 5 + i * 2] = uint8_t(pixel);
+    }
+    struct Capture : Output {
+        std::vector<uint8_t> bytes;
+        bool begin(unsigned w, unsigned h, unsigned streams) override { return w == pixels_per_stream && h == 1 && streams == 2; }
+        bool ready() const override { return true; }
+        bool pixels(unsigned, unsigned, unsigned, const uint8_t *data, unsigned count) override {
+            bytes.insert(bytes.end(), data, data + count * 2); return true;
+        }
+    } output;
+    Player player(source, output); player.set_color_cycle(true); assert(player.start(100));
+    ColorWalk legacy[] = {ColorWalk(0x9e3779b9), ColorWalk(0x243f6a89)};
+    const unsigned times[] = {100, 1100, 2100, 5100, 6100};
+    constexpr uint32_t golden[] = {0x56c7cc0d, 0x352b3a85, 0x6e015bcc, 0x6e015bcc, 0x93503879};
+    for (unsigned frame = 0; frame < 5; ++frame) {
+        if (frame == 4) { player.stop(); assert(player.start(times[frame])); }
+        output.bytes.clear();
+        do { assert(player.poll(times[frame], false) == Step::playing); } while (!player.frame_ready());
+        std::vector<uint8_t> expected(source.bytes.begin() + header_bytes + 4, source.bytes.end());
+        for (unsigned stream = 0; stream < 2; ++stream) {
+            Tint tint = legacy[stream].at(times[frame]);
+            for (unsigned x = 0; x < pixels_per_stream; ++x) {
+                unsigned at = (stream * pixels_per_stream + x) * 2;
+                uint16_t pixel = uint16_t(expected[at]) << 8 | expected[at + 1];
+                pixel = tint_white(pixel, tint); expected[at] = uint8_t(pixel >> 8); expected[at + 1] = uint8_t(pixel);
+            }
+        }
+        assert(output.bytes == expected);
+        assert(~crc_update(0xffffffff, output.bytes.data(), unsigned(output.bytes.size())) == golden[frame]);
+    }
+    player.set_color_cycle(false); assert(player.start(7100)); output.bytes.clear();
+    do { player.poll(7100, false); } while (!player.frame_ready());
+    assert(std::equal(output.bytes.begin(), output.bytes.end(), source.bytes.begin() + header_bytes + 4));
+}
+
 int main() {
     test_bounded_async_packets();
+    test_player_color_cycle_matches_legacy_golden();
     Tint red = {63, 0, 0};
     assert(tint_white(0xffff, red) == 0xf800);
     for (unsigned pixel = 0; pixel < 65536; ++pixel)

@@ -185,15 +185,19 @@ filesystem-used space minus estimated file allocation, not proof of lost space:
 directories, filesystem bookkeeping and file preallocation can contribute.
 
 The USB commands are `CNTRL STORAGE` and `CNTRL STORAGE SCAN`. The single-line
-response is `CNTRL STORAGE SECTORS TYPE CID_HEX FAT CLUSTER_BYTES CLUSTERS FREE`.
-Sectors are 512 bytes, CID is 16 bytes in register order, and FREE is a cluster
-count or `-` when not requested. FAT is 16, 32 or 64 (exFAT). `SCAN` then streams
+response is `CNTRL STORAGE CAPACITY_BYTES USABLE_BYTES FREE_BYTES ALLOCATION_UNIT_BYTES`.
+FREE_BYTES is `-` when not requested. `SCAN` first emits optional
+`CNTRL DETAIL KEY_HEX VALUE_HEX` rows. This driver reports card type, manufacturer,
+OEM, product, revision, serial number, manufacture date, filesystem and raw CID;
+it interprets the identification register and FAT type locally. Details are UTF-8
+strings encoded as hex and do not affect entry numbering. The shared protocol
+also supports storage without a card or FAT filesystem. `SCAN` then streams
 `CNTRL ENTRY ID PARENT D_OR_F SIZE_HEX NAME_HEX` for each entry and ends with
 `CNTRL STORAGE END COUNT`. Root has ID 0; entries have consecutive IDs starting
 at 1, with parents preceding children. Sizes use 16 hex digits, preserving
 64-bit exFAT sizes; hex-encoded names preserve spaces.
 The host rejects partial reports and reconstructs paths and totals on the Mac.
-The short `CNTRL STORAGE` metadata-only query remains unchanged. Errors use
+The short `CNTRL STORAGE` query returns byte counts without scanning. Errors use
 `CNTRL ERROR storage-unavailable`, `storage-read`, `storage-scan` or `storage-list`. Commands
 are handled only when no show/animation transfer or verification is active.
 

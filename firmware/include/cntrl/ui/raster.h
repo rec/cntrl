@@ -3,6 +3,7 @@
 #include "display.h"
 #include "fonts.h"
 #include <algorithm>
+#include <cstring>
 
 namespace cntrl::ui {
 class Raster {
@@ -40,9 +41,13 @@ public:
         }
         if (line.wrap) { const auto p = position(line, index); x += p.x - glyph.x; y += p.row * line.graphics.line_height; }
         const auto color = index < 64 && (line.color_mask & (uint64_t(1) << index)) ? line.alternate_color : line.graphics.foreground;
-        for (unsigned row = 0; row < glyph.height; ++row) for (unsigned col = 0; col < glyph.width; ++col)
+        const int origin_x = x + glyph.x, origin_y = y + glyph.y;
+        const int first_x = std::max(0, int(settings_.pad) - origin_x), first_y = std::max(0, int(settings_.pad) - origin_y);
+        const int end_x = std::min(int(glyph.width), int(viewport_.width) - int(settings_.pad) - origin_x);
+        const int end_y = std::min(int(glyph.height), int(viewport_.height) - int(settings_.pad) - origin_y);
+        for (int row = first_y; row < end_y; ++row) for (int col = first_x; col < end_x; ++col)
             if (glyph.pixels[row * ((glyph.width + 7) / 8) + col / 8] & (0x80 >> (col % 8)))
-                pixel(x + glyph.x + int(col), y + glyph.y + int(row), color, settings_.pad);
+                pixel(origin_x + col, origin_y + row, color, settings_.pad);
         return true;
     }
     void pixel(int x, int y, uint16_t color, unsigned inset = 0) {
@@ -57,10 +62,12 @@ public:
     void circle(const Circle &c) {
         const int span = c.diameter + 2 * c.annulus;
         if (!c.diameter) return;
-        for (int row = 0; row < span; ++row) for (int col = 0; col < span; ++col) {
-            const int dx = 2 * col + 1 - span, dy = 2 * row + 1 - span;
-            const int distance = dx * dx + dy * dy;
-            if (distance <= span * span) pixel(int(c.x) - span / 2 + col, int(c.y) - span / 2 + row, distance <= c.diameter * c.diameter ? c.color : c.ring_color);
+        const int left = int(c.x) - span / 2, top = int(c.y) - span / 2;
+        const int end_x = std::min(int(viewport_.width), left + span), end_y = std::min(int(viewport_.height), top + span);
+        for (int y = std::max(0, top); y < end_y; ++y) for (int x = std::max(0, left); x < end_x; ++x) {
+            const int64_t dx = 2 * (x - left) + 1 - span, dy = 2 * (y - top) + 1 - span;
+            const int64_t distance = dx * dx + dy * dy;
+            if (distance <= int64_t(span) * span) pixel(x, y, distance <= int64_t(c.diameter) * c.diameter ? c.color : c.ring_color);
         }
     }
     void toggle(const ToggleIcon &t) {

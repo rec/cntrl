@@ -8,6 +8,9 @@ namespace cntrl {
 // The adapter supplies biased measurements; settling never blocks the runtime.
 class ExpressionPedals {
 public:
+    static void calibration_filename(unsigned input, char *path, unsigned capacity) {
+        std::snprintf(path, capacity, "/cntrl/expression-%u.cal", input + 1);
+    }
     ExpressionPedals(unsigned count, files::File &calibrations,
                      void (*filename)(unsigned, char *, unsigned), const char *confirm,
                      uint32_t rest_ms, uint32_t bias_ms)
@@ -40,7 +43,7 @@ public:
         stage_ = Capture::idle;
         message_ = nullptr;
     }
-    void next_jack() { cancel(); selected_ = (selected_ + 1) % inputs_.size(); }
+    void select(unsigned index) { cancel(); selected_ = index; }
     void calibrate(bool enabled) {
         if (!enabled) { cancel(); return; }
         if (stage_ == Capture::idle) {
@@ -98,10 +101,10 @@ public:
         if (!phase_) first_ = (first_ + 1) % inputs_.size();
     }
     unsigned selected() const { return selected_; }
-    void status(bool enabled, char (&title)[40], char (&position)[40], char (&prompt)[40]) const {
+    void status(const char *label, bool enabled, char (&title)[40], char (&position)[40], char (&prompt)[40]) const {
         const auto &a = assignments_[selected_];
-        if (a.channel) std::snprintf(title, sizeof(title), "Jack %u  CC %u Ch %u", selected_ + 1, a.controller, a.channel);
-        else std::snprintf(title, sizeof(title), "Jack %u  Unassigned", selected_ + 1);
+        if (a.channel) std::snprintf(title, sizeof(title), "%.20s  CC %u Ch %u", label, a.controller, a.channel);
+        else std::snprintf(title, sizeof(title), "%.24s  Unassigned", label);
         const auto &input = inputs_[selected_];
         if (!enabled) std::strcpy(position, "Select expression role");
         else if (input.reading() < 0) std::strcpy(position, "No pedal");
@@ -109,6 +112,7 @@ public:
         else std::snprintf(position, sizeof(position), "%d%%  Calibrated", (input.position() * 100 + 511) / 1023);
         if (message_) std::snprintf(prompt, sizeof(prompt), "%s", message_);
         else if (!enabled) std::strcpy(prompt, "Select expression role");
+        else if (!confirm_[0]) prompt[0] = 0;
         else std::snprintf(prompt, sizeof(prompt), "%s: %s", confirm_,
             stage_ == Capture::heel ? "Heel down" : stage_ == Capture::toe ? "Toe down" : "Calibrate");
     }

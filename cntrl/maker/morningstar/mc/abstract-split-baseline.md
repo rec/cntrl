@@ -20,8 +20,8 @@ including sanitizer checks. The combined CPU image builds successfully.
 Combined-image SHA256:
 `516f9cd2a2ae7e6f28876948224609b7033be97c9bed06d0714d6eaa83845e20`.
 
-The complete live backup is at
-`/Users/tom/code/cntrl/build/abstract-split/before`.
+The complete live backup, including all 15 historical revisions and stored assets,
+is at `/Users/tom/code/cntrl/build/abstract-split/before-complete`.
 It contains `readability-demo` (2,690 bytes), `simple-setup` (23,084 bytes),
 their assets, songs and the saved selection. The selected setup is
 `simple-setup`; the device reports format 34 and startup counter 2, ready.

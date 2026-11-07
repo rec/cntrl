@@ -8,7 +8,7 @@
 #include <cstring>
 
 namespace {
-ButtonState buttons[6];
+cntrl::ButtonState buttons[6];
 bool painting = true, reverse_order = false;
 bool measure_period = false;
 unsigned pixels_per_update = 1, next_column = 0, offset = 0, update_rate = 60;
@@ -57,15 +57,15 @@ void loop() {
         uint8_t raw = read_buttons();
         for (unsigned i = 0; i < 6; ++i) {
             uint8_t event = buttons[i].update(!(raw & (1u << button_bits[i])), now);
-            if (i == 0 && (event & press_event)) {
+            if (i == 0 && (event & cntrl::press_event)) {
                 update_rate = scroll_probe::next_rate(update_rate);
                 reset_measurements();
             }
-            if (i == 1 && (event & press_event)) {
+            if (i == 1 && (event & cntrl::press_event)) {
                 reverse_order = !reverse_order;
                 reset_measurements();
             }
-            if (i == 2 && (event & press_event)) next_speed();
+            if (i == 2 && (event & cntrl::press_event)) next_speed();
         }
     }
     for (unsigned i = 0; i < 64 && Serial.available(); ++i) {

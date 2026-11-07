@@ -25,6 +25,10 @@ struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     void finish_fonts(bool commit) override { font_assets::cache.finish(commit); }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned, const cntrl::Pane &pane) override {
         if (pane.graphics.asset) assert(font_assets::cache.get(pane.graphics.asset, pane.graphics.size));
         for (const auto &line : pane.lines) if (line.text[0] && line.graphics.asset)

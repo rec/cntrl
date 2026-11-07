@@ -1,4 +1,6 @@
 #pragma once
+#include "ui/presentation.h"
+#include "ui/prompts.h"
 #include "songs.h"
 
 namespace cntrl {
@@ -154,11 +156,13 @@ private:
         }
     }
     void render() {
+        ui::Prompt prompt(hardware_);
+        using Role = ControlRole;
         Pane panes[3];
         for (auto &p : panes) for (auto &line : p.lines) { line.graphics.size = line.graphics.line_height = 16; line.wrap = true; }
         if (songs_.busy()) {
             std::strcpy(panes[1].lines[0].text, "Saving...");
-            for (unsigned i = 0; i < 3; ++i) hardware_.show(i, panes[i]);
+            ui::present(hardware_, panes, 1);
             return;
         }
         auto text = [&](unsigned pane, unsigned line, const char *s) { std::snprintf(panes[pane].lines[line].text, 64, "%s", s); };
@@ -208,15 +212,20 @@ private:
             text(1, 1, item ? item->name : "Missing song");
             std::snprintf(panes[1].lines[2].text, 64, "%u/%u", cursor_ + 1, unsigned(set->count));
         } else text(1, 1, "Add songs");
-        text(0, 3, mode_ == performance ? "A/B entry D edit" : mode_ == naming ? "A/B letter D/E pos" : "A/B browse D/E jump");
-        text(2, 3, mode_ == performance ? "C next F menu" : mode_ == adding ? "C add F done" : "C OK F back");
+        prompt.pair(Role::previous, Role::next, mode_ == performance ? "entry" : mode_ == naming ? "letter" : "browse");
+        if (mode_ == performance) prompt.add(Role::previous_section, "edit");
+        else prompt.pair(Role::previous_section, Role::next_section, mode_ == naming ? "pos" : "jump");
+        text(0, 3, prompt.text());
+        prompt.clear().add(Role::confirm, mode_ == performance ? "next" : mode_ == adding ? "add" : "OK")
+            .add(Role::back, mode_ == performance ? "menu" : mode_ == adding ? "done" : "back");
+        text(2, 3, prompt.text());
         if (feedback_[0]) text(0, 2, feedback_);
         for (unsigned i = 0; i < 3; ++i) {
             unsigned rows = 0;
             for (const auto &line : panes[i].lines) rows += (unsigned(std::strlen(line.text)) + 11) / 12;
             if (rows > 7) for (auto &line : panes[i].lines) line.graphics.size = line.graphics.line_height = 8;
-            hardware_.show(i, panes[i]);
         }
+        ui::present(hardware_, panes, 1);
     }
 };
 } // namespace cntrl

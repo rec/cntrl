@@ -255,7 +255,7 @@ def test_configuration_units_retain_constraints(
 
 def test_target_units_normalize_before_compilation(target: models.Target) -> None:
     data = target.model_dump()
-    data.update(display_width='160 px', display_height='128 px')
+    data['displays'][0].update(width='160 px', height='128 px')
     data['fonts'][0]['sizes']['8 px'] = data['fonts'][0]['sizes'].pop(8)
     data['fonts'][0]['sizes']['8 px'].update(line_height='8 px', top='0 px')
     assert models.Target.model_validate(data) == target
@@ -311,7 +311,10 @@ def test_trs_roles_control_routing_and_round_trip(target: models.Target) -> None
     setup = {'patch_cycles': {'Live': [{'type': 'start', 'output': jack}]}}
     capable = target.model_copy(
         update={
-            'outputs': [*target.outputs, jack],
+            'midi_endpoints': [
+                e.model_copy(update={'output': e.output or e.name == jack})
+                for e in target.midi_endpoints
+            ],
             'trs_ports': {jack: ['midi-a', 'midi-b', 'expression', 'aux', 'off']},
         }
     )
@@ -334,7 +337,12 @@ def test_clock_output_requires_enabled_trs_and_usb_routes(
     jack = 'configurable-1'
     capable = target.model_copy(
         update={
-            'outputs': [*target.outputs, jack, 'usb-device'],
+            'midi_endpoints': [
+                e.model_copy(
+                    update={'output': e.output or e.name in (jack, 'usb-device')}
+                )
+                for e in target.midi_endpoints
+            ],
             'trs_ports': {jack: ['midi-a', 'expression']},
         }
     )

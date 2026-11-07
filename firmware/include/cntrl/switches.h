@@ -1,4 +1,6 @@
 #pragma once
+#include "ui/presentation.h"
+#include "ui/prompts.h"
 #include "patch_executor.h"
 #include "switch_gestures.h"
 
@@ -128,12 +130,12 @@ public:
     CNTRL_FLASH_ROUTINE(switches_button)
 #endif
     void button(unsigned button, bool down, uint32_t now = 0) {
-        if (!open_ || button >= 6) return;
+        if (!open_ || button >= hardware_.input_count() || button >= 8) return;
         unsigned bit = 1u << button;
         if (bool(held_ & bit) == down) return;
         held_ = down ? held_ | bit : held_ & ~bit;
         if (!down) disarmed_ &= ~bit;
-        if (button == 5 && down) { close(); return; }
+        if (button == hardware_.control_input(ControlRole::back) && down) { close(); return; }
         if (closing_) return;
         for (unsigned i = 0; i < count_; ++i) {
             auto &s = states_[i]; if (s.record[0] != button || (disarmed_ & bit)) continue;
@@ -389,7 +391,7 @@ private:
         unsigned known = 0, matched = 0, total = 0;
         for (unsigned i = 0; i < pattern.count; ++i) {
             const auto &v = pattern.values[i]; if (v.value < 0) continue;
-            const auto *connection = midi::find_output(v.output);
+            const auto *connection = hardware_.midi_outputs().find(v.output);
             if (!connection) return -2;
             ++total;
             int value = outputs_.available(v.output) ? state->value(connection->route, v.channel, v.control) : -1;
@@ -441,6 +443,8 @@ private:
     CNTRL_FLASH_ROUTINE(switches_render)
 #endif
     void render() {
+        ui::Prompt prompt(hardware_);
+        using Role = ControlRole;
         Pane panes[3];
         for (unsigned i = 0; i < count_; ++i) {
             const auto &s = states_[i]; Pane view; view.graphics = document_.graphics(1);
@@ -452,7 +456,7 @@ private:
                 : on == -1 || off == -1 ? "Unknown remote state" : on == 0 ? "Other values"
                 : s.record[1] == 0 ? "Completed locally" : s.active ? "On" : "Off";
             document_.page_record(view, u16(s.record + 70), 0, false, state);
-            unsigned pane = s.record[0] % 3, group = s.record[0] / 3;
+            unsigned pane = i % 3, group = i / 3;
             panes[pane].graphics = view.graphics;
             for (unsigned j = 0; j < 3; ++j) {
                 panes[pane].lines[group * 3 + j] = view.lines[j];
@@ -461,9 +465,9 @@ private:
         }
         auto &back = panes[2].lines[15]; back.graphics.size = back.graphics.line_height = 8;
         back.y = int16_t(hardware_.display_height() - 12);
-        std::snprintf(back.text, 64, "%s", closing_ ? "Closing: F abandon" : shifted_ ? "Shifted | F Back" : "F Back");
+        std::snprintf(back.text, 64, "%s%.52s", closing_ ? "Closing: " : shifted_ ? "Shifted | " : "", prompt.add(Role::back, closing_ ? "abandon" : "Back").text());
         if (!count_) std::snprintf(panes[1].lines[0].text, 64, "No switches");
-        for (unsigned i = 0; i < 3; ++i) hardware_.show(i, panes[i]);
+        ui::present(hardware_, panes, 1);
         dirty_ = false;
     }
 };

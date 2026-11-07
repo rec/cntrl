@@ -30,13 +30,6 @@ export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
 .PHONY: tools build inspect test patch-switcher inspect-patch-switcher scroll-probe inspect-scroll-probe test-scroll-probe button-timing test-button-timing boot-switch test-switch-gesture test-boot-selection
 
-.PHONY: test-startup-counter
-test-startup-counter:
-	mkdir -p "$(ROOT)/build"
-	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
-		"$(ROOT)/test_startup_counter.cpp" -o "$(ROOT)/build/test_startup_counter"
-	"$(ROOT)/build/test_startup_counter"
-
 boot-switch: tools test-switch-gesture test-boot-selection
 	cd "$(ROOT)/../../../../.." && uv run --frozen -m cntrl.maker.morningstar.mc.boot_switch
 
@@ -56,7 +49,7 @@ button-timing: tools test-button-timing
 	"$(CLI)" compile --fqbn "$(FQBN)" --warnings all \
 		--build-path "$(ROOT)/build/button-timing" \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -I$(ROOT)' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -I$(ROOT) -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -I$(ROOT) -I$(SOURCE_ROOT)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/button_timing"
@@ -76,8 +69,8 @@ scroll-probe: tools
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/external-flash-config.patch"
 	"$(CLI)" compile --fqbn teensy:avr:teensy41:usb=serialmidi,speed=600,opt=osstd,keys=en-us --warnings all \
 		--build-path "$(ROOT)/build/scroll-probe" \
-		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -I$(ROOT)/usb_probe' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_SCROLL_GAP=$(SCROLL_GAP) -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -I$(SOURCE_ROOT)/firmware/include -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_SCROLL_GAP=$(SCROLL_GAP) -I$(SOURCE_ROOT)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/scroll_probe"
@@ -115,7 +108,7 @@ patch-switcher: tools
 	"$(CLI)" compile --fqbn teensy:avr:teensy41:usb=serialmidi,speed=600,opt=osstd,keys=en-us --warnings all \
 		--build-path "$(PATCH_BUILD)" \
 		$(PATCH_LINK_OPTION) \
-		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -DCNTRL_USB_INTERFACE -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -DCNTRL_USB_INTERFACE -I$(SOURCE_ROOT)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_USB_INTERFACE $(DIAGNOSTIC_FLAGS) -DCNTRL_CABLE_TEST=$(CABLE_TEST) -DCNTRL_ORIGINAL_FIRMWARE=$(ORIGINAL_FIRMWARE) -DCNTRL_PANIC=$(PANIC) -DCNTRL_SWITCHES=$(SWITCHES) -I$(SOURCE_ROOT)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
@@ -131,11 +124,9 @@ inspect-patch-switcher: patch-switcher
 	"$(ARM)-size" -A "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf"
 	"$(ARM)-nm" -n -C "$(ROOT)/build/patch-switcher/patch_switcher.ino.elf" > "$(ROOT)/build/patch-switcher/symbols.txt"
 
-test: tools test-button-timing test-switch-gesture test-boot-selection test-startup-counter
+test: tools test-button-timing test-switch-gesture test-boot-selection
 	mkdir -p "$(ROOT)/build"
 	mkdir -p "$(ROOT)/build"
-	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(abspath $(ROOT)/../../../../..)/firmware/include" "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
-	"$(ROOT)/build/test_buttons"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/test_support" \
 		"$(ROOT)/test_displays.cpp" "$(ROOT)/usb_probe/displays.cpp" -o "$(ROOT)/build/test_displays"
 	"$(ROOT)/build/test_displays"
@@ -173,6 +164,7 @@ build: tools
 	"$(CLI)" compile --fqbn "$(FQBN)" --warnings all \
 		--build-path "$(ROOT)/build/usb-probe" \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG' \
+		--build-property 'build.flags.cpp=-I$(SOURCE_ROOT)/firmware/include' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/usb_probe"

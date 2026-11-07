@@ -3,11 +3,20 @@
 #include <memory>
 
 namespace cntrl::files {
+// Counted I/O returns -1 for I/O failure or position_error for offset positioning failure.
+constexpr int position_error = -2;
 enum class Mode { read, create, exclusive, truncate };
 struct File : midi::MidiFile {
     virtual bool open(const char *path, Mode mode) = 0;
     virtual void close() = 0;
     virtual bool opened() const = 0;
+    virtual int read_some(uint32_t offset, uint8_t *data, unsigned length) {
+        return read(offset, data, length) ? int(length) : -1;
+    }
+    virtual int write_some(uint32_t offset, const uint8_t *data, unsigned length) {
+        return write(offset, data, length) ? int(length) : 0;
+    }
+    virtual bool resize(uint32_t) { return false; }
 };
 struct Directory {
     virtual ~Directory() = default;

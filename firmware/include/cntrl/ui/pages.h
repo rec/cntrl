@@ -7,6 +7,7 @@
 #include <cntrl/panic.h>
 #include "fonts.h"
 #include "display.h"
+#include "controls.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -29,6 +30,9 @@ struct PerformanceStatus {
 class Pages {
 public:
     Pages(const Fonts &fonts, Viewport viewport) : fonts_(fonts), viewport_(viewport) {}
+    void outputs(cntrl::midi::Outputs value) { outputs_ = value; }
+    void controls(Controls value) { controls_ = value; }
+    void viewport(Viewport value) { viewport_ = value; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_window_view)
 #endif
@@ -98,6 +102,7 @@ public:
     void port_status(PortMode active, const char *message = nullptr) {
         active_port_ = active; port_message_ = message; dirty_ = true;
     }
+    void port_name(const char *label, bool available) { port_name_ = label; port_available_ = available; dirty_ = true; }
     void next_port_mode() {
         candidate = PortMode((unsigned(candidate) + 1) % 5);
         port_message_ = nullptr; dirty_ = true;
@@ -184,11 +189,11 @@ public:
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
         if (page_ == Page::confirm_firmware) {
             const unsigned height = title * 3 / 2;
-            line(pane, 0, "F for stock firmware.", 64 - height, height, settings_[R::title_font], true);
-            line(pane, 1, "C to cancel", 64, height, settings_[R::title_font], true, nullptr, 0, design_width, pane.lines[0].graphics.size);
-            return geometry(pane);
+            line(pane, 0, prompt("%s for stock firmware.", controls_.next_page), viewport_.height / 2 - height, height, settings_[R::title_font], true);
+            line(pane, 1, prompt("%s to cancel", controls_.confirm), viewport_.height / 2, height, settings_[R::title_font], true, nullptr, 0, viewport_.width, pane.lines[0].graphics.size);
+            return pane;
         }
-        const unsigned heading_text_height = std::min(title * 3 / 2, (design_height - 2 * pad) / 2);
+        const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
         const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::keyboard ? "Keyboard" : page_ == Page::expression ? "Expression" : "Firmware";
         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
@@ -204,9 +209,9 @@ public:
             if (page_ == Page::clock_transport) {
                 const char *state = external_ ? (clock_.active() ? "External: receiving" : "External: waiting")
                     : !clock_outputs() ? "No outputs configured" : !available_outputs_ ? "Outputs offline" : generator.running() ? "Internal: running" : "Internal: stopped";
-                line(pane, 1, state, 30, 19, font, true);
+                line(pane, 1, state, vertical(30), vertical(19), font, true);
                 if (external_) number_text(tempo, sizeof(tempo), clock_.period_us(), true, true);
-                line(pane, 2, tempo, 48, 19, font, true);
+                line(pane, 2, tempo, vertical(48), vertical(19), font, true);
                 detail[0] = 0;
                 auto output = [&](const cntrl::midi::OutputConnection &port) {
                     if (!(clock_outputs() & (1u << port.route))) return;
@@ -214,77 +219,86 @@ public:
                     std::snprintf(detail + used, sizeof(detail) - used, "%s%s%s", used ? " " : "",
                         port.label, available_outputs_ & (1u << port.route) ? "" : "*");
                 };
-                for (const auto &port : cntrl::midi::output_connections) output(port);
-                for (const auto &port : cntrl::midi::usb_output_connections) output(port);
-                line(pane, 3, detail, 67, 14, font, true);
-                line(pane, 4, "A Start  B Continue", 82, 16, font, true);
-                line(pane, 5, "C Stop  E Source", 102, 16, font, true);
+                for (const auto &port : outputs_) output(port);
+                line(pane, 3, detail, vertical(67), vertical(14), font, true);
+                line(pane, 4, prompt("%s Start  %s Continue", controls_.previous, controls_.next), vertical(82), vertical(16), font, true);
+                line(pane, 5, prompt("%s Stop  %s Source", controls_.confirm, controls_.next_section), vertical(102), vertical(16), font, true);
             } else {
                 std::snprintf(detail, sizeof(detail), "Slot %u: %u BPM", slot_ + 1, settings_.words[R::slot1 + slot_]);
-                line(pane, 1, detail, 28, 18, font, true);
-                line(pane, 2, tempo, 50, 24, font, true);
-                line(pane, 3, "A -1   B +1   C Slot", 80, 17, font, true);
+                line(pane, 1, detail, vertical(28), vertical(18), font, true);
+                line(pane, 2, tempo, vertical(50), vertical(24), font, true);
+                line(pane, 3, prompt("%s -1   %s +1   %s Slot", controls_.previous, controls_.next, controls_.confirm), vertical(80), vertical(17), font, true);
                 std::snprintf(detail, sizeof(detail), "Late %uus  Lost %u", generator.late_us, generator.skipped + generator.blocked);
-                line(pane, 4, detail, 102, 16, font, true);
+                line(pane, 4, detail, vertical(102), vertical(16), font, true);
             }
-            return geometry(pane);
+            return pane;
         }
         if (page_ == Page::cable) {
             const bool active = cable.enabled;
             const unsigned font = settings_[R::status_font];
-            line(pane, 1, "Out", 32, 18, font, true, nullptr, 56, 100);
-            line(pane, 2, "In", 32, 18, font, true, nullptr, 106, 154);
-            line(pane, 3, "DIN", 59, 18, font, false, nullptr, 8, 54);
-            line(pane, 4, "TRS", 85, 18, font, false, nullptr, 8, 54);
-            for (unsigned i = 1; i <= 4; ++i)
-                pane.lines[i].graphics.foreground = active ? 0 : 0x8410;
-            using Source = cntrl::CableTest::Source;
-            for (unsigned i = 0; i < 4; ++i) {
-                Source source = i < 2 ? (cable.sending[i] ? (i == 0 ? Source::din : Source::trs) : Source::none) : cable.inputs[i - 2];
-                uint16_t color = !active || source == Source::none ? 0x8410 : source == Source::din ? 0x001f : 0x07e0;
-                pane.circles[i] = {uint16_t(i < 2 ? 78 : 130), uint16_t(i % 2 ? 94 : 68), 12, 0, color, 0};
+            line(pane, 1, "Out", vertical(32), vertical(18), font, true, nullptr, horizontal(56), horizontal(100));
+            line(pane, 2, "In", vertical(32), vertical(18), font, true, nullptr, horizontal(106), horizontal(154));
+            unsigned rows = std::max(cable.output_count, cable.input_count);
+            if (rows > cntrl::max_lines - 3) rows = cntrl::max_lines - 3;
+            for (unsigned i = 0; i < rows; ++i) {
+                unsigned y = vertical(59 + i * 52 / std::max(1u, rows));
+                const char *label = i < cable.output_count ? cable.connections[i].label : "Input";
+                line(pane, 3 + i, label, y, vertical(18), font, false, nullptr, horizontal(8), horizontal(54));
+                pane.lines[3 + i].graphics.foreground = active ? 0 : 0x8410;
+                if (i < cable.output_count && i < sizeof(pane.circles) / sizeof(pane.circles[0])) {
+                    uint16_t color = !active || !cable.sending[i] ? 0x8410 : i % 2 ? 0x07e0 : 0x001f;
+                    pane.circles[i] = {uint16_t(horizontal(78)), uint16_t(y + vertical(9)), uint16_t(vertical(12)), 0, color, 0};
+                }
+                if (i < cable.input_count && i + cable.output_count < sizeof(pane.circles) / sizeof(pane.circles[0])) {
+                    int source = cable.inputs[i];
+                    uint16_t color = !active || source < 0 ? 0x8410 : source % 2 ? 0x07e0 : 0x001f;
+                    pane.circles[i + cable.output_count] = {uint16_t(horizontal(130)), uint16_t(y + vertical(9)), uint16_t(vertical(12)), 0, color, 0};
+                }
             }
-            pane.toggle = {design_height, 110, true, cable.enabled, false};
-            return geometry(pane);
+            pane.toggle = {uint16_t(horizontal(design_height)), uint16_t(vertical(110)), true, cable.enabled, false};
+            return pane;
         }
         if (page_ == Page::keyboard) {
             const auto shortcut = keyboard_shortcut();
             const unsigned font = settings_[R::status_font];
-            line(pane, 1, shortcut.name[0] ? shortcut.name : "No shortcuts", 38, 24, font, true);
-            line(pane, 2, shortcut_held ? "Held" : "Ready", 66, 20, font, true);
-            line(pane, 3, "A/B: Select", 91, 16, font, true);
-            line(pane, 4, "Hold C: Send", 109, 16, font, true);
-            return geometry(pane);
+            line(pane, 1, shortcut.name[0] ? shortcut.name : "No shortcuts", vertical(38), vertical(24), font, true);
+            line(pane, 2, shortcut_held ? "Held" : "Ready", vertical(66), vertical(20), font, true);
+            line(pane, 3, prompt("%s/%s: Select", controls_.previous, controls_.next), vertical(91), vertical(16), font, true);
+            line(pane, 4, prompt("Hold %s: Send", controls_.confirm), vertical(109), vertical(16), font, true);
+            return pane;
         }
         if (page_ == Page::expression) {
             const unsigned font = settings_[R::status_font];
             for (unsigned i = 0; i < 3; ++i)
-                line(pane, i + 1, expression_lines_[i], 30 + 24 * i, 20, font, true);
-            line(pane, 4, "A: Jack   B: Cancel", 105, 18, font, true);
-            return geometry(pane);
+                line(pane, i + 1, expression_lines_[i], vertical(30 + 24 * i), vertical(20), font, true);
+            line(pane, 4, prompt("%s: Jack   %s: Cancel", controls_.previous, controls_.next), vertical(105), vertical(18), font, true);
+            return pane;
         }
         if (page_ == Page::ports) {
             constexpr const char *names[] = {"Off", "MIDI Type A", "MIDI Type B", "Expression", "Aux switch"};
             char current[40];
-            std::snprintf(current, sizeof(current), "Jack %u: %s", jack + 1, names[unsigned(active_port_)]);
+            if (port_available_) std::snprintf(current, sizeof(current), "%.23s: %s", port_name_, names[unsigned(active_port_)]);
+            else std::snprintf(current, sizeof(current), "%s", port_name_);
             const unsigned font = settings_[R::status_font];
-            line(pane, 1, current, 34, 22, font, true);
-            line(pane, 2, port_message_ ? port_message_ : names[unsigned(candidate)], 60, 22, font, true);
-            line(pane, 3, "A: Jack   B: Mode", 87, 17, font, true);
-            line(pane, 4, "C: Apply", 106, 17, font, true);
-            return geometry(pane);
+            line(pane, 1, current, vertical(34), vertical(22), font, true);
+            line(pane, 2, port_message_ ? port_message_ : names[unsigned(candidate)], vertical(60), vertical(22), font, true);
+            if (port_available_) {
+                line(pane, 3, prompt("%s: Jack   %s: Mode", controls_.previous, controls_.next), vertical(87), vertical(17), font, true);
+                line(pane, 4, prompt("%s: Apply", controls_.confirm), vertical(106), vertical(17), font, true);
+            }
+            return pane;
         }
         if (page_ == Page::panic) {
-            line(pane, 1, "Press C", 40, 22, settings_[R::status_font], true);
-            line(pane, 2, "Hold to repeat", 66, 22, settings_[R::status_font], true);
-            line(pane, 3, panic == cntrl::Panic::Status::sending ? "Sending" : panic == cntrl::Panic::Status::incomplete ? "Incomplete" : "Ready", 100, 24, settings_[R::status_font], true);
-            return geometry(pane);
+            line(pane, 1, prompt("Press %s", controls_.confirm), vertical(40), vertical(22), settings_[R::status_font], true);
+            line(pane, 2, "Hold to repeat", vertical(66), vertical(22), settings_[R::status_font], true);
+            line(pane, 3, panic == cntrl::Panic::Status::sending ? "Sending" : panic == cntrl::Panic::Status::incomplete ? "Incomplete" : "Ready", vertical(100), vertical(24), settings_[R::status_font], true);
+            return pane;
         }
         if (page_ == Page::firmware) {
-            const unsigned label_height = std::min(title * 2, (design_height - 2 * pad) / 4);
-            line(pane, 1, "Use stock", design_height - pad - label_height * 2, label_height, 0, true);
-            line(pane, 2, "firmware", design_height - pad - label_height, label_height, 0, true);
-            return geometry(pane);
+            const unsigned label_height = std::min(title * 2, (viewport_.height - 2 * pad) / 4);
+            line(pane, 1, "Use stock", viewport_.height - pad - label_height * 2, label_height, 0, true);
+            line(pane, 2, "firmware", viewport_.height - pad - label_height, label_height, 0, true);
+            return pane;
         }
         if (page_ == Page::tap) {
             char number[24], sample[24];
@@ -297,9 +311,9 @@ public:
             line(pane, 1, number, pad + heading_height, settings_[R::tempo_height], settings_[R::tempo_font], false, sample);
             flashing_ = held_ || tap_.flash(now, settings_[R::flash_fraction]);
             pane.circles[0].diameter = settings_[R::diameter]; pane.circles[0].annulus = settings_[R::annulus];
-            pane.circles[0].x = 80;
+            pane.circles[0].x = viewport_.width / 2;
             unsigned start = pad + heading_height + settings_[R::tempo_height];
-            pane.circles[0].y = (start + design_height - pad) / 2;
+            pane.circles[0].y = (start + viewport_.height - pad) / 2;
             pane.circles[0].color = settings_[flashing_ ? R::on_color : R::off_color];
             pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
@@ -333,17 +347,16 @@ public:
                 status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : "error") : "--");
             std::snprintf(tap_label, sizeof(tap_label), "Tap: %s", tap);
             const unsigned body_top = pad + heading_height;
-            const unsigned body_height = design_height - pad - body_top;
+            const unsigned body_height = viewport_.height - pad - body_top;
             auto body = [&](unsigned maximum_size) {
                 for (unsigned i = 0; i < 5; ++i) {
                     const unsigned y = body_top + body_height * i / 5;
                     const unsigned height = body_height * (i + 1) / 5 - body_height * i / 5;
                     if (i == 1) {
-                        line(pane, 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, 80, maximum_size);
-                        line(pane, 3, tap_label, y, height, settings_[R::status_font], false, nullptr, 80, design_width, maximum_size);
+                        line(pane, 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width / 2, maximum_size);
+                        line(pane, 3, tap_label, y, height, settings_[R::status_font], false, nullptr, viewport_.width / 2, viewport_.width, maximum_size);
                     } else {
-                        line(pane, i == 0 ? 1 : i + 2, rows[i], y, height,
-                            settings_[R::status_font], false, nullptr, 0, design_width, maximum_size);
+                        line(pane, i == 0 ? 1 : i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size);
                     }
                 }
             };
@@ -365,29 +378,30 @@ public:
             clock_.poll(now_us);
             pane.lines[2].stippled = clock_.period_us() && !clock_.active();
         }
-        return geometry(pane);
+        return pane;
     }
 private:
     static constexpr unsigned design_width = 5 * 32, design_height = 4 * 32;
+    Controls controls_;
+    char prompt_[64] = {};
+    template<class... Indices> const char *prompt(const char *format, Indices... indices) {
+        if (((!label(indices)[0]) || ...)) return "";
+        std::snprintf(prompt_, sizeof(prompt_), format, label(indices)...); return prompt_;
+    }
+    const char *label(unsigned index) const { return index < controls_.count ? controls_.bindings[index].label : ""; }
+    cntrl::midi::Outputs outputs_;
     const Fonts &fonts_;
     Viewport viewport_;
     cntrl::AppLayout layout_;
     unsigned index_ = 0;
     PortMode active_port_ = PortMode::off;
     const char *port_message_ = nullptr;
+    const char *port_name_ = "No configurable ports";
+    bool port_available_ = false;
     unsigned available_outputs_ = 0, slot_ = 0;
     bool external_ = false;
-    cntrl::Pane geometry(cntrl::Pane pane) const {
-        for (auto &c : pane.circles) {
-            c.x = c.x * viewport_.width / design_width; c.y = c.y * viewport_.height / design_height;
-            const unsigned scale = std::min(viewport_.width * design_height, viewport_.height * design_width);
-            c.diameter = c.diameter * scale / (design_width * design_height);
-            c.annulus = c.annulus * scale / (design_width * design_height);
-        }
-        pane.toggle.x = pane.toggle.x * viewport_.width / design_width;
-        pane.toggle.y = pane.toggle.y * viewport_.height / design_height;
-        return pane;
-    }
+    unsigned horizontal(unsigned value) const { return value * viewport_.width / design_width; }
+    unsigned vertical(unsigned value) const { return value * viewport_.height / design_height; }
     void recall_slot() {
         unsigned bpm = settings_.words[cntrl::PageSettings::slot1 + slot_];
         if (bpm) generator.set_tempo((60000000u + bpm / 2) / bpm);
@@ -412,18 +426,16 @@ private:
         else std::snprintf(text, length, "%*lu", fixed ? int(digits) : 1, (unsigned long)value);
     }
     void line(cntrl::Pane &pane, unsigned index, const char *text, unsigned y, unsigned height,
-              unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = design_width, unsigned maximum_size = 96) {
+              unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 0, unsigned maximum_size = 96) {
         auto &l = pane.lines[index];
         std::snprintf(l.text, sizeof(l.text), "%s", text);
         l.graphics = pane.graphics; l.graphics.font = face;
         int left = 0, top = 0, width = 0, ink_height = 0;
         const char *fitting = sample ? sample : l.text;
-        // Page coordinates use a normalized 5:4 design grid. Geometry is applied
-        // before fitting, so glyph pixels are never stretched or duplicated.
-        y = y * viewport_.height / design_height;
-        height = height * viewport_.height / design_height;
-        left_edge = left_edge * viewport_.width / design_width;
-        right_edge = right_edge * viewport_.width / design_width;
+        if (!right_edge) right_edge = viewport_.width;
+        unsigned minimum_size = 0;
+        for (unsigned size = 8; size <= maximum_size && size <= 96; ++size)
+            if (fonts_.supports(face, size)) { minimum_size = size; break; }
         for (unsigned size = 96; size >= 8; --size) {
             if (size > maximum_size || !fonts_.supports(face, size)) continue;
             auto measure = [&](const char *value) {
@@ -432,7 +444,7 @@ private:
             };
             measure(fitting);
             const int available = std::max(0, int(right_edge - left_edge) - 2 * int(pane.graphics.pad));
-            if ((width > available || ink_height > int(height)) && size > (face >= 8 && face != 16 ? 12u : 8u)) continue;
+            if ((width > available || ink_height > int(height)) && size > minimum_size) continue;
             l.graphics.size = size; l.graphics.line_height = height; l.graphics.top = 0;
             if (!sample && width > available) {
                 unsigned n = unsigned(std::strlen(l.text));

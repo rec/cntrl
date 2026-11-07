@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <algorithm>
 
 namespace cntrl::ui {
 struct Viewport {
@@ -27,4 +28,17 @@ struct Display {
     virtual bool scroll_all(unsigned) { return false; }
     virtual void reset_scroll() {}
 };
+inline unsigned minimum_display_width(const Display &display) {
+    if (!display.count()) return 0;
+    unsigned width = display.viewport(0).width;
+    for (unsigned i = 1; i < display.count(); ++i) width = std::min(width, display.viewport(i).width);
+    return width;
+}
+inline unsigned minimum_display_height(const Display &display) {
+    if (!display.count()) return 0;
+    unsigned height = display.viewport(0).height;
+    for (unsigned i = 1; i < display.count(); ++i) height = std::min(height, display.viewport(i).height);
+    return height;
+}
+
 } // namespace cntrl::ui

@@ -1,19 +1,11 @@
 #pragma once
 #include <cstdint>
+#include "target_capabilities.h"
 
-constexpr unsigned display_gap = 72;
-constexpr unsigned display_pitch = 160 + display_gap;
+constexpr unsigned display_gap = cntrl::target::viewports[0].gap;
+constexpr unsigned display_pitch = cntrl::target::viewports[0].width + display_gap;
 // The rotated controller has 162 RAM rows but only 160 visible columns.
 constexpr unsigned display_ram_columns = 162;
-constexpr unsigned mirrored_button(unsigned button) {
-    return button / 3 * 3 + 2 - button % 3;
-}
-constexpr unsigned transition_progress(uint32_t elapsed_ms, unsigned duration_ms) {
-    if (elapsed_ms >= duration_ms) return display_pitch;
-    unsigned frames = (duration_ms * 60 + 999) / 1000;
-    return (elapsed_ms * 60 / 1000) * display_pitch / frames;
-}
-
 struct alignas(32) DisplayBand {
     uint8_t pixels[8 * 128 * 2];
     unsigned panel, column, columns, first, count;

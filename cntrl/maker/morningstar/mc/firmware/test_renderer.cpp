@@ -1,4 +1,5 @@
 #include "patch_switcher/renderer.h"
+#include "usb_probe/buttons.h"
 #include <cassert>
 #include <cstring>
 
@@ -17,6 +18,16 @@ void initialize_display_panorama() { ++initialized; }
 void scroll_display_panel(unsigned p, unsigned offset) { panel = p; ring = offset; }
 void scroll_display_panorama(unsigned offset) { ++all; ring = offset; }
 int main() {
+    for (unsigned i = 0; i < sizeof(button_bits); ++i) {
+        const uint8_t raw = uint8_t(0xffu ^ (1u << button_bits[i]));
+        for (unsigned j = 0; j < sizeof(button_bits); ++j) {
+            cntrl::ButtonState button;
+            const bool pressed = !(raw & (1u << button_bits[j]));
+            assert(!button.update(pressed, 0));
+            assert(button.update(pressed, 15) == (i == j));
+            assert(button.pressed == (i == j));
+        }
+    }
     BoardDisplay display;
     assert(display.count() == 3);
     const auto viewport = display.viewport(2);

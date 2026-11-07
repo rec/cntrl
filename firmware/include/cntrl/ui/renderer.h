@@ -45,11 +45,11 @@ public:
         pane.lines[0].graphics = pane.graphics;
         std::snprintf(pane.lines[0].text, sizeof(pane.lines[0].text), "%s", message); show(screen, pane);
     }
-    void transition(bool undo, std::optional<unsigned> duration, int pane = -1, bool keep_last = false, bool vertical = false, bool panorama = true) {
+    void transition(bool undo, std::optional<unsigned> duration, int pane = -1, unsigned reserved = 0, bool vertical = false, bool panorama = true) {
         if (!usable_ || preparing_ || animating_ || !display_.ready()) return;
         for (const auto &screen : screens_) if (!screen.valid) return;
         for (const auto &screen : screens_) std::copy(cache_ + screen.offset, cache_ + screen.offset + screen.viewport.width * screen.viewport.height, previous_ + screen.offset);
-        drawing_ = -1; undo_ = undo; selected_ = pane; keep_last_ = keep_last; vertical_ = vertical; panorama_ = panorama;
+        drawing_ = -1; undo_ = undo; selected_ = pane; reserved_ = std::min(reserved, unsigned(screens_.size())); vertical_ = vertical; panorama_ = panorama;
         duration_ = duration.value_or(vertical ? 200 : 75); preparing_ = true;
         for (auto &screen : screens_) screen.dirty = true;
     }
@@ -71,7 +71,7 @@ public:
         }
         if (drawing_ < 0) {
             if (preparing_) { preparing_ = false; animating_ = true; started_ = now; progress_ = 0; animation_screen_ = animation_column_ = 0;
-                ring_scroll_ = !vertical_; ring_step_ = false; reveal_ = settling_ = false;
+                ring_scroll_ = !vertical_; ring_step_ = false; reveal_ = settling_ = settle_anchor_ = false;
                 for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i) && (display_.scroll_columns(i) <= screens_[i].viewport.width || screens_[i].viewport.width != screens_[0].viewport.width || screens_[i].viewport.gap != screens_[0].viewport.gap)) ring_scroll_ = false; }
             else dim();
             return;
@@ -101,10 +101,11 @@ private:
     std::vector<Screen> screens_;
     std::vector<uint8_t> transfer_;
     Pane painting_;
-    bool usable_ = false, preparing_ = false, animating_ = false, rendering_ = false, undo_ = false, keep_last_ = false, vertical_ = false, panorama_ = true;
-    bool reset_scroll_ = true, ring_scroll_ = false, ring_step_ = false, reveal_ = false, settling_ = false;
+    bool usable_ = false, preparing_ = false, animating_ = false, rendering_ = false, undo_ = false, vertical_ = false, panorama_ = true;
+    bool reset_scroll_ = true, ring_scroll_ = false, ring_step_ = false, reveal_ = false, settling_ = false, settle_anchor_ = false;
     unsigned reveal_screen_ = 0;
     uint32_t settled_ = 0;
+    unsigned reserved_ = 0;
     int drawing_ = -1, selected_ = -1;
     unsigned column_ = 0, field_ = 0, letter_ = 0, progress_ = 0, duration_ = 0, animation_screen_ = 0, animation_column_ = 0, dim_column_ = 0;
     uint32_t started_ = 0;
@@ -165,7 +166,7 @@ private:
             start = end;
         }
     }
-    bool moving(unsigned screen) const { return selected_ >= 0 ? screen == unsigned(selected_) : !(keep_last_ && screen + 1 == screens_.size()); }
+    bool moving(unsigned screen) const { return selected_ >= 0 ? screen == unsigned(selected_) : screen + reserved_ < screens_.size(); }
     unsigned distance() const {
         unsigned result = 1;
         for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i)) result = std::max(result, vertical_ ? screens_[i].viewport.height : screens_[i].viewport.width + (panorama_ && selected_ < 0 ? screens_[i].viewport.gap : 0));
@@ -194,7 +195,7 @@ private:
             return cache_[p.offset + std::min(y, p.viewport.height - 1) * p.viewport.width + unsigned(source)];
         }
         if (source >= int(p.viewport.width) || y >= p.viewport.height) return 0;
-        if (keep_last_ && undo_ && unsigned(pane) + 1 == screens_.size() && pane > 0) { const auto &left = screens_[unsigned(pane - 1)]; return cache_[left.offset + std::min(y, left.viewport.height - 1) * left.viewport.width + std::min(unsigned(source), left.viewport.width - 1)]; }
+        if (reserved_ && undo_ && unsigned(pane) >= screens_.size() - reserved_ && screens_.size() > reserved_) { const auto &left = screens_[screens_.size() - reserved_ - 1]; return cache_[left.offset + std::min(y, left.viewport.height - 1) * left.viewport.width + std::min(unsigned(source), left.viewport.width - 1)]; }
         return previous_[p.offset + y * p.viewport.width + unsigned(source)];
     }
     bool submit_column(unsigned screen, unsigned column, unsigned height) {
@@ -203,19 +204,22 @@ private:
             : display_.submit(screen, column, 0, 1, height, transfer_.data());
     }
     void animate_ring(uint32_t now) {
+        if (settle_anchor_) {
+            settled_ = now; settle_anchor_ = false; settling_ = true; return;
+        }
         if (settling_) {
             if (uint32_t(now - settled_) < display_.scroll_settle_us()) return;
             settling_ = false;
         }
         if (reveal_) {
-            if (!reveal_screen_ && selected_ < 0 && !keep_last_) {
+            if (!reveal_screen_ && selected_ < 0 && !reserved_) {
                 bool same = true;
                 for (const auto &s : screens_) if (s.ring != screens_[0].ring) same = false;
-                if (same && display_.scroll_all(screens_[0].ring)) { reveal_ = false; settling_ = true; settled_ = now; return; }
+                if (same && display_.scroll_all(screens_[0].ring)) { reveal_ = false; settle_anchor_ = true; return; }
             }
             while (reveal_screen_ < screens_.size() && !moving(reveal_screen_)) ++reveal_screen_;
             if (reveal_screen_ < screens_.size()) { display_.scroll(reveal_screen_, screens_[reveal_screen_].ring); ++reveal_screen_; return; }
-            reveal_ = false; settling_ = true; settled_ = now; return;
+            reveal_ = false; settle_anchor_ = true; return;
         }
         if (!ring_step_) {
             if (progress_ == distance()) {

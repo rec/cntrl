@@ -20,6 +20,7 @@ from pydantic import (
 from reccy.configuration import units
 
 from ..animation.asset import Geometry
+from ..fonts.catalogue import UI_FONTS
 
 
 def millisecond_resolution(value: float) -> float:
@@ -241,9 +242,7 @@ class Shift(Presentation, frozen=True):
 class PlayMidiFile(Presentation, frozen=True):
     operation: Literal['play-midi-file']
     filename: Annotated[str, Field(max_length=95)] = ''
-    outputs: Annotated[list[str], Field(min_length=1)] = Field(
-        default_factory=lambda: ['din']
-    )
+    outputs: Annotated[list[str], Field(min_length=1)] | None = None
     loops: Annotated[int, Field(strict=True, ge=0, le=4294967295)] = 1
     pre_delay: Annotated[
         int, Field(strict=True, ge=0, le=4294967295), units.unit_validator('second')
@@ -261,13 +260,13 @@ class PlayMidiFile(Presentation, frozen=True):
         if value in ('.', '..') or any(
             c in '/\\' or not 32 <= ord(c) <= 126 for c in value
         ):
-            raise ValueError('filename must be an ASCII basename in /cntrl/midi/')
+            raise ValueError('filename must be an ASCII basename')
         return value
 
     @field_validator('outputs')
     @classmethod
-    def unique_outputs(cls, value: list[str]) -> list[str]:
-        if len(value) != len(set(value)):
+    def unique_outputs(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(value) != len(set(value)):
             raise ValueError('duplicate MIDI output')
         return value
 
@@ -277,14 +276,12 @@ class RecordMidiFile(Presentation, frozen=True):
     channels: Annotated[
         list[Annotated[int, Field(strict=True, ge=1, le=16)]], Field(min_length=1)
     ] = Field(default_factory=lambda: list(range(1, 17)))
-    inputs: Annotated[
-        list[Literal['din', 'trs', 'usb-device', 'usb-host']], Field(min_length=1)
-    ] = Field(default=['din', 'trs', 'usb-device', 'usb-host'])
+    inputs: Annotated[list[str], Field(min_length=1)] | None = None
 
     @model_validator(mode='after')
     def unique_filters(self) -> 'RecordMidiFile':
-        if len(self.channels) != len(set(self.channels)) or len(self.inputs) != len(
-            set(self.inputs)
+        if len(self.channels) != len(set(self.channels)) or (
+            self.inputs is not None and len(self.inputs) != len(set(self.inputs))
         ):
             raise ValueError('duplicate MIDI recording filter')
         return self
@@ -292,25 +289,26 @@ class RecordMidiFile(Presentation, frozen=True):
 
 class StockFirmware(Presentation, frozen=True):
     operation: Literal['stock-firmware']
-    exit_buttons: str
+    exit_buttons: str | None = None
 
     @field_validator('exit_buttons')
     @classmethod
-    def button_pair(cls, value: str) -> str:
+    def button_pair(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        buttons = value.split('+')
         if (
-            len(value) != 3
-            or value[1] != '+'
-            or any(c not in 'ABCDEF' for c in (value[0], value[2]))
-            or value[0] == value[2]
+            len(buttons) != 2
+            or any(
+                not b or len(b) > 31 or any(not 32 <= ord(c) <= 126 for c in b)
+                for b in buttons
+            )
+            or buttons[0] == buttons[1]
         ):
             raise ValueError(
-                'exit_buttons must be two distinct buttons, for example A+F'
+                'exit_buttons must be two distinct input identifiers joined by +'
             )
-        return '+'.join(sorted((value[0], value[2])))
-
-    @property
-    def button_mask(self) -> int:
-        return sum(1 << 'ABCDEF'.index(c) for c in self.exit_buttons.split('+'))
+        return '+'.join(sorted(buttons))
 
 
 class Sequence(Presentation, frozen=True):
@@ -536,7 +534,7 @@ class ShiftedActions(BaseModel, frozen=True):
 
 class SwitchAssignment(BaseModel, frozen=True):
     name: str | None = None
-    button: Literal['A', 'B', 'C', 'D', 'E']
+    button: Annotated[str, Field(min_length=1, max_length=31)]
     mode: Literal['press', 'momentary', 'latched'] = 'press'
     on: Patch
     off: Patch | None = None
@@ -692,13 +690,17 @@ class PageSettings(BaseModel, frozen=True):
     padding: Annotated[
         int, Field(strict=True, ge=0, le=64), units.unit_validator('pixel')
     ] = 2
-    tempo_font: Literal['CourierPrime', 'CourierPrimeBold'] = 'CourierPrime'
-    status_font: Literal['classic', 'Arial', 'ComicSansMS', 'AtkinsonNextSemiBold'] = (
-        'AtkinsonNextSemiBold'
-    )
-    title_font: Literal['classic', 'Arial', 'ComicSansMS', 'AtkinsonNextSemiBold'] = (
-        'AtkinsonNextSemiBold'
-    )
+    tempo_font: str = 'CourierPrime'
+    status_font: str = 'AtkinsonNextSemiBold'
+    title_font: str = 'AtkinsonNextSemiBold'
+
+    @field_validator('tempo_font', 'status_font', 'title_font')
+    @classmethod
+    def canonical_ui_font(cls, value: str) -> str:
+        if value not in UI_FONTS:
+            raise ValueError('unknown canonical UI font family')
+        return value
+
     off_color: str = '0x600000'
     on_color: str = '0xFF0000'
     ring_color: str = 'black'
@@ -743,13 +745,11 @@ class Scrolling(BaseModel, frozen=True):
 class App(BaseModel, frozen=True):
     type: Literal['patch-switcher'] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
-    give_up_windows: Annotated[
-        list[Literal['left', 'center', 'right']], Field(min_length=3, max_length=3)
-    ] = ['right', 'center', 'left']
+    give_up_windows: list[str] = Field(default_factory=list, max_length=255)
 
     @model_validator(mode='after')
     def distinct_windows(self) -> 'App':
-        if len(set(self.give_up_windows)) != 3:
+        if len(set(self.give_up_windows)) != len(self.give_up_windows):
             raise ValueError('give_up_windows must contain each window once')
         return self
 
@@ -771,7 +771,7 @@ class Page(BaseModel, frozen=True):
         'keyboard',
         'None',
     ]
-    windows: Annotated[int, Field(strict=True, ge=0, le=3)] = 1
+    windows: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
 
     @model_validator(mode='before')
     @classmethod
@@ -880,6 +880,31 @@ class Setup(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class TargetControls(BaseModel, frozen=True):
+    previous: str | None = None
+    next: str | None = None
+    confirm: str | None = None
+    previous_section: str | None = None
+    next_section: str | None = None
+    back: str | None = None
+    next_page: str | None = None
+    reverse_page: str | None = None
+    tap: str | None = None
+    app_actions: dict[
+        str,
+        Literal[
+            'previous-patch',
+            'next-patch',
+            'activate-selection',
+            'previous-group',
+            'next-group',
+            'undo',
+        ],
+    ] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class TargetMemory(BaseModel, frozen=True):
     capacity: units.Bytes = Field(gt=0, le=4294967295)
     runtime: units.Bytes = Field(ge=0, le=4294967295)
@@ -893,23 +918,129 @@ class TargetMemory(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class TargetDisplay(BaseModel, frozen=True):
+    id: str = Field(min_length=1, max_length=31, pattern=r'^[\x20-\x7e]+$')
+    label: str
+    width: units.Pixels = Field(gt=0, le=65535)
+    height: units.Pixels = Field(gt=0, le=65535)
+    gap: units.Pixels = Field(default=0, ge=0, le=65535)
+    corner_radius: units.Pixels = Field(default=0, ge=0, le=65535)
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class MidiEndpoint(BaseModel, frozen=True):
+    name: Annotated[str, Field(min_length=1, max_length=31)]
+    label: Annotated[str, Field(min_length=1, max_length=31)]
+    route: Annotated[int, Field(strict=True, ge=0, le=15)]
+    transport: Literal['physical', 'usb-device', 'usb-host'] = 'physical'
+    input: bool = False
+    output: bool = True
+    port: Annotated[int, Field(strict=True, ge=0, le=3)] | None = None
+
+    @field_validator('name', 'label')
+    @classmethod
+    def ascii_text(cls, value: str) -> str:
+        if any(not 32 <= ord(c) <= 126 for c in value):
+            raise ValueError('MIDI endpoint names and labels must be printable ASCII')
+        return value
+
+
 class Target(BaseModel, frozen=True):
     memory: TargetMemory
     functions: list[str] = Field(default_factory=list)
-    buttons: list[str] = Field(default_factory=list)
+    buttons: list[Annotated[str, Field(min_length=1, max_length=31)]] = Field(
+        default_factory=list, max_length=8
+    )
+
+    @field_validator('buttons')
+    @classmethod
+    def input_identifiers(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)) or any(
+            '+' in b or any(not 32 <= ord(c) <= 126 for c in b) for b in value
+        ):
+            raise ValueError(
+                'input identifiers must be unique printable ASCII without +'
+            )
+        return value
+
+    controls: TargetControls = Field(default_factory=TargetControls)
+    scan_interval: Annotated[
+        float,
+        Field(gt=0, le=65.535),
+        units.unit_validator('second'),
+        AfterValidator(millisecond_resolution),
+    ] = 0.001
     max_switches: Annotated[int, Field(strict=True, ge=0, le=5)] = 5
-    display_width: units.Pixels = Field(gt=0, le=65535)
-    display_height: units.Pixels = Field(gt=0, le=65535)
+    displays: list[TargetDisplay] = Field(min_length=1, max_length=255)
     fonts: list[FontFace]
+    ui_fonts: list[str]
+
+    @field_validator('ui_fonts')
+    @classmethod
+    def ui_font_families(cls, value: list[str]) -> list[str]:
+        if 'classic' not in value:
+            raise ValueError(
+                'classic UI font is required for management and error screens'
+            )
+        if len(value) != len(set(value)) or any(n not in UI_FONTS for n in value):
+            raise ValueError('UI fonts must name distinct canonical font families')
+        return value
+
     font_sources: dict[str, str] = Field(default_factory=dict)
     animation: Geometry | None = None
-    outputs: list[str]
+    midi_endpoints: list[MidiEndpoint] = Field(max_length=16)
+    default_midi_output: str
     trs_ports: dict[str, list[TrsMode]] = Field(default_factory=dict)
     max_instruments: int = Field(gt=0, le=32)
     max_patch_cycles: int = Field(gt=0, le=128)
     max_patches: int = Field(gt=0, le=65535)
     history_depth: int = Field(gt=0)
     characters: str
+
+    @property
+    def outputs(self) -> list[str]:
+        return [e.name for e in self.midi_endpoints if e.output]
+
+    @model_validator(mode='after')
+    def unique_midi_endpoints(self) -> 'Target':
+        if len({e.name for e in self.midi_endpoints}) != len(
+            self.midi_endpoints
+        ) or len({e.route for e in self.midi_endpoints}) != len(self.midi_endpoints):
+            raise ValueError('MIDI endpoint names and routes must be unique')
+        if sorted(e.route for e in self.midi_endpoints) != list(
+            range(len(self.midi_endpoints))
+        ):
+            raise ValueError(
+                'MIDI routes must cover 0 through endpoint count minus one'
+            )
+        outputs = {e.name for e in self.midi_endpoints if e.output}
+        if self.default_midi_output not in outputs:
+            raise ValueError('MIDI outputs must refer to declared output endpoints')
+        return self
+
+    @property
+    def display_width(self) -> int:
+        return min(d.width for d in self.displays)
+
+    @property
+    def display_height(self) -> int:
+        return min(d.height for d in self.displays)
+
+    @model_validator(mode='after')
+    def distinct_displays(self) -> 'Target':
+        if len({d.id for d in self.displays}) != len(self.displays):
+            raise ValueError('display IDs must be unique')
+        return self
+
+    @model_validator(mode='after')
+    def declared_controls(self) -> 'Target':
+        bindings = self.controls.model_dump(exclude_none=True, exclude={'app_actions'})
+        if (set(bindings.values()) | set(self.controls.app_actions)) - set(
+            self.buttons
+        ):
+            raise ValueError('control bindings must refer to declared input IDs')
+        return self
 
     model_config = ConfigDict(extra='forbid')
 

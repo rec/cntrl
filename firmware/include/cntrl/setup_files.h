@@ -36,6 +36,11 @@ public:
                     char path[144]; std::snprintf(path, sizeof(path), "%s/%s/0.bin", history_path_, candidate);
                     record = reader_.open(path, files::Mode::read) && reader_.size() >= 208;
                     reader_.close();
+                    if (!record) {
+                        std::snprintf(path, sizeof(path), "%s/%s/1.bin", history_path_, candidate);
+                        record = reader_.open(path, files::Mode::read) && reader_.size() >= 208;
+                        reader_.close();
+                    }
                 }
                 if (record) best = n;
             }
@@ -43,8 +48,12 @@ public:
         return false;
     }
     bool remove_revision(const char *name, uint64_t number) override {
-        choose_revision(name, number); char path[144]; filename(0, path);
-        return !filesystem_.exists(path) || filesystem_.remove(path);
+        choose_revision(name, number); char path[144];
+        for (unsigned slot = 0; slot < 2; ++slot) {
+            filename(slot, path);
+            if (filesystem_.exists(path) && !filesystem_.remove(path)) return false;
+        }
+        return true;
     }
     void choose(const char *name) override {
         revision_ = false;
@@ -68,7 +77,7 @@ public:
     bool begin(unsigned slot) override {
         if (!ready || (!filesystem_.exists(directory_) && !filesystem_.make_directory(directory_))) return false;
         char path[144]; filename(slot, path); position_ = 0;
-        return writer_.open(path, revision_ ? files::Mode::exclusive : files::Mode::truncate);
+        return writer_.open(path, revision_ && slot == 0 ? files::Mode::exclusive : files::Mode::truncate);
     }
     bool write(const uint8_t *data, unsigned length) override {
         if (!writer_.write(position_, data, length)) return false;

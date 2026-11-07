@@ -1,5 +1,6 @@
 #pragma once
 #include "font_assets.h"
+#include <algorithm>
 
 namespace cntrl::ui {
 struct Bounds { int left = 0, top = 0, width = 0, height = 0; };
@@ -15,6 +16,8 @@ struct Fonts {
     virtual Bounds bounds(unsigned face, unsigned size, uint32_t asset, const char *text) const = 0;
     // Glyph positions are relative to the saved text cursor. Embedded faces
     // include their cap-height origin; asset runs use the saved baseline.
+    // The caller adds TextLine.graphics.top, including its stored font metric
+    // or explicit layout offset. It must not add another universal baseline.
     virtual bool glyph(unsigned face, unsigned size, uint32_t asset, const char *text, unsigned index, Glyph &result) const = 0;
 };
 class AssetFonts final : public Fonts {

@@ -20,6 +20,10 @@ struct Board : TestPatchHardware {
     }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}

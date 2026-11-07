@@ -1,21 +1,40 @@
 #include <cntrl/ui/application.h>
+#include <cntrl/ui/song_sources.h>
+#include <cntrl/ui/firmware_visit.h>
+#include <cntrl/ui/page_host.h>
 #include "patch_hardware.h"
 #include "storage.h"
 #include <cassert>
 
-struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices, cntrl::SongResolver, cntrl::SongCapture {
+struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices, cntrl::SongResolver, cntrl::SongCapture, cntrl::ui::FirmwareVisitServices {
     unsigned blanks = 0, editors = 0;
     bool idle = true, transfer_busy = false, editor = false;
     uint8_t brightness = 0;
+    cntrl::ui::FirmwareSelection selection{7, 0, true, false};
+    unsigned configurations = 0, selections = 0, handoffs = 0, consumed = 0;
+    std::string last_error;
+    cntrl::ui::FirmwareSelection firmware_selection() const override { return selection; }
+    bool valid_exit(uint8_t pair) const override { return pair == 33; }
+    bool storage_available() const override { return true; }
+    bool stop_clock() override { return true; }
+    bool configure_return(uint8_t pair, uint32_t token) override { assert(pair == 33 && (token == 0 || token == 7)); ++configurations; return true; }
+    bool choose_external_firmware() override { ++selections; return true; }
+    bool consume_return(uint32_t token) override { consumed = token; return true; }
+    void handoff_firmware() override { ++handoffs; }
+    bool switch_invocation(cntrl::PatchExecutor &) const override { return false; }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned, unsigned) const override { return true; }
     unsigned display_width() const override { return 200; }
     unsigned display_height() const override { return 120; }
+    unsigned display_count() const override { return 3; }
+    const char *control_label(cntrl::ControlRole role) const override {
+        const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
+    }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t value, bool = false) override { brightness = value; }
     void set_splash(bool, uint32_t) override {}
-    void error(const char *) override {}
+    void error(const char *message) override { last_error = message; }
     void reply(const char *) override {}
     uint32_t application_time() const override { return 123; }
     void blank_performance() override { ++blanks; }
@@ -31,6 +50,114 @@ struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServi
     bool capture(cntrl::Song &, bool) override { return false; }
     void recalled() override {}
 };
+struct VisitFile : cntrl::files::File {
+    std::vector<uint8_t> bytes;
+    bool active = false, bad_write = false;
+    unsigned opened_count = 0, maximum_io = 0;
+    bool open(const char *, cntrl::files::Mode mode) override {
+        ++opened_count; active = mode != cntrl::files::Mode::read || !bytes.empty();
+        if (mode == cntrl::files::Mode::truncate) bytes.clear(); return active;
+    }
+    void close() override { active = false; }
+    bool opened() const override { return active; }
+    uint32_t size() const override { return bytes.size(); }
+    bool read(uint32_t offset, uint8_t *data, unsigned length) override {
+        maximum_io = std::max(maximum_io, length);
+        if (offset + length > bytes.size()) return false;
+        std::memcpy(data, bytes.data() + offset, length); return true;
+    }
+    bool write(uint32_t offset, const uint8_t *data, unsigned length) override {
+        maximum_io = std::max(maximum_io, length); if (bad_write) return false;
+        bytes.resize(offset + length); std::memcpy(bytes.data() + offset, data, length); return true;
+    }
+    bool sync() override { return true; }
+};
+struct PagePlatform : Hardware {
+    struct Expression {
+        unsigned index = 0;
+        void configure(const cntrl::ExpressionAssignment *) {}
+        void cancel() {}
+        void select(unsigned value) { index = value; }
+        unsigned selected() const { return index; }
+        void calibrate(bool) {}
+    } expression;
+    struct Bridge { void clock_owner(unsigned) {} } bridge;
+    cntrl::midi::Outputs endpoints;
+    cntrl::midi::Outputs midi_outputs() const override { return endpoints; }
+    cntrl::midi::TrsMode port_mode(unsigned) const { return cntrl::midi::TrsMode::off; }
+    bool supports_trs_mode(unsigned port, cntrl::midi::TrsMode mode) const override {
+        return mode == cntrl::midi::TrsMode::off || (port == 1 && mode == cntrl::midi::TrsMode::midi_a) || (port == 3 && mode == cntrl::midi::TrsMode::expression);
+    }
+    Expression &expression_controls() { return expression; }
+    Bridge &midi_bridge() { return bridge; }
+    unsigned midi_file_clock_outputs() const { return 0; }
+    bool expression_available(unsigned) const { return true; }
+};
+struct PageFonts : cntrl::ui::Fonts {
+    bool supports(unsigned, unsigned, uint32_t = 0) const override { return true; }
+    cntrl::ui::Bounds bounds(unsigned, unsigned, uint32_t, const char *s) const override { return {0, 0, int(std::strlen(s) * 3), 5}; }
+    bool glyph(unsigned, unsigned, uint32_t, const char *, unsigned, cntrl::ui::Glyph &) const override { return false; }
+};
+struct PageDisplay : cntrl::ui::Display {
+    unsigned count() const override { return 1; }
+    cntrl::ui::Viewport viewport(unsigned) const override { return {64, 64, 0, 0}; }
+    void poll() override {}
+    bool ready() const override { return true; }
+    bool failed() override { return false; }
+    bool priority_due() const override { return false; }
+    bool submit(unsigned, unsigned, unsigned, unsigned, unsigned, const uint8_t *) override { return true; }
+};
+static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Documents &documents, cntrl::ui::Application &app) {
+    PagePlatform platform; PageFonts fonts; PageDisplay display;
+    uint16_t work[64 * 64] = {}, cache[64 * 64] = {}, previous[64 * 64] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64, cache, previous, 64 * 64);
+    constexpr cntrl::ui::ControlBinding bindings[] = {{0, "Previous"}, {1, "Next"}, {2, "Confirm"}};
+    cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0, 1, 2, 0, 1, 2, 2, 0, 2, bindings, 3});
+    cntrl::midi::OutputConnection endpoints[] = {
+        {"north", "North", 0, cntrl::midi::OutputTransport::physical, false, true, 1},
+        {"south", "South", 1, cntrl::midi::OutputTransport::physical, false, true, 3}};
+    platform.endpoints = {endpoints, 2}; cntrl::PageSettings settings; settings.words[cntrl::PageSettings::title_height] = 8;
+    host.configure_page_settings(settings);
+    uint8_t layout[8 + 32 + 2] = {'C', 'L', 'A', 'Y', 0, 1, 1, 2};
+    layout[8 + 32] = unsigned(cntrl::ui::Pages::Page::ports); layout[8 + 32 + 1] = 1;
+    host.pages_.layout({layout});
+    assert(host.pages_.jack == 1); assert(host.trs_button(1));
+    assert(host.pages_.candidate == cntrl::midi::TrsMode::midi_a);
+    assert(host.trs_button(1)); assert(host.pages_.candidate == cntrl::midi::TrsMode::off);
+    assert(host.trs_button(0)); assert(host.pages_.jack == 3);
+    assert(host.trs_button(1)); assert(host.pages_.candidate == cntrl::midi::TrsMode::expression);
+    const auto named = host.pages_.view(0, 0, {}); assert(std::strcmp(named.lines[1].text, "South: Off") == 0);
+    assert(host.trs_button(0)); assert(host.pages_.jack == 1);
+    platform.endpoints = {}; host.configure_page_settings(settings);
+    const unsigned selected = host.pages_.jack; assert(host.trs_button(0)); assert(host.pages_.jack == selected);
+    const auto none = host.pages_.view(0, 0, {});
+    assert(std::strstr(none.lines[1].text, "No configurable") != nullptr && !none.lines[3].text[0] && !none.lines[4].text[0]);
+}
+static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware &hardware, cntrl::Documents &documents,
+        cntrl::ui::Application &app, cntrl::Songs &songs, cntrl::ui::SongSources &sources) {
+    VisitFile file; cntrl::ui::FirmwareVisitRecord record; cntrl::ui::RuntimeState runtime;
+    cntrl::Controller::NavigationState navigation[9]; cntrl::PatchExecutor *execution = &app.controller().executor(); bool restoring = false;
+    cntrl::ui::FirmwareVisit visit(record, file, hardware, hardware, documents, app, songs, sources, runtime, navigation, execution, restoring);
+    assert(!visit.request(12, nullptr)); hardware.idle = false; assert(!visit.request(33, nullptr)); hardware.idle = true;
+    const cntrl::SongContinuation continuation{};
+    assert(visit.request(33, &continuation)); assert(visit.busy() && !visit.request(33, nullptr));
+    for (unsigned i = 0; i < 100 && !hardware.handoffs; ++i) visit.poll(true);
+    assert(hardware.handoffs == 1 && hardware.configurations == 1 && hardware.selections == 1);
+    assert(file.bytes.size() == sizeof(record) && file.maximum_io <= 512 && !file.opened());
+    file.bytes[0] ^= 1; hardware.selection.returned = 7; hardware.selection.returned_to_application = true;
+    cntrl::ui::FirmwareVisitRecord returned_record;
+    cntrl::ui::FirmwareVisit returned(returned_record, file, hardware, hardware, documents, app, songs, sources, runtime, navigation, execution, restoring);
+    const unsigned opens = file.opened_count; returned.poll(false); assert(file.opened_count == opens && !returned.busy());
+    uint8_t layout[8 + 3 * 32 + 35] = {'C', 'L', 'A', 'Y', 1, 0, 3, 2}; app.layout = {layout};
+    for (unsigned i = 0; i < 100; ++i) returned.poll(true);
+    assert(!returned.busy() && hardware.consumed == 7 && hardware.last_error == "Patch return unavailable");
+    assert(hardware.handoffs == 1); app.layout = {};
+    VisitFile broken; broken.bad_write = true;
+    cntrl::ui::FirmwareVisitRecord failed_record;
+    cntrl::ui::FirmwareVisit failed(failed_record, broken, hardware, hardware, documents, app, songs, sources, runtime, navigation, execution, restoring);
+    assert(failed.request(33, &continuation)); failed.poll(true); failed.poll(true);
+    assert(!failed.busy() && !execution && hardware.last_error == "Firmware switch failed");
+}
 int main() {
     Hardware hardware; TestStorage setup_storage, song_storage;
     cntrl::Controller primary(hardware, hardware, hardware);
@@ -41,6 +168,15 @@ int main() {
         cntrl::Songs songs(song_storage, hardware);
         cntrl::ui::Application app(hardware, documents, primary, extra, songs, hardware, true);
         assert(&app.controller() == &primary && !app.feature_open(hardware));
+        cntrl::SetupTable setups;
+        cntrl::ui::SongSources source(hardware, hardware, hardware, setups, documents, app, songs);
+        cntrl::Song capture; const cntrl::Document *captured = nullptr;
+        assert(!source.capture(capture, true) && !source.capture_source(captured));
+        cntrl::SongSelection missing; std::strcpy(missing.document, "missing");
+        uint32_t revision = 0; assert(!source.revision(missing, revision));
+        assert(!source.activate(missing, {}, false));
+        firmware_handoff_is_durable_and_corrupt_return_is_rejected(hardware, documents, app, songs, source);
+        page_ports_follow_declared_sparse_ids_and_supported_modes(documents, app);
         assert(app.state(1, 91, hardware) && hardware.brightness == 91);
         assert(app.state(9, 0, hardware) && app.pending_operation == 9);
         assert(!app.state(11, 0, hardware)); hardware.editor = true; assert(app.state(11, 0, hardware)); hardware.editor = false;

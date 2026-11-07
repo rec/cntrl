@@ -9,7 +9,7 @@ void setup() {
 }
 
 void loop() {
-    static ButtonState buttons[6];
+    static cntrl::ButtonState buttons[6];
     static uint32_t last_scan = 0;
     static uint32_t last_report = 0;
     static uint32_t scans = 0;

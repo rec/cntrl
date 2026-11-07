@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <vector>
 
 namespace cntrl::animation {
 struct Tint {
@@ -76,4 +77,39 @@ inline uint16_t tint_white(uint16_t pixel, Tint tint) {
     blue = blue - white + (white * tint.blue + 31) / 63;
     return uint16_t((red >> 1) << 11 | green << 5 | (blue >> 1));
 }
+
+// Per-stream color state is independent of physical panel routing. Pixels are
+// transformed in the caller's packet, without a second transfer buffer.
+class ColorCycle {
+public:
+    void enable(bool enabled) { enabled_ = enabled; }
+    void begin(unsigned streams) {
+        while (states_.size() > streams) states_.pop_back();
+        while (states_.size() < streams) {
+            unsigned index = unsigned(states_.size());
+            uint32_t seed = index ? 0x243f6a89u + (index - 1) * 0x9e3779b9u : 0x9e3779b9u;
+            states_.emplace_back(seed);
+        }
+    }
+    void frame(uint32_t now) {
+        if (enabled_) for (auto &state : states_) state.tint = state.walk.at(now);
+    }
+    void pixels(unsigned stream, uint8_t *pixels, unsigned count) const {
+        if (!enabled_) return;
+        for (unsigned i = 0; i < count; ++i) {
+            uint16_t pixel = uint16_t(pixels[2 * i]) << 8 | pixels[2 * i + 1];
+            pixel = tint_white(pixel, states_[stream].tint);
+            pixels[2 * i] = uint8_t(pixel >> 8); pixels[2 * i + 1] = uint8_t(pixel);
+        }
+    }
+private:
+    struct State {
+        explicit State(uint32_t seed) : walk(seed) {}
+        ColorWalk walk;
+        Tint tint = {63, 63, 63};
+    };
+    std::vector<State> states_;
+    bool enabled_ = false;
+};
+
 } // namespace cntrl::animation

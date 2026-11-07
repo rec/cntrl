@@ -1,5 +1,7 @@
 #include <cntrl/ui/renderer.h>
 #include <cntrl/ui/pages.h>
+#include <cntrl/ui/page_host.h>
+#include <cntrl/ui/application_hardware.h>
 #include <cntrl/ui/pixel_throb.h>
 #include <cassert>
 #include <vector>
@@ -108,8 +110,69 @@ static void portable_font_bearings_and_character_advances() {
     assert(fonts.glyph(255, 8, 11, "AB", 0, glyph)); assert(glyph.y == -2);
     font_assets::cache.begin(); font_assets::cache.finish(true); assert(cntrl::memory_used == 0);
 }
+struct MixedDisplay final : cntrl::ui::Display {
+    const cntrl::ui::Viewport views[5] = {{9, 13, 2, 0}, {17, 7, 0, 0}, {21, 11, 3, 0}, {7, 19, 0, 0}, {15, 5, 0, 0}};
+    std::vector<uint16_t> pixels[5];
+    MixedDisplay() { for (unsigned i = 0; i < 5; ++i) pixels[i].resize(views[i].width * views[i].height); }
+    unsigned count() const override { return 5; }
+    cntrl::ui::Viewport viewport(unsigned i) const override { return views[i]; }
+    void poll() override {}
+    bool ready() const override { return true; }
+    bool failed() override { return false; }
+    bool priority_due() const override { return false; }
+    bool submit(unsigned screen, unsigned x, unsigned y, unsigned width, unsigned height, const uint8_t *data) override {
+        assert(screen < 5 && x + width <= views[screen].width && y + height <= views[screen].height);
+        for (unsigned col = 0; col < width; ++col) for (unsigned row = 0; row < height; ++row) {
+            const unsigned i = 2 * (col * height + row);
+            pixels[screen][(y + row) * views[screen].width + x + col] = uint16_t(data[i]) << 8 | data[i + 1];
+        }
+        return true;
+    }
+};
+static void distinct_geometries_and_reserved_windows() {
+    Fonts fonts; MixedDisplay display;
+    uint16_t work[231] = {}, cache[675] = {}, previous[675] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 231, cache, previous, 675);
+    for (unsigned i = 0; i < 5; ++i) { cntrl::Pane pane; pane.graphics.background = i + 1; renderer.show(i, pane); }
+    for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
+    assert(renderer.ready());
+    for (unsigned screen = 0; screen < 5; ++screen) for (auto pixel : display.pixels[screen]) assert(pixel == screen + 1);
+    renderer.transition(false, 10, -1, 2, true, false);
+    for (unsigned i = 0; i < 3; ++i) { cntrl::Pane pane; pane.graphics.background = i + 11; renderer.show(i, pane); }
+    for (unsigned i = 0; i < 3000; ++i) renderer.draw(i * 1000);
+    assert(renderer.ready());
+    for (unsigned screen = 0; screen < 5; ++screen) for (auto pixel : display.pixels[screen]) assert(pixel == screen + (screen < 3 ? 11 : 1));
+}
+static void circles_clip_before_iterating_and_do_not_overflow() {
+    Fonts fonts; uint16_t pixels[24 * 18] = {};
+    cntrl::ui::Raster raster(fonts, pixels); cntrl::ScreenGraphics graphics; graphics.pad = 0; graphics.background = 0;
+    raster.configure({24, 18, 0, 0}, graphics);
+    raster.circle({0, 0, 65535, 0, 0xffff, 0});
+    for (auto pixel : pixels) assert(pixel == 0xffff);
+    raster.circle({65535, 65535, 65535, 65535, 0x1234, 0x1234});
+    // This viewport lies entirely within the very large outer annulus.
+    for (auto pixel : pixels) assert(pixel == 0x1234);
+}
+static void minimum_viewports_follow_declared_surfaces() {
+    struct Geometry : cntrl::ui::Display {
+        unsigned count() const override { return 3; }
+        cntrl::ui::Viewport viewport(unsigned i) const override {
+            constexpr cntrl::ui::Viewport views[] = {{320, 120}, {80, 240}, {160, 160}}; return views[i];
+        }
+        void poll() override {}
+        bool ready() const override { return true; }
+        bool failed() override { return false; }
+        bool priority_due() const override { return false; }
+        bool submit(unsigned, unsigned, unsigned, unsigned, unsigned, const uint8_t *) override { return true; }
+    } display;
+    assert(cntrl::ui::minimum_display_width(display) == 80);
+    assert(cntrl::ui::minimum_display_height(display) == 120);
+}
 int main() {
     cntrl::memory_budget = 192 * 1024;
+    minimum_viewports_follow_declared_surfaces();
+    circles_clip_before_iterating_and_do_not_overflow();
+    distinct_geometries_and_reserved_windows();
     portable_font_bearings_and_character_advances();
     ring_transition_preserves_hidden_columns_and_retries();
     Fonts fonts; Display display;
@@ -141,6 +204,8 @@ int main() {
     cntrl::ui::Pages pages(fonts, display.viewport(0));
     cntrl::PageSettings settings; settings.words[cntrl::PageSettings::title_height] = 20; pages.configure(settings);
     cntrl::ui::PerformanceStatus status; status.starts_status = cntrl::ui::StartsStatus::ready; status.starts = 42;
+    constexpr cntrl::ui::ControlBinding controls[] = {{0, "Less"}, {1, "More"}, {2, "Yes"}, {3, "Back"}};
+    pages.controls({0, 1, 2, 0, 3, 3, 3, 0, 2, controls, 4});
     const auto view = pages.view(0, 0, status);
     assert(std::strcmp(view.lines[0].text, "Status") == 0);
     assert(view.lines[0].graphics.background == 0 && view.lines[0].graphics.foreground == 0xffff);
@@ -149,4 +214,25 @@ int main() {
     for (unsigned i = 0; i < 300; ++i) { renderer.draw(i * 1000); display.complete(); }
     const unsigned title_x = (24 - std::strlen(view.lines[0].text) * 2) / 2;
     assert(display.pixels[view.lines[0].graphics.top * 24 + title_x] == 0xffff);
+    pages.viewport({200, 128, 0, 0});
+    uint8_t layout[8 + 3 * 32 + 2] = {'C', 'L', 'A', 'Y', 0, 1, 3, 2};
+    layout[8 + 3 * 32] = unsigned(cntrl::ui::Pages::Page::clock_tempo);
+    layout[8 + 3 * 32 + 1] = 1;
+    pages.layout(cntrl::AppLayout{layout});
+    const auto clock_page = pages.view(0, 0, status);
+    assert(std::strcmp(clock_page.lines[3].text, "Less -1   More +1   Yes Slot") == 0);
+    layout[8 + 3 * 32] = unsigned(cntrl::ui::Pages::Page::firmware); pages.layout(cntrl::AppLayout{layout}); pages.tap(0);
+    const auto confirmation = pages.view(0, 0, status);
+    assert(std::strcmp(confirmation.lines[0].text, "Back for stock firmware.") == 0);
+    assert(std::strcmp(confirmation.lines[1].text, "Yes to cancel") == 0);
+
+    settings.words[cntrl::PageSettings::diameter] = 18;
+    settings.words[cntrl::PageSettings::annulus] = 5;
+    settings.words[cntrl::PageSettings::tempo_height] = 40;
+    pages.configure(settings); pages.viewport({320, 256, 0, 0});
+    layout[8 + 3 * 32] = unsigned(cntrl::ui::Pages::Page::tap); pages.layout(cntrl::AppLayout{layout});
+    const auto large_tap = pages.view(0, 0, status);
+    assert(large_tap.circles[0].x == 160 && large_tap.circles[0].diameter == 18 && large_tap.circles[0].annulus == 5);
+    assert(large_tap.lines[1].graphics.line_height == 40 && large_tap.lines[0].graphics.line_height == 34);
+
 }

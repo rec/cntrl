@@ -56,7 +56,7 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
     subprocess.run([str(peer), str(image)], check=True)
 
 
-@pytest.mark.parametrize('pair', ['A+A', 'AF', 'A+G', 'A+B+C', 'a+f'])
+@pytest.mark.parametrize('pair', ['A+A', 'AF', 'A+B+C', '+Back', 'Less+'])
 def test_invalid_exit_combinations_are_rejected(pair: str) -> None:
     with pytest.raises(ValueError, match='exit_buttons'):
         models.StockFirmware(operation='stock-firmware', exit_buttons=pair)

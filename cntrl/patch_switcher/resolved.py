@@ -6,7 +6,7 @@ from zlib import crc32
 
 import tomlkit
 
-from . import layout, midi_messages, page_settings
+from . import inputs, layout, midi_endpoints, midi_messages, page_settings
 from .compiler import (
     DOCUMENT_VERSION,
     GESTURE_EVENTS,
@@ -22,13 +22,13 @@ from .compiler import (
     STATE_OPERATIONS,
     SWITCH,
     SWITCH_HOOKS,
-    TRS_JACKS,
     TRS_MODES,
 )
 from .display import read_source
+from .models import MidiEndpoint
 
 
-def graph_offset(data: bytes) -> int:
+def _sections(data: bytes) -> tuple[int, int, int]:
     """Locate the graph following variable name metadata."""
     if len(data) < 76:
         raise ValueError('truncated setup')
@@ -73,6 +73,12 @@ def graph_offset(data: bytes) -> int:
         raise ValueError('missing movie metadata')
     startup, idle = struct.unpack_from('<HH', data, cursor + 4)
     cursor += 8 + 4 * (startup + idle)
+    endpoint_offset = cursor
+    records = midi_endpoints.unpack(data, cursor)
+    cursor += 6 + len(records) * midi_endpoints.RECORD.size
+    input_offset = cursor
+    labels = inputs.unpack(data, cursor)
+    cursor += inputs.HEADER.size + len(labels) * inputs.RECORD.size
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -83,23 +89,41 @@ def graph_offset(data: bytes) -> int:
         cursor += 2 + (0 if size == 65535 else size)
     if cursor + GRAPH.size > len(data) or data[cursor : cursor + 4] != b'CPAT':
         raise ValueError('missing Patch graph')
-    return cursor
+    return cursor, endpoint_offset, input_offset
+
+
+def graph_offset(data: bytes) -> int:
+    """Locate the graph following variable name metadata."""
+    return _sections(data)[0]
+
+
+def endpoint_records(data: bytes) -> list[MidiEndpoint]:
+    return midi_endpoints.unpack(data, _sections(data)[1])
+
+
+def input_labels(data: bytes) -> list[str]:
+    return inputs.unpack(data, _sections(data)[2])
 
 
 def patch(data: bytes, node: int) -> dict[str, object]:
     """Decode any graph node into the common tagged Patch authoring table."""
     offset = graph_offset(data)
     source = read_source(data, offset)
+    labels = input_labels(data)
     metadata = cast(dict[str, object], source.get('patch_metadata', {}))
-    return _patch(data, offset, node, metadata, set())
+    return _patch(data, offset, node, metadata, set(), labels)
 
 
 def export(data: bytes) -> str:
     offset = graph_offset(data)
+    endpoints = endpoint_records(data)
+    names = {e.route: e.name for e in endpoints}
+    jacks = midi_endpoints.ports(endpoints)
     _, _, hold, _, ni, nc, np, flags, _, timeout = HEADER.unpack_from(data)
     meta = 76 + ni * 68 + nc * 68 + np * 82
     nb = struct.unpack_from('<H', data, meta + 4)[0]
     source = read_source(data, offset)
+    labels = input_labels(data)
     metadata = cast(dict[str, object], source.pop('patch_metadata', {}))
     source.pop('program_styles', None)
     source.pop('program_tags', None)
@@ -136,10 +160,10 @@ def export(data: bytes) -> str:
     pages = page_settings.unpack(data, meta + 16)
     cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
     if flags & page_settings.EXPRESSION_FLAG:
-        pages['expression'] = page_settings.unpack_expression(data, cursor, TRS_JACKS)
+        pages['expression'] = page_settings.unpack_expression(data, cursor, jacks)
         cursor += page_settings.EXPRESSION.size * 4
     if flags & page_settings.CLOCK_FLAG:
-        pages.update(page_settings.unpack_clock(data, cursor))
+        pages.update(page_settings.unpack_clock(data, cursor, names))
         cursor += page_settings.CLOCK.size
     if data[cursor : cursor + 4] == b'CKBD':
         pages['keyboard'] = page_settings.unpack_keyboard(data, cursor + 4)
@@ -161,7 +185,7 @@ def export(data: bytes) -> str:
         raise ValueError('invalid TRS port role')
     if any(modes):
         result['trs_ports'] = {
-            j: TRS_MODES[m] for j, m in zip(TRS_JACKS, modes, strict=True) if m
+            j: TRS_MODES[m] for j, m in zip(jacks, modes, strict=True) if m
         }
     result.update(source)
     instruments: dict[str, object] = {}
@@ -206,7 +230,7 @@ def export(data: bytes) -> str:
         cursor += NAMED.size
         identity = key.split(b'\0')[0].decode('utf-8')
         named_nodes[identity] = index
-        named[identity] = _patch(data, offset, index, metadata, set())
+        named[identity] = _patch(data, offset, index, metadata, set(), labels)
     result['patches'] = named
     patch_cycles: dict[str, object] = {}
     for i in range(nc):
@@ -215,7 +239,7 @@ def export(data: bytes) -> str:
         values: list[dict[str, object]] = []
         for position in range(start, start + count):
             root = roots[position]
-            value = _patch(data, offset, root, metadata, set())
+            value = _patch(data, offset, root, metadata, set(), labels)
             if 'patch' in value and _edited_program(
                 data, offset, root, metadata, named_nodes
             ):
@@ -237,10 +261,10 @@ def export(data: bytes) -> str:
             for k, v in cast(dict[str, object], original).items()
             if k in ('name', 'style')
         }
-        value['button'] = chr(ord('A') + button)
+        value['button'] = labels[button]
         if mode:
             value['mode'] = ('press', 'momentary', 'latched')[mode]
-        value['on'] = _patch(data, offset, on, metadata, set())
+        value['on'] = _patch(data, offset, on, metadata, set(), labels)
         hooks = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
         if flags & page_settings.EXPRESSION_FLAG:
             hooks += page_settings.EXPRESSION.size * 4
@@ -256,31 +280,33 @@ def export(data: bytes) -> str:
             hooks += 5 * GESTURES.size
         if data[hooks : hooks + 4] == b'CHOK':
             enter, exit, override = SWITCH_HOOKS.unpack_from(
-                data, hooks + 4 + button * SWITCH_HOOKS.size
+                data, hooks + 4 + i * SWITCH_HOOKS.size
             )
             if enter != 65535:
                 value['enter'] = {
-                    'action': _patch(data, offset, enter, metadata, set()),
+                    'action': _patch(data, offset, enter, metadata, set(), labels),
                     'override': override,
                 }
             if exit != 65535:
-                value['exit'] = _patch(data, offset, exit, metadata, set())
+                value['exit'] = _patch(data, offset, exit, metadata, set(), labels)
             hooks += 4 + 5 * SWITCH_HOOKS.size
         if data[hooks : hooks + 4] == b'CSHF':
             fields = SHIFTED_ACTIONS.unpack_from(
-                data, hooks + 4 + button * SHIFTED_ACTIONS.size
+                data, hooks + 4 + i * SHIFTED_ACTIONS.size
             )
             if fields[0] != 65535:
                 shifted: dict[str, object] = {
-                    'on': _patch(data, offset, fields[0], metadata, set())
+                    'on': _patch(data, offset, fields[0], metadata, set(), labels)
                 }
                 if fields[1] != 65535:
-                    shifted['off'] = _patch(data, offset, fields[1], metadata, set())
+                    shifted['off'] = _patch(
+                        data, offset, fields[1], metadata, set(), labels
+                    )
                 if fields[8]:
                     shifted['gestures'] = {
                         t: fields[8 + j] / 1000 for j, t in enumerate(GESTURE_TIMINGS)
                     } | {
-                        e: _patch(data, offset, fields[2 + j], metadata, set())
+                        e: _patch(data, offset, fields[2 + j], metadata, set(), labels)
                         for j, e in enumerate(GESTURE_EVENTS)
                         if fields[2 + j] != 65535
                     }
@@ -297,7 +323,7 @@ def export(data: bytes) -> str:
                     + struct.unpack_from('<H', data, address + 4)[0]
                     * page_settings.KEYBOARD.size
                 )
-            fields = GESTURES.unpack_from(data, address + button * GESTURES.size)
+            fields = GESTURES.unpack_from(data, address + i * GESTURES.size)
             if fields[6]:
                 gesture: dict[str, object] = {
                     t: fields[6 + j] / 1000 for j, t in enumerate(GESTURE_TIMINGS)
@@ -305,11 +331,11 @@ def export(data: bytes) -> str:
                 for j, event in enumerate(GESTURE_EVENTS):
                     if fields[j] != 65535:
                         gesture[event] = _patch(
-                            data, offset, fields[j], metadata, set()
+                            data, offset, fields[j], metadata, set(), labels
                         )
                 value['gestures'] = gesture
         if off != 65535:
-            value['off'] = _patch(data, offset, off, metadata, set())
+            value['off'] = _patch(data, offset, off, metadata, set(), labels)
         switches[key] = value
     result['switches'] = switches
     programs: list[dict[str, object]] = []
@@ -343,6 +369,7 @@ def _patch(
     index: int,
     metadata: dict[str, object],
     ancestors: set[int],
+    labels: list[str],
 ) -> dict[str, object]:
     _, section_size, count, _, _, _ = GRAPH.unpack_from(data, offset)
     if index >= count or index in ancestors:
@@ -426,7 +453,7 @@ def _patch(
         value.update(
             operation='stock-firmware',
             exit_buttons='+'.join(
-                c for i, c in enumerate('ABCDEF') if data[cursor] & (1 << i)
+                c for i, c in enumerate(labels) if data[cursor] & (1 << i)
             ),
         )
     elif kind == 5:
@@ -438,6 +465,7 @@ def _patch(
                 struct.unpack_from('<H', data, cursor + 2 + i * 2)[0],
                 metadata,
                 ancestors | {index},
+                labels,
             )
             for i in range(children)
         ]
@@ -449,7 +477,7 @@ def _patch(
             operation='play-midi-file',
             filename=filename.split(b'\0')[0].decode('ascii'),
             outputs=[
-                n for n, i in page_settings.CLOCK_ROUTES.items() if outputs & (1 << i)
+                e.name for e in endpoint_records(data) if outputs & (1 << e.route)
             ],
             loops=loops,
             pre_delay=pre,
@@ -463,11 +491,7 @@ def _patch(
         value.update(
             operation='record-midi-file',
             channels=[i + 1 for i in range(16) if channels & (1 << i)],
-            inputs=[
-                n
-                for n, i in {'din': 0, 'trs': 1, 'usb-device': 6, 'usb-host': 8}.items()
-                if inputs & (1 << i)
-            ],
+            inputs=[e.name for e in endpoint_records(data) if inputs & (1 << e.route)],
         )
     elif kind == 7:
         value.update(duration=struct.unpack_from('<I', data, cursor)[0] / 1000)

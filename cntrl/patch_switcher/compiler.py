@@ -10,7 +10,15 @@ from zlib import crc32
 import tomlkit
 from pydantic import ValidationError
 
-from . import display, layout, midi_messages, models, page_settings
+from . import (
+    display,
+    inputs,
+    layout,
+    midi_endpoints,
+    midi_messages,
+    models,
+    page_settings,
+)
 
 
 class CompilationError(ValueError):
@@ -158,15 +166,23 @@ def compile_show(
         show = models.Setup.model_validate(document)
     except ValidationError as error:
         raise CompilationError(_validation_errors('show', error)) from error
+    jacks = midi_endpoints.ports(target.midi_endpoints)
     for jack, mode in show.trs_ports.items():
-        if jack not in TRS_JACKS or mode not in target.trs_ports.get(jack, []):
+        if jack not in jacks or mode not in target.trs_ports.get(jack, []):
             errors.append(f'trs_ports.{jack}: unsupported role {mode!r}')
     target = target.model_copy(
         update={
-            'outputs': [
-                o
-                for o in target.outputs
-                if o not in TRS_JACKS or show.trs_ports.get(o) in ('midi-a', 'midi-b')
+            'midi_endpoints': [
+                e.model_copy(
+                    update={
+                        'output': e.output
+                        and (
+                            e.port is None
+                            or show.trs_ports.get(e.name) in ('midi-a', 'midi-b')
+                        )
+                    }
+                )
+                for e in target.midi_endpoints
             ]
         }
     )
@@ -270,8 +286,19 @@ def compile_show(
             continue
         if assignment.button in buttons:
             errors.append(f'{path}.button: duplicate switch button {assignment.button}')
-        if target.buttons and assignment.button not in target.buttons:
+        if assignment.button not in target.buttons:
             errors.append(f'{path}.button: unavailable on target')
+            continue
+        if assignment.button == target.controls.back:
+            errors.append(f'{path}.button: reserved for back navigation')
+            continue
+        button = target.buttons.index(assignment.button)
+        slot = len(assignments)
+        if slot >= 5:
+            errors.append(
+                f'{path}: setup format supports at most five switch assignments'
+            )
+            continue
         buttons.add(assignment.button)
         on = compiler.add(assignment.on, path + '.on')
         off = (
@@ -290,7 +317,7 @@ def compile_show(
             if assignment.exit is not None
             else 65535
         )
-        hook_records[ord(assignment.button) - ord('A')] = SWITCH_HOOKS.pack(
+        hook_records[slot] = SWITCH_HOOKS.pack(
             enter,
             exit,
             assignment.enter.override if assignment.enter is not None else False,
@@ -311,7 +338,7 @@ def compile_show(
                 events.append(node)
                 if node != 65535:
                     gesture_assignments.append((key, assignment, node, 65535))
-            gesture_records[ord(assignment.button) - ord('A')] = GESTURES.pack(
+            gesture_records[slot] = GESTURES.pack(
                 *events, *(round(getattr(gesture, t) * 1000) for t in GESTURE_TIMINGS)
             )
         if assignment.shifted is not None:
@@ -333,13 +360,13 @@ def compile_show(
                         node = compiler.add(value, f'{path}.shifted.gestures.{event}')
                         events[i] = node
                         gesture_assignments.append((key, assignment, node, 65535))
-            shifted_records[ord(assignment.button) - ord('A')] = SHIFTED_ACTIONS.pack(
+            shifted_records[slot] = SHIFTED_ACTIONS.pack(
                 shifted_on, shifted_off, *events, *timings
             )
         name = key if assignment.name is None else assignment.name
         switch_records.append(
             SWITCH.pack(
-                ord(assignment.button) - ord('A'),
+                button,
                 ('press', 'momentary', 'latched').index(assignment.mode),
                 on,
                 off,
@@ -409,7 +436,11 @@ def compile_show(
             texts = (name, program_name, presentation.display_name)
         else:
             value = compiler.values[patch]
-            mask = value.button_mask if isinstance(value, models.StockFirmware) else 0
+            mask = (
+                compiler.nodes[patch][4]
+                if isinstance(value, models.StockFirmware)
+                else 0
+            )
             records.append(
                 struct.pack(
                     '<HHBBBBBBBB64s',
@@ -492,9 +523,9 @@ def compile_show(
         )
         packed_pages = page_settings.pack(show, target)
         clock = page_settings.pack_clock(show, target)
-        expression = page_settings.pack_expression(show, target, TRS_JACKS)
+        expression = page_settings.pack_expression(show, target, jacks)
         keyboard = page_settings.pack_keyboard(show, target)
-        app_layout = layout.pack(show)
+        app_layout = layout.pack(show, target)
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -563,7 +594,7 @@ def compile_show(
         round(show.navigation.repeat_interval * 1000),
         round(show.target_pulse.delay * 1000),
         *packed_pages,
-        bytes(TRS_MODES.index(show.trs_ports.get(j, 'off')) for j in TRS_JACKS),
+        bytes(TRS_MODES.index(show.trs_ports.get(j, 'off')) for j in jacks),
         round(show.scrolling.vertical_duration * 1000),
         *(
             SCROLL_DIRECTIONS.index(d)
@@ -608,6 +639,8 @@ def compile_show(
         )
         + app_layout
         + movie_records
+        + midi_endpoints.pack(target)
+        + inputs.pack(target)
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -779,13 +812,18 @@ class PatchCompiler:
         if isinstance(value, models.Delay):
             kind, payload = 7, struct.pack('<I', round(value.duration * 1000))
         elif isinstance(value, models.PlayMidiFile):
-            for output in value.outputs:
-                if (
-                    output not in self.target.outputs
-                    or output not in page_settings.CLOCK_ROUTES
-                    or (output == 'usb-device' and not self.show.usb_device_midi)
-                    or (output == 'usb-host' and not self.show.usb_host_midi)
-                ):
+            outputs = (
+                value.outputs
+                if value.outputs is not None
+                else [self.target.default_midi_output]
+            )
+            routes = {
+                e.name: e.route
+                for e in self.target.midi_endpoints
+                if midi_endpoints.enabled(e, self.show)
+            }
+            for output in outputs:
+                if output not in routes:
                     self.errors.append(
                         f'{path}: unavailable MIDI file output {output!r}'
                     )
@@ -793,11 +831,7 @@ class PatchCompiler:
             payload = struct.pack(
                 '<96sHIIIdBb',
                 value.filename.encode('ascii'),
-                sum(
-                    1 << page_settings.CLOCK_ROUTES[n]
-                    for n in value.outputs
-                    if n in page_settings.CLOCK_ROUTES
-                ),
+                sum(1 << routes[n] for n in outputs if n in routes),
                 value.loops,
                 value.pre_delay,
                 value.post_delay,
@@ -807,11 +841,19 @@ class PatchCompiler:
             )
         elif isinstance(value, models.RecordMidiFile):
             kind = 9
-            routes = {'din': 0, 'trs': 1, 'usb-device': 6, 'usb-host': 8}
+            routes = {e.name: e.route for e in self.target.midi_endpoints if e.input}
+            input_names = value.inputs if value.inputs is not None else list(routes)
+            if not input_names:
+                self.errors.append(f'{path}: target has no MIDI recording input_names')
+            for name in input_names:
+                if name not in routes:
+                    self.errors.append(
+                        f'{path}: unavailable MIDI recording input {name!r}'
+                    )
             payload = struct.pack(
                 '<HH',
                 sum(1 << (c - 1) for c in value.channels),
-                sum(1 << routes[n] for n in value.inputs),
+                sum(1 << routes[n] for n in input_names if n in routes),
             )
         elif isinstance(value, models.ProgramChange):
             kind, payload = 1, self.program(value, index, path)
@@ -848,13 +890,15 @@ class PatchCompiler:
                 ),
             )
         elif isinstance(value, models.StockFirmware):
-            kind, payload = 4, bytes((value.button_mask,))
-            if 'stock-firmware' not in self.target.functions or any(
-                c not in self.target.buttons for c in value.exit_buttons.split('+')
-            ):
-                self.errors.append(
-                    f'{path}: stock firmware or exit buttons unavailable on target'
-                )
+            kind = 4
+            try:
+                mask = inputs.button_mask(value.exit_buttons, self.target)
+            except ValueError as error:
+                self.errors.append(f'{path}: {error}')
+                mask = 0
+            payload = bytes((mask,))
+            if 'stock-firmware' not in self.target.functions:
+                self.errors.append(f'{path}: stock firmware unavailable on target')
         elif isinstance(
             value,
             (
@@ -1316,7 +1360,14 @@ class PatchCompiler:
                                     (instrument.output, instrument.channel, controller)
                                 )
                 elif isinstance(value, models.PlayMidiFile):
-                    resources.update((o, 0, -1) for o in value.outputs)
+                    resources.update(
+                        (o, 0, -1)
+                        for o in (
+                            value.outputs
+                            if value.outputs is not None
+                            else [self.target.default_midi_output]
+                        )
+                    )
                 elif isinstance(value, models.OutputMessage):
                     output = value.output
                     assert output is not None
@@ -1792,7 +1843,6 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 34
+DOCUMENT_VERSION = 35
 SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
-TRS_JACKS = tuple(f'configurable-{i}' for i in range(1, 5))
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

@@ -3,7 +3,7 @@
 #include "switches.h"
 #include "pair_timing.h"
 
-ButtonState a_button, f_button;
+cntrl::ButtonState a_button, f_button;
 PairTiming timing;
 uint32_t last_scan = 0;
 unsigned trials = 0;

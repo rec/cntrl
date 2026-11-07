@@ -8,9 +8,9 @@ class Router {
 public:
     Router(cntrl::Documents &documents, Receiver &assets, Session &session, cntrl::Replies &replies,
            void (*storage_info)(bool), void (*midi_status)(unsigned) = nullptr,
-           bool (*asset_command)(const char *) = nullptr)
+           bool (*asset_command)(const char *) = nullptr, void (*midi_reset)() = nullptr)
         : documents_(documents), assets_(assets), session_(session), replies_(replies),
-          storage_info_(storage_info), midi_status_(midi_status), asset_command_(asset_command) {}
+          storage_info_(storage_info), midi_status_(midi_status), asset_command_(asset_command), midi_reset_(midi_reset) {}
     bool accepts_input() const { return assets_.accepts_input() && documents_.accepts_input(); }
     void keepalive(uint32_t now) { last_ = now; documents_.keepalive(now); assets_.keepalive(now); }
     void cancel_transfer() { used_ = 0; overflow_ = false; documents_.cancel_transfer(); assets_.cancel_transfer(); }
@@ -30,8 +30,8 @@ public:
             if (asset_command_ && asset_command_(line_)) {
                 session_.stop(); used_ = 0; overflow_ = false; return;
             }
-            if (midi_status_ && !std::strcmp(line_, "CNTRL MIDI RESET")) {
-                midi_status_(9); used_ = 0; overflow_ = false; return;
+            if (midi_reset_ && !std::strcmp(line_, "CNTRL MIDI RESET")) {
+                midi_reset_(); used_ = 0; overflow_ = false; return;
             }
             unsigned route = 0; int end = 0;
             if (midi_status_ && std::sscanf(line_, "CNTRL MIDI STATUS %u%n", &route, &end) == 1
@@ -79,6 +79,7 @@ private:
     void (*storage_info_)(bool);
     void (*midi_status_)(unsigned);
     bool (*asset_command_)(const char *);
+    void (*midi_reset_)();
     char line_[320];
     unsigned used_ = 0;
     uint32_t last_ = 0;

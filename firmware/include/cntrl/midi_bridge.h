@@ -1,6 +1,8 @@
 #pragma once
 #include "midi_state.h"
 #include <cstdint>
+#include <vector>
+#include "midi_outputs.h"
 #include <array>
 #include <cstring>
 
@@ -135,15 +137,20 @@ private:
     MidiState state_;
 };
 
-// Routes 0..5 are physical outputs, 6..7 computer inputs, 8 USB host output.
-// All storage is fixed. One service() attempts at most one packet per route.
+// Route storage follows the supplied endpoint table. One service attempts
+// at most one packet per destination. USB framing belongs to the adapter.
 class Bridge {
 public:
+    explicit Bridge(Outputs outputs) : routes_(outputs.route_count()),
+        device_routes_(outputs.transport_mask(OutputTransport::usb_device)),
+        host_routes_(outputs.transport_mask(OutputTransport::usb_host)),
+        physical_routes_(outputs.transport_mask(OutputTransport::physical)) {}
+    unsigned destinations() const { return unsigned(routes_.size()); }
     enum class Delivery { idle, pending, complete, cancelled };
     static constexpr unsigned owners = 9;
     Delivery delivery(unsigned owner) const { return owner < owned_.size() ? owned_[owner].delivery : Delivery::idle; }
     bool owned_send(unsigned owner, unsigned route, const uint8_t *bytes, unsigned size) {
-        if (owner >= owned_.size() || route >= destinations || !usb_enabled(route) || !batch_valid(bytes, size)
+        if (owner >= owned_.size() || route >= destinations() || !usb_enabled(route) || !batch_valid(bytes, size)
             || owned_[owner].delivery == Delivery::pending) return false;
         auto &b = owned_[owner];
         std::memcpy(b.bytes, bytes, size); b.size = size; b.offset = 0;
@@ -153,7 +160,7 @@ public:
     // The caller pins the source until delivery or cancellation. This keeps long
     // SysEx bounded to one USB packet per service tick without copying its data.
     bool owned_stream(unsigned owner, unsigned route, const uint8_t *bytes, unsigned size) {
-        if (owner >= owned_.size() || route >= destinations || !usb_enabled(route) || !stream_valid(bytes, size)
+        if (owner >= owned_.size() || route >= destinations() || !usb_enabled(route) || !stream_valid(bytes, size)
             || owned_[owner].delivery == Delivery::pending) return false;
         auto &b = owned_[owner];
         b.source = bytes; b.size = size; b.offset = 0; b.route = route;
@@ -167,13 +174,13 @@ public:
         if (b.delivery == Delivery::pending && b.sysex) routes_[b.route].terminate = true;
         b.delivery = Delivery::cancelled;
     }
-    static constexpr unsigned destinations = 9, capacity = 256, pedal_capacity = 8;
+    static constexpr unsigned capacity = 256, pedal_capacity = 8;
     // Only forwarded clock/transport is filtered. Notes, SysEx and other real-time
     // bytes keep their order, including those queued before a source change.
     void clock_owner(unsigned mask) {
         unsigned acquired = mask & ~clock_owner_;
         clock_owner_ = mask;
-        for (unsigned i = 0; i < destinations; ++i) if (acquired & (1u << i)) {
+        for (unsigned i = 0; i < destinations(); ++i) if (acquired & (1u << i)) {
             auto &r = routes_[i];
             unsigned kept = 0;
             for (unsigned j = 0; j < r.count; ++j) {
@@ -192,7 +199,7 @@ public:
         return true;
     }
     bool usb_enabled(unsigned route) const {
-        return route == 8 ? usb_host_ : route == 6 || route == 7 ? usb_device_ : true;
+        return route < destinations() && ((host_routes_ & (1u << route)) ? usb_host_ : (device_routes_ & (1u << route)) ? usb_device_ : true);
     }
     void disconnect_output(unsigned route) {
         invalidated_ |= 1u << route;
@@ -207,14 +214,14 @@ public:
         usb_device_ = device; usb_host_ = host;
         connected(device_present_, now);
         host_connected(host_present_);
-        for (unsigned route = 6; route < destinations; ++route)
+        for (unsigned route = 0; route < destinations(); ++route)
             if (!usb_enabled(route)) disconnect_output(route);
     }
     void configure(bool enabled) {
         // Also reset when switching between two enabled setups.
         enabled_ = enabled;
         forwarding_ = enabled && connected_; waiting_ = false;
-        for (unsigned i = 0; i < 8; ++i) reset_route(i);
+        for (unsigned i = 0; i < destinations(); ++i) if (!(host_routes_ & (1u << i))) reset_route(i);
     }
     void connected(bool connected, uint32_t now) {
         device_present_ = connected; connected = connected && usb_device_;
@@ -227,19 +234,19 @@ public:
         }
         if (connected_ == connected && !started) return;
         connected_ = connected;
-        for (unsigned i = 0; i < 8; ++i) reset_route(i);
+        for (unsigned i = 0; i < destinations(); ++i) if (!(host_routes_ & (1u << i))) reset_route(i);
         if (!connected) {
-            disconnect_output(6); disconnect_output(7);
+            for (unsigned i = 0; i < destinations(); ++i) if (device_routes_ & (1u << i)) disconnect_output(i);
         }
     }
     void host_connected(bool connected) {
         host_present_ = connected; connected = connected && usb_host_;
         if (host_connected_ == connected) return;
         host_connected_ = connected;
-        if (!connected) disconnect_output(8);
+        if (!connected) for (unsigned i = 0; i < destinations(); ++i) if (host_routes_ & (1u << i)) disconnect_output(i);
     }
     bool pedal(unsigned route, const uint8_t *bytes, unsigned size) {
-        if (route >= destinations || !usb_enabled(route) || !batch_valid(bytes, size) || (route == 6 && !connected_)) return false;
+        if (route >= destinations() || !usb_enabled(route) || !batch_valid(bytes, size) || ((device_routes_ & (1u << route)) && !connected_)) return false;
         auto &r = routes_[route];
         if (r.pedal_count == pedal_capacity) return false;
         auto &b = r.pedal[(r.pedal_head + r.pedal_count) % pedal_capacity];
@@ -248,7 +255,7 @@ public:
     }
     // Report physical packet completion even without an available USB receiver.
     bool receive(unsigned route, uint8_t b, uint32_t now) {
-        if (route >= 8 || !usb_device_ || !enabled_ || (!forwarding_ && route < 6)) return false;
+        if (route >= destinations() || (host_routes_ & (1u << route)) || !usb_device_ || !enabled_ || (!forwarding_ && (physical_routes_ & (1u << route)))) return false;
         auto &r = routes_[route];
         bool was_sysex = r.parser.sysex();
         // Close an interrupted physical SysEx before forwarding a new status.
@@ -260,35 +267,33 @@ public:
         if (complete && forwarding_) enqueue(route, p);
         return complete;
     }
-    void usb(uint32_t packed, uint32_t now) {
-        unsigned route = (packed >> 4) & 15;
-        Packet p{uint8_t(packed & 15), {uint8_t(packed >> 8), uint8_t(packed >> 16), uint8_t(packed >> 24)}};
-        if (route >= 6 || !forwarding_) return;
-        if (!valid(p, routes_[route].parser.sysex() || routes_[route].parser.discarding())) {
+    void forward_packet(unsigned route, const Packet &packet, uint32_t now) {
+        if (route >= destinations() || !forwarding_) return;
+        if (!valid(packet, routes_[route].parser.sysex() || routes_[route].parser.discarding())) {
             ++routes_[route].counts.dropped; return;
         }
-        for (unsigned i = 0; i < p.size(); ++i) receive(route, p.bytes[i], now);
+        for (unsigned i = 0; i < packet.size(); ++i) receive(route, packet.bytes[i], now);
     }
     bool handoff(Sink &sink) {
         bool ready = true;
-        for (unsigned i = 0; i < destinations; ++i) {
+        for (unsigned i = 0; i < destinations(); ++i) {
             if (routes_[i].terminate) terminate(i, sink);
             if (routes_[i].terminate) ready = false;
         }
         return ready;
     }
     bool sysex_ready(unsigned outputs) const {
-        for (unsigned i = 0; i < destinations; ++i)
+        for (unsigned i = 0; i < destinations(); ++i)
             if ((outputs & (1u << i)) && (routes_[i].wire_sysex || routes_[i].terminate || routes_[i].pedal_offset)) return false;
         for (const auto &b : owned_)
             if ((outputs & (1u << b.route)) && b.delivery == Delivery::pending && b.offset) return false;
         return true;
     }
     void service(Sink &sink, uint32_t now, unsigned reserved_outputs = 0) {
-        for (unsigned i = 0; i < destinations; ++i) if (invalidated_ & (1u << i)) sink.forget_output(i);
+        for (unsigned i = 0; i < destinations(); ++i) if (invalidated_ & (1u << i)) sink.forget_output(i);
         invalidated_ = 0;
-        for (unsigned i = 0; i < destinations; ++i) {
-            unsigned index = (cursor_ + i) % destinations;
+        for (unsigned i = 0; i < destinations(); ++i) {
+            unsigned index = (cursor_ + i) % destinations();
             auto &r = routes_[index];
             if (r.parser.sysex() && uint32_t(now - r.last_sysex) >= 1000) abort(index);
             if (r.terminate) {
@@ -326,7 +331,7 @@ public:
             ++r.counts.transmitted;
             r.head = (r.head + 1) % capacity; --r.count;
         }
-        cursor_ = (cursor_ + 1) % destinations;
+        if (destinations()) cursor_ = (cursor_ + 1) % destinations();
     }
 private:
     unsigned invalidated_ = 0;
@@ -397,7 +402,9 @@ private:
         unsigned head = 0, count = 0, pedal_head = 0, pedal_count = 0, pedal_offset = 0;
         uint32_t last_sysex = 0;
         bool wire_sysex = false, terminate = false;
-    } routes_[destinations];
+    };
+    std::vector<Route> routes_;
+    unsigned device_routes_ = 0, host_routes_ = 0, physical_routes_ = 0;
     bool usb_device_ = true, usb_host_ = true, device_present_ = false, host_present_ = false;
     bool enabled_ = false, connected_ = false, host_connected_ = false;
     bool forwarding_ = false, waiting_ = false;

@@ -1,3 +1,4 @@
+#include "midi_endpoints.h"
 #include <cntrl/midi_bridge.h>
 #include <cassert>
 
@@ -95,7 +96,7 @@ void test_channel_modes_clear_affected_state() {
 }
 
 void test_bridge_clients_get_tracking_without_recording_state() {
-    cntrl::midi::Bridge bridge;
+    cntrl::midi::Bridge bridge{test_midi_outputs};
     Output out;
     bridge.configure(true); bridge.connected(true, 0);
     uint8_t patch[] = {0xb0, 7, 90, 0xc0, 12};
@@ -107,7 +108,7 @@ void test_bridge_clients_get_tracking_without_recording_state() {
     assert(out.state().outputs.size() == 1);
     const auto &channel = out.state().outputs[0].channels[0];
     assert(channel.controllers[0].value == 90 && channel.program == 12);
-    bridge.usb(0x643c9009, 0); bridge.service(out, 0);
+    bridge.forward_packet(0, {9, {0x90, 60, 100}}, 0); bridge.service(out, 0);
     assert(channel.notes.size() == 1 && channel.notes[0].velocity == 100);
 }
 
