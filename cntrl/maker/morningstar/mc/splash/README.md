@@ -78,7 +78,7 @@ Native controller, display, renderer and splash tests passed, including fade
 timing, millisecond wraparound, dark repaint gating and musical input during
 the fade. Visual smoothness still requires the user's check.
 
-The source GIF is preserved in `assets/spiral.gif`: 16 frames, 100 ms per frame,
+The source GIF is preserved in the repository's top-level `assets/spiral.gif`: 16 frames, 100 ms per frame,
 1,600 ms per loop. The Mac scales it to cover a 192x154 area (120% of the
 160x128 display, rounded to whole pixels), then crops centrally to 160x128, with
 no margins or letterboxing. This preserves proportions while clipping the
@@ -96,7 +96,7 @@ From the repository root:
 
 ```bash
 uv run --frozen -m cntrl.maker.morningstar.mc.splash.cli prepare \
-  cntrl/maker/morningstar/mc/splash/assets/spiral.gif \
+  assets/spiral.gif \
   --output cntrl/maker/morningstar/mc/splash/build/spiral.cnsa
 ```
 
