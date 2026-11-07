@@ -472,8 +472,8 @@ private:
                 || std::memcmp(old.named_patch(i), current.named_patch(i), 66)) ++patches;
         for (unsigned i = 0; i < old.instruments() || i < current.instruments(); ++i)
             if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
-        settings = old.utility_section_size() != current.utility_section_size()
-            || std::memcmp(old.bank(old.patches()), current.bank(current.patches()), old.utility_section_size())
+        settings = old.page_section_size() != current.page_section_size()
+            || std::memcmp(old.bank(old.patches()), current.bank(current.patches()), old.page_section_size())
             || std::memcmp(old.trs_modes(), current.trs_modes(), 4) || old.navigation_hold_ms() != current.navigation_hold_ms()
             || old.navigation_repeat_ms() != current.navigation_repeat_ms() || old.brightness() != current.brightness()
             || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
@@ -483,7 +483,7 @@ private:
             || old.scroll_ms() != current.scroll_ms()
             || std::memcmp(old.data() + old.metadata() + scrolling_offset, current.data() + current.metadata() + scrolling_offset, 5);
         auto names_end = [](const Document &d) {
-            unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + d.utility_section_size() + 4;
+            unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + d.page_section_size() + 4;
             for (unsigned i = 0; i < d.patches() * 3; ++i) { unsigned n = u16(d.data() + cursor); cursor += 2 + (n == 65535 ? 0 : n); }
             return cursor;
         };

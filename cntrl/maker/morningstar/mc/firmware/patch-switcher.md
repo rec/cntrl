@@ -27,7 +27,7 @@ previous cycle slides it downward. Browsing patches within a cycle scrolls
 rightward, as does sending a patch. The setup's `[scrolling]` table independently
 selects `send`, `patches`, and `cycles` directions (`left`, `right`, `up`, `down`).
 Backward browsing and undo reverse those directions. Vertical sends animate the
-candidate and current panes together while the utility pane stays still.
+candidate and current panes together while the page window stays still.
 Leftward sends slide each performance pane's new content into place; the default
 rightward send retains the continuous panorama movement.
 The transition-start routine resides in flash to keep the combined application
@@ -42,7 +42,7 @@ redrawing runs behind. `scrolling.horizontal_duration` defaults to 75 ms and
 `scrolling.vertical_duration` to 200 ms. Both accept seconds or duration strings
 such as `'200 ms'`. Actual duration can exceed
 the requested duration because a complete frame must finish before the next.
-The current-patch pane and utility pane stay in place during this motion.
+The current-patch pane and page window stay in place during this motion.
 
 ## Scrolling investigation
 
@@ -99,7 +99,7 @@ as it does for module screens. Recompile setups before uploading to format 21.
 A sends a patch: candidate moves right into current, and current into history.
 D undoes along the reverse path. B browses patches and E browses cycles, with
 hold-to-repeat and D-held reverse as described below. C taps tempo on the Tap Tempo page; F cycles the rightmost page.
-Utility modules keep their existing controls and displayed instructions.
+Pages keep their existing controls and displayed instructions.
 Animation does not delay MIDI/history actions.
 For scrolling behaviour, evidence, deployment hashes and limitations, see the
 [scrolling investigation](../scrolling-scan-timing.md) and its
@@ -248,7 +248,7 @@ and six outputs. With USB MIDI forwarding enabled, USB output cables 0 and 1
 send to DIN and dedicated TRS. Cables 2 through 5 send to configurable jacks
 1 through 4 when their active setup selects a MIDI mode.
 
-### TRS Ports utility page
+### TRS Ports page
 
 From the performance screen, press F to reach **TRS Ports** after Panic.
 A selects a jack, B previews its next mode, and C saves it with the selected
@@ -610,7 +610,7 @@ pending.
 
 ## Panic page and USB MIDI forwarding
 
-Panic follows the cable tester in the utility page cycle.
+Panic follows the cable tester in the page cycle.
 
 On Panic, C starts the controller reset pass and holding C continues Note Off
 sweeps. Releasing C restores brightness; F cancels sending and advances. Normal
@@ -618,7 +618,7 @@ bridging resumes when sending completes or the page is left. Build with
 `PANIC=0` to omit this page.
 
 USB MIDI forwarding is controlled by the setup and patch state operations,
-without a separate utility page. The cable tester now owns the Out/In matrix;
+without a separate page. The cable tester now owns the Out/In matrix;
 its source colors identify test messages, not general MIDI activity. See
 [the interface guide](../../../../../doc/midi-interface.md) and
 [the Panic guide](../../../../../doc/panic.md).
@@ -859,7 +859,7 @@ is reported as an error rather than silently resetting the count. `Starts: --` m
 card was mounted; `Starts: error` means reading or saving the counter failed.
 Startup continues in either case. The counter uses card storage exclusively.
 
-The utility pages share one heading font and size, with white
+The pages share one heading font and size, with white
 text on a black heading band. All titles fit against the same reference text.
 Status labels are dark blue and values are green. Their text has one additional
 vertical ink pixel
@@ -867,7 +867,7 @@ without wider glyphs or spacing. The page background and Tap Tempo ring thicknes
 are configured in the setup:
 
 ```toml
-[utility_pages]
+[page_settings]
 title_font = 'classic' # also Arial or ComicSansMS
 background_color = '0xFFF085'
 annulus = 5

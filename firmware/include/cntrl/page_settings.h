@@ -5,7 +5,7 @@
 #include "keyboard.h"
 
 namespace cntrl {
-struct UtilityPageSettings {
+struct PageSettings {
     enum Word : unsigned {
         refresh, clock_timeout, clocks_per_quarter, clock_beats,
         tap_intervals, minimum_taps, minimum_interval, reset_gap, flash_fraction,

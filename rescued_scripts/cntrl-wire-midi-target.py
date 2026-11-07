@@ -12,10 +12,10 @@ p=Path('cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp');s=p.read
         return midi_files.record(settings, startup_counter, micros());
     }
 '''+s[i:];s=s.replace('                    if (!bridge_.usb_enabled(6)) continue;', '''                    if (!bridge_.usb_enabled(6)) continue;
-                    midi_files.receive(6, cntrl::midi::Packet{uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}}, micros());''');s=s.replace('                    if (byte == 0xf8) utility_pages_', '                    midi_files.receive(source - 1, uint8_t(byte), micros());\n                    if (byte == 0xf8) utility_pages_');s=s.replace('''        if (host_midi.read() && bridge_.usb_enabled(8) && host_midi.getType() == 0xf8)
-            utility_pages_.clock(18 + host_midi.getCable(), micros());''','''        if (host_midi.read() && bridge_.usb_enabled(8)) {
+                    midi_files.receive(6, cntrl::midi::Packet{uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}}, micros());''');s=s.replace('                    if (byte == 0xf8) pages_', '                    midi_files.receive(source - 1, uint8_t(byte), micros());\n                    if (byte == 0xf8) pages_');s=s.replace('''        if (host_midi.read() && bridge_.usb_enabled(8) && host_midi.getType() == 0xf8)
+            pages_.clock(18 + host_midi.getCable(), micros());''','''        if (host_midi.read() && bridge_.usb_enabled(8)) {
             unsigned type = host_midi.getType();
-            if (type == 0xf8) utility_pages_.clock(18 + host_midi.getCable(), micros());
+            if (type == 0xf8) pages_.clock(18 + host_midi.getCable(), micros());
             if (type == 0xf0) {
                 for (unsigned i = 0; i < host_midi.getSysExArrayLength(); ++i) midi_files.receive(8, host_midi.getSysExArray()[i], micros());
             } else {

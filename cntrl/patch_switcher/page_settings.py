@@ -1,4 +1,4 @@
-"""Compact runtime settings for the utility pages."""
+"""Compact runtime settings for the pages."""
 
 import struct
 
@@ -6,7 +6,7 @@ from . import graphics, models
 
 
 def pack(show: models.Setup, target: models.Target) -> list[int]:
-    r = show.utility_pages
+    r = show.page_settings
     if (
         r.title_height * 3 // 2
         + 4
@@ -17,10 +17,10 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
         > target.display_height
     ):
         raise ValueError(
-            'utility_pages: title, tempo and flasher exceed display height'
+            'page_settings: title, tempo and flasher exceed display height'
         )
     if r.flasher_diameter + 2 * r.annulus + 2 * r.padding > target.display_width:
-        raise ValueError('utility_pages: flasher exceeds display width')
+        raise ValueError('page_settings: flasher exceeds display width')
     return [
         round(r.refresh_interval * 1000),
         round(r.clock_timeout * 1000),
@@ -49,11 +49,11 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
 
 
 def pack_clock(show: models.Setup, target: models.Target) -> bytes:
-    r = show.utility_pages
+    r = show.page_settings
     if not r.clock_outputs and r.clock_source == 'internal' and r.clock_bpms == [120]:
         return b''
     if len(set(r.clock_outputs)) != len(r.clock_outputs):
-        raise ValueError('utility_pages.clock_outputs: duplicate output')
+        raise ValueError('page_settings.clock_outputs: duplicate output')
     for name in r.clock_outputs:
         if (
             name not in CLOCK_ROUTES
@@ -64,7 +64,7 @@ def pack_clock(show: models.Setup, target: models.Target) -> bytes:
             )
         ):
             raise ValueError(
-                f'utility_pages.clock_outputs: unavailable output {name!r}'
+                f'page_settings.clock_outputs: unavailable output {name!r}'
             )
     return CLOCK.pack(
         sum(1 << CLOCK_ROUTES[n] for n in r.clock_outputs),
@@ -124,7 +124,7 @@ def unpack_clock(data: bytes, offset: int) -> dict[str, object]:
 def pack_expression(
     show: models.Setup, target: models.Target, jacks: tuple[str, ...]
 ) -> bytes:
-    assignments = show.utility_pages.expression
+    assignments = show.page_settings.expression
     if not assignments:
         return b''
     data = bytearray(EXPRESSION.size * 4)
@@ -185,7 +185,7 @@ def unpack_expression(
 
 
 def pack_keyboard(show: models.Setup, target: models.Target) -> bytes:
-    shortcuts = show.utility_pages.keyboard
+    shortcuts = show.page_settings.keyboard
     if not shortcuts:
         return b''
     if 'usb-hid-keyboard' not in target.functions:

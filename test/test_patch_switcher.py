@@ -74,10 +74,10 @@ def test_invalid_navigation_timing_is_rejected(value: object) -> None:
             models.NavigationSettings.model_validate({n: value})
 
 
-def test_utility_page_settings_round_trip(
+def test_pages_round_trip(
     show: dict[str, object], definitions: object, target: models.Target
 ) -> None:
-    show['utility_pages'] = {
+    show['page_settings'] = {
         'refresh_interval': '2 seconds',
         'clock_timeout': '500 ms',
         'clocks_per_quarter': 96,
@@ -101,7 +101,7 @@ def test_utility_page_settings_round_trip(
     }
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    settings = models.Setup.model_validate(exported).utility_pages
+    settings = models.Setup.model_validate(exported).page_settings
     assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
     assert settings.clock_bpms == [90, 123, 405]
     assert (
@@ -134,13 +134,13 @@ def test_utility_page_settings_round_trip(
         {'decimals': 3},
     ],
 )
-def test_invalid_utility_page_settings_are_rejected(
+def test_invalid_pages_are_rejected(
     show: dict[str, object],
     definitions: object,
     target: models.Target,
     settings: dict[str, object],
 ) -> None:
-    show['utility_pages'] = settings
+    show['page_settings'] = settings
     with pytest.raises(compiler.CompilationError):
         compiler.compile_show(show, definitions, [], target)
 
@@ -341,12 +341,12 @@ def test_clock_output_requires_enabled_trs_and_usb_routes(
         }
     )
     setup = {
-        'utility_pages': {'clock_outputs': [jack, 'usb-device']},
+        'page_settings': {'clock_outputs': [jack, 'usb-device']},
         'trs_ports': {jack: 'midi-a'},
     }
     data = compiler.compile_show(setup, {}, [], capable)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['utility_pages']['clock_outputs'] == [jack, 'usb-device']
+    assert exported['page_settings']['clock_outputs'] == [jack, 'usb-device']
     assert exported['trs_ports'] == {jack: 'midi-a'}
     assert compiler.compile_show(exported, {}, [], capable) == data
     for overrides in ({'trs_ports': {jack: 'expression'}}, {'usb_device_midi': False}):

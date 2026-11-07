@@ -1,4 +1,4 @@
-"""Keyboard utility page authoring and portable key ownership."""
+"""Keyboard page authoring and portable key ownership."""
 
 import subprocess
 from pathlib import Path
@@ -18,7 +18,7 @@ def test_keyboard_settings_round_trip_and_require_capability() -> None:
         {'name': 'Record', 'keys': [21], 'modifiers': 9},
     ]
     setup = {
-        'utility_pages': {'keyboard': shortcuts, 'clock_outputs': ['din']},
+        'page_settings': {'keyboard': shortcuts, 'clock_outputs': ['din']},
         'patch_cycles': {},
         'switches': {
             'A': {
@@ -33,8 +33,8 @@ def test_keyboard_settings_round_trip_and_require_capability() -> None:
     target = target.model_copy(update={'functions': ['usb-hid-keyboard']})
     data = compiler.compile_show(setup, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['utility_pages']['keyboard'][0]['keys'] == [44]
-    assert exported['utility_pages']['keyboard'][1]['modifiers'] == 9
+    assert exported['page_settings']['keyboard'][0]['keys'] == [44]
+    assert exported['page_settings']['keyboard'][1]['modifiers'] == 9
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
@@ -46,11 +46,11 @@ def test_keyboard_storage_grows_with_configured_shortcuts(count: int) -> None:
     shortcuts = [{'name': f'Shortcut {i}', 'keys': [44]} for i in range(count)]
     baseline = compiler.compile_show({}, {}, [], target)
     data = compiler.compile_show(
-        {'utility_pages': {'keyboard': shortcuts}}, {}, [], target
+        {'page_settings': {'keyboard': shortcuts}}, {}, [], target
     )
     assert len(data) - len(baseline) == (6 + count * 39 if count else 0)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert len(exported['utility_pages'].get('keyboard', [])) == count
+    assert len(exported['page_settings'].get('keyboard', [])) == count
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
@@ -82,7 +82,7 @@ def test_keyboard_holds_release_and_reconnect(tmp_path: Path) -> None:
     ).model_copy(update={'functions': ['usb-hid-keyboard']})
     data = compiler.compile_show(
         {
-            'utility_pages': {
+            'page_settings': {
                 'keyboard': [
                     {'name': f'Play {i}', 'keys': [44], 'modifiers': 9}
                     for i in range(12)

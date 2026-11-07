@@ -432,7 +432,7 @@ Format 30 adds independent horizontal and vertical scroll durations and the
 send, patch-browsing, and cycle-browsing directions.
 Recompile older setups for format 30.
 
-Format 29 added four per-setup TRS port roles, editable from the TRS Ports utility page.
+Format 29 added four per-setup TRS port roles, editable from the TRS Ports page.
 
 Format 28 introduced `usb_device_midi` and `usb_host_midi`, both defaulting to true.
 They independently enable MIDI communication on the USB Device and USB Host
@@ -474,7 +474,7 @@ it specifies the outgoing content's movement when sending or browsing forward.
 Undo and backward browsing use the opposite direction. The selected direction
 chooses the horizontal or vertical duration, each in the range 0.001..65.535
 seconds. Smaller durations are faster. The former `transition` setting is
-replaced by these two durations. Utility-page browsing uses the horizontal
+replaced by these two durations. Page browsing uses the horizontal
 duration. Duration is a visual target, not a MIDI delay or a hard real-time
 guarantee; transfer and rendering time can extend it.
 Zero (the default) disables the screensaver. Positive values enable the installed
@@ -503,7 +503,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 71 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 utility-page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3) |
+| Metadata header, 71 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3) |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
@@ -601,7 +601,7 @@ separate qualification.
 
 ### Expression pedal
 
-The Expression utility page selects a jack, shows live travel and calibration
+The Expression page selects a jack, shows live travel and calibration
 status, and captures its heel and toe. Setup assignments map movement to MIDI
 CCs with a range, direction and response curve. See the
 [expression pedal guide](../cntrl/maker/morningstar/mc/firmware/expression-pedal.md)
@@ -617,7 +617,7 @@ A zero channel denotes an unassigned jack.
 The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test, Panic, TRS Ports, Expression, MIDI Clock and Clock Tempo using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
-Tempo. Sending and undo keep an auxiliary utility page in place.
+Tempo. Sending and undo keep an auxiliary page in place.
 
 Tap Tempo displays fixed-position Courier digits (`---.-` initially). Two taps
 produce the first result; subsequent taps average the latest four intervals.
@@ -646,11 +646,11 @@ After a clock timeout, the retained tempo is stippled until clocks resume.
 All durations below are seconds and accept unit strings. Dimensions are pixels;
 title and tempo heights reserve layout bands, while font size is fitted automatically.
 
-Configure these pages under `[utility_pages]`, formerly `[right_pages]`.
+Configure these pages under `[page_settings]`, formerly `[right_pages]`.
 Existing compiled setups keep the same layout; editable exports use the new name.
 
 ```toml
-[utility_pages]
+[page_settings]
 refresh_interval = 1
 clock_timeout = 1
 clocks_per_quarter = 24
@@ -676,7 +676,7 @@ digits = 3
 decimals = 1
 ```
 
-The first 23 utility-page metadata words are, in order: refresh milliseconds, clock-timeout
+The first 23 page metadata words are, in order: refresh milliseconds, clock-timeout
 milliseconds, clocks per quarter, clock averaging beats, tap averaging intervals,
 minimum taps, minimum tap interval milliseconds, tap reset-gap milliseconds,
 flash fraction in thousandths, center diameter, annulus width, title height, tempo height,
@@ -720,9 +720,9 @@ operations. The cable tester shows DIN/TRS rows and Out/In columns: DIN test dat
 is blue, TRS test data is green, and each input takes the color of its latest
 matching test stream.
 
-Utility-page titles use `title_font`, defaulting to `classic`; `Arial` and
+Page titles use `title_font`, defaulting to `classic`; `Arial` and
 `ComicSansMS` are also supported. The title band adds two pixels above and below
 the previous layout, without enlarging the text. Status shows `Up` beside Disk.
-Setup format 27 appends the title-font word to the utility-page metadata.
+Setup format 27 appends the title-font word to the page metadata.
 Panic stops an unfinished first sweep one second after C is released and shows
 `Incomplete`; a completed sweep shows `Ready`.

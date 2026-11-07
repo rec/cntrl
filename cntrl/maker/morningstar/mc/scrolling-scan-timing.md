@@ -62,7 +62,7 @@ Destination styling is reconciled afterward.
 Performance controls are mirrored by column: A/C and D/F exchange functions;
 B/E retain theirs. A sends (including held-send brightness feedback), D undoes,
 C/F take the former A/D browsing functions, and C+F opens the module menu.
-Other performance chords are mirrored too. Utility modules retain their own
+Other performance chords are mirrored too. Pages retain their own
 pane layouts, button mappings and displayed instructions. MIDI/history
 semantics and stored setup data remain unchanged.
 

@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
         std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)), {});
         Hardware hw; cntrl::Document document;
         assert(document.load(data.data(), unsigned(data.size()), hw));
-        auto settings = document.utility_pages();
+        auto settings = document.page_settings();
         assert(settings.keyboard_count == 12 && settings.keyboard_shortcut(0).keys[0] == 44 && settings.keyboard_shortcut(0).modifiers == 9);
         assert(!std::strcmp(settings.keyboard_shortcut(11).name, "Play 11"));
     }

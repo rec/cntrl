@@ -16,9 +16,9 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     std::vector<bool> target_transitions, target_vertical;
     std::vector<bool> scroll_vertical, scroll_panorama;
     std::vector<std::optional<unsigned>> scroll_durations;
-    std::vector<bool> utility_page_moves;
+    std::vector<bool> page_moves;
     unsigned taps = 0;
-    void browse_utility_page(bool reverse) override { utility_page_moves.push_back(reverse); }
+    void browse_page(bool reverse) override { page_moves.push_back(reverse); }
     void tap_tempo(uint32_t) override { ++taps; }
     std::vector<std::optional<unsigned>> durations;
     cntrl::Pane panes[3];
@@ -175,15 +175,15 @@ void test_four_button_navigation(const cntrl::Document &doc) {
     app.tick(2500); assert(app.selected_patch() == 0);
     app.button(1, false, 2501); app.tick(10000);
     assert(app.selected_patch() == 0 && hw.sent.empty());
-    hw.utility_page_moves.clear();
+    hw.page_moves.clear();
     app.button(3, true, 11000);
-    app.tick(111000); assert((hw.utility_page_moves == std::vector<bool>{false}));
+    app.tick(111000); assert((hw.page_moves == std::vector<bool>{false}));
     app.button(5, true, 111001);
-    assert((hw.utility_page_moves == std::vector<bool>{false, true}) && app.depth() == 0);
+    assert((hw.page_moves == std::vector<bool>{false, true}) && app.depth() == 0);
     app.button(3, false, 111002); app.button(3, true, 111003);
-    assert((hw.utility_page_moves == std::vector<bool>{false, true, true}));
+    assert((hw.page_moves == std::vector<bool>{false, true, true}));
     app.button(5, false, 111004); app.button(3, false, 111005); app.button(3, true, 111006);
-    assert((hw.utility_page_moves == std::vector<bool>{false, true, true, false}));
+    assert((hw.page_moves == std::vector<bool>{false, true, true, false}));
     app.button(3, false, 111007);
     for (unsigned b : {0u, 3u}) { app.button(b, true, 10001); app.button(b, false, 10002); }
     assert(app.selected_patch() == 0 && hw.sent.empty());

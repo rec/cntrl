@@ -1,4 +1,4 @@
-# MIDI Clock utility pages
+# MIDI Clock pages
 
 Use **MIDI Clock** to control transport. A sends Start, B sends Continue,
 C sends Stop, and E switches between internal and external clock. The internal
@@ -14,10 +14,10 @@ Changing tempo during playback preserves fractional tick phase. Setup slots
 are authored values; live adjustments last until another slot or setup is
 selected.
 
-Configure these preferences under the existing utility page settings:
+Configure these preferences under the existing page settings:
 
 ```toml
-[utility_pages]
+[page_settings]
 clock_outputs = ['din', 'usb-device']
 clock_bpms = [90, 120, 135]
 clock_source = 'internal'

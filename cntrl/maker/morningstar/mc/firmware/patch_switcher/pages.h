@@ -20,15 +20,15 @@ struct PerformanceStatus {
     unsigned cycles = 0, patches = 0;
 };
 
-class UtilityPages {
+class Pages {
 public:
     enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, confirm_firmware };
-    void configure(const cntrl::UtilityPageSettings &settings) {
+    void configure(const cntrl::PageSettings &settings) {
         generator.stop();
         slot_ = 0;
         settings_ = settings;
         shortcut = 0;
-        using R = cntrl::UtilityPageSettings;
+        using R = cntrl::PageSettings;
         external_ = settings[R::clock_external];
         recall_slot();
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
@@ -63,7 +63,7 @@ public:
         port_message_ = nullptr; dirty_ = true;
     }
     cntrl::ClockGenerator generator;
-    unsigned clock_outputs() const { return settings_[cntrl::UtilityPageSettings::clock_outputs]; }
+    unsigned clock_outputs() const { return settings_[cntrl::PageSettings::clock_outputs]; }
     unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
     bool clock_page() const { return page_ == Page::clock_transport || page_ == Page::clock_tempo; }
     void clock_connections(unsigned available) {
@@ -74,7 +74,7 @@ public:
         }
     }
     void clock_button(unsigned button, uint32_t now_us, unsigned available) {
-        using R = cntrl::UtilityPageSettings;
+        using R = cntrl::PageSettings;
         if (page_ == Page::clock_transport) {
             if (button == 2) generator.stop();
             if (!external_ && button < 2)
@@ -131,13 +131,13 @@ public:
         }
     }
     bool due(uint32_t now) {
-        using R = cntrl::UtilityPageSettings;
+        using R = cntrl::PageSettings;
         if (dirty_) return true;
         if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
     cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready) {
-        using R = cntrl::UtilityPageSettings;
+        using R = cntrl::PageSettings;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
@@ -333,11 +333,11 @@ private:
     unsigned available_outputs_ = 0, slot_ = 0;
     bool external_ = false;
     void recall_slot() {
-        unsigned bpm = settings_.words[cntrl::UtilityPageSettings::slot1 + slot_];
+        unsigned bpm = settings_.words[cntrl::PageSettings::slot1 + slot_];
         if (bpm) generator.set_tempo((60000000u + bpm / 2) / bpm);
     }
     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
-        using R = cntrl::UtilityPageSettings;
+        using R = cntrl::PageSettings;
         unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];
         if (!period) {
             if (!fixed) { std::snprintf(text, length, "--"); return; }
@@ -387,7 +387,7 @@ private:
         }
     }
     char expression_lines_[3][40] = {};
-    cntrl::UtilityPageSettings settings_;
+    cntrl::PageSettings settings_;
     cntrl::TapTempo tap_;
     cntrl::ClockTempo clock_;
     Page page_ = Page::status;

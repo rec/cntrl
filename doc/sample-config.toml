@@ -43,7 +43,7 @@ maximum = 128
 hold_delay = 1.5
 repeat_interval = 1.0
 
-[utility_pages]
+[page_settings]
 
 keyboard = []
 clock_outputs = []
@@ -73,7 +73,7 @@ background_color = "0xFFF085"
 digits = 3
 decimals = 1
 
-[utility_pages.expression]
+[page_settings.expression]
 
 [scrolling]
 

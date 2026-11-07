@@ -1,6 +1,6 @@
 from pathlib import Path
 import subprocess,difflib
-p=Path('cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h')
+p=Path('cntrl/maker/morningstar/mc/firmware/patch_switcher/page_settings.h')
 def change(s):
     s=s.replace('#include <cntrl/clock_generator.h>', '#include <cntrl/clock_generator.h>\n#include <cntrl/midi_outputs.h>')
     s=s.replace('    void clock_button(','''    void clock_connections(unsigned available) {

@@ -10,7 +10,7 @@ def stop(signum: int, frame: object) -> None:
 
 signal.signal(signal.SIGALRM, stop)
 signal.alarm(60)
-backup = Path('/private/tmp/cntrl-utility-pages-before-flash')
+backup = Path('/private/tmp/cntrl-pages-before-flash')
 record = sys.argv[1] == 'before'
 if record:
     backup.mkdir()

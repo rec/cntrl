@@ -5,11 +5,11 @@
 #include <cstdio>
 
 namespace cntrl {
-constexpr unsigned utility_page_settings_offset = 16;
-constexpr unsigned trs_modes_offset = utility_page_settings_offset + 2 * UtilityPageSettings::clock_outputs;
+constexpr unsigned pages_offset = 16;
+constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_outputs;
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 5;
-constexpr unsigned clock_section_size = 2 * (UtilityPageSettings::count - UtilityPageSettings::clock_outputs);
+constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
 constexpr unsigned document_version = 30;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
@@ -81,9 +81,9 @@ public:
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
-        UtilityPageSettings right;
-        for (unsigned i = 0; i < UtilityPageSettings::clock_outputs; ++i) right.words[i] = u16(bytes + meta + utility_page_settings_offset + 2 * i);
-        using R = UtilityPageSettings;
+        PageSettings right;
+        for (unsigned i = 0; i < PageSettings::clock_outputs; ++i) right.words[i] = u16(bytes + meta + pages_offset + 2 * i);
+        using R = PageSettings;
         if (!right[R::refresh] || !right[R::clock_timeout] || !right[R::clocks_per_quarter]
             || right[R::clocks_per_quarter] > 960 || !right[R::clock_beats] || right[R::clock_beats] > 16
             || !right[R::tap_intervals] || right[R::tap_intervals] > 8 || right[R::minimum_taps] < 2
@@ -308,9 +308,9 @@ public:
     uint8_t pulse_minimum() const { return data_[metadata() + 10]; }
     uint8_t pulse_maximum() const { return data_[metadata() + 11]; }
     unsigned navigation_repeat_ms() const { return u16(data_ + metadata() + 12); }
-    UtilityPageSettings utility_pages() const {
-        UtilityPageSettings settings;
-        for (unsigned i = 0; i < UtilityPageSettings::clock_outputs; ++i) settings.words[i] = u16(data_ + metadata() + utility_page_settings_offset + 2 * i);
+    PageSettings page_settings() const {
+        PageSettings settings;
+        for (unsigned i = 0; i < PageSettings::clock_outputs; ++i) settings.words[i] = u16(data_ + metadata() + pages_offset + 2 * i);
         if (data_[19] & 0x80) for (unsigned i = 0; i < 4; ++i) {
             const uint8_t *p = bank(patches()) + i * expression_record_size;
             auto &a = settings.expression[i];
@@ -318,7 +318,7 @@ public:
             a.channel = p[32]; a.controller = p[33]; a.minimum = p[34]; a.maximum = p[35];
             a.reverse = p[36]; a.curve = ExpressionCurve(p[37]);
         }
-        settings.words[UtilityPageSettings::slot1] = 120;
+        settings.words[PageSettings::slot1] = 120;
         if (data_[19] & 0x20) read_clock(settings, bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0));
         if (keyboard_size()) {
             settings.keyboard_count = u16(keyboard_section() + 4);
@@ -342,7 +342,7 @@ public:
         p += 4 + button * 5;
         return u16(p) != 65535 || u16(p + 2) != 65535 ? p : nullptr;
     }
-    unsigned utility_section_size() const {
+    unsigned page_section_size() const {
         return unsigned(switch_hook_section() - bank(patches())) + (!std::memcmp(switch_hook_section(), "CHOK", 4) ? 29 : 0);
     }
     const uint8_t *switch_gestures(unsigned button) const {
@@ -396,8 +396,8 @@ public:
     const uint8_t *mapping(unsigned i) const { return data_ + metadata() + metadata_header_size + instruments_ * 64 + i * 8; }
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
-    static void read_clock(UtilityPageSettings &settings, const uint8_t *p) {
-        for (unsigned i = UtilityPageSettings::clock_outputs; i < UtilityPageSettings::count; ++i, p += 2) settings.words[i] = u16(p);
+    static void read_clock(PageSettings &settings, const uint8_t *p) {
+        for (unsigned i = PageSettings::clock_outputs; i < PageSettings::count; ++i, p += 2) settings.words[i] = u16(p);
     }
     static bool graph_valid(const uint8_t *bytes, unsigned length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,

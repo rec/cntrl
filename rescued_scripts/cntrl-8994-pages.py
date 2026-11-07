@@ -4,14 +4,14 @@ import difflib
 
 def change(p, s):
     if p.name == 'test_renderer.cpp':
-        marker = '    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);\n    pages.browse(true, "ignored");'
-        return s.replace(marker, '''    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
+        marker = '    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::tap);\n    pages.browse(true, "ignored");'
+        return s.replace(marker, '''    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::clock_transport);
     view = pages.view(4005, 4005000, status);
     assert(!std::strcmp(view.lines[0].text, "MIDI Clock"));
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::clock_tempo);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::tap);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::clock_tempo);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::clock_transport);
     pages.browse(true, "ignored");''')
     s=s.replace('#include <cntrl/tempo.h>', '#include <cntrl/tempo.h>\n#include <cntrl/clock_generator.h>')
     s=s.replace(', confirm_firmware };', ', clock_transport, clock_tempo, confirm_firmware };')
@@ -23,11 +23,11 @@ def change(p, s):
         s=s.replace(f'page_ = Page((unsigned(page_) + (reverse ? {n-1} : 1)) % {n});', '''constexpr unsigned count = unsigned(Page::confirm_firmware);
             page_ = Page((unsigned(page_) + (reverse ? count - 1 : 1)) % count);''')
     s=s.replace('    Page page() const', '''    cntrl::ClockGenerator generator;
-    unsigned clock_outputs() const { return settings_[cntrl::UtilityPageSettings::clock_outputs]; }
+    unsigned clock_outputs() const { return settings_[cntrl::PageSettings::clock_outputs]; }
     unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
     bool clock_page() const { return page_ == Page::clock_transport || page_ == Page::clock_tempo; }
     void clock_button(unsigned button, uint32_t now_us, unsigned available) {
-        using R = cntrl::UtilityPageSettings;
+        using R = cntrl::PageSettings;
         if (page_ == Page::clock_transport) {
             if (button == 2) generator.stop();
             if (!external_ && button < 2)
@@ -77,14 +77,14 @@ def change(p, s):
     s=s.replace('    void number_text(','''    unsigned slot_ = 0;
     bool external_ = false;
     void recall_slot() {
-        unsigned bpm = settings_.words[cntrl::UtilityPageSettings::slot1 + slot_];
+        unsigned bpm = settings_.words[cntrl::PageSettings::slot1 + slot_];
         if (bpm) generator.set_tempo((60000000u + bpm / 2) / bpm);
     }
     void number_text(''')
     return s
 
 patch = ''
-for p in (Path('cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h'),Path('cntrl/maker/morningstar/mc/firmware/test_renderer.cpp')):
+for p in (Path('cntrl/maker/morningstar/mc/firmware/patch_switcher/page_settings.h'),Path('cntrl/maker/morningstar/mc/firmware/test_renderer.cpp')):
     clean = subprocess.check_output(['git','show',f'HEAD:{p}'],text=True)
     patch += ''.join(difflib.unified_diff(clean.splitlines(True),change(p,clean).splitlines(True),f'a/{p}',f'b/{p}'))
     p.write_text(change(p,p.read_text()))

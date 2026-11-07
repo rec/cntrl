@@ -40,10 +40,10 @@ class RecordMidiFile(Presentation, frozen=True):
 '''+s[i:];s=s.replace('Brightness | UsbMidiInterface | Navigation | StockFirmware,','Brightness | UsbMidiInterface | Navigation | StockFirmware | PlayMidiFile | RecordMidiFile,');p.write_text(s)
 p=Path('cntrl/patch_switcher/compiler.py');s=p.read_text().replace("default_label = value.operation\n", "default_label = value.operation\n",1).replace('elif isinstance(value, models.StockFirmware):\n            default_label', 'elif isinstance(value, (models.StockFirmware, models.PlayMidiFile, models.RecordMidiFile)):\n            default_label');i=s.index('        elif isinstance(value, models.ProgramChange):',s.index('    def add('));s=s[:i]+'''        elif isinstance(value, models.PlayMidiFile):
             for output in value.outputs:
-                if output not in target_outputs(self.show, self.target).outputs or output not in utility_pages.CLOCK_ROUTES:
+                if output not in target_outputs(self.show, self.target).outputs or output not in page_settings.CLOCK_ROUTES:
                     self.errors.append(f'{path}: unavailable MIDI file output {output!r}')
             kind = 8
-            payload = struct.pack('<96sHIIIdBb', value.filename.encode('ascii'), sum(1 << utility_pages.CLOCK_ROUTES[n] for n in value.outputs if n in utility_pages.CLOCK_ROUTES), value.loops, value.pre_delay, value.post_delay, value.speed, value.reverse, value.transpose)
+            payload = struct.pack('<96sHIIIdBb', value.filename.encode('ascii'), sum(1 << page_settings.CLOCK_ROUTES[n] for n in value.outputs if n in page_settings.CLOCK_ROUTES), value.loops, value.pre_delay, value.post_delay, value.speed, value.reverse, value.transpose)
         elif isinstance(value, models.RecordMidiFile):
             kind = 9
             routes = {'din': 0, 'trs': 1, 'usb-device': 6, 'usb-host': 8}
@@ -52,7 +52,7 @@ p=Path('cntrl/patch_switcher/compiler.py');s=p.read_text().replace("default_labe
 s=s.replace('target_outputs(self.show, self.target).outputs','self.target.outputs');p.write_text(s)
 p=Path('cntrl/patch_switcher/resolved.py');s=p.read_text();i=s.index('    elif kind == 7:',s.index('def _patch('));s=s[:i]+'''    elif kind == 8:
         filename, outputs, loops, pre, post, speed, reverse, transpose = struct.unpack_from('<96sHIIIdBb', data, cursor)
-        value.update(operation='play-midi-file', filename=filename.split(b'\\0')[0].decode('ascii'), outputs=[n for n, i in utility_pages.CLOCK_ROUTES.items() if outputs & (1 << i)], loops=loops, pre_delay=pre, post_delay=post, speed=speed, reverse=bool(reverse), transpose=transpose)
+        value.update(operation='play-midi-file', filename=filename.split(b'\\0')[0].decode('ascii'), outputs=[n for n, i in page_settings.CLOCK_ROUTES.items() if outputs & (1 << i)], loops=loops, pre_delay=pre, post_delay=post, speed=speed, reverse=bool(reverse), transpose=transpose)
     elif kind == 9:
         channels, inputs = struct.unpack_from('<HH', data, cursor)
         value.update(operation='record-midi-file', channels=[i + 1 for i in range(16) if channels & (1 << i)], inputs=[n for n, i in {'din': 0, 'trs': 1, 'usb-device': 6, 'usb-host': 8}.items() if inputs & (1 << i)])

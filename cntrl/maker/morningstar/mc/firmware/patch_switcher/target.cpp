@@ -35,7 +35,7 @@ extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 #include "displays.h"
 #include "switches.h"
 #include "renderer.h"
-#include "utility_pages.h"
+#include "pages.h"
 #include "trs_ports.h"
 #ifdef CNTRL_DIAGNOSTICS
 #include "scroll_timing.h"
@@ -168,24 +168,24 @@ public:
         return usb_keyboard_send() == 0;
     }
     bool keyboard_button(unsigned i, bool pressed) {
-        if (utility_pages_.page() != UtilityPages::Page::keyboard || (i != 0 && i != 1 && i != 2)) return false;
+        if (pages_.page() != Pages::Page::keyboard || (i != 0 && i != 1 && i != 2)) return false;
         if (i == 2) {
             if (!pressed) keyboard_.release(0);
             else {
-                const auto shortcut = utility_pages_.keyboard_shortcut();
+                const auto shortcut = pages_.keyboard_shortcut();
                 pressed = shortcut.name[0] && keyboard_.press(0, shortcut);
             }
-            utility_pages_.keyboard_held(pressed);
+            pages_.keyboard_held(pressed);
         } else if (pressed) {
             keyboard_.release(0);
-            utility_pages_.keyboard_held(false);
-            utility_pages_.keyboard_select(i == 0);
+            pages_.keyboard_held(false);
+            pages_.keyboard_select(i == 0);
         }
         return true;
     }
     void poll_keyboard() {
         keyboard_.poll(usb_configuration != 0, *this);
-        if (!usb_configuration) utility_pages_.keyboard_held(false);
+        if (!usb_configuration) pages_.keyboard_held(false);
     }
     bool supports_trs_mode(unsigned jack, cntrl::midi::TrsMode mode) const override {
         return jack < 4 && mode <= cntrl::midi::TrsMode::aux;
@@ -297,48 +297,48 @@ public:
         if (pane == 2) {
             if (content.performance) {
                 if (!performance_visible_) {
-                    utility_pages_.revisit(documents.selected());
-                    enter_utility_page();
+                    pages_.revisit(documents.selected());
+                    enter_page();
                 }
                 performance_visible_ = true;
                 return;
             } else {
-                if (performance_visible_) leave_utility_page();
+                if (performance_visible_) leave_page();
                 performance_visible_ = false;
             }
         }
         renderer_.show(pane, content);
     }
     void select_trs_jack() {
-        auto &page = utility_pages_;
+        auto &page = pages_;
         page.candidate = trs_ports.mode(page.jack);
         page.port_status(page.candidate, documents.document().trs_modes()[page.jack] != uint8_t(page.candidate) ? "Driver failed" : nullptr);
     }
     bool trs_button(unsigned i) {
-        if (utility_pages_.page() != UtilityPages::Page::ports || i > 1) return false;
+        if (pages_.page() != Pages::Page::ports || i > 1) return false;
         if (i == 0) {
-            utility_pages_.jack = (utility_pages_.jack + 1) % 4;
+            pages_.jack = (pages_.jack + 1) % 4;
             select_trs_jack();
-        } else utility_pages_.next_port_mode();
+        } else pages_.next_port_mode();
         return true;
     }
-    void enter_utility_page() {
-        if (utility_pages_.page() == UtilityPages::Page::ports && documents.document().valid()) select_trs_jack();
+    void enter_page() {
+        if (pages_.page() == Pages::Page::ports && documents.document().valid()) select_trs_jack();
 #if CNTRL_CABLE_TEST
-        if (utility_pages_.page() == UtilityPages::Page::cable) cable_test.enter();
+        if (pages_.page() == Pages::Page::cable) cable_test.enter();
 #endif
 #if CNTRL_PANIC
-        if (utility_pages_.page() == UtilityPages::Page::panic) panic.enter(runtime.brightness);
+        if (pages_.page() == Pages::Page::panic) panic.enter(runtime.brightness);
 #endif
     }
-    void leave_utility_page() {
-        keyboard_.clear(); utility_pages_.keyboard_held(false);
-        if (utility_pages_.page() == UtilityPages::Page::expression) expression_.cancel();
+    void leave_page() {
+        keyboard_.clear(); pages_.keyboard_held(false);
+        if (pages_.page() == Pages::Page::expression) expression_.cancel();
 #if CNTRL_CABLE_TEST
-        if (utility_pages_.page() == UtilityPages::Page::cable) leave_cable_test();
+        if (pages_.page() == Pages::Page::cable) leave_cable_test();
 #endif
 #if CNTRL_PANIC
-        if (utility_pages_.page() == UtilityPages::Page::panic) leave_panic();
+        if (pages_.page() == Pages::Page::panic) leave_panic();
 #endif
     }
     unsigned clock_available() const {
@@ -350,44 +350,44 @@ public:
         return mask;
     }
     bool stop_clock() {
-        utility_pages_.generator.stop();
-        utility_pages_.generator.poll(micros(), clock_available(), *this);
-        return !utility_pages_.generator.stopping();
+        pages_.generator.stop();
+        pages_.generator.poll(micros(), clock_available(), *this);
+        return !pages_.generator.stopping();
     }
     bool clock_control(unsigned button, bool pressed) {
-        if (!utility_pages_.clock_page()) return false;
+        if (!pages_.clock_page()) return false;
         if (pressed) {
-            if (button == 5) browse_utility_page(held_controls & (1u << 3));
-            else utility_pages_.clock_button(button, micros(), clock_available());
+            if (button == 5) browse_page(held_controls & (1u << 3));
+            else pages_.clock_button(button, micros(), clock_available());
         }
         return true;
     }
-    void configure_utility_pages(const cntrl::UtilityPageSettings &settings) override {
-        leave_utility_page();
+    void configure_page_settings(const cntrl::PageSettings &settings) override {
+        leave_page();
         expression_.configure(settings);
-        utility_pages_.configure(settings);
-        bridge_.clock_owner(utility_pages_.clock_owner());
-        enter_utility_page();
+        pages_.configure(settings);
+        bridge_.clock_owner(pages_.clock_owner());
+        enter_page();
     }
-    void browse_utility_page(bool reverse) override {
+    void browse_page(bool reverse) override {
         if (!documents.document().valid()) return;
-        if (utility_pages_.page() == UtilityPages::Page::confirm_firmware
+        if (pages_.page() == Pages::Page::confirm_firmware
             && (held_controls & (1u << 2))) return;
-        leave_utility_page();
-        if (utility_pages_.browse(reverse, documents.selected())) {
+        leave_page();
+        if (pages_.browse(reverse, documents.selected())) {
 #if CNTRL_ORIGINAL_FIRMWARE
             if (!start_original_firmware()) error("Firmware switch failed");
 #else
             error("Stock firmware unavailable");
 #endif
         } else renderer_.transition(reverse, documents.document().scroll_ms(), 2);
-        if (utility_pages_.clock_page()) controller.cancel_gesture();
-        enter_utility_page();
+        if (pages_.clock_page()) controller.cancel_gesture();
+        enter_page();
     }
     void tap_tempo(uint32_t now) override {
         if (!documents.document().valid()) return;
-        auto &page = utility_pages_;
-        if (page.page() == UtilityPages::Page::ports) {
+        auto &page = pages_;
+        if (page.page() == Pages::Page::ports) {
             auto active = trs_ports.mode(page.jack);
             if (!output_idle() || configuration_locked() || documents.busy() || documents.dirty()) page.port_status(active, "Busy");
             else if (active == page.candidate && documents.document().trs_modes()[page.jack] == uint8_t(active)) page.port_status(active, "Already set");
@@ -396,7 +396,7 @@ public:
             return;
         }
 #if CNTRL_CABLE_TEST
-        if (utility_pages_.page() == UtilityPages::Page::cable) {
+        if (pages_.page() == Pages::Page::cable) {
             if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
             controller.cancel_gesture();
             cable_test.toggle(now);
@@ -407,7 +407,7 @@ public:
         }
 #endif
 #if CNTRL_PANIC
-        if (utility_pages_.page() == UtilityPages::Page::panic) {
+        if (pages_.page() == Pages::Page::panic) {
             if (!panic_owns_midi && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
             controller.cancel_gesture();
             if (!panic_owns_midi) bridge_.configure(false);
@@ -416,11 +416,11 @@ public:
             return;
         }
 #endif
-        if (utility_pages_.page() == UtilityPages::Page::expression) {
+        if (pages_.page() == Pages::Page::expression) {
             expression_.calibrate(trs_ports.expression_pin(expression_.selected()) >= 0);
             return;
         }
-        utility_pages_.tap(now);
+        pages_.tap(now);
     }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
         throb_.configure(period, low, high, delay);
@@ -464,11 +464,11 @@ public:
         bridge_.host_connected(bool(host_midi));
         uint32_t begin = micros(), now = millis();
         bridge_.connected(usb_configuration != 0, now);
-        if (!documents.document().valid()) utility_pages_.generator.stop();
+        if (!documents.document().valid()) pages_.generator.stop();
         unsigned clock_routes = clock_available();
-        utility_pages_.clock_connections(clock_routes);
-        bridge_.clock_owner(utility_pages_.clock_owner());
-        utility_pages_.generator.poll(micros(), clock_routes, *this);
+        pages_.clock_connections(clock_routes);
+        bridge_.clock_owner(pages_.clock_owner());
+        pages_.generator.poll(micros(), clock_routes, *this);
         // Separate source limits plus an aggregate time budget. Rotate the
         // first source, so a saturated cable cannot starve later sources.
         for (unsigned i = 0; i < 3 && uint32_t(micros() - begin) < 180; ++i) {
@@ -478,7 +478,7 @@ public:
                     uint32_t packet = usb_midi_read_message();
                     if (!packet) break;
                     if (!bridge_.usb_enabled(6)) continue;
-                    if (((packet >> 8) & 255) == 0xf8) utility_pages_.clock((packet >> 4) & 15, micros());
+                    if (((packet >> 8) & 255) == 0xf8) pages_.clock((packet >> 4) & 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.enabled()) continue;
 #endif
@@ -490,7 +490,7 @@ public:
                 } else {
                     HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
                     int byte = serial.read(); if (byte < 0) break;
-                    if (byte == 0xf8) utility_pages_.clock(source + 15, micros());
+                    if (byte == 0xf8) pages_.clock(source + 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.enabled()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
 #endif
@@ -501,7 +501,7 @@ public:
         source_cursor_ = (source_cursor_ + 1) % 3;
         // Existing USB-host input is deliberately not bridged.
         if (host_midi.read() && bridge_.usb_enabled(8) && host_midi.getType() == 0xf8)
-            utility_pages_.clock(18 + host_midi.getCable(), micros());
+            pages_.clock(18 + host_midi.getCable(), micros());
 #if CNTRL_PANIC
         if (panic_owns_midi) {
             panic.tick(now, bridge_.handoff(*this));
@@ -534,7 +534,7 @@ public:
     }
     void load_expression_calibrations() { expression_.load_calibrations(); }
     bool expression_button(unsigned i) {
-        if (utility_pages_.page() != UtilityPages::Page::expression || i > 1) return false;
+        if (pages_.page() != Pages::Page::expression || i > 1) return false;
         if (i == 0) expression_.next_jack(); else expression_.cancel();
         return true;
     }
@@ -553,11 +553,11 @@ public:
             [this](const char *out, const uint8_t *bytes) {
                 return !patch_work_pending() && output_idle() && send(out, bytes, 3);
             });
-        if (utility_pages_.page() == UtilityPages::Page::expression && uint32_t(now - expression_refresh_) >= 80) {
+        if (pages_.page() == Pages::Page::expression && uint32_t(now - expression_refresh_) >= 80) {
             expression_refresh_ = now;
             char title[40], position[40], prompt[40];
             expression_.status(trs_ports.expression_pin(expression_.selected()) >= 0, title, position, prompt);
-            utility_pages_.expression_status(title, position, prompt);
+            pages_.expression_status(title, position, prompt);
         }
     }
     void display(uint32_t now, bool transfer_busy) {
@@ -571,10 +571,10 @@ public:
             port_save_pending_ = false;
             if (documents.dirty()) {
                 documents.edit_cancel();
-                utility_pages_.port_status(trs_ports.mode(utility_pages_.jack), "Save failed");
+                pages_.port_status(trs_ports.mode(pages_.jack), "Save failed");
             }
         }
-        utility_pages_.time(now, micros(), held_controls & (1u << 2));
+        pages_.time(now, micros(), held_controls & (1u << 2));
         ++display_count_;
 #ifdef CNTRL_DIAGNOSTICS
         if (scroll_timing.active()) { if (!display_dma_pending()) scroll_timing.poll(micros()); return; }
@@ -582,18 +582,18 @@ public:
         if (!display_dma_pending()) splash_visible_ = splash_session.poll(now, renderer_.ready(), transfer_busy);
         apply_brightness(now);
 #if CNTRL_CABLE_TEST
-        if (utility_pages_.page() == UtilityPages::Page::cable && cable_test.take_redraw())
-            utility_pages_.revisit(documents.selected());
+        if (pages_.page() == Pages::Page::cable && cable_test.take_redraw())
+            pages_.revisit(documents.selected());
 #endif
 #if CNTRL_PANIC
-        if (utility_pages_.page() == UtilityPages::Page::panic && panic.take_redraw())
-            utility_pages_.revisit(documents.selected());
+        if (pages_.page() == Pages::Page::panic && panic.take_redraw())
+            pages_.revisit(documents.selected());
 #endif
         if (!splash_visible_ && !feature_open() && documents.document().valid()
-            && utility_pages_.due(now)) {
+            && pages_.due(now)) {
             // Prepare the incoming card during the renderer's bounded transition preparation.
-            PerformanceStatus status = utility_pages_.page() == UtilityPages::Page::status ? performance_status() : PerformanceStatus{};
-            renderer_.show(2, utility_pages_.view(now, micros(), status
+            PerformanceStatus status = pages_.page() == Pages::Page::status ? performance_status() : PerformanceStatus{};
+            renderer_.show(2, pages_.view(now, micros(), status
 #if CNTRL_CABLE_TEST
                 , cable_test.status()
 #else
@@ -621,7 +621,7 @@ private:
     ExpressionPedals expression_;
     uint32_t expression_refresh_ = 0;
     cntrl::Keyboard keyboard_;
-    UtilityPages utility_pages_;
+    Pages pages_;
     bool port_save_pending_ = false;
     bool performance_visible_ = false;
     int pending_patch_ = -1;

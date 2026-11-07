@@ -6,7 +6,7 @@ from zlib import crc32
 
 import tomlkit
 
-from . import midi_messages, utility_pages
+from . import midi_messages, page_settings
 from .compiler import (
     DOCUMENT_VERSION,
     GESTURE_EVENTS,
@@ -39,8 +39,8 @@ def graph_offset(data: bytes) -> int:
         & ~(
             0x1FFF
             | GESTURES_FLAG
-            | utility_pages.EXPRESSION_FLAG
-            | utility_pages.CLOCK_FLAG
+            | page_settings.EXPRESSION_FLAG
+            | page_settings.CLOCK_FLAG
         )
         or length != len(data)
         or crc32(data[28:]) != crc
@@ -51,15 +51,15 @@ def graph_offset(data: bytes) -> int:
         raise ValueError('missing setup metadata')
     nb = struct.unpack_from('<H', data, meta + 4)[0]
     cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
-    if flags & utility_pages.EXPRESSION_FLAG:
-        cursor += utility_pages.EXPRESSION.size * 4
-    if flags & utility_pages.CLOCK_FLAG:
-        cursor += utility_pages.CLOCK.size
+    if flags & page_settings.EXPRESSION_FLAG:
+        cursor += page_settings.EXPRESSION.size * 4
+    if flags & page_settings.CLOCK_FLAG:
+        cursor += page_settings.CLOCK.size
     if data[cursor : cursor + 4] == b'CKBD':
         cursor += (
             6
             + struct.unpack_from('<H', data, cursor + 4)[0]
-            * utility_pages.KEYBOARD.size
+            * page_settings.KEYBOARD.size
         )
     if flags & GESTURES_FLAG:
         cursor += 5 * GESTURES.size
@@ -125,17 +125,17 @@ def export(data: bytes) -> str:
     }
     repeat = struct.unpack_from('<H', data, meta + 12)[0]
     result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
-    pages = utility_pages.unpack(data, meta + 16)
+    pages = page_settings.unpack(data, meta + 16)
     cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
-    if flags & utility_pages.EXPRESSION_FLAG:
-        pages['expression'] = utility_pages.unpack_expression(data, cursor, TRS_JACKS)
-        cursor += utility_pages.EXPRESSION.size * 4
-    if flags & utility_pages.CLOCK_FLAG:
-        pages.update(utility_pages.unpack_clock(data, cursor))
-        cursor += utility_pages.CLOCK.size
+    if flags & page_settings.EXPRESSION_FLAG:
+        pages['expression'] = page_settings.unpack_expression(data, cursor, TRS_JACKS)
+        cursor += page_settings.EXPRESSION.size * 4
+    if flags & page_settings.CLOCK_FLAG:
+        pages.update(page_settings.unpack_clock(data, cursor))
+        cursor += page_settings.CLOCK.size
     if data[cursor : cursor + 4] == b'CKBD':
-        pages['keyboard'] = utility_pages.unpack_keyboard(data, cursor + 4)
-    result['utility_pages'] = pages
+        pages['keyboard'] = page_settings.unpack_keyboard(data, cursor + 4)
+    result['page_settings'] = pages
     modes = data[meta + METADATA.size - 9 : meta + METADATA.size - 5]
     if any(m >= len(TRS_MODES) for m in modes):
         raise ValueError('invalid TRS port role')
@@ -222,15 +222,15 @@ def export(data: bytes) -> str:
             value['mode'] = ('press', 'momentary', 'latched')[mode]
         value['on'] = _patch(data, offset, on, metadata, set())
         hooks = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
-        if flags & utility_pages.EXPRESSION_FLAG:
-            hooks += utility_pages.EXPRESSION.size * 4
-        if flags & utility_pages.CLOCK_FLAG:
-            hooks += utility_pages.CLOCK.size
+        if flags & page_settings.EXPRESSION_FLAG:
+            hooks += page_settings.EXPRESSION.size * 4
+        if flags & page_settings.CLOCK_FLAG:
+            hooks += page_settings.CLOCK.size
         if data[hooks : hooks + 4] == b'CKBD':
             hooks += (
                 6
                 + struct.unpack_from('<H', data, hooks + 4)[0]
-                * utility_pages.KEYBOARD.size
+                * page_settings.KEYBOARD.size
             )
         if flags & GESTURES_FLAG:
             hooks += 5 * GESTURES.size
@@ -247,15 +247,15 @@ def export(data: bytes) -> str:
                 value['exit'] = _patch(data, offset, exit, metadata, set())
         if flags & GESTURES_FLAG:
             address = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
-            if flags & utility_pages.EXPRESSION_FLAG:
-                address += utility_pages.EXPRESSION.size * 4
-            if flags & utility_pages.CLOCK_FLAG:
-                address += utility_pages.CLOCK.size
+            if flags & page_settings.EXPRESSION_FLAG:
+                address += page_settings.EXPRESSION.size * 4
+            if flags & page_settings.CLOCK_FLAG:
+                address += page_settings.CLOCK.size
             if data[address : address + 4] == b'CKBD':
                 address += (
                     6
                     + struct.unpack_from('<H', data, address + 4)[0]
-                    * utility_pages.KEYBOARD.size
+                    * page_settings.KEYBOARD.size
                 )
             fields = GESTURES.unpack_from(data, address + button * GESTURES.size)
             if fields[6]:

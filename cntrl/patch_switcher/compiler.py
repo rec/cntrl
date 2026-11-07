@@ -10,7 +10,7 @@ from zlib import crc32
 import tomlkit
 from pydantic import ValidationError
 
-from . import display, midi_messages, models, utility_pages
+from . import display, midi_messages, models, page_settings
 
 
 class CompilationError(ValueError):
@@ -443,10 +443,10 @@ def compile_show(
                 for i, p in enumerate(compiler.values)
             },
         )
-        utility_settings = utility_pages.pack(show, target)
-        clock = utility_pages.pack_clock(show, target)
-        expression = utility_pages.pack_expression(show, target, TRS_JACKS)
-        keyboard = utility_pages.pack_keyboard(show, target)
+        packed_pages = page_settings.pack(show, target)
+        clock = page_settings.pack_clock(show, target)
+        expression = page_settings.pack_expression(show, target, TRS_JACKS)
+        keyboard = page_settings.pack_keyboard(show, target)
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -504,7 +504,7 @@ def compile_show(
         show.target_pulse.maximum,
         round(show.navigation.repeat_interval * 1000),
         round(show.target_pulse.delay * 1000),
-        *utility_settings,
+        *packed_pages,
         bytes(TRS_MODES.index(show.trs_ports.get(j, 'off')) for j in TRS_JACKS),
         round(show.scrolling.vertical_duration * 1000),
         *(
@@ -566,8 +566,8 @@ def compile_show(
             | int(show.animation_color_cycle) << 10
             | int(show.usb_device_midi) << 11
             | int(show.usb_host_midi) << 12
-            | (utility_pages.EXPRESSION_FLAG if expression else 0)
-            | (utility_pages.CLOCK_FLAG if clock else 0)
+            | (page_settings.EXPRESSION_FLAG if expression else 0)
+            | (page_settings.CLOCK_FLAG if clock else 0)
             | (GESTURES_FLAG if gestures else 0),
             crc32(body),
             show.screensaver_timeout * 1000,

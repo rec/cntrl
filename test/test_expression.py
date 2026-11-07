@@ -19,7 +19,7 @@ def target() -> models.Target:
 def setup(**fields: object) -> dict[str, object]:
     return {
         'trs_ports': {'configurable-2': 'expression'},
-        'utility_pages': {
+        'page_settings': {
             'expression': {
                 'configurable-2': {
                     'output': 'din',
@@ -41,17 +41,17 @@ def test_expression_assignment_survives_download(
     target: models.Target, clock_outputs: list[str]
 ) -> None:
     source = setup()
-    pages = source['utility_pages']
+    pages = source['page_settings']
     assert isinstance(pages, dict)
     pages['clock_outputs'] = clock_outputs
     compiled = compiler.compile_show(source, {}, [], target)
     exported = tomlkit.parse(resolved.export(compiled)).unwrap()
     assert (
-        models.Setup.model_validate(exported).utility_pages.expression
-        == models.Setup.model_validate(source).utility_pages.expression
+        models.Setup.model_validate(exported).page_settings.expression
+        == models.Setup.model_validate(source).page_settings.expression
     )
     assert (
-        models.Setup.model_validate(exported).utility_pages.clock_outputs
+        models.Setup.model_validate(exported).page_settings.clock_outputs
         == clock_outputs
     )
     assert compiler.compile_show(exported, {}, [], target) == compiled

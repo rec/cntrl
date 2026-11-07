@@ -1,6 +1,6 @@
-# Keyboard utility page
+# Keyboard page
 
-Keyboard follows Clock Tempo in the utility page cycle. A and B select a
+Keyboard follows Clock Tempo in the page cycle. A and B select a
 shortcut. Hold C to hold its keys and release C to release them. Selecting another
 shortcut, leaving the page or changing setups releases held keys. A disconnected
 USB connection clears all holds. Reconnecting first sends an empty report.
@@ -9,11 +9,11 @@ Configure shortcuts with the setup. The list uses one record per shortcut,
 up to the target’s total setup capacity:
 
 ```toml
-[[utility_pages.keyboard]]
+[[page_settings.keyboard]]
 name = 'Play'
 keys = [44] # USB HID keyboard usage for Space
 
-[[utility_pages.keyboard]]
+[[page_settings.keyboard]]
 name = 'Record'
 keys = [21] # Physical R key on a US layout
 modifiers = 9 # Left Control (1) plus Left GUI/Command (8)

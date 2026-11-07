@@ -94,7 +94,7 @@ public:
         cancel_gesture();
         document_ = document;
         hardware_.configure_trs_ports(document.trs_modes());
-        hardware_.configure_utility_pages(document.utility_pages());
+        hardware_.configure_page_settings(document.page_settings());
         hardware_.set_target_pulse(document.pulse_period_ms(), document.pulse_minimum(), document.pulse_maximum(), document.pulse_delay_ms());
         hardware_.set_brightness(document.brightness());
         brightness_ = document.brightness();
@@ -111,7 +111,7 @@ public:
         render();
     }
     // Adapters map send/patch/undo/cycle to logical inputs 2/1/5/4.
-    // Logical inputs 0/3 map to physical C (tap) and F (utility page).
+    // Logical inputs 0/3 map to physical C (tap) and F (page).
     void button(unsigned button, bool pressed, uint32_t now) {
         if (button >= 6) return;
         const unsigned mask = 1u << button;
@@ -121,12 +121,12 @@ public:
             if (button == 0) {
                 hardware_.tap_tempo(now);
             } else if (button == 3) {
-                hardware_.browse_utility_page(reverse_);
+                hardware_.browse_page(reverse_);
             } else if (button == 2) {
                 c_held_ = true; action(button);
             } else if (button == 5 && (held_ & ((1u << 1) | (1u << 3) | (1u << 4)))) {
                 reverse_ = true;
-                if (held_ & (1u << 3)) hardware_.browse_utility_page(true);
+                if (held_ & (1u << 3)) hardware_.browse_page(true);
                 for (unsigned i = 0; i < 2; ++i) {
                     unsigned nav = i ? 4 : 1;
                     if (held_ & (1u << nav)) { repeat_since_[i] = now; repeating_[i] = false; action(nav); }

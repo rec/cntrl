@@ -1,5 +1,5 @@
 #include "patch_switcher/renderer.h"
-#include "patch_switcher/utility_pages.h"
+#include "patch_switcher/pages.h"
 #include "patch_switcher/scroll_timing.h"
 #include <array>
 #include <map>
@@ -688,24 +688,24 @@ static void sparse_text() {
     font_assets::cache.begin(); font_assets::cache.finish(true);
 }
 
-static void test_utility_pages() {
-    cntrl::UtilityPageSettings settings{{1000, 1000, 24, 1, 4, 2, 100, 3000, 400,
+static void test_page_settings() {
+    cntrl::PageSettings settings{{1000, 1000, 24, 1, 4, 2, 100, 3000, 400,
         40, 5, 12, 40, 2, 8, 0, 0x4000, 0xf800, 0, 3, 1, 0xff90}};
-    UtilityPages custom;
-    settings.words[cntrl::UtilityPageSettings::title_font] = 1;
+    Pages custom;
+    settings.words[cntrl::PageSettings::title_font] = 1;
     custom.configure(settings);
     assert(custom.view(0, 0, {}).lines[0].graphics.font == 1);
-    settings.words[cntrl::UtilityPageSettings::title_font] = 0;
-    settings.words[cntrl::UtilityPageSettings::clock_outputs] = 1;
-    settings.words[cntrl::UtilityPageSettings::slot1] = 90;
-    settings.words[cntrl::UtilityPageSettings::slot2] = 144;
-    UtilityPages pages; pages.configure(settings);
+    settings.words[cntrl::PageSettings::title_font] = 0;
+    settings.words[cntrl::PageSettings::clock_outputs] = 1;
+    settings.words[cntrl::PageSettings::slot1] = 90;
+    settings.words[cntrl::PageSettings::slot2] = 144;
+    Pages pages; pages.configure(settings);
     PerformanceStatus status; status.cycles = 10; status.patches = 59;
     status.ram_used[0] = 49 * 1024; status.ram_free[0] = 463 * 1024;
     status.ram_used[1] = 25 * 1024; status.ram_free[1] = 487 * 1024;
     status.disk_valid = true; status.disk_used = 1181116006ull;
     status.disk_free = 29ull * 1024 * 1024 * 1024 - status.disk_used;
-    assert(pages.page() == UtilityPages::Page::status);
+    assert(pages.page() == Pages::Page::status);
     pages.browse(true, "first");
     auto view = pages.view(0, 0, status);
     assert(!std::strcmp(view.lines[0].text, "Tap Tempo"));
@@ -753,7 +753,7 @@ static void test_utility_pages() {
     assert(!std::strcmp(view.lines[5].text, "RAM: 49/512k 25/512k"));
     assert(!std::strcmp(view.lines[6].text, "Disk:1.1/29G Up:0:00:01"));
     assert(!std::strcmp(view.lines[7].text, "Starts: --") && !view.lines[8].text[0]);
-    assert(view.lines[0].graphics.line_height == settings[cntrl::UtilityPageSettings::title_height] * 3 / 2 + 4);
+    assert(view.lines[0].graphics.line_height == settings[cntrl::PageSettings::title_height] * 3 / 2 + 4);
     assert(view.lines[0].graphics.font == heading.font && view.lines[0].graphics.size == heading.size);
     for (unsigned i = 1; i <= 7; ++i) {
         assert(view.lines[i].graphics.font == view.lines[1].graphics.font);
@@ -799,7 +799,7 @@ static void test_utility_pages() {
     pages.time(0x000003e8u, 1000000, false);
     view = pages.view(1000, 1000000, status);
     assert(!std::strcmp(view.lines[6].text, "Disk:--/--G Up:1193:02:48"));
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::firmware);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::firmware);
     view = pages.view(3600, 3600000, status);
     assert(!std::strcmp(view.lines[0].text, "Firmware"));
     assert(!std::strcmp(view.lines[1].text, "Use stock"));
@@ -809,7 +809,7 @@ static void test_utility_pages() {
     assert(view.lines[1].y > 64 && view.lines[2].y > view.lines[1].y);
     assert(!pages.due(5000));
     pages.tap(3900);
-    assert(pages.page() == UtilityPages::Page::confirm_firmware);
+    assert(pages.page() == Pages::Page::confirm_firmware);
     view = pages.view(3900, 3900000, status);
     assert(!std::strcmp(view.lines[0].text, "F for stock firmware."));
     assert(!std::strcmp(view.lines[1].text, "C to cancel"));
@@ -817,10 +817,10 @@ static void test_utility_pages() {
     assert(!pages.browse(true, "ignored"));
     assert(pages.browse(false, "ignored")); // Only F confirms.
     pages.tap(4000);
-    assert(pages.page() == UtilityPages::Page::firmware);
+    assert(pages.page() == Pages::Page::firmware);
     view = pages.view(4000, 4000000, status);
     assert(!std::strcmp(view.lines[0].text, "Firmware"));
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::cable);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::cable);
     cntrl::CableTest::Status cables;
     view = pages.view(4000, 4000000, status, cables);
     assert(!std::strcmp(view.lines[0].text, "MIDI Cable Test"));
@@ -847,7 +847,7 @@ static void test_utility_pages() {
     cable_renderer.show(2, view); drain(cable_renderer);
     for (unsigned y : {68u, 94u}) for (unsigned x : {78u, 130u}) assert(screens[2][y][x] == 0x8410);
     assert(screens[2][117][135] == 0xffff && screens[2][117][147] == 0);
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::panic);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::panic);
     view = pages.view(4002, 4002000, status);
     assert(!std::strcmp(view.lines[0].text, "Panic") && !std::strcmp(view.lines[3].text, "Ready"));
     assert(view.heading_band && view.graphics.background == 0xff90 && view.lines[0].graphics.size == heading.size);
@@ -855,17 +855,17 @@ static void test_utility_pages() {
     assert(!std::strcmp(view.lines[3].text, "Incomplete"));
     view = pages.view(4003, 4003000, status, {}, cntrl::Panic::Status::sending);
     assert(!std::strcmp(view.lines[3].text, "Sending"));
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::ports);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::ports);
     pages.next_port_mode();
     view = pages.view(4004, 4004000, status);
     assert(!std::strcmp(view.lines[0].text, "TRS Ports"));
     assert(!std::strcmp(view.lines[1].text, "Jack 1: Off"));
     assert(!std::strcmp(view.lines[2].text, "MIDI Type A"));
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::expression);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::expression);
     pages.expression_status("Jack 2  CC 11 Ch 1", "50%  Calibrated", "C: Calibrate");
     view = pages.view(4010, 4010000, status);
     assert(!std::strcmp(view.lines[0].text, "Expression") && !std::strcmp(view.lines[2].text, "50%  Calibrated"));
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::clock_transport);
     view = pages.view(4005, 4005000, status);
     assert(!std::strcmp(view.lines[0].text, "MIDI Clock"));
     assert(pages.generator.bpm() == 120); // Two taps changed the initial 90 BPM.
@@ -875,36 +875,36 @@ static void test_utility_pages() {
     assert(!pages.generator.running());
     pages.clock_button(0, 4007000, 1);
     assert(!pages.generator.running());
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::clock_tempo);
     pages.clock_button(2, 4008000, 1);
     assert(pages.generator.bpm() == 144);
     pages.clock_button(0, 4009000, 1);
     assert(pages.generator.bpm() == 143);
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::keyboard);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::keyboard);
     view = pages.view(4005, 4005000, status);
     assert(!std::strcmp(view.lines[0].text, "Keyboard"));
     assert(!std::strcmp(view.lines[1].text, "No shortcuts"));
-    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::keyboard);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::expression);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::ports);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::panic);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::cable);
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::firmware);
+    pages.browse(false, "ignored"); assert(pages.page() == Pages::Page::tap);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::keyboard);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::clock_tempo);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::clock_transport);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::expression);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::ports);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::panic);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::cable);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::firmware);
     pages.browse(true, "a-very-long-setup-name-that-cannot-fit-at-the-smallest-font");
-    assert(pages.page() == UtilityPages::Page::status);
+    assert(pages.page() == Pages::Page::status);
     view = pages.view(3601, 3601000, status);
     assert(view.lines[1].x >= 2 && view.lines[1].x < 80);
     assert(std::strstr(view.lines[1].text, "..."));
-    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
+    pages.browse(true, "ignored"); assert(pages.page() == Pages::Page::tap);
     view = pages.view(3601, 3601000, status);
     assert(!std::strcmp(view.lines[1].text, "120.0"));
 }
 
 int main() {
-    test_utility_pages();
+    test_page_settings();
     writes = pixels_sent = 0;
     sparse_text();
     {

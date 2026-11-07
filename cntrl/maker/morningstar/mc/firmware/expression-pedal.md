@@ -8,7 +8,7 @@ on DIN channel 1:
 [trs_ports]
 configurable-2 = 'expression'
 
-[utility_pages.expression.configurable-2]
+[page_settings.expression.configurable-2]
 output = 'din'
 channel = 1
 controller = 11

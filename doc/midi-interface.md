@@ -25,7 +25,7 @@ for the new firmware.
 
 Set `is_midi_interface = true` in the setup to enable MIDI forwarding on startup.
 It defaults to `false`. The `usb-midi-interface` patch state operation can also
-change forwarding. There is no separate MIDI Interface utility page; the
+change forwarding. There is no separate MIDI Interface page; the
 Out/In indicator matrix belongs to MIDI Cable Test and shows test streams only.
 
 When enabled without a configured computer host, forwarding checks again every

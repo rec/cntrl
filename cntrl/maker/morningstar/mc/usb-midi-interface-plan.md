@@ -1,8 +1,8 @@
 # Standard USB MIDI interface
 
 Current implementation: the active setup selects the role of each Omniport
-on the TRS Ports utility page. USB cables 2 through 5 forward only to jacks
-configured for MIDI output. See the [target guide](firmware/patch-switcher.md#trs-ports-utility-page).
+on the TRS Ports page. USB cables 2 through 5 forward only to jacks
+configured for MIDI output. See the [target guide](firmware/patch-switcher.md#trs-ports-page).
 The dated plan below records the original implementation.
 
 Status, 2026-10-25: implemented, built, tested and flashed. macOS now exposes

@@ -20,7 +20,7 @@ public:
             }
         }
     }
-    void configure(const cntrl::UtilityPageSettings &settings) {
+    void configure(const cntrl::PageSettings &settings) {
         for (unsigned i = 0; i < 4; ++i) {
             assignments_[i] = settings.expression[i];
             inputs_[i].reset();

@@ -12,11 +12,11 @@ try:
     with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
         client = transport.SetupClient(connection)
         for name, options in [('Default', {}), ('Clock', {'clock_outputs':['din'], 'clock_bpms':[88,130,401]})]:
-            data = compiler.compile_show({'utility_pages':options}, {}, [], target)
+            data = compiler.compile_show({'page_settings':options}, {}, [], target)
             client.copy(name, data, False)
             actual = client.download(name)
             assert actual == data
-            settings = models.Setup.model_validate(tomlkit.parse(resolved.export(actual)).unwrap()).utility_pages
+            settings = models.Setup.model_validate(tomlkit.parse(resolved.export(actual)).unwrap()).page_settings
             print(name, settings.clock_outputs, settings.clock_bpms)
 finally:
     peer.terminate()

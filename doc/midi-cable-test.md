@@ -1,6 +1,6 @@
 # MIDI cable test
 
-The cable tester is the utility page after Firmware and before Panic. Opening it starts
+The cable tester is the page after Firmware and before Panic. Opening it starts
 Off with all four indicators grey. C toggles On/Off. F stops any active test and
 continues the page cycle. Re-entering never restores On.
 
@@ -33,7 +33,7 @@ This checks delivery of MIDI messages, not individual connector-pin continuity.
 
 `firmware/include/cntrl/cable_test.h` owns message generation, return matching
 and a display-independent status snapshot. It uses the shared MIDI sink and
-parser. The target owns port access and navigation; the shared utility-page
+parser. The target owns port access and navigation; the shared page
 renderer supplies the layout.
 
 Browsing the page while Off leaves normal MIDI operation unchanged. Starting a

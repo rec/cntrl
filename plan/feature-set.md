@@ -35,7 +35,7 @@ debounce inputs and give each switch a stable identifier. Reuse press,
 momentary and latched assignments. Document wiring and reject configurations
 exceeding the target's capabilities.
 
-**Dependencies:** The TRS Ports utility page provides socket role selection.
+**Dependencies:** The TRS Ports page provides socket role selection.
 
 **Acceptance:** One physical action produces one intended transition; held
 inputs are rearmed correctly on entry; release and disconnection have explicit
