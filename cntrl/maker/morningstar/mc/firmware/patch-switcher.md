@@ -20,6 +20,20 @@ saves it as `new-image.hex`, retains any previous staged upload image as
 `firmware/build/patch-switcher.hex`. It prints the exact file's SHA-256 for the
 upload request. It does not enter the bootloader or flash the pedal.
 
+## Switch response
+
+The physical input applies debounce once. Switch assignments with a `gestures`
+table use its configured `debounce` duration (20 ms by default); other buttons
+retain 15 ms. The recognizer receives confirmed edges and adds only the waits
+required by configured double taps, long presses and repeats. The 3 ms scan
+interval is unchanged.
+
+Accepted button actions and MIDI output service run before serial transfers and
+background SD work. A new switch invocation starts dispatching in the same
+service pass, and buffered USB MIDI is flushed before MIDI-file SD work.
+These ordering changes have host tests and build checks; latency still needs
+measurement on the pedal.
+
 ## Browsing transitions
 
 By default, moving to the next cycle slides the candidate pane upward; moving to the

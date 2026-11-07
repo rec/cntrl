@@ -141,6 +141,19 @@ int main(int argc, char **argv) {
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex;
     Bytes base; for (unsigned i = 0; i < hex.size(); i += 2) base.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     test_file_operations(base);
+    // An accepted switch press reaches the wire in one tick and one service.
+    {
+        PatchBoard direct;
+        cntrl::Document document;
+        assert(document.load(base.data(), unsigned(base.size()), direct));
+        cntrl::Switches switches(direct, direct, direct);
+        switches.enter(document, 0);
+        switches.button(0, true, 20);
+        switches.tick(20);
+        assert(direct.wire[0].empty());
+        direct.bridge.service(direct, 20);
+        assert(!direct.wire[0].empty());
+    }
     PatchBoard board; cntrl::Document original; assert(original.load(base.data(), unsigned(base.size()), board));
     unsigned first = original.nodes();
     Bytes sysex(130, 3); sysex.front() = 0xf0; sysex.back() = 0xf7;

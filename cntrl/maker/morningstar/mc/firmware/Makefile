@@ -137,7 +137,7 @@ test: tools test-button-timing test-switch-gesture test-boot-selection test-star
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined "$(ROOT)/test_pixel_throb.cpp" -o "$(ROOT)/build/test_pixel_throb"
 	"$(ROOT)/build/test_pixel_throb"
 	mkdir -p "$(ROOT)/build"
-	$(CXX) -std=c++17 -Wall -Wextra -Werror "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(abspath $(ROOT)/../../../../..)/firmware/include" "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
 	"$(ROOT)/build/test_buttons"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/test_support" \
 		"$(ROOT)/test_displays.cpp" "$(ROOT)/usb_probe/displays.cpp" -o "$(ROOT)/build/test_displays"

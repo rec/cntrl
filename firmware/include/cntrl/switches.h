@@ -11,6 +11,12 @@ public:
           {hardware, outputs, sources, 3}, {hardware, outputs, sources, 4}} {}
     ~Switches() { unpin(); }
     bool open() const { return open_; }
+    std::optional<uint16_t> debounce_ms(unsigned button) const {
+        if (!open_ || closing_) return std::nullopt;
+        for (unsigned i = 0; i < count_; ++i)
+            if (states_[i].record[0] == button && states_[i].settings) return u16(states_[i].settings + 12);
+        return std::nullopt;
+    }
     bool closing() const { return closing_; }
     bool abandoned() const { return abandoned_; }
     bool owns(const PatchExecutor &executor) const {
@@ -193,6 +199,7 @@ public:
                             } else if (press) --s.presses;
                             else s.owned = s.active = !baseline && s.requested;
                             s.unknown = s.failed = false;
+                            s.executor.tick(now);
                         }
                     }
                     dirty_ = true;

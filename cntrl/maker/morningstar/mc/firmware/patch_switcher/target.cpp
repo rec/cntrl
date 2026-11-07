@@ -560,10 +560,9 @@ public:
                 midi_files.receive(8, packet, micros());
             }
         }
-        midi_files.recorder.poll(micros());
-        if (midi_files.recorder.failed() && !recording_failed_) error("MIDI recording write failed");
-        recording_failed_ = midi_files.recorder.failed();
-        if (bridge_.sysex_ready(midi_files.player.sysex_outputs())) midi_files.player.poll(micros(), clock_available(), *this);
+#if CNTRL_SWITCHES
+        switches.tick(now);
+#endif
 #if CNTRL_PANIC
         if (panic_owns_midi) {
             panic.tick(now, bridge_.handoff(*this));
@@ -576,10 +575,13 @@ public:
         else
 #endif
         bridge_.service(*this, now, midi_files.player.sysex_outputs());
-#if CNTRL_SWITCHES
-        switches.tick(now);
-#endif
         // Flush only already-buffered packets; this operation never waits.
+        usb_midi_flush_output();
+        // File I/O follows delivery of accepted button actions.
+        midi_files.recorder.poll(micros());
+        if (midi_files.recorder.failed() && !recording_failed_) error("MIDI recording write failed");
+        recording_failed_ = midi_files.recorder.failed();
+        if (bridge_.sysex_ready(midi_files.player.sysex_outputs())) midi_files.player.poll(micros(), clock_available(), *this);
         usb_midi_flush_output();
         uint32_t elapsed = micros() - begin;
         if (elapsed > max_midi_us_) max_midi_us_ = elapsed;
@@ -1374,7 +1376,11 @@ void poll_target() {
         uint8_t raw = read_buttons();
         uint8_t events[6], pressed = 0;
         for (unsigned i = 0; i < 6; ++i) {
-            events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now);
+            unsigned debounce_ms = 15;
+#if CNTRL_SWITCHES
+            debounce_ms = board.switches.debounce_ms(i).value_or(15);
+#endif
+            events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now, debounce_ms);
             if (buttons[i].pressed) pressed |= 1u << i;
         }
         held_controls = pressed;
@@ -1452,6 +1458,9 @@ void poll_target() {
             }
         }
     }
+    if (feature_open()) app_controller().cancel_gesture();
+    tick_apps(now);
+    board.poll();
     // A bounded amount of work per iteration; SD-card latency itself depends
     // on the card and must be measured on the pedal before release.
     for (unsigned i = 0; i < 512 && !usb_session.output_pending() && Serial.available(); ++i)
@@ -1477,12 +1486,9 @@ void poll_target() {
     // continue while command input and reply-producing jobs wait for room.
     if (board.reply_ready()) serial_router.poll(now);
     if (board.reply_ready()) songs_transfer.poll(now);
-    if (feature_open()) app_controller().cancel_gesture();
-    tick_apps(now);
     song_sources.tick(now);
     songs.tick();
     if (board.reply_ready()) font_files.poll(now, board);
-    board.poll();
 #if CNTRL_ORIGINAL_FIRMWARE
     if (!firmware_visit_stage)
 #endif

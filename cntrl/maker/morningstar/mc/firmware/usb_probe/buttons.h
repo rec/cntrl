@@ -23,7 +23,7 @@ struct ButtonState {
     bool waiting_for_second = false;
     bool double_pressed = false;
 
-    uint8_t update(bool sample, uint32_t now) {
+    uint8_t update(bool sample, uint32_t now, uint32_t debounce_ms = 15) {
         uint8_t events = no_event;
         if (waiting_for_second && uint32_t(now - released_at) > 300) {
             waiting_for_second = false;
@@ -32,7 +32,7 @@ struct ButtonState {
             candidate = sample;
             since = now;
         }
-        if (candidate != pressed && uint32_t(now - since) >= 15) {
+        if (candidate != pressed && uint32_t(now - since) >= debounce_ms) {
             pressed = candidate;
             if (pressed) {
                 events |= press_event;

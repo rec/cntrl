@@ -34,11 +34,9 @@ int main(int argc, char **argv) {
     assert(document.load(bytes.data(), unsigned(bytes.size()), board));
     cntrl::Switches switches(board, board, board);
     auto tick = [&](unsigned now) { for (unsigned i = 0; i < 10; ++i) switches.tick(now); };
-    auto edge = [&](bool down, unsigned now) { switches.button(0, down, now); tick(now + 20); };
+    auto edge = [&](bool down, unsigned now) { switches.button(0, down, now + 20); tick(now + 20); };
     switches.enter(document, 0);
-    // Bounce never becomes a stable press.
-    switches.button(0, true, 10); switches.button(0, false, 15); tick(40);
-    assert(board.sent.empty());
+    assert(switches.debounce_ms(0) == 20 && !switches.debounce_ms(5));
     edge(true, 100); edge(false, 150); tick(469); assert(board.sent.empty());
     tick(470); assert((board.sent == std::vector<unsigned>{0, 1}));
     board.sent.clear(); edge(true, 1000); edge(false, 1050); edge(true, 1200);
@@ -80,19 +78,25 @@ int main(int argc, char **argv) {
     cntrl::SwitchGestures gesture;
     std::vector<unsigned> events;
     auto recognize = [&](uint32_t now) { gesture.tick(now, true, [&](unsigned e) { events.push_back(e); }); };
-    gesture.reset(settings); gesture.input(true, 0); recognize(20);
-    gesture.input(false, 500); recognize(520);
+    gesture.reset(settings); gesture.input(true, 20); recognize(20);
+    gesture.input(false, 520); recognize(520);
     assert((events == std::vector<unsigned>{2, 6, 3}));
     gesture.reset(settings); events.clear();
-    gesture.input(true, 1000); recognize(1020); gesture.input(false, 1050); recognize(1070);
-    gesture.input(true, 1350); recognize(1370);
+    gesture.input(true, 1020); recognize(1020); gesture.input(false, 1070); recognize(1070);
+    gesture.input(true, 1370); recognize(1370);
     assert((events == std::vector<unsigned>{0, 1})); // Exact double deadline.
     gesture.reset(settings); events.clear();
-    gesture.input(true, 0xfffffff0u); recognize(4);
-    recognize(504); assert((events == std::vector<unsigned>{2, 6}));
+    gesture.input(true, 2000); recognize(2000);
+    gesture.input(false, 2499); recognize(2600);
+    assert(events.empty()); // A release before the hold deadline stays a tap.
+    gesture.input(true, 2798); recognize(2900);
+    assert((events == std::vector<unsigned>{4})); // Confirmed before the double deadline.
+    gesture.reset(settings); events.clear();
+    gesture.input(true, 0xfffffff0u); recognize(0xfffffff0u);
+    recognize(484); assert((events == std::vector<unsigned>{2, 6}));
     // With release only, the press remains immediate after debouncing.
     for (unsigned i = 1; i < 6; ++i) settings[i * 2] = settings[i * 2 + 1] = 255;
-    gesture.reset(settings); events.clear(); gesture.input(true, 0); recognize(20);
+    gesture.reset(settings); events.clear(); gesture.input(true, 20); recognize(20);
     assert((events == std::vector<unsigned>{0}));
-    gesture.input(false, 50); recognize(70); assert(events.back() == 1);
+    gesture.input(false, 70); recognize(70); assert(events.back() == 1);
 }

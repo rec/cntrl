@@ -4,6 +4,7 @@
 namespace cntrl {
 // Recognition produces at most one repeat per service call. Edges and timing
 // use unsigned elapsed times so the millisecond clock may wrap normally.
+// Inputs are confirmed edges. The input adapter owns the configured debounce.
 class SwitchGestures {
 public:
     void reset(const uint8_t *settings = nullptr) {
@@ -15,23 +16,25 @@ public:
     }
     template<class Emit> void tick(uint32_t now, bool repeat_ready, Emit emit) {
         if (!settings_) return;
+        // Use the confirmed edge time even when service runs later.
+        const uint32_t event_time = stable_ != candidate_ ? changed_ : now;
         // A second debounced press at exactly the deadline is a new tap.
-        if (waiting_ && uint32_t(now - released_) >= u16(settings_ + 16)) {
+        if (waiting_ && uint32_t(event_time - released_) >= u16(settings_ + 16)) {
             emit(0); emit(1); waiting_ = false;
         }
         if (stable_ && !second_) {
             if (!long_ && (u16(settings_ + 2) != 65535 || u16(settings_ + 10) != 65535)
-                && uint32_t(now - pressed_) >= u16(settings_ + 14)) {
-                long_ = true; repeated_ = now; emit(2);
+                && uint32_t(event_time - pressed_) >= u16(settings_ + 14)) {
+                long_ = true; repeated_ = event_time; emit(2);
                 if (repeat_ready) emit(6);
-            } else if (long_ && repeat_ready && uint32_t(now - repeated_) >= u16(settings_ + 18)) {
-                repeated_ = now; emit(6);
+            } else if (long_ && repeat_ready && uint32_t(event_time - repeated_) >= u16(settings_ + 18)) {
+                repeated_ = event_time; emit(6);
             }
         }
-        if (stable_ != candidate_ && uint32_t(now - changed_) >= u16(settings_ + 12)) {
+        if (stable_ != candidate_) {
             stable_ = candidate_;
             if (stable_) {
-                pressed_ = now; long_ = false;
+                pressed_ = event_time; long_ = false;
                 second_ = waiting_; waiting_ = false;
                 if (second_) emit(4);
                 else if (!delayed()) emit(0);
@@ -40,7 +43,7 @@ public:
             } else if (long_) {
                 emit(3); long_ = false;
             } else if (u16(settings_ + 6) != 65535) {
-                waiting_ = true; released_ = now;
+                waiting_ = true; released_ = event_time;
             } else {
                 if (delayed()) emit(0);
                 emit(1);
