@@ -12,6 +12,7 @@ from zlib import crc32
 from pydantic import BaseModel
 
 from .data_files import validate_name
+from .models import TargetMemory
 
 
 class SerialConnection:
@@ -226,6 +227,13 @@ class SetupClient:
         if (response := self.request(command)) != 'CNTRL OK':
             raise ValueError(f'unexpected response: {response}')
 
+    def memory(self) -> TargetMemory:
+        response = self.request('CNTRL MEMORY')
+        fields = response.split()
+        if len(fields) != 4 or fields[:2] != ['CNTRL', 'MEMORY']:
+            raise ValueError(f'invalid memory response: {response}')
+        return TargetMemory(capacity=int(fields[2]), runtime=int(fields[3]))
+
     def catalogue(self) -> list[SetupEntry]:
         result: list[SetupEntry] = []
         response = self.request('CNTRL SETUP LIST')
@@ -359,7 +367,7 @@ class SetupClient:
             raise ValueError('font asset read-back mismatch or checksum collision')
 
     def copy_movie(self, data: bytes) -> str:
-        from ..maker.morningstar.mc.splash.asset import inspect_asset
+        from ..animation.asset import inspect_asset
 
         inspect_asset(data)
         key = crc32(data)
@@ -382,22 +390,14 @@ class SetupClient:
         return f'CNTRL SPLASH READY {len(data)} {key:08x}'
 
     def download_movie(self, key: int) -> bytes:
-        from ..maker.morningstar.mc.splash.asset import (
-            FRAME_BYTES,
-            HEADER,
-            inspect_asset,
-        )
+        from ..animation.asset import HEADER, inspect_asset
 
         response = self.request(f'CNTRL SPLASH SIZE {key:08x}')
         parts = response.split()
         if len(parts) != 4 or parts[:3] != ['CNTRL', 'SPLASH', 'SIZE']:
             raise ValueError(f'invalid movie response: {response}')
         length = int(parts[3])
-        if (
-            not HEADER.size + FRAME_BYTES
-            <= length
-            <= min(0xFFFFFFFF - 20, HEADER.size + 65535 * FRAME_BYTES)
-        ):
+        if not HEADER.size < length <= 0xFFFFFFFF - 20:
             raise ValueError('invalid movie asset length')
         result = bytearray()
         while len(result) < length:

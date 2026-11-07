@@ -239,8 +239,8 @@ private:
             active = std::max(active, int(i) == index_ ? replacement_ram2_ : table_.ram2(i));
         }
         unsigned needs = table_.cntrl_ram2() + active + setup_table_ram_overhead(count);
-        if (uint64_t(needs) + table_.memory_margin() >= 524288) return false;
-        unsigned capacity = 524288 - needs - table_.memory_margin();
+        if (uint64_t(needs) + table_.memory_margin() >= table_.memory_capacity()) return false;
+        unsigned capacity = table_.memory_capacity() - needs - table_.memory_margin();
         if (replacement_length_ > memory_budget) return false;
         std::vector<unsigned> sizes(count);
         for (unsigned i = 0; i < count; ++i) sizes[i] = int(i) == index_ ? replacement_length_ : table_.length(i);

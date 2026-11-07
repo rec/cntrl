@@ -108,6 +108,11 @@ int main(int argc, char **argv) {
     assert(argc == 3 || argc == 4);
     Board board; File file(argv[1]); cntrl::SetupTable table;
     if (argc == 4) { File second(argv[3]); test_history_after_reindex(file, second, board); return 0; }
+    {
+        File incompatible(argv[1]); cntrl::SetupTable rejected;
+        cntrl::put32(incompatible.bytes.data() + 36, cntrl::u32(incompatible.bytes.data() + 36) + 1);
+        assert(!rejected.open(incompatible, board));
+    }
     test_saving_and_history(file, board);
     unsigned initial_budget = cntrl::memory_budget;
     assert(cntrl::memory_used == 0);

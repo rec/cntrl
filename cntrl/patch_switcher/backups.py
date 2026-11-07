@@ -105,7 +105,14 @@ def restore_setups(directory: Path, port: Path) -> None:
                 if current_bundle
                 else 16192
             )
-            bundle = setup_bundle.build(combined, source, margin)
+            bundle = setup_bundle.build(
+                combined,
+                source,
+                setup_bundle.memory_from_bundle(current_bundle)
+                if current_bundle
+                else client.memory(),
+                margin,
+            )
             client.copy_bundle(bundle.pack(), overwrite=True)
         for name in setups:
             print(f'{name}: restored and read-back verified', flush=True)

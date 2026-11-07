@@ -193,6 +193,10 @@ def test_setup_cli_copy_download_and_delete(
     process = subprocess.Popen([str(bundle_peer)], stdin=master, stdout=master)
     try:
         port = os.ttyname(slave)
+        with transport.SerialConnection(Path(port)) as connection:
+            assert transport.SetupClient(connection).memory() == models.TargetMemory(
+                capacity=400000, runtime=240000
+            )
 
         def run(arguments: list[str]) -> None:
             monkeypatch.setattr(

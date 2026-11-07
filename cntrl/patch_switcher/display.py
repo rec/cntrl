@@ -173,7 +173,7 @@ def compile_display(
                     max(6 if 'switch.name' in patch.values else 1, len(lines)),
                     stipple,
                 )
-    from ..maker.morningstar.mc.font_assets import SWITCH_STATES, Preparation
+    from ..fonts.assets import SWITCH_STATES, Preparation
 
     prepared = Preparation(show, target, requests, contexts)
     target = prepared.target

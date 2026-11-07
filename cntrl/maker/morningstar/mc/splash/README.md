@@ -21,9 +21,9 @@ One movie is chosen at random from the relevant list whenever startup or idle
 playback begins, then loops until dismissed. The two categories are independent.
 Missing or invalid SD assets fall through to the normal interface. No selected
 setup means no movie. These fields replace `splash`; recompile setups for
-document version 34. Existing assets are not migrated.
+the current document version; the host converts legacy assets when rebuilding.
 
-Movies stream from SD one 320-byte row at a time using RAM1 stack space. Full
+Movies stream from SD in packets of at most 320 bytes held in the player. Full
 `.cnsa` sizes do not consume RAM2. Keys and portable filenames are included in
 compiled setup sizes and therefore in the setup residency/cache budget.
 `total_ram2_needs()` uses an estimated firmware allowance, not a measured
@@ -107,186 +107,31 @@ edges of the enlarged image. The centre screen is horizontally mirrored;
 both outer screens use the unmirrored image. Padding and show text colours do
 not apply to this full-bleed splash.
 
-## Prepare on the Mac
+## Portable implementation
 
-Pillow is already a project dependency. Image decoding/compositing, resizing,
-cropping, mirroring, colour conversion
-and frame-timing conversion all happen here, not on the pedal.
+Animation preparation, conversion, timing, transfer and playback are implemented
+in `cntrl/animation/` and `firmware/include/cntrl/animation/`. The adapter's target
+export declares 160x128 images and two streams: the first serves both outer
+screens; the second is precomputed with horizontal mirroring for the centre.
+Only `board.h` maps logical streams to physical screen masks and binds SD access.
+The player retains one 320-byte packet until the output accepts the next region;
+no complete animation framebuffer is allocated.
 
-From the repository root:
-
-```bash
-uv run --frozen -m cntrl.maker.morningstar.mc.splash.cli prepare \
-  assets/spiral.gif \
-  --output cntrl/maker/morningstar/mc/splash/build/spiral.cnsa
-```
-
-The supplied animation produces 1,310,800 bytes. Generated assets and binaries
-stay under ignored `build/`; the source GIF is committed. There is no on-pedal
-GIF decoder, decompression, resizing or image mirroring. Base RGB conversion
-happens on the Mac. Rows
-are stored in the exact RGB565 byte order needed by the display bus.
-
-## White-band colour walk
-
-The board output adapter now recolours the white component at playback time,
-using two smooth pseudorandom walks through RGB colour space: one for L/R and
-one for the mirrored centre. Each walk chooses nearby targets, with each six-bit
-channel moving by up to 20 levels per nominal colour segment, and interpolates
-toward them. Each walk also has its own independent speed walk: a new speed
-target is chosen every ten seconds and approached smoothly, bounded to 0.25..2
-times the original pace, starting at 0.5 times the original base speed. The
-fastest rate remains unchanged. The speed target moves by at most 0.25 times base speed
-per segment, reflecting at its limits. Boundary reflections keep RGB channels
-in 0..63 without
-clipping them against the cube walls. The pace is comparable to the former
-20-second hue cycle, but there is no fixed colour loop. Each pixel's
-common RGB component is replaced by the tinted equivalent; its remaining
-colour is retained. Thus black and pure green are unchanged, grey antialiasing
-keeps its coverage, and white-to-green edge blends retain their green residue.
-Other coloured pixels with a white component are also affected; this is not an
-exact-white-only replacement.
-
-Both tints are sampled together at the first outer-screen row and held for the
-complete frame. The outer screens still share a single
-broadcast transfer. One 320-byte temporary row is transformed before sending;
-stored assets, checksums, geometry, frame timing and backlight fades are unchanged.
-The effect is limited to splash/screensaver output, not the main UI. It is now
-optional: the setup setting `animation_color_cycle` defaults to `false`.
-When disabled, original asset pixels are sent directly without the tint transform
-or color-walk calculations. Set it to `true` to enable the independent centre/outer
-color walks. This controls both startup and idle animation and does not change
-GIF motion, frame timing, or backlight fades. The current `simple-setup.toml`
-explicitly sets it to `false`. This setting requires setup format 21 firmware.
-
-`color_cycle.h` implements the walk and pure integer RGB565 transform. The walk
-uses distinct seeds mixed with the first frame's uptime, continues between animation loops and
-does not replay a long backlog after an idle pause. This is visual randomness,
-not a cryptographic generator. Native tests check channel bounds and smoothness
-over ten minutes for both walks, reproducibility without shared state, distinct
-centre/outer paths, clock wraparound, black and green invariance, grey shading, green
-edge blends and identity under a neutral tint for all 65,536 RGB565 values.
-
-Screensaver playback still loops without a time limit until physical input;
-normal wake/dismiss behaviour is unchanged.
-
-The preceding fixed-hue-cycle build was flashed on 2026-10-24 after splash/runtime, display/renderer native
-tests and stock flash-configuration/HEX-ELF checks passed. Image SHA-256:
-`f847942f295e055f4454434c364802f45e74b031d5dc0cf2eee87ca7bd0f7c05`.
-The uploader returned its usual reset/disappearance status 1; USB then confirmed
-`CNTRL READY 7 23390 0718301d`, with pman still selected. Visual colour and
-playback-speed confirmation remains a physical check.
-
-After the USB/MIDI handoff, the combined random-walk firmware passed all 204
-Python tests and native splash/runtime, controller/MIDI-bridge and display/
-renderer tests. Stock flash-configuration and HEX/ELF checks passed. The image
-was uploaded on 2026-10-24, SHA-256:
-`0e9dd09363307bfdba2b5bb1bd78b93e11eb0c814be340f3b354df1fdd5726ad`.
-After the updater's usual reset/disappearance status 1, USB confirmed
-`CNTRL READY 8 23390 e12bd7da` with pman selected, matching the pre-upload show
-length/checksum. No setup or animation assets were rewritten. Visual evaluation
-of the walk remains a physical check; the screensaver loops until button input.
-
-The independent centre/outer colour and speed walks were built, inspected and
-flashed on 2026-10-24 after native splash/runtime and display/renderer tests
-passed. HEX/ELF and stock flash-configuration checks passed. Image SHA-256:
-`e07b74d4145f70d47e1a5238ab1bfa25134b3e027ceaeb216f4c3599d320e3f2`.
-After the updater's usual reset/disappearance status 1, USB confirmed
-`CNTRL READY 8 23390 e12bd7da`, with pman still selected. Assets and show data
-were not rewritten. The actual colour/speed effect still requires observation.
-
-On 2026-10-25 the initial colour speed and minimum were halved, while the 2x
-maximum was retained. Speed-walk segments doubled from five to ten seconds.
-GIF motion and UI transitions were unchanged. Native splash/runtime and display/
-renderer tests and image checks passed; the fixup was flashed and USB confirmed
-pman and `CNTRL READY 8 23390 e12bd7da` unchanged. Image SHA-256:
-`fb5740e44e60ef21cbc24bc36b558c35d83034fade0508797bc39fb9c9d225e8`.
-
-## Components
-
-- `animation.h`: bounded row-streaming player. It loops while active, honours
-  frame durations with a wrap-safe millisecond clock, and returns `dismissed`
-  immediately when any button is pressed. That press must not reach the normal
-  patch controller. One poll reads/transmits at most one 320-byte row.
-- `receiver.h`: independent upload receiver and selected-asset `Source`. Movies
-  are addressed by CRC32 and stored independently. Chunks are acknowledged before
-  the host sends more. It validates the asset geometry, durations and transfer
-  CRC, flushes a final commit marker, reads back and verifies the stored asset,
-  then makes it available for selection. Commit readback is incremental, with
-  at most 512 bytes per CRC read. Individual SD calls may still block.
-- `board.h`: SD/SdFat backend with a persistent reader and an output adapter.
-  `/cntrl/movies/CRC32.bin` contains an envelope and the `.cnsa` bytes.
-  Upload writes `upload.tmp` before publishing the completed file.
-  The application still initializes SD and sets `SdSlots.ready`.
-- `cli.py`: Pydantic/Tyro preparation and chunked serial-upload commands. The
-  uploader reuses the existing serial connection class without modifying it.
-
-The adapter treats panel indices 0/2 as outer and 1 as centre. It broadcasts
-identical rows to both outer panels simultaneously. All panels are deselected
-before button scanning. `session.h` handles playback lifetime and dismissal;
-`router.h` routes complete commands and exclusive binary payloads to the asset
-or show receiver. Upload BEGIN stops playback before storage changes. Status
-queries leave playback running. USB, button scanning and MIDI queue servicing
-continue while the splash owns the screens.
-
-At 8 MHz, broadcasting the two outer panels and separately writing the centre
-requires at least 81.92 ms of pixel wire time per frame, before commands and SD
-access. The original 10 fps remains a physical qualification target. If a transfer exceeds
-a frame's duration, the player finishes that frame and starts the next without
-an extra delay; it does not skip frames or issue catch-up bursts.
-
-## Upload protocol
+The prepared asset format is CNSA version 2. The compiler converts an existing
+version-1 asset using the explicitly supplied target geometry before generating
+its new checksum and setup reference. Original assets remain available for
+backup and recovery. For an individual offline conversion, run the generic CLI:
 
 ```bash
-uv run --frozen -m cntrl.maker.morningstar.mc.splash.cli upload \
-  cntrl/maker/morningstar/mc/splash/build/spiral.cnsa \
-  --port /dev/cu.usbmodem144682801
+uv run python -m cntrl.animation.cli convert old.cnsa --output new.cnsa --target exported-target.toml
 ```
 
-The host validates the prepared asset before opening serial. All messages are
-newline-terminated ASCII, except the known-length binary chunks:
-
-1. Host: `CNTRL SPLASH BEGIN SIZE CRC32_HEX`
-2. Pedal: `CNTRL SPLASH SEND`, or `CNTRL SPLASH EXISTS` for an installed asset.
-3. Host: up to 512 raw bytes, then waits for `CNTRL SPLASH NEXT RECEIVED`.
-4. After the final bytes and durable readback, pedal:
-   `CNTRL SPLASH DONE SIZE CRC32_HEX`.
-5. Host queries `CNTRL SPLASH SIZE CRC32_HEX`, then
-   `CNTRL SPLASH READ CRC32_HEX OFFSET` for 128-byte hex chunks. It compares all
-   stored bytes with the prepared asset, including when the asset already exists.
-
-Failures use `CNTRL SPLASH ERROR REASON`. Incomplete transfers expire after
-10 seconds without incoming data. The previous committed asset remains usable.
-FAT/SD power-loss behaviour still requires hardware testing; simulated write
-failures do not prove filesystem-level atomicity.
-
-## Binary formats
-
-All metadata is little-endian. RGB565 pixels themselves are big-endian, in bus
-order. The 16-byte asset header is magic `CNSA`, u16 version 1, u16 width 160,
-u16 height 128, u16 frame count, u32 total bytes. Every frame is u32 duration in
-milliseconds followed by 128 pairs of rows: normal outer-screen row, then
-pre-mirrored centre row. Each row is 320 bytes. Every frame is independent.
-
-Each SD movie wraps the entire asset with a 16-byte header (`CNSP`, u32 zero,
-u32 asset bytes, u32 whole-asset CRC32) and a final four-byte `DONE` marker.
-Playback opens the asset chosen from the setup's movie keys. No vendor data or
-setup files are written by this backend.
-
-## Verification
+Preparing a source image likewise uses the complete target descriptor:
 
 ```bash
-uv run --frozen pytest cntrl/maker/morningstar/mc/splash/test/test_asset.py
-make -C cntrl/maker/morningstar/mc/splash test check-board
+uv run python -m cntrl.animation.cli prepare source.gif --output prepared.cnsa --target exported-target.toml
 ```
 
-Python tests exercise the byte-accurate mirrored orientation, frame timing,
-invalid assets and actual Python-to-C++ uploads through a pseudo-terminal,
-including a 16-frame asset. Native C++ tests cover row bounds, timer wraparound,
-looping, dismissal, read failures, CRC rejection, interrupted writes, reboot
-selection and timeouts under address/undefined-behaviour sanitizers. Runtime
-tests exercise mixed show/asset commands, binary newlines, missing assets,
-upload interruption of playback and consuming the dismissing gesture without MIDI.
-`check-board` compiles the adapters against the installed Teensy/SD interfaces in
-a separate build directory. It is an API check only, not executable firmware
-for this pedal. No hardware access occurs in these tests.
+The generic format and output API are documented in
+`cntrl/animation/README.md`. Generic tests live in `test/test_animation_assets.py`,
+`test/test_animation_movies.py` and `firmware/test/animation/`.

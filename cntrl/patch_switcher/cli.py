@@ -1,6 +1,7 @@
 """Compile data files and manage named performance setups on the pedal."""
 
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -13,6 +14,7 @@ import tyro
 from pydantic import BaseModel, ConfigDict, Field
 from reccy.configuration import units
 
+from .. import build
 from . import (
     backups,
     compiler,
@@ -34,7 +36,7 @@ class Sources(BaseModel, frozen=True):
         default_factory=list
     )
     avoid_confict: bool = True
-    memory_margin: units.Bytes = Field(default=16192, ge=0, le=524288)
+    memory_margin: units.Bytes = Field(default=16192, ge=0)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -128,7 +130,9 @@ def compile_inputs(
     targets = data_files.expressions(command.target, errors)
     definitions = data_files.expressions(command.definitions, errors)
     tables = [e for t in command.table for e in data_files.expressions(t, errors)]
-    target_data = [data_files.load(e, command.avoid_confict, errors) for e in targets]
+    target_data = [
+        data_files.load_target(e, command.avoid_confict, errors) for e in targets
+    ]
     definition_data = [
         data_files.load(e, command.avoid_confict, errors) for e in definitions
     ]
@@ -201,7 +205,8 @@ def compile_inputs(
     if errors:
         raise compiler.CompilationError(errors)
     try:
-        return setup_bundle.build(result, sources, command.memory_margin)
+        assert target is not None
+        return setup_bundle.build(result, sources, target.memory, command.memory_margin)
     except ValueError as error:
         raise compiler.CompilationError([str(error)]) from error
 
@@ -449,11 +454,14 @@ def main() -> None:
         Annotated[Compile, tyro.conf.subcommand(name='compile')]
         | Annotated[SetupCLI, tyro.conf.subcommand(name='setup')]
         | Annotated[Status, tyro.conf.subcommand(name='status')]
-        | Annotated[Songs, tyro.conf.subcommand(name='songs')],
+        | Annotated[Songs, tyro.conf.subcommand(name='songs')]
+        | Annotated[build.Build, tyro.conf.subcommand(name='build')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
-        if isinstance(command, Compile):
+        if isinstance(command, build.Build):
+            build.run(command)
+        elif isinstance(command, Compile):
             assets: dict[str, dict[int, bytes]] = {}
             movies: dict[int, bytes] = {}
             bundle = compile_inputs(command, assets, movies)
@@ -474,5 +482,5 @@ def main() -> None:
             print(transport.device_status(command.port, command.reset_starts))
     except KeyboardInterrupt:
         sys.exit(130)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))

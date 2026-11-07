@@ -30,10 +30,11 @@ int main(int argc, char **argv) {
     std::vector<uint8_t> setup;
     for (unsigned i = 0; i < hex.size(); i += 2) setup.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     unsigned length = unsigned(setup.size()), table_start = 40 + 3 * 76, payload = table_start + 10;
+    Board board;
     File file; file.bytes.resize(payload + 3 * length);
     auto *p = file.bytes.data(); std::memcpy(p, "CSTB", 4); p[4] = 1; p[6] = 3;
-    cntrl::put32(p + 8, file.size()); cntrl::put32(p + 16, 524288 - 262144 - cntrl::setup_table_ram_overhead(3) - 2 * length);
-    cntrl::put32(p + 20, 262144); cntrl::put32(p + 28, 262144 + cntrl::setup_table_ram_overhead(3));
+    cntrl::put32(p + 8, file.size()); cntrl::put32(p + 16, board.memory_capacity() - board.memory_runtime() - cntrl::setup_table_ram_overhead(3) - 2 * length);
+    cntrl::put32(p + 20, board.memory_runtime()); cntrl::put32(p + 28, board.memory_runtime() + cntrl::setup_table_ram_overhead(3));
     cntrl::put32(p + 32, 3 * length); cntrl::put32(p + 36, 2 * length);
     p[table_start] = 3; cntrl::put32(p + table_start + 2, length); cntrl::put32(p + table_start + 6, 2 * length);
     for (unsigned i = 0; i < 3; ++i) {
@@ -42,7 +43,7 @@ int main(int argc, char **argv) {
         std::memcpy(p + payload + i * length, setup.data(), length);
     }
     cntrl::put32(p + 12, cntrl::checksum(p + 40, file.size() - 40));
-    Board board; cntrl::memory_budget = 2 * length; cntrl::SetupTable table; assert(table.open(file, board));
+    cntrl::memory_budget = 2 * length; cntrl::SetupTable table; assert(table.open(file, board));
     cntrl::StoredPatchSources sources(table); sources.begin(); sources.begin();
     const cntrl::Document *a = nullptr, *b = nullptr; uint32_t revision;
     assert(sources.acquire(0, a, revision) && sources.acquire(1, b, revision));

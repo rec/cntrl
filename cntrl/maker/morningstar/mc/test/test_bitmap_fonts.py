@@ -7,9 +7,9 @@ import freetype
 import pytest
 from PIL import ImageFont
 
+from cntrl.fonts.outline import Outline
 from cntrl.maker.morningstar.mc import build_bitmap_fonts, build_font_metrics
 from cntrl.maker.morningstar.mc.build_font_metrics import read_bits
-from cntrl.maker.morningstar.mc.sparse_fonts import Outline
 from cntrl.patch_switcher import compiler, models
 
 
@@ -31,7 +31,7 @@ def test_firmware_glyphs_preserve_pixels_and_baseline(
         outline, name, size, name == 'AtkinsonNextSemiBold'
     )
     arrays = re.findall(
-        r'unsigned char \w+\[\] CNTRL_FONT_FLASH = \{(.*?)\};', generated, re.S
+        r'unsigned char \w+\[\] CNTRL_FONT_FLASH = \{(.*?)\};', generated, re.DOTALL
     )
     index, data = (
         bytes(int(v, 16) for v in re.findall(r'0x([0-9a-f]+)', a)) for a in arrays

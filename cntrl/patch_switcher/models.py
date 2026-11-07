@@ -19,6 +19,8 @@ from pydantic import (
 )
 from reccy.configuration import units
 
+from ..animation.asset import Geometry
+
 
 def millisecond_resolution(value: float) -> float:
     if value != round(value * 1000) / 1000:
@@ -740,7 +742,7 @@ class Scrolling(BaseModel, frozen=True):
 
 class App(BaseModel, frozen=True):
     type: Literal['patch-switcher'] = 'patch-switcher'
-    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=524288)
+    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
     give_up_windows: Annotated[
         list[Literal['left', 'center', 'right']], Field(min_length=3, max_length=3)
     ] = ['right', 'center', 'left']
@@ -755,7 +757,7 @@ class App(BaseModel, frozen=True):
 
 
 class Page(BaseModel, frozen=True):
-    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=524288)
+    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
     type: Literal[
         'tap-tempo',
         'status',
@@ -878,13 +880,29 @@ class Setup(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class TargetMemory(BaseModel, frozen=True):
+    capacity: units.Bytes = Field(gt=0, le=4294967295)
+    runtime: units.Bytes = Field(ge=0, le=4294967295)
+
+    @model_validator(mode='after')
+    def available(self) -> 'TargetMemory':
+        if self.runtime >= self.capacity:
+            raise ValueError('runtime memory use exhausts target memory')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Target(BaseModel, frozen=True):
+    memory: TargetMemory
     functions: list[str] = Field(default_factory=list)
     buttons: list[str] = Field(default_factory=list)
     max_switches: Annotated[int, Field(strict=True, ge=0, le=5)] = 5
     display_width: units.Pixels = Field(gt=0, le=65535)
     display_height: units.Pixels = Field(gt=0, le=65535)
     fonts: list[FontFace]
+    font_sources: dict[str, str] = Field(default_factory=dict)
+    animation: Geometry | None = None
     outputs: list[str]
     trs_ports: dict[str, list[TrsMode]] = Field(default_factory=dict)
     max_instruments: int = Field(gt=0, le=32)

@@ -37,8 +37,8 @@ public:
         active_ = u32(header + 24); total_setup_ram_ = u32(header + 32);
         unsigned prefix = 2 + 4 * (count_ - 1);
         uint64_t needs = uint64_t(general_) + active_ + setup_table_ram_overhead(count_);
-        if (needs + margin_ >= 524288 || needs != u32(header + 28)
-            || 524288 - needs - margin_ != u32(header + 36)) return false;
+        if (needs + margin_ >= hardware.memory_capacity() || needs != u32(header + 28)
+            || hardware.memory_capacity() - needs - margin_ != u32(header + 36)) return false;
         uint32_t crc = 0xffffffff;
         for (unsigned offset = 40; offset < file.size();) {
             uint8_t block[512]; unsigned n = std::min(uint32_t(512), file.size() - offset);
@@ -147,6 +147,7 @@ public:
     uint32_t revision(unsigned i) const { return entries_[i].revision; }
     uint32_t names_signature() const { return signature_; }
     bool prefill(unsigned i) const { return entries_[i].prefill; }
+    unsigned memory_capacity() const { return hardware_ ? hardware_->memory_capacity() : 0; }
     unsigned memory_margin() const { return margin_; }
     unsigned cntrl_ram2() const { return general_; }
 #ifdef CNTRL_FLASH_ROUTINE

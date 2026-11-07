@@ -5,6 +5,8 @@
 // targets supply the MIDI scheduler and pin real external documents instead.
 struct TestPatchHardware : cntrl::Hardware, cntrl::PatchOutputs, cntrl::PatchSources {
     TestPatchHardware() { if (!cntrl::memory_budget) cntrl::memory_budget = 192 * 1024; }
+    unsigned memory_capacity() const override { return 400000; }
+    unsigned memory_runtime() const override { return 240000; }
     cntrl::Controller *controller = nullptr;
     uint32_t names_signature() const override { return 0; }
     bool available(const char *output) const override { return supports(output); }

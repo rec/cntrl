@@ -3,6 +3,16 @@ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 .PHONY: test
 test:
 	mkdir -p "$(ROOT)/build"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_runtime.cpp" -o "$(ROOT)/build/test_runtime"
+	"$(ROOT)/build/test_runtime"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_application.cpp" -o "$(ROOT)/build/test_application"
+	"$(ROOT)/build/test_application"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_pixel_throb.cpp" -o "$(ROOT)/build/test_pixel_throb"
+	"$(ROOT)/build/test_pixel_throb"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_ui.cpp" -o "$(ROOT)/build/test_ui"
+	"$(ROOT)/build/test_ui"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_startup_counter.cpp" -o "$(ROOT)/build/test_startup_counter"
+	"$(ROOT)/build/test_startup_counter"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_midi_file.cpp" -o "$(ROOT)/build/test_midi_file"
 	"$(ROOT)/build/test_midi_file"
 	mkdir -p "$(ROOT)/build"
@@ -53,3 +63,11 @@ test:
 	"$(ROOT)/build/test_switcher" "$(ROOT)/test/show.golden" "$(ROOT)/test/display.golden"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/include" \
 		"$(ROOT)/test/document_server.cpp" -o "$(ROOT)/build/document_server"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" \
+		-fsanitize=address,undefined -fno-omit-frame-pointer \
+		"$(ROOT)/test/animation/test_splash.cpp" -o "$(ROOT)/build/test_animation"
+	"$(ROOT)/build/test_animation"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -pedantic -I"$(ROOT)/include" \
+		-fsanitize=address,undefined -fno-omit-frame-pointer \
+		"$(ROOT)/test/animation/test_runtime.cpp" -o "$(ROOT)/build/test_animation_runtime"
+	"$(ROOT)/build/test_animation_runtime" "$(ROOT)/test/show.golden"

@@ -1,6 +1,6 @@
 #pragma once
-#include "animation.h"
-#include "color_cycle.h"
+#include <cntrl/animation/animation.h>
+#include <cntrl/animation/color_cycle.h>
 #include <cntrl/hardware.h>
 #include <SD.h>
 #include "displays.h"
@@ -52,32 +52,37 @@ private:
 };
 
 // The two identical outer rows share a single physical pixel transfer.
-class Panels : public Output {
+class Panels : public cntrl::animation::Output {
 public:
     void set_color_cycle(bool enabled) { color_cycle_ = enabled; }
-    void row(uint8_t panels, unsigned y, const uint8_t *pixels) override {
+    bool begin(unsigned width, unsigned height, unsigned streams) override {
+        return width == 160 && height == 128 && streams == 2;
+    }
+    bool ready() const override { return true; }
+    bool pixels(unsigned stream, unsigned x, unsigned y, const uint8_t *pixels, unsigned count) override {
+        uint8_t panels = stream == 0 ? 0b101 : 0b010;
         if (!color_cycle_) {
-            write_display_group(panels, 0, y, pixels, width);
-            return;
+            write_display_group(panels, x, y, pixels, count);
+            return true;
         }
-        // Sample both walks at the same frame boundary; hold them across rows.
-        if (panels == 0b101 && y == 0) {
+        if (!stream && !x && !y) {
             uint32_t now = millis();
             for (unsigned i = 0; i < 2; ++i) tints_[i] = walks_[i].at(now);
         }
-        Tint tint = tints_[panels == 0b010 ? 1 : 0];
-        uint8_t colored[row_bytes];
-        for (unsigned x = 0; x < width; ++x) {
-            uint16_t pixel = uint16_t(pixels[2 * x]) << 8 | pixels[2 * x + 1];
-            pixel = tint_white(pixel, tint);
-            colored[2 * x] = uint8_t(pixel >> 8);
-            colored[2 * x + 1] = uint8_t(pixel);
+        cntrl::animation::Tint tint = tints_[stream];
+        uint8_t colored[cntrl::animation::packet_bytes];
+        for (unsigned i = 0; i < count; ++i) {
+            uint16_t pixel = uint16_t(pixels[2 * i]) << 8 | pixels[2 * i + 1];
+            pixel = cntrl::animation::tint_white(pixel, tint);
+            colored[2 * i] = uint8_t(pixel >> 8);
+            colored[2 * i + 1] = uint8_t(pixel);
         }
-        write_display_group(panels, 0, y, colored, width);
+        write_display_group(panels, x, y, colored, count);
+        return true;
     }
 private:
     bool color_cycle_ = false;
-    Tint tints_[2] = {{63, 63, 63}, {63, 63, 63}};
-    ColorWalk walks_[2] = {ColorWalk(0x9e3779b9), ColorWalk(0x243f6a89)};
+    cntrl::animation::Tint tints_[2] = {{63, 63, 63}, {63, 63, 63}};
+    cntrl::animation::ColorWalk walks_[2] = {cntrl::animation::ColorWalk(0x9e3779b9), cntrl::animation::ColorWalk(0x243f6a89)};
 };
 } // namespace cntrl::splash

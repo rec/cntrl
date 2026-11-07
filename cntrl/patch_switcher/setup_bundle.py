@@ -15,10 +15,8 @@ class SetupBundle(BaseModel, frozen=True):
     setups: dict[str, bytes] = Field(min_length=1, max_length=65535)
     app_ram2: list[int]
     page_ram2: list[int]
-    memory_margin: units.Bytes = Field(default=16192, ge=0, le=524288)
-    # Prefill planning hint only. The pedal enforces its linked shared heap
-    # budget for setup, document and font allocations.
-    cntrl_ram2: units.Bytes = Field(default=294912, ge=0, le=524288)
+    memory: models.TargetMemory
+    memory_margin: units.Bytes = Field(default=16192, ge=0)
 
     @model_validator(mode='after')
     def feasible(self) -> 'SetupBundle':
@@ -54,10 +52,10 @@ class SetupBundle(BaseModel, frozen=True):
             len(self.names) * (64 + 4 + 88 + 85) + 2 + 4 * (len(self.names) - 1) + 32
         )
         active = max(a + p for a, p in zip(self.app_ram2, self.page_ram2, strict=True))
-        return self.cntrl_ram2 + metadata + active
+        return self.memory.runtime + metadata + active
 
     def total_free_ram2(self) -> int:
-        return 524288 - self.memory_margin - self.total_ram2_needs()
+        return self.memory.capacity - self.memory_margin - self.total_ram2_needs()
 
     @cached_property
     def prefill(self) -> list[int]:
@@ -105,7 +103,7 @@ class SetupBundle(BaseModel, frozen=True):
                 HEADER.size + len(body),
                 crc32(body),
                 self.memory_margin,
-                self.cntrl_ram2,
+                self.memory.runtime,
                 max(a + p for a, p in zip(self.app_ram2, self.page_ram2, strict=True)),
                 self.total_ram2_needs(),
                 self.total_setup_ram,
@@ -116,7 +114,10 @@ class SetupBundle(BaseModel, frozen=True):
 
 
 def build(
-    setups: dict[str, bytes], sources: dict[str, object], memory_margin: int = 16192
+    setups: dict[str, bytes],
+    sources: dict[str, object],
+    memory: models.TargetMemory,
+    memory_margin: int = 16192,
 ) -> SetupBundle:
     ordered = sorted(setups, key=str.lower)
     settings = [models.Setup.model_validate(sources[n]) for n in ordered]
@@ -124,6 +125,7 @@ def build(
         setups=setups,
         app_ram2=[sum(a.ram2_bytes for a in s.apps.values()) for s in settings],
         page_ram2=[sum(p.ram2_bytes for p in s.pages) for s in settings],
+        memory=memory,
         memory_margin=memory_margin,
     )
 
@@ -179,6 +181,15 @@ def unpack(data: bytes) -> dict[str, bytes]:
     if cursor != len(data):
         raise ValueError('invalid setup bundle offsets')
     return result
+
+
+def memory_from_bundle(data: bytes) -> models.TargetMemory:
+    """Recover the target memory descriptor encoded in an existing bundle."""
+    unpack(data)
+    header = HEADER.unpack_from(data)
+    return models.TargetMemory(
+        capacity=header[5] + header[8] + header[10], runtime=header[6]
+    )
 
 
 HEADER = struct.Struct('<4sHH8I')

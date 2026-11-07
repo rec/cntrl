@@ -2,6 +2,7 @@
 .DEFAULT_GOAL := build
 
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+SOURCE_ROOT ?= $(abspath $(ROOT)/../../../../..)
 CLI := $(ROOT)/.tools/bin/arduino-cli
 CORE := $(ROOT)/.tools/data/packages/teensy/hardware/avr/1.62.0
 ARM := $(ROOT)/.tools/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin/arm-none-eabi
@@ -115,7 +116,7 @@ patch-switcher: tools
 		--build-path "$(PATCH_BUILD)" \
 		$(PATCH_LINK_OPTION) \
 		--build-property 'build.flags.c=-DCNTRL_EXTERNAL_FLASH_CONFIG -DCNTRL_USB_INTERFACE -I$(ROOT)/usb_probe' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_USB_INTERFACE $(DIAGNOSTIC_FLAGS) -DCNTRL_CABLE_TEST=$(CABLE_TEST) -DCNTRL_ORIGINAL_FIRMWARE=$(ORIGINAL_FIRMWARE) -DCNTRL_PANIC=$(PANIC) -DCNTRL_SWITCHES=$(SWITCHES) -I$(abspath $(ROOT)/../../../../..)/firmware/include -I$(ROOT)/usb_probe' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fpermissive -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -Wno-psabi -Wno-maybe-uninitialized -DCNTRL_USB_INTERFACE $(DIAGNOSTIC_FLAGS) -DCNTRL_CABLE_TEST=$(CABLE_TEST) -DCNTRL_ORIGINAL_FIRMWARE=$(ORIGINAL_FIRMWARE) -DCNTRL_PANIC=$(PANIC) -DCNTRL_SWITCHES=$(SWITCHES) -I$(SOURCE_ROOT)/firmware/include -I$(ROOT)/usb_probe' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=/usr/bin/true' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=/usr/bin/true' \
 		"$(ROOT)/patch_switcher"
@@ -132,8 +133,6 @@ inspect-patch-switcher: patch-switcher
 
 test: tools test-button-timing test-switch-gesture test-boot-selection test-startup-counter
 	mkdir -p "$(ROOT)/build"
-	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined "$(ROOT)/test_pixel_throb.cpp" -o "$(ROOT)/build/test_pixel_throb"
-	"$(ROOT)/build/test_pixel_throb"
 	mkdir -p "$(ROOT)/build"
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(abspath $(ROOT)/../../../../..)/firmware/include" "$(ROOT)/test_buttons.cpp" -o "$(ROOT)/build/test_buttons"
 	"$(ROOT)/build/test_buttons"
@@ -143,11 +142,8 @@ test: tools test-button-timing test-switch-gesture test-boot-selection test-star
 	$(CXX) $(DIAGNOSTIC_FLAGS) -std=c++17 -Wall -Wextra -Werror -DCNTRL_PANORAMA -I"$(ROOT)/test_support" -I"$(ROOT)/usb_probe" \
 		"$(ROOT)/test_displays.cpp" "$(ROOT)/patch_switcher/displays.cpp" -o "$(ROOT)/build/test_panorama_displays"
 	"$(ROOT)/build/test_panorama_displays"
-	$(CXX) $(DIAGNOSTIC_FLAGS) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
-		-I"$(abspath $(ROOT)/../../../../..)/firmware/include" -I"$(ROOT)/usb_probe" -I"$(ROOT)/test_support" \
-		-I"$(CORE)/libraries/ST7735_t3/src" -x c++ \
-		"$(ROOT)/test_renderer.cpp" $(wildcard $(ROOT)/patch_switcher/font_*.cpp) "$(CORE)/libraries/ST7735_t3/src/st7735_t3_font_Arial.c" \
-		"$(CORE)/libraries/ST7735_t3/src/st7735_t3_font_ComicSansMS.c" -o "$(ROOT)/build/test_renderer"
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined \
+		-I"$(SOURCE_ROOT)/firmware/include" "$(ROOT)/test_renderer.cpp" -o "$(ROOT)/build/test_renderer"
 	"$(ROOT)/build/test_renderer"
 
 tools: $(ROOT)/.tools/flash-config-ready

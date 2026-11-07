@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+test "$1" = --source-root
+test -d "$2/firmware/include/cntrl"
+test "$3" = --output
+mkdir -p "$4"
+printf '%s\n' "image = 'firmware.bin'" "target = 'target.toml'" > "$4/build.toml"
+printf '%s\n' 'test image' > "$4/firmware.bin"
+printf '%s\n' "buttons = ['one']" > "$4/target.toml"

@@ -458,10 +458,10 @@ def compile_show(
         if count > maximum:
             errors.append(f'{label}: {count} exceeds target capacity {maximum}')
     try:
-        from ..maker.morningstar.mc.splash.movies import prepare
+        from ..animation.movies import prepare
 
         show, movie_records = prepare(
-            show, movie_assets if movie_assets is not None else {}
+            show, movie_assets if movie_assets is not None else {}, target.animation
         )
         screen_records, references, display_records = display.compile_display(
             show,
@@ -498,7 +498,7 @@ def compile_show(
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
-        from ..maker.morningstar.mc.font_assets import validate_font_count
+        from ..fonts.assets import validate_font_count
 
         validate_font_count(screen_records, display_records)
     if assets is not None:

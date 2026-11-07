@@ -1,4 +1,5 @@
 {
+  "memory": {"capacity": 400000, "runtime": 240000},
   "outputs": [
     "din",
     "trs"

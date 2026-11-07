@@ -103,6 +103,25 @@ def load(
     return result
 
 
+def load_target(
+    expression: DataFile, avoid_confict: bool, errors: list[str]
+) -> dict[str, object]:
+    """Resolve resource references at their source file before combining targets."""
+    result: dict[str, object] = {}
+    origins: dict[str, str] = {}
+    for p in expression.paths:
+        incoming = load(
+            DataFile(name=expression.name, paths=[p]), avoid_confict, errors
+        )
+        if isinstance(resources := incoming.get('font_sources'), dict):
+            incoming['font_sources'] = {
+                n: str((p.resolve().parent / v).resolve()) if isinstance(v, str) else v
+                for n, v in resources.items()
+            }
+        _merge(result, incoming, origins, str(p), '', avoid_confict, errors)
+    return result
+
+
 def _merge(
     result: dict[str, object],
     incoming: dict[str, object],

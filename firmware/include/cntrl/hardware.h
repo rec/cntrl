@@ -59,6 +59,8 @@ struct SongContinuation;
 class Document;
 struct Hardware {
     virtual ~Hardware() = default;
+    virtual unsigned memory_capacity() const { return 0; }
+    virtual unsigned memory_runtime() const { return 0; }
     // Accept the complete message sequence, or accept none of it.
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
     virtual bool supports_function(unsigned) const { return false; }

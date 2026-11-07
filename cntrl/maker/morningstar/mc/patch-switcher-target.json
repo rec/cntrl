@@ -1,4 +1,11 @@
 {
+  "memory": {"capacity": 524288, "runtime": 294912},
+  "font_sources": {
+    "classic": "font_sources/classic.cfont",
+    "Arial": "font_sources/Arial.cfont",
+    "ComicSansMS": "font_sources/ComicSansMS.cfont"
+  },
+  "animation": {"width": 160, "height": 128, "streams": [{}, {"mirror_x": true}]},
   "functions": ["stock-firmware", "usb-hid-keyboard"],
   "buttons": ["A", "B", "C", "D", "E", "F"],
   "outputs": [

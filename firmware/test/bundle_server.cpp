@@ -28,7 +28,10 @@ int main() {
         if (documents.busy()) { documents.receive(byte, 0); return; }
         if (byte == '\n') {
             line[used] = 0;
-            if (!transfer.command(line, 0)) {
+            if (!std::strcmp(line, "CNTRL MEMORY")) {
+                char response[64]; std::snprintf(response, sizeof(response), "CNTRL MEMORY %u %u", peer.memory_capacity(), peer.memory_runtime());
+                peer.reply(response);
+            } else if (!transfer.command(line, 0)) {
                 for (unsigned i = 0; i < used; ++i) documents.receive(uint8_t(line[i]), 0);
                 documents.receive('\n', 0);
             }
