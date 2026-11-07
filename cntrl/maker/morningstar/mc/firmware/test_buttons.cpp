@@ -31,8 +31,55 @@ void test_configured_debounce() {
     }
 }
 
+void test_fast_edges_suppress_press_and_release_bounce() {
+    for (uint32_t delay : {5, 20, 40}) {
+        ButtonState button;
+        auto sample = [&](bool down, uint32_t now) { return button.update(down, now, delay, true); };
+        assert(sample(true, 100) == press_event);
+        assert(sample(false, 101) == no_event);
+        assert(sample(true, 102) == no_event);
+        assert(sample(false, 103) == no_event);
+        assert(sample(true, 104) == no_event);
+        assert(button.pressed);
+        assert(sample(true, 104 + delay) == no_event);
+        assert(sample(false, 200) == release_event);
+        assert(sample(true, 201) == no_event);
+        assert(sample(false, 202) == no_event);
+        assert(sample(true, 203) == no_event);
+        assert(sample(false, 204) == no_event);
+        assert(!button.pressed);
+        assert(sample(false, 204 + delay) == no_event);
+        assert(sample(true, 300) == (press_event | double_press_event));
+        assert(sample(true, 800) == hold_event);
+        assert(sample(false, 801) == release_event);
+        // Bounce past the initial deadline extends settling rather than rearming.
+        ButtonState late_bounce;
+        assert(late_bounce.update(true, 100, delay, true) == press_event);
+        assert(late_bounce.update(false, 100 + delay - 1, delay, true) == no_event);
+        assert(late_bounce.update(true, 100 + delay, delay, true) == no_event);
+        assert(late_bounce.update(false, 101 + delay, delay, true) == no_event);
+        assert(late_bounce.update(true, 102 + delay, delay, true) == no_event);
+        assert(late_bounce.update(true, 102 + 2 * delay, delay, true) == no_event);
+        assert(late_bounce.update(false, 103 + 3 * delay, delay, true) == release_event);
+    }
+    // A release before press settling is accepted once it stays stable.
+    ButtonState short_tap;
+    assert(short_tap.update(true, 0, 20, true) == press_event);
+    assert(short_tap.update(false, 5, 20, true) == no_event);
+    assert(short_tap.update(false, 24, 20, true) == no_event);
+    assert(short_tap.update(false, 25, 20, true) == release_event);
+    // Rearming and both immediate edges work across clock wrap.
+    ButtonState rollover;
+    assert(rollover.update(true, UINT32_MAX - 10, 20, true) == press_event);
+    assert(rollover.update(false, UINT32_MAX - 9, 20, true) == no_event);
+    assert(rollover.update(true, UINT32_MAX - 8, 20, true) == no_event);
+    assert(rollover.update(true, 11, 20, true) == no_event);
+    assert(rollover.update(false, 12, 20, true) == release_event);
+}
+
 int main() {
     test_configured_debounce();
+    test_fast_edges_suppress_press_and_release_bounce();
     ButtonState button;
     assert(!button.update(false, 0));
     assert(!button.update(true, 3));

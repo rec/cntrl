@@ -22,9 +22,13 @@ struct ButtonState {
     bool held = false;
     bool waiting_for_second = false;
     bool double_pressed = false;
+    bool debouncing = false;
 
-    uint8_t update(bool sample, uint32_t now, uint32_t debounce_ms = 15) {
+    uint8_t update(bool sample, uint32_t now, uint32_t debounce_ms = 15, bool fast_switches = false) {
         uint8_t events = no_event;
+        // After an early edge, rearm only when the accepted state has settled.
+        if (!fast_switches || (candidate == pressed && uint32_t(now - since) >= debounce_ms))
+            debouncing = false;
         if (waiting_for_second && uint32_t(now - released_at) > 300) {
             waiting_for_second = false;
         }
@@ -32,8 +36,9 @@ struct ButtonState {
             candidate = sample;
             since = now;
         }
-        if (candidate != pressed && uint32_t(now - since) >= debounce_ms) {
+        if (candidate != pressed && (uint32_t(now - since) >= debounce_ms || (fast_switches && !debouncing))) {
             pressed = candidate;
+            debouncing = fast_switches;
             if (pressed) {
                 events |= press_event;
                 double_pressed = waiting_for_second;

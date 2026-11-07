@@ -398,7 +398,7 @@ public:
         }
         return true;
     }
-    void configure_page_settings(const cntrl::PageSettings &settings) override {
+    FLASHMEM void configure_page_settings(const cntrl::PageSettings &settings) override {
         leave_page();
         expression_.configure(settings);
         pages_.configure(settings);
@@ -1375,12 +1375,14 @@ void poll_target() {
         last_scan = now;
         uint8_t raw = read_buttons();
         uint8_t events[6], pressed = 0;
+        const auto &document = documents.document();
+        bool fast_switches = !document.valid() || document.fast_switches();
         for (unsigned i = 0; i < 6; ++i) {
             unsigned debounce_ms = 15;
 #if CNTRL_SWITCHES
             debounce_ms = board.switches.debounce_ms(i).value_or(15);
 #endif
-            events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now, debounce_ms);
+            events[i] = buttons[i].update(!(raw & (1u << button_bits[i])), now, debounce_ms, fast_switches);
             if (buttons[i].pressed) pressed |= 1u << i;
         }
         held_controls = pressed;

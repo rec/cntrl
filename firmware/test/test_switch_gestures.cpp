@@ -27,11 +27,12 @@ struct Board : TestPatchHardware {
 };
 
 int main(int argc, char **argv) {
-    assert(argc == 2);
+    assert(argc == 3);
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
     Board board; cntrl::Document document;
     assert(document.load(bytes.data(), unsigned(bytes.size()), board));
+    assert(document.fast_switches() == (argv[2][0] == '1'));
     cntrl::Switches switches(board, board, board);
     auto tick = [&](unsigned now) { for (unsigned i = 0; i < 10; ++i) switches.tick(now); };
     auto edge = [&](bool down, unsigned now) { switches.button(0, down, now + 20); tick(now + 20); };
@@ -71,6 +72,10 @@ int main(int argc, char **argv) {
     bad[address] = 0xfe; bad[address + 1] = 0xff;
     cntrl::put32(bad.data() + 20, cntrl::checksum(bad.data() + 28, unsigned(bad.size()) - 28));
     cntrl::Document rejected; assert(!rejected.load(bad.data(), unsigned(bad.size()), board));
+    bad = bytes;
+    bad[document.metadata() + cntrl::scrolling_offset + 5] = 2;
+    cntrl::put32(bad.data() + 20, cntrl::checksum(bad.data() + 28, unsigned(bad.size()) - 28));
+    assert(!rejected.load(bad.data(), unsigned(bad.size()), board));
     assert(!board.errors);
 
     // Recognition alone covers exact boundaries and the 32-bit clock wrap.

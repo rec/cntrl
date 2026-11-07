@@ -796,6 +796,7 @@ class Setup(BaseModel, frozen=True):
         max_length=32,
     )
     take_first_match: Annotated[bool, Field(strict=True)] = False
+    fast_switches: Annotated[bool, Field(strict=True)] = True
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     scrolling: Scrolling = Field(default_factory=Scrolling)
     splash: Annotated[bool, Field(strict=True)] = True

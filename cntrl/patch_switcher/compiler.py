@@ -516,6 +516,7 @@ def compile_show(
                 show.scrolling.cycles,
             )
         ),
+        show.fast_switches,
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
     body += (
@@ -1613,8 +1614,8 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHHHBBHH23H4sH3B')
-DOCUMENT_VERSION = 31
+METADATA = struct.Struct('<4sHHHBBHH23H4sH4B')
+DOCUMENT_VERSION = 32
 SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
 TRS_JACKS = tuple(f'configurable-{i}' for i in range(1, 5))
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

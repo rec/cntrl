@@ -254,7 +254,9 @@ labels. Undo without a restoration leaves SENT unchanged
 while history remains; emptying history blanks UNDO and SENT. A new show and
 startup both clear history and select the first candidate without sending MIDI.
 
-Browse buttons step immediately after electrical debounce. Holding one repeats
+With `fast_switches = true` (the default), browse buttons step on the first
+sampled edge; debounce suppresses subsequent bounce. With it disabled, they
+step after stable electrical debounce. Holding one repeats
 after `navigation.hold_delay` (default 1.5 seconds), then every
 `navigation.repeat_interval` (default 1 second). Pressing undo while a browse
 button is held steps backward immediately and suppresses undo. Browsing stays
@@ -500,12 +502,12 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (31), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI, bit 5 clock settings, bit 6 gestures, bit 7 expression assignments), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (32), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI, bit 5 clock settings, bit 6 gestures, bit 7 expression assignments), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 71 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3) |
+| Metadata header, 72 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3), u8 fast-switches boolean |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |

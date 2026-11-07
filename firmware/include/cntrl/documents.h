@@ -479,6 +479,7 @@ private:
             || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
             || old.animation_color_cycle() != current.animation_color_cycle()
+            || old.fast_switches() != current.fast_switches()
             || old.screensaver_timeout() != current.screensaver_timeout()
             || old.scroll_ms() != current.scroll_ms()
             || std::memcmp(old.data() + old.metadata() + scrolling_offset, current.data() + current.metadata() + scrolling_offset, 5);

@@ -3,6 +3,7 @@ fill_in_styles = true
 background_color = "0xFFF8D8"
 foreground_brightness_limit = 0.5
 take_first_match = false
+fast_switches = true
 brightness = 192
 splash = true
 animation_color_cycle = false

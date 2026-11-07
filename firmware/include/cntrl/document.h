@@ -9,9 +9,9 @@ namespace cntrl {
 constexpr unsigned pages_offset = 16;
 constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_outputs;
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
-constexpr unsigned metadata_header_size = scrolling_offset + 5;
+constexpr unsigned metadata_header_size = scrolling_offset + 6;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 31;
+constexpr unsigned document_version = 32;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -82,6 +82,7 @@ public:
         unsigned nb = u16(bytes + meta + 4);
         if (!u16(bytes + meta + 6) || !u16(bytes + meta + scrolling_offset)) return false;
         for (unsigned i = 0; i < 3; ++i) if (bytes[meta + scrolling_offset + 2 + i] > 3) return false;
+        if (bytes[meta + scrolling_offset + 5] > 1) return false;
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
@@ -323,6 +324,7 @@ public:
     unsigned instruments() const { return instruments_; }
     unsigned patches() const { return patches_; }
     unsigned navigation_hold_ms() const { return u16(data_ + 6); }
+    bool fast_switches() const { return data_[metadata() + scrolling_offset + 5] != 0; }
     uint8_t brightness() const { return data_[18]; }
     unsigned pulse_delay_ms() const { return u16(data_ + metadata() + 14); }
     unsigned pulse_period_ms() const { return u16(data_ + metadata() + 8); }
