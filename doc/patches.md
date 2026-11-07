@@ -437,6 +437,11 @@ for repetition, cancellation and backpressure behavior.
 
 ## References and song libraries
 
+Switch actions also accept `{ operation = 'shift' }` and
+`{ operation = 'unshift' }` for the shared temporary assignment layer.
+See [shifted actions](momentary-latched.md#shared-shift-layer) for alternate
+actions, release pairing, cleanup and navigation behavior.
+
 ```toml
 [patches.borrowed]
 document = 'other-setup'

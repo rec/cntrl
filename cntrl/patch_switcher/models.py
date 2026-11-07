@@ -226,6 +226,10 @@ class Navigation(Presentation, frozen=True):
     ]
 
 
+class Shift(Presentation, frozen=True):
+    operation: Literal['shift', 'unshift']
+
+
 class PlayMidiFile(Presentation, frozen=True):
     operation: Literal['play-midi-file']
     filename: Annotated[str, Field(max_length=95)] = ''
@@ -335,6 +339,7 @@ ConcretePatch = (
         Brightness
         | UsbMidiInterface
         | Navigation
+        | Shift
         | StockFirmware
         | PlayMidiFile
         | RecordMidiFile,
@@ -513,6 +518,14 @@ class SwitchEnter(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class ShiftedActions(BaseModel, frozen=True):
+    on: Patch
+    off: Patch | None = None
+    gestures: SwitchGestures | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class SwitchAssignment(BaseModel, frozen=True):
     name: str | None = None
     button: Literal['A', 'B', 'C', 'D', 'E']
@@ -523,15 +536,19 @@ class SwitchAssignment(BaseModel, frozen=True):
     gestures: SwitchGestures | None = None
     enter: SwitchEnter | None = None
     exit: Patch | None = None
+    shifted: ShiftedActions | None = None
 
     @model_validator(mode='after')
     def cleanup(self) -> 'SwitchAssignment':
-        if self.gestures is not None and self.mode != 'press':
-            raise ValueError('gestures require press mode')
-        if self.mode == 'press' and self.off is not None:
-            raise ValueError('press switches forbid off')
-        if self.mode != 'press' and self.off is None:
-            raise ValueError('momentary and latched switches require off')
+        for actions in (self, self.shifted):
+            if actions is None:
+                continue
+            if actions.gestures is not None and self.mode != 'press':
+                raise ValueError('gestures require press mode')
+            if self.mode == 'press' and actions.off is not None:
+                raise ValueError('press switches forbid off')
+            if self.mode != 'press' and actions.off is None:
+                raise ValueError('momentary and latched switches require off')
         return self
 
     model_config = ConfigDict(extra='forbid')

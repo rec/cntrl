@@ -147,6 +147,9 @@ public:
         unsigned hooks = names;
         bool has_hooks = names + 4 <= length && !std::memcmp(bytes + names, "CHOK", 4);
         if (has_hooks) names += 29;
+        unsigned shifted = names;
+        bool has_shifted = names + 4 <= length && !std::memcmp(bytes + names, "CSHF", 4);
+        if (has_shifted) names += 124;
         const unsigned layout = names;
         if (names + 6 > length || std::memcmp(bytes + names, "CLAY", 4)
             || bytes[names + 4] > AppLayout::max_apps || bytes[names + 5] > 32) return false;
@@ -191,20 +194,25 @@ public:
         if (bytes[19] & 0x40) {
             for (unsigned b = 0; b < 5; ++b) {
                 const uint8_t *p = bytes + gestures + b * 20;
-                bool configured = u16(p + 12) != 0, assigned = false;
+                bool assigned = false;
                 for (unsigned i = 0; i < switch_count; ++i) {
                     const uint8_t *s = bytes + switch_start + i * 72;
                     if (s[0] == b && s[1] == 0) assigned = true;
                 }
-                if (configured && !assigned) return false;
-                for (unsigned j = 0; j < 6; ++j)
-                    if (u16(p + j * 2) != 65535 && (!configured || u16(p + j * 2) >= u16(bytes + graph + 8))) return false;
-                if (configured) {
-                    unsigned debounce = u16(p + 12);
-                    if (debounce > 1000 || u16(p + 14) < debounce || u16(p + 16) < debounce || u16(p + 18) < debounce
-                        || (u16(p + 4) != 65535 && u16(p + 2) == 65535 && u16(p + 10) == 65535)
-                        || (u16(p + 8) != 65535 && u16(p + 6) == 65535)) return false;
-                }
+                if (!gestures_valid(p, u16(bytes + graph + 8), assigned)) return false;
+            }
+        }
+        if (has_shifted) {
+            for (unsigned b = 0; b < 5; ++b) {
+                const uint8_t *p = bytes + shifted + 4 + b * 24, *record = nullptr;
+                for (unsigned i = 0; i < switch_count; ++i)
+                    if (bytes[switch_start + i * 72] == b) record = bytes + switch_start + i * 72;
+                bool configured = u16(p) != 65535;
+                unsigned count = u16(bytes + graph + 8);
+                if (configured && (!record || u16(p) >= count
+                    || (record[1] == 0 ? u16(p + 2) != 65535 : u16(p + 2) >= count))) return false;
+                if (!configured && u16(p + 2) != 65535) return false;
+                if (!gestures_valid(p + 4, count, configured && record && record[1] == 0)) return false;
             }
         }
         end += u32(bytes + graph + 4);
@@ -367,6 +375,13 @@ public:
         p += 4 + button * 5;
         return u16(p) != 65535 || u16(p + 2) != 65535 ? p : nullptr;
     }
+    const uint8_t *switch_shifted(unsigned button) const {
+        const uint8_t *p = switch_hook_section();
+        if (!std::memcmp(p, "CHOK", 4)) p += 29;
+        if (std::memcmp(p, "CSHF", 4)) return nullptr;
+        p += 4 + button * 24;
+        return u16(p) != 65535 ? p : nullptr;
+    }
     unsigned page_section_size() const {
         const auto layout = app_layout();
         return unsigned(layout.records - bank(patches())) + 6 + layout.apps() * 35 + layout.pages() * 2;
@@ -374,6 +389,7 @@ public:
     AppLayout app_layout() const {
         const uint8_t *p = switch_hook_section();
         if (!std::memcmp(p, "CHOK", 4)) p += 29;
+        if (!std::memcmp(p, "CSHF", 4)) p += 124;
         return AppLayout{p};
     }
     const uint8_t *switch_gestures(unsigned button) const {
@@ -427,6 +443,16 @@ public:
     const uint8_t *mapping(unsigned i) const { return data_ + metadata() + metadata_header_size + instruments_ * 64 + i * 8; }
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
+    static bool gestures_valid(const uint8_t *p, unsigned count, bool assigned) {
+        unsigned debounce = u16(p + 12);
+        if (debounce && (!assigned || debounce > 1000 || u16(p + 14) < debounce
+            || u16(p + 16) < debounce || u16(p + 18) < debounce
+            || (u16(p + 4) != 65535 && u16(p + 2) == 65535 && u16(p + 10) == 65535)
+            || (u16(p + 8) != 65535 && u16(p + 6) == 65535))) return false;
+        for (unsigned j = 0; j < 6; ++j)
+            if (u16(p + j * 2) != 65535 && (!debounce || u16(p + j * 2) >= count)) return false;
+        return true;
+    }
     static void read_clock(PageSettings &settings, const uint8_t *p) {
         for (unsigned i = PageSettings::clock_outputs; i < PageSettings::count; ++i, p += 2) settings.words[i] = u16(p);
     }
@@ -494,7 +520,8 @@ private:
                 }
                 break;
             case 3:
-                if (n[1] || length != 5 || p[0] < 1 || p[0] > 10
+                if (n[1] || length != 5 || p[0] < 1 || p[0] > 12
+                    || (p[0] >= 11 && !hardware.switch_capacity())
                     || (p[0] == 1 && u32(p + 1) > 255) || (p[0] == 2 && u32(p + 1) > 1)
                     || (p[0] > 2 && u32(p + 1))) return false;
                 break;

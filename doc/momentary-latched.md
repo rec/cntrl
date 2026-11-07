@@ -120,6 +120,61 @@ assignment's exit once. F again abandons blocked work. Closing during an enter
 that has begun also runs that assignment's exit after accepted work completes.
 Selection is reset each time the page is opened.
 
+## Shared shift layer
+
+`{ operation = 'shift' }` enables one shared layer for the current Switches
+visit; `{ operation = 'unshift' }` disables it. Both are idempotent: repeated
+shifts do not nest or require matching unshifts. They are switch-context
+operations and can appear in switch actions, gestures, hooks, sequences and
+references. They do not invoke actions or change assignment selection by
+themselves, so indirect shifts do not recursively trigger hooks.
+
+An assignment can supply a complete alternate action set under `shifted`:
+
+```toml
+[switches.shift]
+button = 'A'
+mode = 'momentary'
+on = { operation = 'shift' }
+off = { operation = 'unshift' }
+
+[switches.sustain]
+button = 'B'
+mode = 'momentary'
+on = { controller = 64, value = 127, output = 'din', channel = 1 }
+off = { controller = 64, value = 0, output = 'din', channel = 1 }
+
+[switches.sustain.shifted]
+on = { controller = 66, value = 127, output = 'din', channel = 1 }
+off = { controller = 66, value = 0, output = 'din', channel = 1 }
+```
+
+Assignments without `shifted` retain their normal actions. The alternate set
+uses the assignment's existing mode and accepts `on`, `off` and `gestures`.
+The same mode rules apply: press forbids Off, persistent modes require Off,
+and gestures require press mode. Alternate actions cannot leave Switches.
+Names, styles and selection hooks belong to the assignment and are shared by
+both layers.
+
+The layer is captured on press. Momentary and gesture releases stay paired
+with that layer even if Shift is released first. Accepted actions retain their
+chosen layer while queued. A repeated activation uses the currently requested
+layer. When changing the layer of a latched assignment that owns an active On,
+its old Off finishes before the new layer is activated; shared MIDI matches
+alone do not acquire cleanup obligations. Backpressure delays this transition
+without dropping its queued action. Changing shift cancels unrecognized
+gestures on released assignments with alternate actions; held gestures retain
+their original recognition and release actions.
+
+The footer displays `Shifted` while the shared layer is enabled. Assignment
+indicators continue to describe their last executed layer and shared known
+MIDI state, not acknowledgement from an instrument. Shifting does not itself
+send MIDI, rerun enter/exit hooks or restore previous parameter values.
+Disconnects retain the existing unknown-state and rearm rules. Closing cancels
+queued actions, resets shift, and finishes accepted work and cleanup using
+each assignment's executing layer. Abandonment and reopening also reset shift;
+it is never persisted across navigation, setup changes or restart.
+
 ## Programmable gestures
 
 A `press` assignment can include a `gestures` table. `on` is its single-press

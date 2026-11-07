@@ -112,23 +112,6 @@ converted output out of its own input path.
 remain valid; transformed Note On messages have matching Note Off messages.
 Test multiple rules, real-time interleaving and bounded processing under load.
 
-## 9. Shifted assignment actions
-
-**Outcome:** Assignments can use a temporary shifted state to select alternate
-actions.
-
-**Scope:** Add shift/unshift operations and define alternate actions,
-repeat-selection behavior, persistence across navigation and cleanup before
-implementing the schema. Shared MIDI parameter state and selection-based enter
-and exit hooks are implemented in [switch controls](../doc/momentary-latched.md).
-Parameter identities synchronize assignment state automatically.
-
-**Dependencies:** None. Programmable switch gestures support gesture-triggered shifts.
-
-**Acceptance:** Shifted actions and restoration follow the stated lifecycle;
-indirect transitions cannot recurse indefinitely; display state follows local
-execution and does not imply acknowledgement by an external instrument.
-
 ## 11. MIDI CC waveform generators
 
 **Outcome:** Start or stop an LFO that sends MIDI CC values, such as a
@@ -206,8 +189,7 @@ offline workflow separately from serialization tests.
 Start with counters (item 13), which extend existing execution paths without
 new physical inputs.
 Next implement waveforms and timed sequences (items 11 and 12).
-Routing and conversion (6 and 7) form a separate increment. Shifted assignment
-actions (9) can follow once their transition rules are agreed.
+Routing and conversion (6 and 7) form a separate increment.
 
 Hardware-dependent work (items 3 through 5) should follow available test
 hardware and actual connection needs. The graphical editor (16) can begin

@@ -18,6 +18,25 @@ public:
         return std::nullopt;
     }
     bool closing() const { return closing_; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_shift)
+#endif
+    bool shift(bool enabled) {
+        if (!open_) return false;
+        enabled = enabled && !closing_;
+        if (shifted_ == enabled) return true;
+        shifted_ = enabled; dirty_ = true;
+        for (unsigned i = 0; i < count_; ++i) {
+            auto &s = states_[i];
+            if (!s.shifted) continue;
+            if (held_ & (1u << s.record[0])) continue;
+            s.input_layer = shifted_ && s.shifted;
+            s.settings = s.input_layer ? (u16(s.shifted + 16) ? s.shifted + 4 : nullptr)
+                : document_.switch_gestures(s.record[0]);
+            s.gesture.reset(s.settings);
+        }
+        return true;
+    }
     bool abandoned() const { return abandoned_; }
     bool owns(const PatchExecutor &executor) const {
         for (const auto &s : states_) if (&s.executor == &executor) return true;
@@ -25,7 +44,7 @@ public:
     }
     midi::Bridge::Delivery prepare_leave(PatchExecutor &invocation) {
         if (!open_) return midi::Bridge::Delivery::complete;
-        closing_ = dirty_ = true;
+        closing_ = dirty_ = true; shifted_ = false;
         event_count_ = transition_ = 0;
         bool done = true;
         for (unsigned i = 0; i < count_; ++i) {
@@ -48,28 +67,39 @@ public:
         unpin(); sources_.begin(); pinned_ = true;
         document_ = document; count_ = document.switches(); held_ = disarmed_ = held;
         open_ = dirty_ = true; closing_ = abandoned_ = false;
+        shifted_ = false;
         selected_ = -1; event_count_ = transition_ = 0; hooks_enabled_ = false; exit_started_ = false;
         for (unsigned i = 0; i < count_; ++i) {
             State &s = states_[i]; s.executor.cancel();
             s.record = document_.switch_assignment(i);
+            s.actions = s.record + 2; s.shifted = document_.switch_shifted(s.record[0]);
+            s.layer = s.input_layer = false;
             s.settings = document_.switch_gestures(s.record[0]);
             s.hooks = document_.switch_hooks(s.record[0]);
             if (s.hooks && (u16(s.hooks) != 65535 || u16(s.hooks + 2) != 65535)) hooks_enabled_ = true;
-            s.on.count = s.off.count = 0; s.on.complete = s.off.complete = false;
+            if (s.shifted) hooks_enabled_ = true;
+            for (unsigned layer = 0; layer < 2; ++layer) {
+                s.on[layer].count = s.off[layer].count = 0;
+                s.on[layer].complete = s.off[layer].complete = false;
+            }
             s.gesture.reset(s.settings); s.queued = 0;
             s.requested = s.active = s.unknown = s.failed = s.owned = false; s.presses = 0;
             s.resource_count = 0;
-            for (unsigned branch = 0; branch < 10; ++branch) {
-                unsigned node = branch < 2 ? u16(s.record + 2 + branch * 2)
-                    : branch < 8 ? (s.settings ? u16(s.settings + (branch - 2) * 2) : 65535)
-                    : s.hooks ? u16(s.hooks + (branch - 8) * 2) : 65535;
+            for (unsigned branch = 0; branch < 18; ++branch) {
+                unsigned layer = branch / 8, part = branch % 8, node = 65535;
+                if (branch < 16) {
+                    const uint8_t *actions = layer ? s.shifted : s.record + 2;
+                    const uint8_t *settings = layer ? (s.shifted && u16(s.shifted + 16) ? s.shifted + 4 : nullptr) : s.settings;
+                    if (actions && part < 2) node = u16(actions + part * 2);
+                    else if (settings) node = u16(settings + (part - 2) * 2);
+                } else if (s.hooks) node = u16(s.hooks + (branch - 16) * 2);
                 if (node == 65535) continue;
-                if (!s.executor.start(document_, node, s.record[1] != 0 || s.settings || s.hooks)) {
+                if (!s.executor.start(document_, node, s.record[1] != 0 || s.settings || s.hooks || s.shifted)) {
                     s.executor.cancel(); open_ = false; unpin(); return;
                 }
                 unsigned count = s.executor.resource_count();
-                if (branch < 2) {
-                    Pattern &pattern = branch ? s.off : s.on;
+                if (branch < 16 && part < 2) {
+                    Pattern &pattern = part ? s.off[layer] : s.on[layer];
                     if (!capture(pattern, s.executor)) {
                         s.executor.cancel(); hardware_.error("Switch state memory exhausted"); open_ = false; unpin(); return;
                     }
@@ -94,6 +124,9 @@ public:
         }
         render();
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_button)
+#endif
     void button(unsigned button, bool down, uint32_t now = 0) {
         if (!open_ || button >= 6) return;
         unsigned bit = 1u << button;
@@ -104,12 +137,22 @@ public:
         if (closing_) return;
         for (unsigned i = 0; i < count_; ++i) {
             auto &s = states_[i]; if (s.record[0] != button || (disarmed_ & bit)) continue;
+            if (down && s.shifted) {
+                bool layer = shifted_;
+                if (s.input_layer != layer) {
+                    s.input_layer = layer;
+                    s.settings = layer ? (u16(s.shifted + 16) ? s.shifted + 4 : nullptr)
+                        : document_.switch_gestures(button);
+                    s.gesture.reset(s.settings);
+                }
+            }
             synchronize(s);
             if (s.settings) {
                 if (!s.gesture.configured()) s.gesture.reset(s.settings);
                 s.gesture.input(down, now); continue;
             }
-            if (s.record[1] == 0) { if (down) action(i, u16(s.record + 2), 0); }
+            const uint8_t *actions = s.input_layer ? s.shifted : s.record + 2;
+            if (s.record[1] == 0) { if (down) action(i, u16(actions), 0); }
             else if (s.record[1] == 2) { if (down) action(i, 0, 3); }
             else action(i, 0, down ? 1 : 2);
             dirty_ = true;
@@ -124,7 +167,7 @@ public:
         if (transition_ == 1 && selected_ >= 0 && !states_[selected_].queued) selected_ = -1;
         else if (transition_ == 2 && event_count_)
             selected_ = states_[events_[0].index].queued ? -1 : int(events_[0].index);
-        closing_ = dirty_ = true;
+        closing_ = dirty_ = true; shifted_ = false;
         event_count_ = transition_ = 0;
         for (auto &s : states_) {
             s.requested = false;
@@ -144,7 +187,8 @@ public:
             synchronize(s);
             bool overflow = false;
             s.gesture.tick(now, !s.executor.busy() && !s.queued && !event_count_, [&](unsigned event) {
-                unsigned node = event ? u16(s.settings + (event - 1) * 2) : u16(s.record + 2);
+                const uint8_t *actions = s.input_layer ? s.shifted : s.record + 2;
+                unsigned node = event ? u16(s.settings + (event - 1) * 2) : u16(actions);
                 if (node == 65535) return;
                 if (s.queued == 16 || event_count_ == 16) { overflow = true; return; }
                 action(i, node, 0); dirty_ = true;
@@ -182,11 +226,11 @@ public:
                 bool press = s.record[1] == 0;
                 bool baseline = !press && s.unknown && s.requested;
                 if (s.queued || (press ? s.presses != 0 : baseline || s.requested != s.active)) {
-                    unsigned node = s.queued ? s.queue[0] : u16(s.record + (press || (s.requested && !baseline) ? 2 : 4));
-                    if (s.executor.start(document_, node, !press || s.settings || s.hooks)) {
+                    unsigned node = s.queued ? s.queue[0] : u16(s.actions + (press || (s.requested && !baseline) ? 0 : 2));
+                    if (s.executor.start(document_, node, !press || s.settings || s.hooks || s.shifted)) {
                         bool captured = true;
-                        if (node == u16(s.record + 2)) captured = capture(s.on, s.executor);
-                        if (node == u16(s.record + 4)) captured = capture(s.off, s.executor) && captured;
+                        if (node == u16(s.actions)) captured = capture(s.on[s.layer], s.executor);
+                        if (node == u16(s.actions + 2)) captured = capture(s.off[s.layer], s.executor) && captured;
                         if (!captured) hardware_.error("Switch state memory exhausted");
                         if (!captured || !reserve(i)) {
                             s.executor.cancel(); s.failed = s.unknown = true;
@@ -235,8 +279,10 @@ private:
         PatchExecutor::Resource *resources = nullptr;
         unsigned resource_count = 0, baseline_resources = 0;
         const uint8_t *record = nullptr;
+        const uint8_t *actions = nullptr, *shifted = nullptr;
+        bool layer = false, input_layer = false;
         unsigned presses = 0;
-        Pattern on, off;
+        Pattern on[2], off[2];
         const uint8_t *hooks = nullptr;
         SwitchGestures gesture;
         const uint8_t *settings = nullptr;
@@ -246,13 +292,14 @@ private:
     };
     Hardware &hardware_; PatchOutputs &outputs_; PatchSources &sources_; Document document_;
     State states_[5];
-    struct Event { unsigned index, node, kind; };
+    struct Event { unsigned index, node, kind; bool layer; };
     Event events_[16];
     unsigned event_count_ = 0, transition_ = 0, state_revision_ = 0;
     int selected_ = -1;
     bool hooks_enabled_ = false, exit_started_ = false;
     unsigned count_ = 0, held_ = 0, disarmed_ = 0;
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
+    bool shifted_ = false;
     void unpin() { if (pinned_) { pinned_ = false; sources_.end(); } }
     bool capture(Pattern &pattern, const PatchExecutor &executor) {
         unsigned count = executor.resource_count();
@@ -272,7 +319,7 @@ private:
         dirty_ = true;
     }
     void action(unsigned index, unsigned node, unsigned kind) {
-        Event event{index, node, kind};
+        Event event{index, node, kind, states_[index].input_layer};
         if (!hooks_enabled_) {
             auto &s = states_[index];
             if (kind == 0 && !s.settings && node == u16(s.record + 2)) { ++s.presses; dirty_ = true; }
@@ -293,6 +340,13 @@ private:
                 || states_[i].requested != states_[i].active) return;
         const Event event = events_[0];
         auto &next = states_[event.index];
+        if (next.shifted && next.layer != event.layer) {
+            if (next.active && next.owned) { next.requested = false; dirty_ = true; return; }
+            next.active = next.requested = next.owned = false;
+            next.layer = event.layer;
+            next.actions = next.layer ? next.shifted : next.record + 2;
+            synchronize(next); dirty_ = true;
+        }
         bool changed = event.kind != 2 && selected_ != int(event.index);
         if (changed && transition_ == 0) {
             transition_ = 1;
@@ -349,7 +403,7 @@ private:
     }
     void synchronize(State &s) {
         if (closing_ || !s.record[1] || s.executor.busy() || s.requested != s.active || s.unknown || s.queued) return;
-        int observed = match(s.on);
+        int observed = match(s.on[s.layer]);
         if (observed == -2) return;
         bool active = observed == 1;
         if (s.active != active) {
@@ -392,7 +446,7 @@ private:
             const auto &s = states_[i]; Pane view; view.graphics = document_.graphics(1);
             bool pending = false;
             for (unsigned e = 0; e < event_count_; ++e) if (events_[e].index == i) pending = true;
-            int on = match(s.on), off = match(s.off);
+            int on = match(s.on[s.layer]), off = match(s.off[s.layer]);
             const char *state = s.failed ? "Failed / unknown" : s.unknown ? "Unknown remote state" : pending || s.executor.busy() || s.presses || s.queued || s.requested != s.active
                 ? "Pending" : on == 1 ? "On" : off == 1 ? "Off" : on == 2 || off == 2 ? "Partial match"
                 : on == -1 || off == -1 ? "Unknown remote state" : on == 0 ? "Other values"
@@ -407,7 +461,7 @@ private:
         }
         auto &back = panes[2].lines[15]; back.graphics.size = back.graphics.line_height = 8;
         back.y = int16_t(hardware_.display_height() - 12);
-        std::snprintf(back.text, 64, "%s", closing_ ? "Closing: F abandon" : "F Back");
+        std::snprintf(back.text, 64, "%s", closing_ ? "Closing: F abandon" : shifted_ ? "Shifted | F Back" : "F Back");
         if (!count_) std::snprintf(panes[1].lines[0].text, 64, "No switches");
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, panes[i]);
         dirty_ = false;

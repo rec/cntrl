@@ -18,6 +18,7 @@ from .compiler import (
     METADATA,
     NAMED,
     SCROLL_DIRECTIONS,
+    SHIFTED_ACTIONS,
     STATE_OPERATIONS,
     SWITCH,
     SWITCH_HOOKS,
@@ -65,6 +66,8 @@ def graph_offset(data: bytes) -> int:
         cursor += 5 * GESTURES.size
     if data[cursor : cursor + 4] == b'CHOK':
         cursor += 4 + 5 * SWITCH_HOOKS.size
+    if data[cursor : cursor + 4] == b'CSHF':
+        cursor += 4 + 5 * SHIFTED_ACTIONS.size
     cursor = layout.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
@@ -147,6 +150,8 @@ def export(data: bytes) -> str:
         cursor += 5 * GESTURES.size
     if data[cursor : cursor + 4] == b'CHOK':
         cursor += 4 + 5 * SWITCH_HOOKS.size
+    if data[cursor : cursor + 4] == b'CSHF':
+        cursor += 4 + 5 * SHIFTED_ACTIONS.size
     result.update(layout.unpack(data, cursor))
     modes = data[meta + METADATA.size - 18 : meta + METADATA.size - 14]
     if any(m >= len(TRS_MODES) for m in modes):
@@ -257,6 +262,26 @@ def export(data: bytes) -> str:
                 }
             if exit != 65535:
                 value['exit'] = _patch(data, offset, exit, metadata, set())
+            hooks += 4 + 5 * SWITCH_HOOKS.size
+        if data[hooks : hooks + 4] == b'CSHF':
+            fields = SHIFTED_ACTIONS.unpack_from(
+                data, hooks + 4 + button * SHIFTED_ACTIONS.size
+            )
+            if fields[0] != 65535:
+                shifted: dict[str, object] = {
+                    'on': _patch(data, offset, fields[0], metadata, set())
+                }
+                if fields[1] != 65535:
+                    shifted['off'] = _patch(data, offset, fields[1], metadata, set())
+                if fields[8]:
+                    shifted['gestures'] = {
+                        t: fields[8 + j] / 1000 for j, t in enumerate(GESTURE_TIMINGS)
+                    } | {
+                        e: _patch(data, offset, fields[2 + j], metadata, set())
+                        for j, e in enumerate(GESTURE_EVENTS)
+                        if fields[2 + j] != 65535
+                    }
+                value['shifted'] = shifted
         if flags & GESTURES_FLAG:
             address = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
             if flags & page_settings.EXPRESSION_FLAG:
