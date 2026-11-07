@@ -27,28 +27,27 @@ public:
         if (!documents_.reference_document(name, source)) return false;
         Source *s = new (std::nothrow) Source;
         if (!s) return false;
-        s->bytes = static_cast<uint8_t *>(std::malloc(source.length()));
-        if (!s->bytes) { delete s; return false; }
-        std::memcpy(s->bytes, source.data(), source.length());
-        if (!s->document.load(s->bytes, source.length(), hardware_)) {
-            std::free(s->bytes); delete s; return false;
+        if (!s->bytes.resize(source.length())) { delete s; return false; }
+        std::memcpy(s->bytes.data, source.data(), source.length());
+        if (!s->document.load(s->bytes.data, source.length(), hardware_)) {
+            delete s; return false;
         }
         std::snprintf(s->name, sizeof(s->name), "%s", name);
-        s->revision = checksum(s->bytes, source.length());
+        s->revision = checksum(s->bytes.data, source.length());
         s->next = sources_; sources_ = s;
         document = &s->document; revision = s->revision; return true;
     }
     void release_all() {
         while (sources_) {
             Source *next = sources_->next;
-            std::free(sources_->bytes); delete sources_; sources_ = next;
+            delete sources_; sources_ = next;
         }
     }
 private:
     struct Source {
         Document document;
         char name[64] = {};
-        uint8_t *bytes = nullptr;
+        DocumentBuffer bytes;
         uint32_t revision = 0;
         Source *next = nullptr;
     };

@@ -88,5 +88,30 @@ int main(int argc, char **argv) {
     cntrl::Documents documents(storage, transfer, controller, transfer); documents.boot(); transfer.locked = true;
     for (char c : std::string("CNTRL SETUP GET 706d616e\n")) documents.receive(uint8_t(c), 0);
     assert(transfer.response == "CNTRL ERROR configuration-locked" && !documents.busy());
+    transfer.locked = false;
+    auto command = [&](const std::string &line) {
+        for (char c : line + "\n") documents.receive(uint8_t(c), 0);
+    };
+    char put[128]; std::snprintf(put, sizeof(put), "CNTRL SETUP PUT 54657374 %u %08lx 0",
+        unsigned(bytes.size()), (unsigned long)cntrl::checksum(bytes.data(), unsigned(bytes.size())));
+    command(put); assert(transfer.response == "CNTRL SEND");
+    for (uint8_t b : bytes) documents.receive(b, 0);
+    for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
+    assert(!documents.busy() && transfer.response == "CNTRL OK");
+    documents.tick(0); assert(cntrl::document_memory_used == 0);
+    assert(documents.select("Test"));
+    documents.tick(0); assert(cntrl::document_memory_used == bytes.size());
+    assert(documents.edit_begin() && documents.edit_adjust(0, 5, 1));
+    assert(cntrl::document_memory_used == 3 * bytes.size());
+    documents.edit_cancel(); assert(cntrl::document_memory_used == bytes.size());
+    cntrl::DocumentBuffer occupied;
+    assert(occupied.resize(cntrl::document_memory_budget - unsigned(bytes.size())));
+    command(put); assert(transfer.response == "CNTRL ERROR document-memory");
+    assert(documents.document().length() == bytes.size());
+    assert(!std::memcmp(documents.document().data(), bytes.data(), bytes.size()));
+    command("CNTRL STATUS"); assert(transfer.response.find("CNTRL READY ") == 0);
+    occupied.clear();
+    assert(documents.select("Test"));
+    documents.tick(0); assert(cntrl::document_memory_used == bytes.size());
     return 0;
 }

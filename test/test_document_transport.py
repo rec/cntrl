@@ -105,6 +105,47 @@ def test_cpp_receiver_rejects_corrupt_document(peer: Path) -> None:
         os.close(slave)
 
 
+def test_large_setup_uses_the_shared_document_budget(peer: Path) -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(ROOT / 'firmware/test/target.json')
+    )
+
+    def setup(size: int, value: int = 1) -> bytes:
+        return compiler.compile_show(
+            {
+                'patches': {
+                    str(i): {'data': [value] * size, 'output': 'din'} for i in range(2)
+                }
+            },
+            {},
+            [],
+            target,
+        )
+
+    data = setup(40000)
+    too_large_alongside_active = setup(60000)
+    assert len(data) > 65536
+    master, slave = pty.openpty()
+    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
+    try:
+        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+            client = transport.SetupClient(connection)
+            client.copy('Large', data, False)
+            client.ok('CNTRL SETUP FINISH')
+            assert client.download('Large') == data
+            with pytest.raises(ValueError, match='document-memory'):
+                client.copy('Larger', too_large_alongside_active, False)
+            with pytest.raises(ValueError, match='history-failed'):
+                client.copy('Large', setup(40000, 2), True)
+            assert client.current() == 'Large'
+            assert client.download('Large') == data
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+        os.close(master)
+        os.close(slave)
+
+
 ROOT = Path(__file__).resolve().parents[1]
 
 

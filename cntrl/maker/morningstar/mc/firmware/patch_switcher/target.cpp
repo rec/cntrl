@@ -805,7 +805,7 @@ private:
 Board board;
 Card card;
 cntrl::Controller primary_controller(board, board, patch_sources);
-// Keep document/transfer buffers out of RAM1's code and stack budget.
+// Document bytes are allocated from RAM2's heap as needed.
 DMAMEM cntrl::Documents documents(card, board, primary_controller, board);
 cntrl::StoredPatchSources patch_sources(documents, board);
 alignas(cntrl::Controller) DMAMEM unsigned char extra_apps[cntrl::AppLayout::max_apps - 1][sizeof(cntrl::Controller)];
@@ -879,11 +879,11 @@ extern cntrl::Songs songs;
 class SongSources : public cntrl::SongResolver, public cntrl::SongCapture {
 public:
     cntrl::PatchExecutor executor{board, board, patch_sources, 5};
-    ~SongSources() override { executor.cancel(); std::free(embedded_); }
+    ~SongSources() override { executor.cancel(); }
     void tick(uint32_t now) {
         executor.tick(now);
-        if (embedded_ && !executor.busy()) {
-            std::free(embedded_); embedded_ = nullptr; embedded_document_ = cntrl::Document();
+        if (embedded_.data && !executor.busy()) {
+            embedded_.clear(); embedded_document_ = cntrl::Document();
         }
     }
     const cntrl::SongContinuation &context() const { return context_; }
@@ -920,7 +920,7 @@ public:
     }
     bool activate(const cntrl::SongSelection &song, const cntrl::SongContinuation &context, bool resume) override {
         if (apps_busy() || executor.busy() || documents.busy() || documents.dirty()) return false;
-        std::free(embedded_); embedded_ = nullptr;
+        embedded_.clear();
         patch_sources.begin();
         const cntrl::Document *source = nullptr;
         unsigned node = song.node;
@@ -934,9 +934,8 @@ public:
             }
         } else {
             unsigned size = songs.source_size(song.source);
-            if (size && size <= cntrl::max_document) embedded_ = static_cast<uint8_t *>(std::malloc(size));
-            if (embedded_ && songs.read_source(song.source, 0, embedded_, size)
-                && embedded_document_.load(embedded_, size, board)) {
+            if (size && embedded_.resize(size) && songs.read_source(song.source, 0, embedded_.data, size)
+                && embedded_document_.load(embedded_.data, size, board)) {
                 source = &embedded_document_; valid = true;
             }
         }
@@ -962,7 +961,7 @@ public:
 private:
     cntrl::SongContinuation context_;
     cntrl::Document embedded_document_;
-    uint8_t *embedded_ = nullptr;
+    cntrl::DocumentBuffer embedded_;
 };
 SongFiles song_files;
 SongSources song_sources;

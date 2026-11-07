@@ -41,7 +41,7 @@ public:
 private:
     uint32_t now_ = 0;
     void drain() {
-        for (unsigned i = 0; i < cntrl::max_document && executor().status() == cntrl::PatchExecutor::Status::pending; ++i)
+        for (unsigned i = 0; i < cntrl::document_memory_budget && executor().status() == cntrl::PatchExecutor::Status::pending; ++i)
             cntrl::Controller::tick(now_);
     }
 };

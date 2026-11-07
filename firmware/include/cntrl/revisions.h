@@ -29,26 +29,27 @@ struct Revision {
 };
 
 // One directory entry or at most 512 file bytes per tick. Buffers stay owned by
-// Documents until completion; no history-size-dependent allocation or loops.
+// Documents until completion. Reads allocate after validating the record length.
 class Revisions {
 public:
     explicit Revisions(SetupStorage &storage) : storage_(storage) {}
     bool busy() const { return phase_ != Phase::idle; }
     bool success() const { return good_; }
+    bool memory_failed() const { return memory_failed_; }
     const Revision &info() const { return info_; }
-    void read(const char *name, uint64_t number, uint8_t *data) {
-        initialize(name, data); info_.number = number; operation_ = Operation::read;
+    void read(const char *name, uint64_t number, DocumentBuffer &data) {
+        initialize(name, &data); info_.number = number; operation_ = Operation::read;
         storage_.choose_revision(name_, number); phase_ = Phase::header;
     }
-    void current(const char *name, unsigned slot, uint8_t *data) {
-        initialize(name, data); operation_ = Operation::current; slot_ = slot;
+    void current(const char *name, unsigned slot, DocumentBuffer &data) {
+        initialize(name, &data); operation_ = Operation::current; slot_ = slot;
         storage_.choose(name_); phase_ = Phase::header;
     }
-    void next(const char *name, uint64_t before, uint8_t *data) {
-        initialize(name, data); operation_ = Operation::next; scan(before);
+    void next(const char *name, uint64_t before, DocumentBuffer &data) {
+        initialize(name, &data); operation_ = Operation::next; scan(before);
     }
-    void append(const char *name, const char *label, uint32_t modified, uint8_t *data, unsigned length) {
-        initialize(name, data); operation_ = Operation::append;
+    void append(const char *name, const char *label, uint32_t modified, DocumentBuffer &data, unsigned length) {
+        initialize(name, &data); operation_ = Operation::append;
         info_.length = length; info_.modified = modified;
         std::snprintf(info_.label, sizeof(info_.label), "%s", label);
         phase_ = Phase::hash;
@@ -89,7 +90,7 @@ public:
             info_.length = u32(header_ + length_offset);
             if (std::memcmp(header_, current ? "CNST" : "CREV", 4)
                 || checksum(header_, width - 4) != u32(header_ + width - 4)
-                || info_.length < 116 || info_.length > max_document
+                || info_.length < 116 || info_.length > document_memory_budget
                 || storage_.size(slot_) != info_.length + width + 4) { invalid(); return; }
             if (current) {
                 if (!text_valid(header_ + 20, 64) || name_compare(reinterpret_cast<const char *>(header_ + 20), name_)) { invalid(); return; }
@@ -99,12 +100,13 @@ public:
                 info_.modified = u32(header_ + 12); std::memcpy(info_.label, header_ + 20, 64);
             }
             expected_crc_ = u32(header_ + crc_offset); offset_ = 0; crc_ = 0xffffffff;
+            if (!buffer_->resize(info_.length)) { memory_failed_ = true; finish(false); return; }
             phase_ = Phase::read; return;
         }
         case Phase::read: {
             unsigned n = amount(); unsigned width = operation_ == Operation::current ? 96 : 88;
-            if (!storage_.read(slot_, width + offset_, data_ + offset_, n)) { invalid(); return; }
-            update(data_ + offset_, n); offset_ += n;
+            if (!storage_.read(slot_, width + offset_, buffer_->data + offset_, n)) { invalid(); return; }
+            update(buffer_->data + offset_, n); offset_ += n;
             if (offset_ == info_.length) phase_ = Phase::read_end;
             return;
         }
@@ -113,7 +115,7 @@ public:
                 || std::memcmp(block, "DONE", 4) || (crc_ ^ 0xffffffff) != expected_crc_) { invalid(); return; }
             finish(true); return;
         case Phase::hash: {
-            unsigned n = amount(); update(data_ + offset_, n); offset_ += n;
+            unsigned n = amount(); update(buffer_->data + offset_, n); offset_ += n;
             if (offset_ == info_.length) {
                 std::memcpy(header_, "CREV", 4); put32(header_ + 4, info_.length);
                 put32(header_ + 8, crc_ ^ 0xffffffff); put32(header_ + 12, info_.modified);
@@ -129,7 +131,7 @@ public:
             if (!storage_.write(header_, 88)) { finish(false); return; }
             offset_ = 0; phase_ = Phase::write; return;
         case Phase::write: {
-            unsigned n = amount(); if (!storage_.write(data_ + offset_, n)) { finish(false); return; }
+            unsigned n = amount(); if (!storage_.write(buffer_->data + offset_, n)) { finish(false); return; }
             offset_ += n; if (offset_ == info_.length) phase_ = Phase::write_end; return;
         }
         case Phase::write_end:
@@ -148,7 +150,7 @@ public:
             if (!storage_.read(0, offset_, block, n)) { finish(false); return; }
             for (unsigned i = 0; i < n; ++i) {
                 unsigned p = offset_ + i;
-                uint8_t expected = p < 88 ? header_[p] : p < 88 + info_.length ? data_[p - 88] : uint8_t("DONE"[p - 88 - info_.length]);
+                uint8_t expected = p < 88 ? header_[p] : p < 88 + info_.length ? buffer_->data[p - 88] : uint8_t("DONE"[p - 88 - info_.length]);
                 if (block[i] != expected) { finish(false); return; }
             }
             offset_ += n; if (offset_ == info_.length + 92) finish(true); return;
@@ -167,16 +169,18 @@ private:
     Operation operation_ = Operation::read;
     Revision info_;
     char name_[64] = {};
-    uint8_t header_[96] = {}, *data_ = nullptr;
+    uint8_t header_[96] = {};
+    DocumentBuffer *buffer_ = nullptr;
     unsigned offset_ = 0, slot_ = 0;
     uint32_t crc_ = 0xffffffff, expected_crc_ = 0;
     uint64_t best_ = 0;
-    bool good_ = false, opened_ = false;
+    bool good_ = false, opened_ = false, memory_failed_ = false;
     inline static const uint8_t zeros_[64] = {};
     unsigned amount() const { unsigned n = info_.length - offset_; return n > 512 ? 512 : n; }
-    void initialize(const char *name, uint8_t *data) {
-        std::snprintf(name_, sizeof(name_), "%s", name); data_ = data;
+    void initialize(const char *name, DocumentBuffer *data) {
+        std::snprintf(name_, sizeof(name_), "%s", name); buffer_ = data;
         info_ = Revision(); offset_ = slot_ = 0; crc_ = 0xffffffff; good_ = opened_ = false;
+        memory_failed_ = false;
         std::memset(header_, 0, sizeof(header_));
     }
     void update(const uint8_t *data, unsigned n) {

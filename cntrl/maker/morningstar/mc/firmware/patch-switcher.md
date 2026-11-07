@@ -336,17 +336,28 @@ software-clocked driver had an observed update time around 1,500 ms.
 
 ## Capacity measurements
 
-Named-setup document and transfer buffers are placed in RAM2, leaving RAM1 for
+Named-setup document and transfer bytes are allocated from RAM2's heap, leaving RAM1 for
 code, display buffers and stack. Exact link measurements are printed by
 `inspect-patch-switcher`. No external RAM is allocated. Final link
 measurements are printed by `inspect-patch-switcher` and may vary as code changes.
 
-The current allocation supports two 65,536-byte document buffers, 32 routed
-instruments, 128 categories and 128 Undo entries, plus a 65,536-byte scratch
-buffer shared by deletion names and editor-save verification. Record sizes impose an upper
-bound that depends on instrument/category tables, banks and version 9's
-variable-length name metadata. The advertised patch-count limit is not a
-promise that that many fit; the compiler enforces the 65,536-byte limit too. Instrument and
+Document data shares a build-time allocation budget, configured with
+`DOCUMENT_MEMORY` in bytes (default 196608, or 192 KiB). The linker rejects a
+budget larger than the available RAM2 heap. Active setups, staging, scratch,
+cross-setup reference copies and embedded song documents all count towards this
+budget. Each buffer is sized to its contents; staging and scratch are released
+when idle. Allocation failure preserves the active setup and reports an error.
+There is no separate 64 KiB document limit. Loading, editing or replacing a setup
+can require several live buffers, so a document that fits alone may not fit during
+those operations. Fonts and execution state also need heap space, and an exhausted
+heap can reject an allocation before the document budget is reached.
+
+The target supports 32 routed instruments, 128 categories and 128 Undo entries.
+Record sizes impose an upper bound that depends on instrument/category tables,
+banks and variable-length metadata. The advertised patch-count limit is not a
+promise that that many fit. The target manifest's `max_document_bytes` describes
+the largest standalone document allowed by its build's budget; match it to
+`DOCUMENT_MEMORY` when building a different budget. Instrument and
 output IDs occupy at most 31 printable ASCII characters; category/patch labels
 occupy at most 63 UTF-8 bytes. The compiler fits each line independently; category
 and patch names are centered on separate lines using saved cursor offsets,

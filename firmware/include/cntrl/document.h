@@ -66,7 +66,7 @@ public:
     CNTRL_FLASH_ROUTINE(document_load)
 #endif
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
-        if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
+        if (length < 76 || length > document_memory_budget || std::memcmp(bytes, "CSW1", 4)
             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
             || u32(bytes + 8) != length || u32(bytes + 24) > 2147483000u
             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;

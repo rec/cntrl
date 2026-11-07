@@ -849,7 +849,7 @@ class Target(BaseModel, frozen=True):
     fonts: list[FontFace]
     outputs: list[str]
     trs_ports: dict[str, list[TrsMode]] = Field(default_factory=dict)
-    max_document_bytes: units.Bytes = Field(gt=24, le=65536)
+    max_document_bytes: units.Bytes = Field(gt=24, le=0xFFFFFFFF - 100)
     max_instruments: int = Field(gt=0, le=32)
     max_patch_cycles: int = Field(gt=0, le=128)
     max_patches: int = Field(gt=0, le=65535)

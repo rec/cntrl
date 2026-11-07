@@ -36,7 +36,7 @@ public:
         uint32_t generation = generation_, modified = modified_;
         bool present = present_;
         char record_name[64]; std::memcpy(record_name, record_name_, sizeof(record_name));
-        bool valid = load(name) && candidate.load(staging_, length_, hardware_);
+        bool valid = load(name) && candidate.load(staging_.data, length_, hardware_);
         length_ = length; slot_ = slot; generation_ = generation; modified_ = modified; present_ = present;
         std::memcpy(record_name_, record_name, sizeof(record_name));
         return valid;
@@ -56,7 +56,7 @@ public:
     bool select(const char *name) {
         if (busy() || dirty_ || hardware_.configuration_locked() || !hardware_.output_idle() || !setup_name(name) || !load(name)) return false;
         Document candidate;
-        if (!candidate.load(staging_, length_, hardware_) || !candidate.prepare_fonts(hardware_)) return false;
+        if (!candidate.load(staging_.data, length_, hardware_) || !candidate.prepare_fonts(hardware_)) return false;
         char canonical[64]; std::snprintf(canonical, sizeof(canonical), "%s", record_name_);
         if (std::strcmp(selected_, canonical) && !persist_selection(canonical)) { hardware_.finish_fonts(false); return false; }
         hardware_.finish_fonts(true);
@@ -75,10 +75,11 @@ public:
     void redraw() { if (document_.valid()) { if (!hardware_.refresh_apps()) controller_.refresh(); } else empty(); }
     bool edit_begin() {
         if (busy() || hardware_.configuration_locked() || !document_.valid()) return false;
-        std::memcpy(staging_, active_, document_.length()); dirty_ = true; return true;
+        if (!allocate(staging_, document_.length())) return false;
+        std::memcpy(staging_.data, active_.data, document_.length()); dirty_ = true; return true;
     }
     int64_t edit_value(unsigned patch, unsigned field) const {
-        Document d; if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || (field <= 4 && patch >= d.patches())) return 0;
+        Document d; if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_) || (field <= 4 && patch >= d.patches())) return 0;
         const uint8_t *p = patch < d.patches() ? d.patch(patch) : nullptr;
         if (p && u16(p) == 65535 && field <= 4) return -1;
         switch (field) {
@@ -94,12 +95,13 @@ public:
     }
     bool edit_adjust(unsigned patch, unsigned field, int delta) {
         Document d;
-        if (!dirty_ || !d.load(staging_, document_.length(), hardware_) || (field <= 4 && patch >= d.patches()) || field > 7) return false;
-        uint8_t *p = patch < d.patches() ? staging_ + (d.patch(patch) - staging_) : nullptr;
+        if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_) || (field <= 4 && patch >= d.patches()) || field > 7) return false;
+        uint8_t *p = patch < d.patches() ? staging_.data + (d.patch(patch) - staging_.data) : nullptr;
         if (p && u16(p) == 65535 && field <= 4) return false;
         int node = patch < d.patches() ? editable_node(d, patch) : -1;
         if (field <= 4 && node < 0) return false;
-        std::memcpy(scratch_, staging_, document_.length());
+        if (!allocate(scratch_, document_.length())) return false;
+        std::memcpy(scratch_.data, staging_.data, document_.length());
         int64_t old = edit_value(patch, field), value = old + delta;
         if (field == 0 && value >= 1 && value <= 128) p[4] = uint8_t(value - 1);
         else if (field == 1) {
@@ -112,46 +114,47 @@ public:
             }
             if ((delta > 0 && !mapping) || (delta < 0 && old < 0)) return false;
             p[5] = mapping ? mapping[6] : 255; p[6] = mapping ? mapping[7] : 255;
-            put32(staging_ + (d.bank(patch) - staging_), bank);
-        } else if (field == 2 && value >= 1 && value <= 16) staging_[d.instrument(u16(p)) - staging_ + 64] = uint8_t(value - 1);
+            put32(staging_.data + (d.bank(patch) - staging_.data), bank);
+        } else if (field == 2 && value >= 1 && value <= 16) staging_.data[d.instrument(u16(p)) - staging_.data + 64] = uint8_t(value - 1);
         else if (field == 3 && value >= -1 && value <= 127) p[7] = value < 0 ? 255 : uint8_t(value);
         else if (field == 4 && value >= -65 && value <= 63) p[8] = value == -65 ? 255 : uint8_t(value + 64);
-        else if (field == 5 && value >= 0 && value <= 255) staging_[18] = uint8_t(value);
-        else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_ + 24, unsigned(value) * 1000);
-        else if (field == 7 && value >= 0 && value <= 1) staging_[19] = (staging_[19] & ~uint8_t(2)) | (uint8_t(value) << 1);
+        else if (field == 5 && value >= 0 && value <= 255) staging_.data[18] = uint8_t(value);
+        else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_.data + 24, unsigned(value) * 1000);
+        else if (field == 7 && value >= 0 && value <= 1) staging_.data[19] = (staging_.data[19] & ~uint8_t(2)) | (uint8_t(value) << 1);
         else return false;
         if (field <= 4) {
-            uint8_t *program = staging_ + (d.node(unsigned(node)) - staging_) + 4;
+            uint8_t *program = staging_.data + (d.node(unsigned(node)) - staging_.data) + 4;
             std::memcpy(program + 2, p + 4, 5);
             std::memcpy(program + 7, d.bank(patch), 4);
             for (unsigned i = 0; i < d.patches(); ++i) {
                 if (editable_node(d, i) != node) continue;
-                uint8_t *cache = staging_ + (d.patch(i) - staging_);
+                uint8_t *cache = staging_.data + (d.patch(i) - staging_.data);
                 std::memcpy(cache + 4, program + 2, 5);
-                std::memcpy(staging_ + (d.bank(i) - staging_), program + 7, 4);
+                std::memcpy(staging_.data + (d.bank(i) - staging_.data), program + 7, 4);
             }
         }
-        put32(staging_ + 20, checksum(staging_ + 28, document_.length() - 28));
+        put32(staging_.data + 20, checksum(staging_.data + 28, document_.length() - 28));
         Document candidate;
-        if (!candidate.load(staging_, document_.length(), hardware_)) {
-            std::memcpy(staging_, scratch_, document_.length());
+        if (!candidate.load(staging_.data, document_.length(), hardware_)) {
+            std::memcpy(staging_.data, scratch_.data, document_.length());
             return false;
         }
         return true;
     }
     bool save_trs_mode(unsigned jack, midi::TrsMode mode, uint32_t now) {
         if (jack >= 4 || dirty_ || !edit_begin()) return false;
-        staging_[document_.trs_modes() - document_.data() + jack] = uint8_t(mode);
-        put32(staging_ + 20, checksum(staging_ + 28, document_.length() - 28));
+        staging_.data[document_.trs_modes() - document_.data() + jack] = uint8_t(mode);
+        put32(staging_.data + 20, checksum(staging_.data + 28, document_.length() - 28));
         Document candidate;
-        if (candidate.load(staging_, document_.length(), hardware_) && edit_save(now)) return true;
+        if (candidate.load(staging_.data, document_.length(), hardware_) && edit_save(now)) return true;
         edit_cancel(); return false;
     }
-    void edit_cancel() { dirty_ = false; }
+    void edit_cancel() { dirty_ = false; staging_.clear(); scratch_.clear(); }
     bool edit_save(uint32_t now) {
         if (!dirty_ || busy() || hardware_.configuration_locked()) return false;
+        if (!allocate(scratch_, document_.length())) return false;
         std::snprintf(record_name_, sizeof(record_name_), "%s", selected_);
-        expected_ = document_.length(); expected_crc_ = checksum(staging_, expected_); quiet_ = true;
+        expected_ = document_.length(); expected_crc_ = checksum(staging_.data, expected_); quiet_ = true;
         if (!start_write(now)) return false;
         return true;
     }
@@ -162,7 +165,7 @@ public:
         if (browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || writing_ || erasing_) return;
         last_byte_ = now;
         if (receiving_) {
-            staging_[received_++] = byte;
+            staging_.data[received_++] = byte;
             if (received_ == expected_) { receiving_ = false; received(now); }
             return;
         }
@@ -182,9 +185,14 @@ public:
         if (browse_phase_ != BrowsePhase::idle) { browse_tick(now); return; }
         if (history_action_ != HistoryAction::none) { history_tick(now); return; }
         if (erasing_) { erase_step(now); return; }
-        if (!writing_) return;
+        if (!writing_) {
+            if (!dirty_ && !receiving_ && !download_ && !listing_) {
+                staging_.clear(); scratch_.clear();
+            }
+            return;
+        }
         unsigned n = expected_ - written_; if (n > 512) n = 512;
-        if (n && !storage_.write(staging_ + written_, n)) { storage_.finish(); writing_ = false; error("storage-write"); return; }
+        if (n && !storage_.write(staging_.data + written_, n)) { storage_.finish(); writing_ = false; error("storage-write"); return; }
         written_ += n; if (written_ != expected_) return;
         if (!hardware_.output_idle() || hardware_.configuration_locked()) return;
         bool done = storage_.write(reinterpret_cast<const uint8_t *>("DONE"), 4);
@@ -192,14 +200,14 @@ public:
         char name[64]; std::snprintf(name, sizeof(name), "%s", record_name_);
         uint32_t generation = generation_ + 1;
         // Read-back reuses staging. Keep editable bytes if verification fails.
-        if (dirty_) std::memcpy(scratch_, staging_, expected_);
-        if (!done || !load(name) || generation_ != generation || length_ != expected_ || checksum(staging_, length_) != expected_crc_) {
-            if (dirty_) std::memcpy(staging_, scratch_, expected_);
+        if (dirty_) std::memcpy(scratch_.data, staging_.data, expected_);
+        if (!done || !load(name) || generation_ != generation || length_ != expected_ || checksum(staging_.data, length_) != expected_crc_) {
+            if (dirty_) staging_.swap(scratch_);
             error("storage-verify"); return;
         }
         if (!name_compare(name, selected_)) {
             Document candidate;
-            if (!candidate.load(staging_, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { error("font-load"); return; }
+            if (!candidate.load(staging_.data, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { error("font-load"); return; }
             hardware_.finish_fonts(true); activate();
         }
         if (!quiet_) replies_.reply("CNTRL OK");
@@ -281,11 +289,12 @@ private:
             browse_.length = u32(header_ + 8); browse_.generation = u32(header_ + 4);
             if (storage_.size(browse_.slot) != browse_.length + 100
                 || (browse_.final && (browse_.length != browse_.best_length || browse_.generation != browse_.best_generation))) { browse_next_slot(); return; }
+            if (!allocate(scratch_, browse_.length)) { browse_fail(); return; }
             browse_.expected_crc = u32(header_ + 12); browse_.crc = 0xffffffff; browse_.position = 0;
             browse_phase_ = browse_.length ? BrowsePhase::body : BrowsePhase::trailer; return;
         case BrowsePhase::body: {
             unsigned n = browse_.length - browse_.position; if (n > 512) n = 512;
-            uint8_t *p = scratch_ + browse_.position;
+            uint8_t *p = scratch_.data + browse_.position;
             if (!storage_.read(browse_.slot, 96 + browse_.position, p, n)) { browse_next_slot(); return; }
             for (unsigned i = 0; i < n; ++i) {
                 browse_.crc ^= p[i];
@@ -298,11 +307,11 @@ private:
         case BrowsePhase::trailer: {
             uint8_t trailer[4]; Document candidate;
             if (!storage_.read(browse_.slot, 96 + browse_.length, trailer, 4) || std::memcmp(trailer, "DONE", 4)
-                || ~browse_.crc != browse_.expected_crc || (browse_.length && !candidate.load(scratch_, browse_.length, hardware_))) {
+                || ~browse_.crc != browse_.expected_crc || (browse_.length && !candidate.load(scratch_.data, browse_.length, hardware_))) {
                 browse_next_slot(); return;
             }
             if (browse_.final) {
-                std::memcpy(staging_, scratch_, browse_.length); length_ = browse_.length;
+                staging_.swap(scratch_); length_ = browse_.length;
                 generation_ = browse_.generation; slot_ = 1 - browse_.slot;
                 std::snprintf(record_name_, 64, "%s", header_ + 20);
                 browse_phase_ = BrowsePhase::activate; return;
@@ -315,7 +324,7 @@ private:
         }
         case BrowsePhase::activate: {
             Document candidate;
-            if (!hardware_.output_idle() || !candidate.load(staging_, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { browse_fail(); return; }
+            if (!hardware_.output_idle() || !candidate.load(staging_.data, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { browse_fail(); return; }
             if (std::strcmp(selected_, record_name_) && !persist_selection(record_name_)) {
                 hardware_.finish_fonts(false); browse_fail(); return;
             }
@@ -332,14 +341,15 @@ private:
     Revision history_revision_;
     HistoryComparison comparison_;
     // History reads/current bytes and deletion names have exclusive lifetimes.
-    uint8_t scratch_[max_document] = {};
+    DocumentBuffer scratch_;
     char history_name_[64] = {}, history_label_[64] = {};
     uint64_t history_number_ = 0;
     unsigned history_slot_ = 0, current_length_ = 0, current_slot_ = 0;
     uint32_t current_generation_ = 0, history_progress_ = 0;
     bool history_reply_ = false;
     SetupStorage &storage_; Hardware &hardware_; Controller &controller_; Replies &replies_;
-    uint8_t active_[max_document] = {}, staging_[max_document] = {}, header_[96] = {};
+    DocumentBuffer active_, staging_;
+    uint8_t header_[96] = {};
     Document document_;
     char selected_[64] = {}, record_name_[64] = {}, cursor_[64] = {}, line_[256] = {}, last_error_[64] = {}, boot_error_[64] = {};
     unsigned used_ = 0, received_ = 0, expected_ = 0, written_ = 0, slot_ = 0, length_ = 0, download_ = 0;
@@ -349,6 +359,11 @@ private:
     int selection_slot_ = -1;
     bool receiving_ = false, writing_ = false, overflow_ = false, dirty_ = false, quiet_ = false, listing_ = false, deleting_ = false, erasing_ = false, present_ = false;
     inline static const uint8_t zero_[64] = {};
+    bool allocation_failed_ = false;
+    bool allocate(DocumentBuffer &buffer, unsigned length) {
+        allocation_failed_ = !buffer.resize(length);
+        return !allocation_failed_;
+    }
     bool begin_history(HistoryAction action, const char *name, uint64_t number, const char *label = "") {
         if (busy() || (dirty_ && action != HistoryAction::archive) || !setup_name(name) || std::strlen(label) > 63) return false;
         if (action != HistoryAction::archive) quiet_ = true;
@@ -384,7 +399,7 @@ private:
             replies_.reply(response);
         } else if (action == HistoryAction::download) {
             length_ = history_revision_.length; download_ = 1; char response[80];
-            std::snprintf(response, sizeof(response), "CNTRL FILE %u %08lx", length_, (unsigned long)checksum(staging_, length_));
+            std::snprintf(response, sizeof(response), "CNTRL FILE %u %08lx", length_, (unsigned long)checksum(staging_.data, length_));
             replies_.reply(response);
         } else replies_.reply("CNTRL OK");
     }
@@ -394,7 +409,7 @@ private:
         } else {
             generation_ = current_generation_; slot_ = 1 - current_slot_;
             std::snprintf(record_name_, sizeof(record_name_), "%s", history_name_);
-            if (!current_length_ || (current_length_ == expected_ && !std::memcmp(staging_, scratch_, expected_))) {
+            if (!current_length_ || (current_length_ == expected_ && !std::memcmp(staging_.data, scratch_.data, expected_))) {
                 history_action_ = HistoryAction::none; begin_write(now); return;
             }
         }
@@ -403,6 +418,7 @@ private:
     }
     void history_tick(uint32_t now) {
         revisions_.tick();
+        if (revisions_.memory_failed()) { history_complete(false); return; }
         if (revisions_.busy()) {
             if (!quiet_ && uint32_t(now - history_progress_) >= 500) {
                 replies_.reply("CNTRL WAIT"); history_progress_ = now;
@@ -411,7 +427,7 @@ private:
         }
         if (history_phase_ == HistoryPhase::current) {
             const Revision &info = revisions_.info(); Document candidate;
-            if (revisions_.success() && candidate.load(scratch_, info.length, hardware_)
+            if (revisions_.success() && candidate.load(scratch_.data, info.length, hardware_)
                 && (!current_length_ || int32_t(uint32_t(info.number) - current_generation_) > 0)) {
                 current_generation_ = uint32_t(info.number); current_length_ = info.length; current_slot_ = history_slot_;
             }
@@ -424,7 +440,7 @@ private:
         } else if (history_phase_ == HistoryPhase::selected) {
             Document candidate; const auto &info = revisions_.info();
             if (!revisions_.success() || info.length != current_length_ || info.number != current_generation_
-                || !candidate.load(scratch_, info.length, hardware_)) { history_complete(false); return; }
+                || !candidate.load(scratch_.data, info.length, hardware_)) { history_complete(false); return; }
             current_ready(now);
         } else if (history_phase_ == HistoryPhase::revision) {
             if (!revisions_.success()) {
@@ -435,9 +451,9 @@ private:
             history_revision_ = revisions_.info();
             if (history_action_ == HistoryAction::restore) {
                 Document candidate;
-                if (!candidate.load(staging_, history_revision_.length, hardware_) || !candidate.prepare_fonts(hardware_)) { history_complete(false); return; }
+                if (!candidate.load(staging_.data, history_revision_.length, hardware_) || !candidate.prepare_fonts(hardware_)) { history_complete(false); return; }
                 hardware_.finish_fonts(false);
-                expected_ = history_revision_.length; expected_crc_ = checksum(staging_, expected_);
+                expected_ = history_revision_.length; expected_crc_ = checksum(staging_.data, expected_);
                 archive_ready(now);
             } else if (history_action_ == HistoryAction::compare) {
                 if (!compare_history()) { history_complete(false); return; }
@@ -451,7 +467,7 @@ private:
     }
     bool compare_history() {
         Document old, current;
-        if (!old.load(staging_, history_revision_.length, hardware_) || !current.load(scratch_, current_length_, hardware_)) return false;
+        if (!old.load(staging_.data, history_revision_.length, hardware_) || !current.load(scratch_.data, current_length_, hardware_)) return false;
         unsigned &patches = comparison_.patches, &routes = comparison_.routes;
         bool &settings = comparison_.settings, &formatting = comparison_.formatting;
         patches = routes = 0;
@@ -501,6 +517,7 @@ private:
         } else archive_ready(now);
     }
     void error(const char *message) {
+        if (allocation_failed_) { message = "document-memory"; allocation_failed_ = false; }
         std::snprintf(last_error_, sizeof(last_error_), "%s", message);
         char response[128]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s", message);
         if (quiet_) { hardware_.error(message); quiet_ = false; } else replies_.reply(response);
@@ -508,6 +525,7 @@ private:
     void empty(bool startup = false) {
         document_ = Document(); controller_.deactivate();
         hardware_.configure_apps(document_);
+        active_.clear();
         constexpr uint8_t off[4] = {}; hardware_.configure_trs_ports(off);
         hardware_.begin_fonts(); hardware_.finish_fonts(true);
         hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
@@ -520,29 +538,34 @@ private:
     }
     void activate() {
         boot_error_[0] = 0;
-        std::memcpy(active_, staging_, length_);
-        document_.load(active_, length_, hardware_); controller_.activate(document_);
+        active_.swap(staging_);
+        document_.load(active_.data, length_, hardware_); controller_.activate(document_);
+        staging_.clear();
     }
     bool header_valid(const uint8_t *h) const {
         return !std::memcmp(h, "CNST", 4) && checksum(h, 92) == u32(h + 92)
-            && u32(h + 8) <= max_document && text_valid(h + 20, 64)
+            && u32(h + 8) <= document_memory_budget && text_valid(h + 20, 64)
             && setup_name(reinterpret_cast<const char *>(h + 20)) && !u32(h + 84) && !u32(h + 88);
     }
     bool read_slot(unsigned slot) {
         uint8_t trailer[4];
         if (!storage_.read(slot, 0, header_, 96) || !header_valid(header_)) return false;
         unsigned length = u32(header_ + 8);
+        if (!allocate(staging_, length)) return false;
         if (storage_.size(slot) != length + 100 || !storage_.read(slot, 96 + length, trailer, 4)
-            || std::memcmp(trailer, "DONE", 4) || (length && !storage_.read(slot, 96, staging_, length))
-            || checksum(staging_, length) != u32(header_ + 12)) return false;
-        Document candidate; return !length || candidate.load(staging_, length, hardware_);
+            || std::memcmp(trailer, "DONE", 4) || (length && !storage_.read(slot, 96, staging_.data, length))
+            || checksum(staging_.data, length) != u32(header_ + 12)) return false;
+        Document candidate; return !length || candidate.load(staging_.data, length, hardware_);
     }
     bool load(const char *name) {
+        allocation_failed_ = false;
         storage_.choose(name); int best = -1; uint32_t gen = 0;
         present_ = storage_.size(0) || storage_.size(1);
-        for (unsigned i = 0; i < 2; ++i)
+        for (unsigned i = 0; i < 2; ++i) {
             if (read_slot(i) && !name_compare(name, reinterpret_cast<const char *>(header_ + 20))
                 && (best < 0 || int32_t(u32(header_ + 4) - gen) > 0)) { best = int(i); gen = u32(header_ + 4); }
+            if (allocation_failed_) return false;
+        }
         generation_ = gen; slot_ = best == 0 ? 1 : 0; length_ = 0;
         if (best < 0 || !read_slot(unsigned(best))) return false;
         length_ = u32(header_ + 8); modified_ = u32(header_ + 16);
@@ -580,6 +603,7 @@ private:
         return begin_history(HistoryAction::archive, record_name_, 0);
     }
     bool begin_write(uint32_t now) {
+        if (dirty_ && !allocate(scratch_, expected_)) { error("document-memory"); return false; }
         last_error_[0] = 0;
         std::memset(header_, 0, sizeof(header_)); std::memcpy(header_, "CNST", 4);
         put32(header_ + 4, generation_ + 1); put32(header_ + 8, expected_); put32(header_ + 12, expected_crc_);
@@ -591,18 +615,19 @@ private:
         written_ = 0; writing_ = true; return true;
     }
     void erase_batch() {
-        if (!expected_ || staging_[expected_ - 1]) { error("invalid-delete-list"); return; }
-        unsigned names_length = expected_; std::memcpy(scratch_, staging_, names_length);
+        if (!expected_ || staging_.data[expected_ - 1]) { error("invalid-delete-list"); return; }
+        if (!allocate(scratch_, expected_)) { error("document-memory"); return; }
+        unsigned names_length = expected_; std::memcpy(scratch_.data, staging_.data, names_length);
         for (unsigned i = 0; i < names_length;) {
-            const char *n = reinterpret_cast<const char *>(scratch_ + i);
+            const char *n = reinterpret_cast<const char *>(scratch_.data + i);
             if (!setup_name(n) || !load(n)) { error("missing-setup"); return; }
-            for (unsigned j = 0; j < i; j += unsigned(std::strlen(reinterpret_cast<const char *>(scratch_ + j))) + 1)
-                if (!name_compare(n, reinterpret_cast<const char *>(scratch_ + j))) { error("duplicate-setup"); return; }
+            for (unsigned j = 0; j < i; j += unsigned(std::strlen(reinterpret_cast<const char *>(scratch_.data + j))) + 1)
+                if (!name_compare(n, reinterpret_cast<const char *>(scratch_.data + j))) { error("duplicate-setup"); return; }
             i += unsigned(std::strlen(n)) + 1;
         }
         auto deleting = [&](const char *name) {
-            for (unsigned i = 0; i < names_length; i += unsigned(std::strlen(reinterpret_cast<const char *>(scratch_ + i))) + 1)
-                if (!name_compare(name, reinterpret_cast<const char *>(scratch_ + i))) return true;
+            for (unsigned i = 0; i < names_length; i += unsigned(std::strlen(reinterpret_cast<const char *>(scratch_.data + i))) + 1)
+                if (!name_compare(name, reinterpret_cast<const char *>(scratch_.data + i))) return true;
             return false;
         };
         if (deleting(selected_)) {
@@ -621,8 +646,9 @@ private:
     }
     void erase_step(uint32_t now) {
         erasing_ = false;
-        const char *name = reinterpret_cast<const char *>(scratch_ + delete_offset_);
-        load(name); expected_ = 0; expected_crc_ = checksum(staging_, 0);
+        const char *name = reinterpret_cast<const char *>(scratch_.data + delete_offset_);
+        if (!load(name)) { error("missing-setup"); return; }
+        expected_ = 0; expected_crc_ = checksum(staging_.data, 0);
         if (!start_write(now)) return;
         bool ok = storage_.write(reinterpret_cast<const uint8_t *>("DONE"), 4);
         ok = storage_.finish() && ok; writing_ = false;
@@ -633,10 +659,10 @@ private:
         else replies_.reply("CNTRL OK");
     }
     void received(uint32_t now) {
-        if (checksum(staging_, expected_) != expected_crc_) { error("checksum"); return; }
+        if (checksum(staging_.data, expected_) != expected_crc_) { error("checksum"); return; }
         if (deleting_) { erase_batch(); return; }
         Document candidate;
-        if (!candidate.load(staging_, expected_, hardware_)) { error("invalid-document"); return; }
+        if (!candidate.load(staging_.data, expected_, hardware_)) { error("invalid-document"); return; }
         if (!candidate.prepare_fonts(hardware_)) { error("font-load"); return; }
         hardware_.finish_fonts(false);
         start_write(now);
@@ -654,7 +680,7 @@ private:
         if (!length_) { listing_ = false; replies_.reply("CNTRL END"); return; }
         hex_text(record_name_, hex);
         std::snprintf(response, sizeof(response), "CNTRL ENTRY %s %lu %u %08lx", hex,
-            (unsigned long)modified_, length_, (unsigned long)checksum(staging_, length_));
+            (unsigned long)modified_, length_, (unsigned long)checksum(staging_.data, length_));
         replies_.reply(response);
     }
     void command(uint32_t now) {
@@ -662,7 +688,7 @@ private:
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
             char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY %u %u %08lx", document_version, document_.length(),
-                document_.valid() ? (unsigned long)checksum(active_, document_.length()) : 0ul);
+                document_.valid() ? (unsigned long)checksum(active_.data, document_.length()) : 0ul);
             replies_.reply(response); return;
         }
         if (!std::strcmp(line_, "CNTRL SETUP CURRENT")) {
@@ -678,7 +704,7 @@ private:
             if (download_) {
                 unsigned n = length_ - (download_ - 1); if (n > 128) n = 128;
                 char response[280] = "CNTRL DATA ";
-                for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", staging_[download_ - 1 + i]);
+                for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", staging_.data[download_ - 1 + i]);
                 download_ += n; if (download_ - 1 == length_) download_ = 0;
                 replies_.reply(response); return;
             }
@@ -719,19 +745,22 @@ private:
         }
         if (std::sscanf(line_, "CNTRL SETUP GET %126s%n", hex, &end) == 1 && end && !line_[end] && unhex_name(hex, name)) {
             if (!load(name)) { error("missing-setup"); return; }
-            char response[80]; std::snprintf(response, sizeof(response), "CNTRL FILE %u %08lx", length_, (unsigned long)checksum(staging_, length_));
+            char response[80]; std::snprintf(response, sizeof(response), "CNTRL FILE %u %08lx", length_, (unsigned long)checksum(staging_.data, length_));
             download_ = 1; replies_.reply(response); return;
         }
         if (std::sscanf(line_, "CNTRL SETUP PUT %126s %u %lx %u%n", hex, &length, &crc, &overwrite, &end) == 4
-            && end && !line_[end] && unhex_name(hex, name) && overwrite <= 1 && length >= 116 && length <= max_document && crc <= 0xfffffffful) {
+            && end && !line_[end] && unhex_name(hex, name) && overwrite <= 1 && length >= 116 && length <= document_memory_budget && crc <= 0xfffffffful) {
             bool exists = load(name);
+            if (allocation_failed_) { error("document-memory"); return; }
             if ((exists && (!overwrite || std::strcmp(record_name_, name))) || (present_ && !generation_ && !overwrite)) { error("setup-exists"); return; }
+            if (!allocate(staging_, length)) { error("document-memory"); return; }
             std::snprintf(record_name_, sizeof(record_name_), "%s", name);
             expected_ = length; expected_crc_ = uint32_t(crc); received_ = 0; deleting_ = false;
             receiving_ = true; replies_.reply("CNTRL SEND"); return;
         }
         if (std::sscanf(line_, "CNTRL SETUP DELETE %u %lx%n", &length, &crc, &end) == 2
-            && end && !line_[end] && length && length <= max_document && crc <= 0xfffffffful) {
+            && end && !line_[end] && length && length <= document_memory_budget && crc <= 0xfffffffful) {
+            if (!allocate(staging_, length)) { error("document-memory"); return; }
             expected_ = length; expected_crc_ = uint32_t(crc); received_ = 0; deleting_ = true;
             receiving_ = true; replies_.reply("CNTRL SEND"); return;
         }

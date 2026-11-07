@@ -5,9 +5,9 @@
 #include <optional>
 #include "page_settings.h"
 #include "app_layout.h"
+#include "document_memory.h"
 
 namespace cntrl {
-constexpr unsigned max_document = 65536;
 constexpr unsigned max_instruments = 32;
 constexpr unsigned max_patch_cycles = 128;
 constexpr unsigned history_capacity = 128;

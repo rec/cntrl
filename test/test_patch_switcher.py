@@ -256,7 +256,7 @@ def test_configuration_units_retain_constraints(
 def test_target_units_normalize_before_compilation(target: models.Target) -> None:
     data = target.model_dump()
     data.update(
-        display_width='160 px', display_height='128 px', max_document_bytes='64 KiB'
+        display_width='160 px', display_height='128 px', max_document_bytes='192 KiB'
     )
     data['fonts'][0]['sizes']['8 px'] = data['fonts'][0]['sizes'].pop(8)
     data['fonts'][0]['sizes']['8 px'].update(line_height='8 px', top='0 px')

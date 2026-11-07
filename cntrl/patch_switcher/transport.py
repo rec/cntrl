@@ -290,7 +290,7 @@ class SetupClient:
         if len(parts) != 4 or parts[:2] != ['CNTRL', 'FILE']:
             raise ValueError(f'invalid download response: {response}')
         length, checksum = int(parts[2]), int(parts[3], 16)
-        if not 116 <= length <= 65536:
+        if not 116 <= length <= 0xFFFFFFFF - 100:
             raise ValueError('invalid download length')
         result = bytearray()
         while len(result) < length:
@@ -307,8 +307,8 @@ class SetupClient:
 
     def delete(self, names: list[str]) -> None:
         payload = b''.join(validate_name(n).encode('ascii') + b'\0' for n in names)
-        if not payload or len(payload) > 65536:
-            raise ValueError('deletion batch must contain 1..65536 bytes of names')
+        if not payload or len(payload) > 0xFFFFFFFF - 100:
+            raise ValueError('deletion batch must fit a nonempty 32-bit storage record')
         response = self.request(
             f'CNTRL SETUP DELETE {len(payload)} {crc32(payload):08x}'
         )
