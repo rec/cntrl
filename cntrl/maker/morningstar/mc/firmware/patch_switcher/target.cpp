@@ -140,7 +140,12 @@ public:
             invocation_navigation[invocation.owner()] = app_controller().navigation();
         app_controller().validation(begin);
     }
-    bool preview_state(unsigned operation, uint32_t value) override { return app_controller().preview_state(operation, value); }
+    bool preview_state(unsigned operation, uint32_t value) override {
+#if CNTRL_SWITCHES
+        if (operation == 11 || operation == 12) return switches.open();
+#endif
+        return app_controller().preview_state(operation, value);
+    }
     bool selection(unsigned operation, const cntrl::Document *&document, unsigned &node) override {
         if (!documents.document().valid() || !documents.document().app_layout().apps()) return false;
         return app_controller().selection(operation, document, node);
@@ -1137,6 +1142,9 @@ bool patch_work_pending() {
 bool patch_state(unsigned operation, uint32_t value) {
     if (operation == 1) { board.set_brightness(uint8_t(value)); return true; }
     if (operation == 2) { board.set_midi_interface(value != 0); return true; }
+#if CNTRL_SWITCHES
+    if (operation == 11 || operation == 12) return board.switches.shift(operation == 11);
+#endif
     if (operation >= 3 && operation <= 8) {
         if (!app_layout.apps()) return false;
         if ((operation == 7 || operation == 8) && (songs.executing() || documents.busy() || documents.dirty())) return false;

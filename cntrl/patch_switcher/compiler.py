@@ -248,6 +248,9 @@ def compile_show(
     gesture_records = [GESTURES.pack(*([65535] * 6), 0, 0, 0, 0) for _ in range(5)]
     gesture_assignments: list[tuple[str, models.SwitchAssignment, int, int]] = []
     hook_records = [SWITCH_HOOKS.pack(65535, 65535, False) for _ in range(5)]
+    shifted_records = [
+        SHIFTED_ACTIONS.pack(*([65535] * 8), 0, 0, 0, 0) for _ in range(5)
+    ]
     buttons: set[str] = set()
     for key, raw in show.switches.items():
         path = f'switches.{key}'
@@ -301,6 +304,28 @@ def compile_show(
                     gesture_assignments.append((key, assignment, node, 65535))
             gesture_records[ord(assignment.button) - ord('A')] = GESTURES.pack(
                 *events, *(round(getattr(gesture, t) * 1000) for t in GESTURE_TIMINGS)
+            )
+        if assignment.shifted is not None:
+            shifted = assignment.shifted
+            shifted_on = compiler.add(shifted.on, path + '.shifted.on')
+            shifted_off = (
+                compiler.add(shifted.off, path + '.shifted.off')
+                if shifted.off is not None
+                else 65535
+            )
+            gesture_assignments.append((key, assignment, shifted_on, shifted_off))
+            events = [65535] * 6
+            timings = [0] * 4
+            if shifted.gestures is not None:
+                gesture = shifted.gestures
+                timings = [round(getattr(gesture, t) * 1000) for t in GESTURE_TIMINGS]
+                for i, event in enumerate(GESTURE_EVENTS):
+                    if (value := getattr(gesture, event)) is not None:
+                        node = compiler.add(value, f'{path}.shifted.gestures.{event}')
+                        events[i] = node
+                        gesture_assignments.append((key, assignment, node, 65535))
+            shifted_records[ord(assignment.button) - ord('A')] = SHIFTED_ACTIONS.pack(
+                shifted_on, shifted_off, *events, *timings
             )
         name = key if assignment.name is None else assignment.name
         switch_records.append(
@@ -562,6 +587,11 @@ def compile_show(
             )
             else b''
         )
+        + (
+            b'CSHF' + b''.join(shifted_records)
+            if any(a.shifted is not None for _, a, _, _ in assignments)
+            else b''
+        )
         + app_layout
         + b'CNAM'
         + b''.join(names)
@@ -719,7 +749,13 @@ class PatchCompiler:
         elif isinstance(value, models.Reference):
             default_label = 'reference'
         elif isinstance(
-            value, (models.Brightness, models.UsbMidiInterface, models.Navigation)
+            value,
+            (
+                models.Brightness,
+                models.UsbMidiInterface,
+                models.Navigation,
+                models.Shift,
+            ),
         ):
             default_label = 'state'
         elif isinstance(
@@ -810,8 +846,16 @@ class PatchCompiler:
                     f'{path}: stock firmware or exit buttons unavailable on target'
                 )
         elif isinstance(
-            value, (models.Brightness, models.UsbMidiInterface, models.Navigation)
+            value,
+            (
+                models.Brightness,
+                models.UsbMidiInterface,
+                models.Navigation,
+                models.Shift,
+            ),
         ):
+            if isinstance(value, models.Shift) and not self.target.max_switches:
+                self.errors.append(f'{path}: shift requires target switch support')
             kind = 3
             payload = struct.pack(
                 '<BI',
@@ -1206,6 +1250,11 @@ class PatchCompiler:
         self, assignments: list[tuple[str, models.SwitchAssignment, int, int]]
     ) -> None:
         leaves = [self.dependency_leaves(i) for i in range(len(self.nodes))]
+        for root, _, path in self.browser:
+            if any(isinstance(v, models.Shift) for v, _, _ in leaves[root]):
+                self.errors.append(
+                    f'{path}: shift operations require a switch assignment'
+                )
         contexts: list[PatchCompiler] = [self]
         resolved: dict[int, tuple[PatchCompiler, int]] = {}
         for dependencies in leaves:
@@ -1228,6 +1277,7 @@ class PatchCompiler:
                     or assignment.gestures is not None
                     or assignment.enter is not None
                     or assignment.exit is not None
+                    or assignment.shifted is not None
                 ) and (
                     isinstance(value, models.StockFirmware)
                     or isinstance(value, models.Navigation)
@@ -1284,7 +1334,7 @@ class PatchCompiler:
                     else:
                         resources.add((output, 0, -1))
             for previous, mode, other in ownership:
-                if assignment.mode == mode == 'press':
+                if key == previous or assignment.mode == mode == 'press':
                     continue
                 if any(
                     o == p and (c == 0 or d == 0)
@@ -1436,6 +1486,7 @@ SWITCH = struct.Struct('<BBHH64sH')
 GESTURES_FLAG = 1 << 14
 GESTURES = struct.Struct('<10H')
 SWITCH_HOOKS = struct.Struct('<HH?')
+SHIFTED_ACTIONS = struct.Struct('<8H4H')
 GESTURE_EVENTS = (
     'release',
     'long_press',
@@ -1460,6 +1511,8 @@ STATE_OPERATIONS = {
             'undo',
             'menu',
             'back',
+            'shift',
+            'unshift',
         )
     )
 }

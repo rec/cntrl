@@ -112,22 +112,21 @@ converted output out of its own input path.
 remain valid; transformed Note On messages have matching Note Off messages.
 Test multiple rules, real-time interleaving and bounded processing under load.
 
-## 9. Shifted assignment actions
+## 9. Shifted assignment actions: implemented
 
-**Outcome:** Assignments can use a temporary shifted state to select alternate
-actions.
+One shared shift layer selects complete alternate action sets. Idempotent
+shift/unshift operations reuse the Patch executor, including gesture and hook
+invocations. Press/release pairs retain their layer; accepted work and latched
+Off cleanup finish before an assignment changes layers. Shift resets on exit
+and is never persisted. Operations change the flag without invoking actions
+or recursively selecting assignments. Indicators retain local execution and
+shared known MIDI semantics.
 
-**Scope:** Add shift/unshift operations and define alternate actions,
-repeat-selection behavior, persistence across navigation and cleanup before
-implementing the schema. Shared MIDI parameter state and selection-based enter
-and exit hooks are implemented in [switch controls](../doc/momentary-latched.md).
-Parameter identities synchronize assignment state automatically.
-
-**Dependencies:** None. Programmable switch gestures support gesture-triggered shifts.
-
-**Acceptance:** Shifted actions and restoration follow the stated lifecycle;
-indirect transitions cannot recurse indefinitely; display state follows local
-execution and does not imply acknowledgement by an external instrument.
+See [shifted actions](../doc/momentary-latched.md#shared-shift-layer) for the
+schema and lifecycle. Python round-trip tests and native sanitizer tests cover
+alternate actions, held release pairing, backpressure, indirect transitions,
+rearming, cleanup and malformed records. Physical switch latency and external
+instrument behavior remain hardware qualification tasks.
 
 ## 11. MIDI CC waveform generators
 
@@ -207,7 +206,7 @@ Start with counters (item 13), which extend existing execution paths without
 new physical inputs.
 Next implement waveforms and timed sequences (items 11 and 12).
 Routing and conversion (6 and 7) form a separate increment. Shifted assignment
-actions (9) can follow once their transition rules are agreed.
+actions (9) are implemented with the shared-layer lifecycle documented above.
 
 Hardware-dependent work (items 3 through 5) should follow available test
 hardware and actual connection needs. The graphical editor (16) can begin
