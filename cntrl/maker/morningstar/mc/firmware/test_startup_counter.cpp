@@ -9,7 +9,7 @@ struct File {
     unsigned position = 0, writes = 0, limit = StartupCounter::record_size;
     unsigned seeks = 0, fail_seek = 0, mismatch = StartupCounter::record_size;
     int read_limit = StartupCounter::record_size, verify_limit = StartupCounter::record_size;
-    bool open = true, writable = true, synced = true;
+    bool open = true, writable = true, synced = true, truncatable = true;
     explicit operator bool() const { return open; }
     unsigned size() const { return unsigned(data.size()); }
     bool seekSet(unsigned offset) { position = offset; return open && ++seeks != fail_seek; }
@@ -29,6 +29,10 @@ struct File {
         std::memcpy(data.data() + position, bytes, n); position += n; return n;
     }
     bool sync() const { return synced; }
+    bool truncate(unsigned length) {
+        if (!truncatable) return false;
+        data.resize(length); return true;
+    }
 };
 
 void test_raw_reads_preserve_every_byte() {
@@ -88,9 +92,29 @@ void test_counter_text_preserves_values_above_32_bits() {
     assert(!std::strcmp(response, "CNTRL READY 34 123 aabbccdd starts=18446744073709551615 starts_status=ready"));
 }
 
+void test_explicit_reset_replaces_both_slots_and_restarts_at_one() {
+    File file; StartupCounter counter;
+    for (unsigned i = 0; i < 10; ++i) counter.start(file);
+    assert(counter.count == 10 && file.size() == 1024);
+    assert(counter.reset(file) && counter.count == 1 && file.size() == 512);
+    StartupCounter reboot; reboot.start(file);
+    assert(reboot.status == StartupCounter::Status::ready && reboot.count == 2);
+    reboot.start(file);
+    assert(reboot.status == StartupCounter::Status::ready && reboot.count == 3);
+    file.data.assign(512, '?');
+    assert(counter.reset(file) && counter.count == 1);
+    auto before = file.data; file.truncatable = false;
+    assert(!counter.reset(file) && !std::strcmp(counter.error, "truncate") && file.data == before);
+    file.open = false;
+    assert(!counter.reset(file) && !std::strcmp(counter.error, "open") && file.data == before);
+    file.open = file.truncatable = true; file.writable = false;
+    assert(!counter.reset(file) && !std::strcmp(counter.error, "write s0 0/512"));
+}
+
 int main() {
     test_raw_reads_preserve_every_byte();
     test_counter_text_preserves_values_above_32_bits();
+    test_explicit_reset_replaces_both_slots_and_restarts_at_one();
     char response[160];
     StartupCounter absent; absent.usb_status("CNTRL READY 33 0 00000000", response, sizeof(response));
     assert(!std::strcmp(response, "CNTRL READY 33 0 00000000 starts=0 starts_status=unavailable"));

@@ -50,6 +50,15 @@ public:
     }
 
     template<class File>
+    bool reset(File &file) {
+        status = Status::error;
+        if (!file) { std::strcpy(error, "open"); return false; }
+        if (!file.truncate(0)) { std::strcpy(error, "truncate"); return false; }
+        start(file);
+        return status == Status::ready;
+    }
+
+    template<class File>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(startup_counter_start)
 #endif

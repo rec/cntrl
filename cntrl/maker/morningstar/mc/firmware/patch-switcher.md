@@ -933,6 +933,15 @@ Counts are converted to decimal text without 64-bit `printf` conversions, which
 the pedal's C library does not support. The checksum is written as two eight-digit
 32-bit hex words. This preserves the existing record format. Previously malformed
 records containing `lu` or `lx` remain invalid and are not silently reset.
+To deliberately restart the count at 1, run `cntrl status --reset-starts --port
+/dev/cu.usbmodem144682801`. This sends `CNTRL STARTS RESET`, truncates only the
+counter file and uses the normal write/sync/read-back verification to save 1.
+Reset is rejected during MIDI recording. The next firmware start records 2.
+
+Live verification on 2026-11-07: reset reported `starts=1 starts_status=ready`;
+a second status read still reported 1. Entering HalfKay and resetting the existing
+application then reported `starts=2 starts_status=ready`. The loaded setup stayed
+at format 34, 23,084 bytes, checksum `a4c4967e` across that restart.
 
 Raw counter bytes can be inspected over the same USB command transport without
 changing the file. `CNTRL STARTS SIZE` returns `CNTRL STARTS SIZE <bytes>`.

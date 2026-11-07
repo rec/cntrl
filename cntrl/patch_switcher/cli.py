@@ -113,6 +113,8 @@ class Songs(BaseModel, frozen=True):
 
 class Status(BaseModel, frozen=True):
     port: Path
+    reset_starts: bool = False
+    """Reset the saved startup counter to 1 before reporting status."""
 
 
 def compile_inputs(
@@ -469,7 +471,7 @@ def main() -> None:
         elif isinstance(command, SetupCLI):
             run_setup(command.command)
         else:
-            print(transport.device_status(command.port))
+            print(transport.device_status(command.port, command.reset_starts))
     except KeyboardInterrupt:
         sys.exit(130)
     except (OSError, ValueError) as error:

@@ -436,10 +436,9 @@ class SetupClient:
         return bytes(result)
 
 
-def device_status(port: Path) -> str:
+def device_status(port: Path, reset_starts: bool = False) -> str:
     with SerialConnection(port) as connection:
-        connection.write(b'CNTRL STATUS\n')
-        response = connection.line()
-        if response.startswith('CNTRL ERROR'):
-            raise ValueError(response)
-        return response
+        client = SetupClient(connection)
+        if reset_starts:
+            client.ok('CNTRL STARTS RESET')
+        return client.request('CNTRL STATUS')

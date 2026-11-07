@@ -1322,6 +1322,16 @@ PerformanceStatus performance_status() {
 
 void midi_status(unsigned route) { board.midi_status(route); }
 bool asset_command(const char *line) {
+    if (!std::strcmp(line, "CNTRL STARTS RESET")) {
+        if (midi_files.recorder.active()) { board.reply("CNTRL ERROR starts-recording"); return true; }
+        auto file = SD.sdfs.open(StartupCounter::path, O_CREAT | O_RDWR);
+        if (startup_counter.reset(file)) board.reply("CNTRL OK");
+        else {
+            char response[80]; std::snprintf(response, sizeof(response), "CNTRL ERROR starts-reset %s", startup_counter.error);
+            board.reply(response);
+        }
+        return true;
+    }
     if (!std::strncmp(line, "CNTRL STARTS ", 13)) {
         auto file = SD.sdfs.open(StartupCounter::path, O_RDONLY);
         char response[280]; StartupCounter::read_command(line, file, response);
