@@ -1,7 +1,7 @@
 """Back up the pedal without changing its saved data.
 
 Run from the repository root:
-    uv run scripts/backup-pedal.py backups/before-flash --port /dev/cu.usbmodem...
+    uv run rescued_scripts/backup-pedal.py backups/before-flash --port PORT
 
 The destination must not exist. It receives selection, catalogue and status text,
 the binary song library, and a setups/ directory containing each valid current
