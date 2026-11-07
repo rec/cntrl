@@ -11,16 +11,17 @@ class SdSlots : public cntrl::Storage {
 public:
     bool ready = false;
     unsigned size(unsigned slot) override {
-        return open(slot) ? unsigned(readers_[slot].size()) : 0;
+        return open(slot) ? unsigned(reader_.size()) : 0;
     }
     bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned length) override {
-        return open(slot) && readers_[slot].seekSet(offset)
-            && readers_[slot].read(data, length) == int(length);
+        return open(slot) && reader_.seekSet(offset)
+            && reader_.read(data, length) == int(length);
     }
     bool begin(unsigned slot) override {
         if (!ready) return false;
-        readers_[slot].close();
-        writer_ = SD.sdfs.open(names_[slot], O_RDWR | O_CREAT | O_TRUNC);
+        if (!SD.sdfs.exists("/cntrl/movies") && !SD.sdfs.mkdir("/cntrl/movies", true)) return false;
+        writer_.close(); writer_key_ = slot;
+        writer_ = SD.sdfs.open(temporary_, O_RDWR | O_CREAT | O_TRUNC);
         return bool(writer_);
     }
     bool write(const uint8_t *data, unsigned length) override {
@@ -28,18 +29,26 @@ public:
     }
     bool finish() override {
         if (!writer_) return false;
-        bool synced = writer_.sync();
+        uint8_t trailer[4];
+        bool synced = writer_.fileSize() >= 20 && writer_.seekSet(writer_.fileSize() - 4)
+            && writer_.read(trailer, 4) == 4 && !std::memcmp(trailer, "DONE", 4) && writer_.sync();
         writer_.close();
-        return synced;
+        char path[48]; filename(writer_key_, path);
+        return synced && !SD.sdfs.exists(path) && SD.sdfs.rename(temporary_, path);
     }
 private:
     bool open(unsigned slot) {
         if (!ready) return false;
-        if (!readers_[slot]) readers_[slot] = SD.sdfs.open(names_[slot], O_RDONLY);
-        return bool(readers_[slot]);
+        if (!reader_ || reader_key_ != slot) {
+            reader_.close(); reader_key_ = slot;
+            char path[48]; filename(slot, path); reader_ = SD.sdfs.open(path, O_RDONLY);
+        }
+        return bool(reader_);
     }
-    FsFile readers_[2], writer_;
-    const char *names_[2] = {"/cntrl-splash-0.bin", "/cntrl-splash-1.bin"};
+    static void filename(uint32_t key, char *path) { std::snprintf(path, 48, "/cntrl/movies/%08lx.bin", (unsigned long)key); }
+    FsFile reader_, writer_;
+    uint32_t reader_key_ = 0, writer_key_ = 0;
+    const char *temporary_ = "/cntrl/movies/upload.tmp";
 };
 
 // The two identical outer rows share a single physical pixel transfer.

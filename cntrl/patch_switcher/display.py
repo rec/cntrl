@@ -331,6 +331,8 @@ def tag_style(names: list[str], tags: dict[str, models.Style]) -> models.Style:
 def field_value(
     name: str, patch: DisplayPatch, show: models.Setup
 ) -> str | int | float | bool | None:
+    if name == 'splash_movie':
+        return bool(show.splash_movie)
     if name == 'navigation.hold_delay':
         return show.navigation.hold_delay
     if name.startswith('scrolling.'):
@@ -394,7 +396,7 @@ FIELDS = {
     'instrument': 6,
     'name': 7,
     'brightness': 16,
-    'splash': 17,
+    'splash_movie': 17,
     'is_midi_interface': 18,
     'screensaver_timeout': 19,
     'navigation.hold_delay': 20,
@@ -402,6 +404,8 @@ FIELDS = {
     'scrolling.vertical_duration': 23,
 }
 SOURCE_FIELDS = (
+    'splash_movie',
+    'idle_movie',
     'apps',
     'pages',
     'seed',

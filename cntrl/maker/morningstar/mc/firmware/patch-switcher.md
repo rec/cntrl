@@ -6,6 +6,13 @@ format numbers and measurements; they are historical, not the current build.
 
 ## Setup residency and saves
 
+Current movie configuration uses `splash_movie` and `idle_movie` filename lists,
+with automatic preparation and upload alongside setups. Empty lists disable that
+category. Movies stream from SD and keep their pixels out of RAM2; references
+are included in compiled setup sizes. See the
+[movie workflow](../splash/README.md). Document format is now 34. Historical
+single-asset and `splash` boolean descriptions below are superseded.
+
 Runtime setups come from one bundle in `/cntrl/setups/.bundle/0.bin` and `1.bin`.
 The build includes requested setups and their companions in a sorted index table.
 A fitting collection stays resident in RAM2; otherwise the bounded LRU is

@@ -115,7 +115,9 @@ class Status(BaseModel, frozen=True):
 
 
 def compile_inputs(
-    command: Sources, assets: dict[str, dict[int, bytes]] | None = None
+    command: Sources,
+    assets: dict[str, dict[int, bytes]] | None = None,
+    movies: dict[int, bytes] | None = None,
 ) -> setup_bundle.SetupBundle:
     errors: list[str] = []
 
@@ -187,6 +189,7 @@ def compile_inputs(
                     target,
                     fonts,
                     sources,
+                    movies,
                 )
                 if assets is not None:
                     assets[e.name] = fonts
@@ -236,7 +239,10 @@ def run_setup(
         history.run(command)
         return
     assets: dict[str, dict[int, bytes]] = {}
-    bundle = compile_inputs(command, assets) if isinstance(command, Copy) else None
+    movies: dict[int, bytes] = {}
+    bundle = (
+        compile_inputs(command, assets, movies) if isinstance(command, Copy) else None
+    )
     with transport.SerialConnection(command.port) as connection:
         client = transport.SetupClient(connection)
         if isinstance(command, Set):
@@ -278,6 +284,8 @@ def run_setup(
                 for name in bundle.names:
                     for key, font in assets[name].items():
                         client.copy_font(key, font)
+                for data in movies.values():
+                    client.copy_movie(data)
                 client.copy_bundle(bundle.pack(), command.overwrite)
                 report_bundle(bundle)
             except (OSError, ValueError) as error:
@@ -355,7 +363,13 @@ def run_setup(
                                 raise ValueError('invalid font asset path')
                             key = int(Path(p).stem, 16)
                             data = client.download_font(key)
-                            save_font(command.directory, key, data)
+                            save_asset(
+                                command.directory / 'fonts' / f'{key:08x}.cfont', data
+                            )
+                    settings = models.Setup.model_validate(tomlkit.parse(text).unwrap())
+                    for p in settings.splash_movie + settings.idle_movie:
+                        key = int(Path(p).stem, 16)
+                        save_asset(command.directory / p, client.download_movie(key))
                     destination = command.directory / f'{n}.toml'
                     # Complete transfer before touching the destination; publish
                     # a synced sibling atomically, including overwrite protection.
@@ -376,12 +390,11 @@ def run_setup(
                     print(destination)
 
 
-def save_font(directory: Path, key: int, data: bytes) -> None:
-    destination = directory / 'fonts' / f'{key:08x}.cfont'
+def save_asset(destination: Path, data: bytes) -> None:
     destination.parent.mkdir(exist_ok=True)
     if destination.exists():
         if destination.read_bytes() != data:
-            raise ValueError(f'{destination}: font checksum collision')
+            raise ValueError(f'{destination}: asset checksum collision')
         return
     with NamedTemporaryFile(
         dir=destination.parent, prefix='.cntrl-', delete=False
@@ -435,10 +448,15 @@ def main() -> None:
     try:
         if isinstance(command, Compile):
             assets: dict[str, dict[int, bytes]] = {}
-            bundle = compile_inputs(command, assets)
+            movies: dict[int, bytes] = {}
+            bundle = compile_inputs(command, assets, movies)
             for fonts in assets.values():
                 for key, font in fonts.items():
-                    save_font(command.output.parent, key, font)
+                    save_asset(
+                        command.output.parent / 'fonts' / f'{key:08x}.cfont', font
+                    )
+            for key, movie in movies.items():
+                save_asset(command.output.parent / 'movies' / f'{key:08x}.cnsa', movie)
             command.output.write_bytes(bundle.pack())
             report_bundle(bundle)
         elif isinstance(command, Songs):

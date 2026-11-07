@@ -560,7 +560,7 @@ def run(command: Copy | Download) -> None:
             library = decode(download(client))
             for path in library.fonts.values():
                 key = int(Path(path).stem, 16)
-                cli.save_font(command.directory, key, client.download_font(key))
+                cli.save_asset(command.directory / path, client.download_font(key))
         companion_names = references(library)
         if companion_names:
             cli.run_setup(

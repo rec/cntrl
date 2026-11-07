@@ -504,6 +504,9 @@ public:
     void set_splash(bool enabled, uint32_t idle_ms) override {
         splash_session.configure(enabled, idle_ms, millis());
     }
+    void set_movies(const uint8_t *startup, unsigned startup_count, const uint8_t *idle, unsigned idle_count) override {
+        splash_session.movies(startup, startup_count, idle, idle_count);
+    }
     void set_animation_color_cycle(bool enabled) override {
         splash_panels.set_color_cycle(enabled);
     }
@@ -1256,7 +1259,8 @@ cntrl::splash::SdSlots splash_card;
 cntrl::splash::Receiver splash_assets(splash_card, board);
 cntrl::splash::Panels splash_panels;
 cntrl::splash::Player splash_player(splash_assets, splash_panels);
-cntrl::splash::Session splash_session(splash_assets, splash_player);
+unsigned random_movie(unsigned count) { return unsigned(random(count)); }
+cntrl::splash::Session splash_session(splash_assets, splash_player, random_movie);
 
 StorageListing storage_listing;
 void storage_info(bool scan) {
@@ -1366,6 +1370,7 @@ FLASHMEM void initialize_target() {
     font_files.ready = card.ready;
     splash_card.ready = card.ready;
     splash_assets.boot();
+    randomSeed(Teensy3Clock.get() ^ ARM_DWT_CYCCNT);
     if (card.ready && !setup_storage.boot()) board.error("Setup bundle invalid");
     documents.boot();
     if (card.ready && !songs.boot()) board.error("Song storage invalid");

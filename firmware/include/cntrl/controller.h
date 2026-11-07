@@ -105,9 +105,8 @@ public:
             hardware_.set_usb_midi(document.usb_device_midi(), document.usb_host_midi());
             hardware_.set_midi_interface(document.is_midi_interface());
             hardware_.set_animation_color_cycle(document.animation_color_cycle());
-            const auto layout = document.app_layout();
-            const bool empty = !layout.apps() && !layout.pages();
-            hardware_.set_splash(empty || document.splash(), empty ? 1 : document.screensaver_timeout());
+            hardware_.set_movies(document.movie_keys(false), document.movies(false), document.movie_keys(true), document.movies(true));
+            hardware_.set_splash(document.splash(), document.screensaver_timeout());
         }
         brightness_ = document.brightness();
         selected_ = depth_ = 0;

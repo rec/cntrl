@@ -3,7 +3,7 @@
 # Empty sequences let the samples be browsed without sending MIDI.
 fill_in_styles = false
 animation_color_cycle = false
-splash = false
+splash_movie = ''
 screensaver_timeout = '0 s'
 
 [fonts]

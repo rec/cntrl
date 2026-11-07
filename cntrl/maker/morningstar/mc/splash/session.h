@@ -1,13 +1,19 @@
 #pragma once
 #include "receiver.h"
+#include <cstdlib>
 
 namespace cntrl::splash {
 // Own startup splash, idle animation and nonblocking backlight transitions.
 class Session {
 public:
-    Session(Receiver &assets, Player &player) : assets_(assets), player_(player) {}
+    Session(Receiver &assets, Player &player, unsigned (*choose)(unsigned) = random_index)
+        : assets_(assets), player_(player), choose_(choose) {}
+    void movies(const uint8_t *startup, unsigned startup_count, const uint8_t *idle, unsigned idle_count) {
+        stop(); startup_ = startup; startup_count_ = startup_count;
+        idle_ = idle; idle_count_ = idle_count;
+    }
     void configure(bool enabled, uint32_t idle_ms, uint32_t now) {
-        stop(); pending_ = enabled; idle_ms_ = idle_ms;
+        stop(); pending_ = enabled && startup_count_; idle_ms_ = idle_count_ ? idle_ms : 0;
         last_input_ = now; clock_started_ = true;
     }
     void stop() {
@@ -51,13 +57,13 @@ public:
         }
         if (pending_ && !assets_.busy()) {
             pending_ = false;
-            running_ = player_.start(now);
+            running_ = select(false) && player_.start(now);
             if (running_) {
                 to_animation_ = true; fade_ = Fade::painting; duration_ = 2000;
             }
         }
         if (!pending_ && !running_ && fade_ == Fade::none && idle_ms_
-            && !pressed_ && !busy && assets_.size()
+            && !pressed_ && !busy && idle_count_
             && uint32_t(now - last_input_) >= idle_ms_) {
             saver_ = to_animation_ = true;
             fade_ = Fade::out; started_ = now; duration_ = 4000; from_ = 1000;
@@ -65,7 +71,7 @@ public:
         if (running_ && player_.poll(now, false) == Step::failed) stop();
         if (fade_ == Fade::out && uint32_t(now - started_) >= duration_) {
             if (to_animation_) {
-                running_ = player_.start(now);
+                running_ = select(true) && player_.start(now);
                 if (running_) fade_ = Fade::painting;
                 else stop();
             } else {
@@ -92,6 +98,12 @@ public:
         bool redraw = redraw_; redraw_ = false; return redraw;
     }
 private:
+    static unsigned random_index(unsigned count) { return unsigned(std::rand()) % count; }
+    bool select(bool idle) {
+        unsigned count = idle ? idle_count_ : startup_count_;
+        const uint8_t *keys = idle ? idle_ : startup_;
+        return count && assets_.choose(u32(keys + 4 * choose_(count)));
+    }
     enum class Fade { none, out, painting, in };
     uint32_t level(uint32_t now) const {
         uint32_t elapsed = now - started_;
@@ -107,6 +119,9 @@ private:
     }
     Receiver &assets_;
     Player &player_;
+    unsigned (*choose_)(unsigned);
+    const uint8_t *startup_ = nullptr, *idle_ = nullptr;
+    unsigned startup_count_ = 0, idle_count_ = 0;
     bool running_ = false, pending_ = false, held_ = false, redraw_ = false;
     bool saver_ = false, to_animation_ = false, clock_started_ = false;
     bool first_image_ = false;

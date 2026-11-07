@@ -1,12 +1,33 @@
 # MC6 Pro splash animation
 
-The patch-switcher target integrates this player and upload protocol. Set
-`splash = true` in the show (`"splash": true` in JSON) to play the installed
-animation on boot or show activation. The default is true: omitting the setting
-uses the installed animation, unless `splash = false` is explicit. With no active
-setup, startup also uses the installed default animation. Upload the prepared
-asset before relying on playback. A missing or invalid asset
-falls through to the normal interface.
+Set `splash_movie` for startup/setup activation and `idle_movie` for the idle
+screensaver. Both default to an empty list, which means no animation. An empty
+string also disables that category. A string is split on colons; a list contains
+non-empty filename strings. Empty entries within a non-empty list are rejected.
+
+```toml
+splash_movie = '../../../../../assets/spiral.gif'
+idle_movie = ['../../../../../assets/spiral.gif', 'another.webp']
+screensaver_timeout = '30 s'
+```
+
+Paths are relative to the setup source file. GIF/WebP animations, PNG/JPEG stills
+and prepared `.cnsa` files are supported. Untimed stills use a one-second frame.
+Compilation prepares every file with the existing Pillow dependency. Setup
+copying uploads and verifies movies before installing the setup. Downloading a
+setup saves its movies in `movies/` next to the editable TOML.
+
+One movie is chosen at random from the relevant list whenever startup or idle
+playback begins, then loops until dismissed. The two categories are independent.
+Missing or invalid SD assets fall through to the normal interface. No selected
+setup means no movie. These fields replace `splash`; recompile setups for
+document version 34. Existing assets are not migrated.
+
+Movies stream from SD one 320-byte row at a time using RAM1 stack space. Full
+`.cnsa` sizes do not consume RAM2. Keys and portable filenames are included in
+compiled setup sizes and therefore in the setup residency/cache budget.
+`total_ram2_needs()` uses an estimated firmware allowance, not a measured
+high-water report.
 
 Startup playback turns the backlight off immediately, paints the first complete
 animation frame while dark, then fades up to the show's brightness over 2,000 ms
@@ -34,7 +55,7 @@ the configured brightness immediately.
 
 Set `screensaver_timeout = 3` in a TOML show, or `"screensaver_timeout": 3` in
 JSON, for a three-second physical-input idle timeout. The default is 0 (disabled).
-It uses the installed animation and does not require startup `splash` to be true.
+It uses `idle_movie` independently of `splash_movie`; an empty idle list disables it.
 The pman test show enables both. Presses and releases reset the timer, and it
 never starts while a button remains held. Missing assets leave the normal UI up.
 
@@ -88,8 +109,8 @@ not apply to this full-bleed splash.
 
 ## Prepare on the Mac
 
-FFmpeg and ffprobe must already be available on PATH. No Python dependency was
-added. GIF decoding/compositing, resizing, cropping, mirroring, colour conversion
+Pillow is already a project dependency. Image decoding/compositing, resizing,
+cropping, mirroring, colour conversion
 and frame-timing conversion all happen here, not on the pedal.
 
 From the repository root:
@@ -187,15 +208,15 @@ pman and `CNTRL READY 8 23390 e12bd7da` unchanged. Image SHA-256:
   frame durations with a wrap-safe millisecond clock, and returns `dismissed`
   immediately when any button is pressed. That press must not reach the normal
   patch controller. One poll reads/transmits at most one 320-byte row.
-- `receiver.h`: independent upload receiver and active-asset `Source`. It uses
-  two slots and never overwrites the active slot. Chunks are acknowledged before
+- `receiver.h`: independent upload receiver and selected-asset `Source`. Movies
+  are addressed by CRC32 and stored independently. Chunks are acknowledged before
   the host sends more. It validates the asset geometry, durations and transfer
   CRC, flushes a final commit marker, reads back and verifies the stored asset,
-  then activates it. Boot validation and commit readback are incremental, with
+  then makes it available for selection. Commit readback is incremental, with
   at most 512 bytes per CRC read. Individual SD calls may still block.
-- `board.h`: SD/SdFat slot backend, with persistent reader handles, and an output
-  adapter that reuses the existing grouped SPI display driver. Reserved files
-  are `/cntrl-splash-0.bin` and `/cntrl-splash-1.bin`, separate from show files.
+- `board.h`: SD/SdFat backend with a persistent reader and an output adapter.
+  `/cntrl/movies/CRC32.bin` contains an envelope and the `.cnsa` bytes.
+  Upload writes `upload.tmp` before publishing the completed file.
   The application still initializes SD and sets `SdSlots.ready`.
 - `cli.py`: Pydantic/Tyro preparation and chunked serial-upload commands. The
   uploader reuses the existing serial connection class without modifying it.
@@ -226,12 +247,13 @@ The host validates the prepared asset before opening serial. All messages are
 newline-terminated ASCII, except the known-length binary chunks:
 
 1. Host: `CNTRL SPLASH BEGIN SIZE CRC32_HEX`
-2. Pedal: `CNTRL SPLASH SEND`
+2. Pedal: `CNTRL SPLASH SEND`, or `CNTRL SPLASH EXISTS` for an installed asset.
 3. Host: up to 512 raw bytes, then waits for `CNTRL SPLASH NEXT RECEIVED`.
 4. After the final bytes and durable readback, pedal:
    `CNTRL SPLASH DONE SIZE CRC32_HEX`.
-5. Host queries `CNTRL SPLASH STATUS` and verifies
-   `CNTRL SPLASH READY SIZE CRC32_HEX`.
+5. Host queries `CNTRL SPLASH SIZE CRC32_HEX`, then
+   `CNTRL SPLASH READ CRC32_HEX OFFSET` for 128-byte hex chunks. It compares all
+   stored bytes with the prepared asset, including when the asset already exists.
 
 Failures use `CNTRL SPLASH ERROR REASON`. Incomplete transfers expire after
 10 seconds without incoming data. The previous committed asset remains usable.
@@ -246,10 +268,10 @@ u16 height 128, u16 frame count, u32 total bytes. Every frame is u32 duration in
 milliseconds followed by 128 pairs of rows: normal outer-screen row, then
 pre-mirrored centre row. Each row is 320 bytes. Every frame is independent.
 
-Each SD slot wraps the entire asset with a 16-byte header (`CNSP`, u32 generation,
+Each SD movie wraps the entire asset with a 16-byte header (`CNSP`, u32 zero,
 u32 asset bytes, u32 whole-asset CRC32) and a final four-byte `DONE` marker.
-Boot chooses the newest CRC-valid committed generation. No vendor data or show
-files are written by this backend.
+Playback opens the asset chosen from the setup's movie keys. No vendor data or
+setup files are written by this backend.
 
 ## Verification
 

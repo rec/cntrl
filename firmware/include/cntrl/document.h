@@ -11,7 +11,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 33;
+constexpr unsigned document_version = 34;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -167,6 +167,11 @@ public:
             const uint8_t *p = bytes + layout + 6 + apps * 35 + i * 2;
             if (p[0] > 10 || p[1] > 3 || (p[0] == 10 && p[1])) return false;
         }
+        if (names + 8 > length || std::memcmp(bytes + names, "CMOV", 4)) return false;
+        unsigned movie_count = unsigned(u16(bytes + names + 4)) + u16(bytes + names + 6);
+        if (movie_count > (length - names - 8) / 4) return false;
+        if (bool(bytes[19] & 1) != bool(u16(bytes + names + 4))) return false;
+        names += 8 + movie_count * 4;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -383,9 +388,14 @@ public:
         return u16(p) != 65535 ? p : nullptr;
     }
     unsigned page_section_size() const {
-        const auto layout = app_layout();
-        return unsigned(layout.records - bank(patches())) + 6 + layout.apps() * 35 + layout.pages() * 2;
+        return unsigned(movie_section() - bank(patches())) + 8 + 4 * (movies(false) + movies(true));
     }
+    const uint8_t *movie_section() const {
+        const auto layout = app_layout();
+        return layout.records + 6 + layout.apps() * 35 + layout.pages() * 2;
+    }
+    unsigned movies(bool idle) const { return u16(movie_section() + (idle ? 6 : 4)); }
+    const uint8_t *movie_keys(bool idle) const { return movie_section() + 8 + (idle ? 4 * movies(false) : 0); }
     AppLayout app_layout() const {
         const uint8_t *p = switch_hook_section();
         if (!std::memcmp(p, "CHOK", 4)) p += 29;

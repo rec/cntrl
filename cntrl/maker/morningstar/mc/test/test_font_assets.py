@@ -530,7 +530,7 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
     if family in ('StillTime', 'CaveatBold'):
         assert family in exported['fonts']
     for key, bitmap in assets.items():
-        cli.save_font(tmp_path, key, bitmap)
+        cli.save_asset(tmp_path / 'fonts' / f'{key:08x}.cfont', bitmap)
     path = tmp_path / 'exported.toml'
     path.write_text(resolved.export(data))
     command = cli.Sources(

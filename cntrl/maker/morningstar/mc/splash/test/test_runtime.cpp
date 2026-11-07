@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+uint8_t movie_keys[4] = {};
+
 struct Device : TestPatchHardware, cntrl::Replies, cntrl::splash::Replies {
     cntrl::splash::Session *session = nullptr;
     std::vector<std::string> replies;
@@ -52,7 +54,7 @@ void test_performance_c_during_idle_fade(cntrl::splash::Receiver &assets, const 
     for (unsigned phase = 0; phase < 3; ++phase) {
         Device device; Panels panels;
         cntrl::splash::Player player(assets, panels);
-        cntrl::splash::Session session(assets, player); device.session = &session;
+        cntrl::splash::Session session(assets, player); session.movies(movie_keys, 1, movie_keys, 1); device.session = &session;
         cntrl::Document document; assert(document.load(show.data(), unsigned(show.size()), device));
         TestController controller(device); controller.activate(document);
         session.configure(false, 3000, 0); session.poll(0, true); session.poll(3000, true);
@@ -84,7 +86,7 @@ void test_cancel_idle_entry(cntrl::splash::Receiver &assets, const std::vector<u
         Device device;
         Panels panels;
         cntrl::splash::Player player(assets, panels);
-        cntrl::splash::Session session(assets, player);
+        cntrl::splash::Session session(assets, player); session.movies(movie_keys, 1, movie_keys, 1);
         device.session = &session;
         TestController controller(device);
         cntrl::Document document;
@@ -134,7 +136,7 @@ int main(int argc, char **argv) {
     cntrl::Documents documents(show_card, device, controller, device);
     cntrl::splash::Receiver assets(asset_card, device);
     cntrl::splash::Player player(assets, panels);
-    cntrl::splash::Session session(assets, player);
+    cntrl::splash::Session session(assets, player); session.movies(movie_keys, 1, movie_keys, 1);
     cntrl::splash::Router router(documents, assets, session, device, storage_info, nullptr, diagnostic_command);
     device.session = &session;
     assets.boot();
@@ -159,7 +161,7 @@ int main(int argc, char **argv) {
     std::vector<uint8_t> show;
     for (unsigned i = 0; i < hex.size(); i += 2)
         show.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
-    show[19] = 1;
+    show[19] &= ~1u;
     char begin[96];
     std::snprintf(begin, sizeof(begin), "CNTRL SETUP PUT 54657374 %u %08lx 0", unsigned(show.size()),
         (unsigned long)cntrl::checksum(show.data(), unsigned(show.size())));
@@ -184,6 +186,7 @@ int main(int argc, char **argv) {
     constexpr char embedded[] = "\nCNTRL STORAGE SCAN\n";
     std::memcpy(animation.data() + 1000, embedded, sizeof(embedded) - 1);
     uint32_t crc = cntrl::checksum(animation.data(), unsigned(animation.size()));
+    put32(movie_keys, crc);
     std::snprintf(begin, sizeof(begin), "CNTRL SPLASH BEGIN %u %08lx", unsigned(animation.size()),
                   (unsigned long)crc);
     command(router, begin);
@@ -202,7 +205,7 @@ int main(int argc, char **argv) {
 
     {
         Player boot_player(assets, panels);
-        Session boot(assets, boot_player);
+        Session boot(assets, boot_player); boot.movies(movie_keys, 1, movie_keys, 1);
         boot.configure(true, 0, 0);
         assert(boot.brightness(192, 0) == 0);
         for (unsigned i = 0; i < 255; ++i) {
@@ -218,14 +221,14 @@ int main(int argc, char **argv) {
     }
     {
         Player boot_player(assets, panels);
-        Session boot(assets, boot_player);
+        Session boot(assets, boot_player); boot.movies(movie_keys, 1, movie_keys, 1);
         boot.configure(false, 0, 0);
         assert(!boot.poll(0) && boot.brightness(192, 0) == 0);
         assert(!boot.poll(1, true) && boot.brightness(192, 1) == 192);
     }
     {
         Player boot_player(assets, panels);
-        Session boot(assets, boot_player);
+        Session boot(assets, boot_player); boot.movies(movie_keys, 1, movie_keys, 1);
         boot.configure(true, 0, 0);
         assert(boot.controls(1, 0)); // Cancelling before the asset opens also stays dark.
         assert(!boot.poll(0) && boot.brightness(192, 0) == 0);
@@ -233,7 +236,7 @@ int main(int argc, char **argv) {
     }
     {
         Player boot_player(assets, panels);
-        Session boot(assets, boot_player);
+        Session boot(assets, boot_player); boot.movies(movie_keys, 1, movie_keys, 1);
         boot.configure(true, 0, 0);
         assert(boot.poll(0));
         assert(boot.controls(1, 1)); // Dismiss a partially painted startup frame.
@@ -245,7 +248,7 @@ int main(int argc, char **argv) {
     }
     {
         Player boot_player(assets, panels);
-        Session boot(assets, boot_player);
+        Session boot(assets, boot_player); boot.movies(movie_keys, 1, movie_keys, 1);
         boot.configure(true, 0, 0);
         for (unsigned i = 0; i < 256; ++i) assert(boot.poll(0));
         assert(boot.poll(1000) && boot.brightness(192, 1000) == 48);

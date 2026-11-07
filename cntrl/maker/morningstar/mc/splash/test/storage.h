@@ -2,9 +2,10 @@
 #include <cntrl/hardware.h>
 #include <algorithm>
 #include <vector>
+#include <map>
 
 struct Memory : cntrl::Storage {
-    std::vector<uint8_t> slots[2];
+    std::map<unsigned, std::vector<uint8_t>> slots;
     unsigned selected = 0, maximum_read = 0;
     int remaining = -1;
     unsigned size(unsigned slot) override { return unsigned(slots[slot].size()); }

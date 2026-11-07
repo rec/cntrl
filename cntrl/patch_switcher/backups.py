@@ -38,6 +38,8 @@ def restore_setups(directory: Path, port: Path) -> None:
         client = transport.SetupClient(connection)
         for key, data in fonts.items():
             client.copy_font(key, data)
+        for p in sorted((folder / 'movies').glob('*.cnsa')):
+            client.copy_movie(p.read_bytes())
         current_bundle = client.download_bundle()
         existing = setup_bundle.unpack(current_bundle) if current_bundle else {}
         combined = setup_bundle.reindex(existing | setups)
@@ -103,6 +105,9 @@ def verify_after_flashing(directory: Path, port: Path) -> None:
         for key, data in fonts.items():
             if client.download_font(key) != data:
                 raise ValueError(f'{key:08x}: font differs from the backup')
+        for p in sorted((directory / 'setups/movies').glob('*.cnsa')):
+            if client.download_movie(int(p.stem, 16)) != p.read_bytes():
+                raise ValueError(f'{p.name}: movie differs from the backup')
         if songs.download(client) != library:
             raise ValueError('song library differs from the backup')
     print(

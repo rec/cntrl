@@ -16,7 +16,7 @@ public:
     Documents(SetupStorage &storage, Hardware &hardware, Controller &controller, Replies &replies)
         : revisions_(storage), storage_(storage), hardware_(hardware), controller_(controller), replies_(replies) {}
     void boot() {
-        empty(true);
+        empty();
         if (!storage_.available()) { std::strcpy(boot_error_, "storage-unavailable"); return; }
         int stored = read_selection();
         if (stored < 0) { std::strcpy(boot_error_, "selection-record-invalid"); return; }
@@ -532,13 +532,14 @@ private:
         char response[128]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s", message);
         if (quiet_) { hardware_.error(message); quiet_ = false; } else replies_.reply(response);
     }
-    void empty(bool startup = false) {
+    void empty() {
         document_ = Document(); controller_.deactivate();
         hardware_.configure_apps(document_);
         active_.clear();
         constexpr uint8_t off[4] = {}; hardware_.configure_trs_ports(off);
         hardware_.begin_fonts(); hardware_.finish_fonts(true);
-        hardware_.set_brightness(192); hardware_.set_splash(startup, 0);
+        hardware_.set_movies(nullptr, 0, nullptr, 0);
+        hardware_.set_brightness(192); hardware_.set_splash(false, 0);
         hardware_.set_midi_interface(false);
         hardware_.set_animation_color_cycle(false);
         Pane view; view.lines[1].centered = true;

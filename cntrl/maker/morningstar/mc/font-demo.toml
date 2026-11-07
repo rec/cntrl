@@ -1,6 +1,6 @@
 # Three independently styled lines, using the existing page renderer.
 brightness = 192
-splash = false
+splash_movie = ''
 screensaver_timeout = '0 s'
 pad = '4 px'
 

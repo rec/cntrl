@@ -1,4 +1,4 @@
-#include "../receiver.h"
+#include "../session.h"
 #include "../color_cycle.h"
 #include "storage.h"
 #include <algorithm>
@@ -44,6 +44,38 @@ void upload(Receiver &receiver, const std::vector<uint8_t> &asset, uint32_t crc)
         if (!receiver.busy()) break; // Host stops sending after a rejected chunk.
     }
     settle(receiver);
+}
+
+unsigned choices = 0;
+unsigned alternate(unsigned count) { return choices++ % count; }
+
+void test_independent_movie_lists(Receiver &assets, uint32_t first, uint32_t second, uint32_t idle) {
+    Screen screen; Player player(assets, screen);
+    Session session(assets, player, alternate);
+    uint8_t startup_keys[8], idle_key[4];
+    put32(startup_keys, first); put32(startup_keys + 4, second); put32(idle_key, idle);
+    session.movies(startup_keys, 2, idle_key, 1);
+    choices = 0;
+    session.configure(true, 100, 0);
+    assert(session.poll(0) && screen.last_pixel == 17);
+    session.configure(true, 100, 0);
+    assert(session.poll(0) && screen.last_pixel == 42 && choices == 2);
+    session.configure(false, 100, 0);
+    session.take_redraw(); session.poll(0, true);
+    assert(!session.poll(100, true));
+    assert(session.brightness(192, 2100) == 48);
+    assert(session.poll(4100)); // Start painting after the four-second fade.
+    assert(session.poll(4100) && screen.last_pixel == 77 && choices == 3);
+    for (unsigned i = 1; i < height * 2; ++i) session.poll(4100);
+    assert(session.brightness(192, 4100) == 0);
+    session.poll(6100);
+    assert(session.brightness(192, 6100) == 48);
+    session.movies(nullptr, 0, idle_key, 1);
+    session.configure(true, 0, 0);
+    assert(!session.poll(0, true) && choices == 3); // Empty startup is disabled.
+    session.movies(startup_keys, 2, nullptr, 0);
+    session.configure(false, 100, 0);
+    assert(!session.poll(10000, true) && choices == 3); // Empty idle is disabled.
 }
 
 int main() {
@@ -131,14 +163,15 @@ int main() {
 
     // A corrupt transfer must leave the previously committed asset readable.
     auto corrupt = asset; corrupt.back() ^= 1;
-    upload(receiver, corrupt, crc);
+    upload(receiver, corrupt, crc ^ 1u);
     assert(replies.lines.back() == "CNTRL SPLASH ERROR checksum");
     Receiver reboot(memory, replies); reboot.boot(); settle(reboot);
+    assert(reboot.choose(crc));
     assert(reboot.size() == asset.size());
     assert(reboot.read(0, readback.data(), unsigned(readback.size())) && readback == asset);
 
     // Interruption at envelope, payload, trailer and verification boundaries.
-    auto newer = asset; newer.back() = 42;
+    auto newer = asset; newer.back() = 42; newer[header_bytes + 4] = 42;
     uint32_t new_crc = ~crc_update(0xffffffff, newer.data(), unsigned(newer.size()));
     for (unsigned limit : {0u, 15u, 16u, 17u, 528u, unsigned(asset.size()),
                           unsigned(asset.size()) + 16, unsigned(asset.size()) + 19}) {
@@ -146,12 +179,18 @@ int main() {
         Receiver writer(interrupted, replies); writer.boot(); settle(writer);
         upload(writer, newer, new_crc);
         Receiver recovery(interrupted, replies); recovery.boot(); settle(recovery);
+        assert(recovery.choose(crc));
         assert(recovery.size() == asset.size());
         assert(recovery.read(0, readback.data(), unsigned(readback.size())) && readback == asset);
     }
     upload(receiver, newer, new_crc);
     Receiver latest(memory, replies); latest.boot(); settle(latest);
+    assert(latest.choose(new_crc));
     assert(latest.read(0, readback.data(), unsigned(readback.size())) && readback == newer);
+    auto idle = asset; idle[header_bytes + 4] = 77;
+    uint32_t idle_crc = ~crc_update(0xffffffff, idle.data(), unsigned(idle.size()));
+    upload(receiver, idle, idle_crc);
+    test_independent_movie_lists(receiver, crc, new_crc, idle_crc);
 
     auto two_frames = asset;
     two_frames.insert(two_frames.end(), asset.begin() + header_bytes, asset.end());
@@ -184,7 +223,8 @@ int main() {
     assert(replies.lines.back() == "CNTRL SPLASH ERROR timeout");
 
     Memory broken = memory;
-    broken.slots[0].resize(5); broken.slots[1].resize(5);
+    broken.slots[crc].resize(5);
     Receiver empty(broken, replies); empty.boot(); settle(empty);
+    assert(!empty.choose(crc));
     Player unavailable(empty, screen); assert(!unavailable.start(0));
 }

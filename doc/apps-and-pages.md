@@ -57,8 +57,9 @@ expression assignments and keyboard shortcuts live in `[page_settings]`.
 
 ## Empty setups
 
-Both collections may be explicitly empty. This setup runs only the screen saver,
-regardless of the normal splash and idle-timeout preferences.
+Both collections may be explicitly empty. To run only animations, configure
+`splash_movie` and/or `idle_movie` and a positive `screensaver_timeout`. Empty
+movie categories remain disabled even when there are no apps or pages.
 
 ```toml
 apps = {}

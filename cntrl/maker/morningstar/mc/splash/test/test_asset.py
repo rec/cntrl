@@ -8,6 +8,7 @@ from pathlib import Path
 from zlib import crc32
 
 import pytest
+from PIL import Image, ImageDraw
 
 from cntrl.maker.morningstar.mc.splash import asset, cli
 
@@ -30,25 +31,12 @@ def test_mac_prepares_outer_and_mirrored_centre_rows() -> None:
 
 def test_gif_is_enlarged_and_centre_cropped(tmp_path: Path) -> None:
     source = tmp_path / 'border.gif'
-    subprocess.run(
-        [
-            'ffmpeg',
-            '-v',
-            'error',
-            '-f',
-            'lavfi',
-            '-i',
-            'color=blue:size=160x128,'
-            'drawbox=x=0:y=0:w=iw:h=ih:color=red:t=4,'
-            'drawbox=x=64:y=52:w=32:h=24:color=lime:t=fill',
-            '-frames:v',
-            '1',
-            str(source),
-        ],
-        capture_output=True,
-        check=True,
-    )
-    data = asset.prepare_gif(source)
+    image = Image.new('RGB', (160, 128), 'blue')
+    drawing = ImageDraw.Draw(image)
+    drawing.rectangle((0, 0, 159, 127), outline='red', width=4)
+    drawing.rectangle((64, 52, 95, 75), fill='lime')
+    image.save(source)
+    data = asset.prepare_movie(source)
     assert asset.inspect_asset(data).frames == 1
     rows = [
         struct.unpack_from('>160H', data, asset.HEADER.size + 4 + y * 640)

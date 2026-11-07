@@ -93,6 +93,7 @@ struct Hardware {
     virtual void set_usb_midi(bool, bool) {}
     virtual void set_midi_interface(bool) {}
     virtual void set_splash(bool enabled, uint32_t idle_ms) = 0;
+    virtual void set_movies(const uint8_t *, unsigned, const uint8_t *, unsigned) {}
     virtual void set_animation_color_cycle(bool) {}
     virtual void error(const char *message) = 0;
 };

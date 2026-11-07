@@ -1,4 +1,5 @@
-splash = true
+splash_movie = '../../assets/spiral.gif'
+idle_movie = '../../assets/spiral.gif'
 # Keep this full-catalogue example's original appearance. Placeholder names
 # contain punctuation that some decorative font families do not support.
 fill_in_styles = false
