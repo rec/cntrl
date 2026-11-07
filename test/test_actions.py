@@ -6,76 +6,13 @@ import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved
-
-
-def compile_switches(assignments: dict[str, object], capacity: int = 5) -> bytes:
-    root = Path(__file__).parents[1] / 'firmware/test'
-    show = compiler.read_document(root / 'show.json')
-    assert isinstance(show, dict)
-    patch_cycles = show['patch_cycles']
-    assert isinstance(patch_cycles, dict)
-    show['patches'] = {p['name']: p for v in patch_cycles.values() for p in v}
-    show['switches'] = assignments
-    target = models.Target.model_validate(
-        compiler.read_document(root / 'target.json')
-    ).model_copy(update={'max_switches': capacity})
-    return compiler.compile_show(
-        show, compiler.read_document(root / 'definitions.json'), [], target
-    )
-
-
-def assignment(mode: str = 'momentary') -> dict[str, object]:
-    return {
-        'button': 'A',
-        'mode': mode,
-        'on': {
-            'type': 'control-change',
-            'output': 'din',
-            'channel': 1,
-            'controller': 64,
-            'value': 127,
-        },
-        'off': {
-            'type': 'control-change',
-            'output': 'din',
-            'channel': 1,
-            'controller': 64,
-            'value': 0,
-        },
-    }
-
-
-def fixture_assignments() -> dict[str, object]:
-    solo = assignment('latched')
-    solo['button'] = 'B'
-    solo['on'] = {
-        'type': 'control-change',
-        'output': 'din',
-        'channel': 1,
-        'controller': 7,
-        'value': 110,
-    }
-    solo['off'] = {
-        'type': 'control-change',
-        'output': 'din',
-        'channel': 1,
-        'controller': 7,
-        'value': 85,
-    }
-    return {
-        'sustain': assignment(),
-        'solo': solo,
-        'alternate': {
-            'button': 'C',
-            'mode': 'momentary',
-            'on': {'patch': 'Strings'},
-            'off': {'patch': 'Pad'},
-        },
-    }
+from scripts import regenerate_fixtures
 
 
 def test_switches_round_trip_and_native_fixture() -> None:
-    data = compile_switches(fixture_assignments())
+    data = regenerate_fixtures.compile_switches(
+        regenerate_fixtures.fixture_assignments()
+    )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     root = Path(__file__).parents[1] / 'firmware/test'
     target = models.Target.model_validate(compiler.read_document(root / 'target.json'))
@@ -113,18 +50,22 @@ def test_switches_round_trip_and_native_fixture() -> None:
     ],
 )
 def test_invalid_assignment_is_rejected(field: str, value: object) -> None:
-    value_assignment = assignment()
+    value_assignment = regenerate_fixtures.assignment()
     value_assignment[field] = value
     with pytest.raises(ValueError):
-        compile_switches({'sustain': value_assignment})
+        regenerate_fixtures.compile_switches({'sustain': value_assignment})
 
 
 def test_shared_controls_compile_and_unsupported_build_is_rejected() -> None:
-    second = assignment('latched')
+    second = regenerate_fixtures.assignment('latched')
     second['button'] = 'B'
-    assert compile_switches({'first': assignment(), 'second': second})
+    assert regenerate_fixtures.compile_switches(
+        {'first': regenerate_fixtures.assignment(), 'second': second}
+    )
     with pytest.raises(ValueError, match='capacity'):
-        compile_switches({'sustain': assignment()}, 0)
+        regenerate_fixtures.compile_switches(
+            {'sustain': regenerate_fixtures.assignment()}, 0
+        )
 
 
 def test_patch_references_use_stable_keys() -> None:
@@ -134,10 +75,10 @@ def test_patch_references_use_stable_keys() -> None:
         'on': {'patch': 'Sax'},
         'off': {'patch': 'Flute'},
     }
-    assert compile_switches({'alternate': value})
+    assert regenerate_fixtures.compile_switches({'alternate': value})
     value['off'] = {'patch': 'absent'}
     with pytest.raises(ValueError, match='does not exist'):
-        compile_switches({'alternate': value})
+        regenerate_fixtures.compile_switches({'alternate': value})
 
 
 def test_stock_reference_is_rejected_inside_persistent_sequence() -> None:

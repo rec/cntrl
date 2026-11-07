@@ -58,6 +58,13 @@ decisions. Selection-based `enter` and `exit` hooks run through the existing
 executor, with `enter.override` optionally suppressing the selecting action.
 See [switch controls](../doc/momentary-latched.md) for configuration and lifecycle.
 
+## Shared test fixtures
+
+Run `uv run scripts/regenerate_fixtures.py` to regenerate `firmware/test/show.golden`,
+`display.golden` and `actions.golden` after changing the compiled document format
+or fixture inputs. The generator shares the switch-assignment builders used by
+the action tests. Review the resulting fixture changes and run `uv run pytest`.
+
 ## Host command
 
 Install the Python distribution with `uv tool install cntrl-VERSION.whl`, or use
