@@ -13,6 +13,40 @@ public:
     Status status = Status::unavailable;
     char error[32] = {};
 
+    void usb_status(const char *setup, char *response, unsigned size) const {
+        const char *state = status == Status::ready ? "ready" : status == Status::error ? "error" : "unavailable";
+        std::snprintf(response, size, "%s starts=%llu starts_status=%s%s%s", setup,
+            (unsigned long long)count, state, status == Status::error ? " starts_error=" : "",
+            status == Status::error ? error : "");
+    }
+
+    template<class File>
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(startup_counter_read)
+#endif
+    static void read_command(const char *line, File &file, char (&response)[280]) {
+        if (!file) { std::strcpy(response, "CNTRL ERROR starts-open"); return; }
+        if (!std::strcmp(line, "CNTRL STARTS SIZE")) {
+            std::snprintf(response, sizeof(response), "CNTRL STARTS SIZE %llu", (unsigned long long)file.size()); return;
+        }
+        unsigned offset = 0; int end = 0;
+        if (std::sscanf(line, "CNTRL STARTS READ %u%n", &offset, &end) != 1 || !end || line[end]) {
+            std::strcpy(response, "CNTRL ERROR starts-command"); return;
+        }
+        if (offset >= file.size()) { std::strcpy(response, "CNTRL ERROR starts-offset"); return; }
+        if (!file.seekSet(offset)) { std::strcpy(response, "CNTRL ERROR starts-seek"); return; }
+        uint64_t remaining = file.size() - offset;
+        unsigned n = remaining < 128 ? unsigned(remaining) : 128;
+        char bytes[128];
+        int read = file.read(bytes, n);
+        if (read != int(n)) {
+            std::snprintf(response, sizeof(response), "CNTRL ERROR starts-read %d/%u", read, n); return;
+        }
+        std::strcpy(response, "CNTRL DATA ");
+        for (unsigned i = 0; i < n; ++i)
+            std::snprintf(response + 11 + i * 2, 3, "%02x", uint8_t(bytes[i]));
+    }
+
     template<class File>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(startup_counter_start)

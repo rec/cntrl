@@ -1,6 +1,7 @@
 #include "patch_switcher/startup_counter.h"
 #include <algorithm>
 #include <cassert>
+#include <string>
 #include <vector>
 
 struct File {
@@ -30,7 +31,53 @@ struct File {
     bool sync() const { return synced; }
 };
 
+void test_raw_reads_preserve_every_byte() {
+    File file; file.data.resize(1031);
+    for (unsigned i = 0; i < file.data.size(); ++i) file.data[i] = char(i % 256);
+    const auto original = file.data;
+    char response[280];
+    StartupCounter::read_command("CNTRL STARTS SIZE", file, response);
+    assert(!std::strcmp(response, "CNTRL STARTS SIZE 1031"));
+    std::vector<char> received;
+    for (unsigned offset = 0; offset < original.size(); offset += 128) {
+        char command[64]; std::snprintf(command, sizeof(command), "CNTRL STARTS READ %u", offset);
+        StartupCounter::read_command(command, file, response);
+        assert(!std::strncmp(response, "CNTRL DATA ", 11));
+        unsigned n = std::min(128u, unsigned(original.size()) - offset);
+        assert(std::strlen(response) == 11 + n * 2);
+        for (unsigned i = 0; i < n; ++i)
+            received.push_back(char(std::stoul(std::string(response + 11 + i * 2, 2), nullptr, 16)));
+    }
+    assert(received == original && file.data == original && !file.writes);
+    StartupCounter::read_command("CNTRL STARTS READ 1031", file, response);
+    assert(!std::strcmp(response, "CNTRL ERROR starts-offset"));
+    StartupCounter::read_command("CNTRL STARTS READ 0 extra", file, response);
+    assert(!std::strcmp(response, "CNTRL ERROR starts-command"));
+    file.fail_seek = file.seeks + 1;
+    StartupCounter::read_command("CNTRL STARTS READ 0", file, response);
+    assert(!std::strcmp(response, "CNTRL ERROR starts-seek"));
+    file.read_limit = 17;
+    StartupCounter::read_command("CNTRL STARTS READ 0", file, response);
+    assert(!std::strcmp(response, "CNTRL ERROR starts-read 17/128"));
+    file.read_limit = -1;
+    StartupCounter::read_command("CNTRL STARTS READ 0", file, response);
+    assert(!std::strcmp(response, "CNTRL ERROR starts-read -1/128"));
+    file.open = false;
+    StartupCounter::read_command("CNTRL STARTS SIZE", file, response);
+    assert(!std::strcmp(response, "CNTRL ERROR starts-open"));
+    assert(file.data == original && !file.writes);
+    File empty;
+    StartupCounter::read_command("CNTRL STARTS SIZE", empty, response);
+    assert(!std::strcmp(response, "CNTRL STARTS SIZE 0") && !empty.writes);
+    StartupCounter::read_command("CNTRL STARTS READ 0", empty, response);
+    assert(!std::strcmp(response, "CNTRL ERROR starts-offset") && !empty.writes);
+}
+
 int main() {
+    test_raw_reads_preserve_every_byte();
+    char response[160];
+    StartupCounter absent; absent.usb_status("CNTRL READY 33 0 00000000", response, sizeof(response));
+    assert(!std::strcmp(response, "CNTRL READY 33 0 00000000 starts=0 starts_status=unavailable"));
     File file;
     for (unsigned i = 1; i <= 10; ++i) {
         StartupCounter counter; counter.start(file);
@@ -63,6 +110,10 @@ int main() {
     File failed_sync; failed_sync.synced = false; StartupCounter unsaved; unsaved.start(failed_sync);
     assert(unsaved.status == StartupCounter::Status::error);
     assert(!std::strcmp(unsaved.error, "sync s0"));
+    unsaved.usb_status("CNTRL READY 33 123 aabbccdd", response, sizeof(response));
+    assert(!std::strcmp(response, "CNTRL READY 33 123 aabbccdd starts=0 starts_status=error starts_error=sync s0"));
+    recovered.usb_status("CNTRL READY 33 123 aabbccdd", response, sizeof(response));
+    assert(!std::strcmp(response, "CNTRL READY 33 123 aabbccdd starts=10 starts_status=ready"));
     // A correct saved value does not imply that read-back verification succeeded.
     for (int maximum : {17, -1}) {
         File short_read; short_read.verify_limit = maximum;

@@ -131,7 +131,7 @@ def verify_after_flashing(directory: Path, port: Path) -> None:
         client = transport.SetupClient(connection)
         status = client.request('CNTRL STATUS')
         parts = status.split()
-        if len(parts) != 5 or parts[:3] != [
+        if len(parts) < 5 or parts[:3] != [
             'CNTRL',
             'READY',
             str(compiler.DOCUMENT_VERSION),

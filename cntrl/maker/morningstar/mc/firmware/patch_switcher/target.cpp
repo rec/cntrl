@@ -512,7 +512,12 @@ public:
         renderer_.error(message);
     }
     bool reply_ready() const override { return usb_session.reply_ready(); }
-    void reply(const char *text) override { usb_session.reply(text); }
+    void reply(const char *text) override {
+        if (!std::strncmp(text, "CNTRL READY ", 12)) {
+            char response[160]; startup_counter.usb_status(text, response, sizeof(response));
+            usb_session.reply(response);
+        } else usb_session.reply(text);
+    }
     void poll() {
         host.Task();
         bridge_.host_connected(bool(host_midi));
@@ -1317,6 +1322,11 @@ PerformanceStatus performance_status() {
 
 void midi_status(unsigned route) { board.midi_status(route); }
 bool asset_command(const char *line) {
+    if (!std::strncmp(line, "CNTRL STARTS ", 13)) {
+        auto file = SD.sdfs.open(StartupCounter::path, O_RDONLY);
+        char response[280]; StartupCounter::read_command(line, file, response);
+        board.reply(response); return true;
+    }
     if (!std::strncmp(line, "CNTRL BUNDLE ", 13)) return bundle_transfer.command(line, millis());
     if (!std::strcmp(line, "CNTRL STORAGE NEXT")) {
         char response[600]; storage_listing.next(response, sizeof(response)); board.reply(response); return true;

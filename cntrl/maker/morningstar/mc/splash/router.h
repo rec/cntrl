@@ -27,7 +27,7 @@ public:
         if (overflow_) replies_.reply("CNTRL ERROR command-too-long");
         else {
             line_[used_] = 0;
-            if (asset_command_ && (!std::strncmp(line_, "CNTRL FONT ", 11) || !std::strncmp(line_, "CNTRL SONGS ", 12) || !std::strncmp(line_, "CNTRL BUNDLE ", 13) || !std::strcmp(line_, "CNTRL STORAGE NEXT")
+            if (asset_command_ && (!std::strncmp(line_, "CNTRL STARTS ", 13) || !std::strncmp(line_, "CNTRL FONT ", 11) || !std::strncmp(line_, "CNTRL SONGS ", 12) || !std::strncmp(line_, "CNTRL BUNDLE ", 13) || !std::strcmp(line_, "CNTRL STORAGE NEXT")
 #ifdef CNTRL_DIAGNOSTICS
                 || !std::strcmp(line_, "CNTRL DISPLAY EDGE") || !std::strcmp(line_, "CNTRL DISPLAY EDGE END")
 #endif

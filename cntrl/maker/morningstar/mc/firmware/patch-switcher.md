@@ -925,6 +925,18 @@ actual byte count out of 512; a read-back mismatch includes the first differing
 byte offset, for example `Starts: mismatch s0 @37`. The diagnostic is retained
 for that boot. If neither existing record is usable, the first failure is shown;
 recovering from one valid record and saving successfully clears the diagnostic.
+`cntrl status --port /dev/cu.usbmodem144682801` also reports these values over USB,
+appending `starts`, `starts_status` and, on failure, `starts_error` to the
+`CNTRL READY` reply. The count is the last confirmed value, so it can remain zero
+when writing or verifying the first update fails.
+
+Raw counter bytes can be inspected over the same USB command transport without
+changing the file. `CNTRL STARTS SIZE` returns `CNTRL STARTS SIZE <bytes>`.
+`CNTRL STARTS READ <offset>` returns `CNTRL DATA <hex>` containing up to 128 bytes
+from that zero-based file offset. Read successive chunks through the reported
+size to preserve both 512-byte records, including line endings and padding. An
+offset at or beyond EOF is rejected. These commands open only `/cntrl/starts.toml`
+read-only; they do not create, increment, repair or truncate it.
 Startup continues in either case. The counter uses card storage exclusively.
 
 The pages share one heading font and size, with white

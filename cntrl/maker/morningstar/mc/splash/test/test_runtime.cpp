@@ -44,7 +44,11 @@ int storage_queries = 0;
 int storage_scans = 0;
 void storage_info(bool scan) { ++storage_queries; if (scan) ++storage_scans; }
 unsigned display_diagnostics = 0;
+unsigned counter_queries = 0;
 bool diagnostic_command(const char *line) {
+    if (std::string(line) == "CNTRL STARTS SIZE" || std::string(line) == "CNTRL STARTS READ 512") {
+        ++counter_queries; return true;
+    }
     assert(std::string(line) == "CNTRL DISPLAY EDGE");
     ++display_diagnostics;
     return true;
@@ -143,6 +147,8 @@ int main(int argc, char **argv) {
     while (!router.accepts_input()) router.poll(0);
     command(router, "CNTRL STATUS");
     assert(device.replies.back() == "CNTRL READY " + std::to_string(cntrl::document_version) + " 0 00000000");
+    command(router, "CNTRL STARTS SIZE"); command(router, "CNTRL STARTS READ 512");
+    assert(counter_queries == 2);
     command(router, "CNTRL STORAGE");
     assert(storage_queries == 1 && storage_scans == 0);
     command(router, "CNTRL STORAGE SCAN");
