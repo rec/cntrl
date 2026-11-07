@@ -11,7 +11,7 @@ public:
     static const ILI9341_t3_font_t *native_font(unsigned face, unsigned size) {
         if (face == 0) face = 1; // Classic uses native-size Arial bitmaps.
         // The cable-test title is fixed UI text. Show families use SD subsets.
-        if (face == 8 || face == 9) return bitmap_font(face, size);
+        if (face == 8 || face == 9 || face == 16) return bitmap_font(face, size);
         if (face >= 3) return face == 5 && size == 28 ? &StillTime_28 : nullptr;
         if (face != 1 && face != 2) return nullptr;
         switch (size) {

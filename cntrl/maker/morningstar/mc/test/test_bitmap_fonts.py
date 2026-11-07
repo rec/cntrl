@@ -3,23 +3,33 @@
 import re
 from pathlib import Path
 
+import freetype
 import pytest
 from PIL import ImageFont
 
 from cntrl.maker.morningstar.mc import build_bitmap_fonts, build_font_metrics
 from cntrl.maker.morningstar.mc.build_font_metrics import read_bits
+from cntrl.maker.morningstar.mc.sparse_fonts import Outline
 from cntrl.patch_switcher import compiler, models
 
 
-@pytest.mark.parametrize('family', build_bitmap_fonts.FAMILIES)
-@pytest.mark.parametrize('size', build_bitmap_fonts.SIZES)
+@pytest.mark.parametrize(
+    ('family', 'size'),
+    [
+        (f, s)
+        for f in [*build_bitmap_fonts.FAMILIES, build_bitmap_fonts.PAGE_FAMILY]
+        for s in build_bitmap_fonts.font_sizes(f[0])
+    ],
+)
 def test_firmware_glyphs_preserve_pixels_and_baseline(
     family: tuple[str, str, str], size: int
 ) -> None:
     name, source, _ = family
     root = Path(__file__).parents[1]
     outline = root.parents[2] / 'fonts' / source
-    generated = build_bitmap_fonts.bitmap_font(outline, name, size)
+    generated = build_bitmap_fonts.bitmap_font(
+        outline, name, size, name == 'AtkinsonNextSemiBold'
+    )
     arrays = re.findall(
         r'unsigned char \w+\[\] CNTRL_FONT_FLASH = \{(.*?)\};', generated, re.S
     )
@@ -45,17 +55,43 @@ def test_firmware_glyphs_preserve_pixels_and_baseline(
             metrics.append(read_bits(data, offset, b, signed))
             offset += b
         width, height, left, y, advance = metrics
-        mask, origin = font.getmask2(chr(c), mode='1', anchor='ls')
-        assert (width, height) == mask.size
-        assert (left, cap - height - y) == (origin[0], cap + origin[1])
-        assert advance == round(font.getlength(chr(c)))
+        if name == 'AtkinsonNextSemiBold':
+            raster = Outline(outline, autohint=True)
+            glyph = raster.glyph(size, raster.face.get_char_index(c))
+            expected = [
+                int(
+                    bool(
+                        glyph.pixels[r * ((glyph.width + 7) // 8) + x // 8]
+                        & (128 >> (x % 8))
+                    )
+                )
+                for r in range(glyph.height)
+                for x in range(glyph.width)
+            ]
+            assert (width, height, left, y) == (
+                glyph.width,
+                glyph.height,
+                glyph.left,
+                glyph.top - glyph.height,
+            )
+            raster.face.load_char(
+                chr(c),
+                freetype.FT_LOAD_TARGET_MONO | freetype.FT_LOAD_FORCE_AUTOHINT,  # ty: ignore[unresolved-attribute]  # Public C extension API.
+            )
+            assert advance == round(raster.face.glyph.advance.x / 64)
+        else:
+            mask, origin = font.getmask2(chr(c), mode='1', anchor='ls')
+            assert (width, height) == mask.size
+            assert (left, cap - height - y) == (origin[0], cap + origin[1])
+            assert advance == round(font.getlength(chr(c)))
+            expected = [int(bool(mask[i])) for i in range(width * height)]
         pixels = []
         for _ in range(height):
             assert read_bits(data, offset, 1) == 0
             offset += 1
             pixels.extend(read_bits(data, offset + x, 1) for x in range(width))
             offset += width
-        assert pixels == [int(bool(p)) for p in mask]
+        assert pixels == expected
 
 
 def test_generated_fonts_and_exported_metrics_are_current(tmp_path: Path) -> None:
@@ -75,3 +111,14 @@ def test_generated_fonts_and_exported_metrics_are_current(tmp_path: Path) -> Non
         if n == 'StillTime':
             face = face.model_copy(update={'horizontal_scale': 1.5})
         assert face == next(f for f in target.fonts if f.name == n)
+
+
+def test_small_page_font_has_equal_vertical_stems() -> None:
+    path = Path(__file__).parents[4] / 'fonts' / build_bitmap_fonts.PAGE_FAMILY[1]
+    font = Outline(path, autohint=True)
+    glyph = font.glyph(12, font.face.get_char_index(ord('H')))
+    row = ''.join(
+        '#' if glyph.pixels[x // 8] & (128 >> (x % 8)) else '.'
+        for x in range(glyph.width)
+    )
+    assert row == '##...##'

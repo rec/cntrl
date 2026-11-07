@@ -97,7 +97,7 @@ public:
             || !right[R::diameter] || !right[R::annulus] || right[R::title_height] < 8 || right[R::tempo_height] < 8
             || unsigned(right[R::title_height]) * 3 / 2 + 4 + right[R::tempo_height] + right[R::diameter] + 2u * right[R::annulus] + 2u * right[R::padding] > hardware.display_height()
             || unsigned(right[R::diameter]) + 2u * right[R::annulus] + 2u * right[R::padding] > hardware.display_width()
-            || (right[R::tempo_font] != 8 && right[R::tempo_font] != 9) || right[R::status_font] > 2 || right[R::title_font] > 2
+            || (right[R::tempo_font] != 8 && right[R::tempo_font] != 9) || (right[R::status_font] > 2 && right[R::status_font] != 16) || (right[R::title_font] > 2 && right[R::title_font] != 16)
             || !right[R::digits] || right[R::digits] > 4 || right[R::decimals] > 2) return false;
         unsigned names = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
         if (bytes[19] & 0x80) {

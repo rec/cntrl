@@ -698,6 +698,13 @@ static void test_page_settings() {
     settings.words[cntrl::PageSettings::title_font] = 1;
     custom.configure(settings);
     assert(custom.view(0, 0, {}).lines[0].graphics.font == 1);
+    settings.words[cntrl::PageSettings::title_font] = 16;
+    settings.words[cntrl::PageSettings::status_font] = 16;
+    custom.configure(settings);
+    auto outline_view = custom.view(0, 0, {});
+    assert(outline_view.lines[0].graphics.font == 16);
+    assert(outline_view.lines[1].graphics.font == 16);
+    settings.words[cntrl::PageSettings::status_font] = 0;
     settings.words[cntrl::PageSettings::title_font] = 0;
     settings.words[cntrl::PageSettings::clock_outputs] = 1;
     settings.words[cntrl::PageSettings::slot1] = 90;
@@ -721,29 +728,6 @@ static void test_page_settings() {
     DisplayRenderer renderer;
     renderer.show(2, view); drain(renderer);
     assert(screens[2][10][0] == 0 && screens[2][23][0] == 0 && screens[2][24][0] == 0xff90);
-    cntrl::Pane weight;
-    weight.graphics.pad = 2;
-    weight.lines[0].graphics = weight.graphics;
-    weight.lines[0].x = 10; weight.lines[0].y = 30;
-    std::strcpy(weight.lines[0].text, "H");
-    renderer.show(2, weight); drain(renderer);
-    assert(screens[2][37][10] == 0xffff);
-    weight.lines[0].heavier = true;
-    renderer.show(2, weight); drain(renderer);
-    assert(screens[2][37][10] == 0 && screens[2][38][10] == 0xffff);
-    assert(screens[2][30][9] == 0xffff && screens[2][30][15] == 0xffff);
-    weight.lines[0].taller = true;
-    renderer.show(2, weight); drain(renderer);
-    assert(screens[2][38][10] == 0 && screens[2][39][10] == 0xffff);
-    assert(screens[2][30][9] == 0xffff && screens[2][30][15] == 0xffff);
-    std::strcpy(weight.lines[0].text, "T");
-    weight.lines[0].heavier = false;
-    weight.lines[0].taller = false;
-    renderer.show(2, weight); drain(renderer);
-    assert(std::memcmp(screens[2][30], screens[2][31], sizeof(screens[2][30])));
-    weight.lines[0].taller = true;
-    renderer.show(2, weight); drain(renderer);
-    assert(std::memcmp(screens[2][30], screens[2][31], sizeof(screens[2][30])));
     assert(!std::strcmp(view.lines[1].text, "---.-") && view.circles[0].color == 0x4000);
     pages.time(50, 50000, true); assert(pages.due(50));
     view = pages.view(50, 50000, status);
@@ -775,7 +759,7 @@ static void test_page_settings() {
     for (unsigned i = 1; i <= 6; ++i) {
         assert(view.lines[i].graphics.font == view.lines[1].graphics.font);
         assert(view.lines[i].graphics.size == view.lines[1].graphics.size);
-        assert(view.lines[i].taller && !std::strstr(view.lines[i].text, "Setup:"));
+        assert(!std::strstr(view.lines[i].text, "Setup:"));
         assert(view.lines[i].graphics.line_height >= 20 && view.lines[i].graphics.line_height <= 21);
     }
     assert(view.lines[1].y < 40);

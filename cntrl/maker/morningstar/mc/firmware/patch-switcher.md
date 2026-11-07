@@ -941,14 +941,15 @@ Startup continues in either case. The counter uses card storage exclusively.
 
 The pages share one heading font and size, with white
 text on a black heading band. All titles fit against the same reference text.
-Status labels are dark blue and values are green. Their text has one additional
-vertical ink pixel
-without wider glyphs or spacing. The page background and Tap Tempo ring thickness
+Status labels are dark blue and values are green. Page titles and small text
+default to Atkinson Hyperlegible Next SemiBold, rasterized from the outline at
+individual pixel sizes. Its weight comes from the font itself. The page background and Tap Tempo ring thickness
 are configured in the setup:
 
 ```toml
 [page_settings]
-title_font = 'classic' # also Arial or ComicSansMS
+title_font = 'AtkinsonNextSemiBold'
+status_font = 'AtkinsonNextSemiBold'
 background_color = '0xFFF085'
 annulus = 5
 off_color = '0x600000'

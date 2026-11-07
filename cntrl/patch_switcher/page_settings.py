@@ -37,14 +37,14 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
         r.tempo_height,
         r.padding,
         8 if r.tempo_font == 'CourierPrime' else 9,
-        ['classic', 'Arial', 'ComicSansMS'].index(r.status_font),
+        PAGE_FONTS[r.status_font],
         graphics.rgb565(graphics.color(r.off_color)),
         graphics.rgb565(graphics.color(r.on_color)),
         graphics.rgb565(graphics.color(r.ring_color)),
         r.digits,
         r.decimals,
         graphics.rgb565(graphics.color(r.background_color)),
-        ['classic', 'Arial', 'ComicSansMS'].index(r.title_font),
+        PAGE_FONTS[r.title_font],
     ]
 
 
@@ -96,8 +96,8 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     for i, n in enumerate(names):
         result[n] = w[i] / 1000 if i in (0, 1, 6, 7, 8) else w[i]
     result['tempo_font'] = 'CourierPrime' if w[14] == 8 else 'CourierPrimeBold'
-    result['status_font'] = ['classic', 'Arial', 'ComicSansMS'][w[15]]
-    result['title_font'] = ['classic', 'Arial', 'ComicSansMS'][w[22]]
+    result['status_font'] = next(n for n, i in PAGE_FONTS.items() if i == w[15])
+    result['title_font'] = next(n for n, i in PAGE_FONTS.items() if i == w[22])
     for i, n in (
         (16, 'off_color'),
         (17, 'on_color'),
@@ -237,3 +237,6 @@ CLOCK_ROUTES = {
     'usb-device': 6,
     'usb-host': 8,
 }
+
+
+PAGE_FONTS = {'classic': 0, 'Arial': 1, 'ComicSansMS': 2, 'AtkinsonNextSemiBold': 16}

@@ -104,6 +104,36 @@ extern const ILI9341_t3_font_t SpecialElite_28;
 extern const ILI9341_t3_font_t SpecialElite_32;
 extern const ILI9341_t3_font_t SpecialElite_40;
 extern const ILI9341_t3_font_t SpecialElite_48;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_8;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_9;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_10;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_11;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_12;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_13;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_14;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_15;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_16;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_17;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_18;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_19;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_20;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_21;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_22;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_23;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_24;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_25;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_26;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_27;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_28;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_29;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_30;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_31;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_32;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_40;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_48;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_60;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_72;
+extern const ILI9341_t3_font_t AtkinsonNextSemiBold_96;
 inline const ILI9341_t3_font_t *bitmap_font(unsigned face, unsigned size) {
     switch (face) {
     case 3: switch (size) {
@@ -247,6 +277,39 @@ inline const ILI9341_t3_font_t *bitmap_font(unsigned face, unsigned size) {
         case 32: return &SpecialElite_32;
         case 40: return &SpecialElite_40;
         case 48: return &SpecialElite_48;
+        default: return nullptr;
+    }
+    case 16: switch (size) {
+        case 8: return &AtkinsonNextSemiBold_8;
+        case 9: return &AtkinsonNextSemiBold_9;
+        case 10: return &AtkinsonNextSemiBold_10;
+        case 11: return &AtkinsonNextSemiBold_11;
+        case 12: return &AtkinsonNextSemiBold_12;
+        case 13: return &AtkinsonNextSemiBold_13;
+        case 14: return &AtkinsonNextSemiBold_14;
+        case 15: return &AtkinsonNextSemiBold_15;
+        case 16: return &AtkinsonNextSemiBold_16;
+        case 17: return &AtkinsonNextSemiBold_17;
+        case 18: return &AtkinsonNextSemiBold_18;
+        case 19: return &AtkinsonNextSemiBold_19;
+        case 20: return &AtkinsonNextSemiBold_20;
+        case 21: return &AtkinsonNextSemiBold_21;
+        case 22: return &AtkinsonNextSemiBold_22;
+        case 23: return &AtkinsonNextSemiBold_23;
+        case 24: return &AtkinsonNextSemiBold_24;
+        case 25: return &AtkinsonNextSemiBold_25;
+        case 26: return &AtkinsonNextSemiBold_26;
+        case 27: return &AtkinsonNextSemiBold_27;
+        case 28: return &AtkinsonNextSemiBold_28;
+        case 29: return &AtkinsonNextSemiBold_29;
+        case 30: return &AtkinsonNextSemiBold_30;
+        case 31: return &AtkinsonNextSemiBold_31;
+        case 32: return &AtkinsonNextSemiBold_32;
+        case 40: return &AtkinsonNextSemiBold_40;
+        case 48: return &AtkinsonNextSemiBold_48;
+        case 60: return &AtkinsonNextSemiBold_60;
+        case 72: return &AtkinsonNextSemiBold_72;
+        case 96: return &AtkinsonNextSemiBold_96;
         default: return nullptr;
     }
     default: return nullptr;

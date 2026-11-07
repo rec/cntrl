@@ -1,7 +1,8 @@
 # Bitmap display fonts
 
 Thirteen bundled outline families are available alongside classic, Arial and
-ComicSansMS. The IDs below identify their generated reference tables:
+ComicSansMS. Atkinson is an additional page-text face, excluded from random
+patch formatting. The IDs below identify their generated reference tables:
 
 | Configuration name | Source | Face ID | License |
 | --- | --- | --- | --- |
@@ -18,10 +19,16 @@ ComicSansMS. The IDs below identify their generated reference tables:
 | `OrnamentalSlab` | Ewert Regular | 13 | SIL OFL 1.1 |
 | `RubikDistressed` | Rubik Distressed Regular | 14 | SIL OFL 1.1 |
 | `SpecialElite` | Special Elite Regular | 15 | Apache 2.0 |
+| `AtkinsonNextSemiBold` | Atkinson Hyperlegible Next SemiBold | 16 | SIL OFL 1.1 |
 
 The generated reference tables contain printable ASCII, characters 32 through
 126, at nominal pixel
 sizes 12, 16, 20, 24, 28, 32, 40 and 48. Actual line heights depend on the face.
+Atkinson page text is rasterized directly from its outline using the same
+FreeType rasterizer as show text, with monochrome autohinting for consistent
+stem widths and grid-fitted advances at small sizes. Its reference tables include every size from
+8 through 32 pixels, plus 40, 48, 60, 72 and 96. The renderer uses these glyphs
+without thickening or stretching.
 Show text uses sparse SD assets built from the corresponding outlines, as
 described below. Each line automatically selects its largest fitting size. Styles select a font
 using `font_name` at any existing

@@ -337,11 +337,11 @@ public:
                     const unsigned y = body_top + body_height * i / 5;
                     const unsigned height = body_height * (i + 1) / 5 - body_height * i / 5;
                     if (i == 1) {
-                        line(pane, 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, 80, maximum_size, true);
-                        line(pane, 3, tap_label, y, height, settings_[R::status_font], false, nullptr, 80, 160, maximum_size, true);
+                        line(pane, 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, 80, maximum_size);
+                        line(pane, 3, tap_label, y, height, settings_[R::status_font], false, nullptr, 80, 160, maximum_size);
                     } else {
                         line(pane, i == 0 ? 1 : i + 2, rows[i], y, height,
-                            settings_[R::status_font], false, nullptr, 0, 160, maximum_size, true);
+                            settings_[R::status_font], false, nullptr, 0, 160, maximum_size);
                     }
                 }
             };
@@ -396,23 +396,19 @@ private:
         else std::snprintf(text, length, "%*lu", fixed ? int(digits) : 1, (unsigned long)value);
     }
     void line(cntrl::Pane &pane, unsigned index, const char *text, unsigned y, unsigned height,
-              unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 160, unsigned maximum_size = 96, bool taller = false) {
+              unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 160, unsigned maximum_size = 96) {
         auto &l = pane.lines[index];
         std::snprintf(l.text, sizeof(l.text), "%s", text);
         l.graphics = pane.graphics; l.graphics.font = face;
-        l.heavier = true;
-        l.taller = taller;
-        const unsigned sizes[] = {96, 72, 60, 48, 40, 32, 28, 24, 20, 18, 16, 14, 13, 12, 11, 10, 9, 8};
         ST7735_t3 measure(255, 255, 255); measure.setTextSize(1); measure.setTextWrap(false);
         int16_t left = 0, top = 0; uint16_t width = 0, ink_height = 0;
         const char *fitting = sample ? sample : l.text;
-        for (unsigned size : sizes) {
+        for (unsigned size = 96; size >= 8; --size) {
             if (size > maximum_size) continue;
             const auto *font = ShowGraphics::native_font(face, size);
             if (!font) continue;
             measure.setFont(*font); measure.getTextBounds(fitting, 0, 0, &left, &top, &width, &ink_height);
-            const unsigned fitted_height = ink_height + (taller ? std::max(1u, unsigned(ink_height) / 8) : 0);
-            if ((width > right_edge - left_edge - 2 * pane.graphics.pad || fitted_height + 1 > height) && size > (face >= 8 ? 12u : 8u)) continue;
+            if ((width > right_edge - left_edge - 2 * pane.graphics.pad || ink_height > height) && size > (face >= 8 && face != 16 ? 12u : 8u)) continue;
             l.graphics.size = size; l.graphics.line_height = height; l.graphics.top = 0;
             if (!sample && width > right_edge - left_edge - 2 * pane.graphics.pad) {
                 unsigned n = unsigned(std::strlen(l.text));
@@ -423,9 +419,8 @@ private:
             }
             if (centered && sample)
                 measure.getTextBounds(l.text, 0, 0, &left, &top, &width, &ink_height);
-            if (taller) ink_height += std::max(1u, unsigned(ink_height) / 8);
             l.x = centered ? (left_edge + right_edge - width) / 2 - left : sample ? right_edge - pane.graphics.pad - width - left : left_edge + pane.graphics.pad;
-            l.y = int(y) + (int(height) - ink_height - 1) / 2 - top;
+            l.y = int(y) + (int(height) - ink_height) / 2 - top;
             return;
         }
     }

@@ -29,8 +29,11 @@ class Run(BaseModel, frozen=True):
 
 
 class Outline:
-    def __init__(self, path: Path, horizontal_scale: float = 1.0) -> None:
+    def __init__(
+        self, path: Path, horizontal_scale: float = 1.0, *, autohint: bool = False
+    ) -> None:
         self.horizontal_scale = horizontal_scale
+        self.autohint = autohint
         self.data = path.read_bytes()
         self.face = freetype.Face.from_bytes(self.data)
         self.hb = uharfbuzz.Font(uharfbuzz.Face(self.data))  # ty: ignore[unresolved-attribute]  # Public C extension API.
@@ -54,7 +57,11 @@ class Outline:
                 identifier,
                 freetype.FT_LOAD_RENDER  # ty: ignore[unresolved-attribute]  # Public C extension API.
                 | freetype.FT_LOAD_TARGET_MONO  # ty: ignore[unresolved-attribute]  # Public C extension API.
-                | freetype.FT_LOAD_NO_HINTING,  # ty: ignore[unresolved-attribute]  # Public C extension API.
+                | (
+                    freetype.FT_LOAD_FORCE_AUTOHINT  # ty: ignore[unresolved-attribute]  # Public C extension API.
+                    if self.autohint
+                    else freetype.FT_LOAD_NO_HINTING  # ty: ignore[unresolved-attribute]  # Public C extension API.
+                ),
             )
             slot = self.face.glyph
             bitmap = slot.bitmap

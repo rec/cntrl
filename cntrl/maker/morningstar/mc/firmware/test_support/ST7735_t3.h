@@ -43,8 +43,7 @@ public:
         for (unsigned y = 0; y < 8 * scale_ && y_ + y < unsigned(_height); ++y)
             for (unsigned x = 0; x < 6 * scale_ && x_ + x < unsigned(_width); ++x)
                 if (x_ + x >= left_ && x_ + x < right_ && y_ + y >= top_ && y_ + y < bottom_) {
-                    if (character != ' ' && x < 5 * scale_ && y < 7 * scale_
-                        && (character != 'T' || y < scale_ || x / scale_ == 2))
+                    if (character != ' ' && x < 5 * scale_ && y < 7 * scale_)
                         pixels_[(y_ + y) * _width + x_ + x] = color_;
                     else if (background_ != color_)
                         pixels_[(y_ + y) * _width + x_ + x] = background_;
