@@ -356,7 +356,24 @@ void test_clock_source_handoff() {
     assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0xfe, 0xfb, 0xf8}));
 }
 
+void test_file_sysex_waits_for_previous_stream_and_allows_realtime() {
+    cntrl::midi::Bridge bridge; Output out;
+    bridge.configure(true); bridge.connected(true, 0);
+    input(bridge, 0, {0xf0, 1, 2}); bridge.service(out, 0);
+    assert(!bridge.sysex_ready(1));
+    input(bridge, 0, {3, 0xf7}); bridge.service(out, 0, 1);
+    assert(bridge.sysex_ready(1));
+    const auto size = out.bytes[0].size();
+    input(bridge, 0, {0x90, 60, 100}); bridge.service(out, 0, 1);
+    assert(out.bytes[0].size() == size);
+    input(bridge, 0, {0xf8}); bridge.service(out, 0, 1);
+    assert(out.bytes[0].size() == size + 1 && out.bytes[0].back() == 0xf8);
+    bridge.service(out, 0);
+    assert(out.bytes[0].size() == size + 4);
+}
+
 int main() {
+    test_file_sysex_waits_for_previous_stream_and_allows_realtime();
     test_generated_clock_under_load();
     test_clock_source_handoff();
     test_usb_ports_enable_independently();

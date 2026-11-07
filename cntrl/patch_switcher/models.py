@@ -226,6 +226,58 @@ class Navigation(Presentation, frozen=True):
     ]
 
 
+class PlayMidiFile(Presentation, frozen=True):
+    operation: Literal['play-midi-file']
+    filename: Annotated[str, Field(max_length=95)] = ''
+    outputs: Annotated[list[str], Field(min_length=1)] = Field(
+        default_factory=lambda: ['din']
+    )
+    loops: Annotated[int, Field(strict=True, ge=0, le=4294967295)] = 1
+    pre_delay: Annotated[
+        int, Field(strict=True, ge=0, le=4294967295), units.unit_validator('second')
+    ] = 0
+    post_delay: Annotated[
+        int, Field(strict=True, ge=0, le=4294967295), units.unit_validator('second')
+    ] = 0
+    speed: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 1.0
+    reverse: bool = False
+    transpose: Annotated[int, Field(strict=True, ge=-127, le=127)] = 0
+
+    @field_validator('filename')
+    @classmethod
+    def basename(cls, value: str) -> str:
+        if value in ('.', '..') or any(
+            c in '/\\' or not 32 <= ord(c) <= 126 for c in value
+        ):
+            raise ValueError('filename must be an ASCII basename in /cntrl/midi/')
+        return value
+
+    @field_validator('outputs')
+    @classmethod
+    def unique_outputs(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError('duplicate MIDI output')
+        return value
+
+
+class RecordMidiFile(Presentation, frozen=True):
+    operation: Literal['record-midi-file']
+    channels: Annotated[
+        list[Annotated[int, Field(strict=True, ge=1, le=16)]], Field(min_length=1)
+    ] = Field(default_factory=lambda: list(range(1, 17)))
+    inputs: Annotated[
+        list[Literal['din', 'trs', 'usb-device', 'usb-host']], Field(min_length=1)
+    ] = Field(default=['din', 'trs', 'usb-device', 'usb-host'])
+
+    @model_validator(mode='after')
+    def unique_filters(self) -> 'RecordMidiFile':
+        if len(self.channels) != len(set(self.channels)) or len(self.inputs) != len(
+            set(self.inputs)
+        ):
+            raise ValueError('duplicate MIDI recording filter')
+        return self
+
+
 class StockFirmware(Presentation, frozen=True):
     operation: Literal['stock-firmware']
     exit_buttons: str
@@ -280,7 +332,12 @@ ConcretePatch = (
     | Reference
     | Sequence
     | Annotated[
-        Brightness | UsbMidiInterface | Navigation | StockFirmware,
+        Brightness
+        | UsbMidiInterface
+        | Navigation
+        | StockFirmware
+        | PlayMidiFile
+        | RecordMidiFile,
         Field(discriminator='operation'),
     ]
     | Annotated[

@@ -302,3 +302,40 @@ def test_usb_wait_backoff_keeps_retrying_until_control_c(
     assert capsys.readouterr().err.splitlines() == [
         f'Waiting {n} seconds for USB (hit control-C to exit)' for n in (1, 2, 4, 8)
     ]
+
+
+def test_midi_file_operations_survive_cpp_storage(peer: Path) -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(ROOT / 'firmware/test/target.json')
+    )
+    data = compiler.compile_show(
+        {
+            'patch_cycles': {
+                'Files': [
+                    {
+                        'operation': 'play-midi-file',
+                        'filename': '255-3.mid',
+                        'outputs': ['din', 'trs'],
+                        'speed': 1.5,
+                        'reverse': True,
+                    },
+                    {'operation': 'record-midi-file', 'channels': [1, 16]},
+                ]
+            }
+        },
+        {},
+        [],
+        target,
+    )
+    master, slave = pty.openpty()
+    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
+    try:
+        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+            client = transport.SetupClient(connection)
+            client.copy('Files', data, False)
+            assert client.download('Files') == data
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+        os.close(master)
+        os.close(slave)

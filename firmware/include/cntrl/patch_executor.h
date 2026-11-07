@@ -1,5 +1,6 @@
 #pragma once
 #include "document.h"
+#include "midi_file.h"
 #include <cstdlib>
 
 namespace cntrl {
@@ -23,6 +24,10 @@ struct PatchOutputs {
     virtual void cancel_patch(unsigned owner) = 0;
     virtual const midi::MidiState *midi_state() const { return nullptr; }
     virtual bool state(unsigned operation, uint32_t value) = 0;
+    virtual bool play_midi_file(unsigned, const midi::PlayMidiFilePatch &) { return false; }
+    virtual midi::Bridge::Delivery midi_file_delivery(unsigned) const { return midi::Bridge::Delivery::cancelled; }
+    virtual void cancel_midi_file(unsigned) {}
+    virtual bool record_midi_file(const midi::RecordMidiFilePatch &) { return false; }
     virtual void validation(bool) {}
     virtual void validation_context(PatchExecutor &, bool enabled) { validation(enabled); }
     virtual bool preview_state(unsigned, uint32_t) { return true; }
@@ -119,6 +124,13 @@ public:
     void tick(uint32_t now = 0) {
         if (status_ != Status::pending) return;
         if (builtin_stock_) { dispatch_stock(builtin_stock_); return; }
+        if (file_waiting_) {
+            auto delivery = outputs_.midi_file_delivery(owner_);
+            if (delivery == midi::Bridge::Delivery::pending) return;
+            file_waiting_ = false;
+            if (delivery != midi::Bridge::Delivery::complete) { fail("MIDI file playback failed"); return; }
+            complete_leaf();
+        }
         if (waiting_) {
             if (!outputs_.available(waiting_output_)) {
                 outputs_.cancel_patch(owner_); waiting_ = false; finish(Status::unknown); return;
@@ -158,6 +170,17 @@ public:
             if (!invoke(StatePatch{p[0], u32(p + 1)})) { fail("Application operation failed"); return; }
             started_ = true;
             complete_leaf(); return;
+        case 8: {
+            midi::PlayMidiFilePatch settings;
+            std::memcpy(settings.filename, p, 96); settings.outputs = u16(p + 96);
+            settings.loops = u32(p + 98); settings.pre_delay = u32(p + 102); settings.post_delay = u32(p + 106);
+            std::memcpy(&settings.speed, p + 110, 8); settings.reverse = p[118]; settings.transpose = int8_t(p[119]);
+            if (!outputs_.play_midi_file(owner_, settings)) { fail("Cannot open MIDI file"); return; }
+            file_waiting_ = started_ = true; return;
+        }
+        case 9:
+            if (!outputs_.record_midi_file({u16(p), u16(p + 2)})) { fail("MIDI recording failed"); return; }
+            started_ = true; complete_leaf(); return;
         case 7:
             delay_started_ = now; delay_duration_ = u32(p);
             delaying_ = started_ = true;
@@ -171,6 +194,8 @@ public:
         if (outputs_.send_patch(owner_, output, bytes, length)) { waiting_ = started_ = true; waiting_output_ = output; }
     }
     void cancel() {
+        if (file_waiting_) outputs_.cancel_midi_file(owner_);
+        file_waiting_ = false;
         if (waiting_) outputs_.cancel_patch(owner_);
         waiting_ = delaying_ = false; builtin_stock_ = 0; depth_ = 0;
         finish(Status::idle);
@@ -194,6 +219,7 @@ private:
     Status status_ = Status::idle;
     const char *error_ = "";
     const char *waiting_output_ = nullptr;
+    bool file_waiting_ = false;
     bool waiting_ = false, pinned_ = false, persistent_ = false, validating_ = false, reconstructing_ = false, started_ = false;
     bool state_complete_ = true;
 
@@ -207,6 +233,8 @@ private:
         if (pinned_) { pinned_ = false; sources_.end(); }
     }
     bool fail(const char *message) {
+        if (file_waiting_) outputs_.cancel_midi_file(owner_);
+        file_waiting_ = false;
         if (waiting_) outputs_.cancel_patch(owner_);
         waiting_ = false; error_ = message; hardware_.error(message);
         finish(Status::failed); return false;
@@ -290,7 +318,7 @@ private:
         if (!outputs_.stock(buttons, *this)) fail("Firmware switch failed");
     }
     bool resource(const char *output, unsigned channel, unsigned control, int expected = -1) {
-        Resource value = {}; std::memcpy(value.output, output, 32); value.channel = channel; value.control = control;
+        Resource value = {}; std::snprintf(value.output, sizeof(value.output), "%s", output); value.channel = channel; value.control = control;
         for (unsigned i = 0; i < resource_count_; ++i)
             if (resources_[i].channel == channel && resources_[i].control == control && !std::strcmp(resources_[i].output, output)) {
                 resources_[i].value = expected; return true;
@@ -333,6 +361,11 @@ private:
                 if ((control == 6 || control == 38 || control >= 96) && status >> 4 == 11) state_complete_ = false;
                 if (!resource(output, status & 15, control, expected)) return false;
             }
+        } else if (node[0] == 8) {
+            state_complete_ = false;
+            unsigned mask = u16(p + 96);
+            for (const auto &out : midi::output_connections) if ((mask & (1u << out.route)) && !resource(out.name, 256, 256)) return false;
+            for (const auto &out : midi::usb_output_connections) if ((mask & (1u << out.route)) && !resource(out.name, 256, 256)) return false;
         } else if (node[0] != 7) state_complete_ = false;
         return true;
     }

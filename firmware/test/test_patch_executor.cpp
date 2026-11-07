@@ -18,6 +18,13 @@ struct PatchBoard : TestPatchHardware, cntrl::midi::Sink {
     Bytes wire[2];
     std::vector<unsigned> operations;
     std::string last_error;
+    cntrl::midi::PlayMidiFilePatch file_settings;
+    cntrl::midi::Bridge::Delivery file_delivery = cntrl::midi::Bridge::Delivery::pending;
+    bool file_cancelled = false, recording = false;
+    bool play_midi_file(unsigned, const cntrl::midi::PlayMidiFilePatch &settings) override { file_settings = settings; return true; }
+    cntrl::midi::Bridge::Delivery midi_file_delivery(unsigned) const override { return file_delivery; }
+    void cancel_midi_file(unsigned) override { file_cancelled = true; }
+    bool record_midi_file(const cntrl::midi::RecordMidiFilePatch &) override { recording = !recording; return true; }
     cntrl::Controller::NavigationState initial_navigation, stock_navigation;
     bool supports(const char *) const override { return true; }
     bool supports_function(unsigned code) const override { return code == 1; }
@@ -111,9 +118,29 @@ void drain(cntrl::PatchExecutor &executor, PatchBoard &board) {
     }
 }
 
+void test_file_operations(const Bytes &base) {
+    PatchBoard board; cntrl::Document original;
+    assert(original.load(base.data(), unsigned(base.size()), board));
+    unsigned root = original.nodes();
+    Bytes play(120); play[96] = 3; play[98] = 1; play[102] = 2;
+    double speed = 1.5; std::memcpy(play.data() + 110, &speed, 8); play[118] = 1; play[119] = uint8_t(-12);
+    Bytes image = extend(base, {node(8, play), node(9, {1,0,1,0}), sequence({root, root + 1})}, board);
+    cntrl::Document document; assert(document.load(image.data(), unsigned(image.size()), board));
+    cntrl::PatchExecutor executor(board, board, board, 5);
+    assert(executor.start(document, root + 2)); executor.tick();
+    assert(board.file_settings.outputs == 3 && board.file_settings.pre_delay == 2 && board.file_settings.speed == 1.5);
+    assert(board.file_settings.reverse && board.file_settings.transpose == -12);
+    executor.tick(); assert(executor.busy() && !board.recording);
+    board.file_delivery = cntrl::midi::Bridge::Delivery::complete;
+    executor.tick(); executor.tick(); assert(!executor.busy() && board.recording);
+    assert(executor.start(document, root)); executor.tick(); executor.cancel(); assert(board.file_cancelled);
+    assert(executor.start(document, root + 1)); executor.tick(); assert(!board.recording);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex;
     Bytes base; for (unsigned i = 0; i < hex.size(); i += 2) base.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    test_file_operations(base);
     PatchBoard board; cntrl::Document original; assert(original.load(base.data(), unsigned(base.size()), board));
     unsigned first = original.nodes();
     Bytes sysex(130, 3); sysex.front() = 0xf0; sysex.back() = 0xf7;

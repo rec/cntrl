@@ -412,6 +412,34 @@ def _patch(
             )
             for i in range(children)
         ]
+    elif kind == 8:
+        filename, outputs, loops, pre, post, speed, reverse, transpose = (
+            struct.unpack_from('<96sHIIIdBb', data, cursor)
+        )
+        value.update(
+            operation='play-midi-file',
+            filename=filename.split(b'\0')[0].decode('ascii'),
+            outputs=[
+                n for n, i in page_settings.CLOCK_ROUTES.items() if outputs & (1 << i)
+            ],
+            loops=loops,
+            pre_delay=pre,
+            post_delay=post,
+            speed=speed,
+            reverse=bool(reverse),
+            transpose=transpose,
+        )
+    elif kind == 9:
+        channels, inputs = struct.unpack_from('<HH', data, cursor)
+        value.update(
+            operation='record-midi-file',
+            channels=[i + 1 for i in range(16) if channels & (1 << i)],
+            inputs=[
+                n
+                for n, i in {'din': 0, 'trs': 1, 'usb-device': 6, 'usb-host': 8}.items()
+                if inputs & (1 << i)
+            ],
+        )
     elif kind == 7:
         value.update(duration=struct.unpack_from('<I', data, cursor)[0] / 1000)
     elif kind == 6:

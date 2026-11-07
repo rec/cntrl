@@ -700,7 +700,9 @@ class PatchCompiler:
             value, (models.Brightness, models.UsbMidiInterface, models.Navigation)
         ):
             default_label = 'state'
-        elif isinstance(value, models.StockFirmware):
+        elif isinstance(
+            value, (models.StockFirmware, models.PlayMidiFile, models.RecordMidiFile)
+        ):
             default_label = value.operation
         else:
             default_label = value.type
@@ -708,6 +710,41 @@ class PatchCompiler:
         flags = 0
         if isinstance(value, models.Delay):
             kind, payload = 7, struct.pack('<I', round(value.duration * 1000))
+        elif isinstance(value, models.PlayMidiFile):
+            for output in value.outputs:
+                if (
+                    output not in self.target.outputs
+                    or output not in page_settings.CLOCK_ROUTES
+                    or (output == 'usb-device' and not self.show.usb_device_midi)
+                    or (output == 'usb-host' and not self.show.usb_host_midi)
+                ):
+                    self.errors.append(
+                        f'{path}: unavailable MIDI file output {output!r}'
+                    )
+            kind = 8
+            payload = struct.pack(
+                '<96sHIIIdBb',
+                value.filename.encode('ascii'),
+                sum(
+                    1 << page_settings.CLOCK_ROUTES[n]
+                    for n in value.outputs
+                    if n in page_settings.CLOCK_ROUTES
+                ),
+                value.loops,
+                value.pre_delay,
+                value.post_delay,
+                value.speed,
+                value.reverse,
+                value.transpose,
+            )
+        elif isinstance(value, models.RecordMidiFile):
+            kind = 9
+            routes = {'din': 0, 'trs': 1, 'usb-device': 6, 'usb-host': 8}
+            payload = struct.pack(
+                '<HH',
+                sum(1 << (c - 1) for c in value.channels),
+                sum(1 << routes[n] for n in value.inputs),
+            )
         elif isinstance(value, models.ProgramChange):
             kind, payload = 1, self.program(value, index, path)
         elif isinstance(value, models.Sequence):
@@ -1189,6 +1226,8 @@ class PatchCompiler:
                                 resources.add(
                                     (instrument.output, instrument.channel, controller)
                                 )
+                elif isinstance(value, models.PlayMidiFile):
+                    resources.update((o, 0, -1) for o in value.outputs)
                 elif isinstance(value, models.OutputMessage):
                     output = value.output
                     assert output is not None

@@ -540,3 +540,8 @@ an invocation is pending, and setup changes use the existing cancellation path.
 Completed delays are counted in stock-firmware continuation checkpoints.
 Returning from a stock visit skips waits already completed. Downloaded setups
 and song libraries preserve delay durations in seconds using the short form.
+
+## MIDI file playback and recording
+
+The `play-midi-file` and `record-midi-file` operations are patches. See
+[MIDI file patches](midi-files.md) for fields, timing, recording names and examples.

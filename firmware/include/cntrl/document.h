@@ -3,6 +3,7 @@
 #include "midi_bridge.h"
 #include <cstring>
 #include <cstdio>
+#include <cmath>
 
 namespace cntrl {
 constexpr unsigned pages_offset = 16;
@@ -425,6 +426,9 @@ private:
     static void read_clock(PageSettings &settings, const uint8_t *p) {
         for (unsigned i = PageSettings::clock_outputs; i < PageSettings::count; ++i, p += 2) settings.words[i] = u16(p);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_graph_valid)
+#endif
     static bool graph_valid(const uint8_t *bytes, unsigned length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,
                             unsigned mappings, const Hardware &hardware) {
@@ -496,6 +500,24 @@ private:
             case 5:
                 if (n[1] || length < 2 || length != 2u + u16(p) * 2u) return false;
                 for (unsigned j = 0; j < u16(p); ++j) if (u16(p + 2 + j * 2) >= count) return false;
+                break;
+            case 8: {
+                double speed = 0;
+                if (n[1] || length != 120 || (p[0] && !text_valid(p, 96)) || !u16(p + 96) || (u16(p + 96) & ~0x17f)
+                    || p[118] > 1 || int8_t(p[119]) == -128
+                    || ((u16(p + 96) & (1u << 6)) && !(bytes[19] & 8))
+                    || ((u16(p + 96) & (1u << 8)) && !(bytes[19] & 16))) return false;
+                for (unsigned j = 0; j < 96 && p[j]; ++j) if (p[j] == '/' || p[j] == '\\') return false;
+                std::memcpy(&speed, p + 110, 8);
+                if (!std::isfinite(speed) || speed <= 0) return false;
+                for (const auto &out : midi::output_connections)
+                    if ((u16(p + 96) & (1u << out.route)) && !output_valid(bytes + metadata + trs_modes_offset, reinterpret_cast<const uint8_t *>(out.name), hardware)) return false;
+                for (const auto &out : midi::usb_output_connections)
+                    if ((u16(p + 96) & (1u << out.route)) && !hardware.supports(out.name)) return false;
+                break;
+            }
+            case 9:
+                if (n[1] || length != 4 || !u16(p) || !u16(p + 2) || (u16(p + 2) & ~0x143)) return false;
                 break;
             case 7:
                 if (n[1] || length != 4 || !u32(p) || u32(p) > 65535) return false;

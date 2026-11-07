@@ -277,7 +277,14 @@ public:
         }
         return ready;
     }
-    void service(Sink &sink, uint32_t now) {
+    bool sysex_ready(unsigned outputs) const {
+        for (unsigned i = 0; i < destinations; ++i)
+            if ((outputs & (1u << i)) && (routes_[i].wire_sysex || routes_[i].terminate || routes_[i].pedal_offset)) return false;
+        for (const auto &b : owned_)
+            if ((outputs & (1u << b.route)) && b.delivery == Delivery::pending && b.offset) return false;
+        return true;
+    }
+    void service(Sink &sink, uint32_t now, unsigned reserved_outputs = 0) {
         for (unsigned i = 0; i < destinations; ++i) if (invalidated_ & (1u << i)) sink.forget_output(i);
         invalidated_ = 0;
         for (unsigned i = 0; i < destinations; ++i) {
@@ -291,6 +298,9 @@ public:
             bool owned_in_progress = false;
             for (const auto &b : owned_)
                 if (b.route == index && b.delivery == Delivery::pending && b.offset) owned_in_progress = true;
+            if ((reserved_outputs & (1u << index)) && !r.wire_sysex && !owned_in_progress && !r.pedal_offset) {
+                service_realtime(index, sink); continue;
+            }
             if ((owned_in_progress || r.pedal_offset) && service_realtime(index, sink)) continue;
             if (!r.wire_sysex && !r.pedal_offset && service_owned(index, sink)) continue;
             // A pedal batch is indivisible relative to ordinary bridge traffic.

@@ -9,6 +9,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <usb_keyboard.h>
 #include <SD.h>
 #include "expression_pedals.h"
+#include "midi_files.h"
 #include <USBHost_t36.h>
 #include <malloc.h>
 #include <new>
@@ -83,6 +84,7 @@ bool feature_open();
 PerformanceStatus performance_status();
 void capture_disk_space();
 StartupCounter startup_counter;
+MidiFiles midi_files;
 DMAMEM cntrl::Controller::NavigationState invocation_navigation[9];
 bool restoring_invocation = false;
 unsigned pending_ui_operation = 0;
@@ -121,7 +123,15 @@ public:
     cntrl::midi::Bridge::Delivery patch_delivery(unsigned owner) const override { return bridge_.delivery(owner); }
     void cancel_patch(unsigned owner) override { bridge_.cancel_owner(owner); }
     const cntrl::midi::MidiState *midi_state() const override { return &cntrl::midi::Sink::state(); }
-    bool state(unsigned operation, uint32_t value) override { return patch_state(operation, value); }
+    bool play_midi_file(unsigned owner, const cntrl::midi::PlayMidiFilePatch &settings) override {
+        return midi_files.play(owner, settings);
+    }
+    cntrl::midi::Bridge::Delivery midi_file_delivery(unsigned owner) const override { return midi_files.player.delivery(owner); }
+    void cancel_midi_file(unsigned owner) override { if (owner == midi_files.player.owner()) midi_files.player.cancel(); }
+    bool record_midi_file(const cntrl::midi::RecordMidiFilePatch &settings) override {
+        return midi_files.record(settings, startup_counter, micros());
+    }
+    FLASHMEM bool state(unsigned operation, uint32_t value) override { return patch_state(operation, value); }
     bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override { return patch_stock(pair, invocation); }
     void validation(bool begin) override { app_controller().validation(begin); }
     void validation_context(cntrl::PatchExecutor &invocation, bool begin) override {
@@ -392,7 +402,7 @@ public:
         leave_page();
         expression_.configure(settings);
         pages_.configure(settings);
-        bridge_.clock_owner(pages_.clock_owner());
+        bridge_.clock_owner(pages_.clock_owner() | midi_files.player.clock_outputs());
     }
     void browse_page(bool reverse) override {
         if (!documents.document().valid()) return;
@@ -504,8 +514,8 @@ public:
         if (!documents.document().valid()) pages_.generator.stop();
         unsigned clock_routes = clock_available();
         pages_.clock_connections(clock_routes);
-        bridge_.clock_owner(pages_.clock_owner());
-        pages_.generator.poll(micros(), clock_routes, *this);
+        bridge_.clock_owner(pages_.clock_owner() | midi_files.player.clock_outputs());
+        pages_.generator.poll(micros(), clock_routes & ~midi_files.player.clock_outputs(), *this);
         // Separate source limits plus an aggregate time budget. Rotate the
         // first source, so a saturated cable cannot starve later sources.
         for (unsigned i = 0; i < 3 && uint32_t(micros() - begin) < 180; ++i) {
@@ -515,6 +525,7 @@ public:
                     uint32_t packet = usb_midi_read_message();
                     if (!packet) break;
                     if (!bridge_.usb_enabled(6)) continue;
+                    midi_files.receive(6, cntrl::midi::Packet{uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}}, micros());
                     if (((packet >> 8) & 255) == 0xf8) pages_.clock((packet >> 4) & 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.enabled()) continue;
@@ -527,6 +538,7 @@ public:
                 } else {
                     HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
                     int byte = serial.read(); if (byte < 0) break;
+                    midi_files.receive(source - 1, uint8_t(byte), micros());
                     if (byte == 0xf8) pages_.clock(source + 15, micros());
 #if CNTRL_CABLE_TEST
                     if (cable_test.enabled()) { cable_test.receive(source - 1, uint8_t(byte), now); continue; }
@@ -537,8 +549,21 @@ public:
         }
         source_cursor_ = (source_cursor_ + 1) % 3;
         // Existing USB-host input is deliberately not bridged.
-        if (host_midi.read() && bridge_.usb_enabled(8) && host_midi.getType() == 0xf8)
-            pages_.clock(18 + host_midi.getCable(), micros());
+        if (host_midi.read() && bridge_.usb_enabled(8)) {
+            unsigned type = host_midi.getType();
+            if (type == 0xf8) pages_.clock(18 + host_midi.getCable(), micros());
+            if (type == 0xf0) {
+                for (unsigned i = 0; i < host_midi.getSysExArrayLength(); ++i) midi_files.receive(8, host_midi.getSysExArray()[i], micros());
+            } else {
+                uint8_t cin = type < 0xf0 ? type >> 4 : type == 0xf1 || type == 0xf3 ? 2 : type == 0xf2 ? 3 : type == 0xf6 ? 5 : 15;
+                cntrl::midi::Packet packet{cin, {uint8_t(type < 0xf0 ? type | (host_midi.getChannel() - 1) : type), host_midi.getData1(), host_midi.getData2()}};
+                midi_files.receive(8, packet, micros());
+            }
+        }
+        midi_files.recorder.poll(micros());
+        if (midi_files.recorder.failed() && !recording_failed_) error("MIDI recording write failed");
+        recording_failed_ = midi_files.recorder.failed();
+        if (bridge_.sysex_ready(midi_files.player.sysex_outputs())) midi_files.player.poll(micros(), clock_available(), *this);
 #if CNTRL_PANIC
         if (panic_owns_midi) {
             panic.tick(now, bridge_.handoff(*this));
@@ -550,7 +575,7 @@ public:
         if (cable_test.enabled()) { if (bridge_.handoff(*this)) cable_test.tick(now); }
         else
 #endif
-        bridge_.service(*this, now);
+        bridge_.service(*this, now, midi_files.player.sysex_outputs());
 #if CNTRL_SWITCHES
         switches.tick(now);
 #endif
@@ -661,7 +686,7 @@ private:
     uint32_t expression_refresh_ = 0;
     cntrl::Keyboard keyboard_;
     Pages pages_;
-    bool port_save_pending_ = false;
+    bool port_save_pending_ = false, recording_failed_ = false;
     bool performance_visible_ = false;
     int pending_patch_ = -1;
     bool splash_visible_ = false;
@@ -1330,7 +1355,7 @@ FLASHMEM void initialize_target() {
             startup_counter.start(file);
         }
     }
-    if (card.ready) board.load_expression_calibrations();
+    if (card.ready) { board.load_expression_calibrations(); midi_files.boot(); }
     capture_disk_space();
     font_files.ready = card.ready;
     splash_card.ready = card.ready;
