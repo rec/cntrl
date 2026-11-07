@@ -197,6 +197,73 @@ def test_external_dependencies_use_stable_keys_and_detect_cross_document_cycles(
         compiler.compile_show(local, {}, [], target)
 
 
+@pytest.mark.parametrize('inline', [True, False])
+def test_external_patches_can_be_embedded_or_resolved_at_runtime(
+    target: models.Target, inline: bool
+) -> None:
+    local = {
+        'inline_patches': inline,
+        'patches': {'borrowed': {'document': 'other', 'patch': 'nested'}},
+    }
+    other = {
+        'patches': {
+            'nested': {'patches': ['message', {'document': 'third', 'patch': 'wait'}]},
+            'message': {'type': 'start', 'output': 'din'},
+        }
+    }
+    companions = {
+        'other': other,
+        'third': {'patches': {'wait': {'duration': 0.25}}},
+    }
+    data = compiler.compile_show(local, {}, [], target, documents=companions)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert models.Setup.model_validate(exported).inline_patches is inline
+    if inline:
+        assert exported['patches']['borrowed']['patches'] == [
+            {'type': 'start', 'output': 'din'},
+            {'duration': 0.25},
+        ]
+        assert compiler.compile_show(exported, {}, [], target)
+    else:
+        assert exported['patches']['borrowed']['document'] == 'other'
+        with pytest.raises(compiler.CompilationError, match='companion document'):
+            compiler.compile_show(exported, {}, [], target)
+
+
+def test_inlined_programs_keep_source_routing_and_bank_mappings(
+    target: models.Target,
+) -> None:
+    local = {
+        'instruments': {'synth': {'output': 'din', 'channel': 1}},
+        'patches': {'borrowed': {'document': 'other', 'patch': 'program'}},
+    }
+    other = {
+        'instruments': {'synth': {'output': 'trs', 'channel': 2}},
+        'definitions': {
+            'profiles': [
+                {
+                    'instrument': 'synth',
+                    'name': 'default',
+                    'banks': {3: {'msb': 4, 'lsb': 5}},
+                }
+            ]
+        },
+        'patches': {'program': {'program': 7, 'bank': 3}},
+    }
+    data = compiler.compile_show(local, {}, [], target, documents={'other': other})
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    patch = exported['patches']['borrowed']['patches'][0]
+    instrument = exported['instruments'][patch['instrument']]
+    assert instrument['output'] == 'trs'
+    assert instrument['channel'] == 2
+    assert patch['program'] == 7
+    assert patch['bank'] == 3
+    recompiled = compiler.compile_show(exported, {}, [], target)
+    restored = tomlkit.parse(resolved.export(recompiled)).unwrap()
+    assert restored['patches']['borrowed'] == exported['patches']['borrowed']
+    assert models.Setup().inline_patches is True
+
+
 def test_persistent_switch_reserves_entire_raw_output_through_references(
     target: models.Target,
 ) -> None:

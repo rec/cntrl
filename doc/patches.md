@@ -446,9 +446,21 @@ patch = 'clean'
 External references use the setup's logical name and a named patch's stable key.
 Display labels and instrument/program matching are not identities. The setup CLI
 loads adjacent `other-setup.toml` companions recursively and compiles the complete
-dependency graph before opening the transport. On the pedal, sources are checked
-and pinned before execution. Missing references and cycles fail before effects;
-pending work prevents replacement of its source data.
+dependency graph before opening the transport.
+
+The top-level setup setting `inline_patches = true` is the default. Referenced
+patch actions and their nested dependencies are embedded in the compiled setup,
+including source instrument routing and bank mappings. Executing them does not
+load another setup from the pedal's card. Changes to a source setup require
+recompiling and uploading its callers. Downloading an inlined setup exports the
+embedded actions.
+
+Set `inline_patches = false` to retain runtime references. On the pedal, source
+setups are loaded, checked and pinned before execution, so subsequent invocations
+can use independently updated source setups. Missing references and cycles fail
+before effects; pending work prevents replacement of its source data. This
+setting controls patch dependencies within a compiled setup; song library live
+references still resolve their source setup at playback time.
 
 Song libraries have optional `instruments`, `definitions`, `patches`, `fonts` and
 `tags` context using the same authoring models. Each song's `patches` list

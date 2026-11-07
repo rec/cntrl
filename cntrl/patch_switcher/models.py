@@ -767,6 +767,7 @@ class Setup(BaseModel, frozen=True):
     fonts: dict[str, str] = Field(default_factory=dict)
     seed: Annotated[int, Field(strict=True)] | None = 0
     fill_in_styles: Annotated[bool, Field(strict=True)] = True
+    inline_patches: Annotated[bool, Field(strict=True)] = True
     background_color: str = '0xFFF8D8'
     foreground_brightness_limit: Annotated[
         float, Field(strict=True, gt=0, le=1), units.unit_validator('dimensionless')

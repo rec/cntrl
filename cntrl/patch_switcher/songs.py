@@ -161,6 +161,7 @@ def encode(
         context: dict[str, object] = {
             # This is an execution container, not an authored browser cycle.
             'fill_in_styles': False,
+            'inline_patches': False,
             # Song sources validate possible destinations. The selected setup
             # owns the physical jack modes when the song plays.
             'trs_ports': {

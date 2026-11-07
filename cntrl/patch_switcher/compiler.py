@@ -205,16 +205,6 @@ def compile_show(
                 f'instruments.{alias}: unavailable output {instrument.output!r}'
             )
         instruments[alias] = instrument
-        instrument_records.append(
-            struct.pack(
-                '<32s32sB3x',
-                _text(alias, 32, target, f'instruments.{alias}', errors),
-                _text(
-                    instrument.output, 32, target, f'instruments.{alias}.output', errors
-                ),
-                instrument.channel - 1,
-            )
-        )
     compiler = PatchCompiler(
         show, profiles, entries, instruments, target, errors, documents or {}
     )
@@ -412,6 +402,19 @@ def compile_show(
             texts = (presentation.name, None, presentation.display_name)
         names.extend(_name_record(t, path, errors) for t in texts)
         views.append(view)
+    if show.inline_patches and not errors:
+        compiler.inline_references()
+    for alias, instrument in instruments.items():
+        instrument_records.append(
+            struct.pack(
+                '<32s32sB3x',
+                _text(alias, 32, target, f'instruments.{alias}', errors),
+                _text(
+                    instrument.output, 32, target, f'instruments.{alias}.output', errors
+                ),
+                instrument.channel - 1,
+            )
+        )
     for label, count, maximum in (
         ('instruments', len(instruments), target.max_instruments),
         ('patch_cycles', len(patch_cycles), target.max_patch_cycles),
@@ -1278,6 +1281,92 @@ class PatchCompiler:
         ):
             return [self.named[value.patch]]
         return self.children.get(index, [])
+
+    def inline_references(self) -> None:
+        contexts: list[PatchCompiler] = [self]
+        imported: dict[tuple[int, int], int] = {}
+        for index, value in enumerate(list(self.values)):
+            if not isinstance(value, models.Reference) or not value.document:
+                continue
+            children: list[int] = []
+            for leaf, path, source in self.dependency_leaves(index):
+                context = self.source_context(source, contexts)
+                node = next(
+                    (i for i, p in enumerate(context.values) if p == leaf), None
+                )
+                if node is None:
+                    node = context.add(leaf, path)
+                key = contexts.index(context), node
+                if context is self:
+                    children.append(node)
+                    continue
+                if key in imported:
+                    children.append(imported[key])
+                    continue
+                data = context.nodes[node]
+                if node in context.programs:
+                    instrument_index = struct.unpack_from('<H', data, 4)[0]
+                    source_alias, instrument = list(context.instruments.items())[
+                        instrument_index
+                    ]
+                    profile = context.profiles[
+                        instrument.instrument, instrument.profile
+                    ]
+                    alias = next(
+                        (
+                            a
+                            for a, i in self.instruments.items()
+                            if i == instrument
+                            and self.profiles[i.instrument, i.profile] == profile
+                        ),
+                        None,
+                    )
+                    if alias is None:
+                        alias = source_alias
+                        if alias in self.instruments:
+                            number = len(self.instruments)
+                            while (alias := f'inline_{number}') in self.instruments:
+                                number += 1
+                        if (
+                            existing := self.profiles.get(
+                                (instrument.instrument, instrument.profile)
+                            )
+                        ) is not None and existing != profile:
+                            number = 0
+                            while (
+                                instrument.instrument,
+                                name := f'inline_{number}',
+                            ) in self.profiles:
+                                number += 1
+                            profile = profile.model_copy(update={'name': name})
+                            instrument = instrument.model_copy(update={'profile': name})
+                        self.profiles[instrument.instrument, instrument.profile] = (
+                            profile
+                        )
+                        self.instruments[alias] = instrument
+                    data = (
+                        data[:4]
+                        + struct.pack('<H', list(self.instruments).index(alias))
+                        + data[6:]
+                    )
+                destination = len(self.nodes)
+                if destination >= 65535:
+                    raise CompilationError(['inlined patches exceed node capacity'])
+                imported[key] = destination
+                children.append(destination)
+                self.nodes.append(data)
+                self.values.append(context.values[node])
+                self.paths.append(path)
+                self.labels.append(context.labels[node])
+                if node in context.program_metadata:
+                    self.program_metadata[destination] = context.program_metadata[node]
+            if len(children) > 32766:
+                raise CompilationError(['inlined patch exceeds node storage capacity'])
+            payload = struct.pack('<H', len(children)) + b''.join(
+                struct.pack('<H', c) for c in children
+            )
+            self.nodes[index] = struct.pack('<BBH', 5, 0, len(payload)) + payload
+            self.children[index] = children
 
     def pack(self, roots: list[int], switches: list[bytes]) -> bytes:
         prefix = (

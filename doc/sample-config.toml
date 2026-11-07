@@ -1,5 +1,6 @@
 seed = 0
 fill_in_styles = true
+inline_patches = true
 background_color = "0xFFF8D8"
 foreground_brightness_limit = 0.5
 take_first_match = false

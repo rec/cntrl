@@ -276,6 +276,8 @@ def compile_display(
         for k, v in show.model_dump(exclude_none=True).items()
         if k in SOURCE_FIELDS
     }
+    if not show.inline_patches:
+        source['inline_patches'] = False
     source['switches'] = {
         k: {
             n: w
