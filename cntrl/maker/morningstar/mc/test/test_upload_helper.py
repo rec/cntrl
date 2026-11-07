@@ -64,6 +64,72 @@ def firmware_path(tmp_path: Path) -> Path:
     return path
 
 
+@pytest.mark.parametrize('previous', [None, b'previous upload image'])
+def test_prepare_stages_the_validated_image_and_preserves_previous(
+    firmware_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    previous: bytes | None,
+) -> None:
+    destination = tmp_path / 'upload.hex'
+    monkeypatch.setattr(upload_helper, 'IMAGE_PATH', destination)
+    if previous is not None:
+        destination.write_bytes(previous)
+    backup = tmp_path / 'backup'
+    image = upload_helper.prepare_image(firmware_path, backup)
+    expected = firmware_path.read_bytes()
+    assert image.sha256 == hashlib.sha256(expected).hexdigest()
+    assert destination.read_bytes() == expected
+    assert (backup / 'new-image.hex').read_bytes() == expected
+    if previous is None:
+        assert not (backup / 'previous-upload-image.hex').exists()
+    else:
+        assert (backup / 'previous-upload-image.hex').read_bytes() == previous
+
+
+@pytest.mark.parametrize('malformed', [False, True])
+def test_prepare_rejects_invalid_image_without_replacing_previous(
+    firmware_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    malformed: bool,
+) -> None:
+    source = tmp_path / 'invalid.hex'
+    source.write_text(
+        'not an Intel HEX image'
+        if malformed
+        else firmware_path.read_text().replace(
+            hex_record(4, bytes.fromhex('6000')),
+            hex_record(4, bytes.fromhex('7000')),
+        )
+    )
+    destination = tmp_path / 'upload.hex'
+    destination.write_bytes(b'previous')
+    monkeypatch.setattr(upload_helper, 'IMAGE_PATH', destination)
+    backup = tmp_path / 'backup'
+    with pytest.raises(ValueError):
+        upload_helper.prepare_image(source, backup)
+    assert destination.read_bytes() == b'previous'
+    assert not backup.exists()
+
+
+def test_prepare_refuses_to_overwrite_a_backup(
+    firmware_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / 'upload.hex'
+    destination.write_bytes(b'previous')
+    monkeypatch.setattr(upload_helper, 'IMAGE_PATH', destination)
+    backup = tmp_path / 'backup'
+    backup.mkdir()
+    (backup / 'new-image.hex').write_bytes(b'recovery image')
+    with pytest.raises(FileExistsError):
+        upload_helper.prepare_image(firmware_path, backup)
+    assert destination.read_bytes() == b'previous'
+    assert (backup / 'new-image.hex').read_bytes() == b'recovery image'
+
+
 def test_cli_uses_explicit_commands() -> None:
     assert isinstance(
         tyro.cli(upload_helper.Serve | upload_helper.Upload, args=['serve']),

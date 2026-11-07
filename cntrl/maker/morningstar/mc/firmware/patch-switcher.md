@@ -4,6 +4,22 @@ The application is built and running on the pedal. It is not a fully
 hardware-qualified release. Dated sections below retain earlier image hashes,
 format numbers and measurements; they are historical, not the current build.
 
+## Preparing an upload image
+
+After building the combined firmware, stage it for the existing upload helper:
+
+```bash
+uv run -m cntrl.maker.morningstar.mc.upload_helper prepare \
+  --source cntrl/maker/morningstar/mc/firmware/build/boot-switch/combined.hex \
+  --directory backups/before-flash/firmware
+```
+
+The directory must not exist. The command validates a snapshot of the HEX file,
+saves it as `new-image.hex`, retains any previous staged upload image as
+`previous-upload-image.hex`, and atomically replaces the helper's fixed
+`firmware/build/patch-switcher.hex`. It prints the exact file's SHA-256 for the
+upload request. It does not enter the bootloader or flash the pedal.
+
 ## Browsing transitions
 
 By default, moving to the next cycle slides the candidate pane upward; moving to the

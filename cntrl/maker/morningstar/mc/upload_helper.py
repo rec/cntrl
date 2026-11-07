@@ -8,6 +8,7 @@ import subprocess
 import sys
 import termios
 from pathlib import Path
+from shutil import copyfile
 from tempfile import TemporaryDirectory
 
 import tyro
@@ -32,6 +33,13 @@ class Bootloader(BaseModel, frozen=True):
     """Enter HalfKay through the fixed pedal's USB serial port, without uploading."""
 
 
+class Prepare(BaseModel, frozen=True):
+    """Validate and stage a HEX image, retaining images in a new backup directory."""
+
+    source: Path
+    directory: Path
+
+
 class UploadResult(BaseModel, frozen=True):
     returncode: int
     output: str
@@ -43,6 +51,21 @@ class Board(BaseModel, frozen=True):
     description: str
     model: str
     capabilities: list[str]
+
+
+def prepare_image(source: Path, directory: Path) -> FirmwareImage:
+    IMAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix='prepare-', dir=IMAGE_PATH.parent) as staging:
+        snapshot = Path(staging) / 'patch-switcher.hex'
+        snapshot.write_bytes(source.read_bytes())
+        image = read_hex(snapshot)
+        validate_firmware(image)
+        directory.mkdir(parents=True)
+        if IMAGE_PATH.exists():
+            copyfile(IMAGE_PATH, directory / 'previous-upload-image.hex')
+        copyfile(snapshot, directory / 'new-image.hex')
+        snapshot.replace(IMAGE_PATH)
+    return image
 
 
 def request_bootloader() -> None:
@@ -183,19 +206,22 @@ def request_upload(request: Upload) -> UploadResult:
 
 
 def main() -> None:
-    options = tyro.cli(Serve | Upload | Bootloader)
+    options = tyro.cli(Serve | Upload | Bootloader | Prepare)
     try:
         if isinstance(options, Serve):
             serve()
         elif isinstance(options, Bootloader):
             request_bootloader()
+        elif isinstance(options, Prepare):
+            image = prepare_image(options.source, options.directory)
+            print(f'Prepared {IMAGE_PATH}\nSHA256: {image.sha256}')
         else:
             result = request_upload(options)
             print(result.output, end='')
             sys.exit(result.returncode)
     except KeyboardInterrupt:
         sys.exit(130)
-    except OSError as error:
+    except (OSError, ValueError) as error:
         sys.exit(f'Upload helper: {error}')
 
 
