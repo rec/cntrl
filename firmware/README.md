@@ -79,6 +79,7 @@ cntrl setup list --port /dev/YOUR_SERIAL_PORT
 cntrl setup set Evening --port /dev/YOUR_SERIAL_PORT
 cntrl setup rotate -b --port /dev/YOUR_SERIAL_PORT
 cntrl setup download Evening --port /dev/YOUR_SERIAL_PORT
+cntrl setup restore backups/before-flash --port /dev/YOUR_SERIAL_PORT
 cntrl setup del Evening --port /dev/YOUR_SERIAL_PORT
 cntrl status --port /dev/YOUR_SERIAL_PORT
 ```
@@ -88,6 +89,12 @@ running application; it cannot flash firmware. The old single-show `upload`
 command is replaced by named setup management. Close other serial users before
 transferring data. A status response reports format version, active byte
 count and CRC32. Recheck status after a power cycle to verify persistence.
+
+`setup restore` reads backups produced by `rescued_scripts/backup-pedal.py`.
+It uploads `setups/fonts/*.cfont`, overwrites the saved `setups/*.bin` with
+read-back verification, and restores a nonempty `selected.txt` selection.
+Binaries must already use the current document format. Songs and unrelated
+setups are retained. An empty saved selection leaves the current selection alone.
 
 Data files can be combined using a standalone ` + ` argument wherever the CLI
 accepts them. Put positional expressions before options, for example

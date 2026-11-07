@@ -12,7 +12,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import compiler, data_files, history, models, resolved, songs, transport
+from . import backups, compiler, data_files, history, models, resolved, songs, transport
 
 
 class Sources(BaseModel, frozen=True):
@@ -86,6 +86,7 @@ class SetupCLI(BaseModel, frozen=True):
         | Annotated[Delete, tyro.conf.subcommand(name='del')]
         | Annotated[Rotate, tyro.conf.subcommand(name='rotate')]
         | Annotated[Download, tyro.conf.subcommand(name='download')]
+        | Annotated[backups.Restore, tyro.conf.subcommand(name='restore')]
     )
 
 
@@ -199,8 +200,18 @@ def document_references(document: object) -> list[str]:
 
 
 def run_setup(
-    command: Copy | Set | List | Delete | Rotate | Download | history.History,
+    command: Copy
+    | Set
+    | List
+    | Delete
+    | Rotate
+    | Download
+    | history.History
+    | backups.Restore,
 ) -> None:
+    if isinstance(command, backups.Restore):
+        backups.restore_setups(command.directory, command.port)
+        return
     if isinstance(command, history.History):
         history.run(command)
         return
