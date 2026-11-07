@@ -13,23 +13,23 @@ program = 1
 name = 'Flute'
 style = {foreground_color = 'white'}
 
-[pages.patch]
+[patch_views.patch]
 fields = ['brightness', 'display_name', 'volume', 'tempo', 'splash']
 
 [parameters.tempo]
 value = 120
 
-[pages.numeric]
+[patch_views.numeric]
 fields = ['program', 'bank', 'volume', 'pan', 'instrument', 'name']
 
-[pages.settings]
+[patch_views.settings]
 fields = ['is_midi_interface', 'screensaver_timeout', 'navigation.hold_delay', 'scrolling.horizontal_duration']
 
 [windows.undo]
-page = 'numeric'
+view = 'numeric'
 
 [windows.sent]
-page = 'settings'
+view = 'settings'
 
 [windows.next.style]
 background_color = 'blue'

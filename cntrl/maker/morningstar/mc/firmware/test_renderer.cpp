@@ -700,6 +700,9 @@ static void test_page_settings() {
     settings.words[cntrl::PageSettings::slot1] = 90;
     settings.words[cntrl::PageSettings::slot2] = 144;
     Pages pages; pages.configure(settings);
+    constexpr uint8_t cycle[] = {'C', 'L', 'A', 'Y', 0, 10,
+        1, 1, 2, 1, 3, 1, 4, 1, 5, 1, 6, 1, 7, 1, 8, 1, 9, 1, 0, 1};
+    pages.layout(cntrl::AppLayout{cycle});
     PerformanceStatus status; status.cycles = 10; status.patches = 59;
     status.ram_used[0] = 49 * 1024; status.ram_free[0] = 463 * 1024;
     status.ram_used[1] = 25 * 1024; status.ram_free[1] = 487 * 1024;
@@ -903,8 +906,48 @@ static void test_page_settings() {
     assert(!std::strcmp(view.lines[1].text, "120.0"));
 }
 
+static void test_page_window_allocation() {
+    constexpr uint8_t cycle[] = {'C', 'L', 'A', 'Y', 0, 5,
+        10, 0, 1, 1, 1, 2, 1, 3, 0, 0};
+    Pages pages;
+    pages.layout(cntrl::AppLayout{cycle});
+    assert(pages.page() == Pages::Page::none && pages.windows() == 0);
+    pages.tap(100);
+    assert(pages.page() == Pages::Page::none);
+    for (unsigned count = 1; count <= 3; ++count) {
+        pages.browse(false, "setup");
+        assert(pages.page() == Pages::Page::status && pages.windows() == count);
+    }
+    pages.browse(false, "setup");
+    assert(pages.page() == Pages::Page::tap && pages.windows() == 0);
+    pages.browse(false, "setup");
+    assert(pages.page() == Pages::Page::none && pages.windows() == 0);
+    pages.browse(true, "setup");
+    assert(pages.page() == Pages::Page::tap);
+    pages.layout(cntrl::AppLayout{});
+    pages.browse(false, "setup");
+    assert(pages.page() == Pages::Page::none && pages.windows() == 0);
+
+    cntrl::Pane content;
+    std::snprintf(content.lines[0].text, 64, "Status");
+    for (unsigned i = 1; i < 8; ++i) std::snprintf(content.lines[i].text, 64, "row %u", i);
+    content.circles[0].diameter = 40;
+    for (unsigned count = 2; count <= 3; ++count) {
+        unsigned row = 1;
+        for (unsigned window = 0; window < count; ++window) {
+            const auto view = Pages::window_view(content, window, count);
+            assert(!std::strcmp(view.lines[0].text, "Status"));
+            assert(view.circles[0].diameter == (window == 0 ? 40 : 0));
+            for (unsigned i = 1; i < cntrl::max_lines && view.lines[i].text[0]; ++i)
+                assert(!std::strcmp(view.lines[i].text, content.lines[row++].text));
+        }
+        assert(row == 8);
+    }
+}
+
 int main() {
     test_page_settings();
+    test_page_window_allocation();
     writes = pixels_sent = 0;
     sparse_text();
     {

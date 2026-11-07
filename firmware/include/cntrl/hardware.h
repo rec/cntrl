@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include "page_settings.h"
+#include "app_layout.h"
 
 namespace cntrl {
 constexpr unsigned max_document = 65536;
@@ -56,6 +57,7 @@ inline bool button_pair_valid(unsigned mask) {
 }
 
 struct SongContinuation;
+class Document;
 struct Hardware {
     virtual ~Hardware() = default;
     // Accept the complete message sequence, or accept none of it.
@@ -80,6 +82,8 @@ struct Hardware {
     virtual void show(unsigned pane, const Pane &content) = 0;
     virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) { (void)undo; (void)duration_ms; (void)pane; (void)vertical; (void)panorama; }
     virtual void configure_page_settings(const PageSettings &) {}
+    virtual void configure_apps(const Document &) {}
+    virtual bool refresh_apps() { return false; }
     virtual void browse_page(bool) {}
     virtual void tap_tempo(uint32_t) {}
     // Temporary performance feedback bypasses dimming; a normal call clears it.

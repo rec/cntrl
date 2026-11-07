@@ -295,22 +295,22 @@ pad = 4
 [style]
 font_name = 'Arial'
 
-[pages.patch]
+[patch_views.patch]
 fields = ['patch_cycle.name', 'display_name']
 
 [windows.undo]
-page = 'patch'
+view = 'patch'
 
 [windows.sent]
-page = 'patch'
+view = 'patch'
 
 [windows.next]
-page = 'patch'
+view = 'patch'
 
 # Optional overrides:
 # [windows.next.style]
 # background_color = '0x002040'
-# [pages.patch.line_styles.display_name]
+# [patch_views.patch.line_styles.display_name]
 # font_name = 'ComicSansMS'
 ```
 
@@ -322,7 +322,7 @@ routing alias). Built-in global settings are `brightness`, `splash`,
 These read the current document, including numeric edits. Additional shared
 display values are defined as `[parameters.tempo]` with `value = 120` and an
 optional `style` block; they are configuration values, not a tempo engine.
-Their names must not collide with built-ins. Pages list names in display order;
+Their names must not collide with built-ins. Patch views list names in display order;
 unknown or duplicate names are rejected. Absent/empty values are omitted, while
 zero and false remain visible. A page supports at most 16 fields, further
 limited by the available display height.
@@ -368,7 +368,7 @@ instrument = 'synth'
 program = 1
 tags = ['whole-system']
 
-[pages.patch]
+[patch_views.patch]
 fields = ['patch_cycle.name', 'tags', 'display_name']
 ```
 
@@ -430,7 +430,9 @@ values do not determine vertical spacing.
 
 Format 30 adds independent horizontal and vertical scroll durations and the
 send, patch-browsing, and cycle-browsing directions.
-Recompile older setups for format 30.
+Format 31 adds named app instances, a configurable page cycle and window allocation.
+Recompile older setups for format 31. See [Apps and pages](../doc/apps-and-pages.md)
+for configuration and the empty setup.
 
 Format 29 added four per-setup TRS port roles, editable from the TRS Ports page.
 
@@ -498,7 +500,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 
 | Record | Layout |
 | --- | --- |
-| Header, 28 bytes | `CSW1`, u16 version (29), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI; other bits zero), u32 body CRC32, u32 screensaver timeout in milliseconds |
+| Header, 28 bytes | `CSW1`, u16 version (31), u16 navigation hold-delay milliseconds, u32 total bytes, u16 instrument/patch cycle/patch counts, u8 brightness (0..255), u8 flags (bit 0 splash, bit 1 USB MIDI interface, bit 2 animation color cycling, bits 3 and 4 enable USB device and host MIDI, bit 5 clock settings, bit 6 gestures, bit 7 expression assignments), u32 body CRC32, u32 screensaver timeout in milliseconds |
 | Screen, 16 bytes, three records | u8 font ID, size, pad, zero; u16 foreground RGB565, background RGB565, line height, top-bearing adjustment; four zero bytes |
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
@@ -507,6 +509,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
+| App/page layout, after optional expression, clock, keyboard, gesture and hook sections | `CLAY`, u8 app count, u8 page count; each app has name[32] and three u8 logical windows in surrender order; each page has u8 type and u8 window count. At most four apps and 32 pages. Logical windows are left=0, center=1, right=2. Page types follow `layout.PAGE_TYPES` |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
 | Display header, 16 bytes | `CDSP`, u16 style count, page count, text count, page-data byte count; u32 source-metadata byte count |
 | Resolved style, 16 bytes | Same layout as a screen record, one per distinct resolved style |
@@ -612,9 +615,10 @@ records between the bank indices and `CNAM`. Each record holds a 32-byte
 output name followed by channel, CC, minimum, maximum, reverse and curve bytes.
 A zero channel denotes an unassigned jack.
 
-### Auxiliary patch-manager pages (format 26)
+### Pages
 
-The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test, Panic, TRS Ports, Expression, MIDI Clock and Clock Tempo using
+By default the rightmost window starts on Status. F cycles through Status, Firmware,
+MIDI Cable Test, Panic, TRS Ports, Expression, MIDI Clock, Clock Tempo, Keyboard and Tap Tempo using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary page in place.
@@ -646,8 +650,9 @@ After a clock timeout, the retained tempo is stippled until clocks resume.
 All durations below are seconds and accept unit strings. Dimensions are pixels;
 title and tempo heights reserve layout bands, while font size is fitted automatically.
 
-Configure these pages under `[page_settings]`, formerly `[right_pages]`.
-Existing compiled setups keep the same layout; editable exports use the new name.
+Configure shared page preferences under `[page_settings]`. Select page types,
+order and window counts with the setup's `pages` list. Configure named app instances
+under `[apps.NAME]`. See [Apps and pages](../doc/apps-and-pages.md).
 
 ```toml
 [page_settings]

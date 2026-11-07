@@ -4,17 +4,17 @@ splash = true
 fill_in_styles = false
 screensaver_timeout = 3
 
-[pages.patch]
+[patch_views.patch]
 fields = ['patch_cycle.name', 'display_name']
 
 [windows.undo]
-page = 'patch'
+view = 'patch'
 
 [windows.sent]
-page = 'patch'
+view = 'patch'
 
 [windows.next]
-page = 'patch'
+view = 'patch'
 
 [instruments.pman]
 instrument = "patchman"

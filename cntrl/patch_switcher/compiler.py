@@ -10,7 +10,7 @@ from zlib import crc32
 import tomlkit
 from pydantic import ValidationError
 
-from . import display, midi_messages, models, page_settings
+from . import display, layout, midi_messages, models, page_settings
 
 
 class CompilationError(ValueError):
@@ -447,6 +447,7 @@ def compile_show(
         clock = page_settings.pack_clock(show, target)
         expression = page_settings.pack_expression(show, target, TRS_JACKS)
         keyboard = page_settings.pack_keyboard(show, target)
+        app_layout = layout.pack(show)
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -539,6 +540,7 @@ def compile_show(
             )
             else b''
         )
+        + app_layout
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -1573,7 +1575,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH3B')
-DOCUMENT_VERSION = 30
+DOCUMENT_VERSION = 31
 SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
 TRS_JACKS = tuple(f'configurable-{i}' for i in range(1, 5))
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

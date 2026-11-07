@@ -50,8 +50,10 @@ def show() -> dict[str, object]:
             ]
         },
         tag_styles={'sax': models.Style(), 'whole-system': models.Style()},
-        pages={
-            'patch': models.Page(fields=['patch_cycle.name', 'tags', 'display_name'])
+        patch_views={
+            'patch': models.PatchView(
+                fields=['patch_cycle.name', 'tags', 'display_name']
+            )
         },
     ).model_dump(exclude_none=True)
 

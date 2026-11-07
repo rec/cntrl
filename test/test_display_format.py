@@ -56,7 +56,9 @@ def lines(block: bytes, page: int) -> list[tuple[int, tuple[int, ...], int, str]
 def test_patch_program_lines_share_smaller_fitting_size(target: models.Target) -> None:
     show = models.Setup(
         fill_in_styles=False,
-        pages={'patch': models.Page(fields=['patch_cycle.name', 'names.a', 'names.b'])},
+        patch_views={
+            'patch': models.PatchView(fields=['patch_cycle.name', 'names.a', 'names.b'])
+        },
     )
     item = display.DisplayPatch(
         values={
@@ -103,11 +105,11 @@ def test_a_window_can_select_a_different_page(target: models.Target) -> None:
         {
             'instruments': {},
             'patch_cycles': {},
-            'pages': {
+            'patch_views': {
                 'patch': {'fields': ['display_name']},
                 'tag': {'fields': ['patch_cycle.name']},
             },
-            'windows': {'sent': {'page': 'tag', 'pad': 12}},
+            'windows': {'sent': {'view': 'tag', 'pad': 12}},
         }
     )
     windows, refs, block = display.compile_display(show, [patch()], target)
@@ -139,15 +141,15 @@ def test_window_records_and_pages_follow_physical_left_to_right_order(
     show = models.Setup.model_validate(
         {
             'fill_in_styles': False,
-            'pages': {
+            'patch_views': {
                 'candidate': {'fields': ['display_name']},
                 'current': {'fields': ['brightness']},
                 'history': {'fields': ['patch_cycle.name']},
             },
             'windows': {
-                'next': {'page': 'candidate', 'style': {'background_color': 'red'}},
-                'sent': {'page': 'current', 'style': {'background_color': 'green'}},
-                'undo': {'page': 'history', 'style': {'background_color': 'blue'}},
+                'next': {'view': 'candidate', 'style': {'background_color': 'red'}},
+                'sent': {'view': 'current', 'style': {'background_color': 'green'}},
+                'undo': {'view': 'history', 'style': {'background_color': 'blue'}},
             },
         }
     )
@@ -173,7 +175,7 @@ def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
             'instruments': {},
             'patch_cycles': {'wind': []},
             'windows': {'next': {'style': {'background_color': 'blue'}}},
-            'pages': {
+            'patch_views': {
                 'patch': {
                     'style': {'foreground_color': 'yellow'},
                     'line_styles': {'display_name': {'foreground_color': 'green'}},
@@ -201,7 +203,7 @@ def test_page_fields_use_window_data_and_global_parameters(
                 'zero': {'value': 0},
                 'missing': {},
             },
-            'pages': {
+            'patch_views': {
                 'patch': {'fields': ['display_name', 'tempo', 'missing', 'off', 'zero']}
             },
         }
@@ -218,13 +220,13 @@ def test_page_fields_use_window_data_and_global_parameters(
     'config,message',
     [
         ({'parameters': {'program': {'value': 1}}}, 'duplicate field'),
-        ({'pages': {'patch': {'fields': ['unknown']}}}, 'unknown fields'),
+        ({'patch_views': {'patch': {'fields': ['unknown']}}}, 'unknown fields'),
         (
-            {'pages': {'patch': {'fields': ['program', 'program']}}},
+            {'patch_views': {'patch': {'fields': ['program', 'program']}}},
             'duplicate page field',
         ),
-        ({'windows': {'sent': {'page': 'absent'}}}, 'unknown page'),
-        ({'pages': {'patch': {'line_styles': {'missing': {}}}}}, 'line_styles'),
+        ({'windows': {'sent': {'view': 'absent'}}}, 'unknown patch view'),
+        ({'patch_views': {'patch': {'line_styles': {'missing': {}}}}}, 'line_styles'),
     ],
 )
 def test_ambiguous_or_unknown_references_are_rejected(
@@ -257,7 +259,7 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
     show = compiler.read_document(FIXTURES / 'show.json')
     assert isinstance(show, dict)
     show['contrast'] = 0.5
-    show['pages'] = {
+    show['patch_views'] = {
         'patch': {
             'fields': ['patch_cycle.name', 'display_name', 'brightness'],
             'line_styles': {'brightness': {'foreground_color': 'blue'}},
@@ -287,7 +289,9 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
         == definitions['programs'][0]['style']
     )
     assert (
-        exported['pages']['patch']['line_styles']['brightness']['foreground_color']
+        exported['patch_views']['patch']['line_styles']['brightness'][
+            'foreground_color'
+        ]
         == 'blue'
     )
     assert compiler.compile_show(exported, {}, [], target) == data
@@ -303,7 +307,7 @@ def test_tag_labels_and_patch_content_resolve_their_own_styles(
             'sax': models.Style(foreground_color='red'),
             'whole-system': models.Style(foreground_color='blue'),
         },
-        pages={'patch': models.Page(fields=['tags', 'display_name'])},
+        patch_views={'patch': models.PatchView(fields=['tags', 'display_name'])},
     )
     value = patch().model_copy(
         update={
@@ -334,7 +338,7 @@ def test_local_tag_reapplies_after_program_tags(
             'sax': models.Style(foreground_color='red'),
             'bright': models.Style(foreground_color='blue'),
         },
-        pages={'patch': models.Page(fields=['tags', 'display_name'])},
+        patch_views={'patch': models.PatchView(fields=['tags', 'display_name'])},
     )
     value = patch().model_copy(
         update={'program_tags': ['sax', 'bright'], 'tags': ['sax']}

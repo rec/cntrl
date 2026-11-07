@@ -72,7 +72,7 @@ public:
     }
     const char *browse_result() const { return browse_.result; }
     bool rotate(bool backward) { return browse(selected_, backward, true); }
-    void redraw() { if (document_.valid()) controller_.refresh(); else empty(); }
+    void redraw() { if (document_.valid()) { if (!hardware_.refresh_apps()) controller_.refresh(); } else empty(); }
     bool edit_begin() {
         if (busy() || hardware_.configuration_locked() || !document_.valid()) return false;
         std::memcpy(staging_, active_, document_.length()); dirty_ = true; return true;
@@ -506,6 +506,7 @@ private:
     }
     void empty(bool startup = false) {
         document_ = Document(); controller_.deactivate();
+        hardware_.configure_apps(document_);
         constexpr uint8_t off[4] = {}; hardware_.configure_trs_ports(off);
         hardware_.begin_fonts(); hardware_.finish_fonts(true);
         hardware_.set_brightness(192); hardware_.set_splash(startup, 0);

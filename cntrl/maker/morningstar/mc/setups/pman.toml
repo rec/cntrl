@@ -9,30 +9,30 @@ contrast = 0.6
 font_name = "classic"
 
 [windows.undo]
-page = "patch"
+view = "patch"
 
 [windows.undo.style]
 background_color = "0xF8FCF8"
 foreground_color = "0x000000"
 
 [windows.sent]
-page = "patch"
+view = "patch"
 
 [windows.sent.style]
 background_color = "0xF8FCF8"
 foreground_color = "0x000000"
 
 [windows.next]
-page = "patch"
+view = "patch"
 
 [windows.next.style]
 background_color = "0xF8FCF8"
 foreground_color = "0x000000"
 
-[pages.patch]
+[patch_views.patch]
 fields = ["patch_cycle.name", "display_name"]
 
-[pages.patch.line_styles]
+[patch_views.patch.line_styles]
 
 [tag_styles]
 

@@ -168,7 +168,7 @@ output = 'din'
 channel = 1
 catalogues = ['vl70-internal.toml', 'patchman-internal.toml']
 
-[pages.patch]
+[patch_views.patch]
 fields = ['patch_cycle.name', 'names.vl70m', 'names.patchman']
 
 [patch_cycles]

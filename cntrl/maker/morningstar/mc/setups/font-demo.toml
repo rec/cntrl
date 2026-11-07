@@ -6,18 +6,18 @@ pad = 4
 contrast = 0.6
 
 [windows.undo]
-page = "patch"
+view = "patch"
 
 [windows.sent]
-page = "patch"
+view = "patch"
 
 [windows.next]
-page = "patch"
+view = "patch"
 
-[pages.patch]
+[patch_views.patch]
 fields = ["handwriting_sample", "courier_sample", "courier_bold_sample"]
 
-[pages.patch.line_styles]
+[patch_views.patch.line_styles]
 
 [tag_styles]
 

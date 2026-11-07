@@ -75,6 +75,61 @@ decimals = 1
 
 [page_settings.expression]
 
+[apps.patch-switcher]
+
+type = "patch-switcher"
+give_up_windows = ["right", "center", "left"]
+
+[[pages]]
+
+type = "status"
+windows = 1
+
+[[pages]]
+
+type = "firmware"
+windows = 1
+
+[[pages]]
+
+type = "cable-test"
+windows = 1
+
+[[pages]]
+
+type = "panic"
+windows = 1
+
+[[pages]]
+
+type = "trs-ports"
+windows = 1
+
+[[pages]]
+
+type = "expression"
+windows = 1
+
+[[pages]]
+
+type = "clock-transport"
+windows = 1
+
+[[pages]]
+
+type = "clock-tempo"
+windows = 1
+
+[[pages]]
+
+type = "keyboard"
+windows = 1
+
+[[pages]]
+
+type = "tap-tempo"
+windows = 1
+
 [scrolling]
 
 horizontal_duration = 0.075
@@ -96,7 +151,7 @@ horizontal_scale = 1.0
 
 [windows.next]
 
-page = "patch"
+view = "patch"
 pad = 0
 
 [windows.next.style]
@@ -109,7 +164,7 @@ horizontal_scale = 1.0
 
 [windows.sent]
 
-page = "patch"
+view = "patch"
 pad = 0
 
 [windows.sent.style]
@@ -122,7 +177,7 @@ horizontal_scale = 1.0
 
 [windows.undo]
 
-page = "patch"
+view = "patch"
 pad = 0
 
 [windows.undo.style]
@@ -133,11 +188,11 @@ foreground_color = "sample"
 font_name = "sample"
 horizontal_scale = 1.0
 
-[pages.patch]
+[patch_views.patch]
 
 fields = ["patch_cycle.name", "display_name"]
 
-[pages.patch.style]
+[patch_views.patch.style]
 
 icon = "sample"
 background_color = "sample"
@@ -145,7 +200,7 @@ foreground_color = "sample"
 font_name = "sample"
 horizontal_scale = 1.0
 
-[pages.patch.line_styles]
+[patch_views.patch.line_styles]
 
 [tag_styles]
 

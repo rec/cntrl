@@ -11,6 +11,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include "expression_pedals.h"
 #include <USBHost_t36.h>
 #include <malloc.h>
+#include <new>
 extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
 #include <cntrl/documents.h>
 #include <cntrl/patch_sources.h>
@@ -59,7 +60,14 @@ TrsPorts trs_ports;
 USBHost host;
 MIDIDevice host_midi(host);
 extern cntrl::StoredPatchSources patch_sources;
-extern cntrl::Controller controller;
+cntrl::Controller &app_controller();
+void configure_apps(const cntrl::Document &document);
+void refresh_app();
+void configure_app_menu();
+bool app_visible();
+bool apps_busy();
+void app_brightness(uint8_t value);
+unsigned rendering_app();
 extern uint8_t held_controls;
 bool patch_state(unsigned operation, uint32_t value);
 enum class UiOperation : unsigned {
@@ -75,7 +83,7 @@ bool feature_open();
 PerformanceStatus performance_status();
 void capture_disk_space();
 StartupCounter startup_counter;
-DMAMEM cntrl::Controller::NavigationState invocation_navigation[6];
+DMAMEM cntrl::Controller::NavigationState invocation_navigation[9];
 bool restoring_invocation = false;
 unsigned pending_ui_operation = 0;
 bool return_to_switches = false;
@@ -115,17 +123,18 @@ public:
     const cntrl::midi::MidiState *midi_state() const override { return &cntrl::midi::Sink::state(); }
     bool state(unsigned operation, uint32_t value) override { return patch_state(operation, value); }
     bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override { return patch_stock(pair, invocation); }
-    void validation(bool begin) override { controller.validation(begin); }
+    void validation(bool begin) override { app_controller().validation(begin); }
     void validation_context(cntrl::PatchExecutor &invocation, bool begin) override {
         if (begin && !restoring_invocation && !invocation.reconstructing())
-            invocation_navigation[invocation.owner()] = controller.navigation();
-        controller.validation(begin);
+            invocation_navigation[invocation.owner()] = app_controller().navigation();
+        app_controller().validation(begin);
     }
-    bool preview_state(unsigned operation, uint32_t value) override { return controller.preview_state(operation, value); }
+    bool preview_state(unsigned operation, uint32_t value) override { return app_controller().preview_state(operation, value); }
     bool selection(unsigned operation, const cntrl::Document *&document, unsigned &node) override {
-        return controller.selection(operation, document, node);
+        if (!documents.document().valid() || !documents.document().app_layout().apps()) return false;
+        return app_controller().selection(operation, document, node);
     }
-    void selection_complete(unsigned operation) override { controller.selection_complete(operation); }
+    void selection_complete(unsigned operation) override { app_controller().selection_complete(operation); }
     cntrl::midi::Bridge::Delivery prepare_leave(cntrl::PatchExecutor &invocation) override {
 #if CNTRL_SWITCHES
         if (switches.open()) {
@@ -293,21 +302,38 @@ public:
         ++scan_count_;
     }
     void show(unsigned pane, const cntrl::Pane &content) override {
+        if (content.performance) {
+            if (!app_visible() || feature_open()) return;
+            const auto layout = documents.document().app_layout();
+            const int destination = layout.app_window(rendering_app(), pane, pages_.windows());
+            if (destination < 0) return;
+            if (!performance_visible_) { pages_.revisit(documents.selected()); enter_page(); }
+            performance_visible_ = true;
+            if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
+            renderer_.show(unsigned(destination), content);
+            return;
+        }
         if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(millis()); }
         if (pane == 2) {
-            if (content.performance) {
-                if (!performance_visible_) {
-                    pages_.revisit(documents.selected());
-                    enter_page();
-                }
-                performance_visible_ = true;
-                return;
-            } else {
-                if (performance_visible_) leave_page();
-                performance_visible_ = false;
-            }
+            if (performance_visible_) leave_page();
+            performance_visible_ = false;
         }
         renderer_.show(pane, content);
+    }
+    void configure_apps(const cntrl::Document &document) override {
+        pages_.layout(document.valid() ? document.app_layout() : cntrl::AppLayout{});
+        ::configure_apps(document);
+        performance_visible_ = true;
+        if (document.valid()) enter_page();
+    }
+    bool refresh_apps() override { refresh_app(); return true; }
+    void blank_performance() {
+        cntrl::Pane empty;
+        empty.graphics.background = 0;
+        for (unsigned i = 0; i < 3; ++i) renderer_.show(i, empty);
+        pending_patch_ = -1;
+        performance_visible_ = true;
+        pages_.revisit(documents.selected());
     }
     void select_trs_jack() {
         auto &page = pages_;
@@ -367,7 +393,6 @@ public:
         expression_.configure(settings);
         pages_.configure(settings);
         bridge_.clock_owner(pages_.clock_owner());
-        enter_page();
     }
     void browse_page(bool reverse) override {
         if (!documents.document().valid()) return;
@@ -380,8 +405,11 @@ public:
 #else
             error("Stock firmware unavailable");
 #endif
-        } else renderer_.transition(reverse, documents.document().scroll_ms(), 2);
-        if (pages_.clock_page()) controller.cancel_gesture();
+        } else {
+            renderer_.transition(reverse, documents.document().scroll_ms(), pages_.windows() == 1 ? 2 : -1);
+            refresh_app();
+        }
+        if (pages_.clock_page()) app_controller().cancel_gesture();
         enter_page();
     }
     void tap_tempo(uint32_t now) override {
@@ -398,7 +426,7 @@ public:
 #if CNTRL_CABLE_TEST
         if (pages_.page() == Pages::Page::cable) {
             if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
-            controller.cancel_gesture();
+            app_controller().cancel_gesture();
             cable_test.toggle(now);
             if (cable_test.enabled())
                 for (const auto &output : cntrl::midi::output_connections) forget_output(output.route);
@@ -409,7 +437,7 @@ public:
 #if CNTRL_PANIC
         if (pages_.page() == Pages::Page::panic) {
             if (!panic_owns_midi && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
-            controller.cancel_gesture();
+            app_controller().cancel_gesture();
             if (!panic_owns_midi) bridge_.configure(false);
             panic_owns_midi = true;
             panic.button(true, now);
@@ -425,7 +453,16 @@ public:
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
         throb_.configure(period, low, high, delay);
     }
-    FLASHMEM void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false, bool panorama = true) override { renderer_.transition(undo, duration_ms, pane, true, vertical, panorama); }
+    FLASHMEM void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false, bool panorama = true) override {
+        if (!app_visible() || feature_open()) return;
+        const unsigned occupied = pages_.windows();
+        if (occupied == 3) return;
+        if (pane >= 0) {
+            pane = documents.document().app_layout().app_window(rendering_app(), unsigned(pane), occupied);
+            if (pane < 0) return;
+        } else if (occupied == 2) pane = 0;
+        renderer_.transition(undo, duration_ms, pane, occupied == 1, vertical, panorama);
+    }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
         if (enabled) {
@@ -443,7 +480,7 @@ public:
     void set_brightness(uint8_t value, bool temporary = false) override {
         brightness_feedback_ = temporary;
         if (temporary) feedback_brightness_ = value;
-        else { runtime.brightness = value; controller.runtime_brightness(value); }
+        else { runtime.brightness = value; app_brightness(value); }
         if (temporary) splash_session.stop();
         apply_brightness(millis());
     }
@@ -590,10 +627,10 @@ public:
             pages_.revisit(documents.selected());
 #endif
         if (!splash_visible_ && !feature_open() && documents.document().valid()
-            && pages_.due(now)) {
+            && pages_.windows() && pages_.due(now)) {
             // Prepare the incoming card during the renderer's bounded transition preparation.
             PerformanceStatus status = pages_.page() == Pages::Page::status ? performance_status() : PerformanceStatus{};
-            renderer_.show(2, pages_.view(now, micros(), status
+            const cntrl::Pane content = pages_.view(now, micros(), status
 #if CNTRL_CABLE_TEST
                 , cable_test.status()
 #else
@@ -604,7 +641,9 @@ public:
 #else
                 , cntrl::Panic::Status::ready
 #endif
-            ));
+            );
+            for (unsigned i = 0; i < pages_.windows(); ++i)
+                renderer_.show(3 - pages_.windows() + i, Pages::window_view(content, i, pages_.windows()));
         }
         if (!splash_visible_) draw();
     }
@@ -737,10 +776,54 @@ private:
 
 Board board;
 Card card;
-cntrl::Controller controller(board, board, patch_sources);
+cntrl::Controller primary_controller(board, board, patch_sources);
 // Keep document/transfer buffers out of RAM1's code and stack budget.
-DMAMEM cntrl::Documents documents(card, board, controller, board);
+DMAMEM cntrl::Documents documents(card, board, primary_controller, board);
 cntrl::StoredPatchSources patch_sources(documents, board);
+alignas(cntrl::Controller) DMAMEM unsigned char extra_apps[cntrl::AppLayout::max_apps - 1][sizeof(cntrl::Controller)];
+cntrl::AppLayout app_layout;
+unsigned visible_app = 0, processing_app = cntrl::AppLayout::max_apps;
+cntrl::Controller &app_at(unsigned index) {
+    return index ? *std::launder(reinterpret_cast<cntrl::Controller *>(extra_apps[index - 1])) : primary_controller;
+}
+unsigned rendering_app() { return processing_app < cntrl::AppLayout::max_apps ? processing_app : visible_app; }
+cntrl::Controller &app_controller() { return app_at(rendering_app()); }
+bool app_visible() { return app_layout.apps() && rendering_app() == visible_app; }
+bool apps_busy() {
+    for (unsigned i = 0; i < app_layout.apps(); ++i) if (app_at(i).busy()) return true;
+    return primary_controller.busy();
+}
+void app_brightness(uint8_t value) {
+    for (unsigned i = 0; i < (app_layout.apps() ? app_layout.apps() : 1); ++i)
+        app_at(i).runtime_brightness(value);
+}
+FLASHMEM void configure_apps(const cntrl::Document &document) {
+    app_layout = document.valid() ? document.app_layout() : cntrl::AppLayout{};
+    visible_app = 0;
+    for (unsigned i = 1; i < cntrl::AppLayout::max_apps; ++i) {
+        processing_app = i;
+        if (i < app_layout.apps()) app_at(i).activate(document, false);
+        else app_at(i).deactivate();
+    }
+    processing_app = cntrl::AppLayout::max_apps;
+    board.blank_performance();
+    configure_app_menu();
+}
+void refresh_app() {
+    const unsigned previous = processing_app;
+    processing_app = visible_app;
+    board.blank_performance();
+    if (app_layout.apps()) app_at(visible_app).refresh();
+    processing_app = previous;
+}
+void tick_apps(uint32_t now) {
+    for (unsigned i = 0; i < (app_layout.apps() ? app_layout.apps() : 1); ++i) {
+        processing_app = i;
+        cntrl::App &app = app_at(i);
+        app.tick(now);
+    }
+    processing_app = cntrl::AppLayout::max_apps;
+}
 cntrl::SetupUi setup_ui(documents, board);
 class SongFiles : public cntrl::Storage {
 public:
@@ -776,11 +859,11 @@ public:
         }
     }
     const cntrl::SongContinuation &context() const { return context_; }
-    void recalled() override { controller.cancel_gesture(); }
+    void recalled() override { app_controller().cancel_gesture(); }
     bool capture(cntrl::Song &song, bool reference) override {
         const auto &d = documents.document();
-        if (!d.valid() || !d.patches() || documents.busy() || documents.dirty() || patch_work_pending()) return false;
-        unsigned index = controller.selected_patch();
+        if (!d.valid() || !app_layout.apps() || !d.patches() || documents.busy() || documents.dirty() || patch_work_pending()) return false;
+        unsigned index = app_controller().selected_patch();
         const uint8_t *p = d.patch(index);
         std::snprintf(song.name, 64, "%s", reinterpret_cast<const char *>(p + 12));
         std::snprintf(song.label, 64, "%s", song.name);
@@ -798,7 +881,7 @@ public:
         return true;
     }
     bool capture_source(const cntrl::Document *&source) override {
-        if (documents.busy() || documents.dirty() || controller.busy() || songs.executing()) return false;
+        if (documents.busy() || documents.dirty() || apps_busy() || songs.executing()) return false;
         source = &documents.document(); return source->valid();
     }
     bool revision(const cntrl::SongSelection &song, uint32_t &crc) override {
@@ -808,7 +891,7 @@ public:
         patch_sources.end(); return valid;
     }
     bool activate(const cntrl::SongSelection &song, const cntrl::SongContinuation &context, bool resume) override {
-        if (controller.busy() || executor.busy() || documents.busy() || documents.dirty()) return false;
+        if (apps_busy() || executor.busy() || documents.busy() || documents.dirty()) return false;
         std::free(embedded_); embedded_ = nullptr;
         patch_sources.begin();
         const cntrl::Document *source = nullptr;
@@ -831,11 +914,11 @@ public:
         }
         context_ = context;
         if (valid) {
-            auto previous = controller.navigation();
-            if (!resume) controller.external_selection();
+            auto previous = app_controller().navigation();
+            if (!resume) app_controller().external_selection();
             valid = resume ? node == context.node && executor.resume(*source, node, context.completed, context.sources_crc)
                            : executor.start(*source, node);
-            if (!valid && !resume) controller.navigation(previous);
+            if (!valid && !resume) app_controller().navigation(previous);
         }
         patch_sources.end(); return valid;
     }
@@ -862,8 +945,9 @@ enum ModuleIndex { setups_module, songs_module,
 #if CNTRL_SWITCHES
     switches_module,
 #endif
+    app_modules,
 };
-const char *const module_names[] = {"Setups", "Songs and setlists",
+const char *module_names[app_modules + cntrl::AppLayout::max_apps] = {"Setups", "Songs and setlists",
 #if CNTRL_SWITCHES
     "Switches",
 #endif
@@ -876,6 +960,7 @@ struct FirmwareVisitRecord {
     cntrl::Controller::NavigationState initial_navigation, return_navigation;
     Board::RuntimeState runtime;
     uint32_t ui_operation = 0;
+    uint32_t app = 0;
     uint32_t crc = 0;
 };
 DMAMEM FirmwareVisitRecord firmware_visit;
@@ -894,6 +979,8 @@ bool append_boot_record(uint32_t value) {
 }
 bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
     if (firmware_visit_stage || !valid_exit_pair(pair) || documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
+    for (unsigned i = 0; i < app_layout.apps(); ++i)
+        if (i != rendering_app() && app_at(i).busy()) return false;
     auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
     if (!can_enter_stock(state) || (continuation && !card.ready)) return false;
     if (!board.stop_clock()) return false;
@@ -901,8 +988,9 @@ bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
     if (continuation) {
         firmware_visit.token = state.next; firmware_visit.continuation = *continuation;
         firmware_visit.initial_navigation = invocation_navigation[visiting_invocation->owner()];
-        firmware_visit.return_navigation = controller.navigation();
+        firmware_visit.return_navigation = app_controller().navigation();
         firmware_visit.runtime = board.runtime; firmware_visit.ui_operation = pending_ui_operation;
+        firmware_visit.app = rendering_app();
         std::snprintf(firmware_visit.setup, 64, "%s", documents.selected());
         const auto &document = documents.document();
         firmware_visit.setup_crc = document.valid() ? cntrl::checksum(document.data(), document.length()) : 0;
@@ -911,7 +999,7 @@ bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
     } else firmware_visit_stage = 5;
     return true;
 }
-bool start_original_firmware() { return controller.executor().invoke(cntrl::StockFirmwarePatch{33}); }
+bool start_original_firmware() { return app_controller().executor().invoke(cntrl::StockFirmwarePatch{33}); }
 void poll_firmware_visit(bool released) {
     auto fail = [&]() {
         firmware_visit_file.close(); firmware_visit_stage = 0; songs.cancel_function();
@@ -949,16 +1037,18 @@ void poll_firmware_visit(bool released) {
         case 12: {
             auto continuation = firmware_visit.continuation;
             firmware_visit_stage = 0;
-            if (!valid || !controller.navigation(firmware_visit.initial_navigation)) { board.error("Patch return unavailable"); return; }
+            if (firmware_visit.app >= app_layout.apps()) { board.error("App return unavailable"); return; }
+            visible_app = firmware_visit.app;
+            if (!valid || !app_controller().navigation(firmware_visit.initial_navigation)) { board.error("Patch return unavailable"); return; }
             restoring_invocation = true;
             bool resumed = continuation.caller == 1 ? songs.resume(continuation)
-                : controller.executor().resume(documents.document(), continuation.node, continuation.completed, continuation.sources_crc);
+                : app_controller().executor().resume(documents.document(), continuation.node, continuation.completed, continuation.sources_crc);
             restoring_invocation = false;
-            if (!resumed || !controller.navigation(firmware_visit.return_navigation)) {
-                controller.executor().cancel(); song_sources.executor.cancel();
+            if (!resumed || !app_controller().navigation(firmware_visit.return_navigation)) {
+                app_controller().executor().cancel(); song_sources.executor.cancel();
                 board.error("Patch return unavailable"); return;
             }
-            invocation_navigation[5] = firmware_visit.initial_navigation;
+            invocation_navigation[app_controller().executor().owner()] = firmware_visit.initial_navigation;
             board.set_brightness(firmware_visit.runtime.brightness);
             board.set_midi_interface(firmware_visit.runtime.interface);
             pending_ui_operation = firmware_visit.ui_operation;
@@ -1018,14 +1108,21 @@ void poll_firmware_visit(bool released) {
     }
 }
 #endif
-cntrl::ModuleMenu module_menu(board, module_names, sizeof(module_names) / sizeof(module_names[0]));
-bool patch_work_pending() { return controller.busy() || songs.executing() || songs.busy(); }
+cntrl::ModuleMenu module_menu(board, module_names, app_modules);
+void configure_app_menu() {
+    for (unsigned i = 0; i < app_layout.apps(); ++i) module_names[app_modules + i] = app_layout.app_name(i);
+    module_menu.configure(app_modules + app_layout.apps());
+}
+bool patch_work_pending() {
+    return apps_busy() || songs.executing() || songs.busy();
+}
 bool patch_state(unsigned operation, uint32_t value) {
     if (operation == 1) { board.set_brightness(uint8_t(value)); return true; }
     if (operation == 2) { board.set_midi_interface(value != 0); return true; }
     if (operation >= 3 && operation <= 8) {
+        if (!app_layout.apps()) return false;
         if ((operation == 7 || operation == 8) && (songs.executing() || documents.busy() || documents.dirty())) return false;
-        return controller.navigate(operation);
+        return app_controller().navigate(operation);
     }
     if (operation == 9 || operation == 10) { pending_ui_operation = operation; return true; }
     return state_ui(UiOperation(operation));
@@ -1059,22 +1156,28 @@ bool state_ui(UiOperation operation) {
         if (module_menu.button(5, true) == -2) { documents.redraw(); module_controls_locked = true; }
         return true;
     case UiOperation::menu_open:
-        controller.cancel_gesture();
+        app_controller().cancel_gesture();
         songs_ui.leave(); module_menu.enter(); module_controls_locked = true; return true;
     case UiOperation::performance_show:
-        controller.cancel_gesture();
+        app_controller().cancel_gesture();
         module_menu.leave(); songs_ui.leave(); documents.redraw(); module_controls_locked = true; return true;
     case UiOperation::menu_activate: {
         if (!module_menu.open()) return false;
         int selected = module_menu.button(2, true);
         if (selected == -1) return true;
+        if (selected >= app_modules && unsigned(selected - app_modules) < app_layout.apps()) {
+            app_at(visible_app).cancel_gesture();
+            visible_app = unsigned(selected - app_modules);
+            refresh_app(); module_controls_locked = true;
+            return true;
+        }
         if (selected == songs_module) {
             if (!documents.busy() && !songs_transfer.busy() && board.output_idle()) { songs_ui.enter(); module_controls_locked = true; }
             else module_menu.enter();
         }
 #if CNTRL_SWITCHES
         else if (selected == switches_module) {
-            if (!documents.busy() && !documents.dirty() && !songs_transfer.busy() && board.output_idle() && documents.document().valid()) {
+            if (!apps_busy() && !documents.busy() && !documents.dirty() && !songs_transfer.busy() && board.output_idle() && documents.document().valid()) {
                 board.enter_switches(documents.document(), held_controls);
             } else module_menu.enter();
         }
@@ -1214,6 +1317,8 @@ uint32_t last_scan = 0;
 FLASHMEM void initialize_target() {
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session = cntrl::UsbSession{};
+    for (unsigned i = 1; i < cntrl::AppLayout::max_apps; ++i)
+        new (extra_apps[i - 1]) cntrl::Controller(board, board, patch_sources, 5 + i);
     initialize_switches();
     initialize_displays(false);
     board.begin();
@@ -1261,7 +1366,7 @@ void poll_target() {
         }
 
 #endif
-        if (consumed) controller.cancel_gesture();
+        if (consumed) app_controller().cancel_gesture();
         setup_ui.poll(pressed);
         module_menu.poll(pressed);
         songs_ui.poll(pressed);
@@ -1278,10 +1383,10 @@ void poll_target() {
                 if (module_controls_locked) continue;
                 if (module_menu.open()) {
                     if (events[i] & press_event) {
-                        if (i == 0) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_previous)});
-                        else if (i == 1) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_next)});
-                        else if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_activate)});
-                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_back)});
+                        if (i == 0) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_previous)});
+                        else if (i == 1) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_next)});
+                        else if (i == 2) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_activate)});
+                        else if (i == 5) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_back)});
                     }
 #if CNTRL_SWITCHES
                 } else if (board.switches.open()) {
@@ -1292,13 +1397,13 @@ void poll_target() {
                     constexpr UiOperation operations[] = {UiOperation::songs_previous, UiOperation::songs_next,
                         UiOperation::songs_confirm, UiOperation::songs_previous_section,
                         UiOperation::songs_next_section, UiOperation::songs_back};
-                    if (events[i] & press_event) controller.executor().invoke(cntrl::StatePatch{unsigned(operations[i])});
+                    if (events[i] & press_event) app_controller().executor().invoke(cntrl::StatePatch{unsigned(operations[i])});
                 } else if (setup_ui.open()) {
                     if (events[i] & press_event) {
-                        if (i == 0) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_previous)});
-                        else if (i == 1) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_next)});
-                        else if (i == 2) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_confirm)});
-                        else if (i == 5) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_back)});
+                        if (i == 0) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_previous)});
+                        else if (i == 1) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_next)});
+                        else if (i == 2) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_confirm)});
+                        else if (i == 5) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::setup_back)});
                     }
                 } else {
 #if CNTRL_CABLE_TEST
@@ -1311,8 +1416,13 @@ void poll_target() {
                     if ((events[i] & press_event) && board.expression_button(i)) continue;
                     if ((events[i] & press_event) && board.trs_button(i)) continue;
                     if (board.clock_control(i, events[i] & press_event)) continue;
-                    if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
-                    if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
+                    if (app_layout.apps()) {
+                        if (events[i] & press_event) app_controller().button(mirrored_button(i), true, now);
+                        if (events[i] & release_event) app_controller().button(mirrored_button(i), false, now);
+                    } else if (events[i] & press_event) {
+                        if (i == 5) board.browse_page(false);
+                        else if (i == 2) board.tap_tempo(now);
+                    }
                 }
             }
         }
@@ -1342,8 +1452,8 @@ void poll_target() {
     // continue while command input and reply-producing jobs wait for room.
     if (board.reply_ready()) serial_router.poll(now);
     if (board.reply_ready()) songs_transfer.poll(now);
-    if (feature_open()) controller.cancel_gesture();
-    controller.tick(now);
+    if (feature_open()) app_controller().cancel_gesture();
+    tick_apps(now);
     song_sources.tick(now);
     songs.tick();
     if (board.reply_ready()) font_files.poll(now, board);
@@ -1356,27 +1466,27 @@ void poll_target() {
     static bool switches_open = false;
     if (switches_open && !board.switches.open()) {
         board.leave_switches();
-        if (pending_ui_operation == 10) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::performance_show)});
-        else controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_open)});
+        if (pending_ui_operation == 10) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::performance_show)});
+        else app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_open)});
         pending_ui_operation = 0; module_controls_locked = true;
         if (board.switches.abandoned()) board.error("Switch state unknown");
     }
     switches_open = board.switches.open();
 #endif
-    if (!patch_work_pending()
+    if ((pending_ui_operation || !patch_work_pending())
 #if CNTRL_SWITCHES
         && !board.switches.open()
 #endif
     ) {
         if (pending_ui_operation) {
-            if (pending_ui_operation == 9) controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_open)});
-            else controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::performance_show)});
+            if (pending_ui_operation == 9) app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::menu_open)});
+            else app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::performance_show)});
             pending_ui_operation = 0; return_to_switches = false; module_controls_locked = true;
         }
 #if CNTRL_SWITCHES
         else if (return_to_switches) {
             return_to_switches = false;
-            controller.executor().invoke(cntrl::StatePatch{unsigned(UiOperation::switches_return)});
+            app_controller().executor().invoke(cntrl::StatePatch{unsigned(UiOperation::switches_return)});
         }
 #endif
     }

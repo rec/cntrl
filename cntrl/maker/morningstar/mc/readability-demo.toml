@@ -14,10 +14,10 @@ BarlowCondensedSemiBold = '../../../fonts/barlow-condensed/BarlowCondensed-SemiB
 foreground_color = '0x202040'
 background_color = '0xFFF8D8'
 
-[pages.patch]
+[patch_views.patch]
 fields = ['comparison', 'display_name', 'name']
 
-[pages.patch.line_styles]
+[patch_views.patch.line_styles]
 display_name = {font_name = 'AtkinsonNextSemiBold'}
 name = {font_name = 'BarlowCondensedSemiBold'}
 

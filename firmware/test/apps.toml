@@ -1,0 +1,42 @@
+fill_in_styles = false
+
+[apps.lead]
+type = 'patch-switcher'
+
+[apps.rhythm]
+type = 'patch-switcher'
+give_up_windows = ['left', 'right', 'center']
+
+[[pages]]
+type = 'None'
+
+[[pages]]
+type = 'status'
+windows = 1
+
+[[pages]]
+type = 'status'
+windows = 2
+
+[[pages]]
+type = 'status'
+windows = 3
+
+[[pages]]
+type = 'tap-tempo'
+windows = 0
+
+[patches.lead]
+patches = [
+    {type = 'delay', duration = '100 ms'},
+    {type = 'control-change', output = 'din', channel = 1, controller = 7, value = 100},
+]
+
+[patches.rhythm]
+type = 'program-change'
+output = 'din'
+channel = 1
+program = 2
+
+[patch_cycles]
+main = ['lead', 'rhythm']

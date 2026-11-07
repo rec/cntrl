@@ -380,7 +380,7 @@ def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
     outline = str(ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf')
     source['fonts'] = {'First': outline, 'Second': outline}
     source['style'] = {'font_name': 'First'}
-    source['pages'] = {
+    source['patch_views'] = {
         'patch': {
             'fields': ['display_name', 'other'],
             'line_styles': {'other': {'font_name': 'Second'}},
@@ -480,7 +480,11 @@ def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
     show = models.Setup.model_validate(
-        {'instruments': {}, 'patch_cycles': {}, 'pages': {'patch': {'fields': []}}}
+        {
+            'instruments': {},
+            'patch_cycles': {},
+            'patch_views': {'patch': {'fields': []}},
+        }
     )
     windows, _, _ = display.compile_display(
         show,
@@ -498,7 +502,7 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
     assert isinstance(source, dict)
     source['fill_in_styles'] = False
     source['style'] = {'font_name': family, 'horizontal_scale': 1.25}
-    source['pages'] = {
+    source['patch_views'] = {
         'patch': {
             'fields': ['patch_cycle.name', 'display_name'],
             'line_styles': {'patch_cycle.name': {'horizontal_scale': 1.0}},

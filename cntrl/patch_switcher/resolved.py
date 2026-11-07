@@ -6,7 +6,7 @@ from zlib import crc32
 
 import tomlkit
 
-from . import midi_messages, page_settings
+from . import layout, midi_messages, page_settings
 from .compiler import (
     DOCUMENT_VERSION,
     GESTURE_EVENTS,
@@ -65,6 +65,7 @@ def graph_offset(data: bytes) -> int:
         cursor += 5 * GESTURES.size
     if data[cursor : cursor + 4] == b'CHOK':
         cursor += 4 + 5 * SWITCH_HOOKS.size
+    cursor = layout.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -135,7 +136,17 @@ def export(data: bytes) -> str:
         cursor += page_settings.CLOCK.size
     if data[cursor : cursor + 4] == b'CKBD':
         pages['keyboard'] = page_settings.unpack_keyboard(data, cursor + 4)
+        cursor += (
+            6
+            + struct.unpack_from('<H', data, cursor + 4)[0]
+            * page_settings.KEYBOARD.size
+        )
     result['page_settings'] = pages
+    if flags & GESTURES_FLAG:
+        cursor += 5 * GESTURES.size
+    if data[cursor : cursor + 4] == b'CHOK':
+        cursor += 4 + 5 * SWITCH_HOOKS.size
+    result.update(layout.unpack(data, cursor))
     modes = data[meta + METADATA.size - 9 : meta + METADATA.size - 5]
     if any(m >= len(TRS_MODES) for m in modes):
         raise ValueError('invalid TRS port role')

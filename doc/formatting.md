@@ -51,14 +51,14 @@ foreground_color = '0xD08000'
 [tag_styles.whole-system]
 font_name = 'CourierPrimeBold'
 
-[pages.patch]
+[patch_views.patch]
 fields = ['patch_cycle.name', 'display_name']
 
-[pages.patch.line_styles.'patch_cycle.name']
+[patch_views.patch.line_styles.'patch_cycle.name']
 foreground_color = 'blue'
 
 [windows.next]
-page = 'patch'
+view = 'patch'
 
 [windows.next.style]
 background_color = 'white'
@@ -146,13 +146,13 @@ Preserve partial styles, including empty icon strings, through download/recompil
 Image loading, path resolution, conversion, embedding, layout and rendering remain
 future work. Resolving the reference does not display an icon yet.
 
-## Pages and fields
+## Patch views and fields
 
-Pages contain ordered field names, for example
+Patch views contain ordered field names, for example
 `fields = ['patch_cycle.name', 'names.vl70m', 'names.patchman']`. Each window supplies
-its own data item to the page. Missing and empty values are omitted; zero and
+its own data item to the view. Missing and empty values are omitted; zero and
 false remain visible. Built-ins and shared parameters use one unique namespace.
-Unknown or duplicate field names are errors. Pages are bounded by record capacity
+Unknown or duplicate field names are errors. Views are bounded by record capacity
 and target height. See the [application guide](https://github.com/rec/cntrl/blob/main/firmware/README.md) for the
 complete field catalogue and compiled format, and [Patch authoring](patches.md)
 for styles generated automatically for cycles.

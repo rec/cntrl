@@ -18,7 +18,7 @@ def test_page_lines_select_different_native_font_families() -> None:
             'instruments': {},
             'patch_cycles': {},
             'style': {'font_name': 'Arial'},
-            'pages': {
+            'patch_views': {
                 'patch': {'line_styles': {'display_name': {'font_name': 'ComicSansMS'}}}
             },
         }

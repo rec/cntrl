@@ -10,7 +10,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 5;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 30;
+constexpr unsigned document_version = 31;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -61,6 +61,9 @@ inline bool label_valid(const uint8_t *p, unsigned length) {
 
 class Document {
 public:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_load)
+#endif
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
@@ -142,6 +145,23 @@ public:
         unsigned hooks = names;
         bool has_hooks = names + 4 <= length && !std::memcmp(bytes + names, "CHOK", 4);
         if (has_hooks) names += 29;
+        const unsigned layout = names;
+        if (names + 6 > length || std::memcmp(bytes + names, "CLAY", 4)
+            || bytes[names + 4] > AppLayout::max_apps || bytes[names + 5] > 32) return false;
+        unsigned apps = bytes[names + 4], page_count = bytes[names + 5];
+        names += 6 + apps * 35 + page_count * 2;
+        if (names > length) return false;
+        for (unsigned i = 0; i < apps; ++i) {
+            const uint8_t *p = bytes + layout + 6 + i * 35;
+            if (!text_valid(p, 32) || p[32] > 2 || p[33] > 2 || p[34] > 2
+                || p[32] == p[33] || p[32] == p[34] || p[33] == p[34]) return false;
+            for (unsigned j = 0; j < i; ++j)
+                if (!std::strcmp(reinterpret_cast<const char *>(p), reinterpret_cast<const char *>(bytes + layout + 6 + j * 35))) return false;
+        }
+        for (unsigned i = 0; i < page_count; ++i) {
+            const uint8_t *p = bytes + layout + 6 + apps * 35 + i * 2;
+            if (p[0] > 10 || p[1] > 3 || (p[0] == 10 && p[1])) return false;
+        }
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -343,7 +363,13 @@ public:
         return u16(p) != 65535 || u16(p + 2) != 65535 ? p : nullptr;
     }
     unsigned page_section_size() const {
-        return unsigned(switch_hook_section() - bank(patches())) + (!std::memcmp(switch_hook_section(), "CHOK", 4) ? 29 : 0);
+        const auto layout = app_layout();
+        return unsigned(layout.records - bank(patches())) + 6 + layout.apps() * 35 + layout.pages() * 2;
+    }
+    AppLayout app_layout() const {
+        const uint8_t *p = switch_hook_section();
+        if (!std::memcmp(p, "CHOK", 4)) p += 29;
+        return AppLayout{p};
     }
     const uint8_t *switch_gestures(unsigned button) const {
         if (!(data_[19] & 0x40)) return nullptr;

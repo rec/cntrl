@@ -27,6 +27,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     unsigned errors = 0;
     uint8_t brightness = 0;
     bool splash = false;
+    uint32_t idle_timeout = 0;
     bool animation_color_cycle = false;
     bool is_midi_interface = false;
     bool usb_device_midi = false, usb_host_midi = false;
@@ -49,7 +50,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     void set_brightness(uint8_t value, bool) override { brightness = value; }
     void set_usb_midi(bool device, bool host) override { usb_device_midi = device; usb_host_midi = host; }
     void set_midi_interface(bool value) override { is_midi_interface = value; }
-    void set_splash(bool enabled, uint32_t) override { splash = enabled; }
+    void set_splash(bool enabled, uint32_t idle) override { splash = enabled; idle_timeout = idle; }
     void set_animation_color_cycle(bool enabled) override { animation_color_cycle = enabled; }
     void error(const char *) override { ++errors; }
     void reply(const char *s) override { replies.emplace_back(s); }
@@ -606,8 +607,77 @@ void test_catalogue_jobs_are_bounded_and_preserve_order(const std::vector<uint8_
     finish(); assert(!std::strcmp(docs.browse_result(), "Middle"));
 }
 
+static void test_apps_run_independently(const std::string &path) {
+    std::ifstream file(path.substr(0, path.find_last_of('/') + 1) + "apps.golden");
+    std::string hex; file >> hex;
+    std::vector<uint8_t> bytes;
+    for (unsigned i = 0; i < hex.size(); i += 2)
+        bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    struct Shared : Fake {
+        cntrl::Controller *visible = nullptr;
+        std::vector<unsigned> owners;
+        unsigned hidden_draws = 0;
+        void show(unsigned pane, const cntrl::Pane &content) override {
+            if (controller == visible) Fake::show(pane, content);
+            else ++hidden_draws;
+        }
+        bool send_patch(unsigned owner, const char *route, const uint8_t *data, unsigned n) override {
+            owners.push_back(owner); return send(route, data, n);
+        }
+    } hw;
+    cntrl::Document document;
+    assert(document.load(bytes.data(), unsigned(bytes.size()), hw));
+    const auto layout = document.app_layout();
+    assert(layout.apps() == 2 && layout.pages() == 5);
+    assert(!std::strcmp(layout.app_name(0), "lead") && !std::strcmp(layout.app_name(1), "rhythm"));
+    assert(layout.app_window(0, 0, 1) == 0 && layout.app_window(0, 1, 1) == 1 && layout.app_window(0, 2, 1) == -1);
+    assert(layout.app_window(1, 0, 1) == -1 && layout.app_window(1, 1, 1) == 0 && layout.app_window(1, 2, 1) == 1);
+    assert(layout.app_window(1, 1, 2) == 0 && layout.app_window(1, 2, 2) == -1);
+    for (unsigned i = 0; i < 3; ++i) {
+        assert(layout.app_window(0, i, 0) == int(i));
+        assert(layout.app_window(0, i, 3) == -1);
+    }
+    assert(layout.page(0)[0] == 10 && layout.page(0)[1] == 0);
+    cntrl::Controller first(hw, hw, hw, 5), second(hw, hw, hw, 6);
+    hw.controller = hw.visible = &first; first.activate(document);
+    hw.controller = &second; second.activate(document, false);
+    hw.controller = &first; assert(first.navigate(7));
+    for (unsigned i = 0; i < 20; ++i) first.tick(0);
+    assert(first.busy() && hw.sent.empty());
+    hw.visible = hw.controller = &second;
+    assert(second.navigate(3));
+    assert(first.selected_patch() == 0 && second.selected_patch() == 1);
+    assert(second.navigate(7));
+    for (unsigned i = 0; i < 100; ++i) {
+        hw.controller = &first; first.tick(200);
+        hw.controller = &second; second.tick(200);
+    }
+    assert(!first.busy() && !second.busy());
+    assert((hw.owners == std::vector<unsigned>{5, 6}));
+    assert((hw.sent == std::vector<std::vector<uint8_t>>{{0xb0, 7, 100}, {0xc0, 1}}));
+    assert(hw.hidden_draws && first.navigation().center == 0 && second.navigation().center == 1);
+    const unsigned offset = unsigned(layout.records - bytes.data());
+    for (const auto &bad : std::vector<std::pair<unsigned, uint8_t>>{
+            {4, 5}, {5, 33}, {6 + 32, 3}, {6 + 33, 2},
+            {6 + 70, 11}, {6 + 71, 1}, {6 + 73, 4}}) {
+        auto corrupt = bytes; corrupt[offset + bad.first] = bad.second;
+        cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
+        cntrl::Document rejected; assert(!rejected.load(corrupt.data(), unsigned(corrupt.size()), hw));
+    }
+    auto empty = bytes;
+    empty.erase(empty.begin() + offset + 6, empty.begin() + offset + 6 + 70 + 10);
+    empty[offset + 4] = empty[offset + 5] = 0;
+    empty[19] &= ~1u; // An empty setup must animate even when splash is disabled.
+    cntrl::put32(empty.data() + 8, unsigned(empty.size()));
+    cntrl::put32(empty.data() + 20, cntrl::checksum(empty.data() + 28, unsigned(empty.size()) - 28));
+    cntrl::Document idle; assert(idle.load(empty.data(), unsigned(empty.size()), hw));
+    hw.controller = hw.visible = &first; first.activate(idle);
+    assert(hw.splash && hw.idle_timeout == 1);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 3);
+    test_apps_run_independently(argv[1]);
     std::ifstream file(argv[1]);
     std::string hex; file >> hex;
     assert(!hex.empty() && hex.size() % 2 == 0);

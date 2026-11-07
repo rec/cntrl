@@ -140,7 +140,7 @@ private:
 class Bridge {
 public:
     enum class Delivery { idle, pending, complete, cancelled };
-    static constexpr unsigned owners = 6;
+    static constexpr unsigned owners = 9;
     Delivery delivery(unsigned owner) const { return owner < owned_.size() ? owned_[owner].delivery : Delivery::idle; }
     bool owned_send(unsigned owner, unsigned route, const uint8_t *bytes, unsigned size) {
         if (owner >= owned_.size() || route >= destinations || !usb_enabled(route) || !batch_valid(bytes, size)

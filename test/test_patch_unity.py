@@ -312,7 +312,7 @@ def test_composite_inherits_child_tags_but_keeps_parent_label(
             },
         },
         'patch_cycles': {'Live': [{'patch': 'parent'}]},
-        'pages': {'patch': {'fields': ['display_name', 'tags']}},
+        'patch_views': {'patch': {'fields': ['display_name', 'tags']}},
     }
     data = compiler.compile_show(show, {}, [], target)
     assert b'Parent\0' in data and b'sax, whole-system\0' in data

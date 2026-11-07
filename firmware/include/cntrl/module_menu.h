@@ -9,6 +9,7 @@ public:
     ModuleMenu(Hardware &hardware, const char *const *names, unsigned count)
         : hardware_(hardware), names_(names), count_(count) {}
     bool open() const { return open_; }
+    void configure(unsigned count) { count_ = count; selected_ = 0; }
     void leave() { open_ = false; }
     void enter() { open_ = locked_ = true; selected_ = 0; render(); }
     void poll(uint8_t held) { if (!held) locked_ = false; }
@@ -34,7 +35,7 @@ private:
             line.graphics.size = line.graphics.line_height = 16;
         std::snprintf(views[0].lines[0].text, 64, "A/B browse");
         std::snprintf(views[0].lines[1].text, 64, "C OK, F back");
-        std::snprintf(views[1].lines[0].text, 64, "Modules");
+        std::snprintf(views[1].lines[0].text, 64, "Apps and tools");
         std::snprintf(views[1].lines[1].text, 64, "%s", names_[selected_]);
         for (unsigned i = 0; i < 3; ++i) {
             for (auto &line : views[i].lines) line.wrap = true;

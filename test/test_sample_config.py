@@ -15,8 +15,8 @@ class ExampleSetup(models.Setup, frozen=True):
         sent=models.Window(style=models.Style(horizontal_scale=1.0)),
         undo=models.Window(style=models.Style(horizontal_scale=1.0)),
     )
-    pages: dict[str, models.Page] = {
-        'patch': models.Page(style=models.Style(horizontal_scale=1.0))
+    patch_views: dict[str, models.PatchView] = {
+        'patch': models.PatchView(style=models.Style(horizontal_scale=1.0))
     }
 
 

@@ -22,7 +22,40 @@ struct PerformanceStatus {
 
 class Pages {
 public:
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, confirm_firmware };
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_window_view)
+#endif
+    static cntrl::Pane window_view(const cntrl::Pane &content, unsigned window, unsigned count) {
+        if (count == 1) return content;
+        cntrl::Pane result;
+        result.graphics = content.graphics;
+        result.heading_band = content.heading_band;
+        result.lines[0] = content.lines[0];
+        unsigned lines = 0;
+        for (unsigned i = 1; i < cntrl::max_lines; ++i) if (content.lines[i].text[0]) ++lines;
+        const unsigned first = lines * window / count, end = lines * (window + 1) / count;
+        unsigned source = 0, destination = 1;
+        for (unsigned i = 1; i < cntrl::max_lines; ++i) {
+            if (!content.lines[i].text[0]) continue;
+            if (source >= first && source < end) {
+                result.lines[destination] = content.lines[i];
+                result.lines[destination++].y = -1;
+            }
+            ++source;
+        }
+        if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
+        return result;
+    }
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, confirm_firmware };
+    void layout(cntrl::AppLayout layout) {
+        layout_ = layout;
+        index_ = 0;
+        page_ = layout.pages() ? Page(layout.page(0)[0]) : Page::none;
+        dirty_ = true;
+    }
+    unsigned windows() const {
+        return layout_.pages() ? layout_.page(index_)[1] : 0;
+    }
     void configure(const cntrl::PageSettings &settings) {
         generator.stop();
         slot_ = 0;
@@ -37,9 +70,10 @@ public:
     }
     bool browse(bool reverse, const char *setup) {
         if (page_ == Page::confirm_firmware) return !reverse;
-        do {
-            constexpr unsigned count = unsigned(Page::confirm_firmware);
-            page_ = Page((unsigned(page_) + (reverse ? count - 1 : 1)) % count);
+        if (!layout_.pages()) return false;
+        for (unsigned i = 0; i < layout_.pages(); ++i) {
+            index_ = (index_ + layout_.pages() + (reverse ? -1 : 1)) % layout_.pages();
+            page_ = Page(layout_.page(index_)[0]);
 #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
             if (page_ == Page::cable) continue;
 #endif
@@ -47,7 +81,7 @@ public:
             if (page_ == Page::panic) continue;
 #endif
             break;
-        } while (true);
+        }
         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
         dirty_ = true;
         return false;
@@ -328,6 +362,8 @@ public:
         return pane;
     }
 private:
+    cntrl::AppLayout layout_;
+    unsigned index_ = 0;
     PortMode active_port_ = PortMode::off;
     const char *port_message_ = nullptr;
     unsigned available_outputs_ = 0, slot_ = 0;

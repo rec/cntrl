@@ -20,7 +20,7 @@ instrument = 'pman'
 program = 1
 display_name = 'Font demo'
 
-[pages.patch]
+[patch_views.patch]
 fields = ['handwriting_sample', 'courier_sample', 'courier_bold_sample']
 
 [parameters.handwriting_sample]

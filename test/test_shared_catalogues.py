@@ -85,7 +85,7 @@ def test_named_sound_fields_render_and_reject_unknown_names(
 ) -> None:
     show = models.Setup.model_validate(
         {
-            'pages': {'patch': {'fields': ['names.stock', 'names.modified']}},
+            'patch_views': {'patch': {'fields': ['names.stock', 'names.modified']}},
         }
     )
     patch = display.DisplayPatch(
@@ -96,7 +96,9 @@ def test_named_sound_fields_render_and_reject_unknown_names(
     with pytest.raises(ValueError, match='unknown fields'):
         display.compile_display(
             show.model_copy(
-                update={'pages': {'patch': models.Page(fields=['names.typo'])}}
+                update={
+                    'patch_views': {'patch': models.PatchView(fields=['names.typo'])}
+                }
             ),
             [patch],
             target,

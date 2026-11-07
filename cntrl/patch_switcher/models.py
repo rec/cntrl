@@ -331,7 +331,7 @@ class Definitions(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Page(BaseModel, frozen=True):
+class PatchView(BaseModel, frozen=True):
     fields: list[str] = Field(
         default_factory=lambda: ['patch_cycle.name', 'display_name']
     )
@@ -339,7 +339,7 @@ class Page(BaseModel, frozen=True):
     line_styles: dict[str, Style] = Field(default_factory=dict)
 
     @model_validator(mode='after')
-    def unique_fields(self) -> 'Page':
+    def unique_fields(self) -> 'PatchView':
         if len(self.fields) != len(set(self.fields)):
             raise ValueError('duplicate page field')
         if any(n not in self.fields for n in self.line_styles):
@@ -350,7 +350,7 @@ class Page(BaseModel, frozen=True):
 
 
 class Window(BaseModel, frozen=True):
-    page: str = 'patch'
+    view: str = 'patch'
     pad: (
         Annotated[int, Field(strict=True, ge=0, le=255), units.unit_validator('pixel')]
         | None
@@ -553,7 +553,7 @@ class KeyboardShortcut(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Pages(BaseModel, frozen=True):
+class PageSettings(BaseModel, frozen=True):
     keyboard: list[KeyboardShortcut] = Field(default_factory=list)
     expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)
     clock_outputs: list[str] = Field(default_factory=list)
@@ -621,7 +621,7 @@ class Pages(BaseModel, frozen=True):
     decimals: Annotated[int, Field(strict=True, ge=0, le=2)] = 1
 
     @model_validator(mode='after')
-    def feasible_taps(self) -> 'Pages':
+    def feasible_taps(self) -> 'PageSettings':
         if self.minimum_taps > self.tap_intervals + 1:
             raise ValueError('minimum_taps exceeds tap_intervals + 1')
         if self.minimum_interval > self.reset_gap:
@@ -654,6 +654,53 @@ class Scrolling(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class App(BaseModel, frozen=True):
+    type: Literal['patch-switcher'] = 'patch-switcher'
+    give_up_windows: Annotated[
+        list[Literal['left', 'center', 'right']], Field(min_length=3, max_length=3)
+    ] = ['right', 'center', 'left']
+
+    @model_validator(mode='after')
+    def distinct_windows(self) -> 'App':
+        if len(set(self.give_up_windows)) != 3:
+            raise ValueError('give_up_windows must contain each window once')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class Page(BaseModel, frozen=True):
+    type: Literal[
+        'tap-tempo',
+        'status',
+        'firmware',
+        'cable-test',
+        'panic',
+        'trs-ports',
+        'expression',
+        'clock-transport',
+        'clock-tempo',
+        'keyboard',
+        'None',
+    ]
+    windows: Annotated[int, Field(strict=True, ge=0, le=3)] = 1
+
+    @model_validator(mode='before')
+    @classmethod
+    def none_windows(cls, value: object) -> object:
+        if isinstance(value, dict) and value.get('type') == 'None':
+            return {'windows': 0, **value}
+        return value
+
+    @model_validator(mode='after')
+    def no_windows_for_none(self) -> 'Page':
+        if self.type == 'None' and self.windows:
+            raise ValueError('None must have zero windows')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Setup(BaseModel, frozen=True):
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
@@ -669,7 +716,28 @@ class Setup(BaseModel, frozen=True):
     ] = 0.5
     target_pulse: TargetPulse = Field(default_factory=TargetPulse)
     navigation: NavigationSettings = Field(default_factory=NavigationSettings)
-    page_settings: Pages = Field(default_factory=Pages)
+    page_settings: PageSettings = Field(default_factory=PageSettings)
+    apps: dict[str, App] = Field(
+        default_factory=lambda: {'patch-switcher': App()}, max_length=4
+    )
+    pages: list[Page] = Field(
+        default_factory=lambda: [
+            Page(type=t)
+            for t in (
+                'status',
+                'firmware',
+                'cable-test',
+                'panic',
+                'trs-ports',
+                'expression',
+                'clock-transport',
+                'clock-tempo',
+                'keyboard',
+                'tap-tempo',
+            )
+        ],
+        max_length=32,
+    )
     take_first_match: Annotated[bool, Field(strict=True)] = False
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     scrolling: Scrolling = Field(default_factory=Scrolling)
@@ -700,7 +768,9 @@ class Setup(BaseModel, frozen=True):
         units.unit_validator('dimensionless'),
     ] = 0.6
     windows: Windows = Field(default_factory=Windows)
-    pages: dict[str, Page] = Field(default_factory=lambda: {'patch': Page()})
+    patch_views: dict[str, PatchView] = Field(
+        default_factory=lambda: {'patch': PatchView()}
+    )
     tags: Annotated[list[str], BeforeValidator(parse_tags)] = Field(
         default_factory=list
     )

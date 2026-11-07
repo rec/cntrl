@@ -46,17 +46,19 @@ def compile_display(
     overlap = set(show.parameters) & (set(FIELDS) | named_fields)
     if overlap:
         raise ValueError(f'duplicate field definitions: {sorted(overlap)}')
-    for name, page in show.pages.items():
+    for name, page in show.patch_views.items():
         if len(page.fields) > MAX_LINES:
-            raise ValueError(f'pages.{name}: at most {MAX_LINES} fields are supported')
+            raise ValueError(
+                f'patch_views.{name}: at most {MAX_LINES} fields are supported'
+            )
         unknown = set(page.fields) - set(FIELDS) - named_fields - set(show.parameters)
         if unknown:
-            raise ValueError(f'pages.{name}: unknown fields {sorted(unknown)}')
+            raise ValueError(f'patch_views.{name}: unknown fields {sorted(unknown)}')
     windows = [getattr(show.windows, n) for n in WINDOW_NAMES]
     errors: list[str] = []
     for name, window in zip(WINDOW_NAMES, windows, strict=True):
-        if window.page not in show.pages:
-            raise ValueError(f'windows.{name}: unknown page {window.page!r}')
+        if window.view not in show.patch_views:
+            raise ValueError(f'windows.{name}: unknown patch view {window.view!r}')
         try:
             if window.style:
                 for key in ('foreground_color', 'background_color'):
@@ -75,12 +77,14 @@ def compile_display(
         tag = tag_style(patch.program_tags + patch.tags, show.tag_styles)
         for window in windows:
             page = (
-                show.pages.get(
+                show.patch_views.get(
                     'switches',
-                    models.Page(fields=['switch.name', 'switch.mode', 'switch.state']),
+                    models.PatchView(
+                        fields=['switch.name', 'switch.mode', 'switch.state']
+                    ),
                 )
                 if 'switch.name' in patch.values
-                else show.pages[window.page]
+                else show.patch_views[window.view]
             )
             if 'switch.name' in patch.values and (
                 len(page.fields) > 3
@@ -405,7 +409,7 @@ SOURCE_FIELDS = (
     'pad',
     'contrast',
     'windows',
-    'pages',
+    'patch_views',
     'tags',
     'tag_styles',
     'parameters',

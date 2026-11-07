@@ -1,10 +1,11 @@
 #pragma once
+#include "app.h"
 #include "patch_executor.h"
 #include <cstdio>
 
 namespace cntrl {
 
-class Controller {
+class Controller : public App {
 public:
     struct ProgramHistory { uint16_t patch; int previous; };
     struct NavigationState {
@@ -41,10 +42,10 @@ public:
         std::memcpy(current_, state.current, sizeof(current_));
         std::memcpy(last_sent_, state.last_sent, sizeof(last_sent_)); return true;
     }
-    Controller(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources)
-        : hardware_(hardware), executor_(hardware, outputs, sources, 5) {}
+    Controller(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner = 5)
+        : hardware_(hardware), executor_(hardware, outputs, sources, owner) {}
     void deactivate() { executor_.cancel(); sending_ = -1; cancel_gesture(); document_ = Document(); }
-    bool busy() const { return executor_.busy(); }
+    bool busy() const override { return executor_.busy(); }
     void runtime_brightness(uint8_t value) { brightness_ = value; }
     PatchExecutor &executor() { return executor_; }
     void validation(bool enabled) {
@@ -88,31 +89,39 @@ public:
         --depth_;
     }
     void cancel_gesture() { release_c(); held_ = 0; reverse_ = false; }
-    void refresh() { cancel_gesture(); if (document_.valid()) render(); }
-    void activate(const Document &document) {
+    void refresh() override { cancel_gesture(); if (document_.valid()) render(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(controller_activate)
+#endif
+    void activate(const Document &document, bool configure = true) {
         executor_.cancel(); sending_ = -1;
         cancel_gesture();
         document_ = document;
-        hardware_.configure_trs_ports(document.trs_modes());
-        hardware_.configure_page_settings(document.page_settings());
-        hardware_.set_target_pulse(document.pulse_period_ms(), document.pulse_minimum(), document.pulse_maximum(), document.pulse_delay_ms());
-        hardware_.set_brightness(document.brightness());
+        if (configure) {
+            hardware_.configure_trs_ports(document.trs_modes());
+            hardware_.configure_page_settings(document.page_settings());
+            hardware_.set_target_pulse(document.pulse_period_ms(), document.pulse_minimum(), document.pulse_maximum(), document.pulse_delay_ms());
+            hardware_.set_brightness(document.brightness());
+            hardware_.set_usb_midi(document.usb_device_midi(), document.usb_host_midi());
+            hardware_.set_midi_interface(document.is_midi_interface());
+            hardware_.set_animation_color_cycle(document.animation_color_cycle());
+            const auto layout = document.app_layout();
+            const bool empty = !layout.apps() && !layout.pages();
+            hardware_.set_splash(empty || document.splash(), empty ? 1 : document.screensaver_timeout());
+        }
         brightness_ = document.brightness();
-        hardware_.set_usb_midi(document.usb_device_midi(), document.usb_host_midi());
-        hardware_.set_midi_interface(document.is_midi_interface());
-        hardware_.set_animation_color_cycle(document.animation_color_cycle());
-        hardware_.set_splash(document.splash(), document.screensaver_timeout());
         selected_ = depth_ = 0;
         for (auto &c : cursors_) c = 0;
         for (auto &p : current_) p = -1;
         for (auto &p : last_sent_) p = -1;
         center_ = -1;
         held_ = 0; reverse_ = false;
+        if (configure) hardware_.configure_apps(document);
         render();
     }
     // Adapters map send/patch/undo/cycle to logical inputs 2/1/5/4.
     // Logical inputs 0/3 map to physical C (tap) and F (page).
-    void button(unsigned button, bool pressed, uint32_t now) {
+    void button(unsigned button, bool pressed, uint32_t now) override {
         if (button >= 6) return;
         const unsigned mask = 1u << button;
         if (pressed) {
@@ -147,7 +156,7 @@ public:
             }
         }
     }
-    void tick(uint32_t now) {
+    void tick(uint32_t now) override {
         executor_.tick(now);
         if (sending_ >= 0 && c_held_ && executor_.started() && !flashing_) {
             flashing_ = true; hardware_.set_brightness(255, true);
