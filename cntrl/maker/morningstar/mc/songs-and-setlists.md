@@ -1,7 +1,7 @@
 # Songs and setlists
 
 The implementation supports songs, an on-pedal song library and editable
-setlists. Song positions now use the unified Patch schema and CSG4 records. See
+setlists. Song positions now use the unified Patch schema and CSG5 records. See
 [authoring, execution and required format changes](../../../../doc/patches.md).
 Hardware qualification of this format is pending. Song sections remain deferred as described in
 [the plan](../../../../plan/songs-and-setlists.md).
@@ -21,15 +21,15 @@ operation sends MIDI.
 
 Under Songs, C opens Rename song or Use selected patch. The latter replaces the
 song's sound with an inline copy of the patch browser's highlighted selection.
-The song retains its ID and its setlist occurrences. Rename uses A/B to change a
-character, D/E to move the cursor, C to save and F to cancel. The same editor is
+The song keeps its name and setlist entries. Renaming updates every setlist
+reference to that name. Rename uses A/B to change a character, D/E to move the cursor, C to save and F to cancel. The same editor is
 available for setlist names.
 
 Under Setlists, choose **New setlist**. It receives a unique default name and
 opens the alphabetically sorted song picker. C adds the highlighted song and
 keeps the picker open; A/B browse and D/E jump between initial letters. F returns
-to the ordered performance view. Song IDs and selection context distinguish
-otherwise identical displayed names.
+to the ordered performance view. Song names are unique; a setlist can contain
+the same name more than once.
 
 In the performance view, C recalls the next song. A/B highlight an occurrence
 for editing; they do not recall it. D opens the edit menu:
@@ -84,19 +84,16 @@ instrument = 'piano'
 name = 'default'
 
 [[songs]]
-id = 1
 name = 'One Love'
 patches = [{type = 'program-change', instrument = 'piano', program = 12}]
 
 [[songs]]
-id = 2
 name = 'Linked sound'
 patches = [{document = 'pman', patch = 'clean'}]
 
 [[setlists]]
-id = 3
 name = 'Tonight'
-songs = [1, 2, 1]
+songs = ['One Love', 'Linked sound', 'One Love']
 ```
 
 Each song requires a nonempty ordered `patches` list of operations, sequences or named patch references.
@@ -104,10 +101,10 @@ Channels and program numbers are one-based. Program patches resolve logical
 bank mappings through their instrument context. A sequence at one position runs
 all its children on that activation; it does not add song positions.
 
-Song and setlist IDs must be positive and unique across the file. Occurrence IDs
-are allocated automatically. Downloads include `entry_ids` and `next_id`; retain
-these when editing so occurrences keep their identities and deleted IDs are not
-reused. Duplicate song names and repeated occurrences are allowed.
+Songs have unique names, as do setlists. Setlists contain ordered song names,
+including repeated names. Playback tracks a zero-based setlist entry index and
+a patch index within the current song. Edits adjust these indices; undo restores
+the previous positions. There are no song, patch-position or setlist-entry IDs.
 
 ```bash
 uv run --frozen cntrl songs copy songs.toml \
@@ -141,8 +138,8 @@ another is written. A fourth SD file stages incoming uploads. Upload reception
 also streams chunks directly to SD and validates the completed data before
 committing it. No library-sized RAM buffers or entry arrays remain.
 
-The native song controller occupies 440 bytes and its transfer controller is
-less than 128 bytes on the test host. These sizes do not grow with the library.
+The native song controller occupies less than 4 KiB and its transfer controller
+is less than 128 bytes on the test host. These sizes do not grow with the library.
 The SD adapter retains four file handles; transient song records and I/O buffers
 also occupy bounded working memory. The desktop TOML tools may hold the library
 in host RAM.
@@ -151,31 +148,29 @@ Confirmed edits save automatically under `/cntrl/songs/`, with generation
 counters, CRCs, completion markers and read-back verification. A failed save
 leaves the active library unchanged; boot chooses the newest valid complete
 file. Invalid existing storage is reported instead of silently overwritten.
-Undo preserves the ID allocation counter so removed occurrence IDs cannot be
-reused accidentally. Boot does not recall a song or resume a setlist automatically.
+Undo restores the saved library and playback indices. Boot does not recall a
+song or resume a setlist automatically.
 
-Counts and IDs use 32-bit fields, and a generation file must fit the underlying
+Counts and indices use 32-bit fields, and a generation file must fit the underlying
 SD filesystem and the format's approximately 4 GiB file range. Storage must have
 room for saved generations and an incoming upload. These are representation and
 capacity constraints, rather than the former 64-song/16-setlist/64-entry caps.
 Names and patch-selection fields retain their existing format bounds.
 
-The payload begins with three little-endian 32-bit values: next ID, song count
-and setlist count. Song records follow. Each setlist has its ID, name and a 32-bit
-entry count followed by exactly that many occurrence/song ID pairs. There are no
-unused padded collection slots. Committed files use the `CSG4` envelope. Each song
-stores its first occurrence followed by its ID, name and position count, then
-the remaining occurrences. Each occurrence has a persistent ID and either a
-document/key reference or a root in an immutable compiled source document.
-A CSP4 appendix stores those source documents. Export preceding formats with
-the preceding host and author them using the new tagged schema before compiling;
-there is no legacy decoder.
+The payload begins with two little-endian 32-bit counts: songs and setlists.
+Each song stores its first patch selection, name and patch count, then its
+remaining selections. Each setlist stores its name and entry count followed by
+that many song names. Committed files use the `CSG5` envelope; a `CSP5` appendix
+stores immutable compiled patch sources. Export older libraries with the old host
+before replacing the firmware, then remove ID fields and replace numeric setlist
+references with song names before copying them with the new host. There is no
+legacy decoder.
 
-Saving and boot verification stream over the file, so their work grows with the
-amount of stored data. Import checks use repeated scans to validate identities
-and references with bounded RAM; large imports can take longer. SD latency has
-not been qualified on the pedal. Songs and setlists survive firmware updates
-that preserve SD data.
+Saving, importing and boot verification stream over the file. Work grows with
+the amount of stored data; there are no identity or reference-validation scans.
+Binary bounds, source format checks and checksums remain. Missing song names are
+reported when recalled. SD latency has not been qualified on the pedal. Songs and
+setlists survive firmware updates that preserve this storage format and SD data.
 
 No SD latency, physical power-loss behavior or display readability has yet been
 measured on the pedal. Those checks are required before deployment. Alphabetical
@@ -185,12 +180,13 @@ not implemented in this version.
 ## Verification, 2026-10-27
 
 All 345 Python tests pass, including variable-length Python-to-C++ transfers of
-130 songs and 20 setlists with 130 entries each. Tests reject duplicate IDs,
-missing song references, unconfirmed replacement and interrupted uploads.
+130 songs and 20 setlists with 130 entries each. Current tests cover unique names,
+positional edits, reference updates on rename, unconfirmed replacement and
+interrupted uploads.
 Sanitizer-enabled native tests create 130 songs, 22 setlists and a 105-entry
 setlist; edit and undo entries beyond the former limits; and verify recovery on
 boot. The test storage rejects read/write requests larger than 256 bytes. Static
-assertions keep the core controller below 1 KiB and transfer controller below
+assertions keep the core controller below 4 KiB and transfer controller below
 128 bytes. Existing reference recall, picker, failed-save and rename tests pass.
 
 Both native suites, Ruff, formatting, ty and pyupgrade checks are part of the
@@ -224,7 +220,6 @@ A song can contain an explicit firmware visit between MIDI selections:
 
 ```toml
 [[songs]]
-id = 1
 name = 'Firmware visit'
 patches = [
     {output = 'din', channel = 1, program = 12},
@@ -246,6 +241,5 @@ the module to choose another browser patch, then reopen the editor to insert it.
 Function patches can be selected from a setup just like MIDI patches. Source
 references remain MIDI selections; use an inline function for firmware visits.
 
-Host export includes occurrence IDs; keep them to preserve identity when editing.
-An omitted patch ID allocates a new identity during compilation. Setup documents
-now use format 15 and must be recompiled before use with this firmware.
+Host exports contain names and ordered patch lists. Recompile and copy song
+libraries using the matching CSG5 host and firmware format.

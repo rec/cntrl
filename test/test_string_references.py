@@ -43,7 +43,6 @@ def test_strings_in_every_patch_position_compile_and_round_trip(
             'patches': source['patches'],
             'songs': [
                 {
-                    'id': 1,
                     'name': 'Repeated variation',
                     'patches': ['clean', 'lead', 'clean'],
                 }

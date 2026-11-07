@@ -277,7 +277,6 @@ volume = 100
 display_name = "A'"
 
 [[songs]]
-id = 1
 name = 'Example'
 patches = ['A′', 'A', 'A′']
 ```
@@ -510,9 +509,9 @@ recompile older configurations before deploying the matching firmware.
 
 Song libraries have optional `instruments`, `definitions`, `patches`, `fonts` and
 `tags` context using the same authoring models. Each song's `patches` list
-contains Patch strings or tables. A table can include an `id` for the position's persistent
-occurrence identity. A nonempty library is compiled with `--target`; companion
-setups and font assets follow the existing copy/download workflow. Inline captures
+contains Patch strings or tables. Songs have unique names; setlists contain song
+names, and playback tracks entry and patch indices. A nonempty library is compiled
+with `--target`; companion setups and font assets follow the existing copy/download workflow. Inline captures
 retain their compiled source; live references retain their stable document/key.
 
 ## Completion, failure and stock return
@@ -525,8 +524,8 @@ state unknown. Undo restores known program selections and does not implicitly
 replay a composite or reverse state, SysEx or firmware visits.
 
 A stock visit checkpoints the enclosing root, completed child ordinal, source
-fingerprint, caller and song/setlist occurrences when present. It also preserves
-the browser context and active brightness/interface settings needed to resume.
+fingerprint, caller, song and setlist names, and entry and patch indices when
+present. It also preserves the browser context and active brightness/interface settings needed to resume.
 Only an explicit stock return can resume. Its durable token is consumed before
 dispatch; changed sources, invalid records and ordinary boot never replay it.
 Remaining children finish before a song advances once to its next position.
@@ -535,7 +534,7 @@ unknown, rather than risk sending it twice.
 
 ## Required authoring and format changes
 
-The current setup format is 25; song records use CSG4. Setup
+The current setup format is 25; song records use CSG5. Setup
 window graphics and page references use physical left-to-right order:
 next (0), sent (1), undo (2). Recompile and
 upload matching setup and song documents together before using this firmware.

@@ -22,7 +22,6 @@ from .data_files import validate_name
 
 
 class Song(BaseModel, frozen=True):
-    id: int = Field(gt=0, lt=0xFFFFFFFF)
     name: str
     patches: list[
         Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)]
@@ -37,19 +36,12 @@ class Song(BaseModel, frozen=True):
         errors: list[str] = []
         for index, value in enumerate(values):
             fields = dict(value)
-            occurrence = fields.pop('id', None)
-            if occurrence is not None and (
-                type(occurrence) is not int or not 0 < occurrence < 0xFFFFFFFF
-            ):
-                errors.append(f'patches[{index}].id: expected 1..4294967294')
             try:
                 patch = models.patch_adapter.validate_python(fields)
             except ValidationError as error:
                 errors.append(f'patches[{index}]: {error}')
                 continue
             fields = patch.model_dump(exclude_none=True)
-            if occurrence is not None:
-                fields['id'] = occurrence
             result.append(fields)
         if errors:
             raise ValueError('\n'.join(errors))
@@ -59,15 +51,12 @@ class Song(BaseModel, frozen=True):
 
 
 class Setlist(BaseModel, frozen=True):
-    id: int = Field(gt=0, lt=0xFFFFFFFF)
     name: str
-    songs: list[int] = Field(default_factory=list)
-    entry_ids: list[int] = Field(default_factory=list)
+    songs: list[str] = Field(default_factory=list)
     model_config = ConfigDict(extra='forbid')
 
 
 class Library(BaseModel, frozen=True):
-    next_id: int | None = Field(default=None, ge=1, le=0xFFFFFFFF)
     instruments: dict[str, object] = Field(default_factory=dict)
     definitions: models.Definitions | None = None
     patches: dict[str, object] = Field(default_factory=dict)
@@ -115,44 +104,26 @@ def encode(
     documents: dict[str, object] | None = None,
     assets: dict[int, bytes] | None = None,
 ) -> bytes:
-    ids = [s.id for s in library.songs] + [s.id for s in library.setlists]
-    song_ids = {s.id for s in library.songs}
-    for s in library.setlists:
-        if s.entry_ids and len(s.entry_ids) != len(s.songs):
-            raise ValueError('entry_ids must match songs')
-        ids.extend(s.entry_ids)
-        if any(i not in song_ids for i in s.songs):
-            raise ValueError('setlist references an unknown song')
-    explicit = [
-        i for s in library.songs for p in s.patches if isinstance(i := p.get('id'), int)
-    ]
-    if len(set(ids + explicit)) != len(ids + explicit):
-        raise ValueError('song, setlist and patch occurrence IDs must be unique')
-    next_id = max(ids + explicit, default=0) + 1
-    if library.next_id is not None:
-        if library.next_id < next_id:
-            raise ValueError('next_id must exceed all existing IDs')
-        next_id = library.next_id
-    positions: list[list[tuple[int, dict[str, object], str]]] = []
+    for items in (library.songs, library.setlists):
+        names = [s.name for s in items]
+        if len(set(names)) != len(names):
+            raise ValueError(
+                'song and setlist names must be unique within each collection'
+            )
+    positions: list[list[int]] = []
     values_for_source: list[dict[str, object]] = []
     paths: list[str] = []
     for song_index, song in enumerate(library.songs):
         values = []
         for patch_index, position in enumerate(song.patches):
             value = dict(position)
-            occurrence = value.pop('id', None)
-            if occurrence is None:
-                occurrence = next_id
-                next_id += 1
-            if not isinstance(occurrence, int):
-                raise ValueError('invalid occurrence ID')
-            key = f'@song-{occurrence}'
+            position = len(values_for_source)
             values_for_source.append(value)
             paths.append(f'songs[{song_index}].patches[{patch_index}]')
-            values.append((occurrence, value, key))
+            values.append(position)
         positions.append(values)
     source = b''
-    roots: dict[str, int] = {}
+    roots: list[int] = []
     if values_for_source or library.patches:
         if target is None:
             raise ValueError(
@@ -192,20 +163,20 @@ def encode(
         graph = resolved.graph_offset(source)
         _, _, count, _, _, _ = compiler.GRAPH.unpack_from(source, graph)
         offset = graph + compiler.GRAPH.size + count * 4
-        for index, (occurrence, _, _) in enumerate(p for s in positions for p in s):
-            roots[f'@song-{occurrence}'] = struct.unpack_from(
-                '<H', source, offset + index * 2
-            )[0]
+        roots = [
+            struct.unpack_from('<H', source, offset + i * 2)[0]
+            for i in range(len(values_for_source))
+        ]
     records = []
     browser = 0
     for song, values in zip(library.songs, positions, strict=True):
         selections = []
-        for occurrence, _, key in values:
+        for position in values:
             document, reference, origin, node = (
                 bytes(64),
                 bytes(64),
                 0,
-                roots[key],
+                roots[position],
             )
             header = compiler.HEADER.unpack_from(source)
             label_offset = 76 + header[4] * 68 + header[5] * 68 + browser * 82 + 12
@@ -214,32 +185,21 @@ def encode(
             )
             browser += 1
             selections.append(
-                SELECTION.pack(
-                    document, reference, label_text(label), origin, node, occurrence
-                )
+                SELECTION.pack(document, reference, label_text(label), origin, node)
             )
         records.append(
             selections[0]
-            + SONG.pack(song.id, text(song.name, 64), len(selections))
+            + SONG.pack(text(song.name, 64), len(selections))
             + b''.join(selections[1:])
         )
     sets = []
     for s in library.setlists:
-        entries = []
-        for i, song in enumerate(s.songs):
-            if s.entry_ids:
-                occurrence = s.entry_ids[i]
-            else:
-                occurrence = next_id
-                next_id += 1
-            entries.append(struct.pack('<II', occurrence, song))
-        sets.append(SET.pack(s.id, text(s.name, 64), len(entries)) + b''.join(entries))
-    if next_id > 0xFFFFFFFF:
-        raise ValueError('song IDs exhausted')
+        entries = [text(n, 64) for n in s.songs]
+        sets.append(SET.pack(text(s.name, 64), len(entries)) + b''.join(entries))
     payload = (
-        struct.pack('<III', next_id, len(library.songs), len(library.setlists))
+        struct.pack('<II', len(library.songs), len(library.setlists))
         + b''.join(records + sets)
-        + b'CSP4'
+        + b'CSP5'
     )
     if source:
         payload += struct.pack('<I', len(source)) + source
@@ -249,12 +209,12 @@ def encode(
 
 
 def decode(data: bytes) -> Library:
-    if len(data) < 16:
+    if len(data) < 12:
         raise ValueError('invalid song library size')
-    next_id, ns, nl = struct.unpack_from('<III', data)
-    if ns > (len(data) - 16) // (SONG.size + SELECTION.size):
+    ns, nl = struct.unpack_from('<II', data)
+    if ns > (len(data) - 12) // (SONG.size + SELECTION.size):
         raise ValueError('invalid song library counts')
-    offset = 12
+    offset = 8
     positions = []
     song_headers = []
     for _ in range(ns):
@@ -262,7 +222,7 @@ def decode(data: bytes) -> Library:
             raise ValueError('truncated song')
         first = SELECTION.unpack_from(data, offset)
         offset += SELECTION.size
-        key, name, count = SONG.unpack_from(data, offset)
+        name, count = SONG.unpack_from(data, offset)
         offset += SONG.size
         if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
             raise ValueError('invalid song patch count')
@@ -271,28 +231,26 @@ def decode(data: bytes) -> Library:
             values.append(SELECTION.unpack_from(data, offset))
             offset += SELECTION.size
         positions.append(values)
-        song_headers.append((key, _string(name)))
+        song_headers.append(_string(name))
     sets = []
     for _ in range(nl):
         if offset + SET.size > len(data):
             raise ValueError('truncated setlist')
-        key, name, count = SET.unpack_from(data, offset)
+        name, count = SET.unpack_from(data, offset)
         offset += SET.size
-        if count > (len(data) - offset) // 8:
+        if count > (len(data) - offset) // 64:
             raise ValueError('invalid setlist count')
         entries = [
-            struct.unpack_from('<II', data, offset + j * 8) for j in range(count)
+            _string(data[offset + j * 64 : offset + (j + 1) * 64]) for j in range(count)
         ]
-        offset += count * 8
+        offset += count * 64
         sets.append(
             Setlist(
-                id=key,
                 name=_string(name),
-                songs=[e[1] for e in entries],
-                entry_ids=[e[0] for e in entries],
+                songs=entries,
             )
         )
-    if data[offset : offset + 4] != b'CSP4':
+    if data[offset : offset + 4] != b'CSP5':
         raise ValueError('missing song Patch sources')
     offset += 4
     sources = []
@@ -349,9 +307,9 @@ def decode(data: bytes) -> Library:
     if sources:
         context['definitions'] = {'profiles': profiles, 'programs': programs}
     songs = []
-    for (key, name), values in zip(song_headers, positions, strict=True):
+    for name, values in zip(song_headers, positions, strict=True):
         patches = []
-        for document, reference, label, source, node, occurrence in values:
+        for document, reference, label, source, node in values:
             if document[0]:
                 if source != 0xFFFFFFFF:
                     raise ValueError('invalid external song Patch')
@@ -371,12 +329,9 @@ def decode(data: bytes) -> Library:
                     source_fonts[source],
                     source_tags[source],
                 )
-            value['id'] = occurrence
             patches.append(value)
-        songs.append(Song(id=key, name=name, patches=patches))
-    result = Library.model_validate(
-        context | {'next_id': next_id, 'songs': songs, 'setlists': sets}
-    )
+        songs.append(Song(name=name, patches=patches))
+    result = Library.model_validate(context | {'songs': songs, 'setlists': sets})
     return result
 
 
@@ -574,6 +529,6 @@ def run(command: Copy | Download) -> None:
         print(destination)
 
 
-SELECTION = struct.Struct('<64s64s64sIII')
-SONG = struct.Struct('<I64sI')
-SET = struct.Struct('<I64sI')
+SELECTION = struct.Struct('<64s64s64sII')
+SONG = struct.Struct('<64sI')
+SET = struct.Struct('<64sI')

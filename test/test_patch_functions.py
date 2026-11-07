@@ -82,7 +82,6 @@ def test_song_with_function_and_repeated_patches_preserves_occurrences() -> None
     library = songs.Library(
         songs=[
             songs.Song(
-                id=1,
                 name='Song',
                 patches=[
                     {
@@ -104,7 +103,8 @@ def test_song_with_function_and_repeated_patches_preserves_occurrences() -> None
     )
     data = songs.encode(library, target)
     restored = songs.decode(data)
-    assert len({p['id'] for p in restored.songs[0].patches}) == 3
+    assert len(restored.songs[0].patches) == 3
+    assert restored.songs[0].patches[0] == restored.songs[0].patches[2]
     function = restored.songs[0].patches[1]
     assert (
         function['operation'] == 'stock-firmware' and function['exit_buttons'] == 'B+E'

@@ -167,7 +167,7 @@ bits and retains its existing release-to-arm, 15 ms debounce and 50 ms/no-hold
 behavior. No patch-mode A+F handler is installed.
 
 For song visits, `/cntrl/firmware-visit.bin` stores a verified small record with
-setup identity/checksum, song library generation/checksum and occurrence IDs.
+setup identity/checksum, song library generation/checksum, song and setlist names, and entry and patch indices.
 The following referenced selection also carries its source document checksum.
 Write, sync, read-back, journal commit and return handling run as separate poll
 steps. No collection or full runtime snapshot is written. The old record is

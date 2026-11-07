@@ -981,7 +981,7 @@ const char *module_names[app_modules + cntrl::AppLayout::max_apps] = {"Setups", 
 };
 #if CNTRL_ORIGINAL_FIRMWARE
 struct FirmwareVisitRecord {
-    uint32_t magic = 0x46564932, token = 0, setup_crc = 0;
+    uint32_t magic = 0x46564933, token = 0, setup_crc = 0;
     char setup[64] = {};
     cntrl::SongContinuation continuation;
     cntrl::Controller::NavigationState initial_navigation, return_navigation;
@@ -1052,7 +1052,7 @@ void poll_firmware_visit(bool released) {
         }
         case 10: {
             const auto &document = documents.document();
-            valid = valid && firmware_visit.magic == 0x46564932 && firmware_visit.token == token
+            valid = valid && firmware_visit.magic == 0x46564933 && firmware_visit.token == token
                 && firmware_visit.crc == cntrl::checksum(reinterpret_cast<const uint8_t *>(&firmware_visit), sizeof(firmware_visit) - 4)
                 && !std::strncmp(firmware_visit.setup, documents.selected(), 64)
                 && firmware_visit.setup_crc == (document.valid() ? cntrl::checksum(document.data(), document.length()) : 0);

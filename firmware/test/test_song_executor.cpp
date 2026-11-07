@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
     assert(songs.import_write(payload.data(), unsigned(payload.size())));
     assert(songs.import_finish(unsigned(payload.size()), cntrl::checksum(payload.data(), unsigned(payload.size()))));
     while (songs.busy()) songs.tick();
-    assert(songs.success()); songs.choose(2); assert(songs.next()); board.drain();
+    assert(songs.success()); songs.choose("Set"); assert(songs.next()); board.drain();
     assert(board.visits == 1 && board.events == std::vector<unsigned>({64, 150}));
     assert(board.saved.completed == 3);
 
@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
     assert(restored.boot() && returned.events.empty());
     assert(restored.resume(board.saved)); returned.drain();
     assert(returned.visits == 0 && returned.events == std::vector<unsigned>({65, 66, 67}));
-    cntrl::SongSelection current; assert(restored.current_patch(current) && current.occurrence == 21);
+    cntrl::SongSelection current; assert(restored.current_patch(current) && restored.continuation().patch == 1);
     assert(!restored.next());
 
     SongBoard changed; cntrl::Songs invalid(storage, changed); changed.songs = &invalid;
