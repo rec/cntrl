@@ -391,6 +391,7 @@ def test_song_can_start_with_a_derived_patch_and_reuse_its_parent(
 def test_empty_song_library_downloads() -> None:
     data = songs.encode(songs.Library())
     client = Mock(spec=transport.SetupClient)
+    client.connection = Mock(usb_block_size=4096)
     client.request.side_effect = [
         f'CNTRL SONGS {len(data)} {crc32(data):08x}',
         'CNTRL DATA ' + data.hex(),

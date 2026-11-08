@@ -17,6 +17,8 @@ def header(target: Target) -> str:
     ]
     lines = [
         '#pragma once',
+        f'#define CNTRL_USB_BLOCK_SIZE {target.usb_block_size}',
+        '#include <cntrl/usb_config.h>',
         '#include <array>',
         '#include <cntrl/midi_outputs.h>',
         '#include <cntrl/ui/display.h>',

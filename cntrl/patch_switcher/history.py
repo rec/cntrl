@@ -115,8 +115,11 @@ def import_revision(
     )
     if response != 'CNTRL SEND':
         raise ValueError(f'unexpected history import response: {response}')
-    for offset in range(0, len(record), 128):
-        client.ok('CNTRL HISTORY DATA ' + record[offset : offset + 128].hex())
+    for offset in range(0, len(record), client.connection.usb_block_size):
+        client.ok(
+            'CNTRL HISTORY DATA '
+            + record[offset : offset + client.connection.usb_block_size].hex()
+        )
     if (response := client.request('CNTRL HISTORY END')) not in (
         'CNTRL OK',
         'CNTRL EXISTS',

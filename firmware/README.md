@@ -557,10 +557,14 @@ prints `Waiting x seconds for USB (hit control-C to exit)` and retries after
 uploads and live MIDI output are outside this policy.
 
 Each wire request starts with byte 0x1e, then
-`CNTRL USB SESSION_HEX SEQUENCE REPLY_ACK DATA_HEX\n`. Data is at most 128 bytes;
+`CNTRL USB SESSION_HEX SEQUENCE REPLY_ACK DATA_HEX\n`. Data is at most `usb_block_size` bytes (4096 by default);
 `-` means no data. Sequence 1 opens a random session with empty data. Later
 sequences deliver bytes or poll for a reply; sequence 0 releases the session.
-Responses are `CNTRL USB SESSION_HEX SEQUENCE REPLY_ID REPLY_HEX\n`, with `-`
+The firmware target configures `usb_block_size` in bytes. Its generated
+capability header sizes the transport and transfer buffers; the host learns the
+value from replies, including the initial session handshake.
+
+Responses are `CNTRL USB SESSION_HEX SEQUENCE REPLY_ID BLOCK_SIZE REPLY_HEX\n`, with `-`
 when no application reply is ready. A retry keeps the same session and sequence.
 The receiver delivers input bytes once and retains each application reply until
 acknowledged. The leading separator discards a partial wire frame before retry.
@@ -593,7 +597,7 @@ never paths. Requests are:
 - `CNTRL SETUP FINISH`: select the earliest setup if selection is empty after
   a copy batch; otherwise retain the selection, reply `CNTRL OK`.
 - `CNTRL SETUP GET NAME_HEX`: reply `CNTRL FILE SIZE CRC`. Each `CNTRL NEXT`
-  returns `CNTRL DATA HEX_BYTES` with up to 128 bytes, until SIZE is complete.
+  returns `CNTRL DATA HEX_BYTES` with up to `usb_block_size` bytes, until SIZE is complete.
 - `CNTRL SETUP SET NAME_HEX`, `CNTRL SETUP FORWARD` and
   `CNTRL SETUP BACKWARD`: persist selection and restart the GUI, reply `CNTRL OK`.
 - `CNTRL SETUP DELETE SIZE CRC`: receive a checksummed binary list of

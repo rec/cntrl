@@ -1,4 +1,5 @@
 #pragma once
+#include "usb_config.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -8,6 +9,12 @@ namespace cntrl {
 // acknowledges it; duplicate input frames never reach the command interpreter.
 class UsbSession {
 public:
+    void reset() {
+        session_ = sequence_ = 0; reply_id_ = 1;
+        used_ = size_ = offset_ = sent_ = 0;
+        collecting_ = reset_ = closed_ = false;
+        line_[0] = reply_[0] = output_[0] = 0;
+    }
     bool active() const { return session_ != 0 && !closed_; }
     bool resetting() const { return reset_; }
     void reset_done() { reset_ = false; if (closed_) respond(); else finish_input(); }
@@ -33,9 +40,10 @@ public:
             return;
         }
         collecting_ = false; line_[used_] = 0;
-        unsigned long session; unsigned long seq, ack; char hex[257]; int end = 0;
-        if (std::sscanf(line_, "CNTRL USB %lx %lu %lu %256s%n", &session, &seq, &ack, hex, &end) != 4
-            || line_[end] || !session || session > 0xfffffffful || seq > 0xfffffffful || ack > 0xfffffffful) return;
+        unsigned long session; unsigned long seq, ack; int end = 0;
+        if (std::sscanf(line_, "CNTRL USB %lx %lu %lu %n", &session, &seq, &ack, &end) != 3
+            || !end || !line_[end] || std::strlen(line_ + end) > usb_block_size * 2 || !session || session > 0xfffffffful || seq > 0xfffffffful || ack > 0xfffffffful) return;
+        const char *hex = line_ + end;
         if (session == session_ && !seq && !std::strcmp(hex, "-")) {
             closed_ = true; sequence_ = 0; reply_[0] = 0; size_ = offset_ = 0; reset_ = true; return;
         }
@@ -65,14 +73,14 @@ private:
     uint32_t sequence_ = 0, reply_id_ = 1;
     unsigned used_ = 0, size_ = 0, offset_ = 0, sent_ = 0;
     bool collecting_ = false, reset_ = false, closed_ = false;
-    char line_[350] = {}, reply_[600] = {}, output_[1300] = {};
-    uint8_t bytes_[128] = {};
+    char line_[usb_block_size * 2 + 64] = {}, reply_[usb_text_size] = {}, output_[usb_frame_size] = {};
+    uint8_t bytes_[usb_block_size] = {};
     void finish_input() { ++sequence_; respond(); }
     void respond(const char *error = nullptr) {
         sent_ = 0;
         if (error) { std::snprintf(output_, sizeof(output_), "CNTRL USB %s\n", error); return; }
-        unsigned n = unsigned(std::snprintf(output_, sizeof(output_), "CNTRL USB %lx %lu %lu ",
-            (unsigned long)session_, (unsigned long)sequence_, (unsigned long)reply_id_));
+        unsigned n = unsigned(std::snprintf(output_, sizeof(output_), "CNTRL USB %lx %lu %lu %u ",
+            (unsigned long)session_, (unsigned long)sequence_, (unsigned long)reply_id_, usb_block_size));
         if (!reply_[0]) output_[n++] = '-';
         else for (const unsigned char *p = reinterpret_cast<const unsigned char *>(reply_); *p; ++p) {
             std::snprintf(output_ + n, 3, "%02x", *p); n += 2;

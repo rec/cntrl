@@ -21,6 +21,7 @@ class SerialConnection:
     def __init__(self, port: Path, timeout: float = 30) -> None:
         self.port = port
         self.timeout = timeout
+        self.usb_block_size = 4096
         self.fd = -1
         self.session = secrets.randbits(32) or 1
         self.sequence = 1
@@ -112,13 +113,16 @@ class SerialConnection:
                             )
                             lost_reported = True
                         raise OSError('USB session lost')
-                    if len(response) != 6 or response[:2] != ['CNTRL', 'USB']:
+                    if len(response) != 7 or response[:2] != ['CNTRL', 'USB']:
                         raise OSError('Invalid USB transport response')
                     try:
                         session = int(response[2], 16)
                         sequence, reply = int(response[3]), int(response[4])
+                        block_size = int(response[5])
+                        if not 1 <= block_size <= 65535:
+                            raise ValueError('invalid USB block size')
                         payload = (
-                            b'' if response[5] == '-' else bytes.fromhex(response[5])
+                            b'' if response[6] == '-' else bytes.fromhex(response[6])
                         )
                     except ValueError as error:
                         raise OSError('Invalid USB transport response') from error
@@ -131,6 +135,7 @@ class SerialConnection:
                         self.acknowledged = reply
                     elif payload and reply != self.acknowledged:
                         raise OSError('Unexpected USB reply sequence')
+                    self.usb_block_size = block_size
                     self.sequence += 1
                     return
             except (OSError, termios.error):
@@ -166,7 +171,7 @@ class SerialConnection:
     def read_frame(self) -> str:
         deadline = time.monotonic() + self.timeout
         result = bytearray()
-        while len(result) < 1300:
+        while len(result) < (self.usb_block_size * 2 + 128) * 2 + 64:
             remaining = deadline - time.monotonic()
             if remaining <= 0 or not select.select([self.fd], [], [], remaining)[0]:
                 raise TimeoutError('USB serial response timed out')
@@ -185,10 +190,12 @@ class SerialConnection:
         raise OSError('USB transport response too long')
 
     def write(self, data: bytes) -> None:
-        for i in range(0, len(data), 128):
-            self.exchange(data[i : i + 128])
+        for i in range(0, len(data), self.usb_block_size):
+            self.exchange(data[i : i + self.usb_block_size])
 
-    def line(self, limit: int = 256) -> str:
+    def line(self, limit: int | None = None) -> str:
+        if limit is None:
+            limit = self.usb_block_size * 2 + 128
         while True:
             if b'\n' in self.received:
                 line, _, remaining = self.received.partition(b'\n')
@@ -218,7 +225,7 @@ class SetupClient:
 
     def request(self, command: str) -> str:
         self.connection.write((command + '\n').encode('ascii'))
-        response = self.connection.line(limit=600)
+        response = self.connection.line()
         if response.startswith('CNTRL ERROR'):
             raise ValueError(response)
         return response
@@ -293,8 +300,11 @@ class SetupClient:
         )
         if response != 'CNTRL SEND':
             raise ValueError(response)
-        for i in range(0, len(data), 128):
-            self.ok('CNTRL BUNDLE DATA ' + data[i : i + 128].hex())
+        for i in range(0, len(data), self.connection.usb_block_size):
+            self.ok(
+                'CNTRL BUNDLE DATA '
+                + data[i : i + self.connection.usb_block_size].hex()
+            )
         self.ok('CNTRL BUNDLE END')
         if self.download_bundle() != data:
             raise ValueError('bundle read-back verification failed')
@@ -305,8 +315,9 @@ class SetupClient:
             raise ValueError('invalid bundle size response')
         length, checksum = int(parts[2]), int(parts[3], 16)
         result = bytearray()
-        for i in range(0, length, 128):
-            response = self.request(f'CNTRL BUNDLE GET {i} {min(128, length - i)}')
+        for i in range(0, length, self.connection.usb_block_size):
+            count = min(self.connection.usb_block_size, length - i)
+            response = self.request(f'CNTRL BUNDLE GET {i} {count}')
             if not response.startswith('CNTRL BUNDLE '):
                 raise ValueError('invalid bundle data response')
             result.extend(bytes.fromhex(response[13:]))
@@ -333,7 +344,7 @@ class SetupClient:
             if not response.startswith('CNTRL DATA '):
                 raise ValueError(response)
             chunk = bytes.fromhex(response[11:])
-            if not 1 <= len(chunk) <= 128:
+            if not 1 <= len(chunk) <= self.connection.usb_block_size:
                 raise ValueError('invalid download chunk')
             result.extend(chunk)
         if len(result) != length or crc32(result) != checksum:
@@ -360,8 +371,11 @@ class SetupClient:
         if response not in ('CNTRL SEND', 'CNTRL EXISTS'):
             raise ValueError(response)
         if response == 'CNTRL SEND':
-            for i in range(0, len(data), 128):
-                self.ok('CNTRL FONT DATA ' + data[i : i + 128].hex())
+            for i in range(0, len(data), self.connection.usb_block_size):
+                self.ok(
+                    'CNTRL FONT DATA '
+                    + data[i : i + self.connection.usb_block_size].hex()
+                )
             self.ok('CNTRL FONT END')
         if self.download_font(key) != data:
             raise ValueError('font asset read-back mismatch or checksum collision')
@@ -373,9 +387,9 @@ class SetupClient:
         key = crc32(data)
         response = self.request(f'CNTRL SPLASH BEGIN {len(data)} {key:08x}')
         if response == 'CNTRL SPLASH SEND':
-            for i in range(0, len(data), 512):
-                self.connection.write(data[i : i + 512])
-                received = min(i + 512, len(data))
+            for i in range(0, len(data), self.connection.usb_block_size):
+                self.connection.write(data[i : i + self.connection.usb_block_size])
+                received = min(i + self.connection.usb_block_size, len(data))
                 expected = (
                     f'CNTRL SPLASH NEXT {received}'
                     if received < len(data)
@@ -405,7 +419,11 @@ class SetupClient:
             if not response.startswith('CNTRL DATA '):
                 raise ValueError(response)
             chunk = bytes.fromhex(response[11:])
-            if not 1 <= len(chunk) <= min(128, length - len(result)):
+            if (
+                not 1
+                <= len(chunk)
+                <= min(self.connection.usb_block_size, length - len(result))
+            ):
                 raise ValueError('invalid movie asset chunk')
             result.extend(chunk)
         if crc32(result) != key:
@@ -426,7 +444,7 @@ class SetupClient:
             if not response.startswith('CNTRL DATA '):
                 raise ValueError(response)
             chunk = bytes.fromhex(response[11:])
-            if not 1 <= len(chunk) <= 128:
+            if not 1 <= len(chunk) <= self.connection.usb_block_size:
                 raise ValueError('invalid font asset chunk')
             result.extend(chunk)
         if len(result) != length or crc32(result) != key:

@@ -20,6 +20,7 @@ def test_capabilities_compile_without_an_implementation(
     assert isinstance(data, dict)
     data['memory'] = {'capacity': 803840, 'runtime': 120000}
     data['buttons'] = buttons
+    data['usb_block_size'] = 256
     data['displays'] = [
         {'id': f'view-{i}', 'label': f'View {i}', 'width': 177 + i, 'height': 131}
         for i in range(count)

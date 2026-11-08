@@ -29,7 +29,7 @@ int main() {
     cntrl::Documents documents(storage, peer, controller, peer); documents.boot();
     cntrl::BundleTransfer transfer(storage, documents, peer, peer);
     cntrl::HistoryImport history(disk, documents, peer, peer);
-    char line[320] = {}; unsigned used = 0;
+    char line[cntrl::usb_text_size] = {}; unsigned used = 0;
     return usb_peer(peer.usb, [&](uint8_t byte) {
         if (documents.busy()) { documents.receive(byte, 0); return; }
         if (byte == '\n') {

@@ -1,4 +1,5 @@
 #include "target.h"
+#include "target_capabilities.h"
 #if CNTRL_ORIGINAL_FIRMWARE
 #include "../boot_switch/selection.h"
 extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
@@ -36,7 +37,6 @@ extern "C" char cntrl_memory_budget;
 #include <cntrl/midi_outputs.h>
 #include "midi_binding.h"
 #include <cntrl/midi_runtime.h>
-#include "target_capabilities.h"
 #include <cntrl/module_menu.h>
 #if CNTRL_SWITCHES
 #include <cntrl/switches.h>
@@ -562,7 +562,7 @@ bool append_boot_record(uint32_t value) {
 #endif
 
 cntrl::splash::SdSlots splash_card;
-cntrl::animation::Receiver splash_assets(splash_card, board);
+DMAMEM cntrl::animation::Receiver splash_assets(splash_card, board);
 cntrl::splash::Panels splash_panels;
 cntrl::animation::Player splash_player(splash_assets, splash_panels);
 unsigned random_movie(unsigned count) { return unsigned(random(count)); }
@@ -681,7 +681,7 @@ struct AssetServices {
     font_files, native_asset_command};
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
 bool asset_command(const char *line) { return asset_commands.command(line, millis()); }
-cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset);
+DMAMEM cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset);
 cntrl::ButtonState buttons[cntrl::target::button_count];
 cntrl::CooperativeRuntime cooperative_runtime(cntrl::target::scan_interval_ms);
 
@@ -692,7 +692,7 @@ bool switch_scan_due() { return cooperative_runtime.scan_due(millis()); }
 FLASHMEM void initialize_target() {
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
-    usb_session = cntrl::UsbSession{};
+    usb_session.reset();
     for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i)
         new (extra_controllers[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::target::max_switches + i);
     initialize_switches();

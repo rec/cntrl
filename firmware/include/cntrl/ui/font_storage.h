@@ -1,4 +1,5 @@
 #pragma once
+#include <cntrl/usb_config.h>
 #include <cntrl/ui/font_assets.h>
 #include <cntrl/documents.h>
 #include <cntrl/filesystem.h>
@@ -53,8 +54,10 @@ public:
             replies.reply("CNTRL SEND"); return true;
         }
         if (!std::strncmp(line, "CNTRL FONT DATA ", 16)) {
-            unsigned n = std::strlen(line + 16); uint8_t bytes[128];
-            if (!writer_.opened() || !n || n % 2 || n > 256 || n / 2 > expected_ - received_) return error();
+            unsigned n = std::strlen(line + 16);
+            cntrl::UsbBlock block; if (!block.bytes) return error();
+            auto *bytes = block.bytes;
+            if (!writer_.opened() || !n || n % 2 || n > cntrl::usb_block_size * 2 || n / 2 > expected_ - received_) return error();
             for (unsigned i = 0; i < n; ++i) {
                 char c = line[16 + i]; int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
                 if (digit < 0) return error();
@@ -80,11 +83,13 @@ public:
         }
         end = 0;
         if (std::sscanf(line, "CNTRL FONT READ %lx %u%n", &key, &length, &end) == 2 && end && !line[end] && key && key <= 0xfffffffful) {
-            auto &file = reader_; uint8_t bytes[128];
+            auto &file = reader_; cntrl::UsbBlock block;
+            if (!block.bytes) return error();
+            auto *bytes = block.bytes;
             if (!open(uint32_t(key)) || length >= file.size()) return error();
-            unsigned n = unsigned(file.size() - length); if (n > sizeof(bytes)) n = sizeof(bytes);
+            unsigned n = unsigned(file.size() - length); if (n > cntrl::usb_block_size) n = cntrl::usb_block_size;
             if (!file.read(length, bytes, n)) return error();
-            char response[280] = "CNTRL DATA ";
+            char *response = block.text; std::strcpy(response, "CNTRL DATA ");
             for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", bytes[i]);
             replies.reply(response); return true;
         }

@@ -5,6 +5,7 @@
 
 int main(int argc, char **argv) {
     assert(argc == 5);
+    static_assert(cntrl::usb_block_size == 256);
     assert(cntrl::target::memory_capacity == std::strtoul(argv[1], nullptr, 10));
     assert(cntrl::target::viewports[0].width == std::strtoul(argv[2], nullptr, 10));
     assert(cntrl::target::display_count == std::strtoul(argv[3], nullptr, 10));

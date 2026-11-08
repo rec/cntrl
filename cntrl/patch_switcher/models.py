@@ -954,6 +954,7 @@ class Target(BaseModel, frozen=True):
         units.unit_validator('second'),
         AfterValidator(millisecond_resolution),
     ] = 0.001
+    usb_block_size: units.Bytes = Field(default=4096, ge=1, le=65535)
     max_switches: Annotated[int, Field(strict=True, ge=0, le=5)] = 5
     displays: list[TargetDisplay] = Field(min_length=1, max_length=255)
     fonts: list[FontFace]

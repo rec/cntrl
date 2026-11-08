@@ -1,4 +1,5 @@
 #pragma once
+#include <cntrl/usb_config.h>
 #include "animation.h"
 #include <cntrl/hardware.h>
 #include <cstdio>
@@ -108,6 +109,7 @@ public:
             crc_ = 0xffffffff;
         }
         unsigned amount = u32(envelope_ + 8) - offset_;
+        if (amount > 512) amount = 512;
         if (amount > sizeof(buffer_)) amount = sizeof(buffer_);
         if (!storage_.read(slot_, 16 + offset_, buffer_, amount)) { verified(false); return; }
         crc_ = crc_update(crc_, buffer_, amount); offset_ += amount;
@@ -143,10 +145,11 @@ private:
             && end && !line_[end] && crc <= 0xfffffffful) {
             uint32_t length;
             if (!asset_info(uint32_t(crc), length) || offset >= length) { replies_.reply("CNTRL SPLASH ERROR missing"); return; }
-            uint8_t bytes[128]; unsigned n = length - offset;
-            if (n > sizeof(bytes)) n = sizeof(bytes);
+            UsbBlock block; if (!block.bytes) { fail("allocation"); return; }
+            auto *bytes = block.bytes; unsigned n = length - offset;
+            if (n > usb_block_size) n = usb_block_size;
             if (!storage_.read(uint32_t(crc), 16 + offset, bytes, n)) { replies_.reply("CNTRL SPLASH ERROR read"); return; }
-            char response[280] = "CNTRL DATA ";
+            char *response = block.text; std::strcpy(response, "CNTRL DATA ");
             for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", bytes[i]);
             replies_.reply(response); return;
         }
@@ -201,7 +204,7 @@ private:
     unsigned slot_ = 0, used_ = 0, line_used_ = 0;
     uint32_t length_ = 0, checksum_ = 0, incoming_ = 0, expected_ = 0;
     uint32_t offset_ = 0, crc_ = 0, last_ = 0, frame_duration_ = 0, frame_bytes_ = 0;
-    uint8_t buffer_[512], envelope_[16], header_[header_bytes];
+    uint8_t buffer_[usb_block_size], envelope_[16], header_[header_bytes];
     char line_[96];
 };
 } // namespace cntrl::animation

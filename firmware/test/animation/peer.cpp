@@ -9,6 +9,7 @@ struct Wire : cntrl::animation::Replies {
 };
 
 int main() {
+    cntrl::memory_budget = 192 * 1024;
     Memory memory;
     Wire wire;
     cntrl::animation::Receiver receiver(memory, wire);

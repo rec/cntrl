@@ -1,4 +1,5 @@
 #pragma once
+#include <cntrl/usb_config.h>
 #include "session.h"
 #include <cntrl/documents.h>
 
@@ -80,7 +81,7 @@ private:
     void (*midi_status_)(unsigned);
     bool (*asset_command_)(const char *);
     void (*midi_reset_)();
-    char line_[320];
+    char line_[usb_text_size];
     unsigned used_ = 0;
     uint32_t last_ = 0;
     bool overflow_ = false;

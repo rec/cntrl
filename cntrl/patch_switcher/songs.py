@@ -420,7 +420,7 @@ def download(client: transport.SetupClient) -> bytes:
         if not response_line.startswith('CNTRL DATA '):
             raise ValueError(response_line)
         chunk = bytes.fromhex(response_line[11:])
-        if not 1 <= len(chunk) <= 128:
+        if not 1 <= len(chunk) <= client.connection.usb_block_size:
             raise ValueError('invalid song library chunk')
         result.extend(chunk)
     if len(result) != length or crc32(result) != int(response[3], 16):
@@ -432,8 +432,11 @@ def upload(client: transport.SetupClient, data: bytes, overwrite: bool) -> None:
     """Upload an exact current-format library and verify the stored bytes."""
     decode(data)
     client.ok(f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} {int(overwrite)}')
-    for offset in range(0, len(data), 128):
-        client.ok('CNTRL SONGS DATA ' + data[offset : offset + 128].hex())
+    for offset in range(0, len(data), client.connection.usb_block_size):
+        client.ok(
+            'CNTRL SONGS DATA '
+            + data[offset : offset + client.connection.usb_block_size].hex()
+        )
     client.ok('CNTRL SONGS END')
     if download(client) != data:
         raise ValueError('song library read-back mismatch')

@@ -1,4 +1,5 @@
 #pragma once
+#include <cntrl/usb_config.h>
 #include "songs.h"
 
 namespace cntrl {
@@ -38,8 +39,8 @@ public:
         }
         if (!std::strncmp(line, "CNTRL SONGS DATA ", 17)) {
             unsigned n = unsigned(std::strlen(line + 17));
-            if (!receiving_ || !n || n % 2 || n > 256 || n / 2 > expected_ - received_) return error();
-            uint8_t bytes[128];
+            if (!receiving_ || !n || n % 2 || n > usb_block_size * 2 || n / 2 > expected_ - received_) return error();
+            UsbBlock block; if (!block.bytes) return error(); auto *bytes = block.bytes;
             for (unsigned i = 0; i < n; ++i) {
                 char c = line[17 + i]; int v = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
                 if (v < 0) return error();
@@ -62,10 +63,10 @@ public:
         }
         end = 0;
         if (std::sscanf(line, "CNTRL SONGS READ %u%n", &length, &end) == 1 && end && !line[end] && length < songs_.length()) {
-            unsigned n = std::min(128u, songs_.length() - length);
-            uint8_t bytes[128];
+            unsigned n = std::min(usb_block_size, songs_.length() - length);
+            UsbBlock block; if (!block.bytes) return error(); auto *bytes = block.bytes;
             if (!songs_.read_payload(length, bytes, n)) return error();
-            char response[280] = "CNTRL DATA ";
+            char *response = block.text; std::strcpy(response, "CNTRL DATA ");
             for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", bytes[i]);
             replies_.reply(response); return true;
         }

@@ -1,4 +1,5 @@
 #pragma once
+#include "usb_config.h"
 #include "documents.h"
 
 namespace cntrl {
@@ -39,7 +40,7 @@ public:
         if (!std::strncmp(line, "CNTRL HISTORY DATA ", 19)) {
             if (phase_ != Phase::receive) return fail("history-import-state");
             const char *hex = line + 19; unsigned width = unsigned(std::strlen(hex));
-            if (!width || width % 2 || width > 256 || width / 2 > expected_ - received_) return fail("history-import-data");
+            if (!width || width % 2 || width > usb_block_size * 2 || width / 2 > expected_ - received_) return fail("history-import-data");
             for (unsigned i = 0; i < width; i += 2) {
                 int high = digit(hex[i]), low = digit(hex[i + 1]);
                 if (high < 0 || low < 0) return fail("history-import-data");

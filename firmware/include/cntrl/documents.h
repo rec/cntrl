@@ -1,4 +1,5 @@
 #pragma once
+#include <cntrl/usb_config.h>
 #include "controller.h"
 #include "setup_names.h"
 #include "revisions.h"
@@ -728,8 +729,9 @@ private:
         if (!std::strcmp(line_, "CNTRL NEXT")) {
             if (listing_) { listing(); return; }
             if (download_) {
-                unsigned n = length_ - (download_ - 1); if (n > 128) n = 128;
-                char response[280] = "CNTRL DATA ";
+                unsigned n = length_ - (download_ - 1); if (n > usb_block_size) n = usb_block_size;
+                UsbBlock block; if (!block.bytes) { error("allocation"); return; }
+                char *response = block.text; std::strcpy(response, "CNTRL DATA ");
                 for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", staging_.data[download_ - 1 + i]);
                 download_ += n; if (download_ - 1 == length_) download_ = 0;
                 replies_.reply(response); return;

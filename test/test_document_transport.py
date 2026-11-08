@@ -14,13 +14,19 @@ import pytest
 from cntrl.patch_switcher import cli, compiler, models, resolved, transport
 
 
+@pytest.fixture(scope='module', params=[1024, 4096])
+def usb_block_size(request: pytest.FixtureRequest) -> int:
+    return int(request.param)
+
+
 @pytest.fixture(scope='module')
-def peer(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def peer(tmp_path_factory: pytest.TempPathFactory, usb_block_size: int) -> Path:
     executable = tmp_path_factory.mktemp('document-peer') / 'peer'
     subprocess.run(
         [
             'c++',
             '-std=c++17',
+            f'-DCNTRL_USB_BLOCK_SIZE={usb_block_size}',
             '-Wall',
             '-Wextra',
             '-Werror',
@@ -55,7 +61,9 @@ def bundle_peer() -> Iterator[Path]:
         yield executable
 
 
-def test_named_setup_lifecycle_against_cpp_receiver(peer: Path) -> None:
+def test_named_setup_lifecycle_against_cpp_receiver(
+    peer: Path, usb_block_size: int
+) -> None:
     data = bytes.fromhex((ROOT / 'firmware/test/show.golden').read_text())
     master, slave = pty.openpty()
     process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
@@ -66,6 +74,7 @@ def test_named_setup_lifecycle_against_cpp_receiver(peer: Path) -> None:
             == f'CNTRL READY {compiler.DOCUMENT_VERSION} 0 00000000'
         )
         with transport.SerialConnection(port) as connection:
+            assert connection.usb_block_size == usb_block_size
             client = transport.SetupClient(connection)
             assert client.catalogue() == []
             assert client.current() == ''
@@ -299,10 +308,15 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
             read_frame = connection.read_frame
             writes = 0
             losses = 0
+            data_frame = False
 
             def interrupted_write(frame: bytes) -> None:
-                nonlocal writes
+                nonlocal writes, data_frame
                 writes += 1
+                data_frame = (
+                    frame.split()[-1]
+                    == data[: connection.usb_block_size].hex().encode()
+                )
                 if writes == 3:
                     write_frame(frame[: len(frame) // 2])
                     raise OSError('injected partial USB write')
@@ -311,7 +325,7 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
             def lost_reply() -> str:
                 nonlocal losses
                 result = read_frame()
-                if writes == 10 and losses == 0:
+                if data_frame and losses == 0:
                     losses += 1
                     raise OSError('injected lost data acknowledgement')
                 return result

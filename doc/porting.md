@@ -59,7 +59,8 @@ data. Its principal fields are:
 - `buttons`: ordered logical input IDs, with `controls` assigning navigation,
   confirmation, back, page, tap and application actions to those IDs. Input IDs
   are unique printable ASCII strings of at most 31 bytes; `+` is reserved for
-  compound-input authoring. `scan_interval` is a duration.
+  compound-input authoring. `scan_interval` is a duration. `usb_block_size` is the USB transfer payload
+  size in bytes (default 4096); rebuilding regenerates the firmware buffers.
 - `midi_endpoints`: `name`, `label`, `route`, `transport`, input/output capability
   flags and an optional configurable-port slot. `default_midi_output` names the
   output used when a play-file operation omits its output list.

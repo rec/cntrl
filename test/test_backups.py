@@ -68,6 +68,7 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
 
     class Client(transport.SetupClient):
         def __init__(self) -> None:
+            super().__init__(transport.SerialConnection(Path('/unused')))
             self.listed = False
             self.storage = iter(
                 [
@@ -167,6 +168,7 @@ def test_restore_uploads_saved_song_library_before_restoring_selection(
 
     class Client(transport.SetupClient):
         def __init__(self) -> None:
+            super().__init__(transport.SerialConnection(Path('/unused')))
             self.uploaded = bytearray()
             self.saved = b''
             self.selected = ''

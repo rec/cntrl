@@ -1,4 +1,5 @@
 #pragma once
+#include <cntrl/usb_config.h>
 #include "bundled_storage.h"
 #include "documents.h"
 
@@ -18,8 +19,10 @@ public:
                 storage_.bundle_size(), (unsigned long)storage_.bundle_crc()); replies_.reply(response); return true;
         }
         if (std::sscanf(line, "CNTRL BUNDLE GET %u %u%n", &offset, &length, &end) == 2 && !line[end]
-            && length && length <= 128) {
-            uint8_t bytes[128]; char response[280] = "CNTRL BUNDLE ";
+            && length && length <= usb_block_size) {
+            UsbBlock block; if (!block.bytes) return error("allocation");
+            auto *bytes = block.bytes; char *response = block.text;
+            std::strcpy(response, "CNTRL BUNDLE ");
             if (!storage_.bundle_read(offset, bytes, length)) return error("bundle-read");
             for (unsigned i = 0; i < length; ++i) std::snprintf(response + 13 + i * 2, 3, "%02x", bytes[i]);
             replies_.reply(response); return true;
@@ -36,8 +39,10 @@ public:
         }
         if (!std::strncmp(line, "CNTRL BUNDLE DATA ", 18)) {
             if (!active_) return error("no-bundle-transfer");
-            const char *hex = line + 18; unsigned width = unsigned(std::strlen(hex)); uint8_t bytes[128];
-            if (!width || width > 256 || width % 2 || width / 2 > expected_ - received_) return fail("bundle-data");
+            const char *hex = line + 18; unsigned width = unsigned(std::strlen(hex));
+            UsbBlock block; if (!block.bytes) return fail("allocation");
+            auto *bytes = block.bytes;
+            if (!width || width > usb_block_size * 2 || width % 2 || width / 2 > expected_ - received_) return fail("bundle-data");
             for (unsigned i = 0; i < width; i += 2) {
                 unsigned value = 0;
                 for (unsigned j = 0; j < 2; ++j) {

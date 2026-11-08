@@ -1,4 +1,6 @@
 #pragma once
+#define CNTRL_USB_BLOCK_SIZE 4096
+#include <cntrl/usb_config.h>
 #include <array>
 #include <cntrl/midi_outputs.h>
 #include <cntrl/ui/display.h>
