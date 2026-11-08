@@ -9,7 +9,7 @@ enum class Operation : unsigned {
     songs_previous, songs_next, songs_confirm, songs_previous_section, songs_next_section, songs_back,
     switches_return = 153,
 };
-struct ControlBinding { unsigned app_button; const char *label; };
+struct ControlBinding { unsigned controller_button; const char *label; };
 struct Controls {
     static constexpr unsigned absent = std::numeric_limits<unsigned>::max();
     unsigned previous = absent, next = absent, confirm = absent, previous_section = absent, next_section = absent, back = absent;
@@ -66,9 +66,9 @@ public:
                 if (press && services.expression(i)) continue;
                 if (press && services.port(i)) continue;
                 if (services.clock(i, press)) continue;
-                if (services.has_app()) {
-                    if (press) services.app(controls_.bindings[i].app_button, true, now);
-                    if (release) services.app(controls_.bindings[i].app_button, false, now);
+                if (services.has_controller()) {
+                    if (press) services.controller(controls_.bindings[i].controller_button, true, now);
+                    if (release) services.controller(controls_.bindings[i].controller_button, false, now);
                 } else if (press && i == controls_.tap) services.tap(now);
             }
         }

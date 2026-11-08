@@ -39,7 +39,7 @@ private:
             line.graphics.size = line.graphics.line_height = 16;
         std::snprintf(views[0].lines[0].text, 64, "%s", prompt.pair(Role::previous, Role::next, "browse").text());
         std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, "OK").add(Role::back, "back", ", ").text());
-        std::snprintf(views[1].lines[0].text, 64, "Apps and tools");
+        std::snprintf(views[1].lines[0].text, 64, "Pages and tools");
         std::snprintf(views[1].lines[1].text, 64, "%s", names_[selected_]);
         for (unsigned i = 0; i < 3; ++i) {
             for (auto &line : views[i].lines) line.wrap = true;

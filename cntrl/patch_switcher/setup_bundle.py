@@ -13,17 +13,14 @@ from . import compiler, data_files, display, models, resolved
 
 class SetupBundle(BaseModel, frozen=True):
     setups: dict[str, bytes] = Field(min_length=1, max_length=65535)
-    app_ram2: list[int]
     page_ram2: list[int]
     memory: models.TargetMemory
     memory_margin: units.Bytes = Field(default=16192, ge=0)
 
     @model_validator(mode='after')
     def feasible(self) -> 'SetupBundle':
-        if len(self.app_ram2) != len(self.setups) or len(self.page_ram2) != len(
-            self.setups
-        ):
-            raise ValueError('one app/page RAM estimate is required per setup')
+        if len(self.page_ram2) != len(self.setups):
+            raise ValueError('one page RAM estimate is required per setup')
         for name in self.names:
             data_files.validate_name(name)
         if len({n.lower() for n in self.names}) != len(self.names):
@@ -51,7 +48,7 @@ class SetupBundle(BaseModel, frozen=True):
         metadata = (
             len(self.names) * (64 + 4 + 88 + 85) + 2 + 4 * (len(self.names) - 1) + 32
         )
-        active = max(a + p for a, p in zip(self.app_ram2, self.page_ram2, strict=True))
+        active = max(self.page_ram2)
         return self.memory.runtime + metadata + active
 
     def total_free_ram2(self) -> int:
@@ -89,7 +86,7 @@ class SetupBundle(BaseModel, frozen=True):
             ENTRY.pack(
                 n.encode('ascii'),
                 s,
-                self.app_ram2[i] + self.page_ram2[i],
+                self.page_ram2[i],
                 int(i in self.prefill),
             )
             for i, (n, s) in enumerate(zip(self.names, self.setup_sizes, strict=True))
@@ -104,7 +101,7 @@ class SetupBundle(BaseModel, frozen=True):
                 crc32(body),
                 self.memory_margin,
                 self.memory.runtime,
-                max(a + p for a, p in zip(self.app_ram2, self.page_ram2, strict=True)),
+                max(self.page_ram2),
                 self.total_ram2_needs(),
                 self.total_setup_ram,
                 self.total_free_ram2(),
@@ -123,8 +120,7 @@ def build(
     settings = [models.Setup.model_validate(sources[n]) for n in ordered]
     return SetupBundle(
         setups=setups,
-        app_ram2=[sum(a.ram2_bytes for a in s.apps.values()) for s in settings],
-        page_ram2=[sum(p.ram2_bytes for p in s.pages) for s in settings],
+        page_ram2=[sum(p.ram2_bytes for p in s.pages.values()) for s in settings],
         memory=memory,
         memory_margin=memory_margin,
     )

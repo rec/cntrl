@@ -63,8 +63,8 @@ struct Actions {
     bool expression(unsigned) { return false; }
     bool port(unsigned) { return false; }
     bool clock(unsigned, bool) { return false; }
-    bool has_app() const { return true; }
-    void app(unsigned input, bool pressed, uint32_t now) { application.controller().button(input, pressed, now); }
+    bool has_controller() const { return true; }
+    void controller(unsigned input, bool pressed, uint32_t now) { application.controller().button(input, pressed, now); }
     void tap(uint32_t) {}
 };
 struct Services {
@@ -90,7 +90,7 @@ struct Services {
     bool diagnostic_controls(const uint8_t *, uint8_t, uint32_t) { return false; }
     cntrl::ui::FirmwareVisit *visit() { return nullptr; }
     Actions &actions() { return routing; }
-    void apps(uint32_t now) { application.tick(now); }
+    void pages(uint32_t now) { application.tick(now); }
     void midi() { hardware.delivering = true; hardware.bridge.service(hardware, now()); hardware.delivering = false; }
     Session &session() { return usb; }
     Job &commands() { return job; }
@@ -119,11 +119,11 @@ static void raw_press_reaches_midi(std::vector<uint8_t> bytes, bool fast, uint32
     assert(configuration.load(bytes.data(), bytes.size(), hardware)); assert(configuration.fast_switches() == fast);
     cntrl::Controller primary(hardware, hardware, hardware); hardware.controller = &primary;
     cntrl::Documents documents(setups, hardware, primary, hardware); cntrl::Songs songs(song_storage, hardware);
-    alignas(cntrl::Controller) unsigned char extra[(cntrl::AppLayout::max_apps - 1) * sizeof(cntrl::Controller)];
-    for (unsigned i = 1; i < cntrl::AppLayout::max_apps; ++i) new (extra + (i - 1) * sizeof(cntrl::Controller)) cntrl::Controller(hardware, hardware, hardware, 5 + i);
+    alignas(cntrl::Controller) unsigned char extra[(cntrl::PageLayout::max_controllers - 1) * sizeof(cntrl::Controller)];
+    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i) new (extra + (i - 1) * sizeof(cntrl::Controller)) cntrl::Controller(hardware, hardware, hardware, 5 + i);
     {
         cntrl::ui::Application application(hardware, documents, primary, extra, songs, hardware, true);
-        application.layout = configuration.app_layout(); primary.activate(configuration, false);
+        application.layout = configuration.page_layout(); primary.activate(configuration, false);
         constexpr cntrl::ui::ControlBinding bindings[] = {{2, "A"}, {1, "B"}, {0, "C"}, {5, "D"}, {4, "E"}, {3, "F"}};
         cntrl::ButtonState states[6];
         cntrl::ui::InputCoordinator input(states, {0, 1, 2, 3, 4, 5, 5, 3, 2, bindings, 6}, configuration, application, hardware);
@@ -138,7 +138,7 @@ static void raw_press_reaches_midi(std::vector<uint8_t> bytes, bool fast, uint32
         assert((hardware.packets == std::vector<std::vector<uint8_t>>{{0xb0, 0, 1}, {0xb0, 32, 2}, {0xc0, 0}, {0xb0, 7, 100}, {0xb0, 10, 0}}));
         assert(services.displays == 41);
     }
-    for (unsigned i = 1; i < cntrl::AppLayout::max_apps; ++i) std::launder(reinterpret_cast<cntrl::Controller *>(extra + (i - 1) * sizeof(cntrl::Controller)))->~Controller();
+    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i) std::launder(reinterpret_cast<cntrl::Controller *>(extra + (i - 1) * sizeof(cntrl::Controller)))->~Controller();
 }
 int main(int argc, char **argv) {
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex; std::vector<uint8_t> bytes;

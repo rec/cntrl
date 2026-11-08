@@ -98,7 +98,7 @@ MidiFileStorage midi_storage;
 cntrl::midi::MidiFiles midi_files(midi_storage.filesystem, midi_storage.source,
     midi_storage.index, midi_storage.recording, midi_storage.entries, cntrl::target::midi_connections.count,
     "/cntrl/midi", "/cntrl/midi/.playback-index");
-DMAMEM cntrl::Controller::NavigationState invocation_navigation[cntrl::target::max_switches + cntrl::AppLayout::max_apps];
+DMAMEM cntrl::Controller::NavigationState invocation_navigation[cntrl::target::max_switches + cntrl::PageLayout::max_controllers];
 bool restoring_invocation = false;
 cntrl::PatchExecutor *visiting_invocation = nullptr;
 
@@ -262,7 +262,7 @@ public:
         return application.controller().preview_state(operation, value);
     }
     bool selection(unsigned operation, const cntrl::Document *&document, unsigned &node) override {
-        if (!documents.document().valid() || !documents.document().app_layout().apps()) return false;
+        if (!documents.document().valid() || !documents.document().page_layout().controllers()) return false;
         return application.controller().selection(operation, document, node);
     }
     void selection_complete(unsigned operation) override { application.controller().selection_complete(operation); }
@@ -535,7 +535,7 @@ DMAMEM cntrl::Documents documents(setup_storage, board, primary_controller, boar
 cntrl::StoredPatchSources patch_sources(setup_storage.setups());
 cntrl::BundleTransfer bundle_transfer(setup_storage, documents, board, board);
 cntrl::HistoryImport history_import(card, documents, board, board);
-alignas(cntrl::Controller) DMAMEM unsigned char extra_apps[cntrl::AppLayout::max_apps - 1][sizeof(cntrl::Controller)];
+alignas(cntrl::Controller) DMAMEM unsigned char extra_controllers[cntrl::PageLayout::max_controllers - 1][sizeof(cntrl::Controller)];
 extern cntrl::Songs songs;
 
 cntrl::device::SdFile song_writer, song_readers[4];
@@ -544,7 +544,7 @@ cntrl::SlotStorage song_files(setup_filesystem, song_writer, song_reader_handles
 cntrl::ui::SongSources song_sources(board, board, patch_sources, setup_storage.setups(), documents, application, songs, cntrl::target::max_switches);
 DMAMEM cntrl::Songs songs(song_files, song_sources);
 DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
-cntrl::ui::Application application(board, documents, primary_controller, extra_apps, songs, song_sources, CNTRL_SWITCHES);
+cntrl::ui::Application application(board, documents, primary_controller, extra_controllers, songs, song_sources, CNTRL_SWITCHES);
 #if CNTRL_ORIGINAL_FIRMWARE
 DMAMEM cntrl::ui::FirmwareVisitRecord firmware_visit_record;
 cntrl::device::SdFile firmware_visit_file;
@@ -693,8 +693,8 @@ FLASHMEM void initialize_target() {
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session = cntrl::UsbSession{};
-    for (unsigned i = 1; i < cntrl::AppLayout::max_apps; ++i)
-        new (extra_apps[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::target::max_switches + i);
+    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i)
+        new (extra_controllers[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::target::max_switches + i);
     initialize_switches();
     initialize_displays(false);
     board.begin();
@@ -757,8 +757,8 @@ public:
     bool expression(unsigned i) { return board.expression_button(i); }
     bool port(unsigned i) { return board.trs_button(i); }
     bool clock(unsigned i, bool pressed) { return board.clock_control(i, pressed); }
-    bool has_app() const { return application.layout.apps(); }
-    void app(unsigned i, bool pressed, uint32_t now) { application.controller().button(i, pressed, now); }
+    bool has_controller() const { return application.layout.controllers(); }
+    void controller(unsigned i, bool pressed, uint32_t now) { application.controller().button(i, pressed, now); }
     void tap(uint32_t now) { board.tap_tempo(now); }
     void leave_switches() {
 #if CNTRL_SWITCHES
@@ -834,7 +834,7 @@ public:
 #endif
     }
     TargetControls &actions() { return target_controls; }
-    void apps(uint32_t now) { if (application.feature_open(board) || history_import.busy()) application.controller().cancel_gesture(); application.tick(now); }
+    void pages(uint32_t now) { if (application.feature_open(board) || history_import.busy()) application.controller().cancel_gesture(); application.tick(now); }
     void midi() { board.poll(); }
     auto &session() { return usb_session; }
     auto &commands() { return serial_router; }

@@ -215,13 +215,13 @@ int main() {
     const unsigned title_x = (24 - std::strlen(view.lines[0].text) * 2) / 2;
     assert(display.pixels[view.lines[0].graphics.top * 24 + title_x] == 0xffff);
     pages.viewport({200, 128, 0, 0});
-    uint8_t layout[8 + 3 * 32 + 2] = {'C', 'L', 'A', 'Y', 0, 1, 3, 2};
-    layout[8 + 3 * 32] = unsigned(cntrl::ui::Pages::Page::clock_tempo);
-    layout[8 + 3 * 32 + 1] = 1;
-    pages.layout(cntrl::AppLayout{layout});
+    uint8_t layout[8 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 1, 0};
+    layout[8 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::clock_tempo);
+    layout[8 + 3 * 32 + 33] = 1;
+    pages.layout(cntrl::PageLayout{layout});
     const auto clock_page = pages.view(0, 0, status);
     assert(std::strcmp(clock_page.lines[3].text, "Less -1   More +1   Yes Slot") == 0);
-    layout[8 + 3 * 32] = unsigned(cntrl::ui::Pages::Page::firmware); pages.layout(cntrl::AppLayout{layout}); pages.tap(0);
+    layout[8 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::firmware); pages.layout(cntrl::PageLayout{layout}); pages.tap(0);
     const auto confirmation = pages.view(0, 0, status);
     assert(std::strcmp(confirmation.lines[0].text, "Back for stock firmware.") == 0);
     assert(std::strcmp(confirmation.lines[1].text, "Yes to cancel") == 0);
@@ -230,7 +230,7 @@ int main() {
     settings.words[cntrl::PageSettings::annulus] = 5;
     settings.words[cntrl::PageSettings::tempo_height] = 40;
     pages.configure(settings); pages.viewport({320, 256, 0, 0});
-    layout[8 + 3 * 32] = unsigned(cntrl::ui::Pages::Page::tap); pages.layout(cntrl::AppLayout{layout});
+    layout[8 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::tap); pages.layout(cntrl::PageLayout{layout});
     const auto large_tap = pages.view(0, 0, status);
     assert(large_tap.circles[0].x == 160 && large_tap.circles[0].diameter == 18 && large_tap.circles[0].annulus == 5);
     assert(large_tap.lines[1].graphics.line_height == 40 && large_tap.lines[0].graphics.line_height == 34);

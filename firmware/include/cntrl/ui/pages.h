@@ -57,15 +57,19 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, confirm_firmware };
-    void layout(cntrl::AppLayout layout) {
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, confirm_firmware };
+    void layout(cntrl::PageLayout layout) {
         layout_ = layout;
         index_ = 0;
         page_ = layout.pages() ? Page(layout.page(0)[0]) : Page::none;
         dirty_ = true;
     }
     unsigned windows() const {
-        return layout_.pages() ? layout_.page(index_)[1] : 0;
+        return layout_.pages() && page_ != Page::patch_switcher ? layout_.page(index_)[1] : 0;
+    }
+    unsigned index() const { return index_; }
+    void select(unsigned index) {
+        index_ = index; page_ = Page(layout_.page(index)[0]); dirty_ = true;
     }
     void configure(const cntrl::PageSettings &settings) {
         generator.stop();
@@ -392,7 +396,7 @@ private:
     cntrl::midi::Outputs outputs_;
     const Fonts &fonts_;
     Viewport viewport_;
-    cntrl::AppLayout layout_;
+    cntrl::PageLayout layout_;
     unsigned index_ = 0;
     PortMode active_port_ = PortMode::off;
     const char *port_message_ = nullptr;

@@ -19,7 +19,7 @@ struct ApplicationServices {
     virtual void open_switch_editor(const Document &, uint64_t held) = 0;
     virtual bool shift_switch_editor(bool backwards) = 0;
 };
-// Coordinates installed applications and menus independently of controller
+// Coordinates configured pages and menus independently of controller
 // storage placement and the platform's physical controls.
 class Application {
 public:
@@ -32,39 +32,39 @@ public:
         if (switches) names_[2] = "Switches";
     }
     Controller &at(unsigned index) { return index ? *std::launder(reinterpret_cast<Controller *>(extra_ + (index - 1) * sizeof(Controller))) : primary_; }
-    unsigned rendering() const { return processing_index < AppLayout::max_apps ? processing_index : visible_index; }
+    unsigned rendering() const { return processing_index < PageLayout::max_controllers ? processing_index : visible_index; }
     Controller &controller() { return at(rendering()); }
-    bool visible() const { return layout.apps() && rendering() == visible_index; }
+    bool visible() const { return layout.controllers() && rendering() == visible_index; }
     bool busy() {
-        for (unsigned i = 0; i < layout.apps(); ++i) if (at(i).busy()) return true;
+        for (unsigned i = 0; i < layout.controllers(); ++i) if (at(i).busy()) return true;
         return primary_.busy();
     }
     bool patch_pending() { return busy() || songs_.executing() || songs_.busy(); }
     bool feature_open(const ApplicationServices &services) const { return menu.open() || setups.open() || song_ui.open() || services.switch_editor_open(); }
-    void brightness(uint8_t value) { for (unsigned i = 0; i < (layout.apps() ? layout.apps() : 1); ++i) at(i).runtime_brightness(value); }
+    void brightness(uint8_t value) { for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) at(i).runtime_brightness(value); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_configure)
 #endif
     void configure(const Document &document, ApplicationServices &services) {
-        layout = document.valid() ? document.app_layout() : AppLayout{}; visible_index = 0;
-        for (unsigned i = 1; i < AppLayout::max_apps; ++i) {
+        layout = document.valid() ? document.page_layout() : PageLayout{}; visible_index = 0; pending_page = PageLayout::max_pages;
+        for (unsigned i = 1; i < PageLayout::max_controllers; ++i) {
             processing_index = i;
-            if (i < layout.apps()) at(i).activate(document, false); else at(i).deactivate();
+            if (i < layout.controllers()) at(i).activate(document, false); else at(i).deactivate();
         }
-        processing_index = AppLayout::max_apps; services.blank_performance();
-        for (unsigned i = 0; i < layout.apps(); ++i) names_[app_offset() + i] = layout.app_name(i);
-        menu.configure(app_offset() + layout.apps());
+        processing_index = PageLayout::max_controllers; services.blank_performance();
+        for (unsigned i = 0; i < layout.pages(); ++i) names_[page_offset() + i] = layout.name(i);
+        menu.configure(page_offset() + layout.pages());
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_refresh)
 #endif
     void refresh(ApplicationServices &services) {
         const unsigned previous = processing_index; processing_index = visible_index;
-        services.blank_performance(); if (layout.apps()) at(visible_index).refresh(); processing_index = previous;
+        services.blank_performance(); if (layout.controllers()) at(visible_index).refresh(); processing_index = previous;
     }
     void tick(uint32_t now) {
-        for (unsigned i = 0; i < (layout.apps() ? layout.apps() : 1); ++i) { processing_index = i; at(i).tick(now); }
-        processing_index = AppLayout::max_apps;
+        for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) { processing_index = i; at(i).tick(now); }
+        processing_index = PageLayout::max_controllers;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_state)
@@ -74,7 +74,7 @@ public:
         if (operation == 2) { hardware_.set_midi_interface(value != 0); return true; }
         if (operation == 11 || operation == 12) return services.shift_switch_editor(operation == 11);
         if (operation >= 3 && operation <= 8) {
-            if (!layout.apps()) return false;
+            if (!layout.controllers()) return false;
             if ((operation == 7 || operation == 8) && (songs_.executing() || documents_.busy() || documents_.dirty())) return false;
             return controller().navigate(operation);
         }
@@ -101,8 +101,8 @@ public:
             if (!menu.open()) return false;
             const int selected = menu.button(2, true);
             if (selected == -1) return true;
-            if (selected >= int(app_offset()) && unsigned(selected) - app_offset() < layout.apps()) {
-                at(visible_index).cancel_gesture(); visible_index = unsigned(selected) - app_offset(); refresh(services); controls_locked = true; return true;
+            if (selected >= int(page_offset()) && unsigned(selected) - page_offset() < layout.pages()) {
+                at(visible_index).cancel_gesture(); pending_page = unsigned(selected) - page_offset(); controls_locked = true; return true;
             }
             if (selected == 1) {
                 if (!documents_.busy() && !services.song_transfer_busy() && services.output_idle()) { song_ui.enter(); controls_locked = true; }
@@ -140,13 +140,14 @@ public:
         default: return false;
         }
     }
-    AppLayout layout;
-    unsigned visible_index = 0, processing_index = AppLayout::max_apps;
+    PageLayout layout;
+    unsigned visible_index = 0, processing_index = PageLayout::max_controllers;
+    unsigned pending_page = PageLayout::max_pages;
     unsigned pending_operation = 0;
     bool return_to_switches = false, controls_locked = false;
     uint64_t held = 0;
 private:
-    std::array<const char *, 3 + AppLayout::max_apps> names_{};
+    std::array<const char *, 3 + PageLayout::max_pages> names_{};
 public:
     ModuleMenu menu;
     SetupUi setups;
@@ -158,6 +159,6 @@ private:
     unsigned char *extra_;
     Songs &songs_;
     bool has_switches_;
-    unsigned app_offset() const { return has_switches_ ? 3 : 2; }
+    unsigned page_offset() const { return has_switches_ ? 3 : 2; }
 };
 } // namespace cntrl::ui

@@ -61,7 +61,7 @@ public:
     }
     const char *browse_result() const { return browse_.result; }
     bool rotate(bool backward) { return browse(selected_, backward, true); }
-    void redraw() { if (document_.valid()) { if (!hardware_.refresh_apps()) controller_.refresh(); } else empty(); }
+    void redraw() { if (document_.valid()) { if (!hardware_.refresh_pages()) controller_.refresh(); } else empty(); }
     bool edit_begin() {
         if (busy() || hardware_.configuration_locked() || !document_.valid()) return false;
         if (!allocate(staging_, document_.length())) return false;
@@ -502,7 +502,7 @@ private:
             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
             || old.animation_color_cycle() != current.animation_color_cycle()
             || old.fast_switches() != current.fast_switches()
-            || old.app_page_ram2() != current.app_page_ram2()
+            || old.page_ram2() != current.page_ram2()
             || old.screensaver_timeout() != current.screensaver_timeout()
             || old.scroll_ms() != current.scroll_ms()
             || std::memcmp(old.data() + old.metadata() + scrolling_offset, current.data() + current.metadata() + scrolling_offset, 5);
@@ -534,7 +534,7 @@ private:
     }
     void empty() {
         document_ = Document(); controller_.deactivate();
-        hardware_.configure_apps(document_);
+        hardware_.configure_pages(document_);
         active_.clear();
         constexpr uint8_t off[4] = {}; hardware_.configure_trs_ports(off);
         hardware_.begin_fonts(); hardware_.finish_fonts(true);

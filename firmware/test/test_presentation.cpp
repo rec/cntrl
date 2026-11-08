@@ -46,6 +46,6 @@ int main() {
     for (const auto &line : single.shown[0].lines) if (line.text[0]) text.emplace_back(line.text);
     assert(std::find(text.begin(), text.end(), "Left/Right browse") != text.end());
     assert(std::find(text.begin(), text.end(), "Select OK") != text.end());
-    assert(std::find(text.begin(), text.end(), "Apps and tools") != text.end());
+    assert(std::find(text.begin(), text.end(), "Pages and tools") != text.end());
 
 }

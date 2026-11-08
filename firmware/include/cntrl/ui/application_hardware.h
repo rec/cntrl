@@ -4,7 +4,7 @@
 
 namespace cntrl::ui {
 // Platform provides page_host() plus its physical Hardware services. The shared
-// facade connects application/page behavior to the Hardware interface once.
+// facade connects page presentation to the Hardware interface once.
 template<class Platform>
 class ApplicationHardware : public Hardware {
 public:
@@ -13,12 +13,12 @@ public:
 #endif
     void show(unsigned pane, const Pane &content) override { presentation().show(pane, content); }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(application_hardware_configure_apps)
-#endif
-    void configure_apps(const Document &document) override { presentation().configure_apps(document); }
-    bool refresh_apps() override { return presentation().refresh_apps(); }
-#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_hardware_configure_pages)
+#endif
+    void configure_pages(const Document &document) override { presentation().configure_pages(document); }
+    bool refresh_pages() override { return presentation().refresh_pages(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_hardware_configure_page_settings)
 #endif
     void configure_page_settings(const PageSettings &settings) override { presentation().configure_page_settings(settings); }
 #ifdef CNTRL_FLASH_ROUTINE

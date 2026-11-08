@@ -17,7 +17,7 @@ struct Services {
     void keyboard() { order.push_back(1); }
     bool scan_available() const { return bus; }
     void scan(uint32_t, uint32_t gap) { scan_gap = gap; order.push_back(2); }
-    void apps(uint32_t) { order.push_back(3); }
+    void pages(uint32_t) { order.push_back(3); }
     void midi() { order.push_back(4); }
     Session &session() { return usb; }
     Job &commands() { return command; }
@@ -55,8 +55,8 @@ struct Actions {
     bool expression(unsigned) { return false; }
     bool port(unsigned) { return false; }
     bool clock(unsigned, bool) { return false; }
-    bool has_app() const { return true; }
-    void app(unsigned i, bool pressed, uint32_t) { actions.push_back(40 + i * 2 + !pressed); }
+    bool has_controller() const { return true; }
+    void controller(unsigned i, bool pressed, uint32_t) { actions.push_back(40 + i * 2 + !pressed); }
     void tap(uint32_t) { actions.push_back(90); }
 };
 int main() {

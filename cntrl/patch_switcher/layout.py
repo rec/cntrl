@@ -1,75 +1,78 @@
-"""Compile the app instances and the ordered page cycle."""
+"""Compile named pages and their window allocation."""
 
 from . import models
 
 
-def pack(show: models.Setup, target: models.Target) -> bytes:
-    windows = [d.id for d in target.displays]
-    window_count = len(windows)
-    identities = b''.join(n.encode('ascii').ljust(32, b'\0') for n in windows)
-    apps = bytearray()
-    for name, app in show.apps.items():
+def pack(pages: dict[str, models.Page], windows: list[str]) -> bytes:
+    records = bytearray()
+    if sum(p.type == 'patch-switcher' for p in pages.values()) > 4:
+        raise ValueError('at most four patch-switcher pages are supported')
+    for name, page in pages.items():
         encoded = name.encode('ascii')
         if not encoded or len(encoded) > 31 or any(c < 32 or c > 126 for c in encoded):
             raise ValueError(
-                'app names must contain 1 to 31 printable ASCII characters'
+                'page names must contain 1 to 31 printable ASCII characters'
             )
-        apps.extend(encoded.ljust(32, b'\0'))
-        priority = app.give_up_windows or list(reversed(windows))
-        if len(priority) != window_count or set(priority) != set(windows):
+        count = page.windows
+        if count is None:
+            count = (
+                len(windows)
+                if page.type == 'patch-switcher'
+                else 0
+                if page.type == 'None'
+                else 1
+            )
+        if count > len(windows):
+            raise ValueError('page requests more windows than the target provides')
+        priority = page.give_up_windows or list(reversed(windows))
+        if len(priority) != len(windows) or set(priority) != set(windows):
             raise ValueError(
-                f'apps.{name}.give_up_windows must contain every target display ID once'
+                f'pages.{name}.give_up_windows must list every target display ID once'
             )
-        apps.extend(windows.index(n) for n in priority)
-    if any(p.windows > window_count for p in show.pages):
-        raise ValueError('page requests more windows than the target provides')
-    pages = bytes(v for p in show.pages for v in (PAGE_TYPES.index(p.type), p.windows))
+        records.extend(encoded.ljust(32, b'\0'))
+        records.extend((PAGE_TYPES.index(page.type), count))
+        records.extend(windows.index(n) for n in priority)
     return (
-        b'CLAY'
-        + bytes((len(show.apps), len(show.pages), window_count, 2))
-        + identities
-        + apps
-        + pages
+        b'CPAG'
+        + bytes((len(pages), len(windows), 1, 0))
+        + b''.join(n.encode('ascii').ljust(32, b'\0') for n in windows)
+        + records
     )
 
 
 def section_end(data: bytes, offset: int) -> int:
-    if data[offset : offset + 4] != b'CLAY':
-        raise ValueError('missing app/page layout')
+    if data[offset : offset + 4] != b'CPAG':
+        raise ValueError('missing page layout')
     if offset + 8 > len(data):
-        raise ValueError('truncated app/page layout')
-    apps, pages, windows, version = data[offset + 4 : offset + 8]
-    end = offset + 8 + windows * 32 + apps * (32 + windows) + pages * 2
-    if version != 2 or not windows or apps > 4 or pages > 32 or end > len(data):
-        raise ValueError('invalid app/page layout')
+        raise ValueError('truncated page layout')
+    count, windows, version, reserved = data[offset + 4 : offset + 8]
+    end = offset + 8 + windows * 32 + count * (34 + windows)
+    if version != 1 or reserved or not windows or count > 36 or end > len(data):
+        raise ValueError('invalid page layout')
     return end
 
 
 def unpack(data: bytes, offset: int) -> dict[str, object]:
     section_end(data, offset)
-    apps, pages = data[offset + 4 : offset + 6]
-    window_count = data[offset + 6]
+    count, window_count = data[offset + 4 : offset + 6]
     cursor = offset + 8
     windows = [
         data[cursor + i * 32 : cursor + (i + 1) * 32].split(b'\0')[0].decode('ascii')
         for i in range(window_count)
     ]
     cursor += window_count * 32
-    instances: dict[str, object] = {}
-    for _ in range(apps):
+    pages = {}
+    for _ in range(count):
         name = data[cursor : cursor + 32].split(b'\0')[0].decode('ascii')
-        instances[name] = {
-            'type': 'patch-switcher',
+        pages[name] = {
+            'type': PAGE_TYPES[data[cursor + 32]],
+            'windows': data[cursor + 33],
             'give_up_windows': [
-                windows[i] for i in data[cursor + 32 : cursor + 32 + window_count]
+                windows[i] for i in data[cursor + 34 : cursor + 34 + window_count]
             ],
         }
-        cursor += 32 + window_count
-    cycle = [
-        {'type': PAGE_TYPES[data[cursor + 2 * i]], 'windows': data[cursor + 2 * i + 1]}
-        for i in range(pages)
-    ]
-    return {'apps': instances, 'pages': cycle}
+        cursor += 34 + window_count
+    return {'pages': pages}
 
 
 def upgrade_legacy_section(
@@ -88,18 +91,27 @@ def upgrade_legacy_section(
     end = offset + 6 + apps * 35 + pages * 2
     if apps > 4 or pages > 32 or end > len(data):
         raise ValueError('invalid legacy app/page layout')
-    names = bytearray()
-    for name in window_ids:
-        encoded = name.encode('ascii')
-        if not 1 <= len(encoded) <= 31 or any(c < 32 or c > 126 for c in encoded):
-            raise ValueError('invalid legacy window ID')
-        names.extend(encoded.ljust(32, b'\0'))
+    entries: dict[str, models.Page] = {}
+    old_names = {
+        data[offset + 6 + i * 35 : offset + 38 + i * 35].split(b'\0')[0].decode('ascii')
+        for i in range(apps)
+    }
+    for i in range(pages):
+        kind, count = data[
+            offset + 6 + apps * 35 + i * 2 : offset + 8 + apps * 35 + i * 2
+        ]
+        name = PAGE_TYPES[kind]
+        suffix = 1
+        while name in entries or name in old_names:
+            name = f'{PAGE_TYPES[kind]}-{suffix}'
+            suffix += 1
+        entries[name] = models.Page(type=PAGE_TYPES[kind], windows=count)
     for i in range(apps):
         start = offset + 6 + i * 35
-        if set(data[start + 32 : start + 35]) != {0, 1, 2}:
-            raise ValueError('invalid legacy window priority')
-    section = b'CLAY' + bytes((apps, pages, 3, 2)) + names + data[offset + 6 : end]
-    return bytes(section), end
+        name = data[start : start + 32].split(b'\0')[0].decode('ascii')
+        priority = [window_ids[j] for j in data[start + 32 : start + 35]]
+        entries[name] = models.Page(give_up_windows=priority)
+    return pack(entries, window_ids), end
 
 
 PAGE_TYPES = (
@@ -114,4 +126,5 @@ PAGE_TYPES = (
     'clock-tempo',
     'keyboard',
     'None',
+    'patch-switcher',
 )

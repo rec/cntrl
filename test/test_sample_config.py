@@ -9,6 +9,10 @@ pytest_plugins = ['reccy.pytest_plugin']
 
 
 class ExampleSetup(models.Setup, frozen=True):
+    pages: dict[str, models.Page] = {
+        n: p.model_copy(update={'windows': 3 if p.type == 'patch-switcher' else 1})
+        for n, p in models.Setup().pages.items()
+    }
     style: models.Style | None = models.Style(horizontal_scale=1.0)
     windows: models.Windows = models.Windows(
         next=models.Window(style=models.Style(horizontal_scale=1.0)),

@@ -1,11 +1,10 @@
 #pragma once
-#include "app.h"
 #include "patch_executor.h"
 #include <cstdio>
 
 namespace cntrl {
 
-class Controller : public App {
+class Controller {
 public:
     struct ProgramHistory { uint16_t patch; int previous; };
     struct NavigationState {
@@ -45,7 +44,7 @@ public:
     Controller(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner = 5)
         : hardware_(hardware), executor_(hardware, outputs, sources, owner) {}
     void deactivate() { executor_.cancel(); sending_ = -1; cancel_gesture(); document_ = Document(); }
-    bool busy() const override { return executor_.busy(); }
+    bool busy() const { return executor_.busy(); }
     void runtime_brightness(uint8_t value) { brightness_ = value; }
     PatchExecutor &executor() { return executor_; }
     void validation(bool enabled) {
@@ -89,7 +88,7 @@ public:
         --depth_;
     }
     void cancel_gesture() { release_c(); held_ = 0; reverse_ = false; }
-    void refresh() override { if (document_.valid()) render(); }
+    void refresh() { if (document_.valid()) render(); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(controller_activate)
 #endif
@@ -115,12 +114,12 @@ public:
         for (auto &p : last_sent_) p = -1;
         center_ = -1;
         held_ = 0; reverse_ = false;
-        if (configure) hardware_.configure_apps(document);
+        if (configure) hardware_.configure_pages(document);
         render();
     }
     // These six application actions are independent of physical inputs. Target
     // control bindings supply the action index for each declared input.
-    void button(unsigned button, bool pressed, uint32_t now) override {
+    void button(unsigned button, bool pressed, uint32_t now) {
         if (button >= 6) return;
         const unsigned mask = 1u << button;
         if (pressed) {
@@ -155,7 +154,7 @@ public:
             }
         }
     }
-    void tick(uint32_t now) override {
+    void tick(uint32_t now) {
         executor_.tick(now);
         if (sending_ >= 0 && c_held_ && executor_.started() && !flashing_) {
             flashing_ = true; hardware_.set_brightness(255, true);

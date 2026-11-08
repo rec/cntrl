@@ -11,7 +11,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 35;
+constexpr unsigned document_version = 36;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -144,13 +144,13 @@ public:
         bool has_shifted = names + 4 <= length && !std::memcmp(bytes + names, "CSHF", 4);
         if (has_shifted) names += 124;
         const unsigned layout = names;
-        if (names + 8 > length || std::memcmp(bytes + names, "CLAY", 4)
-            || bytes[names + 4] > AppLayout::max_apps || bytes[names + 5] > 32
-            || !bytes[names + 6] || bytes[names + 7] != 2) return false;
-        unsigned apps = bytes[names + 4], page_count = bytes[names + 5], windows = bytes[names + 6];
-        names += 8 + windows * 32 + apps * (32 + windows) + page_count * 2;
-        if (names > length) return false;
-        const AppLayout arrangement{bytes + layout};
+        if (names + 8 > length || std::memcmp(bytes + names, "CPAG", 4)
+            || bytes[names + 4] > PageLayout::max_pages || !bytes[names + 5]
+            || bytes[names + 6] != 1 || bytes[names + 7]) return false;
+        const PageLayout arrangement{bytes + layout};
+        unsigned page_count = arrangement.pages(), windows = arrangement.windows();
+        names += arrangement.length();
+        if (names > length || arrangement.controllers() > PageLayout::max_controllers) return false;
         if (hardware.display_count() && hardware.display_count() != windows) return false;
         for (unsigned i = 0; i < windows; ++i) {
             const auto *name = reinterpret_cast<const uint8_t *>(arrangement.window_name(i));
@@ -160,20 +160,17 @@ public:
             for (unsigned j = 0; j < i; ++j)
                 if (!std::strcmp(arrangement.window_name(i), arrangement.window_name(j))) return false;
         }
-        for (unsigned i = 0; i < apps; ++i) {
-            const auto *p = reinterpret_cast<const uint8_t *>(arrangement.app_name(i));
-            if (!text_valid(p, 32)) return false;
+        for (unsigned i = 0; i < page_count; ++i) {
+            const auto *p = arrangement.record(i);
+            if (!p[0] || !text_valid(p, 32) || p[32] > PageLayout::patch_switcher
+                || p[33] > windows || (p[32] == 10 && p[33])) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < windows; ++j) {
-                if (p[32 + j] >= windows || seen[p[32 + j]]) return false;
-                seen[p[32 + j]] = true;
+                if (p[34 + j] >= windows || seen[p[34 + j]]) return false;
+                seen[p[34 + j]] = true;
             }
             for (unsigned j = 0; j < i; ++j)
-                if (!std::strcmp(reinterpret_cast<const char *>(p), arrangement.app_name(j))) return false;
-        }
-        for (unsigned i = 0; i < page_count; ++i) {
-            const uint8_t *p = arrangement.page(i);
-            if (p[0] > 10 || p[1] > windows || (p[0] == 10 && p[1])) return false;
+                if (!std::strcmp(arrangement.name(i), arrangement.name(j))) return false;
         }
         if (names + 8 > length || std::memcmp(bytes + names, "CMOV", 4)) return false;
         unsigned movie_count = unsigned(u16(bytes + names + 4)) + u16(bytes + names + 6);
@@ -377,7 +374,7 @@ public:
     unsigned patches() const { return patches_; }
     unsigned navigation_hold_ms() const { return u16(data_ + 6); }
     bool fast_switches() const { return data_[metadata() + scrolling_offset + 5] != 0; }
-    unsigned app_page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
+    unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
     uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 10); }
     uint8_t brightness() const { return data_[18]; }
     unsigned pulse_delay_ms() const { return u16(data_ + metadata() + 14); }
@@ -434,16 +431,16 @@ public:
         return unsigned(inputs - bank(patches())) + 6 + 32 * u16(inputs + 4);
     }
     const uint8_t *movie_section() const {
-        const auto layout = app_layout();
+        const auto layout = page_layout();
         return layout.records + layout.length();
     }
     unsigned movies(bool idle) const { return u16(movie_section() + (idle ? 6 : 4)); }
     const uint8_t *movie_keys(bool idle) const { return movie_section() + 8 + (idle ? 4 * movies(false) : 0); }
-    AppLayout app_layout() const {
+    PageLayout page_layout() const {
         const uint8_t *p = switch_hook_section();
         if (!std::memcmp(p, "CHOK", 4)) p += 29;
         if (!std::memcmp(p, "CSHF", 4)) p += 124;
-        return AppLayout{p};
+        return PageLayout{p};
     }
     unsigned switch_slot(unsigned button) const {
         for (unsigned i = 0; i < switches(); ++i) if (switch_assignment(i)[0] == button) return i;

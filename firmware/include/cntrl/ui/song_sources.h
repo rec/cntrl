@@ -24,7 +24,7 @@ public:
 #endif
     bool capture(cntrl::Song &song, bool reference) override {
         const auto &d = documents_.document();
-        if (!d.valid() || !application_.layout.apps() || !d.patches() || documents_.busy() || documents_.dirty() || application_.patch_pending()) return false;
+        if (!d.valid() || !application_.layout.controllers() || !d.patches() || documents_.busy() || documents_.dirty() || application_.patch_pending()) return false;
         unsigned index = application_.controller().selected_patch();
         const uint8_t *p = d.patch(index);
         std::snprintf(song.name, 64, "%s", reinterpret_cast<const char *>(p + 12));

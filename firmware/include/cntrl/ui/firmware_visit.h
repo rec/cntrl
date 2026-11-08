@@ -13,7 +13,7 @@ struct FirmwareVisitRecord {
     SongContinuation continuation;
     Controller::NavigationState initial_navigation, return_navigation;
     RuntimeState runtime;
-    uint32_t ui_operation = 0, app = 0, crc = 0;
+    uint32_t ui_operation = 0, controller = 0, crc = 0;
 };
 struct FirmwareSelection { uint32_t next = 0, returned = 0; bool can_enter = false, returned_to_application = false; };
 struct FirmwareVisitServices {
@@ -53,7 +53,7 @@ public:
 #endif
     bool request(uint8_t pair, const SongContinuation *continuation) {
         if (busy() || !services_.valid_exit(pair) || documents_.busy() || documents_.dirty() || services_.song_transfer_busy() || !services_.output_idle()) return false;
-        for (unsigned i = 0; i < application_.layout.apps(); ++i)
+        for (unsigned i = 0; i < application_.layout.controllers(); ++i)
             if (i != application_.rendering() && application_.at(i).busy()) return false;
         const auto state = services_.firmware_selection();
         if (!state.can_enter || (continuation && !services_.storage_available()) || !services_.stop_clock()) return false;
@@ -62,7 +62,7 @@ public:
             record_.token = state.next; record_.continuation = *continuation;
             record_.initial_navigation = navigation_[invocation->owner()];
             record_.return_navigation = application_.controller().navigation(); record_.runtime = runtime_;
-            record_.ui_operation = application_.pending_operation; record_.app = application_.rendering();
+            record_.ui_operation = application_.pending_operation; record_.controller = application_.rendering();
             std::snprintf(record_.setup, sizeof(record_.setup), "%s", documents_.selected());
             record_.setup_crc = setup_crc(); record_.crc = record_crc(); stage_ = Stage::create;
         } else stage_ = Stage::configure;
@@ -161,8 +161,8 @@ private:
 #endif
     void resume() {
         const auto continuation = record_.continuation; stage_ = Stage::idle;
-        if (record_.app >= application_.layout.apps()) { hardware_.error("App return unavailable"); return; }
-        application_.visible_index = record_.app;
+        if (record_.controller >= application_.layout.controllers()) { hardware_.error("Page return unavailable"); return; }
+        application_.visible_index = record_.controller;
         if (!valid_ || !application_.controller().navigation(record_.initial_navigation)) { hardware_.error("Patch return unavailable"); return; }
         restoring = true;
         const bool resumed = continuation.caller == 1 ? songs_.resume(continuation)

@@ -88,7 +88,7 @@ def regenerate_fixtures() -> None:
         n: compiler.compile_show(
             compiler.read_document(ROOT / f'{n}.{s}'), definitions, [], target
         )
-        for n, s in [('show', 'json'), ('display', 'toml'), ('apps', 'toml')]
+        for n, s in [('show', 'json'), ('display', 'toml'), ('pages', 'toml')]
     }
     fixtures['actions'] = compile_switches(fixture_assignments())
     for name, data in fixtures.items():

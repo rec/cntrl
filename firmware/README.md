@@ -442,8 +442,9 @@ values do not determine vertical spacing.
 
 Format 30 adds independent horizontal and vertical scroll durations and the
 send, patch-browsing, and cycle-browsing directions.
-Format 31 adds named app instances, a configurable page cycle and window allocation.
-Recompile older setups for format 31. See [Apps and pages](../doc/apps-and-pages.md)
+Format 31 introduced separate apps and pages with configurable window allocation.
+Format 36 unifies them into one ordered collection of named pages.
+Recompile older setups for format 36. See [Pages](../doc/pages.md)
 for configuration and the empty setup.
 
 Format 29 added four per-setup TRS port roles, editable from the TRS Ports page.
@@ -518,12 +519,12 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 80 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3), u8 fast-switches boolean, u32 combined app/page RAM2 declaration, u32 sorted-name-table signature |
+| Metadata header, 80 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3), u8 fast-switches boolean, u32 page RAM2 declaration, u32 sorted-name-table signature |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
-| App/page layout, after optional expression, clock, keyboard, gesture and hook sections | `CLAY`, u8 app count, u8 page count; each app has name[32] and three u8 logical windows in surrender order; each page has u8 type and u8 window count. At most four apps and 32 pages. Logical windows are left=0, center=1, right=2. Page types follow `layout.PAGE_TYPES` |
-| Movie lists, after app/page layout | `CMOV`, u16 startup count, u16 idle count, then startup and idle CRC32 asset keys as u32 values |
+| Page layout, after optional expression, clock, keyboard, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 window count and one u8 surrender-order entry per display. At most four patch-switchers and 36 pages. Page types follow `layout.PAGE_TYPES` |
+| Movie lists, after page layout | `CMOV`, u16 startup count, u16 idle count, then startup and idle CRC32 asset keys as u32 values |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
 | Display header, 16 bytes | `CDSP`, u16 style count, page count, text count, page-data byte count; u32 source-metadata byte count |
 | Resolved style, 16 bytes | Same layout as a screen record, one per distinct resolved style |
@@ -665,8 +666,7 @@ All durations below are seconds and accept unit strings. Dimensions are pixels;
 title and tempo heights reserve layout bands, while font size is fitted automatically.
 
 Configure shared page preferences under `[page_settings]`. Select page types,
-order and window counts with the setup's `pages` list. Configure named app instances
-under `[apps.NAME]`. See [Apps and pages](../doc/apps-and-pages.md).
+order and window counts under the setup's named `[pages.NAME]` tables. See [Pages](../doc/pages.md).
 
 ```toml
 [page_settings]

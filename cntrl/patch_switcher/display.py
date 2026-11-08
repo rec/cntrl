@@ -406,7 +406,6 @@ FIELDS = {
 SOURCE_FIELDS = (
     'splash_movie',
     'idle_movie',
-    'apps',
     'pages',
     'seed',
     'fill_in_styles',

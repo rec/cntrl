@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include "page_settings.h"
-#include "app_layout.h"
+#include "page_layout.h"
 #include "memory.h"
 
 namespace cntrl {
@@ -91,8 +91,8 @@ struct Hardware {
     virtual void show(unsigned pane, const Pane &content) = 0;
     virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) { (void)undo; (void)duration_ms; (void)pane; (void)vertical; (void)panorama; }
     virtual void configure_page_settings(const PageSettings &) {}
-    virtual void configure_apps(const Document &) {}
-    virtual bool refresh_apps() { return false; }
+    virtual void configure_pages(const Document &) {}
+    virtual bool refresh_pages() { return false; }
     virtual void browse_page(bool) {}
     virtual void tap_tempo(uint32_t) {}
     // Temporary performance feedback bypasses dimming; a normal call clears it.

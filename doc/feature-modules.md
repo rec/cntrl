@@ -1,9 +1,9 @@
 # Optional feature modules
 
-Status: setup management and songs/setlists use the Apps and tools menu. Panic,
+Status: setup management and songs/setlists use the Pages and tools menu. Panic,
 the MIDI cable tester and stock-firmware switching use the
 page cycle. The menu contains Setups, Songs and setlists, Switches, and the setup's
-named app instances. See [Apps and pages](apps-and-pages.md) for app selection and
+named pages. See [Pages](pages.md) for page selection and
 window allocation. The broader organization below remains guidance for
 subsequent features.
 

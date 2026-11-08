@@ -61,7 +61,7 @@ public:
     unsigned setup_count() const override { return table_.count(); }
     uint32_t setup_names_signature() const override { return table_.names_signature(); }
     const char *setup_name_at(unsigned i) const override { return table_.name(uint16_t(i)); }
-    void prepare_document(const Document &document) override { replacement_ram2_ = document.valid() ? document.app_page_ram2() : 0; }
+    void prepare_document(const Document &document) override { replacement_ram2_ = document.valid() ? document.page_ram2() : 0; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(bundle_size)
 #endif

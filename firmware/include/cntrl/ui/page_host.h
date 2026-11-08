@@ -42,8 +42,8 @@ public:
     void show(unsigned pane, const cntrl::Pane &content) {
         if (content.performance) {
             if (!application_.visible() || application_.feature_open(platform_)) return;
-            const auto layout = documents_.document().app_layout();
-            const int destination = layout.app_window(application_.rendering(), pane, pages_.windows());
+            const auto layout = documents_.document().page_layout();
+            const int destination = layout.controller_window(application_.rendering(), pane, pages_.windows());
             if (destination < 0) return;
             if (!performance_visible_) { pages_.revisit(); enter_page(); }
             performance_visible_ = true;
@@ -59,17 +59,17 @@ public:
         renderer_.show(pane, content);
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(page_host_configure_apps)
+    CNTRL_FLASH_ROUTINE(page_host_configure_pages)
 #endif
-    void configure_apps(const cntrl::Document &document) {
+    void configure_pages(const cntrl::Document &document) {
         pages_.outputs(platform_.midi_outputs());
         configure_ports();
-        pages_.layout(document.valid() ? document.app_layout() : cntrl::AppLayout{});
+        pages_.layout(document.valid() ? document.page_layout() : cntrl::PageLayout{});
         application_.configure(document, platform_);
         performance_visible_ = true;
         if (document.valid()) enter_page();
     }
-    bool refresh_apps() { application_.refresh(platform_); return true; }
+    bool refresh_pages() { application_.refresh(platform_); return true; }
     void blank_performance() {
         cntrl::Pane empty;
         empty.graphics.background = 0;
@@ -153,15 +153,25 @@ public:
         if (!documents_.document().valid()) return;
         if (pages_.page() == Pages::Page::confirm_firmware
             && controls_.confirm < 64 && (application_.held & (uint64_t(1) << controls_.confirm))) return;
+        const unsigned previous_windows = pages_.windows();
+        const unsigned previous_controller = application_.visible_index;
         leave_page();
         if (pages_.browse(reverse)) {
             if (!platform_.switch_firmware()) error("Firmware switch failed");
         } else {
-            renderer_.transition(reverse, documents_.document().scroll_ms(), pages_.windows() == 1 ? int(display_.count() - 1) : -1);
+            focus_controller();
+            const unsigned windows = std::max(previous_windows, pages_.windows());
+            const bool utility_only = previous_controller == application_.visible_index && windows == 1;
+            renderer_.transition(reverse, documents_.document().scroll_ms(), utility_only ? int(display_.count() - 1) : -1);
             application_.refresh(platform_);
         }
         if (pages_.clock_page()) application_.controller().cancel_gesture();
         enter_page();
+    }
+    void select_page(unsigned index) {
+        leave_page(); pages_.select(index);
+        focus_controller();
+        application_.refresh(platform_); enter_page();
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_tap)
@@ -214,7 +224,7 @@ public:
         const unsigned occupied = pages_.windows();
         if (occupied == display_.count()) return;
         if (pane >= 0) {
-            pane = documents_.document().app_layout().app_window(application_.rendering(), unsigned(pane), occupied);
+            pane = documents_.document().page_layout().controller_window(application_.rendering(), unsigned(pane), occupied);
             if (pane < 0) return;
         } else if (occupied + 1 == display_.count()) pane = 0;
         renderer_.transition(undo, duration_ms, pane, occupied, vertical, panorama);
@@ -251,6 +261,9 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
+        if (application_.pending_page < application_.layout.pages()) {
+            select_page(application_.pending_page); application_.pending_page = PageLayout::max_pages;
+        }
         if (platform_.display_priority_due()) return;
         if (pages_.page() == Pages::Page::expression && expression_ports_.empty()) pages_.expression_status("No configurable ports", "", "");
         if (pages_.page() == Pages::Page::expression && !expression_ports_.empty() && uint32_t(now - expression_refresh_) >= 80) {
@@ -322,6 +335,11 @@ public:
     Pages pages_;
     Keyboard keyboard_;
 private:
+    void focus_controller() {
+        if (pages_.page() != Pages::Page::patch_switcher) return;
+        application_.controller().cancel_gesture();
+        application_.visible_index = application_.layout.controller_slot(pages_.index());
+    }
     struct Port { unsigned index; const char *label; };
     std::vector<Port> ports_;
     std::vector<unsigned> expression_ports_;

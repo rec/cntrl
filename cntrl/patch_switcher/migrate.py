@@ -113,14 +113,8 @@ def upgrade_setup(
     source['splash_movie'] = [f'movies/{k:08x}.cnsa' for k in keys[:startup]]
     source['idle_movie'] = [f'movies/{k:08x}.cnsa' for k in keys[startup:]]
     arrangement = layout.unpack(section, 0)
-    apps = source.get('apps')
-    if isinstance(apps, dict):
-        compiled_apps = arrangement['apps']
-        if not isinstance(compiled_apps, dict):
-            raise ValueError('invalid converted application metadata')
-        for name, app in apps.items():
-            if isinstance(app, dict) and name in compiled_apps:
-                app['give_up_windows'] = compiled_apps[name]['give_up_windows']
+    source.pop('apps', None)
+    source['pages'] = arrangement['pages']
     authored = tomlkit.dumps(source).encode('utf-8')
     rewritten = bytearray(result[: len(result) - source_size] + authored)
     struct.pack_into('<I', rewritten, display_offset + 12, len(authored))

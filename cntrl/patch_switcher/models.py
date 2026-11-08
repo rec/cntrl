@@ -742,23 +742,9 @@ class Scrolling(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class App(BaseModel, frozen=True):
-    type: Literal['patch-switcher'] = 'patch-switcher'
-    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
-    give_up_windows: list[str] = Field(default_factory=list, max_length=255)
-
-    @model_validator(mode='after')
-    def distinct_windows(self) -> 'App':
-        if len(set(self.give_up_windows)) != len(self.give_up_windows):
-            raise ValueError('give_up_windows must contain each window once')
-        return self
-
-    model_config = ConfigDict(extra='forbid')
-
-
 class Page(BaseModel, frozen=True):
-    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
     type: Literal[
+        'patch-switcher',
         'tap-tempo',
         'status',
         'firmware',
@@ -770,19 +756,16 @@ class Page(BaseModel, frozen=True):
         'clock-tempo',
         'keyboard',
         'None',
-    ]
-    windows: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
-
-    @model_validator(mode='before')
-    @classmethod
-    def none_windows(cls, value: object) -> object:
-        if isinstance(value, dict) and value.get('type') == 'None':
-            return {'windows': 0, **value}
-        return value
+    ] = 'patch-switcher'
+    ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
+    windows: Annotated[int | None, Field(strict=True, ge=0, le=255)] = None
+    give_up_windows: list[str] = Field(default_factory=list, max_length=255)
 
     @model_validator(mode='after')
-    def no_windows_for_none(self) -> 'Page':
-        if self.type == 'None' and self.windows:
+    def window_allocation(self) -> 'Page':
+        if len(set(self.give_up_windows)) != len(self.give_up_windows):
+            raise ValueError('give_up_windows must contain each window once')
+        if self.type == 'None' and self.windows not in (None, 0):
             raise ValueError('None must have zero windows')
         return self
 
@@ -806,26 +789,26 @@ class Setup(BaseModel, frozen=True):
     target_pulse: TargetPulse = Field(default_factory=TargetPulse)
     navigation: NavigationSettings = Field(default_factory=NavigationSettings)
     page_settings: PageSettings = Field(default_factory=PageSettings)
-    apps: dict[str, App] = Field(
-        default_factory=lambda: {'patch-switcher': App()}, max_length=4
-    )
-    pages: list[Page] = Field(
-        default_factory=lambda: [
-            Page(type=t)
-            for t in (
-                'status',
-                'firmware',
-                'cable-test',
-                'panic',
-                'trs-ports',
-                'expression',
-                'clock-transport',
-                'clock-tempo',
-                'keyboard',
-                'tap-tempo',
-            )
-        ],
-        max_length=32,
+    pages: dict[str, Page] = Field(
+        default_factory=lambda: {
+            **{
+                t: Page(type=t)
+                for t in (
+                    'status',
+                    'firmware',
+                    'cable-test',
+                    'panic',
+                    'trs-ports',
+                    'expression',
+                    'clock-transport',
+                    'clock-tempo',
+                    'keyboard',
+                    'tap-tempo',
+                )
+            },
+            'patch-switcher': Page(),
+        },
+        max_length=36,
     )
     take_first_match: Annotated[bool, Field(strict=True)] = False
     fast_switches: Annotated[bool, Field(strict=True)] = True

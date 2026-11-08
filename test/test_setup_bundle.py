@@ -32,7 +32,6 @@ def test_prefill_maximizes_bytes_when_largest_first_would_waste_space() -> None:
     # Metadata/save workspace occupy 765 bytes. Leave a ten-byte cache.
     bundle = setup_bundle.SetupBundle(
         setups={'a': b'a' * 8, 'b': b'b' * 6, 'c': b'c' * 4},
-        app_ram2=[0, 0, 0],
         page_ram2=[0, 0, 0],
         memory=models.TargetMemory(capacity=400000, runtime=0),
         memory_margin=400000 - 765 - 10,
@@ -41,12 +40,12 @@ def test_prefill_maximizes_bytes_when_largest_first_would_waste_space() -> None:
     assert bundle.prefill == [1, 2]
 
 
-def test_active_setup_accounting_does_not_sum_mutually_exclusive_apps() -> None:
+def test_active_setup_accounting_does_not_sum_inactive_setups() -> None:
     bundle = setup_bundle.build(
         {'a': b'a', 'b': b'b'},
         {
-            'a': {'apps': {'x': {'ram2_bytes': 100}}, 'pages': []},
-            'b': {'apps': {}, 'pages': [{'type': 'status', 'ram2_bytes': 80}]},
+            'a': {'pages': {'x': {'type': 'patch-switcher', 'ram2_bytes': 100}}},
+            'b': {'pages': {'status': {'type': 'status', 'ram2_bytes': 80}}},
         },
         memory=MEMORY,
     )

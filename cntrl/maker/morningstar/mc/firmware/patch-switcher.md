@@ -16,7 +16,7 @@ single-asset and `splash` boolean descriptions below are superseded.
 Runtime setups come from one bundle in `/cntrl/setups/.bundle/0.bin` and `1.bin`.
 The build includes requested setups and their companions in a sorted index table.
 A fitting collection stays resident in RAM2; otherwise the bounded LRU is
-prefilled to maximize resident bytes. App/page RAM declarations and the configurable
+prefilled to maximize resident bytes. Page RAM declarations and the configurable
 16192-byte memory margin guide the initial prefill plan only. Actual setup,
 document and font allocations share the linked heap budget. The other cntrl RAM2 reserve
 is currently an explicit 288 KiB estimate, not a measured peak.

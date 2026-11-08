@@ -302,7 +302,7 @@ used outputs, channels and values.
 If all compiled setups fit, the bundle prepares a packed resident table. Otherwise
 it uses a byte-limited LRU cache and a host-computed prefill set. Setups are indexed
 by the sorted bundle name table; human-readable names remain available separately.
-App/page estimates default to zero, and the budget uses the largest active setup's
+Page estimates default to zero, and the budget uses the largest active setup's
 combined app/page demand.
 
 Buffer placement, alignment, executable sections and linker reservations belong
@@ -338,7 +338,7 @@ The current setup format is 35. Important portable sections are:
 
 Existing protocol limits are sixteen MIDI routes, eight physical input IDs,
 five configured switch slots and four configurable-port/expression slots. Layout
-supports at most four apps, 32 pages and 255 declared windows; setup/resource
+supports at most four patch-switchers, 36 named pages and 255 declared windows; setup/resource
 limits are declared separately by `Target`. These are format/product limits,
 not processor pins or implied transport positions.
 
@@ -404,7 +404,7 @@ inspect the `controls.count` event entries; event bits are `press_event`,
 
 The router's action service binds `controls_locked`, `menu_open`, `setup_open`,
 `songs_open`, `switches_open`, `switch_button`, `invoke(Operation)`, `browse`,
-`midi_reserved`, `keyboard`, `expression`, `port`, `clock`, `has_app`, `app` and
+`midi_reserved`, `keyboard`, `expression`, `port`, `clock`, `has_controller`, `controller` and
 `tap` to the shared application and page objects. Its completion path additionally
 uses `leave_switches`, `abandoned`, `patch_pending` and `error`. Call
 `InputCoordinator::finish(actions)` during the runtime's navigation phase;

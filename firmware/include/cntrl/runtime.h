@@ -17,7 +17,7 @@ public:
             const uint32_t gap = scanned_ ? uint32_t(now - last_scan_) : 0;
             last_scan_ = now; scanned_ = true; s.scan(now, gap);
         }
-        s.apps(now);
+        s.pages(now);
         // Deliver button actions before storage and display work.
         s.midi();
         auto &session = s.session(); auto &commands = s.commands();

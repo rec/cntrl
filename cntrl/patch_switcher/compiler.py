@@ -525,7 +525,7 @@ def compile_show(
         clock = page_settings.pack_clock(show, target)
         expression = page_settings.pack_expression(show, target, jacks)
         keyboard = page_settings.pack_keyboard(show, target)
-        app_layout = layout.pack(show, target)
+        page_layout = layout.pack(show.pages, [d.id for d in target.displays])
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -605,8 +605,7 @@ def compile_show(
             )
         ),
         show.fast_switches,
-        sum(a.ram2_bytes for a in show.apps.values())
-        + sum(p.ram2_bytes for p in show.pages),
+        sum(p.ram2_bytes for p in show.pages.values()),
         crc32(setup_name_bytes),
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
@@ -637,7 +636,7 @@ def compile_show(
             if any(a.shifted is not None for _, a, _, _ in assignments)
             else b''
         )
-        + app_layout
+        + page_layout
         + movie_records
         + midi_endpoints.pack(target)
         + inputs.pack(target)
@@ -1843,6 +1842,6 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 35
+DOCUMENT_VERSION = 36
 SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

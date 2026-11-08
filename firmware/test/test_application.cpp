@@ -5,6 +5,8 @@
 #include "patch_hardware.h"
 #include "storage.h"
 #include <cassert>
+#include <fstream>
+#include <iterator>
 
 struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices, cntrl::SongResolver, cntrl::SongCapture, cntrl::ui::FirmwareVisitServices {
     unsigned blanks = 0, editors = 0;
@@ -73,6 +75,7 @@ struct VisitFile : cntrl::files::File {
     bool sync() override { return true; }
 };
 struct PagePlatform : Hardware {
+    bool switch_firmware() { return false; }
     struct Expression {
         unsigned index = 0;
         void configure(const cntrl::ExpressionAssignment *) {}
@@ -99,13 +102,21 @@ struct PageFonts : cntrl::ui::Fonts {
     bool glyph(unsigned, unsigned, uint32_t, const char *, unsigned, cntrl::ui::Glyph &) const override { return false; }
 };
 struct PageDisplay : cntrl::ui::Display {
-    unsigned count() const override { return 1; }
+    unsigned windows = 1;
+    std::vector<std::vector<uint16_t>> pixels = std::vector<std::vector<uint16_t>>(3, std::vector<uint16_t>(64 * 64));
+    unsigned count() const override { return windows; }
     cntrl::ui::Viewport viewport(unsigned) const override { return {64, 64, 0, 0}; }
     void poll() override {}
     bool ready() const override { return true; }
     bool failed() override { return false; }
     bool priority_due() const override { return false; }
-    bool submit(unsigned, unsigned, unsigned, unsigned, unsigned, const uint8_t *) override { return true; }
+    bool submit(unsigned screen, unsigned x, unsigned y, unsigned width, unsigned height, const uint8_t *data) override {
+        for (unsigned col = 0; col < width; ++col) for (unsigned row = 0; row < height; ++row) {
+            const unsigned offset = 2 * (col * height + row);
+            pixels[screen][(y + row) * 64 + x + col] = uint16_t(data[offset]) << 8 | data[offset + 1];
+        }
+        return true;
+    }
 };
 static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Documents &documents, cntrl::ui::Application &app) {
     PagePlatform platform; PageFonts fonts; PageDisplay display;
@@ -118,8 +129,8 @@ static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Doc
         {"south", "South", 1, cntrl::midi::OutputTransport::physical, false, true, 3}};
     platform.endpoints = {endpoints, 2}; cntrl::PageSettings settings; settings.words[cntrl::PageSettings::title_height] = 8;
     host.configure_page_settings(settings);
-    uint8_t layout[8 + 32 + 2] = {'C', 'L', 'A', 'Y', 0, 1, 1, 2};
-    layout[8 + 32] = unsigned(cntrl::ui::Pages::Page::ports); layout[8 + 32 + 1] = 1;
+    uint8_t layout[8 + 32 + 35] = {'C', 'P', 'A', 'G', 1, 1, 1, 0};
+    layout[8 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::ports); layout[8 + 32 + 33] = 1;
     host.pages_.layout({layout});
     assert(host.pages_.jack == 1); assert(host.trs_button(1));
     assert(host.pages_.candidate == cntrl::midi::TrsMode::midi_a);
@@ -132,6 +143,85 @@ static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Doc
     const unsigned selected = host.pages_.jack; assert(host.trs_button(0)); assert(host.pages_.jack == selected);
     const auto none = host.pages_.view(0, 0, {});
     assert(std::strstr(none.lines[1].text, "No configurable") != nullptr && !none.lines[3].text[0] && !none.lines[4].text[0]);
+}
+static void selecting_pages_preserves_state_and_background_work(const char *path) {
+    struct Context : Hardware {
+        cntrl::ui::Application *application = nullptr;
+        unsigned sends = 0;
+        bool send(const char *, const uint8_t *, unsigned) override { ++sends; return true; }
+        bool state(unsigned operation, uint32_t value) override { return application->state(operation, value, *this); }
+        void validation(bool active) override { application->controller().validation(active); }
+        bool preview_state(unsigned operation, uint32_t value) override { return application->controller().preview_state(operation, value); }
+        bool selection(unsigned operation, const cntrl::Document *&document, unsigned &node) override { return application->controller().selection(operation, document, node); }
+        void selection_complete(unsigned operation) override { application->controller().selection_complete(operation); }
+    } hardware;
+    std::ifstream file(path); std::string hex; file >> hex;
+    std::vector<uint8_t> bytes;
+    for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    cntrl::Document document; assert(document.load(bytes.data(), unsigned(bytes.size()), hardware));
+    // Match the pedal's one-window Tap Tempo page followed by its patch page.
+    const unsigned tap = unsigned(document.page_layout().page(4) - bytes.data());
+    bytes[tap + 1] = 1;
+    cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size() - 28)));
+    assert(document.load(bytes.data(), unsigned(bytes.size()), hardware));
+    TestStorage storage, library;
+    cntrl::Controller primary(hardware, hardware, hardware);
+    cntrl::Documents documents(storage, hardware, primary, hardware);
+    cntrl::Songs songs(library, hardware);
+    alignas(cntrl::Controller) unsigned char extra[(cntrl::PageLayout::max_controllers - 1) * sizeof(cntrl::Controller)];
+    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i) new (extra + (i - 1) * sizeof(cntrl::Controller)) cntrl::Controller(hardware, hardware, hardware, 5 + i);
+    {
+        cntrl::ui::Application app(hardware, documents, primary, extra, songs, hardware, false); hardware.application = &app;
+        primary.activate(document); app.configure(document, hardware);
+        PagePlatform platform; PageFonts fonts; PageDisplay display;
+        display.windows = 3;
+        uint16_t work[4096] = {}, cache[3 * 4096] = {}, previous[3 * 4096] = {};
+        cntrl::ui::Renderer renderer(display, fonts, work, 4096, cache, previous, 3 * 4096);
+        cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {});
+        host.pages_.layout(document.page_layout());
+        host.select_page(5); assert(app.visible_index == 0 && host.pages_.windows() == 0);
+        assert(app.controller().navigate(7)); app.tick(0); assert(app.busy() && hardware.sends == 0);
+        host.select_page(6); assert(app.visible_index == 1);
+        assert(app.controller().navigate(3)); assert(app.controller().selected_patch() == 1);
+        host.select_page(1); assert(app.visible_index == 1 && host.pages_.windows() == 1);
+        for (unsigned i = 0; i < 100; ++i) app.tick(200);
+        assert(!app.busy() && hardware.sends == 1);
+        host.select_page(5); assert(app.controller().selected_patch() == 0 && app.controller().navigation().center == 0);
+        host.select_page(6); assert(app.controller().selected_patch() == 1);
+        host.select_page(5); app.controller().button(1, true, 300);
+        for (unsigned i = 0; i < 20; ++i) app.tick(300);
+        assert(app.controller().selected_patch() == 1);
+        host.select_page(6); host.select_page(5); app.controller().button(1, true, 400);
+        for (unsigned i = 0; i < 20; ++i) app.tick(400);
+        assert(app.controller().selected_patch() == 0);
+        host.select_page(6);
+        host.pages_.browse(true); assert(host.pages_.index() == 5);
+        host.pages_.browse(false); assert(host.pages_.index() == 6);
+        host.pages_.browse(false); assert(host.pages_.index() == 0);
+        char put[128]; std::snprintf(put, sizeof(put), "CNTRL SETUP PUT 54657374 %u %08lx 0\n",
+            unsigned(bytes.size()), (unsigned long)cntrl::checksum(bytes.data(), unsigned(bytes.size())));
+        for (char c : std::string(put)) documents.receive(uint8_t(c), 0);
+        for (uint8_t b : bytes) documents.receive(b, 0);
+        for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
+        assert(!documents.busy() && documents.select("Test"));
+        host.select_page(5); host.select_page(4);
+        for (unsigned screen = 0; screen < 3; ++screen) {
+            cntrl::Pane pane; pane.graphics.background = screen + 1; pane.graphics.pad = 0;
+            renderer.show(screen, pane);
+        }
+        for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
+        assert(renderer.ready());
+        // Leaving Tap Tempo keeps the same patch controller visible. Only the
+        // outgoing utility window may move.
+        host.browse_page(false); assert(host.pages_.index() == 5);
+        for (unsigned i = 0; i < 20000; ++i) {
+            renderer.draw(1000000 + i * 1000);
+            for (unsigned screen = 0; screen < 2; ++screen)
+                for (auto pixel : display.pixels[screen]) assert(pixel == screen + 1);
+        }
+        assert(renderer.ready());
+    }
+    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i) std::launder(reinterpret_cast<cntrl::Controller *>(extra + (i - 1) * sizeof(cntrl::Controller)))->~Controller();
 }
 static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware &hardware, cntrl::Documents &documents,
         cntrl::ui::Application &app, cntrl::Songs &songs, cntrl::ui::SongSources &sources) {
@@ -148,7 +238,7 @@ static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware 
     cntrl::ui::FirmwareVisitRecord returned_record;
     cntrl::ui::FirmwareVisit returned(returned_record, file, hardware, hardware, documents, app, songs, sources, runtime, navigation, execution, restoring);
     const unsigned opens = file.opened_count; returned.poll(false); assert(file.opened_count == opens && !returned.busy());
-    uint8_t layout[8 + 3 * 32 + 35] = {'C', 'L', 'A', 'Y', 1, 0, 3, 2}; app.layout = {layout};
+    uint8_t layout[8 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 1, 0}; layout[8 + 3 * 32 + 32] = 11; layout[8 + 3 * 32 + 33] = 3; app.layout = {layout};
     for (unsigned i = 0; i < 100; ++i) returned.poll(true);
     assert(!returned.busy() && hardware.consumed == 7 && hardware.last_error == "Patch return unavailable");
     assert(hardware.handoffs == 1); app.layout = {};
@@ -158,12 +248,13 @@ static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware 
     assert(failed.request(33, &continuation)); failed.poll(true); failed.poll(true);
     assert(!failed.busy() && !execution && hardware.last_error == "Firmware switch failed");
 }
-int main() {
+int main(int argc, char **argv) {
+    assert(argc == 2); selecting_pages_preserves_state_and_background_work(argv[1]);
     Hardware hardware; TestStorage setup_storage, song_storage;
     cntrl::Controller primary(hardware, hardware, hardware);
     cntrl::Documents documents(setup_storage, hardware, primary, hardware);
-    alignas(cntrl::Controller) unsigned char extra[(cntrl::AppLayout::max_apps - 1) * sizeof(cntrl::Controller)];
-    for (unsigned i = 0; i + 1 < cntrl::AppLayout::max_apps; ++i) new (extra + i * sizeof(cntrl::Controller)) cntrl::Controller(hardware, hardware, hardware, i + 6);
+    alignas(cntrl::Controller) unsigned char extra[(cntrl::PageLayout::max_controllers - 1) * sizeof(cntrl::Controller)];
+    for (unsigned i = 0; i + 1 < cntrl::PageLayout::max_controllers; ++i) new (extra + i * sizeof(cntrl::Controller)) cntrl::Controller(hardware, hardware, hardware, i + 6);
     {
         cntrl::Songs songs(song_storage, hardware);
         cntrl::ui::Application app(hardware, documents, primary, extra, songs, hardware, true);
@@ -192,7 +283,7 @@ int main() {
         assert(app.operation_ui(Op::menu_open, hardware)); app.menu.poll(0); app.operation_ui(Op::menu_next, hardware);
         hardware.transfer_busy = true; app.operation_ui(Op::menu_activate, hardware); assert(app.menu.open() && !app.song_ui.open());
         hardware.transfer_busy = false; cntrl::Document empty; app.configure(empty, hardware); assert(hardware.blanks == 1);
-        app.processing_index = 1; assert(&app.controller() == &app.at(1)); app.tick(0); assert(app.processing_index == cntrl::AppLayout::max_apps);
+        app.processing_index = 1; assert(&app.controller() == &app.at(1)); app.tick(0); assert(app.processing_index == cntrl::PageLayout::max_controllers);
     }
-    for (unsigned i = 0; i + 1 < cntrl::AppLayout::max_apps; ++i) std::launder(reinterpret_cast<cntrl::Controller *>(extra + i * sizeof(cntrl::Controller)))->~Controller();
+    for (unsigned i = 0; i + 1 < cntrl::PageLayout::max_controllers; ++i) std::launder(reinterpret_cast<cntrl::Controller *>(extra + i * sizeof(cntrl::Controller)))->~Controller();
 }

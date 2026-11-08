@@ -145,7 +145,7 @@ belongs in the core scheduler.
 
 ### Application versus hardware
 
-The portable application owns controller/document instances, pages/apps, menu
+The portable application owns controller/document instances, pages, menu
 focus, switch dispatch, song sources, MIDI file operations and command routing.
 Calls such as page browsing and app configuration become application operations,
 rather than pretending to be hardware services. Status pages consume a portable

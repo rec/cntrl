@@ -15,7 +15,7 @@ def test_saved_graph_and_edited_volume_survive_schema_change() -> None:
     target = target_descriptor()
     original = edited_setup()
     converted = migrate.upgrade_setup(original, target, {})
-    assert struct.unpack_from('<H', converted, 4)[0] == 35
+    assert struct.unpack_from('<H', converted, 4)[0] == compiler.DOCUMENT_VERSION
     assert graph_bytes(converted) == graph_bytes(original)
     first_cache = 76 + 2 * 68 + 2 * 68
     assert converted[first_cache + 7] == 91

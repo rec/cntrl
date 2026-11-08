@@ -613,8 +613,8 @@ void test_catalogue_jobs_are_bounded_and_preserve_order(const std::vector<uint8_
     finish(); assert(!std::strcmp(docs.browse_result(), "Middle"));
 }
 
-static void test_apps_run_independently(const std::string &path) {
-    std::ifstream file(path.substr(0, path.find_last_of('/') + 1) + "apps.golden");
+static void test_pages_run_independently(const std::string &path) {
+    std::ifstream file(path.substr(0, path.find_last_of('/') + 1) + "pages.golden");
     std::string hex; file >> hex;
     std::vector<uint8_t> bytes;
     for (unsigned i = 0; i < hex.size(); i += 2)
@@ -633,15 +633,15 @@ static void test_apps_run_independently(const std::string &path) {
     } hw;
     cntrl::Document document;
     assert(document.load(bytes.data(), unsigned(bytes.size()), hw));
-    const auto layout = document.app_layout();
-    assert(layout.apps() == 2 && layout.pages() == 5);
-    assert(!std::strcmp(layout.app_name(0), "lead") && !std::strcmp(layout.app_name(1), "rhythm"));
-    assert(layout.app_window(0, 0, 1) == 0 && layout.app_window(0, 1, 1) == 1 && layout.app_window(0, 2, 1) == -1);
-    assert(layout.app_window(1, 0, 1) == -1 && layout.app_window(1, 1, 1) == 0 && layout.app_window(1, 2, 1) == 1);
-    assert(layout.app_window(1, 1, 2) == 0 && layout.app_window(1, 2, 2) == -1);
+    const auto layout = document.page_layout();
+    assert(layout.controllers() == 2 && layout.pages() == 7);
+    assert(!std::strcmp(layout.name(layout.controller_page(0)), "lead") && !std::strcmp(layout.name(layout.controller_page(1)), "rhythm"));
+    assert(layout.controller_window(0, 0, 1) == 0 && layout.controller_window(0, 1, 1) == 1 && layout.controller_window(0, 2, 1) == -1);
+    assert(layout.controller_window(1, 0, 1) == -1 && layout.controller_window(1, 1, 1) == 0 && layout.controller_window(1, 2, 1) == 1);
+    assert(layout.controller_window(1, 1, 2) == 0 && layout.controller_window(1, 2, 2) == -1);
     for (unsigned i = 0; i < 3; ++i) {
-        assert(layout.app_window(0, i, 0) == int(i));
-        assert(layout.app_window(0, i, 3) == -1);
+        assert(layout.controller_window(0, i, 0) == int(i));
+        assert(layout.controller_window(0, i, 3) == -1);
     }
     assert(layout.page(0)[0] == 10 && layout.page(0)[1] == 0);
     cntrl::Controller first(hw, hw, hw, 5), second(hw, hw, hw, 6);
@@ -663,18 +663,18 @@ static void test_apps_run_independently(const std::string &path) {
     assert((hw.sent == std::vector<std::vector<uint8_t>>{{0xb0, 7, 100}, {0xc0, 1}}));
     assert(hw.hidden_draws && first.navigation().center == 0 && second.navigation().center == 1);
     const unsigned offset = unsigned(layout.records - bytes.data());
-    const unsigned app_offset = unsigned(reinterpret_cast<const uint8_t *>(layout.app_name(0)) - layout.records);
+    const unsigned app_offset = unsigned(reinterpret_cast<const uint8_t *>(layout.name(layout.controller_page(0))) - layout.records);
     const unsigned page_offset = unsigned(layout.page(0) - layout.records);
     for (const auto &bad : std::vector<std::pair<unsigned, uint8_t>>{
-            {4, 5}, {5, 33}, {6, 0}, {7, 1}, {app_offset + 32, 3}, {app_offset + 33, 2},
-            {page_offset, 11}, {page_offset + 1, 1}, {page_offset + 3, 4}}) {
+            {4, 37}, {5, 0}, {6, 0}, {7, 1}, {app_offset + 34, 3}, {app_offset + 35, 2},
+            {page_offset, 12}, {page_offset + 1, 1}, {page_offset + 38, 4}}) {
         auto corrupt = bytes; corrupt[offset + bad.first] = bad.second;
         cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
         cntrl::Document rejected; assert(!rejected.load(corrupt.data(), unsigned(corrupt.size()), hw));
     }
     auto empty = bytes;
-    empty.erase(empty.begin() + offset + app_offset, empty.begin() + offset + layout.length());
-    empty[offset + 4] = empty[offset + 5] = 0;
+    empty.erase(empty.begin() + offset + 8 + layout.windows() * 32, empty.begin() + offset + layout.length());
+    empty[offset + 4] = 0;
     empty[19] &= ~1u;
     cntrl::put32(empty.data() + 8, unsigned(empty.size()));
     cntrl::put32(empty.data() + 20, cntrl::checksum(empty.data() + 28, unsigned(empty.size()) - 28));
@@ -685,7 +685,7 @@ static void test_apps_run_independently(const std::string &path) {
 
 int main(int argc, char **argv) {
     assert(argc == 3);
-    test_apps_run_independently(argv[1]);
+    test_pages_run_independently(argv[1]);
     std::ifstream file(argv[1]);
     std::string hex; file >> hex;
     assert(!hex.empty() && hex.size() % 2 == 0);
