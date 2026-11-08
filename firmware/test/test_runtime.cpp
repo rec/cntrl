@@ -82,8 +82,11 @@ int main() {
     constexpr cntrl::ui::ControlBinding bindings[] = {{7, "Left"}, {3, "Right"}, {4, "Back"}, {1, "Confirm"}};
     cntrl::ui::ControlRouter router({0, 1, 3, 0, 1, 2, 2, 0, 3, bindings, 4}); Actions actions;
     uint8_t events[4] = {1, 0, 0, 0}; router.route(actions, events, 1, 0);
-    assert(actions.actions.empty()); // Reserved reverse gesture needs forward held.
-    router.route(actions, events, 5, 0); assert(actions.actions.back() == 31);
+    assert(actions.actions == std::vector<unsigned>{54}); // Reverse input still reaches its controller action alone.
+    actions.actions.clear(); events[0] = 2; router.route(actions, events, 0, 0);
+    assert(actions.actions == std::vector<unsigned>{55}); // Its release reaches the controller too.
+    actions.actions.clear(); events[0] = 1; router.route(actions, events, 5, 0);
+    assert(actions.actions == std::vector<unsigned>{31}); // Holding forward reserves the reverse page gesture.
     actions.actions.clear(); actions.view = Actions::menu; router.route(actions, events, 1, 0);
     assert(actions.actions == std::vector<unsigned>{unsigned(cntrl::ui::Operation::menu_previous)});
     actions.actions.clear(); actions.view = Actions::performance; events[0] = 0; events[1] = 1; router.route(actions, events, 2, 0);

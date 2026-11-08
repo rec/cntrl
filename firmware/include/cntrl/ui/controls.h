@@ -54,11 +54,13 @@ public:
                     else if (i == controls_.back) services.invoke(Operation::setup_back);
                 }
             } else {
-                if (i == controls_.reverse_page || i == controls_.next_page) {
-                    if (press) {
-                        if (i == controls_.next_page) services.browse(false);
-                        else if (controls_.next_page < 64 && (held & (uint64_t(1) << controls_.next_page))) services.browse(true);
-                    }
+                if (i == controls_.next_page) {
+                    if (press) services.browse(false);
+                    continue;
+                }
+                if (i == controls_.reverse_page && controls_.next_page < 64
+                    && (held & (uint64_t(1) << controls_.next_page))) {
+                    if (press) services.browse(true);
                     continue;
                 }
                 if (services.midi_reserved() && i != controls_.confirm && i != controls_.back) continue;
