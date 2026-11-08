@@ -129,17 +129,18 @@ def encode(
             raise ValueError(
                 'song patches require --target to compile their setup context'
             )
+        port_modes: dict[str, models.TrsMode] = {
+            j: next(m for m in modes if m in ('midi-a', 'midi-b'))
+            for j, modes in target.trs_ports.items()
+            if 'midi-a' in modes or 'midi-b' in modes
+        }
         context: dict[str, object] = {
             # This is an execution container, not an authored browser cycle.
             'fill_in_styles': False,
             'inline_patches': False,
             # Song sources validate possible destinations. The selected setup
             # owns the physical jack modes when the song plays.
-            'trs_ports': {
-                j: next(m for m in modes if m in ('midi-a', 'midi-b'))
-                for j, modes in target.trs_ports.items()
-                if 'midi-a' in modes or 'midi-b' in modes
-            },
+            'trs_ports': port_modes,
             'instruments': library.instruments,
             'patches': library.patches,
             'patch_cycles': {'Songs': values_for_source} if values_for_source else {},
@@ -151,6 +152,20 @@ def encode(
         }
         if library.definitions is not None:
             context['definitions'] = library.definitions.model_dump(exclude_none=True)
+        pending = list(library.patches.values()) + values_for_source
+        while pending:
+            value = pending.pop()
+            if isinstance(value, dict):
+                bindings = value.get('bindings')
+                if isinstance(bindings, dict):
+                    for key, binding in bindings.items():
+                        if isinstance(
+                            models.parse_binding(binding), models.ExpressionAssignment
+                        ):
+                            port_modes[key] = 'expression'
+                pending.extend(value.values())
+            elif isinstance(value, list):
+                pending.extend(value)
         try:
             source = compiler.compile_show(context, {}, [], target, assets, documents)
         except compiler.CompilationError as error:

@@ -3,16 +3,37 @@
 #include "ui/prompts.h"
 #include "patch_executor.h"
 #include "switch_gestures.h"
+#include "control_bindings.h"
+#include "memory.h"
 
 namespace cntrl {
 class Switches {
 public:
+    static constexpr unsigned capacity = 8;
     Switches(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources)
         : hardware_(hardware), outputs_(outputs), sources_(sources), states_{{hardware, outputs, sources, 0},
           {hardware, outputs, sources, 1}, {hardware, outputs, sources, 2},
-          {hardware, outputs, sources, 3}, {hardware, outputs, sources, 4}} {}
-    ~Switches() { unpin(); }
-    bool open() const { return open_; }
+          {hardware, outputs, sources, 3}, {hardware, outputs, sources, 4},
+          {hardware, outputs, sources, 5}, {hardware, outputs, sources, 6}, {hardware, outputs, sources, 7}} {}
+    ~Switches() { unpin(); if (pending_invocation_) sources_.end(); }
+    bool open() const { return open_ || pending_invocation_; }
+    bool performance() const { return bool(bindings_); }
+    unsigned revision() const { return revision_; }
+    ExpressionAssignment expression(unsigned input) const { return bindings_.expression(input); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_bind_controls)
+#endif
+    midi::Bridge::Delivery bind_controls(const Document &document, unsigned node, PatchExecutor &invocation) {
+        if (pending_invocation_ && pending_invocation_ != &invocation) return midi::Bridge::Delivery::pending;
+        if (!pending_invocation_ || pending_node_ != node || pending_source_ != document.data()) {
+            if (!pending_.resize(document.length())) return midi::Bridge::Delivery::cancelled;
+            std::memcpy(pending_.data, document.data(), document.length());
+            if (!pending_document_.load(pending_.data, pending_.size, hardware_)) { pending_.clear(); return midi::Bridge::Delivery::cancelled; }
+            if (!pending_invocation_) sources_.begin();
+            pending_invocation_ = &invocation; pending_node_ = node; pending_source_ = document.data();
+        }
+        return prepare_leave(invocation);
+    }
     std::optional<uint16_t> debounce_ms(unsigned button) const {
         if (!open_ || closing_) return std::nullopt;
         for (unsigned i = 0; i < count_; ++i)
@@ -34,7 +55,7 @@ public:
             if (held_ & (1u << s.record[0])) continue;
             s.input_layer = shifted_ && s.shifted;
             s.settings = s.input_layer ? (u16(s.shifted + 16) ? s.shifted + 4 : nullptr)
-                : document_.switch_gestures(s.record[0]);
+                : gestures(s.record[0]);
             s.gesture.reset(s.settings);
         }
         return true;
@@ -44,8 +65,12 @@ public:
         for (const auto &s : states_) if (&s.executor == &executor) return true;
         return false;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_prepare_leave)
+#endif
     midi::Bridge::Delivery prepare_leave(PatchExecutor &invocation) {
         if (!open_) return midi::Bridge::Delivery::complete;
+        const bool first = !closing_;
         closing_ = dirty_ = true; shifted_ = false;
         event_count_ = transition_ = 0;
         bool done = true;
@@ -54,9 +79,9 @@ public:
             if (&s.executor == &invocation) continue;
             s.requested = false;
             if (!s.owned) s.active = false;
-            s.gesture.reset(); s.queued = 0;
+            if (first) cancel_gestures(s);
             if (s.unknown) return midi::Bridge::Delivery::cancelled;
-            if (s.executor.busy() || s.active || s.presses) done = false;
+            if (s.executor.busy() || s.active || s.presses || s.queued) done = false;
         }
         return done ? midi::Bridge::Delivery::complete : midi::Bridge::Delivery::pending;
     }
@@ -64,20 +89,21 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_enter)
 #endif
-    void enter(const Document &document, uint8_t held) {
+    void enter(const Document &document, uint8_t held, ControlBindings bindings = {}) {
         for (auto &s : states_) s.executor.cancel();
         unpin(); sources_.begin(); pinned_ = true;
-        document_ = document; count_ = document.switches(); held_ = disarmed_ = held;
+        document_ = document; bindings_ = bindings; ++revision_;
+        count_ = bindings_ ? bindings_.count() : document.switches(); held_ = disarmed_ = held;
         open_ = dirty_ = true; closing_ = abandoned_ = false;
         shifted_ = false;
         selected_ = -1; event_count_ = transition_ = 0; hooks_enabled_ = false; exit_started_ = false;
         for (unsigned i = 0; i < count_; ++i) {
             State &s = states_[i]; s.executor.cancel();
-            s.record = document_.switch_assignment(i);
-            s.actions = s.record + 2; s.shifted = document_.switch_shifted(s.record[0]);
+            s.record = bindings_ ? bindings_.record(i) : document_.switch_assignment(i);
+            s.actions = s.record + 2; s.shifted = bindings_ ? (u16(s.record + 97) != 65535 ? s.record + 97 : nullptr) : document_.switch_shifted(s.record[0]);
             s.layer = s.input_layer = false;
-            s.settings = document_.switch_gestures(s.record[0]);
-            s.hooks = document_.switch_hooks(s.record[0]);
+            s.settings = gestures(s.record[0]);
+            s.hooks = bindings_ ? (u16(s.record + 92) != 65535 || u16(s.record + 94) != 65535 ? s.record + 92 : nullptr) : document_.switch_hooks(s.record[0]);
             if (s.hooks && (u16(s.hooks) != 65535 || u16(s.hooks + 2) != 65535)) hooks_enabled_ = true;
             if (s.shifted) hooks_enabled_ = true;
             for (unsigned layer = 0; layer < 2; ++layer) {
@@ -135,7 +161,7 @@ public:
         if (bool(held_ & bit) == down) return;
         held_ = down ? held_ | bit : held_ & ~bit;
         if (!down) disarmed_ &= ~bit;
-        if (button == hardware_.control_input(ControlRole::back) && down) { close(); return; }
+        if (!bindings_ && button == hardware_.control_input(ControlRole::back) && down) { close(); return; }
         if (closing_) return;
         for (unsigned i = 0; i < count_; ++i) {
             auto &s = states_[i]; if (s.record[0] != button || (disarmed_ & bit)) continue;
@@ -144,7 +170,7 @@ public:
                 if (s.input_layer != layer) {
                     s.input_layer = layer;
                     s.settings = layer ? (u16(s.shifted + 16) ? s.shifted + 4 : nullptr)
-                        : document_.switch_gestures(button);
+                        : gestures(button);
                     s.gesture.reset(s.settings);
                 }
             }
@@ -174,11 +200,12 @@ public:
         for (auto &s : states_) {
             s.requested = false;
             if (!s.owned) s.active = false;
-            s.gesture.reset(); s.queued = 0;
+            cancel_gestures(s);
         }
     }
-    void tick(uint32_t now = 0) {
-        if (!open_) return;
+    void tick(uint32_t now = 0, std::optional<uint8_t> held = std::nullopt) {
+        if (held) held_ = *held;
+        if (!open_) { install_pending(); return; }
         if (const auto *state = outputs_.midi_state()) {
             if (state->revision() != state_revision_) { state_revision_ = state->revision(); dirty_ = true; }
         }
@@ -262,9 +289,12 @@ public:
                 }
             }
             for (unsigned i = 0; i < count_; ++i) if (states_[i].unknown) abandoned_ = true;
-            open_ = false; unpin(); return;
+            open_ = false; unpin();
+            if (bindings_) { bindings_ = {}; ++revision_; }
+            install_pending(); return;
         }
         if (dirty_) render();
+        install_pending();
     }
 private:
     struct Pattern {
@@ -293,7 +323,13 @@ private:
         bool requested = false, active = false, unknown = false, failed = false, owned = false;
     };
     Hardware &hardware_; PatchOutputs &outputs_; PatchSources &sources_; Document document_;
-    State states_[5];
+    State states_[capacity];
+    ControlBindings bindings_;
+    MemoryBuffer bound_, pending_;
+    Document pending_document_;
+    PatchExecutor *pending_invocation_ = nullptr;
+    const uint8_t *pending_source_ = nullptr;
+    unsigned pending_node_ = 0, revision_ = 0;
     struct Event { unsigned index, node, kind; bool layer; };
     Event events_[16];
     unsigned event_count_ = 0, transition_ = 0, state_revision_ = 0;
@@ -302,6 +338,37 @@ private:
     unsigned count_ = 0, held_ = 0, disarmed_ = 0;
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
     bool shifted_ = false;
+    void cancel_gestures(State &s) {
+        s.queued = s.presses = 0;
+        s.gesture.cancel([&](unsigned event) {
+            unsigned node = u16(s.settings + (event - 1) * 2);
+            if (node != 65535) s.queue[s.queued++] = uint16_t(node);
+        });
+    }
+    const uint8_t *gestures(unsigned input) const {
+        if (!bindings_) return document_.switch_gestures(input);
+        const auto *p = bindings_.find(input);
+        return p && u16(p + 84) ? p + 72 : nullptr;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_install_pending)
+#endif
+    void install_pending() {
+        if (!pending_invocation_) { if (!open_) bound_.clear(); return; }
+        if (pending_invocation_->busy()) return;
+        bool completed = pending_invocation_->status() == PatchExecutor::Status::completed;
+        pending_invocation_ = nullptr;
+        if (completed) {
+            // The invoking executor has returned, so replacing its state is safe.
+            bound_.swap(pending_);
+            const auto *p = bound_.data + (pending_document_.node(pending_node_) - pending_document_.data()) + 4;
+            Document document;
+            if (document.load(bound_.data, bound_.size, hardware_)) enter(document, uint8_t(held_), ControlBindings{p});
+            if (!open_) { bindings_ = {}; ++revision_; }
+        }
+        pending_document_ = Document(); pending_.clear(); sources_.end();
+        if (!open_) bound_.clear();
+    }
     void unpin() { if (pinned_) { pinned_ = false; sources_.end(); } }
     bool capture(Pattern &pattern, const PatchExecutor &executor) {
         unsigned count = executor.resource_count();
@@ -443,6 +510,19 @@ private:
     CNTRL_FLASH_ROUTINE(switches_render)
 #endif
     void render() {
+        if (bindings_) {
+            Pane panes[3];
+            for (auto &pane : panes) pane.graphics = document_.graphics(1);
+            std::snprintf(panes[1].lines[0].text, 64, "%s", bindings_.title());
+            for (unsigned i = 0; i < count_; ++i) {
+                const auto &s = states_[i];
+                auto &pane = panes[i % 3];
+                const unsigned row = 2 + i / 3;
+                const char *state = s.unknown ? "Unknown" : s.executor.busy() || s.queued ? "Pending" : s.record[1] ? (s.active ? "On" : "Off") : "";
+                std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", hardware_.input_label(s.record[0]), reinterpret_cast<const char *>(s.record + 6), state[0] ? " | " : "", state);
+            }
+            ui::present(hardware_, panes, 1); dirty_ = false; return;
+        }
         ui::Prompt prompt(hardware_);
         using Role = ControlRole;
         Pane panes[3];

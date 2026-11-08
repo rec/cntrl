@@ -6,7 +6,7 @@ namespace cntrl::ui {
 class SongSources : public cntrl::SongResolver, public cntrl::SongCapture {
 public:
     SongSources(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, SetupTable &setups,
-                Documents &documents, Application &application, Songs &songs, unsigned owner = 5)
+                Documents &documents, Application &application, Songs &songs, unsigned owner = 8)
         : executor(hardware, outputs, sources, owner), hardware_(hardware), sources_(sources), setups_(setups),
           documents_(documents), application_(application), songs_(songs) {}
     cntrl::PatchExecutor executor;

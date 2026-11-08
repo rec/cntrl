@@ -11,6 +11,15 @@ public:
         *this = SwitchGestures(); settings_ = settings;
     }
     bool configured() const { return settings_ != nullptr; }
+    // Cancel undecided taps, but pair an action already recognized on press.
+    template<class Emit> void cancel(Emit emit) {
+        if (settings_ && stable_) {
+            if (second_) emit(5);
+            else if (long_) emit(3);
+            else if (!delayed()) emit(1);
+        }
+        reset();
+    }
     void input(bool down, uint32_t now) {
         if (down != candidate_) { candidate_ = down; changed_ = now; }
     }

@@ -49,6 +49,10 @@ def infer_patch_type(value: object) -> object:
         for k in ('type', 'parent', 'patch', 'patches', 'operation', 'duration')
     ):
         return value
+    if 'bindings' in value and not any(
+        k in value for k in (*IMPLIED_MIDI_TYPES, 'note', 'value')
+    ):
+        return value | {'patches': []}
     types = {t for k, t in IMPLIED_MIDI_TYPES.items() if k in value}
     if 'note' in value:
         types.add('polyphonic-key-pressure' if 'pressure' in value else 'note-on')
@@ -60,6 +64,24 @@ def infer_patch_type(value: object) -> object:
     if types:
         return value | {'type': next(iter(types))}
     return value
+
+
+def parse_binding(value: object) -> 'Patch | SwitchBinding | ExpressionAssignment':
+    if isinstance(value, (SwitchBinding, ExpressionAssignment)):
+        return value
+    if isinstance(value, dict):
+        if 'on' in value:
+            return SwitchBinding.model_validate(value)
+        if (
+            'controller' in value
+            and 'value' not in value
+            and not any(
+                k in value
+                for k in ('type', 'parent', 'patch', 'patches', 'operation', 'duration')
+            )
+        ):
+            return ExpressionAssignment.model_validate(value)
+    return patch_adapter.validate_python(value)
 
 
 class Bank(BaseModel, frozen=True):
@@ -112,6 +134,16 @@ class Presentation(BaseModel, frozen=True):
     tags: Annotated[list[str], BeforeValidator(parse_tags)] = Field(
         default_factory=list
     )
+    bindings: dict[str, object] | None = None
+
+    @field_validator('bindings')
+    @classmethod
+    def control_bindings(
+        cls, value: dict[str, object] | None
+    ) -> dict[str, object] | None:
+        if value is None:
+            return None
+        return {k: parse_binding(v) for k, v in value.items()}
 
     model_config = ConfigDict(extra='forbid')
 
@@ -232,6 +264,7 @@ class Navigation(Presentation, frozen=True):
         'undo',
         'menu',
         'back',
+        'next-song-patch',
     ]
 
 
@@ -532,20 +565,18 @@ class ShiftedActions(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class SwitchAssignment(BaseModel, frozen=True):
+class SwitchBinding(BaseModel, frozen=True):
     name: str | None = None
-    button: Annotated[str, Field(min_length=1, max_length=31)]
     mode: Literal['press', 'momentary', 'latched'] = 'press'
     on: Patch
     off: Patch | None = None
-    style: Style | None = None
     gestures: SwitchGestures | None = None
     enter: SwitchEnter | None = None
     exit: Patch | None = None
     shifted: ShiftedActions | None = None
 
     @model_validator(mode='after')
-    def cleanup(self) -> 'SwitchAssignment':
+    def cleanup(self) -> 'SwitchBinding':
         for actions in (self, self.shifted):
             if actions is None:
                 continue
@@ -558,6 +589,11 @@ class SwitchAssignment(BaseModel, frozen=True):
         return self
 
     model_config = ConfigDict(extra='forbid')
+
+
+class SwitchAssignment(SwitchBinding, frozen=True):
+    button: Annotated[str, Field(min_length=1, max_length=31)]
+    style: Style | None = None
 
 
 class TargetPulse(BaseModel, frozen=True):
@@ -1040,6 +1076,7 @@ IMPLIED_MIDI_TYPES = {
     'position': 'song-position-pointer',
     'song': 'song-select',
 }
+
 
 Sequence.model_rebuild()
 patch_adapter = TypeAdapter(Patch)

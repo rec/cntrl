@@ -43,7 +43,7 @@ public:
         std::memcpy(current_, state.current, sizeof(current_));
         std::memcpy(last_sent_, state.last_sent, sizeof(last_sent_)); return true;
     }
-    Controller(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner = 5)
+    Controller(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner = 8)
         : hardware_(hardware), executor_(hardware, outputs, sources, owner) {}
     void deactivate() { executor_.cancel(); sending_ = -1; cancel_gesture(); document_ = Document(); }
     bool busy() const { return executor_.busy(); }

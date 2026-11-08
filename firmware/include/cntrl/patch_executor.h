@@ -35,6 +35,7 @@ struct PatchOutputs {
     virtual bool selection(unsigned, const Document *&, unsigned &) { return false; }
     virtual void selection_complete(unsigned) {}
     virtual midi::Bridge::Delivery prepare_leave(PatchExecutor &) { return midi::Bridge::Delivery::complete; }
+    virtual midi::Bridge::Delivery bind_controls(const Document &, unsigned, PatchExecutor &) { return midi::Bridge::Delivery::cancelled; }
     virtual bool stock(uint8_t buttons, PatchExecutor &invocation) = 0;
 };
 
@@ -98,10 +99,10 @@ public:
         while (depth_) {
             const uint8_t *n = next_leaf(true);
             if (!n) { if (status_ == Status::failed) return false; break; }
-            if (persistent && (n[0] == 4 || (n[0] == 3 && (n[4] == 9 || n[4] == 10))))
+            if (persistent && (n[0] == 4 || n[0] == 10 || (n[0] == 3 && (n[4] == 9 || n[4] == 10 || n[4] == 13))))
                 return fail("Persistent switches cannot leave their context");
             if (!collect(n, *frames_[depth_ - 1].document)) return false;
-            ++leaves; --depth_;
+            ++leaves; advance_leaf();
         }
         if (completed > leaves || (fingerprint && fingerprint != fingerprint_))
             return fail("Patch sources changed since firmware visit");
@@ -114,7 +115,7 @@ public:
         if (reconstructing_) { outputs_.validation_context(*this, true); validating_ = true; }
         while (completed_ < completed) {
             if (!next_leaf(true)) return fail("Invalid patch continuation");
-            --depth_; ++completed_;
+            advance_leaf(); ++completed_;
         }
         if (validating_) { outputs_.validation_context(*this, false); validating_ = false; }
         reconstructing_ = false; fingerprint_ = expected_fingerprint;
@@ -154,6 +155,13 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 10: {
+            const auto &frame = frames_[depth_ - 1];
+            auto delivery = outputs_.bind_controls(*frame.document, frame.node, *this);
+            if (delivery == midi::Bridge::Delivery::pending) return;
+            if (delivery != midi::Bridge::Delivery::complete) { fail("Cannot install patch bindings"); return; }
+            started_ = true; complete_leaf(); return;
+        }
         case 1: {
             const uint8_t *instrument = frames_[depth_ - 1].document->instrument(u16(p));
             output = reinterpret_cast<const char *>(instrument + 32);
@@ -267,6 +275,11 @@ private:
                 if (!bind_selection(validating, p[0], document, node)) return nullptr;
                 if (node == 65535) { if (!validating) outputs_.selection_complete(p[0]); --depth_; continue; }
                 if (!push(document, node)) return nullptr;
+            } else if (n[0] == 10) {
+                if (!f.child) return n;
+                if (f.child == 2) { --depth_; continue; }
+                ++f.child;
+                if (!push(document, u16(p))) return nullptr;
             } else if (n[0] == 5) {
                 unsigned count = u16(p);
                 if (f.child == count) { --depth_; continue; }
@@ -295,7 +308,11 @@ private:
         }
         return nullptr;
     }
-    void complete_leaf() { --depth_; ++completed_; }
+    void advance_leaf() {
+        if (frames_[depth_ - 1].document->node(frames_[depth_ - 1].node)[0] == 10) ++frames_[depth_ - 1].child;
+        else --depth_;
+    }
+    void complete_leaf() { advance_leaf(); ++completed_; }
     bool bind_selection(bool validating, unsigned operation, const Document *&document, unsigned &node) {
         if (!validating || reconstructing_) {
             if (binding_cursor_ >= binding_count_ || bindings_[binding_cursor_].operation != operation)

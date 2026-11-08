@@ -110,7 +110,7 @@ MidiFileStorage midi_storage;
 cntrl::midi::MidiFiles midi_files(midi_storage.filesystem, midi_storage.source,
     midi_storage.index, midi_storage.recording, midi_storage.entries, cntrl::target::midi_connections.count,
     "/cntrl/midi", "/cntrl/midi/.playback-index");
-DMAMEM cntrl::Controller::NavigationState invocation_navigation[cntrl::target::max_switches + cntrl::PageLayout::max_controllers];
+DMAMEM cntrl::Controller::NavigationState invocation_navigation[cntrl::midi::Bridge::owners];
 bool restoring_invocation = false;
 cntrl::PatchExecutor *visiting_invocation = nullptr;
 
@@ -254,6 +254,17 @@ public:
             startup_counter.status == cntrl::StartupCounter::Status::ready, micros());
     }
     FLASHMEM bool state(unsigned operation, uint32_t value) override { return application.state(operation, value, *this); }
+    cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &document, unsigned node, cntrl::PatchExecutor &invocation) override {
+#if CNTRL_SWITCHES
+        cntrl::ControlBindings bindings{document.node(node) + 4};
+        for (unsigned i = 0; i < 4; ++i)
+            if (bindings.expression(i).channel && !expression_available(i)) return cntrl::midi::Bridge::Delivery::cancelled;
+        return switches.bind_controls(document, node, invocation);
+#else
+        (void)document; (void)node; (void)invocation;
+        return cntrl::midi::Bridge::Delivery::cancelled;
+#endif
+    }
     bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override {
 #if CNTRL_ORIGINAL_FIRMWARE
         return firmware_visit.stock(pair, invocation);
@@ -291,7 +302,10 @@ public:
     }
 #if CNTRL_SWITCHES
     void enter_switches(const cntrl::Document &document, uint8_t held) { bridge_.configure(false); switches.enter(document, held); }
-    void leave_switches() { bridge_.configure(runtime.interface); }
+    bool leave_switches() {
+        bridge_.configure(runtime.interface);
+        const bool performance = performance_switches_; performance_switches_ = false; return performance;
+    }
 #endif
 #if CNTRL_PANIC
     cntrl::Panic panic{*this, *this};
@@ -375,7 +389,7 @@ public:
     void set_midi_interface(bool enabled) override {
         runtime.interface = enabled;
 #if CNTRL_SWITCHES
-        if (switches.open()) return;
+        if (switches.open() && !switches.performance()) return;
 #endif
 #if CNTRL_PANIC
         if (panic_owns_midi) return;
@@ -476,7 +490,21 @@ public:
     cntrl::ui::Pages &runtime_pages() { return ui_.pages_; }
     void midi_flush() { if (usb_configuration) usb_midi_flush_output(); }
 #if CNTRL_SWITCHES
-    void midi_switch_tick(uint32_t now) { switches.tick(now); }
+    void midi_switch_tick(uint32_t now) {
+        switches.tick(now, uint8_t(application.held));
+        if (switches.revision() == binding_revision_) return;
+        binding_revision_ = switches.revision();
+        if (switches.performance()) {
+            performance_switches_ = true; application.bindings_enter();
+            animation_session().stop();
+            bridge_.configure(runtime.interface);
+            cntrl::ExpressionAssignment assignments[4];
+            for (unsigned i = 0; i < 4; ++i) assignments[i] = switches.expression(i);
+            expression_.controls().configure(assignments);
+        } else if (documents.document().valid()) expression_.controls().configure(documents.document().page_settings().expression);
+    }
+    unsigned binding_revision_ = 0;
+    bool performance_switches_ = false;
 #endif
     bool midi_read_event(unsigned source, cntrl::midi::InputEvent &event) {
         if (source == 0) {
@@ -575,7 +603,7 @@ cntrl::device::SdFile setup_reader, setup_writer;
 cntrl::device::SdDirectory setup_history;
 cntrl::SetupFiles card(setup_filesystem, setup_reader, setup_writer, setup_history);
 cntrl::BundledStorage setup_storage(card, board);
-cntrl::Controller primary_controller(board, board, patch_sources, cntrl::target::max_switches);
+cntrl::Controller primary_controller(board, board, patch_sources, cntrl::Switches::capacity);
 // Document bytes are allocated from RAM2's heap as needed.
 DMAMEM cntrl::Documents documents(setup_storage, board, primary_controller, board);
 cntrl::StoredPatchSources patch_sources(setup_storage.setups());
@@ -587,7 +615,7 @@ extern cntrl::Songs songs;
 cntrl::device::SdFile song_writer, song_readers[4];
 cntrl::files::File *song_reader_handles[] = {&song_readers[0], &song_readers[1], &song_readers[2], &song_readers[3]};
 cntrl::SlotStorage song_files(setup_filesystem, song_writer, song_reader_handles, 4, "/cntrl/songs", card.ready);
-cntrl::ui::SongSources song_sources(board, board, patch_sources, setup_storage.setups(), documents, application, songs, cntrl::target::max_switches);
+cntrl::ui::SongSources song_sources(board, board, patch_sources, setup_storage.setups(), documents, application, songs, cntrl::Switches::capacity);
 DMAMEM cntrl::Songs songs(song_files, song_sources);
 DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
 cntrl::ui::Application application(board, documents, primary_controller, extra_controllers, songs, song_sources, CNTRL_SWITCHES);
@@ -742,7 +770,7 @@ FLASHMEM void initialize_target() {
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session.reset();
     for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i)
-        new (extra_controllers[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::target::max_switches + i);
+        new (extra_controllers[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::Switches::capacity + i);
     initialize_switches();
     initialize_displays(false);
     board.begin();
@@ -808,9 +836,11 @@ public:
     bool has_controller() const { return application.layout.controllers(); }
     void controller(unsigned i, bool pressed, uint32_t now) { application.controller().button(i, pressed, now); }
     void tap(uint32_t now) { board.tap_tempo(now); }
-    void leave_switches() {
+    bool leave_switches() {
 #if CNTRL_SWITCHES
-        board.leave_switches();
+        return board.leave_switches();
+#else
+        return false;
 #endif
     }
     bool abandoned() const {

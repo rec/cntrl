@@ -384,10 +384,18 @@ def _patch(
         raise ValueError('truncated Patch node')
     properties = cast(dict[str, object], metadata.get(str(index), {}))
     if isinstance(authored := properties.get('_derived'), dict):
-        if kind != 1:
+        program_cursor, program_kind = cursor, kind
+        if kind == 10:
+            child = struct.unpack_from('<H', data, cursor)[0]
+            child_address = (
+                offset
+                + struct.unpack_from('<I', data, offset + GRAPH.size + child * 4)[0]
+            )
+            program_cursor, program_kind = child_address + 4, data[child_address]
+        if program_kind != 1:
             return dict(authored)
         original = bytes.fromhex(str(properties['_derived_program']))
-        current = data[cursor : cursor + size]
+        current = data[program_cursor : program_cursor + len(original)]
         if original == current:
             return dict(authored)
         # Volume and pan edits are expressible as ordinary overrides.
@@ -494,6 +502,85 @@ def _patch(
             channels=[i + 1 for i in range(16) if channels & (1 << i)],
             inputs=[e.name for e in endpoint_records(data) if inputs & (1 << e.route)],
         )
+    elif kind == 10:
+        entry = _patch(
+            data,
+            offset,
+            struct.unpack_from('<H', data, cursor)[0],
+            metadata,
+            ancestors | {index},
+            labels,
+        )
+        bindings = page_settings.unpack_expression(
+            data, cursor + 68, midi_endpoints.ports(endpoint_records(data))
+        )
+        original = cast(dict[str, dict[str, object]], properties.get('bindings', {}))
+        for slot in range(data[cursor + 66]):
+            record = cursor + 220 + slot * 121
+            button, mode, on, off, _, _ = SWITCH.unpack_from(data, record)
+            key = labels[button]
+
+            def patch(node: int) -> dict[str, object]:
+                return _patch(data, offset, node, metadata, ancestors | {index}, labels)
+
+            def gestures(address: int) -> dict[str, object]:
+                fields = GESTURES.unpack_from(data, address)
+                return {
+                    t: fields[6 + j] / 1000 for j, t in enumerate(GESTURE_TIMINGS)
+                } | {
+                    e: patch(fields[j])
+                    for j, e in enumerate(GESTURE_EVENTS)
+                    if fields[j] != 65535
+                }
+
+            authored = original.get(key, {})
+            action: dict[str, object] = (
+                {k: v for k, v in authored.items() if k in ('name', 'style')}
+                if isinstance(authored, dict)
+                else {}
+            )
+            action['on'] = patch(on)
+            selected = action['on']
+            label = (
+                selected.get('display_name')
+                or selected.get('name')
+                or selected.get('patch')
+                or key
+            )
+            if 'name' not in action and _text(data, record + 6, 64) != label:
+                action['name'] = _text(data, record + 6, 64)
+            if mode:
+                action.update(
+                    mode=('press', 'momentary', 'latched')[mode], off=patch(off)
+                )
+            if struct.unpack_from('<H', data, record + 84)[0]:
+                action['gestures'] = gestures(record + 72)
+            enter, exit, override = SWITCH_HOOKS.unpack_from(data, record + 92)
+            if enter != 65535:
+                action['enter'] = {'action': patch(enter), 'override': override}
+            if exit != 65535:
+                action['exit'] = patch(exit)
+            shifted_on, shifted_off = struct.unpack_from('<HH', data, record + 97)
+            if shifted_on != 65535:
+                shifted: dict[str, object] = {'on': patch(shifted_on)}
+                if shifted_off != 65535:
+                    shifted['off'] = patch(shifted_off)
+                if struct.unpack_from('<H', data, record + 113)[0]:
+                    shifted['gestures'] = gestures(record + 101)
+                action['shifted'] = shifted
+            bindings[key] = (
+                action['on']
+                if set(action) == {'on'} and 'on' not in authored
+                else action
+            )
+        return (
+            entry
+            | value
+            | {
+                'bindings': {k: bindings[k] for k in original if k in bindings}
+                | bindings
+            }
+        )
     elif kind == 7:
         value.update(duration=struct.unpack_from('<I', data, cursor)[0] / 1000)
     elif kind == 6:
@@ -527,6 +614,9 @@ def _edited_program(
             return origin['program'] != data[address + 6] + 1 or origin.get('bank') != (
                 None if bank == 0xFFFFFFFF else bank
             )
+        if data[address] == 10:
+            index = struct.unpack_from('<H', data, address + 4)[0]
+            continue
         if (
             data[address] != 6
             or struct.unpack_from('<H', data, address + 4)[0] != 65535

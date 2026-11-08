@@ -147,7 +147,7 @@ public:
         physical_routes_(outputs.transport_mask(OutputTransport::physical)) {}
     unsigned destinations() const { return unsigned(routes_.size()); }
     enum class Delivery { idle, pending, complete, cancelled };
-    static constexpr unsigned owners = 9;
+    static constexpr unsigned owners = 12;
     Delivery delivery(unsigned owner) const { return owner < owned_.size() ? owned_[owner].delivery : Delivery::idle; }
     bool owned_send(unsigned owner, unsigned route, const uint8_t *bytes, unsigned size) {
         if (owner >= owned_.size() || route >= destinations() || !usb_enabled(route) || !batch_valid(bytes, size)

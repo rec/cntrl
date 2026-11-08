@@ -217,6 +217,7 @@ private:
         for (unsigned visited = 0; visited < document.nodes(); ++visited) {
             const uint8_t *p = document.node(node);
             if (p[0] == 1) return int(node);
+            if (p[0] == 10) { node = u16(p + 4); continue; }
             if (p[0] != 6 || u16(p + 4) != 65535) return -1;
             int referenced = document.named_patch(reinterpret_cast<const char *>(p + 6));
             if (referenced < 0) return -1;

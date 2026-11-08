@@ -505,8 +505,18 @@ def compile_show(
                     for k, v in p.model_dump(
                         exclude_unset=True, exclude_none=True
                     ).items()
-                    if k in models.Presentation.model_fields
+                    if k in models.Presentation.model_fields and k != 'bindings'
                 }
+                | (
+                    {
+                        'bindings': {
+                            k: models.parse_binding(v).model_dump(exclude_none=True)
+                            for k, v in p.bindings.items()
+                        }
+                    }
+                    if p.bindings is not None
+                    else {}
+                )
                 | (
                     {'_program': compiler.program_metadata[i]}
                     if i in compiler.program_metadata
@@ -707,6 +717,9 @@ class PatchCompiler:
         self.program_names: dict[
             tuple[str, str, int, int | None], list[str | None]
         ] = {}
+        self.binding_assignments: list[
+            tuple[str, models.SwitchAssignment, int, int]
+        ] = []
 
     def parse(self, raw: object, path: str, name: str | None = None) -> int | None:
         if path.startswith('patch_cycles.') and type(raw) is int:
@@ -775,6 +788,11 @@ class PatchCompiler:
             }
             if index in self.programs:
                 metadata['_derived_program'] = self.nodes[index][4:].hex()
+            elif (
+                self.nodes[index][0] == 10
+                and (entry := self.children[index][0]) in self.programs
+            ):
+                metadata['_derived_program'] = self.nodes[entry][4:].hex()
             self.derivations[index] = metadata
             return index
         for key in ('name', 'display_name'):
@@ -807,6 +825,16 @@ class PatchCompiler:
         else:
             default_label = value.type
         self.labels.append(value.display_name or value.name or name or default_label)
+        if value.bindings is not None:
+            if not self.target.max_switches:
+                self.errors.append(f'{path}.bindings: target has no switch engine')
+            child = self.add(
+                value.model_copy(update={'bindings': None}), path + '.entry', name
+            )
+            payload = self.compile_bindings(value, child, path)
+            self.nodes[index] = struct.pack('<BBH', 10, 0, len(payload)) + payload
+            self.children[index] = [child]
+            return index
         flags = 0
         if isinstance(value, models.Delay):
             kind, payload = 7, struct.pack('<I', round(value.duration * 1000))
@@ -952,6 +980,148 @@ class PatchCompiler:
             struct.pack('<BBH', kind, flags, min(len(payload), 65535)) + payload
         )
         return index
+
+    def compile_bindings(
+        self, value: models.ConcretePatch, child: int, path: str
+    ) -> bytes:
+        records: list[bytes] = []
+        expressions: dict[str, models.ExpressionAssignment] = {}
+        assert value.bindings is not None
+
+        def add_action(
+            patch: models.Patch | None,
+            suffix: str,
+            context: str,
+            assignment: models.SwitchAssignment,
+        ) -> int:
+            node = self.add(patch, context + suffix) if patch is not None else 65535
+            if node != 65535:
+                self.binding_assignments.append((context, assignment, node, 65535))
+            return node
+
+        def gestures(
+            gesture: models.SwitchGestures | None,
+            suffix: str,
+            context: str,
+            assignment: models.SwitchAssignment,
+        ) -> bytes:
+            if gesture is None:
+                return GESTURES.pack(*([65535] * 6), 0, 0, 0, 0)
+            return GESTURES.pack(
+                *(
+                    add_action(
+                        getattr(gesture, e), f'{suffix}.{e}', context, assignment
+                    )
+                    for e in GESTURE_EVENTS
+                ),
+                *(round(getattr(gesture, t) * 1000) for t in GESTURE_TIMINGS),
+            )
+
+        for key, raw in value.bindings.items():
+            binding = models.parse_binding(raw)
+            context = f'{path}.bindings.{key}'
+            if isinstance(binding, models.ExpressionAssignment):
+                expressions[key] = binding
+                continue
+            if key not in self.target.buttons:
+                self.errors.append(f'{context}: unknown switch {key!r}')
+                continue
+            action = (
+                binding
+                if isinstance(binding, models.SwitchBinding)
+                else models.SwitchBinding(on=binding)
+            )
+            assignment = models.SwitchAssignment(
+                button=key, **action.model_dump(exclude_unset=True)
+            )
+            on = self.add(action.on, context + '.on')
+            off = (
+                self.add(action.off, context + '.off')
+                if action.off is not None
+                else 65535
+            )
+            self.binding_assignments.append((context, assignment, on, off))
+
+            label = (
+                action.name
+                or getattr(action.on, 'display_name', None)
+                or getattr(action.on, 'name', None)
+                or getattr(action.on, 'patch', None)
+                or key
+            )
+            records.append(
+                SWITCH.pack(
+                    self.target.buttons.index(key),
+                    ('press', 'momentary', 'latched').index(action.mode),
+                    on,
+                    off,
+                    _text(
+                        label,
+                        64,
+                        self.target,
+                        context + '.name',
+                        self.errors,
+                        unicode=True,
+                    ),
+                    65535,
+                )
+                + gestures(action.gestures, '.gestures', context, assignment)
+                + SWITCH_HOOKS.pack(
+                    add_action(
+                        action.enter.action if action.enter else None,
+                        '.enter.action',
+                        context,
+                        assignment,
+                    ),
+                    add_action(action.exit, '.exit', context, assignment),
+                    action.enter.override if action.enter else False,
+                )
+                + (
+                    struct.pack(
+                        '<HH',
+                        add_action(
+                            action.shifted.on, '.shifted.on', context, assignment
+                        ),
+                        add_action(
+                            action.shifted.off, '.shifted.off', context, assignment
+                        ),
+                    )
+                    + gestures(
+                        action.shifted.gestures,
+                        '.shifted.gestures',
+                        context,
+                        assignment,
+                    )
+                    if action.shifted
+                    else SHIFTED_ACTIONS.pack(*([65535] * 8), 0, 0, 0, 0)
+                )
+            )
+        settings = self.show.page_settings.model_copy(
+            update={'expression': expressions}
+        )
+        expression = page_settings.pack_expression(
+            self.show.model_copy(update={'page_settings': settings}),
+            self.target,
+            midi_endpoints.ports(self.target.midi_endpoints),
+        )
+        return (
+            struct.pack(
+                '<H64sBB',
+                child,
+                _text(
+                    self.labels[child],
+                    64,
+                    self.target,
+                    path + '.display_name',
+                    self.errors,
+                    unicode=True,
+                ),
+                len(records),
+                0,
+            )
+            + (expression or bytes(4 * page_settings.EXPRESSION.size))
+            + b''.join(records)
+        )
 
     def program(self, patch: models.ProgramChange, index: int, path: str) -> bytes:
         if (
@@ -1127,6 +1297,9 @@ class PatchCompiler:
     ) -> tuple[int, models.Presentation]:
         seen = set() if seen is None else seen
         value = self.values[index]
+        if self.nodes[index][0] == 10 and index not in seen:
+            seen.add(index)
+            return self.presentation(self.children[index][0], seen)
         if (
             index not in seen
             and isinstance(value, models.Reference)
@@ -1192,6 +1365,11 @@ class PatchCompiler:
             current = documents[document]
             if isinstance(value, models.Derived):
                 value = resolve_derivation(value, current.patches, path)
+            if (
+                isinstance(value, (models.Sequence, models.Reference))
+                and value.bindings is not None
+            ):
+                leaves.append((value, path, current))
             if isinstance(value, models.Sequence):
                 pending.extend(
                     (p, f'{path}.patches[{i}]', document, chain)
@@ -1302,6 +1480,7 @@ class PatchCompiler:
     def validate(
         self, assignments: list[tuple[str, models.SwitchAssignment, int, int]]
     ) -> None:
+        assignments = assignments + self.binding_assignments
         leaves = [self.dependency_leaves(i) for i in range(len(self.nodes))]
         for root, _, path in self.browser:
             if any(isinstance(v, models.Shift) for v, _, _ in leaves[root]):
@@ -1333,8 +1512,9 @@ class PatchCompiler:
                     or assignment.shifted is not None
                 ) and (
                     isinstance(value, models.StockFirmware)
+                    or getattr(value, 'bindings', None) is not None
                     or isinstance(value, models.Navigation)
-                    and value.operation in ('menu', 'back')
+                    and value.operation in ('menu', 'back', 'next-song-patch')
                 ):
                     self.errors.append(
                         f'switches.{key}: {path} leaves the switch context; '
@@ -1394,6 +1574,11 @@ class PatchCompiler:
                     else:
                         resources.add((output, 0, -1))
             for previous, mode, other in ownership:
+                if (
+                    key.rsplit('.bindings.', 1)[:-1]
+                    != previous.rsplit('.bindings.', 1)[:-1]
+                ):
+                    continue
                 if key == previous or assignment.mode == mode == 'press':
                     continue
                 if any(
@@ -1420,83 +1605,154 @@ class PatchCompiler:
     def inline_references(self) -> None:
         contexts: list[PatchCompiler] = [self]
         imported: dict[tuple[int, int], int] = {}
-        for index, value in enumerate(list(self.values)):
-            if not isinstance(value, models.Reference) or not value.document:
-                continue
-            children: list[int] = []
-            for leaf, path, source in self.dependency_leaves(index):
-                context = self.source_context(source, contexts)
-                node = next(
-                    (i for i, p in enumerate(context.values) if p == leaf), None
+        reference_names: dict[tuple[int, int], str] = {}
+
+        def reference(
+            context: PatchCompiler, value: models.Reference
+        ) -> tuple[PatchCompiler, int]:
+            if value.document:
+                source = next(
+                    v
+                    for k, v in self.documents.items()
+                    if k.casefold() == value.document.casefold()
                 )
-                if node is None:
-                    node = context.add(leaf, path)
-                key = contexts.index(context), node
-                if context is self:
-                    children.append(node)
-                    continue
-                if key in imported:
-                    children.append(imported[key])
-                    continue
-                data = context.nodes[node]
-                if node in context.programs:
-                    instrument_index = struct.unpack_from('<H', data, 4)[0]
-                    source_alias, instrument = list(context.instruments.items())[
-                        instrument_index
-                    ]
-                    profile = context.profiles[
-                        instrument.instrument, instrument.profile
-                    ]
-                    alias = next(
-                        (
-                            a
-                            for a, i in self.instruments.items()
-                            if i == instrument
-                            and self.profiles[i.instrument, i.profile] == profile
-                        ),
-                        None,
-                    )
-                    if alias is None:
-                        alias = source_alias
-                        if alias in self.instruments:
-                            number = len(self.instruments)
-                            while (alias := f'inline_{number}') in self.instruments:
-                                number += 1
-                        if (
-                            existing := self.profiles.get(
-                                (instrument.instrument, instrument.profile)
-                            )
-                        ) is not None and existing != profile:
-                            number = 0
-                            while (
-                                instrument.instrument,
-                                name := f'inline_{number}',
-                            ) in self.profiles:
-                                number += 1
-                            profile = profile.model_copy(update={'name': name})
-                            instrument = instrument.model_copy(update={'profile': name})
-                        self.profiles[instrument.instrument, instrument.profile] = (
-                            profile
+                context = self.source_context(
+                    models.Setup.model_validate(source), contexts
+                )
+            if value.patch not in context.named:
+                node = context.parse(
+                    context.show.patches[value.patch],
+                    f'patches.{value.patch}',
+                    value.patch,
+                )
+                assert node is not None
+                context.named[value.patch] = node
+            return context, context.named[value.patch]
+
+        def import_node(context: PatchCompiler, node: int) -> int:
+            if context is self:
+                return node
+            key = contexts.index(context), node
+            if key in imported:
+                return imported[key]
+            destination = len(self.nodes)
+            if destination >= 65535:
+                raise CompilationError(['inlined patches exceed node capacity'])
+            imported[key] = destination
+            self.nodes.append(b'')
+            self.values.append(context.values[node])
+            self.paths.append(context.paths[node])
+            self.labels.append(context.labels[node])
+            data = bytearray(context.nodes[node])
+            if data[0] == 1:
+                source_alias, instrument = list(context.instruments.items())[
+                    struct.unpack_from('<H', data, 4)[0]
+                ]
+                profile = context.profiles[instrument.instrument, instrument.profile]
+                alias = next(
+                    (
+                        a
+                        for a, i in self.instruments.items()
+                        if i == instrument
+                        and self.profiles[i.instrument, i.profile] == profile
+                    ),
+                    None,
+                )
+                if alias is None:
+                    alias = source_alias
+                    if alias in self.instruments:
+                        number = len(self.instruments)
+                        while (alias := f'inline_{number}') in self.instruments:
+                            number += 1
+                    if (
+                        existing := self.profiles.get(
+                            (instrument.instrument, instrument.profile)
                         )
-                        self.instruments[alias] = instrument
-                    data = (
-                        data[:4]
-                        + struct.pack('<H', list(self.instruments).index(alias))
-                        + data[6:]
-                    )
-                destination = len(self.nodes)
-                if destination >= 65535:
-                    raise CompilationError(['inlined patches exceed node capacity'])
-                imported[key] = destination
-                children.append(destination)
-                self.nodes.append(data)
-                self.values.append(context.values[node])
-                self.paths.append(path)
-                self.labels.append(context.labels[node])
-                if node in context.program_metadata:
-                    self.program_metadata[destination] = context.program_metadata[node]
-            if len(children) > 32766:
-                raise CompilationError(['inlined patch exceeds node storage capacity'])
+                    ) is not None and existing != profile:
+                        number = 0
+                        while (
+                            instrument.instrument,
+                            name := f'inline_{number}',
+                        ) in self.profiles:
+                            number += 1
+                        profile = profile.model_copy(update={'name': name})
+                        instrument = instrument.model_copy(update={'profile': name})
+                    self.profiles[instrument.instrument, instrument.profile] = profile
+                    self.instruments[alias] = instrument
+                struct.pack_into('<H', data, 4, list(self.instruments).index(alias))
+                self.program_metadata[destination] = context.program_metadata[node]
+            if data[0] == 6:
+                value = context.values[node]
+                assert isinstance(value, models.Reference)
+                source, target = reference(context, value)
+                child = import_node(source, target)
+                identity = contexts.index(source), target
+                if identity not in reference_names:
+                    name = value.patch
+                    if name in self.named and self.named[name] != child:
+                        name = f'inline_{identity[0]}_{target}'
+                        while name in self.named:
+                            name = '_' + name
+                    reference_names[identity] = name
+                    self.named[name] = child
+                name = reference_names[identity]
+                data = bytearray(
+                    struct.pack('<BBHH64s', 6, 0, 66, 65535, name.encode('utf-8'))
+                )
+                self.values[destination] = value.model_copy(
+                    update={'patch': name, 'document': None}
+                )
+            else:
+                offsets = []
+                if data[0] == 5:
+                    offsets = list(range(6, len(data), 2))
+                elif data[0] == 10:
+                    offsets = [4] + [
+                        224 + i * 121 + j
+                        for i in range(data[70])
+                        for j in (
+                            *range(2, 6, 2),
+                            *range(72, 84, 2),
+                            92,
+                            94,
+                            *range(97, 113, 2),
+                        )
+                    ]
+                for offset in offsets:
+                    child = struct.unpack_from('<H', data, offset)[0]
+                    if child != 65535:
+                        struct.pack_into(
+                            '<H', data, offset, import_node(context, child)
+                        )
+                if data[0] == 5:
+                    self.children[destination] = [
+                        struct.unpack_from('<H', data, o)[0] for o in offsets
+                    ]
+            self.nodes[destination] = bytes(data)
+            return destination
+
+        def leaves(context: PatchCompiler, node: int) -> list[int]:
+            data = context.nodes[node]
+            if data[0] == 6:
+                value = context.values[node]
+                assert isinstance(value, models.Reference)
+                return leaves(*reference(context, value))
+            if data[0] == 5:
+                return [
+                    i
+                    for child in context.children[node]
+                    for i in leaves(context, child)
+                ]
+            return [import_node(context, node)]
+
+        for index, value in enumerate(list(self.values)):
+            if (
+                not isinstance(value, models.Reference)
+                or not value.document
+                or self.nodes[index][0] != 6
+            ):
+                continue
+            children = leaves(*reference(self, value))
             payload = struct.pack('<H', len(children)) + b''.join(
                 struct.pack('<H', c) for c in children
             )
@@ -1573,6 +1829,7 @@ STATE_OPERATIONS = {
             'back',
             'shift',
             'unshift',
+            'next-song-patch',
         )
     )
 }

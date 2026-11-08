@@ -41,6 +41,11 @@ public:
     }
     bool patch_pending() { return busy() || songs_.executing() || songs_.busy(); }
     bool feature_open(const ApplicationServices &services) const { return menu.open() || setups.open() || song_ui.open() || services.switch_editor_open(); }
+    void bindings_enter() {
+        binding_return_songs = binding_return_songs || song_ui.open();
+        controller().cancel_gesture(); menu.leave(); song_ui.leave();
+        controls_locked = false;
+    }
     void brightness(uint8_t value) { for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) at(i).runtime_brightness(value); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_configure)
@@ -65,6 +70,10 @@ public:
     void tick(uint32_t now) {
         for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) { processing_index = i; at(i).tick(now); }
         processing_index = PageLayout::max_controllers;
+        if (next_song_patch_ && !patch_pending()) {
+            next_song_patch_ = false;
+            if (!songs_.next()) hardware_.error(songs_.last_error());
+        }
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_state)
@@ -79,6 +88,10 @@ public:
             return controller().navigate(operation);
         }
         if (operation == 9 || operation == 10) { pending_operation = operation; return true; }
+        if (operation == 13) {
+            if (next_song_patch_) return false;
+            next_song_patch_ = true; return true;
+        }
         return operation_ui(Operation(operation), services);
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -94,9 +107,13 @@ public:
             if (!menu.open()) return false;
             if (menu.button(5, true) == -2) { documents_.redraw(); controls_locked = true; } return true;
         case Operation::menu_open:
+            binding_return_songs = false;
             controller().cancel_gesture(); song_ui.leave(); menu.enter(); controls_locked = true; return true;
         case Operation::performance_show:
-            controller().cancel_gesture(); menu.leave(); song_ui.leave(); documents_.redraw(); controls_locked = true; return true;
+            controller().cancel_gesture(); menu.leave(); song_ui.leave();
+            if (binding_return_songs) { binding_return_songs = false; song_ui.perform(); }
+            else documents_.redraw();
+            controls_locked = true; return true;
         case Operation::menu_activate: {
             if (!menu.open()) return false;
             const int selected = menu.button(2, true);
@@ -145,6 +162,7 @@ public:
     unsigned pending_page = PageLayout::max_pages;
     unsigned pending_operation = 0;
     bool return_to_switches = false, controls_locked = false;
+    bool binding_return_songs = false;
     uint64_t held = 0;
 private:
     std::array<const char *, 3 + PageLayout::max_pages> names_{};
@@ -159,6 +177,7 @@ private:
     unsigned char *extra_;
     Songs &songs_;
     bool has_switches_;
+    bool next_song_patch_ = false;
     unsigned page_offset() const { return has_switches_ ? 3 : 2; }
 };
 } // namespace cntrl::ui

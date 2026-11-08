@@ -576,7 +576,7 @@ private:
                 }
                 break;
             case 3:
-                if (n[1] || length != 5 || p[0] < 1 || p[0] > 12
+                if (n[1] || length != 5 || p[0] < 1 || p[0] > 13
                     || (p[0] >= 11 && !hardware.switch_capacity())
                     || (p[0] == 1 && u32(p + 1) > 255) || (p[0] == 2 && u32(p + 1) > 1)
                     || (p[0] > 2 && u32(p + 1))) return false;
@@ -602,6 +602,31 @@ private:
             case 9:
                 if (n[1] || length != 4 || !u16(p) || !u16(p + 2) || (u16(p + 2) & ~input_routes)) return false;
                 break;
+            case 10: {
+                if (!hardware.switch_capacity() || n[1] || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
+                    || p[66] > hardware.input_count() || p[67] || length != 220u + 121u * p[66]) return false;
+                for (unsigned j = 0; j < 4; ++j) {
+                    const uint8_t *e = p + 68 + j * expression_record_size;
+                    if (!e[32]) continue;
+                    if (e[32] > 16 || e[33] > 127 || e[34] > e[35] || e[35] > 127 || e[36] > 1 || e[37] > 2
+                        || bytes[metadata + trs_modes_offset + j] != unsigned(midi::TrsMode::expression)
+                        || !output_valid(bytes + metadata + trs_modes_offset, e, hardware, output_routes)) return false;
+                }
+                unsigned assigned = 0;
+                for (unsigned j = 0; j < p[66]; ++j) {
+                    const uint8_t *s = p + 220 + j * 121;
+                    if (s[0] >= hardware.input_count() || (assigned & (1u << s[0])) || s[1] > 2
+                        || !label_valid(s + 6, 64) || u16(s + 2) >= count
+                        || (s[1] ? u16(s + 4) >= count : u16(s + 4) != 65535) || u16(s + 70) != 65535) return false;
+                    assigned |= 1u << s[0];
+                    if (!gestures_valid(s + 72, count, !s[1]) || s[96] > 1 || (s[96] && u16(s + 92) == 65535)) return false;
+                    for (unsigned k = 0; k < 2; ++k) if (u16(s + 92 + k * 2) != 65535 && u16(s + 92 + k * 2) >= count) return false;
+                    for (unsigned k = 0; k < 8; ++k) if (u16(s + 97 + k * 2) != 65535 && u16(s + 97 + k * 2) >= count) return false;
+                    if (u16(s + 97) != 65535 && (s[1] ? u16(s + 99) == 65535 : u16(s + 99) != 65535)) return false;
+                    if (!gestures_valid(s + 101, count, u16(s + 97) != 65535 && !s[1])) return false;
+                }
+                break;
+            }
             case 7:
                 if (n[1] || length != 4 || !u32(p) || u32(p) > 65535) return false;
                 break;
@@ -623,6 +648,7 @@ private:
             const uint8_t *node = nullptr;
             while (visited++ <= count) {
                 node = g + u32(g + 16 + root * 4);
+                if (node[0] == 10) { root = u16(node + 4); continue; }
                 if (node[0] != 6 || u16(node + 4) != 65535) break;
                 bool found = false;
                 for (unsigned j = 0; j < named; ++j)

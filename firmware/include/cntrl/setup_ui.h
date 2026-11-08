@@ -39,6 +39,9 @@ public:
             else { mode_ = Mode::closed; docs_.redraw(); }
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_button)
+#endif
     void button(unsigned button, bool down, uint32_t now) {
         if (!down || locked_ || browsing_ || (mode_ == Mode::saving || mode_ == Mode::history_work)) return;
         if (mode_ == Mode::failed) {

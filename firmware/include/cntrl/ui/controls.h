@@ -78,8 +78,8 @@ public:
     template<class Services>
     void finish(Services &services, unsigned &pending, bool &returning, bool &locked) {
         if (switches_open_ && !services.switches_open()) {
-            services.leave_switches();
-            services.invoke(pending == 10 ? Operation::performance_show : Operation::menu_open);
+            bool performance = services.leave_switches();
+            services.invoke(pending == 10 || (performance && pending != 9) ? Operation::performance_show : Operation::menu_open);
             pending = 0; locked = true;
             if (services.abandoned()) services.error("Switch state unknown");
         }
