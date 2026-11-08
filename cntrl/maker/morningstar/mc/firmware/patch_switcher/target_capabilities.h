@@ -37,7 +37,7 @@ inline constexpr std::array<const char *, button_count> button_labels = {{
 }};
 inline constexpr unsigned maximum_display_area = 20480;
 inline constexpr unsigned total_display_area = 61440;
-inline constexpr std::array<midi::OutputConnection, 9> endpoints = {{
+inline constexpr std::array<midi::OutputConnection, 10> endpoints = {{
     {"din", "DIN", 0, midi::OutputTransport::physical, true, true, midi::no_port},
     {"trs", "TRS", 1, midi::OutputTransport::physical, true, true, midi::no_port},
     {"configurable-1", "TRS 1", 2, midi::OutputTransport::physical, false, true, 0},
@@ -47,8 +47,9 @@ inline constexpr std::array<midi::OutputConnection, 9> endpoints = {{
     {"usb-device", "USB device", 6, midi::OutputTransport::usb_device, true, true, midi::no_port},
     {"usb-return", "USB return", 7, midi::OutputTransport::usb_device, false, false, midi::no_port},
     {"usb-host", "USB host", 8, midi::OutputTransport::usb_host, true, true, midi::no_port},
+    {"usb-host-return", "Hosted MIDI return", 9, midi::OutputTransport::usb_device, false, false, midi::no_port},
 }};
-inline constexpr midi::Outputs midi_connections{endpoints.data(), 9};
+inline constexpr midi::Outputs midi_connections{endpoints.data(), 10};
 inline constexpr std::array<midi::OutputConnection, 2> cable_endpoints = {{
     endpoints[0],
     endpoints[1],

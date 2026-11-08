@@ -12,6 +12,7 @@ animation_color_cycle = false
 is_midi_interface = false
 usb_device_midi = true
 usb_host_midi = true
+forward_device_to_host = true
 
 # Idle seconds; 0 disables the screensaver.
 screensaver_timeout = 0

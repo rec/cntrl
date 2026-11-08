@@ -66,6 +66,7 @@ struct Services : cntrl::midi::Sink {
     Cable cable_test;
     Panic panic;
     bool panic_owns_midi = false;
+    bool host_present = false;
     struct { bool interface = true; } runtime;
     uint32_t time = 0, timer_step = 1;
     unsigned errors = 0;
@@ -81,7 +82,7 @@ struct Services : cntrl::midi::Sink {
     uint32_t milliseconds() const { return time / 1000; }
     uint32_t microseconds() { time += timer_step; return time; }
     void midi_transport_poll() { log.push_back("transport"); }
-    bool midi_host_connected() const { return false; }
+    bool midi_host_connected() const { return host_present; }
     bool midi_device_connected() const { return true; }
     bool midi_document_valid() const { return true; }
     cntrl::midi::Bridge &midi_bridge() { return bridge; }
@@ -154,8 +155,21 @@ void test_exclusive_utilities_and_diagnostics() {
     runtime.status(services.bridge, 2, document, services);
     assert(services.replies.back() == "CNTRL ERROR midi-route");
 }
+void test_relay_runs_when_physical_interface_is_disabled() {
+    Services services(1);
+    services.sources[0].clear(); services.host_present = true;
+    services.bridge.configure(false);
+    cntrl::midi::InputEvent event;
+    event.packetized = event.relay = true; event.input = 0; event.forward = 1;
+    event.packet = {9, {0x90, 60, 100}};
+    services.sources[0].push_back(event);
+    cntrl::midi::Runtime runtime;
+    runtime.poll(services);
+    assert(services.writes == std::vector<unsigned>{1});
+}
 int main() {
     test_rotating_sources_and_delivery_precede_file_work();
     test_time_budget_zero_sources_and_failure_edges();
     test_exclusive_utilities_and_diagnostics();
+    test_relay_runs_when_physical_interface_is_disabled();
 }

@@ -37,6 +37,8 @@ extern "C" char cntrl_memory_budget;
 #include <cntrl/midi_bridge.h>
 #include <cntrl/midi_outputs.h>
 #include "midi_binding.h"
+#include "usb_forward_device.h"
+#include <cntrl/usb_midi_forward.h>
 #include <cntrl/midi_runtime.h>
 #include <cntrl/module_menu.h>
 #if CNTRL_SWITCHES
@@ -88,7 +90,16 @@ extern cntrl::splash::Panels splash_panels;
 font_assets::Files font_files;
 TrsPorts trs_ports;
 USBHost host;
-MIDIDevice host_midi(host);
+class HostedMidi : public MIDIDevice {
+public:
+    explicit HostedMidi(USBHost &host) : MIDIDevice(host) {}
+    uint32_t generation = 0;
+protected:
+    bool claim(Device_t *device, int type, const uint8_t *descriptors, uint32_t length) override {
+        if (!MIDIDevice::claim(device, type, descriptors, length)) return false;
+        ++generation; return true;
+    }
+} host_midi(host);
 extern cntrl::StoredPatchSources patch_sources;
 using UiOperation = cntrl::ui::Operation;
 extern cntrl::ui::Application application;
@@ -390,7 +401,9 @@ public:
         const unsigned n = p.size();
         HardwareSerial *serial;
         switch (binding.driver) {
-        case cntrl::device::MidiDriver::usb_device: return usb_midi_try_write_packed(p.packed(binding.index));
+        case cntrl::device::MidiDriver::usb_device:
+            if (binding.index == 2 && !hosted_forward_active()) return false;
+            return usb_midi_try_write_packed(p.packed(binding.index));
         case cntrl::device::MidiDriver::usb_host: return host_midi.try_write_packed(p.packed(binding.index));
         case cntrl::device::MidiDriver::configurable: return trs_ports.send(binding.index, p.bytes, n);
         case cntrl::device::MidiDriver::din: serial = &Serial1; break;
@@ -421,19 +434,53 @@ public:
     }
     bool reply_ready() const override { return usb_session.reply_ready(); }
     void reply(const char *text) override { startup_counter.reply(text, usb_session); }
-    void midi_transport_poll() { host.Task(); }
+    void detach() {
+        cntrl::device::detach_usb_device();
+        for (const auto &endpoint : midi_outputs())
+            if (endpoint.transport == cntrl::midi::OutputTransport::usb_device) bridge_.disconnect_output(endpoint.route);
+            else if (endpoint.transport == cntrl::midi::OutputTransport::usb_host) bridge_.discard_forwarded(endpoint.route);
+    }
+    void publish(const char *name) {
+        if (!cntrl::device::publish_hosted_midi(name)) error("USB MIDI descriptor failed");
+    }
+    void attach() { cntrl::device::attach_usb_device(); }
+    void clear_device() {
+        for (const auto &endpoint : midi_outputs())
+            if (endpoint.transport == cntrl::midi::OutputTransport::usb_host
+                || !std::strcmp(endpoint.name, "usb-host-return")) bridge_.disconnect_output(endpoint.route);
+    }
+    void stop_forwarding() {
+        for (const auto &endpoint : midi_outputs())
+            if (endpoint.transport == cntrl::midi::OutputTransport::usb_host
+                || !std::strcmp(endpoint.name, "usb-host-return")) bridge_.discard_forwarded(endpoint.route);
+    }
+    bool hosted_forward_active() const {
+        const auto &setup = documents.document();
+        return hosted_forward_.active(host_midi.generation) && cntrl::device::hosted_midi_visible() && host_midi
+            && setup.valid() && setup.forward_device_to_host() && setup.usb_device_midi() && setup.usb_host_midi();
+    }
+    void midi_transport_poll() {
+        host.Task();
+        const auto &setup = documents.document();
+        bool enabled = setup.valid() && setup.forward_device_to_host() && setup.usb_device_midi() && setup.usb_host_midi();
+        const auto *product = host_midi.product();
+        const char *name = product && product[0] ? reinterpret_cast<const char *>(product) : "USB MIDI";
+        hosted_forward_.poll(enabled, bool(host_midi), host_midi.generation, name, millis(),
+            documents.busy() || usb_session.active() || usb_session.output_pending(), *this);
+    }
     bool midi_host_connected() const { return bool(host_midi); }
     bool midi_device_connected() const { return usb_configuration != 0; }
     bool midi_document_valid() const { return documents.document().valid(); }
     unsigned midi_source_count() const { return 4; }
     cntrl::midi::MidiFiles &runtime_midi_files() { return midi_files; }
     cntrl::ui::Pages &runtime_pages() { return ui_.pages_; }
-    void midi_flush() { usb_midi_flush_output(); }
+    void midi_flush() { if (usb_configuration) usb_midi_flush_output(); }
 #if CNTRL_SWITCHES
     void midi_switch_tick(uint32_t now) { switches.tick(now); }
 #endif
     bool midi_read_event(unsigned source, cntrl::midi::InputEvent &event) {
         if (source == 0) {
+            if (!usb_configuration) return false;
             uint32_t packet = usb_midi_read_message();
             if (!packet) return false;
             const auto *input = cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::usb_device);
@@ -441,6 +488,13 @@ public:
             event.clock_source = (packet >> 4) & 15;
             event.packetized = true;
             event.packet = {uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}};
+            if (event.clock_source == 6) {
+                const auto *hosted = cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::usb_host);
+                if (hosted_forward_active() && hosted) {
+                    event.forward = hosted->route; event.relay = true;
+                }
+                return true;
+            }
             const auto *output = event.clock_source < 2 ?
                 cntrl::device::midi_endpoint(midi_outputs(), event.clock_source ? cntrl::device::MidiDriver::trs : cntrl::device::MidiDriver::din) :
                 cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::configurable, event.clock_source - 2);
@@ -457,26 +511,17 @@ public:
             event.cable_input = source - 1;
             return true;
         }
-        // Driver storage stays unchanged until the next read(). Consume a
-        // decoded SysEx array incrementally before requesting another message.
         const auto *input = cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::usb_host);
         event.input = input ? input->route : cntrl::midi::InputEvent::absent;
-        if (host_sysex_offset_ < host_sysex_length_) {
-            event.byte = host_midi.getSysExArray()[host_sysex_offset_++];
-            event.clock_source = 18 + host_midi.getCable();
-            return true;
-        }
-        if (!host_midi.read()) return false;
-        unsigned type = host_midi.getType();
-        event.clock_source = 18 + host_midi.getCable();
-        if (type == 0xf0) {
-            host_sysex_offset_ = 0; host_sysex_length_ = host_midi.getSysExArrayLength();
-            if (!host_sysex_length_) return false;
-            event.byte = host_midi.getSysExArray()[host_sysex_offset_++];
-        } else {
-            uint8_t cin = type < 0xf0 ? type >> 4 : type == 0xf1 || type == 0xf3 ? 2 : type == 0xf2 ? 3 : type == 0xf6 ? 5 : 15;
-            event.packetized = true;
-            event.packet = {cin, {uint8_t(type < 0xf0 ? type | (host_midi.getChannel() - 1) : type), host_midi.getData1(), host_midi.getData2()}};
+        uint32_t packet = host_midi.read_packed();
+        if (!packet) return false;
+        unsigned cable = (packet >> 4) & 15;
+        event.clock_source = 18 + cable;
+        event.packetized = true;
+        event.packet = {uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}};
+        const auto *output = cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::usb_device, 2);
+        if (!cable && hosted_forward_active() && output) {
+            event.forward = output->route; event.relay = true;
         }
         return true;
     }
@@ -518,7 +563,7 @@ private:
     BoardDisplay display_;
     cntrl::midi::Bridge bridge_{cntrl::target::midi_connections};
     cntrl::midi::Runtime midi_runtime_;
-    unsigned host_sysex_offset_ = 0, host_sysex_length_ = 0;
+    cntrl::midi::UsbMidiForward hosted_forward_;
     RenderPixels pixels_;
     cntrl::ui::Renderer renderer_{display_, fonts, pixels_.work, cntrl::target::maximum_display_area, pixels_.cache, pixels_.previous, cntrl::target::total_display_area};
     cntrl::ui::PageHost<Board> ui_{*this, application, documents, display_, fonts, renderer_, cntrl::target::controls};

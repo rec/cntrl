@@ -126,6 +126,14 @@
       "transport": "usb-host",
       "input": true,
       "output": true
+    },
+    {
+      "name": "usb-host-return",
+      "label": "Hosted MIDI return",
+      "route": 9,
+      "transport": "usb-device",
+      "input": false,
+      "output": false
     }
   ],
   "trs_ports": {

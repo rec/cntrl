@@ -604,7 +604,7 @@ def compile_show(
                 show.scrolling.cycles,
             )
         ),
-        show.fast_switches,
+        int(show.fast_switches) | (int(not show.forward_device_to_host) << 1),
         sum(p.ram2_bytes for p in show.pages.values()),
         crc32(setup_name_bytes),
     )

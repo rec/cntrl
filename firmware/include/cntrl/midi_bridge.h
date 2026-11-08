@@ -192,6 +192,12 @@ public:
         }
     }
     bool enabled() const { return enabled_; }
+    void discard_forwarded(unsigned index) {
+        auto &r = routes_[index];
+        if (r.parser.sysex() || r.wire_sysex) abort(index);
+        else { r.counts.dropped += r.count; r.count = r.head = 0; }
+        r.parser.reset();
+    }
     const Counters &counters(unsigned route) const { return routes_[route].counts; }
     bool idle() const {
         for (const auto &b : owned_) if (b.delivery == Delivery::pending) return false;
@@ -203,7 +209,7 @@ public:
     }
     void disconnect_output(unsigned route) {
         invalidated_ |= 1u << route;
-        reset_route(route);
+        discard_forwarded(route);
         cancel_route(route);
         auto &r = routes_[route];
         r.counts.dropped += r.pedal_count;
@@ -221,7 +227,8 @@ public:
         // Also reset when switching between two enabled setups.
         enabled_ = enabled;
         forwarding_ = enabled && connected_; waiting_ = false;
-        for (unsigned i = 0; i < destinations(); ++i) if (!(host_routes_ & (1u << i))) reset_route(i);
+        for (unsigned i = 0; i < destinations(); ++i)
+            if (!(host_routes_ & (1u << i)) && !routes_[i].relay) discard_forwarded(i);
     }
     void connected(bool connected, uint32_t now) {
         device_present_ = connected; connected = connected && usb_device_;
@@ -234,7 +241,7 @@ public:
         }
         if (connected_ == connected && !started) return;
         connected_ = connected;
-        for (unsigned i = 0; i < destinations(); ++i) if (!(host_routes_ & (1u << i))) reset_route(i);
+        for (unsigned i = 0; i < destinations(); ++i) if (!(host_routes_ & (1u << i))) discard_forwarded(i);
         if (!connected) {
             for (unsigned i = 0; i < destinations(); ++i) if (device_routes_ & (1u << i)) disconnect_output(i);
         }
@@ -256,6 +263,20 @@ public:
     // Report physical packet completion even without an available USB receiver.
     bool receive(unsigned route, uint8_t b, uint32_t now) {
         if (route >= destinations() || (host_routes_ & (1u << route)) || !usb_device_ || !enabled_ || (!forwarding_ && (physical_routes_ & (1u << route)))) return false;
+        return receive_byte(route, b, now, forwarding_);
+    }
+    // Hosted-device forwarding is independent of the physical MIDI-interface switch.
+    void relay_packet(unsigned route, const Packet &packet, uint32_t now) {
+        if (route >= destinations() || !usb_enabled(route) || !connected_ || !host_connected_) return;
+        routes_[route].relay = true;
+        receive_packet(route, packet, now);
+    }
+    void forward_packet(unsigned route, const Packet &packet, uint32_t now) {
+        if (route >= destinations() || !forwarding_ || (host_routes_ & (1u << route)) || !usb_device_ || !enabled_) return;
+        receive_packet(route, packet, now);
+    }
+private:
+    bool receive_byte(unsigned route, uint8_t b, uint32_t now, bool forwarding) {
         auto &r = routes_[route];
         bool was_sysex = r.parser.sysex();
         // Close an interrupted physical SysEx before forwarding a new status.
@@ -264,16 +285,16 @@ public:
         Packet p;
         bool complete = r.parser.receive(b, p);
         if (b < 0xf8 && (was_sysex || r.parser.sysex())) r.last_sysex = now;
-        if (complete && forwarding_) enqueue(route, p);
+        if (complete && forwarding) enqueue(route, p);
         return complete;
     }
-    void forward_packet(unsigned route, const Packet &packet, uint32_t now) {
-        if (route >= destinations() || !forwarding_) return;
+    void receive_packet(unsigned route, const Packet &packet, uint32_t now) {
         if (!valid(packet, routes_[route].parser.sysex() || routes_[route].parser.discarding())) {
             ++routes_[route].counts.dropped; return;
         }
-        for (unsigned i = 0; i < packet.size(); ++i) receive(route, packet.bytes[i], now);
+        for (unsigned i = 0; i < packet.size(); ++i) receive_byte(route, packet.bytes[i], now, true);
     }
+public:
     bool handoff(Sink &sink) {
         bool ready = true;
         for (unsigned i = 0; i < destinations(); ++i) {
@@ -401,7 +422,7 @@ private:
         Packet queue[capacity]; Batch pedal[pedal_capacity]; Parser parser; Counters counts;
         unsigned head = 0, count = 0, pedal_head = 0, pedal_count = 0, pedal_offset = 0;
         uint32_t last_sysex = 0;
-        bool wire_sysex = false, terminate = false;
+        bool wire_sysex = false, terminate = false, relay = false;
     };
     std::vector<Route> routes_;
     unsigned device_routes_ = 0, host_routes_ = 0, physical_routes_ = 0;
@@ -454,12 +475,6 @@ private:
         r.counts.dropped += r.count; ++r.counts.aborted;
         r.count = r.head = 0; r.terminate = r.wire_sysex;
         r.parser.discard_sysex();
-    }
-    void reset_route(unsigned index) {
-        auto &r = routes_[index];
-        if (r.parser.sysex() || r.wire_sysex) abort(index);
-        else { r.counts.dropped += r.count; r.count = r.head = 0; }
-        r.parser.reset();
     }
 };
 } // namespace cntrl::midi

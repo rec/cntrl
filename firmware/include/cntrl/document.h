@@ -82,7 +82,7 @@ public:
         unsigned nb = u16(bytes + meta + 4);
         if (!u16(bytes + meta + 6) || !u16(bytes + meta + scrolling_offset)) return false;
         for (unsigned i = 0; i < 3; ++i) if (bytes[meta + scrolling_offset + 2 + i] > 3) return false;
-        if (bytes[meta + scrolling_offset + 5] > 1) return false;
+        if (bytes[meta + scrolling_offset + 5] > 3) return false;
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
@@ -373,7 +373,8 @@ public:
     unsigned instruments() const { return instruments_; }
     unsigned patches() const { return patches_; }
     unsigned navigation_hold_ms() const { return u16(data_ + 6); }
-    bool fast_switches() const { return data_[metadata() + scrolling_offset + 5] != 0; }
+    bool fast_switches() const { return data_[metadata() + scrolling_offset + 5] & 1; }
+    bool forward_device_to_host() const { return !(data_[metadata() + scrolling_offset + 5] & 2); }
     unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
     uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 10); }
     uint8_t brightness() const { return data_[18]; }

@@ -829,6 +829,7 @@ class Setup(BaseModel, frozen=True):
     is_midi_interface: Annotated[bool, Field(strict=True)] = False
     usb_device_midi: Annotated[bool, Field(strict=True)] = True
     usb_host_midi: Annotated[bool, Field(strict=True)] = True
+    forward_device_to_host: Annotated[bool, Field(strict=True)] = True
     screensaver_timeout: Annotated[
         int,
         Field(

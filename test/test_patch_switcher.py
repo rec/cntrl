@@ -380,7 +380,8 @@ def test_usb_midi_switch_round_trips(
 
 
 @pytest.mark.parametrize(
-    'field', ['is_midi_interface', 'usb_device_midi', 'usb_host_midi']
+    'field',
+    ['is_midi_interface', 'usb_device_midi', 'usb_host_midi', 'forward_device_to_host'],
 )
 @pytest.mark.parametrize('value', [1, 'true', None])
 def test_usb_midi_switch_rejects_non_booleans(

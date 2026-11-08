@@ -10,7 +10,7 @@ struct InputEvent {
     unsigned input = 0, forward = absent, clock_source = 0, cable_input = absent;
     Packet packet{};
     uint8_t byte = 0;
-    bool packetized = false;
+    bool packetized = false, relay = false;
 };
 
 // Platform services supply nonblocking raw events, time and physical delivery.
@@ -56,6 +56,10 @@ public:
                 if (s.panic_owns_midi) continue;
 #endif
                 if (event.forward == InputEvent::absent) continue;
+                if (event.relay) {
+                    bridge.relay_packet(event.forward, event.packet, now);
+                    continue;
+                }
                 if (event.packetized) {
                     const auto *output = s.midi_outputs().route(event.forward);
                     if (output && s.available(output->name)) bridge.forward_packet(event.forward, event.packet, now);

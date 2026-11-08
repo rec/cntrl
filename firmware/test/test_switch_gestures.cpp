@@ -77,7 +77,14 @@ int main(int argc, char **argv) {
     cntrl::put32(bad.data() + 20, cntrl::checksum(bad.data() + 28, unsigned(bad.size()) - 28));
     cntrl::Document rejected; assert(!rejected.load(bad.data(), unsigned(bad.size()), board));
     bad = bytes;
-    bad[document.metadata() + cntrl::scrolling_offset + 5] = 2;
+    for (unsigned flags = 0; flags < 4; ++flags) {
+        bad[document.metadata() + cntrl::scrolling_offset + 5] = flags;
+        cntrl::put32(bad.data() + 20, cntrl::checksum(bad.data() + 28, unsigned(bad.size()) - 28));
+        assert(rejected.load(bad.data(), unsigned(bad.size()), board));
+        assert(rejected.fast_switches() == bool(flags & 1));
+        assert(rejected.forward_device_to_host() == !bool(flags & 2));
+    }
+    bad[document.metadata() + cntrl::scrolling_offset + 5] = 4;
     cntrl::put32(bad.data() + 20, cntrl::checksum(bad.data() + 28, unsigned(bad.size()) - 28));
     assert(!rejected.load(bad.data(), unsigned(bad.size()), board));
     assert(!board.errors);

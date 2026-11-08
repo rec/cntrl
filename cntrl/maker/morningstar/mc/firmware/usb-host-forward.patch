@@ -1,0 +1,55 @@
+--- a/cores/teensy4/usb.c
++++ b/cores/teensy4/usb.c
+@@ -129,0 +130,3 @@
++#ifdef CNTRL_USB_INTERFACE
++extern const uint8_t *cntrl_usb_descriptor(uint16_t value, uint16_t index, uint16_t *length) __attribute__((weak));
++#endif
+@@ -570,0 +574,13 @@
++#ifdef CNTRL_USB_INTERFACE
++		if (cntrl_usb_descriptor) {
++			uint16_t length = 0;
++			const uint8_t *descriptor = cntrl_usb_descriptor(setup.wValue, setup.wIndex, &length);
++			if (descriptor) {
++				if (length > setup.wLength) length = setup.wLength;
++				memcpy(usb_descriptor_buffer, descriptor, length);
++				arm_dcache_flush_delete(usb_descriptor_buffer, length);
++				endpoint0_transmit(usb_descriptor_buffer, length, 0);
++				return;
++			}
++		}
++#endif
+--- a/cores/teensy4/usb_desc.c
++++ b/cores/teensy4/usb_desc.c
+@@ -2769 +2769 @@
+-uint8_t usb_descriptor_buffer[CONFIG_DESC_SIZE];
++uint8_t usb_descriptor_buffer[CONFIG_DESC_SIZE + 32];
+--- a/libraries/USBHost_t36/midi.cpp
++++ b/libraries/USBHost_t36/midi.cpp
+@@ -400 +400 @@
+-bool MIDIDeviceBase::read(uint8_t channel)
++uint32_t MIDIDeviceBase::read_packed()
+@@ -402 +402 @@
+-	uint32_t n, head, tail, avail, ch, type1, type2, b1;
++	uint32_t n, head, tail, avail;
+@@ -419,0 +420,2 @@
++	return n;
++}
+@@ -420,0 +423,5 @@
++bool MIDIDeviceBase::read(uint8_t channel)
++{
++	uint32_t n = read_packed(), ch, type1, type2, b1;
++	if (!n) return false;
++
+--- a/libraries/USBHost_t36/USBHost_t36.h
++++ b/libraries/USBHost_t36/USBHost_t36.h
+@@ -1449,0 +1450 @@
++    uint32_t read_packed();
+--- a/cores/teensy4/usb_desc.h
++++ b/cores/teensy4/usb_desc.h
+@@ -987,0 +988,6 @@
++
++#ifdef CNTRL_USB_INTERFACE
++// Maximum cable count, including the dynamically advertised hosted device.
++#undef MIDI_NUM_CABLES
++#define MIDI_NUM_CABLES 7
++#endif

@@ -15,6 +15,7 @@ inline MidiBinding midi_binding(const midi::OutputConnection &endpoint) {
     case midi::OutputTransport::usb_device:
         if (!std::strcmp(endpoint.name, "usb-device")) return {MidiDriver::usb_device, 0};
         if (!std::strcmp(endpoint.name, "usb-return")) return {MidiDriver::usb_device, 1};
+        if (!std::strcmp(endpoint.name, "usb-host-return")) return {MidiDriver::usb_device, 2};
         break;
     case midi::OutputTransport::usb_host:
         if (!std::strcmp(endpoint.name, "usb-host")) return {MidiDriver::usb_host, 0};

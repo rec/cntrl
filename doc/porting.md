@@ -140,6 +140,7 @@ The main implementation bindings are declared in these headers:
 | `cntrl/midi_outputs.h` | Borrowed endpoint descriptor views |
 | `cntrl/midi_bridge.h` | MIDI delivery queues and the central state-tracking sink |
 | `cntrl/midi_runtime.h` | Fair ingress service, clock/file/utility scheduling and diagnostics |
+| `cntrl/usb_midi_forward.h` | Hosted-device publication lifecycle and USB MIDI descriptor extension |
 | `cntrl/runtime.h` | Cooperative scheduling order |
 | `cntrl/animation/animation.h` | Animation source and logical output contracts |
 
@@ -166,6 +167,19 @@ recording-input ID, optional forwarding route, clock-source ID, optional cable-t
 input and either one byte or a decoded `Packet`. The implementation owns native
 packet/cable decoding and slices retained native SysEx buffers into bounded events.
 Core code does not retain a pointer to that native buffer.
+
+`InputEvent::relay` requests explicit hosted-device forwarding independently of
+the physical-interface switch. Its destination uses the existing bridge queues
+and central sink/state path. `Bridge::discard_forwarded` clears forwarding work
+without cancelling explicitly owned pedal operations. Device replacement clears
+the affected destinations entirely.
+
+`UsbMidiForward` accepts a connection generation, current product name, setup
+enablement and a busy flag. Its services clear replaced devices, stop forwarding,
+detach, publish and attach. The implementation supplies native descriptors and
+controller operations. A short idle grace allows the final configuration reply
+to drain; a 250 ms detached interval publishes the latest connected device.
+Polling never blocks. Product strings are consumed synchronously by `publish`.
 
 `ApplicationServices` supplies application time, blanking, output-idle state,
 song-transfer state and switch-editor entry/shift operations. `PageHost<Platform>`

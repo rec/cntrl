@@ -101,6 +101,8 @@ patch-switcher: tools
 		patch --force --fuzz=0 -d "$(CORE)" -p1 < "$(ROOT)/flex-serial-release.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/usb-midi-interface.patch" > /dev/null 2>&1 || \
 		patch --force --fuzz=0 -d "$(CORE)" -p1 < "$(ROOT)/usb-midi-interface.patch"
+	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/usb-host-forward.patch" > /dev/null 2>&1 || \
+		patch --force --fuzz=0 -d "$(CORE)" -p1 < "$(ROOT)/usb-host-forward.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/fonts-in-flash.patch" > /dev/null 2>&1 || \
 		patch --force --fuzz=0 -d "$(CORE)" -p1 < "$(ROOT)/fonts-in-flash.patch"
 	patch --force --fuzz=0 --dry-run --reverse -d "$(CORE)" -p1 < "$(ROOT)/no-external-ram.patch"

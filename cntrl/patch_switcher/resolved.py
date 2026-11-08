@@ -136,7 +136,8 @@ def export(data: bytes) -> str:
         'is_midi_interface': bool(flags & 512),
         'usb_device_midi': bool(flags & 2048),
         'usb_host_midi': bool(flags & 4096),
-        'fast_switches': bool(data[meta + METADATA.size - 9]),
+        'fast_switches': bool(data[meta + METADATA.size - 9] & 1),
+        'forward_device_to_host': not bool(data[meta + METADATA.size - 9] & 2),
         'screensaver_timeout': timeout // 1000,
     }
     scrolling = struct.unpack_from('<H3B', data, meta + METADATA.size - 14)

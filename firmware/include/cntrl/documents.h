@@ -503,6 +503,7 @@ private:
             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
             || old.animation_color_cycle() != current.animation_color_cycle()
             || old.fast_switches() != current.fast_switches()
+            || old.forward_device_to_host() != current.forward_device_to_host()
             || old.page_ram2() != current.page_ram2()
             || old.screensaver_timeout() != current.screensaver_timeout()
             || old.scroll_ms() != current.scroll_ms()
