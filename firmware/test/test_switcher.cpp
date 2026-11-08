@@ -299,7 +299,7 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert((hw.target_transitions == std::vector<bool>{false, true}));
     app.action(1); app.action(0); // Browse forward and backward within the cycle.
     assert((hw.target_transitions == std::vector<bool>{false, true, false, true}));
-    assert((hw.target_vertical == std::vector<bool>{true, true, false, false}));
+    assert((hw.target_vertical == std::vector<bool>{false, false, false, false}));
     assert(hw.panes[1].pending_patch == -1 && hw.panes[2].pending_patch == -1);
     assert(hw.panes[0].lines[0].graphics.background == hw.panes[0].lines[1].graphics.foreground);
     assert(hw.panes[0].lines[0].graphics.foreground == hw.panes[0].lines[1].graphics.background);

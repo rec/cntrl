@@ -193,13 +193,13 @@ def test_scroll_durations_and_directions_survive_resolved_export(
     assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
 
 
-def test_scroll_defaults_preserve_current_motion(show: dict[str, object]) -> None:
+def test_scroll_defaults_use_horizontal_motion(show: dict[str, object]) -> None:
     assert models.Setup.model_validate(show).scrolling.model_dump() == {
         'horizontal_duration': 0.075,
         'vertical_duration': 0.2,
         'send': 'right',
         'patches': 'right',
-        'cycles': 'up',
+        'cycles': 'right',
     }
 
 

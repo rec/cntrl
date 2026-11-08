@@ -162,7 +162,7 @@ horizontal_duration = 0.075
 vertical_duration = 0.2
 send = "right"
 patches = "right"
-cycles = "up"
+cycles = "right"
 
 [trs_ports]
 

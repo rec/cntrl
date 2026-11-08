@@ -74,8 +74,8 @@ measurement on the pedal.
 
 ## Browsing transitions
 
-By default, moving to the next cycle slides the candidate pane upward; moving to the
-previous cycle slides it downward. Browsing patches within a cycle scrolls
+By default, moving to the next cycle slides the candidate pane rightward; moving to the
+previous cycle slides it leftward. Browsing patches within a cycle scrolls
 rightward, as does sending a patch. The setup's `[scrolling]` table independently
 selects `send`, `patches`, and `cycles` directions (`left`, `right`, `up`, `down`).
 Backward browsing and undo reverse those directions. Vertical sends animate the

@@ -737,7 +737,7 @@ class Scrolling(BaseModel, frozen=True):
     ] = 0.2
     send: Literal['right', 'left', 'up', 'down'] = 'right'
     patches: Literal['right', 'left', 'up', 'down'] = 'right'
-    cycles: Literal['right', 'left', 'up', 'down'] = 'up'
+    cycles: Literal['right', 'left', 'up', 'down'] = 'right'
 
     model_config = ConfigDict(extra='forbid')
 

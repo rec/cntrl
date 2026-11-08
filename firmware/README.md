@@ -482,7 +482,7 @@ horizontal_duration = '75 ms'
 vertical_duration = '200 ms'
 send = 'right'
 patches = 'right'
-cycles = 'up'
+cycles = 'right'
 ```
 
 These are the defaults. Each direction can be `left`, `right`, `up`, or `down`;
