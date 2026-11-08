@@ -168,8 +168,26 @@ static void minimum_viewports_follow_declared_surfaces() {
     assert(cntrl::ui::minimum_display_width(display) == 80);
     assert(cntrl::ui::minimum_display_height(display) == 120);
 }
+static void automatic_text_survives_background_and_stipple_passes() {
+    for (bool bands : {false, true}) for (bool stippled : {false, true}) {
+        Fonts fonts; Display display;
+        uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
+        cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18, cache, previous, 24 * 18);
+        cntrl::Pane pane; pane.graphics.background = 0x1234; pane.graphics.pad = 0;
+        pane.three_bands = bands; pane.heading_band = true;
+        auto &line = pane.lines[0]; line.graphics = pane.graphics;
+        line.graphics.background = 0; line.graphics.foreground = 0xffff;
+        line.graphics.line_height = 2; line.graphics.top = 0;
+        line.stippled = stippled; std::strcpy(line.text, "AB");
+        renderer.show(0, pane);
+        for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+        assert(renderer.ready());
+        assert(std::count(display.pixels.begin(), display.pixels.end(), 0xffff) == (stippled ? 2 : 4));
+    }
+}
 int main() {
     cntrl::memory_budget = 192 * 1024;
+    automatic_text_survives_background_and_stipple_passes();
     minimum_viewports_follow_declared_surfaces();
     circles_clip_before_iterating_and_do_not_overflow();
     distinct_geometries_and_reserved_windows();

@@ -162,7 +162,8 @@ private:
             if (heading && !painting_.three_bands) end = unsigned(std::max(0, text_y(i) - line.graphics.top + line.graphics.line_height + 2));
             const unsigned inset = heading ? 0 : painting_.graphics.pad;
             end = std::min(end, v.height > inset ? v.height - inset : 0);
-            if (end > start && v.width > 2 * inset) raster_.rectangle(inset, start, v.width - 2 * inset, end - start, line.graphics.background, preserve && line.stippled);
+            if ((!preserve || line.stippled) && end > start && v.width > 2 * inset)
+                raster_.rectangle(inset, start, v.width - 2 * inset, end - start, line.graphics.background, preserve);
             start = end;
         }
     }
