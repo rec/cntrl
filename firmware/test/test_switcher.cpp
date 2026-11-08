@@ -107,7 +107,7 @@ void test_empty_patch_windows_are_black(const std::vector<uint8_t> &source) {
     app.action(2);
     assert(hw.panes[2].graphics.background == 0 && hw.panes[1].graphics.background == 0x07e0);
     app.action(5);
-    assert(hw.panes[2].graphics.background == 0 && hw.panes[1].graphics.background == 0);
+    assert(hw.panes[2].graphics.background == 0 && hw.panes[1].graphics.background == 0x07e0);
 
     // A selected patch can also have a page whose fields all resolve to empty.
     unsigned display = doc.display_metadata();
@@ -228,7 +228,6 @@ void test_four_button_navigation(const cntrl::Document &doc) {
     app.button(1, false, 100001);
 
     app.activate(doc);
-    app.button(1, true, 0); app.button(1, false, 1);
     app.button(2, true, 10); app.button(2, false, 11);
     assert(app.depth() == 1 && !hw.sent.empty());
     app.button(1, true, 20); app.button(1, false, 21);
@@ -342,8 +341,8 @@ void test_greyed_names(const cntrl::Document &doc) {
     app.action(0);
     assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     unsigned sent = unsigned(hw.sent.size());
-    app.action(5); app.action(5); // Unknown pre-show selections: no MIDI sent.
-    assert(hw.sent.size() == sent && app.depth() == 0);
+    app.action(5); app.action(5); // B's first send blocks older undo entries.
+    assert(hw.sent.size() == sent && app.depth() == 2);
     assert(hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
     app.action(1); // A:Sax
     hw.connected = false; app.action(2);
@@ -354,31 +353,88 @@ void test_greyed_names(const cntrl::Document &doc) {
     assert(!hw.panes[0].lines[1].stippled && hw.panes[0].lines[1].graphics.foreground == hw.panes[0].graphics.foreground);
 }
 
+void test_first_send_blocks_undo_and_preserves_current_patch(const cntrl::Document &doc) {
+    Fake hw; TestController app(hw); app.activate(doc);
+    app.action(2); // First synth send: Flute.
+    assert(hw.panes[0].lines[1].stippled && !hw.panes[0].circles[0].diameter);
+    const auto sends = hw.sent.size(), transitions = hw.transitions.size();
+    app.action(5);
+    assert(hw.sent.size() == sends && hw.transitions.size() == transitions);
+    assert(app.depth() == 1 && !std::strcmp(hw.panes[1].lines[1].text, "Flute"));
+    const cntrl::Document *selected; unsigned node;
+    app.validation(true); assert(app.selection(8, selected, node) && node == 65535);
+    assert(app.selection(8, selected, node) && node == 65535); app.validation(false);
+    app.selection_complete(8); assert(app.depth() == 1);
+    app.action(1); app.action(2); // Sax can restore Flute.
+    assert(hw.panes[0].circles[0].diameter);
+    app.action(1); app.action(2); // First bass send: Strings blocks the synth undo.
+    assert(!hw.panes[0].circles[0].diameter);
+    const auto count = hw.sent.size(); app.action(5);
+    assert(hw.sent.size() == count && app.depth() == 3);
+    assert(!std::strcmp(hw.panes[1].lines[1].text, "Strings"));
+    app.action(4); app.action(2); // Bass Pad has a known previous patch.
+    assert(hw.panes[0].circles[0].diameter);
+    app.action(5);
+    assert(!hw.panes[0].circles[0].diameter);
+    assert(!std::strcmp(hw.panes[1].lines[1].text, "Strings"));
+    const auto restored = hw.sent.size(); app.action(5);
+    assert(hw.sent.size() == restored && app.depth() == 3);
+    app.activate(doc); app.action(2); app.action(1); app.action(2);
+    app.validation(true);
+    assert(app.selection(8, selected, node) && node != 65535);
+    assert(app.selection(8, selected, node) && node == 65535);
+    assert(app.selection(8, selected, node) && node == 65535);
+    app.validation(false); app.selection_complete(8);
+    assert(app.depth() == 1 && !hw.panes[0].circles[0].diameter);
+    assert(!std::strcmp(hw.panes[1].lines[1].text, "Flute"));
+}
+
+void test_undo_light_uses_title_contrast_and_two_pixel_padding(const cntrl::Document &source) {
+    for (const auto &colors : {std::pair<uint16_t, uint16_t>{0, 0x07e0}, {0xffff, 0x001f},
+                             {0x07e0, 0x001f}, {0x001f, 0x07e0}, {0x8c51, 0}}) {
+        auto bytes = std::vector<uint8_t>(source.data(), source.data() + source.length());
+        const unsigned display = source.display_metadata();
+        for (unsigned i = 0; i < cntrl::u16(bytes.data() + display + 4); ++i) {
+            bytes[display + 16 + i * 16 + 4] = uint8_t(colors.first);
+            bytes[display + 16 + i * 16 + 5] = uint8_t(colors.first >> 8);
+        }
+        cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size() - 28)));
+        Fake hw; cntrl::Document doc; assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
+        TestController app(hw); app.activate(doc); app.action(2); app.action(1); app.action(2);
+        const auto &light = hw.panes[0].circles[0];
+        assert(light.color == colors.second && light.annulus == 0);
+        assert(light.diameter == hw.display_height() / 3 - 4);
+        assert(light.x - light.diameter / 2 == 2 && light.y - light.diameter / 2 == 2);
+        assert(!hw.panes[1].circles[0].diameter && !hw.panes[2].circles[0].diameter);
+        app.action(5); assert(!hw.panes[0].circles[0].diameter);
+    }
+}
+
 void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     Fake hw;
     TestController app(hw); app.activate(doc);
     app.action(5); assert(hw.transitions.empty());
     hw.connected = false; app.action(2); assert(hw.transitions.empty());
     hw.connected = true; app.action(2); // Flute.
-    app.action(0); app.action(2); // Strings.
-    app.action(0); // Browse away to Sax before undoing Strings.
+    app.action(1); app.action(2); // Sax.
+    app.action(1); // Browse away to Strings before undoing Sax.
     unsigned sent = hw.sent.size();
     app.action(5);
-    assert(hw.sent.size() == sent); // No previous selection for Strings' instrument.
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Strings"));
+    assert(hw.sent.size() == sent + 1); // Restore Flute for the same instrument.
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
     assert((hw.transitions == std::vector<bool>{false, false, true}));
     assert((hw.durations == std::vector<std::optional<unsigned>>{75, 75, 75}));
     app.action(5);
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
-    assert(!hw.panes[2].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
+    assert(!hw.panes[2].lines[1].text[0] && !std::strcmp(hw.panes[1].lines[1].text, "Flute"));
     std::vector<uint8_t> configured(doc.data(), doc.data() + doc.length());
     configured[doc.metadata() + 6] = 0x4d;
     configured[doc.metadata() + 7] = 1; // 333 milliseconds.
     cntrl::put32(configured.data() + 20, cntrl::checksum(configured.data() + 28, configured.size() - 28));
     cntrl::Document custom; assert(custom.load(configured.data(), configured.size(), hw));
     app.activate(custom); hw.durations.clear();
-    app.action(2); app.action(5);
-    assert((hw.durations == std::vector<std::optional<unsigned>>{333, 333}));
+    app.action(2); app.action(1); app.action(2); app.action(5);
+    assert((hw.durations == std::vector<std::optional<unsigned>>{333, 333, 333}));
 }
 
 void test_greyed_aliases(const std::vector<uint8_t> &bytes) {
@@ -778,6 +834,8 @@ int main(int argc, char **argv) {
     test_greyed_names(doc);
     test_configured_scrolling(doc);
     test_undo_restores_undone_candidate(doc);
+    test_first_send_blocks_undo_and_preserves_current_patch(doc);
+    test_undo_light_uses_title_contrast_and_two_pixel_padding(doc);
     test_greyed_aliases(bytes);
     test_setup_editing_and_empty_ui(bytes);
     test_deletion_and_selection_power_loss(bytes);
@@ -885,9 +943,9 @@ int main(int argc, char **argv) {
     unsigned count = unsigned(hw.sent.size());
     app.action(5); assert(hw.sent.size() == count);
     assert(!std::strcmp(hw.panes[1].lines[1].text, "Flute"));
-    app.action(5); assert(hw.sent.size() == count && app.depth() == 0);
-    assert(!hw.panes[2].lines[1].text[0] && !hw.panes[1].lines[1].text[0]);
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Flute"));
+    app.action(5); assert(hw.sent.size() == count && app.depth() == 2);
+    assert(!hw.panes[2].lines[1].text[0] && !std::strcmp(hw.panes[1].lines[1].text, "Flute"));
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
     app.action(5); assert(hw.sent.size() == count);
     app.activate(doc);
     hw.connected = false; app.action(2); assert(app.depth() == 0 && hw.errors);
@@ -901,6 +959,7 @@ int main(int argc, char **argv) {
     assert(app.depth() == cntrl::history_capacity);
     for (unsigned i = 0; i < cntrl::history_capacity; ++i) app.action(5);
     assert(app.depth() == 0);
+    assert(hw.panes[1].lines[1].text[0] && !hw.panes[0].circles[0].diameter);
     test_four_button_navigation(doc);
     // Persistent upload, status, reboot, and interrupted inactive-slot writes.
     TestStorage memory;

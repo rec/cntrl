@@ -1,5 +1,7 @@
 #pragma once
 #include "patch_executor.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 namespace cntrl {
@@ -68,9 +70,9 @@ public:
             node = document_.browser_root(p); return true;
         }
         unsigned depth = previewing_ ? preview_depth_ : depth_;
-        if (!depth) { node = 65535; return true; }
+        if (!can_undo(depth)) { node = 65535; return true; }
         const ProgramHistory &a = history_[depth - 1];
-        node = a.previous < 0 ? 65535 : document_.browser_root(unsigned(a.previous));
+        node = document_.browser_root(unsigned(a.previous));
         if (previewing_) {
             --preview_depth_; preview_selected_ = u16(document_.patch(a.patch) + 2);
             preview_cursors_[preview_selected_] = a.patch - u16(document_.patch_cycle(preview_selected_) + 64);
@@ -78,14 +80,15 @@ public:
         return true;
     }
     void selection_complete(unsigned operation) {
-        if (operation != 8 || !depth_) return;
+        if (operation != 8 || !can_undo(depth_)) return;
         const ProgramHistory &a = history_[depth_ - 1];
         unsigned instrument = u16(document_.patch(a.patch));
         current_[instrument] = a.previous;
-        if (a.previous >= 0) last_sent_[instrument] = a.previous;
+        center_ = last_sent_[instrument] = a.previous;
         selected_ = u16(document_.patch(a.patch) + 2);
         cursors_[selected_] = a.patch - u16(document_.patch_cycle(selected_) + 64);
         --depth_;
+        render();
     }
     void cancel_gesture() { release_c(); held_ = 0; reverse_ = false; }
     void refresh() { if (document_.valid()) render(); }
@@ -201,12 +204,10 @@ public:
             sending_ = int(p); undoing_ = false;
         } else if (operation == 8) {
             if (executor_.busy()) return false;
-            if (!depth_) return true;
+            if (!can_undo(depth_)) return true;
             const ProgramHistory &a = history_[depth_ - 1];
             sending_ = int(a.patch); undoing_ = true;
-            if (a.previous >= 0) {
-                if (!executor_.start(document_, document_.browser_root(unsigned(a.previous)))) { sending_ = -1; return false; }
-            } else complete_undo();
+            if (!executor_.start(document_, document_.browser_root(unsigned(a.previous)))) { sending_ = -1; return false; }
         } else return false;
         render();
         return true;
@@ -256,6 +257,21 @@ private:
         flashing_ = c_held_ = false;
     }
     unsigned candidate() const { return document_.patch_cycles() ? u16(document_.patch_cycle(selected_) + 64) + cursors_[selected_] : 0; }
+    bool can_undo(unsigned depth) const { return depth && history_[depth - 1].previous >= 0; }
+    static uint16_t undo_color(uint16_t background) {
+        const auto linear = [](unsigned value, unsigned maximum) {
+            const float channel = float(value) / maximum;
+            return channel <= 0.04045f ? channel / 12.92f : std::pow((channel + 0.055f) / 1.055f, 2.4f);
+        };
+        const float luminance = 0.2126f * linear(background >> 11, 31)
+            + 0.7152f * linear((background >> 5) & 63, 63) + 0.0722f * linear(background & 31, 31);
+        const auto contrasts = [luminance](float other) {
+            return (std::max(luminance, other) + 0.05f) / (std::min(luminance, other) + 0.05f) >= 3;
+        };
+        if (contrasts(0.7152f)) return 0x07e0;
+        if (contrasts(0.0722f)) return 0x001f;
+        return contrasts(0) ? 0 : 0xffff;
+    }
     bool already_sent(unsigned index) const {
         const uint8_t *p = document_.patch(index);
         if (u16(p) == 65535) return false;
@@ -294,10 +310,10 @@ private:
         const ProgramHistory &a = history_[depth_ - 1];
         unsigned instrument = u16(document_.patch(a.patch));
         current_[instrument] = a.previous;
-        if (a.previous >= 0) { center_ = a.previous; last_sent_[instrument] = a.previous; }
+        center_ = last_sent_[instrument] = a.previous;
         selected_ = u16(document_.patch(a.patch) + 2);
         cursors_[selected_] = a.patch - u16(document_.patch_cycle(selected_) + 64);
-        if (!--depth_) center_ = -1;
+        --depth_;
         sending_ = -1; scroll(0, true);
     }
     void pane(unsigned slot, int index) {
@@ -315,6 +331,11 @@ private:
                 const uint16_t foreground = heading.foreground;
                 heading.foreground = heading.background;
                 heading.background = foreground;
+                if (slot == 0 && !executor_.busy() && can_undo(depth_)) {
+                    const unsigned height = hardware_.display_height() / 3;
+                    const unsigned diameter = height > 4 ? height - 4 : 0;
+                    view.circles[0] = {uint16_t(2 + diameter / 2), uint16_t(2 + diameter / 2), uint16_t(diameter), 0, undo_color(heading.background), 0};
+                }
             }
             if (slot == 2) for (auto &line : view.lines) line.stippled = true;
         }

@@ -185,9 +185,25 @@ static void automatic_text_survives_background_and_stipple_passes() {
         assert(std::count(display.pixels.begin(), display.pixels.end(), 0xffff) == (stippled ? 2 : 4));
     }
 }
+static void title_text_is_drawn_over_its_indicator() {
+    Fonts fonts; Display display;
+    uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18, cache, previous, 24 * 18);
+    cntrl::Pane pane; pane.graphics.pad = 0; pane.three_bands = pane.heading_band = true;
+    auto &line = pane.lines[0]; line.graphics = pane.graphics;
+    line.graphics.background = 0; line.graphics.foreground = 0xffff;
+    line.graphics.line_height = 2; line.graphics.top = 0;
+    std::strcpy(line.text, "AB"); pane.circles[0] = {5, 3, 6, 0, 0x07e0, 0};
+    renderer.show(0, pane);
+    for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+    assert(renderer.ready());
+    assert(display.pixels[2 * 24 + 4] == 0xffff && display.pixels[2 * 24 + 6] == 0xffff);
+    assert(display.pixels[2 * 24 + 5] == 0x07e0);
+}
 int main() {
     cntrl::memory_budget = 192 * 1024;
     automatic_text_survives_background_and_stipple_passes();
+    title_text_is_drawn_over_its_indicator();
     minimum_viewports_follow_declared_surfaces();
     circles_clip_before_iterating_and_do_not_overflow();
     distinct_geometries_and_reserved_windows();

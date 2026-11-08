@@ -250,7 +250,11 @@ unchanged. A simple program selection records a known program Undo entry.
 Composites and side effects clear unsafe program history rather than invent an
 inverse. Undo restores the latest known program selection by restoring that
 instrument's previous selection, leaving other instruments unchanged. If its
-previous selection is unknown, Undo pops the action without sending anything.
+previous selection is unknown, that send blocks Undo without changing history,
+the candidate or the current patch. The centre pane retains the restored patch
+after a successful Undo. A circle behind the candidate title text indicates that
+Undo can restore a known previous selection; it is absent at a first-send barrier
+and while the controller is executing a patch.
 
 On the performance page, a successful send press that changes the instrument's
 last-sent program or bank sets all screens to maximum brightness until send is
