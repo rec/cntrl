@@ -90,7 +90,8 @@ cntrl setup backup backups/before-flash --port /dev/YOUR_SERIAL_PORT
 cntrl setup restore backups/before-flash --port /dev/YOUR_SERIAL_PORT
 cntrl setup verify backups/before-flash --port /dev/YOUR_SERIAL_PORT
 cntrl setup del Evening --port /dev/YOUR_SERIAL_PORT
-cntrl status --port /dev/YOUR_SERIAL_PORT
+cntrl status
+cntrl status disk-speed
 ```
 
 Compilation never opens a device. `setup copy` compiles and copies data to the
@@ -749,3 +750,34 @@ the previous layout, without enlarging the text. Status shows `Up` beside Disk.
 Setup format 27 appends the title-font word to the page metadata.
 Panic stops an unfinished first sweep one second after C is released and shows
 `Incomplete`; a completed sweep shows `Ready`.
+
+### USB disk-speed measurement
+
+Status commands discover cntrl devices automatically on macOS and Linux using
+USB device metadata. They select a sole match or offer a numbered choice by
+product name and serial number when several devices are connected. Unrelated
+serial ports are not opened during discovery. No match produces a connection
+message; multiple matches require an interactive choice. `--port` remains an
+optional explicit endpoint override.
+
+`cntrl status disk-speed` uploads a 1 MB (1,000,000-byte) scratch file, syncs and reopens it, then downloads and verifies
+its contents. It prints `Upload`, `Download`, and their `Total` in milliseconds.
+The timings include USB framing, acknowledgements and filesystem I/O. Connection
+setup, payload generation, final comparison and scratch-file deletion are outside
+the measured intervals. This measures the USB/storage round trip, not isolated
+card throughput.
+
+The command exclusively uses `/cntrl/.disk-speed.tmp`, which is reserved for this
+test and may be replaced on the next run after a power loss. Success, transfer
+errors, session cancellation and transfer timeout close and remove it. A removal
+failure during a command is reported as `disk-delete`. The test uses the
+firmware's advertised `usb_block_size` and never requires the 1 MB file to fit in device RAM.
+
+The device must run firmware containing the disk-speed commands and configurable
+USB blocks. An older USB reply format produces an immediate firmware-update
+message, rather than retrying as though the USB device were disconnected.
+
+The wire commands are `CNTRL DISK BEGIN CRC_HEX`, `CNTRL DISK DATA HEX_BYTES`,
+`CNTRL DISK END`, `CNTRL DISK READ OFFSET`, and `CNTRL DISK DELETE`. Data blocks
+are at most `usb_block_size` bytes. END acknowledges only after length/checksum
+validation, disk sync, and reopening for reads. READ replies `CNTRL DATA HEX_BYTES`.

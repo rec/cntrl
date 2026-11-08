@@ -389,8 +389,74 @@ def test_usb_wait_backoff_keeps_retrying_until_control_c(
         connection.__enter__()
     assert attempts == 6
     assert capsys.readouterr().err.splitlines() == [
-        f'Waiting {n} seconds for USB (hit control-C to exit)' for n in (1, 2, 4, 8)
+        f'Waiting {n} seconds for USB: USB unplugged (hit control-C to exit)'
+        for n in (1, 2, 4, 8)
     ]
+
+
+@pytest.mark.parametrize(
+    'response,message',
+    [
+        ('CNTRL USB abc 1 1 -', 'older cntrl firmware'),
+        ('not a USB frame', 'Invalid USB transport response'),
+        ('CNTRL USB abc 1 1 four -', 'Invalid USB transport response'),
+        ('CNTRL USB abc 1 1 4096 zz', 'Invalid USB transport response'),
+        ('CNTRL USB abc 2 1 4096 -', 'Unexpected USB sequence'),
+    ],
+)
+def test_incompatible_usb_replies_fail_without_reconnecting(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    response: str,
+    message: str,
+) -> None:
+    master, slave = pty.openpty()
+    connection = transport.SerialConnection(Path(os.ttyname(slave)))
+    connection.session = 0xABC
+    monkeypatch.setattr(connection, 'read_frame', lambda: response)
+
+    def unexpected_wait(_: float) -> None:
+        pytest.fail('A protocol error must not retry as a USB disconnection')
+
+    monkeypatch.setattr(transport.time, 'sleep', unexpected_wait)
+    try:
+        with pytest.raises(transport.UsbProtocolError, match=message):
+            with connection:
+                pytest.fail('An incompatible handshake must not open a session')
+        assert connection.fd == -1
+        assert 'Waiting' not in capsys.readouterr().err
+    finally:
+        connection.close()
+        os.close(master)
+        os.close(slave)
+
+
+def test_protocol_error_during_a_command_does_not_retry_session_cleanup(
+    peer: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    master, slave = pty.openpty()
+    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
+    connection = transport.SerialConnection(Path(os.ttyname(slave)))
+    reads = 0
+
+    def invalid_response() -> str:
+        nonlocal reads
+        reads += 1
+        return 'invalid USB frame'
+
+    try:
+        with pytest.raises(transport.UsbProtocolError, match='Invalid USB'):
+            with connection:
+                monkeypatch.setattr(connection, 'read_frame', invalid_response)
+                transport.SetupClient(connection).request('CNTRL STATUS')
+        assert reads == 1
+        assert connection.fd == -1
+    finally:
+        connection.close()
+        process.terminate()
+        process.wait(timeout=5)
+        os.close(master)
+        os.close(slave)
 
 
 def test_midi_file_operations_survive_cpp_storage(peer: Path) -> None:

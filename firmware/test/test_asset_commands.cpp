@@ -49,7 +49,7 @@ struct Services {
     CounterFile counter_file;
     Recorder recorder;
     History history;
-    Transfer bundle;
+    Transfer bundle, disk;
     Listing listing;
     Editor song_editor;
     Transfer songs;
@@ -98,6 +98,8 @@ int main() {
     services.song_editor.visible = false;
     assert(commands.command("CNTRL SONGS LIST", 12));
     assert(services.songs.calls == 1 && services.songs.last == 12);
+    assert(commands.command("CNTRL DISK BEGIN 0", 13));
+    assert(services.disk.calls == 1 && services.disk.last == 13);
     assert(commands.command("CNTRL FONT LIST", 13));
     assert(!commands.command("CNTRL STATUS", 14));
     assert(services.fonts.calls == 2);

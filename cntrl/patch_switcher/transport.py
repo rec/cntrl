@@ -15,6 +15,10 @@ from .data_files import validate_name
 from .models import TargetMemory
 
 
+class UsbProtocolError(ValueError):
+    """The device replied, but this host cannot interpret its USB protocol."""
+
+
 class SerialConnection:
     """A resumable, acknowledged byte stream over a replaceable serial fd."""
 
@@ -32,7 +36,7 @@ class SerialConnection:
     def __enter__(self) -> 'SerialConnection':
         try:
             self.exchange(b'')
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, UsbProtocolError):
             self.release()
             self.close()
             raise
@@ -40,7 +44,7 @@ class SerialConnection:
 
     def __exit__(self, *args: object) -> None:
         try:
-            if args and args[0] is KeyboardInterrupt:
+            if args and args[0] in (KeyboardInterrupt, UsbProtocolError):
                 self.release()
             else:
                 self.sequence = 0
@@ -113,8 +117,14 @@ class SerialConnection:
                             )
                             lost_reported = True
                         raise OSError('USB session lost')
+                    if len(response) == 6 and response[:2] == ['CNTRL', 'USB']:
+                        raise UsbProtocolError(
+                            'USB protocol mismatch: the connected device is running '
+                            'older cntrl firmware. Update its firmware before using '
+                            'this version of cntrl.'
+                        )
                     if len(response) != 7 or response[:2] != ['CNTRL', 'USB']:
-                        raise OSError('Invalid USB transport response')
+                        raise UsbProtocolError('Invalid USB transport response')
                     try:
                         session = int(response[2], 16)
                         sequence, reply = int(response[3]), int(response[4])
@@ -125,25 +135,28 @@ class SerialConnection:
                             b'' if response[6] == '-' else bytes.fromhex(response[6])
                         )
                     except ValueError as error:
-                        raise OSError('Invalid USB transport response') from error
+                        raise UsbProtocolError(
+                            'Invalid USB transport response'
+                        ) from error
                     if session != self.session or sequence < self.sequence:
                         continue
                     if sequence != self.sequence:
-                        raise OSError('Unexpected USB sequence')
+                        raise UsbProtocolError('Unexpected USB sequence')
                     if payload and reply == self.acknowledged + 1:
                         self.received.extend(payload)
                         self.acknowledged = reply
                     elif payload and reply != self.acknowledged:
-                        raise OSError('Unexpected USB reply sequence')
+                        raise UsbProtocolError('Unexpected USB reply sequence')
                     self.usb_block_size = block_size
                     self.sequence += 1
                     return
-            except (OSError, termios.error):
+            except (OSError, termios.error) as error:
                 self.close()
                 failures += 1
                 if failures >= 3:
                     print(
-                        f'Waiting {delay} seconds for USB (hit control-C to exit)',
+                        f'Waiting {delay} seconds for USB: {error} '
+                        '(hit control-C to exit)',
                         file=sys.stderr,
                         flush=True,
                     )
@@ -185,9 +198,9 @@ class SerialConnection:
                 try:
                     return result.decode('ascii').rstrip('\r')
                 except UnicodeDecodeError as error:
-                    raise OSError('Invalid USB response encoding') from error
+                    raise UsbProtocolError('Invalid USB response encoding') from error
             result.extend(value)
-        raise OSError('USB transport response too long')
+        raise UsbProtocolError('USB transport response too long')
 
     def write(self, data: bytes) -> None:
         for i in range(0, len(data), self.usb_block_size):

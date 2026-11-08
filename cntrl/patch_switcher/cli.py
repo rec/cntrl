@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Annotated
+from typing import Annotated, Literal
 
 import tomlkit
 import tyro
@@ -20,6 +20,8 @@ from . import (
     backups,
     compiler,
     data_files,
+    devices,
+    disk_speed,
     history,
     models,
     resolved,
@@ -116,7 +118,9 @@ class Songs(BaseModel, frozen=True):
 
 
 class Status(BaseModel, frozen=True):
-    port: Path
+    port: Path | None = None
+    """Select automatically unless a serial endpoint is explicitly supplied."""
+    action: Annotated[Literal['disk-speed'] | None, tyro.conf.Positional] = None
     reset_starts: bool = False
     """Reset the saved startup counter to 1 before reporting status."""
 
@@ -484,8 +488,19 @@ def main() -> None:
             songs.run(command.command)
         elif isinstance(command, SetupCLI):
             run_setup(command.command)
+        elif command.action == 'disk-speed':
+            if command.reset_starts:
+                raise ValueError('--reset-starts cannot be combined with disk-speed')
+            timings = disk_speed.measure(devices.select_port(command.port))
+            print(f'Upload: {timings.upload_ms:.3f} ms')
+            print(f'Download: {timings.download_ms:.3f} ms')
+            print(f'Total: {timings.total_ms:.3f} ms')
         else:
-            print(transport.device_status(command.port, command.reset_starts))
+            print(
+                transport.device_status(
+                    devices.select_port(command.port), command.reset_starts
+                )
+            )
     except KeyboardInterrupt:
         sys.exit(130)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:

@@ -23,6 +23,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/setup_files.h>
 #include <cntrl/history_import.h>
 #include <cntrl/asset_commands.h>
+#include <cntrl/disk_speed.h>
 #include <USBHost_t36.h>
 #include <malloc.h>
 #include <charconv>
@@ -663,7 +664,8 @@ bool native_asset_command(const char *line) {
 #endif
     return false;
 }
-cntrl::device::SdFile counter_command_file;
+cntrl::device::SdFile counter_command_file, disk_speed_file;
+cntrl::DiskSpeedTransfer disk_speed_transfer(setup_filesystem, disk_speed_file, board);
 struct AssetServices {
     Board &hardware, &replies;
     cntrl::StartupCounter &counter;
@@ -672,12 +674,13 @@ struct AssetServices {
     decltype(history_import) &history;
     decltype(bundle_transfer) &bundle;
     cntrl::StorageListing &listing;
+    cntrl::DiskSpeedTransfer &disk;
     cntrl::SongsUi &song_editor;
     decltype(songs_transfer) &songs;
     font_assets::Storage &fonts;
     bool (*native_extension)(const char *);
 } asset_services{board, board, startup_counter, counter_command_file, midi_files.recorder,
-    history_import, bundle_transfer, storage_listing, application.song_ui, songs_transfer,
+    history_import, bundle_transfer, storage_listing, disk_speed_transfer, application.song_ui, songs_transfer,
     font_files, native_asset_command};
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
 bool asset_command(const char *line) { return asset_commands.command(line, millis()); }
@@ -840,6 +843,7 @@ public:
     auto &commands() { return serial_router; }
     auto &song_transfer() { return songs_transfer; }
     auto &bundle_transfer() { return ::bundle_transfer; }
+    auto &disk_transfer() { return disk_speed_transfer; }
     auto &history_transfer() { return history_import; }
     auto &fonts() { return font_files; }
     auto &song_sources() { return ::song_sources; }

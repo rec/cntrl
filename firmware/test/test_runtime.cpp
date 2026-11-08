@@ -7,7 +7,7 @@
 
 struct Services {
     Session usb;
-    Job command, transfer, bundle, history, font, source, song;
+    Job command, transfer, bundle, history, font, source, song, disk;
     std::vector<unsigned> order;
     unsigned serial_reads = 0;
     bool reply = true, bus = true;
@@ -21,6 +21,7 @@ struct Services {
     void midi() { order.push_back(4); }
     Session &session() { return usb; }
     Job &commands() { return command; }
+    Job &disk_transfer() { return disk; }
     Job &song_transfer() { return transfer; }
     Job &bundle_transfer() { return bundle; }
     Job &history_transfer() { return history; }
@@ -63,8 +64,10 @@ int main() {
     cntrl::CooperativeRuntime runtime; Services services; runtime.poll(services);
     assert(services.order == std::vector<unsigned>({0, 1, 2, 3, 4, 5, 6, 7}));
     assert(services.serial_reads == 512 && services.usb.consumed_count == 128);
-    assert(services.command.polls == 1 && services.transfer.polls == 1 && services.font.polls == 1);
+    assert(services.command.polls == 1 && services.transfer.polls == 1 && services.font.polls == 1 && services.disk.polls == 1);
     assert(services.source.polls == 1 && services.song.polls == 1);
+    Services resetting; resetting.usb.reset = true; runtime.poll(resetting);
+    assert(resetting.disk.cancellations == 1);
     Services blocked; blocked.reply = false; blocked.usb.blocked = true; blocked.bus = false; runtime.poll(blocked);
     assert(blocked.serial_reads == 0 && blocked.command.polls == 0 && blocked.transfer.polls == 0);
     assert(blocked.order == std::vector<unsigned>({0, 1, 3, 4, 5, 6, 7}));
