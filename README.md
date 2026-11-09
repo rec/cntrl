@@ -63,10 +63,10 @@ reliability, and speed of response.
   * Arpeggiator for polyphonic or monophonic instruments(*)
   * Drone controller(*)
   * MIDI cable tester
-  * MIDI filtering, merging, splitting, etc(*)
-  * USB host and device services(*)
+  * MIDI filtering, merging, splitting, etc
+  * USB host and device services
   * Panic
-  * MIDI monitor(*)
+  * MIDI monitor
 
 * Display text messages received over MIDI or USB(*)
   * i.e. cues or warnings from your computer
