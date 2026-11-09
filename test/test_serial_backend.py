@@ -1,5 +1,6 @@
 """Backend deadlines and short I/O retain the framed protocol semantics."""
 
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -54,7 +55,34 @@ def test_failed_writes_raise_transport_errors(
 def test_fragmented_reply_is_decoded_without_reading_the_next_frame() -> None:
     connection = transport.SerialConnection(Path('unused'))
     backend = Mock()
+    backend.in_waiting = 0
     backend.read.side_effect = [bytes([c]) for c in b'CNTRL OK\r\nnext']
     connection.serial = backend
     assert connection.read_frame() == 'CNTRL OK'
     assert backend.read.call_count == len(b'CNTRL OK\r\n')
+
+
+def test_queued_frames_are_read_in_bulk_without_losing_the_next_reply() -> None:
+    wire = b'CNTRL DATA ' + b'ab' * 4096 + b'\r\nCNTRL OK\n'
+    source = BytesIO(wire)
+    backend = Mock(in_waiting=len(wire))
+    backend.read.side_effect = source.read
+    connection = transport.SerialConnection(Path('unused'))
+    connection.serial = backend
+    assert connection.read_frame() == 'CNTRL DATA ' + 'ab' * 4096
+    assert connection.read_frame() == 'CNTRL OK'
+    backend.read.assert_called_once_with(len(wire))
+
+
+def test_closing_discards_prefetched_replies_before_reconnecting() -> None:
+    source = BytesIO(b'first\nstale\n')
+    backend = Mock(in_waiting=12)
+    backend.read.side_effect = source.read
+    connection = transport.SerialConnection(Path('unused'))
+    connection.serial = backend
+    assert connection.read_frame() == 'first'
+    connection.close()
+    replacement = Mock(in_waiting=6)
+    replacement.read.side_effect = BytesIO(b'fresh\n').read
+    connection.serial = replacement
+    assert connection.read_frame() == 'fresh'

@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Annotated, Literal
+from typing import Annotated
 
 import tomlkit
 import tyro
@@ -117,12 +117,27 @@ class Songs(BaseModel, frozen=True):
     )
 
 
+class DiskSpeed(BaseModel, frozen=True):
+    """Measure USB disk throughput in bytes/second with live byte progress.
+
+    Upload, sync, download and verify a 1,000,000-byte scratch file. Report
+    upload, download and round-trip throughput, then remove the scratch file.
+    """
+
+
+@tyro.conf.configure(tyro.conf.CascadeSubcommandArgs)
 class Status(BaseModel, frozen=True):
+    """Show device status or measure USB disk throughput."""
+
     port: Path | None = None
     """Select automatically unless a serial endpoint is explicitly supplied."""
-    action: Annotated[Literal['disk-speed'] | None, tyro.conf.Positional] = None
     reset_starts: bool = False
     """Reset the saved startup counter to 1 before reporting status."""
+    command: Annotated[
+        Annotated[DiskSpeed, tyro.conf.subcommand(name='disk-speed', prefix_name=False)]
+        | None,
+        tyro.conf.DisallowNone,
+    ] = None
 
 
 def compile_inputs(
@@ -488,13 +503,13 @@ def main() -> None:
             songs.run(command.command)
         elif isinstance(command, SetupCLI):
             run_setup(command.command)
-        elif command.action == 'disk-speed':
+        elif command.command is not None:
             if command.reset_starts:
                 raise ValueError('--reset-starts cannot be combined with disk-speed')
-            timings = disk_speed.measure(devices.select_port(command.port))
-            print(f'Upload: {timings.upload_ms:.3f} ms')
-            print(f'Download: {timings.download_ms:.3f} ms')
-            print(f'Total: {timings.total_ms:.3f} ms')
+            rates = disk_speed.measure(devices.select_port(command.port))
+            print(f'Upload: {rates.upload_bytes_per_second:,.0f} bytes/second')
+            print(f'Download: {rates.download_bytes_per_second:,.0f} bytes/second')
+            print(f'Round trip: {rates.round_trip_bytes_per_second:,.0f} bytes/second')
         else:
             print(
                 transport.device_status(
