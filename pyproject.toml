@@ -12,6 +12,7 @@ dependencies = [
     "python-bidi>=0.6.12",
     "reccy",
     "tomlkit>=0.15.1",
+    "tqdm>=4.70.1",
     "tyro>=1.0.16",
     "uharfbuzz>=0.56.3",
 ]
