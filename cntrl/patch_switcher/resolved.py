@@ -188,6 +188,13 @@ def export(data: bytes) -> str:
         result['trs_ports'] = {
             j: TRS_MODES[m] for j, m in zip(jacks, modes, strict=True) if m
         }
+    combined = {
+        j: 'combined'
+        for i, j in enumerate(jacks)
+        if data[meta + METADATA.size - 9] & (4 << i)
+    }
+    if combined:
+        result['auxiliary_switches'] = combined
     result.update(source)
     instruments: dict[str, object] = {}
     profiles: list[dict[str, object]] = []

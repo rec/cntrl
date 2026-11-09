@@ -41,6 +41,10 @@ public:
     }
     int expression_pin(unsigned i) const { return mode_[i] == Mode::expression ? tip[i] : -1; }
     Mode mode(unsigned i) const { return mode_[i]; }
+    unsigned contacts(unsigned i) const {
+        if (mode_[i] != Mode::aux) return 0;
+        return (digitalReadFast(tip[i]) == LOW ? 1u : 0u) | (digitalReadFast(ring[i]) == LOW ? 2u : 0u);
+    }
     bool idle() const {
         for (const auto &tx : serial_) if (tx && tx->transmitting()) return false;
         return true;

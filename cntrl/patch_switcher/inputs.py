@@ -2,13 +2,49 @@
 
 import struct
 
-from .models import Target
+from . import midi_endpoints
+from .models import Setup, Target
 
 
 def pack(target: Target) -> bytes:
-    return HEADER.pack(b'CINP', len(target.buttons)) + b''.join(
-        RECORD.pack(b.encode('ascii')) for b in target.buttons
+    names = labels(target)
+    return HEADER.pack(b'CINP', len(names)) + b''.join(
+        RECORD.pack(b.encode('ascii')) for b in names
     )
+
+
+def labels(target: Target) -> list[str]:
+    names = target.buttons + [
+        f'{p}.{c}'
+        for p in midi_endpoints.ports(target.midi_endpoints)
+        if 'aux' in target.trs_ports.get(p, [])
+        for c in ('tip', 'ring', 'both')
+    ]
+    if (
+        len(names) > 32
+        or any(len(n.encode('ascii')) > 31 for n in names)
+        or len(names) != len(set(names))
+    ):
+        raise ValueError(
+            'input identifiers must be unique, fit 31 bytes and total at most 32'
+        )
+    return names
+
+
+def index(name: str, show: Setup, target: Target) -> int:
+    names = labels(target)
+    if name not in names:
+        raise ValueError(f'unknown switch {name!r}')
+    if name not in target.buttons:
+        port, contact = name.rsplit('.', 1)
+        if show.trs_ports.get(port) != 'aux':
+            raise ValueError(f'{name}: requires the aux TRS role')
+        if (
+            contact == 'both'
+            and show.auxiliary_switches.get(port, 'independent') != 'combined'
+        ):
+            raise ValueError(f'{name}: requires combined auxiliary switches')
+    return names.index(name)
 
 
 def button_mask(pair: str | None, target: Target) -> int:
@@ -31,7 +67,7 @@ def unpack(data: bytes, offset: int) -> list[str]:
     if offset + HEADER.size > len(data) or data[offset : offset + 4] != b'CINP':
         raise ValueError('missing input metadata')
     _, count = HEADER.unpack_from(data, offset)
-    if count > 8 or offset + HEADER.size + count * RECORD.size > len(data):
+    if count > 32 or offset + HEADER.size + count * RECORD.size > len(data):
         raise ValueError('invalid input metadata size')
     result = []
     for i in range(count):

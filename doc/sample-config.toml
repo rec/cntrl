@@ -166,6 +166,8 @@ cycles = "right"
 
 [trs_ports]
 
+[auxiliary_switches]
+
 [style]
 
 icon = "sample"

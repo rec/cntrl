@@ -82,7 +82,9 @@ public:
         unsigned nb = u16(bytes + meta + 4);
         if (!u16(bytes + meta + 6) || !u16(bytes + meta + scrolling_offset)) return false;
         for (unsigned i = 0; i < 3; ++i) if (bytes[meta + scrolling_offset + 2 + i] > 3) return false;
-        if (bytes[meta + scrolling_offset + 5] > 3) return false;
+        if (bytes[meta + scrolling_offset + 5] > 63) return false;
+        for (unsigned i = 0; i < 4; ++i)
+            if ((bytes[meta + scrolling_offset + 5] & (4u << i)) && bytes[meta + trs_modes_offset + i] != unsigned(midi::TrsMode::aux)) return false;
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
             || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
@@ -206,13 +208,26 @@ public:
         names += 6 + endpoints * 68;
         if (names + 6 > length || std::memcmp(bytes + names, "CINP", 4)) return false;
         unsigned inputs = u16(bytes + names + 4);
-        if (inputs > 8 || inputs != hardware.input_count() || inputs > (length - names - 6) / 32) return false;
+        if (inputs > 32 || inputs < hardware.input_count() || inputs > (length - names - 6) / 32) return false;
         for (unsigned i = 0; i < inputs; ++i) {
             const uint8_t *id = bytes + names + 6 + i * 32;
             if (!text_valid(id, 32) || std::strchr(reinterpret_cast<const char *>(id), '+')
-                || std::strcmp(reinterpret_cast<const char *>(id), hardware.input_label(i))) return false;
+                || (i < hardware.input_count() && std::strcmp(reinterpret_cast<const char *>(id), hardware.input_label(i)))) return false;
             for (unsigned j = 0; j < i; ++j)
                 if (!std::strcmp(reinterpret_cast<const char *>(id), reinterpret_cast<const char *>(bytes + names + 6 + j * 32))) return false;
+        }
+        if (inputs > hardware.input_count()) {
+            unsigned index = hardware.input_count();
+            for (unsigned port = 0; port < 4; ++port) {
+                const midi::OutputConnection *connection = nullptr;
+                for (const auto &c : hardware.midi_outputs()) if (c.port == port) { connection = &c; break; }
+                if (!connection || !hardware.supports_trs_mode(port, midi::TrsMode::aux)) continue;
+                for (const char *contact : {"tip", "ring", "both"}) {
+                    char label[64]; std::snprintf(label, sizeof(label), "%s.%s", connection->name, contact);
+                    if (index >= inputs || std::strcmp(label, reinterpret_cast<const char *>(bytes + names + 6 + 32 * index++))) return false;
+                }
+            }
+            if (index != inputs) return false;
         }
         names += 6 + inputs * 32;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
@@ -225,7 +240,7 @@ public:
             end += size;
         }
         unsigned graph = end;
-        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes)) return false;
+        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs)) return false;
         unsigned switch_count = u16(bytes + graph + 10);
         unsigned switch_start = graph + 16 + u16(bytes + graph + 8) * 4 + np * 2;
         if (has_hooks) {
@@ -375,6 +390,13 @@ public:
     unsigned navigation_hold_ms() const { return u16(data_ + 6); }
     bool fast_switches() const { return data_[metadata() + scrolling_offset + 5] & 1; }
     bool forward_device_to_host() const { return !(data_[metadata() + scrolling_offset + 5] & 2); }
+    bool auxiliary_combined(unsigned port) const { return data_[metadata() + scrolling_offset + 5] & (4u << port); }
+    const uint8_t *input_section() const {
+        const uint8_t *endpoints = movie_section() + 8 + 4 * (movies(false) + movies(true));
+        return endpoints + 6 + 68 * u16(endpoints + 4);
+    }
+    unsigned inputs() const { return u16(input_section() + 4); }
+    const char *input_label(unsigned index) const { return reinterpret_cast<const char *>(input_section() + 6 + 32 * index); }
     unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
     uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 10); }
     uint8_t brightness() const { return data_[18]; }
@@ -517,7 +539,7 @@ private:
 #endif
     static bool graph_valid(const uint8_t *bytes, unsigned length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,
-                            unsigned mappings, const Hardware &hardware, unsigned output_routes, unsigned input_routes) {
+                            unsigned mappings, const Hardware &hardware, unsigned output_routes, unsigned input_routes, unsigned input_count) {
         if (start > length || length - start < 16 || std::memcmp(bytes + start, "CPAT", 4)) return false;
         const uint8_t *g = bytes + start;
         unsigned size = u32(g + 4), count = u16(g + 8), switches = u16(g + 10), named = u16(g + 14);
@@ -529,7 +551,7 @@ private:
         unsigned buttons = 0;
         for (unsigned i = 0; i < switches; ++i) {
             const uint8_t *s = g + assignments + i * 72;
-            if (s[0] >= hardware.input_count() || s[0] == hardware.control_input(ControlRole::back) || s[1] > 2 || u16(s + 2) >= count || (buttons & (1u << s[0]))
+            if (s[0] >= input_count || s[0] == hardware.control_input(ControlRole::back) || s[1] > 2 || u16(s + 2) >= count || (buttons & (1u << s[0]))
                 || !label_valid(s + 6, 64) || (s[1] ? u16(s + 4) >= count : u16(s + 4) != 65535)) return false;
             buttons |= 1u << s[0];
         }
@@ -604,7 +626,7 @@ private:
                 break;
             case 10: {
                 if (!hardware.switch_capacity() || n[1] || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
-                    || p[66] > hardware.input_count() || p[67] || length != 220u + 121u * p[66]) return false;
+                    || p[66] > 8 || p[66] > input_count || p[67] || length != 220u + 121u * p[66]) return false;
                 for (unsigned j = 0; j < 4; ++j) {
                     const uint8_t *e = p + 68 + j * expression_record_size;
                     if (!e[32]) continue;
@@ -615,7 +637,7 @@ private:
                 unsigned assigned = 0;
                 for (unsigned j = 0; j < p[66]; ++j) {
                     const uint8_t *s = p + 220 + j * 121;
-                    if (s[0] >= hardware.input_count() || (assigned & (1u << s[0])) || s[1] > 2
+                    if (s[0] >= input_count || (assigned & (1u << s[0])) || s[1] > 2
                         || !label_valid(s + 6, 64) || u16(s + 2) >= count
                         || (s[1] ? u16(s + 4) >= count : u16(s + 4) != 65535) || u16(s + 70) != 65535) return false;
                     assigned |= 1u << s[0];

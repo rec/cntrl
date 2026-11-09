@@ -25,22 +25,6 @@ instead of hard-coded knowledge of particular instruments or effects.
 Dependencies below identify prerequisites, not a requirement to implement the
 entire plan. An item is complete only when its acceptance criteria are met.
 
-## 3. External auxiliary switches
-
-**Outcome:** External switches can invoke the same assignments as built-in
-ones.
-
-**Scope:** Decode supported TRS tip, ring and combined contact arrangements,
-debounce inputs and give each switch a stable identifier. Reuse press,
-momentary and latched assignments. Document wiring and reject configurations
-exceeding the target's capabilities.
-
-**Dependencies:** The TRS Ports page provides socket role selection.
-
-**Acceptance:** One physical action produces one intended transition; held
-inputs are rearmed correctly on entry; release and disconnection have explicit
-cleanup behavior. Verify simultaneous inputs and contact bounce on hardware.
-
 ## 4. Relay outputs
 
 **Outcome:** Patches can switch amplifier channels or send analog tap-tempo
@@ -191,7 +175,7 @@ new physical inputs.
 Next implement waveforms and timed sequences (items 11 and 12).
 Routing and conversion (6 and 7) form a separate increment.
 
-Hardware-dependent work (items 3 through 5) should follow available test
+Hardware-dependent work (items 4 and 5) should follow available test
 hardware and actual connection needs. The graphical editor (16) can begin
 against the current schema without waiting for the other items.
 

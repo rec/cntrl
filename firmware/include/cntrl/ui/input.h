@@ -14,7 +14,7 @@ public:
         : states_(states), controls_(controls), configuration_(configuration), application_(application),
           application_services_(application_services), router_(controls) {}
     template<class Services>
-    void scan(uint8_t sample, uint32_t now, Services &services) {
+    void scan(uint8_t sample, uint32_t now, Services &services, uint32_t auxiliary_held = 0) {
         std::array<uint8_t, 8> events{};
         uint8_t pressed = 0;
         const bool fast = !configuration_.valid() || configuration_.fast_switches();
@@ -22,7 +22,7 @@ public:
             events[i] = states_[i].update(sample & (1u << i), now, services.debounce(i).value_or(15), fast);
             if (states_[i].pressed) pressed |= uint8_t(1u << i);
         }
-        application_.held = pressed;
+        application_.held = pressed | auxiliary_held;
         if (controls_.confirm < controls_.count && (events[controls_.confirm] & release_event)) {
             services.keyboard_release(controls_.confirm);
             if (services.panic_open()) services.panic_release(now);

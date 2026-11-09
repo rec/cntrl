@@ -17,7 +17,7 @@ from pydantic import (
     field_validator,
 )
 
-from . import compiler, models, resolved, setup_bundle, transport
+from . import compiler, inputs, models, resolved, setup_bundle, transport
 from .data_files import validate_name
 
 
@@ -141,6 +141,7 @@ def encode(
             # Song sources validate possible destinations. The selected setup
             # owns the physical jack modes when the song plays.
             'trs_ports': port_modes,
+            'auxiliary_switches': {},
             'instruments': library.instruments,
             'patches': library.patches,
             'patch_cycles': {'Songs': values_for_source} if values_for_source else {},
@@ -159,6 +160,11 @@ def encode(
                 bindings = value.get('bindings')
                 if isinstance(bindings, dict):
                     for key, binding in bindings.items():
+                        if key not in target.buttons and key in inputs.labels(target):
+                            port, contact = key.rsplit('.', 1)
+                            port_modes[port] = 'aux'
+                            if contact == 'both':
+                                context['auxiliary_switches'][port] = 'combined'
                         if isinstance(
                             models.parse_binding(binding), models.ExpressionAssignment
                         ):

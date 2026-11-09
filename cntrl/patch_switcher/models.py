@@ -862,6 +862,9 @@ class Setup(BaseModel, frozen=True):
     ] = Field(default_factory=list)
     animation_color_cycle: Annotated[bool, Field(strict=True)] = False
     trs_ports: dict[str, TrsMode] = Field(default_factory=dict)
+    auxiliary_switches: dict[str, Literal['independent', 'combined']] = Field(
+        default_factory=dict
+    )
     is_midi_interface: Annotated[bool, Field(strict=True)] = False
     usb_device_midi: Annotated[bool, Field(strict=True)] = True
     usb_host_midi: Annotated[bool, Field(strict=True)] = True

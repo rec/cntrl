@@ -43,6 +43,7 @@ extern "C" char cntrl_memory_budget;
 #include <cntrl/module_menu.h>
 #if CNTRL_SWITCHES
 #include <cntrl/switches.h>
+#include <cntrl/auxiliary_switches.h>
 #endif
 #if CNTRL_PANIC
 #include <cntrl/panic.h>
@@ -210,7 +211,7 @@ public:
     }
     void open_switch_editor(const cntrl::Document &document, uint64_t held) override {
 #if CNTRL_SWITCHES
-        enter_switches(document, uint8_t(held));
+        enter_switches(document, uint32_t(held));
 #else
         (void)document; (void)held;
 #endif
@@ -301,7 +302,7 @@ public:
         return bridge_.idle() ? cntrl::midi::Bridge::Delivery::complete : cntrl::midi::Bridge::Delivery::pending;
     }
 #if CNTRL_SWITCHES
-    void enter_switches(const cntrl::Document &document, uint8_t held) { bridge_.configure(false); switches.enter(document, held); }
+    void enter_switches(const cntrl::Document &document, uint32_t held) { bridge_.configure(false); switches.enter(document, held); }
     bool leave_switches() {
         bridge_.configure(runtime.interface);
         const bool performance = performance_switches_; performance_switches_ = false; return performance;
@@ -491,7 +492,7 @@ public:
     void midi_flush() { if (usb_configuration) usb_midi_flush_output(); }
 #if CNTRL_SWITCHES
     void midi_switch_tick(uint32_t now) {
-        switches.tick(now, uint8_t(application.held));
+        switches.tick(now, uint32_t(application.held));
         if (switches.revision() == binding_revision_) return;
         binding_revision_ = switches.revision();
         if (switches.performance()) {
@@ -857,6 +858,7 @@ TargetControls target_controls;
 cntrl::ui::InputCoordinator input_coordinator(buttons, cntrl::target::controls, documents.document(), application, board);
 class TargetRuntime {
 public:
+    cntrl::AuxiliarySwitches auxiliary;
     uint32_t now() const { return millis(); }
     void complete_display() { poll_display_dma(); }
     void keyboard() { board.poll_keyboard(); }
@@ -867,7 +869,15 @@ public:
         uint8_t logical = 0;
         for (unsigned i = 0; i < cntrl::target::button_count; ++i)
             if (!(raw & (1u << button_bits[i]))) logical |= uint8_t(1u << i);
-        input_coordinator.scan(logical, now, *this);
+        auxiliary.scan(board, documents.document(), now, [](unsigned port) { return trs_ports.contacts(port); },
+            [this](unsigned input) { return debounce(input); });
+        input_coordinator.scan(logical, now, *this, auxiliary.held());
+#if CNTRL_SWITCHES
+        for (unsigned input = cntrl::target::button_count; input < 32; ++input) {
+            if (auxiliary.event(input) & cntrl::press_event) board.switches.button(input, true, now);
+            if (auxiliary.event(input) & cntrl::release_event) board.switches.button(input, false, now);
+        }
+#endif
     }
     std::optional<unsigned> debounce(unsigned i) const {
 #if CNTRL_SWITCHES

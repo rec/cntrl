@@ -134,6 +134,7 @@ public:
     bool save_trs_mode(unsigned jack, midi::TrsMode mode, uint32_t now) {
         if (jack >= 4 || dirty_ || !edit_begin()) return false;
         staging_.data[document_.trs_modes() - document_.data() + jack] = uint8_t(mode);
+        if (mode != midi::TrsMode::aux) staging_.data[document_.metadata() + scrolling_offset + 5] &= ~(4u << jack);
         put32(staging_.data + 20, checksum(staging_.data + 28, document_.length() - 28));
         Document candidate;
         if (candidate.load(staging_.data, document_.length(), hardware_) && edit_save(now)) return true;
@@ -509,6 +510,7 @@ private:
             || old.screensaver_timeout() != current.screensaver_timeout()
             || old.scroll_ms() != current.scroll_ms()
             || std::memcmp(old.data() + old.metadata() + scrolling_offset, current.data() + current.metadata() + scrolling_offset, 5);
+        for (unsigned i = 0; i < 4; ++i) settings = settings || old.auxiliary_combined(i) != current.auxiliary_combined(i);
         auto names_end = [](const Document &d) {
             unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + d.page_section_size() + 4;
             for (unsigned i = 0; i < d.patches() * 3; ++i) { unsigned n = u16(d.data() + cursor); cursor += 2 + (n == 65535 ? 0 : n); }

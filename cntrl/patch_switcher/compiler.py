@@ -170,6 +170,13 @@ def compile_show(
     for jack, mode in show.trs_ports.items():
         if jack not in jacks or mode not in target.trs_ports.get(jack, []):
             errors.append(f'trs_ports.{jack}: unsupported role {mode!r}')
+    for jack in show.auxiliary_switches:
+        if show.trs_ports.get(jack) != 'aux' or 'aux' not in target.trs_ports.get(
+            jack, []
+        ):
+            errors.append(
+                f'auxiliary_switches.{jack}: requires a supported aux TRS role'
+            )
     target = target.model_copy(
         update={
             'midi_endpoints': [
@@ -286,13 +293,14 @@ def compile_show(
             continue
         if assignment.button in buttons:
             errors.append(f'{path}.button: duplicate switch button {assignment.button}')
-        if assignment.button not in target.buttons:
-            errors.append(f'{path}.button: unavailable on target')
+        try:
+            button = inputs.index(assignment.button, show, target)
+        except ValueError as error:
+            errors.append(f'{path}.button: {error}')
             continue
         if assignment.button == target.controls.back:
             errors.append(f'{path}.button: reserved for back navigation')
             continue
-        button = target.buttons.index(assignment.button)
         slot = len(assignments)
         if slot >= 5:
             errors.append(
@@ -380,7 +388,9 @@ def compile_show(
                 values={
                     'patch_cycle.name': 'Switches',
                     'display_name': name,
-                    'switch.name': f'{assignment.button}: {name}',
+                    'switch.name': f'{assignment.button}: {name}'
+                    if assignment.button in target.buttons
+                    else name,
                     'switch.mode': assignment.mode,
                     'switch.button': assignment.button,
                     'switch.state': 'Unknown remote state',
@@ -614,7 +624,13 @@ def compile_show(
                 show.scrolling.cycles,
             )
         ),
-        int(show.fast_switches) | (int(not show.forward_device_to_host) << 1),
+        int(show.fast_switches)
+        | (int(not show.forward_device_to_host) << 1)
+        | sum(
+            1 << (i + 2)
+            for i, j in enumerate(jacks)
+            if show.auxiliary_switches.get(j) == 'combined'
+        ),
         sum(p.ram2_bytes for p in show.pages.values()),
         crc32(setup_name_bytes),
     )
@@ -1023,8 +1039,10 @@ class PatchCompiler:
             if isinstance(binding, models.ExpressionAssignment):
                 expressions[key] = binding
                 continue
-            if key not in self.target.buttons:
-                self.errors.append(f'{context}: unknown switch {key!r}')
+            try:
+                button = inputs.index(key, self.show, self.target)
+            except ValueError as error:
+                self.errors.append(f'{context}: {error}')
                 continue
             action = (
                 binding
@@ -1051,7 +1069,7 @@ class PatchCompiler:
             )
             records.append(
                 SWITCH.pack(
-                    self.target.buttons.index(key),
+                    button,
                     ('press', 'momentary', 'latched').index(action.mode),
                     on,
                     off,

@@ -89,7 +89,7 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_enter)
 #endif
-    void enter(const Document &document, uint8_t held, ControlBindings bindings = {}) {
+    void enter(const Document &document, uint32_t held, ControlBindings bindings = {}) {
         for (auto &s : states_) s.executor.cancel();
         unpin(); sources_.begin(); pinned_ = true;
         document_ = document; bindings_ = bindings; ++revision_;
@@ -156,7 +156,7 @@ public:
     CNTRL_FLASH_ROUTINE(switches_button)
 #endif
     void button(unsigned button, bool down, uint32_t now = 0) {
-        if (!open_ || button >= hardware_.input_count() || button >= 8) return;
+        if (!open_ || button >= document_.inputs() || button >= 32) return;
         unsigned bit = 1u << button;
         if (bool(held_ & bit) == down) return;
         held_ = down ? held_ | bit : held_ & ~bit;
@@ -203,7 +203,7 @@ public:
             cancel_gestures(s);
         }
     }
-    void tick(uint32_t now = 0, std::optional<uint8_t> held = std::nullopt) {
+    void tick(uint32_t now = 0, std::optional<uint32_t> held = std::nullopt) {
         if (held) held_ = *held;
         if (!open_) { install_pending(); return; }
         if (const auto *state = outputs_.midi_state()) {
@@ -363,7 +363,7 @@ private:
             bound_.swap(pending_);
             const auto *p = bound_.data + (pending_document_.node(pending_node_) - pending_document_.data()) + 4;
             Document document;
-            if (document.load(bound_.data, bound_.size, hardware_)) enter(document, uint8_t(held_), ControlBindings{p});
+            if (document.load(bound_.data, bound_.size, hardware_)) enter(document, held_, ControlBindings{p});
             if (!open_) { bindings_ = {}; ++revision_; }
         }
         pending_document_ = Document(); pending_.clear(); sources_.end();
@@ -519,7 +519,7 @@ private:
                 auto &pane = panes[i % 3];
                 const unsigned row = 2 + i / 3;
                 const char *state = s.unknown ? "Unknown" : s.executor.busy() || s.queued ? "Pending" : s.record[1] ? (s.active ? "On" : "Off") : "";
-                std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", hardware_.input_label(s.record[0]), reinterpret_cast<const char *>(s.record + 6), state[0] ? " | " : "", state);
+                std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", document_.input_label(s.record[0]), reinterpret_cast<const char *>(s.record + 6), state[0] ? " | " : "", state);
             }
             ui::present(hardware_, panes, 1); dirty_ = false; return;
         }
