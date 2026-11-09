@@ -1,0 +1,2 @@
+# SDK patches must match upstream LF sources on every host.
+*.patch text eol=lf

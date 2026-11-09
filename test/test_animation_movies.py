@@ -21,12 +21,30 @@ from scripts import native_tests
         ('a.gif', ['a.gif']),
         ('a.gif:b.webp', ['a.gif', 'b.webp']),
         (['a.gif', 'b.webp'], ['a.gif', 'b.webp']),
+        (
+            [r'C:\media\a.gif', r'\\server\media\b.gif'],
+            [r'C:\media\a.gif', r'\\server\media\b.gif'],
+        ),
     ],
 )
 def test_movie_list_forms(value: object, expected: list[str]) -> None:
     setup = models.Setup.model_validate({'splash_movie': value, 'idle_movie': value})
     assert setup.splash_movie == expected
     assert setup.idle_movie == expected
+
+
+def test_utf8_crlf_setup_resolves_movies_from_a_directory_with_spaces(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / 'café media'
+    directory.mkdir()
+    source = directory / 'show.toml'
+    source.write_bytes("name = 'Café'\r\nsplash_movie = ['movie.gif']\r\n".encode())
+    document = compiler.read_document(source)
+    assert document == {
+        'name': 'Café',
+        'splash_movie': [str((directory / 'movie.gif').resolve())],
+    }
 
 
 @pytest.mark.parametrize(

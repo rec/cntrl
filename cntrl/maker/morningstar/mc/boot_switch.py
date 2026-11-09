@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Annotated
+from urllib.request import urlopen
 
 import tyro
 from pydantic import AfterValidator, BaseModel, Field
@@ -12,6 +13,7 @@ from reccy.configuration import units
 
 from ....firmware.intel_hex import FirmwareImage, encode_hex, read_hex
 from ....patch_switcher.models import millisecond_resolution
+from . import toolchain
 from .upload_helper import validate_firmware
 
 
@@ -71,10 +73,23 @@ def build(command: Build, *, source_root: Path | None = None) -> None:
     root = Path(__file__).parent / 'firmware'
     work = root / 'build/boot-switch'
     work.mkdir(parents=True, exist_ok=True)
+    if not command.stock.exists() and command.stock == Build().stock:
+        with urlopen(
+            'https://github.com/Morningstar-Engineering/MC6-PRO-MIDI-Controller/releases/download/v3.14.0/'
+            + command.stock.name,
+            timeout=60,
+        ) as response:
+            data = response.read()
+        import hashlib
+
+        if hashlib.sha256(data).hexdigest() != STOCK_SHA256:
+            raise ValueError('downloaded stock firmware checksum mismatch')
+        command.stock.write_bytes(data)
     stock = read_hex(command.stock)
     if stock.sha256 != STOCK_SHA256:
         raise ValueError('stock firmware does not match the traced v3.14.0 image')
     core = root / '.tools/data/packages/teensy/hardware/avr/1.62.0'
+    toolchain.ensure(root)
     original = (core / 'cores/teensy4/imxrt1062_t41.ld').read_text()
     region = 'FLASH (rx): ORIGIN = 0x60000000, LENGTH = 7936K'
     if original.count(region) != 1:
@@ -83,28 +98,16 @@ def build(command: Build, *, source_root: Path | None = None) -> None:
     linker.write_text(
         original.replace(region, 'FLASH (rx): ORIGIN = 0x60100000, LENGTH = 6912K')
     )
-    subprocess.run(
-        [
-            'make',
-            '-C',
-            str(root),
-            'patch-switcher',
-            f'PATCH_BUILD={work / "cntrl"}',
-            f'PATCH_OUTPUT={work / "cntrl.hex"}',
-            f'PATCH_LINKER={linker}',
-            *([f'SOURCE_ROOT={source_root}'] if source_root is not None else []),
-        ],
-        check=True,
+    toolchain.build(
+        root, source_root or Path(__file__).resolve().parents[4], work, linker
     )
     custom = read_hex(work / 'cntrl.hex')
     entry = struct.unpack_from('<I', custom.data, 0x1004)[0]
-    arm = root / '.tools/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin'
-    tool = arm / 'arm-none-eabi'
     source = root / 'boot_switch'
     elf = work / 'hook.elf'
     subprocess.run(
         [
-            f'{tool}-g++',
+            str(toolchain.arm_tool(root, 'g++')),
             '-mcpu=cortex-m7',
             '-mthumb',
             '-mfloat-abi=hard',
@@ -131,10 +134,17 @@ def build(command: Build, *, source_root: Path | None = None) -> None:
     )
     binary = work / 'hook.bin'
     subprocess.run(
-        [f'{tool}-objcopy', '-O', 'binary', str(elf), str(binary)], check=True
+        [
+            str(toolchain.arm_tool(root, 'objcopy')),
+            '-O',
+            'binary',
+            str(elf),
+            str(binary),
+        ],
+        check=True,
     )
     symbols = subprocess.run(
-        [f'{tool}-nm', '--defined-only', str(elf)],
+        [str(toolchain.arm_tool(root, 'nm')), '--defined-only', str(elf)],
         capture_output=True,
         text=True,
         check=True,

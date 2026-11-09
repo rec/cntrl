@@ -18,12 +18,22 @@ def validate_name(name: str) -> str:
         not 1 <= len(name) <= 63
         or name in ('.', '..')
         or name.endswith((' ', '.'))
+        or name.split('.', 1)[0].rstrip(' ').upper() in WINDOWS_DEVICES
         or any(ord(c) < 32 or ord(c) > 126 or c in '<>:"/\\|?*' for c in name)
     ):
         raise ValueError(
             f'{name!r}: invalid setup name (1..63 filename-safe ASCII characters)'
         )
     return name
+
+
+WINDOWS_DEVICES = {
+    'CON',
+    'PRN',
+    'AUX',
+    'NUL',
+    *(f'{p}{i}' for p in ('COM', 'LPT') for i in range(1, 10)),
+}
 
 
 def expressions(

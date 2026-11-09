@@ -16,12 +16,12 @@ int usb_peer(cntrl::UsbSession &usb, Receive receive, Poll poll, Ready ready, Re
 #endif
     while (true) {
 #ifdef _WIN32
-        DWORD available = 0;
+        unsigned long available = 0;
         if (!PeekNamedPipe(GetStdHandle(STD_INPUT_HANDLE), nullptr, 0, nullptr, &available, nullptr)) return 0;
         if (!available && !(usb.reply_ready() && !ready())) Sleep(1);
         if (available) {
             uint8_t byte;
-            DWORD count = 0;
+            unsigned long count = 0;
             if (!ReadFile(GetStdHandle(STD_INPUT_HANDLE), &byte, 1, &count, nullptr) || count != 1) return 0;
             usb.receive(byte);
         }
@@ -41,7 +41,7 @@ int usb_peer(cntrl::UsbSession &usb, Receive receive, Poll poll, Ready ready, Re
         if (usb.reply_ready()) poll();
         while (usb.output_pending()) {
 #ifdef _WIN32
-            DWORD count = 0;
+            unsigned long count = 0;
             if (!WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), usb.output(), 1, &count, nullptr) || count != 1) return 1;
 #else
             if (::write(1, usb.output(), 1) != 1) return 1;

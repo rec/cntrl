@@ -12,6 +12,10 @@ on:
         description: Target implementation directory for a full build
         type: string
         default: ''
+      cold_cache:
+        description: Qualify without restored dependency or SDK caches
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -44,18 +48,24 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
         with:
-          enable-cache: true
+          enable-cache: ${{ !inputs.cold_cache }}
           cache-dependency-glob: cntrl/uv.lock
       - uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c
         if: runner.os == 'Windows'
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: inputs.profile == 'full' && !inputs.cold_cache
+        with:
+          path: cntrl/cntrl/**/firmware/.tools
+          key: sdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cntrl/uv.lock', 'cntrl/cntrl/**/toolchain.py', 'cntrl/cntrl/**/*.patch') }}
       - name: Install locked dependencies
         run: uv sync --frozen --group dev
       - name: Record tested revision
         run: git rev-parse HEAD
-      - name: Run Python tests
-        run: uv run --no-sync python -m pytest -q --junitxml=reports/pytest.xml
-      - name: Run native suite
-        run: uv run --no-sync python scripts/native_tests.py
+      - name: Qualify selected profile
+        env:
+          CNTRL_CI_PROFILE: ${{ inputs.profile }}
+          CNTRL_CI_TARGET_DIR: ${{ inputs.target_dir }}
+        run: uv run --no-sync python -m scripts.ci
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

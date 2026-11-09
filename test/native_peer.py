@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from queue import Empty, Queue
 from tempfile import TemporaryFile
-from threading import Thread
+from threading import Thread, Timer
 from types import TracebackType
 from unittest.mock import patch
 
@@ -29,6 +29,8 @@ class NativePeer:
         )
         self.reader = Thread(target=self.receive, daemon=True)
         self.reader.start()
+        self.watchdog = Timer(180, self.process.kill)
+        self.watchdog.start()
         self.backend = patch('cntrl.patch_switcher.transport.Serial', self.open)
         self.backend.start()
         return 'cntrl-test-peer'
@@ -52,6 +54,7 @@ class NativePeer:
         traceback: TracebackType | None,
     ) -> None:
         self.backend.stop()
+        self.watchdog.cancel()
         self.process.terminate()
         self.process.wait(timeout=5)
         self.reader.join(timeout=5)

@@ -52,6 +52,7 @@ def qualify(options: Qualification) -> None:
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     check=True,
+                    timeout=1200,
                 )
         source = read_document(root / 'firmware/test/show.json')
         if not isinstance(source, dict):
@@ -107,6 +108,7 @@ def qualify(options: Qualification) -> None:
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 check=True,
+                timeout=120,
             )
         if not compiled.is_file() or not list((root / 'fonts').glob('*.cfont')):
             raise ValueError('export qualification did not prepare native font assets')
@@ -368,7 +370,7 @@ C_HEADERS = set(
         'string.h tgmath.h threads.h time.h uchar.h wchar.h wctype.h'
     ).split()
 )
-HOST_HEADERS = {'poll.h', 'unistd.h'}
+HOST_HEADERS = {'poll.h', 'unistd.h', 'windows.h'}
 CPP_HEADERS = set(
     (
         'algorithm any array atomic barrier bit bitset cassert cctype cerrno '

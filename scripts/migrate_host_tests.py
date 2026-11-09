@@ -17,7 +17,7 @@ class Options(BaseModel, frozen=True):
 def migrate(options: Options) -> None:
     for path in [
         *options.root.glob('test/test_*.py'),
-        *options.root.glob('cntrl/maker/*/*/test/test_*.py'),
+        *options.root.glob('cntrl/**/test/test_*.py'),
     ]:
         source = path.read_text()
         tree = ast.parse(source)

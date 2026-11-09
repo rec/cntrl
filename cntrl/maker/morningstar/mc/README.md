@@ -77,12 +77,13 @@ See the [firmware build and inspection instructions](firmware/README.md),
 Run from the repository root:
 
 ```bash
-make -C cntrl/maker/morningstar/mc/firmware test inspect-patch-switcher
+uv run --frozen python -m cntrl.maker.morningstar.mc.native_tests
+uv run --frozen cntrl build --target-dir cntrl/maker/morningstar/mc --output build/device
 uv run --frozen pytest
 ```
 
-The separate `inspect` target builds the historical USB/button/display diagnostic,
-not the patch-switcher. Neither build flashes anything. The helper uploads the
+See [cross-platform build and uploader setup](cross-platform.md).
+Builds do not flash anything. The helper uploads the
 fixed `firmware/build/patch-switcher.hex` path only. Keep an existing helper
 running between uploads; restart it when its source or fixed paths change. An
 address-in-use error can mean it is already serving, not that its socket is stale.

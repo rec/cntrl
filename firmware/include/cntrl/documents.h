@@ -769,7 +769,8 @@ private:
             if (select(name)) replies_.reply("CNTRL OK"); else error("selection-failed"); return;
         }
         if (!std::strcmp(line_, "CNTRL SETUP FORWARD") || !std::strcmp(line_, "CNTRL SETUP BACKWARD")) {
-            if (!rotate(!std::strcmp(line_, "CNTRL SETUP BACKWARD"))) error("rotation-failed"); return;
+            if (!rotate(!std::strcmp(line_, "CNTRL SETUP BACKWARD"))) error("rotation-failed");
+            return;
         }
         if (!std::strcmp(line_, "CNTRL SETUP FINISH")) {
             char first[64]; if (!selected_[0] && next_valid("", first) && !select(first)) { error("selection-failed"); return; }
