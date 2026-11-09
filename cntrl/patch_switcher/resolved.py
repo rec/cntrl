@@ -6,7 +6,14 @@ from zlib import crc32
 
 import tomlkit
 
-from . import inputs, layout, midi_endpoints, midi_messages, page_settings
+from . import (
+    inputs,
+    layout,
+    midi_endpoints,
+    midi_messages,
+    page_settings,
+    relay_outputs,
+)
 from .compiler import (
     DOCUMENT_VERSION,
     GESTURE_EVENTS,
@@ -79,6 +86,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     input_offset = cursor
     labels = inputs.unpack(data, cursor)
     cursor += inputs.HEADER.size + len(labels) * inputs.RECORD.size
+    cursor = relay_outputs.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -196,6 +204,10 @@ def export(data: bytes) -> str:
     if combined:
         result['auxiliary_switches'] = combined
     result.update(source)
+    input_offset = _sections(data)[2]
+    relay_offset = input_offset + inputs.HEADER.size + len(labels) * inputs.RECORD.size
+    if relays := relay_outputs.unpack(data, relay_offset):
+        result['relays'] = relays
     instruments: dict[str, object] = {}
     profiles: list[dict[str, object]] = []
     for i in range(ni):
@@ -588,6 +600,15 @@ def _patch(
                 | bindings
             }
         )
+    elif kind == 11:
+        contact, action, duration = struct.unpack_from('<32sBI', data, cursor)
+        value.update(
+            operation='relay',
+            relay=contact.split(b'\0')[0].decode('ascii'),
+            action=relay_outputs.ACTIONS[action],
+        )
+        if duration:
+            value['duration'] = duration / 1000
     elif kind == 7:
         value.update(duration=struct.unpack_from('<I', data, cursor)[0] / 1000)
     elif kind == 6:

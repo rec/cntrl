@@ -15,6 +15,9 @@ public:
         if (writing_) storage_.finish();
         writing_ = false; phase_ = Phase::idle; data_.clear();
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(history_import_command)
+#endif
     bool command(const char *line, uint32_t now) {
         unsigned length = 0; unsigned long crc = 0; int end = 0;
         char encoded[127], number[21];

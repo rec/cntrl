@@ -168,6 +168,8 @@ cycles = "right"
 
 [auxiliary_switches]
 
+[relays]
+
 [style]
 
 icon = "sample"

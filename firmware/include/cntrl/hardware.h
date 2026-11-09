@@ -6,6 +6,7 @@
 #include "page_settings.h"
 #include "page_layout.h"
 #include "memory.h"
+#include "relay_outputs.h"
 
 namespace cntrl {
 constexpr unsigned max_instruments = 32;
@@ -58,7 +59,8 @@ inline bool button_pair_valid(unsigned mask) {
 struct SongContinuation;
 class Document;
 enum class ControlRole { previous, next, confirm, previous_section, next_section, back };
-struct Hardware {
+struct Hardware : RelayDriver {
+    RelayOutputs relays{*this};
     virtual ~Hardware() = default;
     virtual unsigned memory_capacity() const { return 0; }
     virtual unsigned memory_runtime() const { return 0; }

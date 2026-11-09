@@ -272,6 +272,29 @@ class Shift(Presentation, frozen=True):
     operation: Literal['shift', 'unshift']
 
 
+class Relay(Presentation, frozen=True):
+    operation: Literal['relay']
+    relay: str
+    action: Literal['engage', 'disengage', 'toggle', 'pulse']
+    duration: (
+        Annotated[
+            float,
+            Field(strict=True, ge=0.001, le=65.535),
+            units.unit_validator('second'),
+            AfterValidator(millisecond_resolution),
+        ]
+        | None
+    ) = None
+
+    @model_validator(mode='after')
+    def pulse_duration(self) -> 'Relay':
+        if (self.action == 'pulse') != (self.duration is not None):
+            raise ValueError(
+                'duration is required for pulse and forbidden for other relay actions'
+            )
+        return self
+
+
 class PlayMidiFile(Presentation, frozen=True):
     operation: Literal['play-midi-file']
     filename: Annotated[str, Field(max_length=95)] = ''
@@ -381,7 +404,8 @@ ConcretePatch = (
         | Shift
         | StockFirmware
         | PlayMidiFile
-        | RecordMidiFile,
+        | RecordMidiFile
+        | Relay,
         Field(discriminator='operation'),
     ]
     | Annotated[
@@ -865,6 +889,7 @@ class Setup(BaseModel, frozen=True):
     auxiliary_switches: dict[str, Literal['independent', 'combined']] = Field(
         default_factory=dict
     )
+    relays: dict[str, Annotated[bool, Field(strict=True)]] = Field(default_factory=dict)
     is_midi_interface: Annotated[bool, Field(strict=True)] = False
     usb_device_midi: Annotated[bool, Field(strict=True)] = True
     usb_host_midi: Annotated[bool, Field(strict=True)] = True
@@ -1016,6 +1041,18 @@ class Target(BaseModel, frozen=True):
     midi_endpoints: list[MidiEndpoint] = Field(max_length=16)
     default_midi_output: str
     trs_ports: dict[str, list[TrsMode]] = Field(default_factory=dict)
+    relay_outputs: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=31, pattern=r'^[ -~]+$')]],
+        Field(max_length=32),
+    ] = Field(default_factory=list)
+
+    @field_validator('relay_outputs')
+    @classmethod
+    def distinct_relays(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError('relay output names must be unique')
+        return value
+
     max_instruments: int = Field(gt=0, le=32)
     max_patch_cycles: int = Field(gt=0, le=128)
     max_patches: int = Field(gt=0, le=65535)

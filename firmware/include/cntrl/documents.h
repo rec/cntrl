@@ -539,6 +539,7 @@ private:
     }
     void empty() {
         document_ = Document(); controller_.deactivate();
+        if (!hardware_.relays.reset()) hardware_.error("Relay reset failed");
         hardware_.configure_pages(document_);
         active_.clear();
         constexpr uint8_t off[4] = {}; hardware_.configure_trs_ports(off);

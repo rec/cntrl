@@ -100,6 +100,7 @@ public:
         cancel_gesture();
         document_ = document;
         if (configure) {
+            if (!hardware_.relays.configure(document.relay_records(), document.relay_count())) hardware_.error("Relay setup failed");
             hardware_.configure_trs_ports(document.trs_modes());
             hardware_.configure_page_settings(document.page_settings());
             hardware_.set_target_pulse(document.pulse_period_ms(), document.pulse_minimum(), document.pulse_maximum(), document.pulse_delay_ms());
