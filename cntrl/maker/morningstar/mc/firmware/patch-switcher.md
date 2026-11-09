@@ -34,7 +34,7 @@ After building and inspecting the combined firmware, use its absolute path and
 exact SHA-256 with the existing upload helper:
 
 ```bash
-cntrl upload-helper upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
+python -m cntrl.maker.morningstar.mc.upload_helper upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
 ```
 
 The helper snapshots and validates the requested worktree image before flashing

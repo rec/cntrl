@@ -8,7 +8,6 @@ import sys
 from multiprocessing.connection import Client, Listener
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Annotated
 
 import tyro
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -33,16 +32,6 @@ class Upload(BaseModel, frozen=True):
 
 class Bootloader(BaseModel, frozen=True):
     """Enter HalfKay through the fixed pedal's USB serial port, without uploading."""
-
-
-class Helper(BaseModel, frozen=True):
-    """Serve firmware uploads, request an upload, or enter the pedal's bootloader."""
-
-    command: (
-        Annotated[Serve, tyro.conf.subcommand(name='serve')]
-        | Annotated[Upload, tyro.conf.subcommand(name='upload')]
-        | Annotated[Bootloader, tyro.conf.subcommand(name='bootloader')]
-    )
 
 
 class UploadResult(BaseModel, frozen=True):
@@ -263,6 +252,10 @@ def run(options: Serve | Upload | Bootloader) -> None:
         sys.exit(f'Upload helper: {error}')
 
 
+def main() -> None:
+    run(tyro.cli(Serve | Upload | Bootloader))
+
+
 ROOT = Path(__file__).resolve().parent
 REQUEST_LIMIT = 8192
 CACHE_DIRECTORY = (
@@ -281,3 +274,7 @@ SOCKET_PATH = (
 BOARD_SERIAL = '14468280'
 BOARD_TAG = '14468280-Teensy'
 FLASH_CONFIG_SHA256 = '65b509525e8b0e6e92e4e6bc8fa39575399b27532e04a55f7a7883212042fe7a'
+
+
+if __name__ == '__main__':
+    main()

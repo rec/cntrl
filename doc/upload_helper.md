@@ -1,9 +1,8 @@
 # Firmware upload helper
 
-Use `cntrl upload-helper serve` to start the helper manually,
-`cntrl upload-helper bootloader` to request bootloader entry, and
-`cntrl upload-helper upload --image /absolute/path/to/firmware.hex --sha256 DIGEST`
-to request an upload. The helper is part of the existing `cntrl` CLI.
+Firmware upload helpers belong to the selected implementation and run through
+its Python module. The common CLI remains usable without implementation code.
+Use the implementation's helper guide for its entry point and command arguments.
 
 Use the running, user-launched upload helper for firmware flashing. Reuse that
 process; do not start a second server. Each upload request supplies an absolute
