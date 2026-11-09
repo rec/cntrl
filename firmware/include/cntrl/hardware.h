@@ -7,6 +7,7 @@
 #include "page_layout.h"
 #include "memory.h"
 #include "relay_outputs.h"
+#include "counters.h"
 
 namespace cntrl {
 constexpr unsigned max_instruments = 32;
@@ -61,6 +62,7 @@ class Document;
 enum class ControlRole { previous, next, confirm, previous_section, next_section, back };
 struct Hardware : RelayDriver {
     RelayOutputs relays{*this};
+    Counters counters;
     virtual ~Hardware() = default;
     virtual unsigned memory_capacity() const { return 0; }
     virtual unsigned memory_runtime() const { return 0; }

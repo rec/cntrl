@@ -251,6 +251,41 @@ class SystemMessage(OutputMessage, frozen=True):
     ]
 
 
+class Counter(BaseModel, frozen=True):
+    type: Literal['program-change', 'control-change']
+    output: str
+    channel: Annotated[int, Field(strict=True, ge=1, le=16)]
+    controller: Annotated[int, Field(strict=True, ge=0, le=127)] | None = None
+    initial: Annotated[int, Field(strict=True)]
+    minimum: Annotated[int, Field(strict=True)]
+    maximum: Annotated[int, Field(strict=True)]
+    step: Annotated[int, Field(strict=True, ge=-32767, le=32767)] = 1
+    boundary: Literal['wrap', 'bounce'] = 'wrap'
+
+    @model_validator(mode='after')
+    def limits(self) -> 'Counter':
+        low, high = (1, 128) if self.type == 'program-change' else (0, 127)
+        if not low <= self.minimum <= self.initial <= self.maximum <= high:
+            raise ValueError(
+                f'counter limits and initial must be ordered within {low}..{high}'
+            )
+        if not self.step:
+            raise ValueError('counter step must be nonzero')
+        if (self.type == 'control-change') != (self.controller is not None):
+            raise ValueError(
+                'controller is required for CC and forbidden for PC counters'
+            )
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class ScrollCounter(Presentation, frozen=True):
+    operation: Literal['scroll-counter']
+    counter: str
+    direction: Literal['forward', 'backward'] = 'forward'
+
+
 class Brightness(Presentation, frozen=True):
     operation: Literal['brightness']
     value: Annotated[int, Field(strict=True, ge=0, le=255)]
@@ -413,7 +448,8 @@ ConcretePatch = (
         | PlayMidiFile
         | RecordMidiFile
         | MidiStream
-        | Relay,
+        | Relay
+        | ScrollCounter,
         Field(discriminator='operation'),
     ]
     | Annotated[
@@ -932,6 +968,7 @@ class Setup(BaseModel, frozen=True):
     )
     tag_styles: dict[str, Style] = Field(default_factory=dict)
     parameters: dict[str, Parameter] = Field(default_factory=dict)
+    counters: dict[str, Counter] = Field(default_factory=dict)
     switches: dict[str, object] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra='forbid')

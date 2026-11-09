@@ -1,0 +1,91 @@
+fill_in_styles = false
+
+[counters.volume]
+type = 'control-change'
+output = 'din'
+channel = 2
+controller = 7
+initial = 95
+minimum = 0
+maximum = 100
+step = 5
+boundary = 'wrap'
+
+[counters.program]
+type = 'program-change'
+output = 'trs'
+channel = 16
+initial = 128
+minimum = 1
+maximum = 128
+boundary = 'wrap'
+
+[counters.bounded]
+type = 'control-change'
+output = 'din'
+channel = 1
+controller = 1
+initial = 3
+minimum = 0
+maximum = 5
+step = -4
+boundary = 'bounce'
+
+[counters.fixed]
+type = 'control-change'
+output = 'din'
+channel = 1
+controller = 2
+initial = 64
+minimum = 64
+maximum = 64
+step = 32767
+boundary = 'bounce'
+
+[patches.up]
+operation = 'scroll-counter'
+counter = 'volume'
+
+[patches.down]
+operation = 'scroll-counter'
+counter = 'volume'
+direction = 'backward'
+
+[patches.program]
+operation = 'scroll-counter'
+counter = 'program'
+
+[patches.program_down]
+operation = 'scroll-counter'
+counter = 'program'
+direction = 'backward'
+
+[patches.bounded]
+operation = 'scroll-counter'
+counter = 'bounded'
+
+[patches.bounded_back]
+operation = 'scroll-counter'
+counter = 'bounded'
+direction = 'backward'
+
+[patches.fixed]
+operation = 'scroll-counter'
+counter = 'fixed'
+
+[patch_cycles]
+counters = ['up', 'program']
+
+[switches.up]
+button = 'A'
+on = 'up'
+
+[switches.down]
+button = 'B'
+on = 'down'
+
+[patch_views.patch]
+fields = ['display_name', 'counters.volume', 'counters.program']
+
+[patch_views.switches]
+fields = ['switch.name', 'counters.volume', 'switch.state']

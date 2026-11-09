@@ -365,7 +365,7 @@ HEADER = struct.Struct('<4sI')
 ENTRY = struct.Struct('<15BII')
 MAX_ASSET = 256 * 1024
 NUMBERS = '-0123456789'
-NUMERIC_FIELDS = (2, 3, 4, 5, 16, 17, 19, 20, 21)
+NUMERIC_FIELDS = (2, 3, 4, 5, 16, 17, 19, 20, 21, 24)
 SWITCH_STATES = (
     'Off',
     'On',

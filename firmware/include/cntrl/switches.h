@@ -206,6 +206,9 @@ public:
     void tick(uint32_t now = 0, std::optional<uint32_t> held = std::nullopt) {
         if (held) held_ = *held;
         if (!open_) { install_pending(); return; }
+        if (counter_revision_ != hardware_.counters.revision()) {
+            counter_revision_ = hardware_.counters.revision(); dirty_ = true;
+        }
         if (const auto *state = outputs_.midi_state()) {
             if (state->revision() != state_revision_) { state_revision_ = state->revision(); dirty_ = true; }
         }
@@ -329,7 +332,7 @@ private:
     Document pending_document_;
     PatchExecutor *pending_invocation_ = nullptr;
     const uint8_t *pending_source_ = nullptr;
-    unsigned pending_node_ = 0, revision_ = 0;
+    unsigned pending_node_ = 0, revision_ = 0, counter_revision_ = 0;
     struct Event { unsigned index, node, kind; bool layer; };
     Event events_[16];
     unsigned event_count_ = 0, transition_ = 0, state_revision_ = 0;
@@ -535,7 +538,7 @@ private:
                 ? "Pending" : on == 1 ? "On" : off == 1 ? "Off" : on == 2 || off == 2 ? "Partial match"
                 : on == -1 || off == -1 ? "Unknown remote state" : on == 0 ? "Other values"
                 : s.record[1] == 0 ? "Completed locally" : s.active ? "On" : "Off";
-            document_.page_record(view, u16(s.record + 70), 0, false, state);
+            document_.page_record(view, u16(s.record + 70), 0, false, state, &hardware_.counters);
             unsigned pane = i % 3, group = i / 3;
             panes[pane].graphics = view.graphics;
             for (unsigned j = 0; j < 3; ++j) {

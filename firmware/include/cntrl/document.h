@@ -244,6 +244,23 @@ public:
             }
             names += 6 + relay_count * 33;
         }
+        unsigned counter_count = 0;
+        if (names + 4 <= length && !std::memcmp(bytes + names, "CCNT", 4)) {
+            if (length - names < 6) return false;
+            counter_count = u16(bytes + names + 4);
+            if (!counter_count || counter_count > (length - names - 6) / 104) return false;
+            for (unsigned i = 0; i < counter_count; ++i) {
+                const uint8_t *p = bytes + names + 6 + i * 104;
+                if (!label_valid(p, 64) || !text_valid(p + 64, 32)
+                    || !output_valid(bytes + meta + trs_modes_offset, p + 64, hardware, output_routes)
+                    || (p[96] >> 4 != 11 && p[96] >> 4 != 12) || p[97] > 127
+                    || (p[96] >> 4 == 12 && p[97]) || p[99] > p[98] || p[98] > p[100]
+                    || p[100] > 127 || !u16(p + 101) || u16(p + 101) == 32768 || p[103] > 1) return false;
+                for (unsigned j = 0; j < i; ++j)
+                    if (!std::strcmp(reinterpret_cast<const char *>(p), reinterpret_cast<const char *>(bytes + names + 6 + j * 104))) return false;
+            }
+            names += 6 + counter_count * 104;
+        }
         unsigned streams = 0;
         if (names + 4 <= length && !std::memcmp(bytes + names, "CSTR", 4)) {
             if (length - names < 12) return false;
@@ -261,7 +278,7 @@ public:
             end += size;
         }
         unsigned graph = end;
-        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count)) return false;
+        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count)) return false;
         if (streams) {
             std::vector<midi::OutputConnection> configured;
             for (auto connection : hardware.midi_outputs()) {
@@ -321,7 +338,7 @@ public:
             if (cursor + count * 8 > texts) return false;
             for (unsigned j = 0; j < count; ++j, cursor += 8) {
                 const uint8_t *p = bytes + cursor;
-                if ((p[0] > 7 && (p[0] < 16 || p[0] > 23) && p[0] != 255)
+                if ((p[0] > 7 && (p[0] < 16 || p[0] > 24) && p[0] != 255)
                     || p[1] > 1 || u16(p + 2) >= ns || u16(p + 6) >= nt) return false;
                 const uint8_t *g = bytes + styles + u16(p + 2) * 16;
                 if (u16(p + 4) < g[2] || u16(p + 4) >= hardware.display_width() - g[2]) return false;
@@ -455,6 +472,9 @@ public:
     const uint8_t *relay_section() const { return input_section() + 6 + inputs() * 32; }
     unsigned relay_count() const { return !std::memcmp(relay_section(), "CREL", 4) ? u16(relay_section() + 4) : 0; }
     const uint8_t *relay_records() const { return relay_section() + 6; }
+    const uint8_t *counter_section() const { return relay_section() + (relay_count() ? 6 + relay_count() * 33 : 0); }
+    unsigned counters() const { return !std::memcmp(counter_section(), "CCNT", 4) ? u16(counter_section() + 4) : 0; }
+    const uint8_t *counter(unsigned index) const { return counter_section() + 6 + index * 104; }
     unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
     uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 10); }
     uint8_t brightness() const { return data_[18]; }
@@ -509,7 +529,7 @@ public:
     unsigned page_section_size() const {
         const uint8_t *endpoints = movie_section() + 8 + 4 * (movies(false) + movies(true));
         const uint8_t *inputs = endpoints + 6 + 68 * u16(endpoints + 4);
-        return unsigned(inputs - bank(patches())) + 6 + 32 * u16(inputs + 4) + (relay_count() ? 6 + relay_count() * 33 : 0);
+        return unsigned(inputs - bank(patches())) + 6 + 32 * u16(inputs + 4) + (relay_count() ? 6 + relay_count() * 33 : 0) + (counters() ? 6 + counters() * 104 : 0);
     }
     const uint8_t *movie_section() const {
         const auto layout = page_layout();
@@ -553,11 +573,11 @@ public:
         }
         return true;
     }
-    void page(Pane &view, unsigned index, unsigned slot, bool already_sent) const {
+    void page(Pane &view, unsigned index, unsigned slot, bool already_sent, const Counters *values = nullptr) const {
         unsigned page = u16(patch(index) + 76 + slot * 2);
-        page_record(view, page, index, already_sent);
+        page_record(view, page, index, already_sent, "", values);
     }
-    void page_record(Pane &view, unsigned page, unsigned index, bool already_sent, const char *state = "") const {
+    void page_record(Pane &view, unsigned page, unsigned index, bool already_sent, const char *state = "", const Counters *values = nullptr) const {
         const uint8_t *p = data_ + pages_;
         while (page--) p += 1 + p[0] * 8;
         unsigned count = *p++;
@@ -565,10 +585,10 @@ public:
             TextLine &line = view.lines[i];
             line.graphics = read_graphics(data_ + styles_ + u16(p + 2) * 16);
             line.x = u16(p + 4);
-            line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 23);
+            line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 24);
             line.stippled = already_sent && p[1];
             if (p[0] == 22) std::snprintf(line.text, sizeof(line.text), "%s", state);
-            else field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6));
+            else field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6), values);
         }
     }
     const uint8_t *instrument(unsigned i) const { return data_ + 76 + i * 68; }
@@ -598,7 +618,7 @@ private:
     static bool graph_valid(const uint8_t *bytes, unsigned document_length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,
                             unsigned mappings, const Hardware &hardware, unsigned output_routes, unsigned input_routes, unsigned input_count,
-                            const uint8_t *relay_records, unsigned relay_count) {
+                            const uint8_t *relay_records, unsigned relay_count, unsigned counter_count) {
         if (start > document_length || document_length - start < 16 || std::memcmp(bytes + start, "CPAT", 4)) return false;
         const uint8_t *g = bytes + start;
         unsigned size = u32(g + 4), count = u16(g + 8), switches = u16(g + 10), named = u16(g + 14);
@@ -721,6 +741,9 @@ private:
             case 13:
                 if (n[1] || length != 73 || !text_valid(p, 72) || p[72] > 1) return false;
                 break;
+            case 14:
+                if (n[1] || length != 3 || u16(p) >= counter_count || p[2] > 1) return false;
+                break;
             case 7:
                 if (n[1] || length != 4 || !u32(p) || u32(p) > 65535) return false;
                 break;
@@ -793,11 +816,20 @@ private:
     static ScreenGraphics read_graphics(const uint8_t *p) {
         return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u32(p + 12)};
     }
-    void field_text(char *text, unsigned size, unsigned code, unsigned index, unsigned literal) const {
+    void field_text(char *text, unsigned size, unsigned code, unsigned index, unsigned literal, const Counters *values) const {
         const uint8_t *p = patch(index);
         const uint8_t *source = data_ + texts_;
         while (literal--) source += 2 + u16(source);
         source += 2;
+        if (code == 24) {
+            for (unsigned i = 0; i < counters(); ++i) {
+                const uint8_t *c = counter(i);
+                if (std::strcmp(reinterpret_cast<const char *>(c), reinterpret_cast<const char *>(source))) continue;
+                unsigned value = values ? values->value(u32(data_ + 20), i, c[98]) : c[98];
+                std::snprintf(text, size, "%u", value + (c[96] >> 4 == 12)); return;
+            }
+            return;
+        }
         if (u16(p) == 65535 && code >= 2 && code <= 6) return;
         switch (code) {
         case 0: source = patch_cycle(u16(p + 2)); break;

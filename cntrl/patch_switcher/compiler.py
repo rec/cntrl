@@ -11,6 +11,7 @@ import tomlkit
 from pydantic import ValidationError
 
 from . import (
+    counters,
     display,
     inputs,
     layout,
@@ -488,6 +489,7 @@ def compile_show(
         views.append(view)
     if show.inline_patches and not errors:
         compiler.inline_references()
+    show = show.model_copy(update={'counters': compiler.counters})
     for alias, instrument in instruments.items():
         instrument_records.append(
             struct.pack(
@@ -556,6 +558,7 @@ def compile_show(
         keyboard = page_settings.pack_keyboard(show, target)
         page_layout = layout.pack(show.pages, [d.id for d in target.displays])
         relay_settings = relay_outputs.pack(show, target)
+        counter_settings = counters.pack(compiler.counters, show, target)
         stream_settings = midi_processing.compile_routes(
             show.midi,
             {i: p.midi for i, p in enumerate(compiler.values) if p.midi is not None},
@@ -683,6 +686,7 @@ def compile_show(
         + midi_endpoints.pack(target)
         + inputs.pack(target)
         + relay_settings
+        + counter_settings
         + stream_settings
         + b'CNAM'
         + b''.join(names)
@@ -736,6 +740,7 @@ class PatchCompiler:
             instruments,
         )
         self.target, self.errors, self.documents = target, errors, documents
+        self.counters = dict(show.counters)
         self.values: list[models.ConcretePatch] = []
         self.nodes: list[bytes] = []
         self.paths: list[str] = []
@@ -858,6 +863,7 @@ class PatchCompiler:
                 models.RecordMidiFile,
                 models.MidiStream,
                 models.Relay,
+                models.ScrollCounter,
             ),
         ):
             default_label = value.operation
@@ -882,7 +888,20 @@ class PatchCompiler:
             self.children[index] = [child]
             return index
         flags = 0
-        if isinstance(value, models.MidiStream):
+        if isinstance(value, models.ScrollCounter):
+            if value.counter not in self.counters:
+                self.errors.append(f'{path}: unknown counter {value.counter!r}')
+            kind, payload = (
+                14,
+                struct.pack(
+                    '<HB',
+                    list(self.counters).index(value.counter)
+                    if value.counter in self.counters
+                    else 0,
+                    value.direction == 'backward',
+                ),
+            )
+        elif isinstance(value, models.MidiStream):
             reference = value.stream
             if reference.startswith('system/'):
                 valid = reference[7:] in (self.show.midi or {})
@@ -1692,6 +1711,7 @@ class PatchCompiler:
         contexts: list[PatchCompiler] = [self]
         imported: dict[tuple[int, int], int] = {}
         reference_names: dict[tuple[int, int], str] = {}
+        counter_names: dict[tuple[int, str], str] = {}
 
         def reference(
             context: PatchCompiler, value: models.Reference
@@ -1730,6 +1750,24 @@ class PatchCompiler:
             self.paths.append(context.paths[node])
             self.labels.append(context.labels[node])
             data = bytearray(context.nodes[node])
+            if data[0] == 14:
+                source_name = list(context.counters)[
+                    struct.unpack_from('<H', data, 4)[0]
+                ]
+                identity = contexts.index(context), source_name
+                if identity not in counter_names:
+                    name = source_name
+                    if name in self.counters:
+                        name = f'inline_{identity[0]}_{len(self.counters)}'
+                        while name in self.counters:
+                            name = '_' + name
+                    counter_names[identity] = name
+                    self.counters[name] = context.counters[source_name]
+                name = counter_names[identity]
+                self.values[destination] = context.values[node].model_copy(
+                    update={'counter': name}
+                )
+                struct.pack_into('<H', data, 4, list(self.counters).index(name))
             if data[0] == 1:
                 source_alias, instrument = list(context.instruments.items())[
                     struct.unpack_from('<H', data, 4)[0]

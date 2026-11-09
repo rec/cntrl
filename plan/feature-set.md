@@ -80,22 +80,6 @@ for clock-synchronized operation only.
 future steps; restart and tempo changes follow documented rules. Backpressure
 remains bounded and cannot leave an uninterruptible sequence running.
 
-## 13. MIDI PC/CC scroll counters
-
-**Outcome:** Use switches to step through MIDI program numbers or adjust a CC
-value, such as raising volume by five units per press.
-
-**Scope:** Add named counters with initial value, limits, step size and
-optional wraparound. Bind counters to MIDI PC or CC messages and display their
-current values. Define setup-change reset behavior and whether an unsuccessful
-send advances the counter. Reuse the same value for display and transmission.
-
-**Dependencies:** None.
-
-**Acceptance:** Limits, wraparound and negative steps behave consistently;
-multiple assignments referencing a counter share one value; failed or blocked
-sends follow the chosen advancement policy without display drift.
-
 ## 16. Graphical configuration editor
 
 **Outcome:** Users can edit, validate, transfer and back up setups through a
@@ -120,9 +104,7 @@ offline workflow separately from serialization tests.
 
 ## Suggested implementation order
 
-Start with counters (item 13), which extend existing execution paths without
-new physical inputs.
-Next implement waveforms and timed sequences (items 11 and 12).
+Start with waveforms and timed sequences (items 11 and 12).
 Routing and conversion follow the implementation sequence in
 [midi-processing.md](midi-processing.md).
 
