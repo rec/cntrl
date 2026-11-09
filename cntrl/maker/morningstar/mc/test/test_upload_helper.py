@@ -207,10 +207,12 @@ def test_worktree_discovery_includes_primary_and_linked_checkout(
         ]
 
 
-@pytest.mark.skipif(sys.platform == 'win32', reason='POSIX tty line-coding check')
 def test_bootloader_selects_special_baud_without_serial_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    if sys.platform == 'win32':
+        pytest.skip('POSIX tty line-coding check')
+
     import pty
     import termios
 
