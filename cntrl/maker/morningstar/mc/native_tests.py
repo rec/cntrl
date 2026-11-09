@@ -1,5 +1,6 @@
 """Run the adapter's native display and boot-selection checks on each host."""
 
+import sys
 from pathlib import Path
 
 import tyro
@@ -17,9 +18,10 @@ class Tests(BaseModel, frozen=True):
 
 def run(options: Tests) -> None:
     root = Path(__file__).resolve().parent / 'firmware'
+    failures: list[str] = []
     for name, sources, defines in TESTS:
         binary = options.output / name
-        compile_native(
+        result = compile_native(
             [
                 'c++',
                 '-std=c++17',
@@ -34,9 +36,15 @@ def run(options: Tests) -> None:
                 *(str(root / s) for s in sources),
                 '-o',
                 str(binary),
-            ]
+            ],
+            check=False,
         )
-        run_native([str(binary)])
+        if result.returncode:
+            failures.append(name)
+        elif run_native([str(binary)], check=False).returncode:
+            failures.append(name)
+    if failures:
+        sys.exit('Adapter native tests failed: ' + ', '.join(failures))
 
 
 TESTS = [
