@@ -28,7 +28,7 @@ class Qualification(BaseModel, frozen=True):
 def qualify(options: Qualification) -> None:
     check_dependencies(options.source_root)
     options.output.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix='cntrl-portable-') as directory:
+    with TemporaryDirectory(prefix='cntrl portable ') as directory:
         root = Path(directory)
         for name in SOURCE_DIRECTORIES:
             shutil.copytree(
@@ -52,6 +52,7 @@ def qualify(options: Qualification) -> None:
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     check=True,
+                    timeout=1200,
                 )
         source = read_document(root / 'firmware/test/show.json')
         if not isinstance(source, dict):
@@ -107,6 +108,7 @@ def qualify(options: Qualification) -> None:
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 check=True,
+                timeout=120,
             )
         if not compiled.is_file() or not list((root / 'fonts').glob('*.cfont')):
             raise ValueError('export qualification did not prepare native font assets')
@@ -153,7 +155,7 @@ def check_dependencies(source_root: Path) -> None:
         )
     ]
     python = {
-        p: ast.parse(p.read_text(), filename=str(p))
+        p: ast.parse(p.read_bytes(), filename=str(p))
         for p in sources
         if p.suffix == '.py'
     }
@@ -195,7 +197,7 @@ def check_dependencies(source_root: Path) -> None:
         ):
             errors.append(f'{relative}: source alias escapes the portable tree')
             continue
-        text = path.read_text()
+        text = path.read_bytes().decode()
         host_fixture = relative.parts[:2] == ('firmware', 'test')
         production = relative.parts[0] not in ('test',) and not host_fixture
         if path.suffix in ('.ld', '.lds', '.s', '.S'):
@@ -368,7 +370,7 @@ C_HEADERS = set(
         'string.h tgmath.h threads.h time.h uchar.h wchar.h wctype.h'
     ).split()
 )
-HOST_HEADERS = {'poll.h', 'unistd.h'}
+HOST_HEADERS = {'poll.h', 'unistd.h', 'windows.h'}
 CPP_HEADERS = set(
     (
         'algorithm any array atomic barrier bit bitset cassert cctype cerrno '

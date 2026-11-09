@@ -509,3 +509,7 @@ def main() -> None:
         sys.exit(130)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))
+
+
+if __name__ == '__main__':
+    main()

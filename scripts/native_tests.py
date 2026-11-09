@@ -49,7 +49,9 @@ def compile_native(
                 command.append('/' + a[1:])
             elif not a.startswith('-'):
                 command.append(a)
-        command.extend([f'/Fe{output}', f'/Fo{output.with_suffix(".obj")}'])
+        objects = output.parent / (output.stem + '-objects')
+        objects.mkdir(exist_ok=True)
+        command.extend([f'/Fe{output}', f'/Fo{objects}{os.sep}'])
     else:
         command = [os.environ.get('CXX', arguments[0]), *arguments[1:]]
         command[output_index] = str(output)

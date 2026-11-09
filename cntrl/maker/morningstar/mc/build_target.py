@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from ....firmware.capabilities import header
 from ....patch_switcher.compiler import read_document
 from ....patch_switcher.models import Target
-from . import boot_switch, export_fonts
+from . import boot_switch, export_fonts, toolchain
 
 
 class Build(BaseModel, frozen=True):
@@ -20,6 +20,7 @@ class Build(BaseModel, frozen=True):
 
 def run(command: Build) -> None:
     root = Path(__file__).parent
+    toolchain.ensure(root / 'firmware')
     command.output.mkdir(parents=True, exist_ok=True)
     data = read_document(root / 'patch-switcher-target.json')
     if not isinstance(data, dict):
@@ -42,6 +43,12 @@ def run(command: Build) -> None:
     shutil.copyfile(
         root / 'firmware/build/boot-switch/combined.hex',
         command.output / 'firmware.hex',
+    )
+    shutil.copyfile(
+        root / 'firmware/.tools/provenance.toml', command.output / 'toolchain.toml'
+    )
+    shutil.copyfile(
+        root / 'firmware/build/boot-switch/memory.txt', command.output / 'memory.txt'
     )
     (command.output / 'build.toml').write_text(
         tomlkit.dumps({'image': 'firmware.hex', 'target': 'target.toml'})

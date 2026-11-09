@@ -5,6 +5,7 @@ import struct
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from test_firmware import hex_record
@@ -155,10 +156,12 @@ def test_worktree_discovery_includes_primary_and_linked_checkout(
         ]
 
 
-@pytest.mark.skipif(sys.platform == 'win32', reason='POSIX tty line-coding check')
 def test_bootloader_selects_special_baud_without_serial_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    if sys.platform == 'win32':
+        pytest.skip('POSIX tty line-coding check')
+
     import pty
     import termios
 
@@ -184,6 +187,23 @@ def test_bootloader_selects_special_baud_without_serial_payload(
     finally:
         os.close(master)
         os.close(slave)
+
+
+def test_bootloader_uses_the_identified_pedal_and_special_line_coding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = MagicMock()
+    monkeypatch.setattr(upload_helper, 'Serial', backend)
+    monkeypatch.setattr(
+        upload_helper,
+        'connected',
+        lambda: [
+            Device(port=Path('COM10'), name='cntrl', serial=upload_helper.BOARD_SERIAL)
+        ],
+    )
+    upload_helper.request_bootloader()
+    backend.assert_called_once_with('COM10', baudrate=134, timeout=5, write_timeout=5)
+    backend.return_value.__enter__.return_value.write.assert_not_called()
 
 
 @pytest.mark.parametrize(

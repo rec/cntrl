@@ -7,6 +7,7 @@ import pytest
 from serial.tools.list_ports_common import ListPortInfo
 
 from cntrl.patch_switcher import devices
+from cntrl.patch_switcher.data_files import validate_name
 
 
 @pytest.mark.parametrize('endpoint', ['COM10', '/dev/ttyACM0', '/dev/cu.usbmodem2'])
@@ -93,3 +94,9 @@ def test_explicit_port_skips_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(devices, 'connected', unexpected)
     assert devices.select_port(Path('/dev/explicit')) == Path('/dev/explicit')
+
+
+@pytest.mark.parametrize('name', ['CON', 'nul', 'COM1', 'LPT9.backup'])
+def test_setup_names_can_be_published_on_windows(name: str) -> None:
+    with pytest.raises(ValueError, match='invalid setup name'):
+        validate_name(name)

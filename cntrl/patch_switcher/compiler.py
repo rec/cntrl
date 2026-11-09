@@ -33,13 +33,13 @@ def read_document(path: Path, *, _ancestors: tuple[Path, ...] = ()) -> object:
     resolved = path.resolve()
     if resolved in _ancestors:
         raise ValueError(f'{path}: catalogue reference cycle')
-    with path.open() as source:
-        if path.suffix == '.json':
-            document = json.load(source)
-        elif path.suffix == '.toml':
-            document = tomlkit.load(source).unwrap()
-        else:
-            raise ValueError(f'{path}: expected .toml or .json')
+    source = path.read_bytes().decode()
+    if path.suffix == '.json':
+        document = json.loads(source)
+    elif path.suffix == '.toml':
+        document = tomlkit.parse(source).unwrap()
+    else:
+        raise ValueError(f'{path}: expected .toml or .json')
     if isinstance(document, dict) and isinstance(
         patches := document.get('patches'), list
     ):
