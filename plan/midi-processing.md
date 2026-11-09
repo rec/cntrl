@@ -15,7 +15,7 @@ above either keyboard.
 
 ```toml
 [patches.chorus.midi]
-octave = {from = ['din', 'usb-host:keys'], via = [{transpose = 12}], to = ['trs', 'usb-host:synth']}
+octave = {from = ['din', 'usb-host/keys'], via = [{transpose = 12}], to = ['trs', 'usb-host/synth']}
 ```
 
 ## Writing routes
@@ -24,7 +24,7 @@ Each key names one route. The compiler expands the following conventions.
 
 | Field | Meaning |
 | --- | --- |
-| `from` | One input, or a list to merge. An endpoint alias reads that port. `@name` reads the processed result of another route in this scope. |
+| `from` | One input, or a list to merge. An endpoint alias reads that port. A route name reads its processed result in this scope. `system/name` reads a system route from a patch. |
 | `generate` | A generator with no input. Supply exactly one of `from` and `generate`. |
 | `via` | Steps in playing order. Omit for thru. Each step has one processor name and its argument. |
 | `to` | One output or a list for fan-out. Omit on a route consumed by another route. Diagnose an unused route with no output. |
@@ -42,8 +42,8 @@ to the synth and returns one delayed copy to the computer.
 
 ```toml
 [midi]
-keys = {from = 'din', via = [{keep = {channel = 1}}], to = 'usb-host:synth'}
-echo = {from = '@keys', via = [{delay = '250 ms'}], to = 'usb-device:performance'}
+keys = {from = 'din', via = [{keep = {channel = 1}}], to = 'usb-host/synth'}
+echo = {from = 'keys', via = [{delay = '250 ms'}], to = 'usb-device/performance'}
 clock = {generate = {clock = {bpm = 120}}, to = 'trs'}
 ```
 
@@ -51,10 +51,18 @@ Endpoint aliases come from the port registry and include DIN, TRS, MIDI-capable
 omniports, USB host and device ports. Internal producers such as expression
 assignments and patch messages can expose named sources. The compiler checks
 direction and configured port role. A known alias may be physically absent.
+Use `/` consistently to qualify references, such as `usb-host/synth`,
+`usb-device/performance` and `system/keys`. Bare names such as `din` remain valid.
 Keep existing setups' forwarding defaults when no routing is authored. When
 system routes are explicit they define the system matrix, including an empty
 matrix. Compile existing forwarding policies and integrated internal producers
 into the same delivery path so a direct writer cannot duplicate a routed event.
+
+Reserve all registered endpoint aliases, including internal producer aliases,
+for those endpoints even while disconnected. Route names cannot match any of
+these aliases or contain `/`. Validate these rules against the configured port
+registry when compiling and loading, so every input name resolves unambiguously.
+Reject unknown references and naming collisions before activating routes.
 
 ## System and patch lifetime
 
@@ -69,8 +77,9 @@ scopes before activating the replacement.
 Derived patches inherit the parent's routes by name. A child definition with
 the same name replaces that entire route. Resolve references after inheritance.
 System and patch names are independent. To consume a system route from a patch
-use `@system/name`. System routes cannot depend on an active patch. Reserve
-the `system/` prefix in route names. A shared system clock or keyboard stream
+use `system/name`. System routes cannot depend on an active patch. Reserve
+the `system/` prefix for route qualification, excluding it from endpoint aliases.
+A shared system clock or keyboard stream
 therefore keeps running when its patch subscriber leaves.
 
 For example, given the system routes above, a solo patch can add a harmony.
@@ -78,13 +87,13 @@ A derived solo patch can change the interval with one route replacement.
 
 ```toml
 [patches.solo.midi]
-harmony = {from = '@system/keys', via = [{transpose = 7}], to = 'usb-host:synth'}
+harmony = {from = 'system/keys', via = [{transpose = 7}], to = 'usb-host/synth'}
 
 [patches.high_solo]
 parent = 'solo'
 
 [patches.high_solo.midi]
-harmony = {from = '@system/keys', via = [{transpose = 12}], to = 'usb-host:synth'}
+harmony = {from = 'system/keys', via = [{transpose = 12}], to = 'usb-host/synth'}
 ```
 
 For interactive muting, retain the proposed `midi-stream` operation with a
@@ -202,7 +211,8 @@ scope and route.
 
 1. Compile both scopes to indexed routes using one schema. Round-trip the
    examples through compile, export, setup bundles and per-setup history. Check
-   inheritance, cross-scope references, cycles, invalid port roles and budgets.
+   inheritance, cross-scope references, reserved names even for absent ports,
+   forbidden slashes, unknown references, cycles, invalid port roles and budgets.
 2. Replace fixed forwarding with the graph and existing delivery scheduler.
    Test byte-for-byte thru including repeated notes, stable merges, independent
    fan-out, SysEx and clock ownership. Verify setup defaults and explicit routes
