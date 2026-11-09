@@ -404,6 +404,7 @@ FIELDS = {
     'scrolling.vertical_duration': 23,
 }
 SOURCE_FIELDS = (
+    'midi',
     'splash_movie',
     'idle_movie',
     'pages',

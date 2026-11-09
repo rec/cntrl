@@ -16,6 +16,7 @@ from . import (
     layout,
     midi_endpoints,
     midi_messages,
+    midi_processing,
     models,
     page_settings,
     relay_outputs,
@@ -146,6 +147,8 @@ def resolve_derivation(
             normalize_patch(definitions[key]), definitions, path, (*parents, key)
         )
         fields = parent.model_dump(exclude_unset=True) | (value.model_extra or {})
+        if isinstance(fields.get('midi'), dict):
+            fields['midi'] = (parent.midi or {}) | fields['midi']
         merged = type(parent).model_validate(fields)
     except ValidationError as error:
         raise CompilationError(_validation_errors(path, error)) from error
@@ -183,11 +186,16 @@ def compile_show(
             'midi_endpoints': [
                 e.model_copy(
                     update={
+                        'input': e.input
+                        and (
+                            e.port is None
+                            or show.trs_ports.get(e.name) in ('midi-a', 'midi-b')
+                        ),
                         'output': e.output
                         and (
                             e.port is None
                             or show.trs_ports.get(e.name) in ('midi-a', 'midi-b')
-                        )
+                        ),
                     }
                 )
                 for e in target.midi_endpoints
@@ -525,7 +533,7 @@ def compile_show(
                             for k, v in p.bindings.items()
                         }
                     }
-                    if p.bindings is not None
+                    if p.bindings is not None and compiler.nodes[i][0] == 10
                     else {}
                 )
                 | (
@@ -548,6 +556,11 @@ def compile_show(
         keyboard = page_settings.pack_keyboard(show, target)
         page_layout = layout.pack(show.pages, [d.id for d in target.displays])
         relay_settings = relay_outputs.pack(show, target)
+        stream_settings = midi_processing.compile_routes(
+            show.midi,
+            {i: p.midi for i, p in enumerate(compiler.values) if p.midi is not None},
+            target.midi_endpoints,
+        )
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -633,7 +646,8 @@ def compile_show(
             for i, j in enumerate(jacks)
             if show.auxiliary_switches.get(j) == 'combined'
         ),
-        sum(p.ram2_bytes for p in show.pages.values()),
+        sum(p.ram2_bytes for p in show.pages.values())
+        + midi_processing.estimate_ram(stream_settings),
         crc32(setup_name_bytes),
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
@@ -669,6 +683,7 @@ def compile_show(
         + midi_endpoints.pack(target)
         + inputs.pack(target)
         + relay_settings
+        + stream_settings
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -805,12 +820,10 @@ class PatchCompiler:
             metadata: dict[str, object] = {
                 '_derived': {'parent': value.parent, **(value.model_extra or {})}
             }
-            if index in self.programs:
-                metadata['_derived_program'] = self.nodes[index][4:].hex()
-            elif (
-                self.nodes[index][0] == 10
-                and (entry := self.children[index][0]) in self.programs
-            ):
+            entry = index
+            while self.nodes[entry][0] in (10, 12):
+                entry = self.children[entry][0]
+            if entry in self.programs:
                 metadata['_derived_program'] = self.nodes[entry][4:].hex()
             self.derivations[index] = metadata
             return index
@@ -843,6 +856,7 @@ class PatchCompiler:
                 models.StockFirmware,
                 models.PlayMidiFile,
                 models.RecordMidiFile,
+                models.MidiStream,
                 models.Relay,
             ),
         ):
@@ -850,6 +864,13 @@ class PatchCompiler:
         else:
             default_label = value.type
         self.labels.append(value.display_name or value.name or name or default_label)
+        if value.midi is not None:
+            child = self.add(
+                value.model_copy(update={'midi': None}), path + '.entry', name
+            )
+            self.nodes[index] = struct.pack('<BBHH', 12, 0, 2, child)
+            self.children[index] = [child]
+            return index
         if value.bindings is not None:
             if not self.target.max_switches:
                 self.errors.append(f'{path}.bindings: target has no switch engine')
@@ -861,7 +882,33 @@ class PatchCompiler:
             self.children[index] = [child]
             return index
         flags = 0
-        if isinstance(value, models.Relay):
+        if isinstance(value, models.MidiStream):
+            reference = value.stream
+            if reference.startswith('system/'):
+                valid = reference[7:] in (self.show.midi or {})
+            else:
+                valid = any(reference in (p.midi or {}) for p in self.values)
+                valid = valid or any(
+                    reference
+                    in (
+                        resolve_derivation(
+                            normalize_patch(p), self.show.patches, path
+                        ).midi
+                        or {}
+                    )
+                    for p in self.show.patches.values()
+                )
+            if not valid:
+                self.errors.append(f'{path}.stream: unknown MIDI stream {reference!r}')
+            kind, payload = (
+                13,
+                struct.pack(
+                    '<72sB',
+                    _text(reference, 72, self.target, path + '.stream', self.errors),
+                    value.enabled,
+                ),
+            )
+        elif isinstance(value, models.Relay):
             if value.relay not in self.target.relay_outputs:
                 self.errors.append(f'{path}.relay: unsupported contact {value.relay!r}')
             kind, payload = (
@@ -1336,7 +1383,7 @@ class PatchCompiler:
     ) -> tuple[int, models.Presentation]:
         seen = set() if seen is None else seen
         value = self.values[index]
-        if self.nodes[index][0] == 10 and index not in seen:
+        if self.nodes[index][0] in (10, 12) and index not in seen:
             seen.add(index)
             return self.presentation(self.children[index][0], seen)
         if (
@@ -1745,6 +1792,8 @@ class PatchCompiler:
                 offsets = []
                 if data[0] == 5:
                     offsets = list(range(6, len(data), 2))
+                elif data[0] == 12:
+                    offsets = [4]
                 elif data[0] == 10:
                     offsets = [4] + [
                         224 + i * 121 + j
@@ -1763,7 +1812,7 @@ class PatchCompiler:
                         struct.pack_into(
                             '<H', data, offset, import_node(context, child)
                         )
-                if data[0] == 5:
+                if data[0] in (5, 12):
                     self.children[destination] = [
                         struct.unpack_from('<H', data, o)[0] for o in offsets
                     ]

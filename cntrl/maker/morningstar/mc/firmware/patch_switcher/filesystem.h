@@ -68,6 +68,7 @@ public:
     bool remove(const char *path) override { return SD.sdfs.remove(path); }
     bool available() const override { return SD.sdfs.card() && !SD.sdfs.card()->errorCode(); }
     std::unique_ptr<files::Directory> directory() override { return std::make_unique<SdDirectory>(); }
+    std::unique_ptr<files::File> file() override { return std::make_unique<SdFile>(); }
 };
 } // namespace cntrl::device
 #endif

@@ -34,5 +34,6 @@ struct FileSystem {
     virtual bool remove(const char *) { return false; }
     virtual bool available() const { return true; }
     virtual std::unique_ptr<Directory> directory() { return {}; }
+    virtual std::unique_ptr<File> file() { return {}; }
 };
 } // namespace cntrl::files

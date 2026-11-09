@@ -100,6 +100,7 @@ public:
         cancel_gesture();
         document_ = document;
         if (configure) {
+            hardware_.configure_midi_streams(document);
             if (!hardware_.relays.configure(document.relay_records(), document.relay_count())) hardware_.error("Relay setup failed");
             hardware_.configure_trs_ports(document.trs_modes());
             hardware_.configure_page_settings(document.page_settings());
@@ -201,14 +202,14 @@ public:
                 for (auto &v : current_) v = -1;
                 for (auto &v : last_sent_) v = -1;
             }
-            if (!executor_.start(document_, document_.browser_root(p))) { navigation(before); return false; }
+            if (!executor_.start(document_, document_.browser_root(p), false, true)) { navigation(before); return false; }
             sending_ = int(p); undoing_ = false;
         } else if (operation == 8) {
             if (executor_.busy()) return false;
             if (!can_undo(depth_)) return true;
             const ProgramHistory &a = history_[depth_ - 1];
             sending_ = int(a.patch); undoing_ = true;
-            if (!executor_.start(document_, document_.browser_root(unsigned(a.previous)))) { sending_ = -1; return false; }
+            if (!executor_.start(document_, document_.browser_root(unsigned(a.previous)), false, true)) { sending_ = -1; return false; }
         } else return false;
         render();
         return true;

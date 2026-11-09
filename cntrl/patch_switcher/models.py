@@ -49,7 +49,7 @@ def infer_patch_type(value: object) -> object:
         for k in ('type', 'parent', 'patch', 'patches', 'operation', 'duration')
     ):
         return value
-    if 'bindings' in value and not any(
+    if ('bindings' in value or 'midi' in value) and not any(
         k in value for k in (*IMPLIED_MIDI_TYPES, 'note', 'value')
     ):
         return value | {'patches': []}
@@ -135,6 +135,7 @@ class Presentation(BaseModel, frozen=True):
         default_factory=list
     )
     bindings: dict[str, object] | None = None
+    midi: dict[str, object] | None = None
 
     @field_validator('bindings')
     @classmethod
@@ -146,6 +147,12 @@ class Presentation(BaseModel, frozen=True):
         return {k: parse_binding(v) for k, v in value.items()}
 
     model_config = ConfigDict(extra='forbid')
+
+
+class MidiStream(Presentation, frozen=True):
+    operation: Literal['midi-stream']
+    stream: Annotated[str, Field(min_length=1, max_length=70)]
+    enabled: Annotated[bool, Field(strict=True)]
 
 
 class ProgramChange(Presentation, frozen=True):
@@ -405,6 +412,7 @@ ConcretePatch = (
         | StockFirmware
         | PlayMidiFile
         | RecordMidiFile
+        | MidiStream
         | Relay,
         Field(discriminator='operation'),
     ]
@@ -833,6 +841,7 @@ class Page(BaseModel, frozen=True):
 
 
 class Setup(BaseModel, frozen=True):
+    midi: dict[str, object] | None = None
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
     patches: dict[str, object] = Field(default_factory=dict)

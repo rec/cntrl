@@ -86,7 +86,7 @@ public:
             auto previous = application_.controller().navigation();
             if (!resume) application_.controller().external_selection();
             valid = resume ? node == context.node && executor.resume(*source, node, context.completed, context.sources_crc)
-                           : executor.start(*source, node);
+                           : executor.start(*source, node, false, true);
             if (!valid && !resume) application_.controller().navigation(previous);
         }
         sources_.end(); return valid;

@@ -21,6 +21,8 @@ pad = 4
 contrast = 0.6
 tags = []
 
+[midi]
+
 # Validate entries independently so one malformed patch cannot hide others.
 [instruments]
 

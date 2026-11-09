@@ -146,6 +146,16 @@ public:
         host_routes_(outputs.transport_mask(OutputTransport::usb_host)),
         physical_routes_(outputs.transport_mask(OutputTransport::physical)) {}
     unsigned destinations() const { return unsigned(routes_.size()); }
+    unsigned busy_outputs() const {
+        unsigned mask = 0;
+        for (unsigned i = 0; i < destinations(); ++i) {
+            const auto &r = routes_[i];
+            if (r.count || r.pedal_count || r.wire_sysex || r.terminate) mask |= 1u << i;
+        }
+        for (const auto &b : owned_)
+            if (b.delivery == Delivery::pending) mask |= 1u << b.route;
+        return mask;
+    }
     enum class Delivery { idle, pending, complete, cancelled };
     static constexpr unsigned owners = 12;
     Delivery delivery(unsigned owner) const { return owner < owned_.size() ? owned_[owner].delivery : Delivery::idle; }

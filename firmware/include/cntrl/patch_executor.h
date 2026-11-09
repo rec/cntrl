@@ -29,6 +29,8 @@ struct PatchOutputs {
     virtual midi::Bridge::Delivery midi_file_delivery(unsigned) const { return midi::Bridge::Delivery::cancelled; }
     virtual void cancel_midi_file(unsigned) {}
     virtual bool record_midi_file(const midi::RecordMidiFilePatch &) { return false; }
+    virtual bool select_midi_streams(const Document &, unsigned) { return true; }
+    virtual bool gate_midi_stream(const char *, bool) { return false; }
     virtual void validation(bool) {}
     virtual void validation_context(PatchExecutor &, bool enabled) { validation(enabled); }
     virtual bool preview_state(unsigned, uint32_t) { return true; }
@@ -79,8 +81,11 @@ public:
         status_ = Status::pending; return true;
     }
 
-    bool start(const Document &document, unsigned node, bool persistent = false) {
-        return resume(document, node, 0, 0, persistent);
+    bool start(const Document &document, unsigned node, bool persistent = false, bool selection = false) {
+        if (!resume(document, node, 0, 0, persistent)) return false;
+        if (selection && !outputs_.select_midi_streams(document_, root_))
+            return fail("Cannot select MIDI streams");
+        return true;
     }
     // Reconstruct the traversal without replaying completed effects. The caller
     // consumes its durable continuation before this method dispatches anything.
@@ -99,7 +104,7 @@ public:
         while (depth_) {
             const uint8_t *n = next_leaf(true);
             if (!n) { if (status_ == Status::failed) return false; break; }
-            if (persistent && (n[0] == 4 || n[0] == 10 || (n[0] == 3 && (n[4] == 9 || n[4] == 10 || n[4] == 13))))
+            if (persistent && (n[0] == 4 || n[0] == 10 || n[0] == 12 || (n[0] == 3 && (n[4] == 9 || n[4] == 10 || n[4] == 13))))
                 return fail("Persistent switches cannot leave their context");
             if (!collect(n, *frames_[depth_ - 1].document)) return false;
             ++leaves; advance_leaf();
@@ -155,6 +160,18 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 13:
+            if (!outputs_.gate_midi_stream(reinterpret_cast<const char *>(p), p[72])) {
+                fail("Cannot change MIDI stream gate"); return;
+            }
+            started_ = true; complete_leaf(); return;
+        case 12: {
+            const auto &frame = frames_[depth_ - 1];
+            if (!outputs_.select_midi_streams(*frame.document, frame.node)) {
+                fail("Cannot select MIDI streams"); return;
+            }
+            started_ = true; complete_leaf(); return;
+        }
         case 11:
             if (!hardware_.relays.execute(reinterpret_cast<const char *>(p), p[32], u32(p + 33), now)) { fail("Relay operation failed"); return; }
             started_ = true; complete_leaf(); return;
@@ -278,7 +295,7 @@ private:
                 if (!bind_selection(validating, p[0], document, node)) return nullptr;
                 if (node == 65535) { if (!validating) outputs_.selection_complete(p[0]); --depth_; continue; }
                 if (!push(document, node)) return nullptr;
-            } else if (n[0] == 10) {
+            } else if (n[0] == 10 || n[0] == 12) {
                 if (!f.child) return n;
                 if (f.child == 2) { --depth_; continue; }
                 ++f.child;

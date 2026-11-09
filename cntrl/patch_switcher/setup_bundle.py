@@ -117,10 +117,23 @@ def build(
     memory_margin: int = 16192,
 ) -> SetupBundle:
     ordered = sorted(setups, key=str.lower)
-    settings = [models.Setup.model_validate(sources[n]) for n in ordered]
+    page_ram2: list[int] = []
+    for name in ordered:
+        settings = models.Setup.model_validate(sources[name])
+        data = setups[name]
+        # Size-only callers can supply opaque payloads. Compiled setups carry
+        # the authoritative estimate, including imported routing graphs.
+        if not data.startswith(b'CSW1'):
+            page_ram2.append(sum(p.ram2_bytes for p in settings.pages.values()))
+            continue
+        instruments, cycles, patches = struct.unpack_from('<HHH', data, 12)
+        metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
+        page_ram2.append(
+            struct.unpack_from('<I', data, metadata + compiler.METADATA.size - 8)[0]
+        )
     return SetupBundle(
         setups=setups,
-        page_ram2=[sum(p.ram2_bytes for p in s.pages.values()) for s in settings],
+        page_ram2=page_ram2,
         memory=memory,
         memory_margin=memory_margin,
     )
