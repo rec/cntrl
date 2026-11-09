@@ -29,40 +29,6 @@ Remaining qualification is tracked in [midi-processing.md](midi-processing.md).
 Dependencies below identify prerequisites, not a requirement to implement the
 entire plan. An item is complete only when its acceptance criteria are met.
 
-## 11. MIDI CC waveform generators
-
-**Outcome:** Start or stop an LFO that sends MIDI CC values, such as a
-repeating filter sweep or automatic expression-pedal movement.
-
-**Scope:** Generate MIDI CC values using sine, triangle, saw, square or random
-shapes, with configurable range, rate and destination. Support one-shot and
-repeating operation, with either an independent rate or clock divisions. Define
-replacement, cancellation and final-value behavior.
-
-**Dependencies:** The existing [MIDI Clock generator](../doc/midi-clock.md)
-for clock-synchronized operation only.
-
-**Acceptance:** Values remain within bounds; one-shot completion and stopping
-are deterministic; unchanged values are not sent unnecessarily. Output pressure
-cannot accumulate obsolete modulation values or delay unrelated controls.
-
-## 12. MIDI PC/CC step sequencers
-
-**Outcome:** A patch starts a timed sequence of MIDI Program Changes or CC
-values. For example, repeat eight filter-cutoff values on eighth-note steps.
-
-**Scope:** Keep the existing immediate `Sequence` patch semantics unchanged.
-Add an explicit timed operation with step values, duration, one-shot/repeat
-mode, start/stop and restart policy. Support independent timing and clock
-divisions. Define how overdue steps are handled before implementation.
-
-**Dependencies:** The existing [MIDI Clock generator](../doc/midi-clock.md)
-for clock-synchronized operation only.
-
-**Acceptance:** Steps run in order at the requested rate; stopping cancels
-future steps; restart and tempo changes follow documented rules. Backpressure
-remains bounded and cannot leave an uninterruptible sequence running.
-
 ## 16. Graphical configuration editor
 
 **Outcome:** Users can edit, validate, transfer and back up setups through a
@@ -84,16 +50,6 @@ alongside each subsequently completed item.
 edits round-trip through compilation and download; disconnecting does not lose
 unsaved edits or partially replace a setup. Verify the actual interface and
 offline workflow separately from serialization tests.
-
-## Suggested implementation order
-
-Start with waveforms and timed sequences (items 11 and 12).
-
-The graphical editor (16) can begin against the current schema without waiting
-for the other items.
-
-This order is a recommendation. Select an item and settle its stated behavior
-decisions before starting implementation.
 
 ## Additional work beyond the prompt
 
