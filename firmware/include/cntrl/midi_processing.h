@@ -49,6 +49,7 @@ public:
     struct Route {
         char name[64] = {};
         uint16_t scope = system_scope, outputs = 0;
+        uint16_t failed_outputs = 0;
         std::vector<Input> inputs;
         std::vector<Step> steps;
         bool enabled = true, failed = false;
@@ -106,7 +107,7 @@ public:
         selected_ = scope;
         if (external_selected_) { routes_.resize(base_routes_); external_selected_ = false; }
         for (auto &route : routes_) if (route.scope == scope) {
-            route.enabled = true; route.failed = false; route.next = now; route.started = false;
+            route.enabled = true; route.failed = false; route.failed_outputs = 0; route.next = now; route.started = false;
         }
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -156,7 +157,7 @@ public:
         if (!enabled) retire(uint64_t(1) << route);
         routes_[route].file.reset(); routes_[route].started = false;
         routes_[route].enabled = enabled;
-        if (enabled) routes_[route].failed = false;
+        if (enabled) { routes_[route].failed = false; routes_[route].failed_outputs = 0; }
     }
     void stop_all() {
         retire(~uint64_t(0));
@@ -180,6 +181,7 @@ public:
         bool replacement = connection.identity != identity;
         connection.present = present; connection.identity = identity; ++connection.generation;
         clock_claimed_[output] = false;
+        for (auto &route : routes_) route.failed_outputs &= uint16_t(~(1u << output));
         for (auto &voice : voices_) if (voice.output == output && voice.sounding) owe(voice);
         for (const auto &claim : holds_) if (claim.output == output) cleanup_packet(output, {11, {uint8_t(0xb0 | claim.channel), claim.controller, 0}});
         erase_if(holds_, [output](const Hold &claim) { return claim.output == output; });
@@ -212,21 +214,25 @@ public:
             });
             if (note == notes_.end()) return;
             token = note->token; notes_.erase(note);
-            release_note(token, now, packet.bytes[2]);
+            release_note(token, now, packet.bytes[2], &packet);
             return;
         } else if (kind == 10) {
             std::vector<Capture> pressure_captures;
             for (const auto &note : notes_)
                 if (note.input == input && note.channel == (packet.bytes[0] & 15) && note.pitch == packet.bytes[1]) {
                     for (const auto &voice : voices_) if (voice.token == note.token) {
-                        Packet pressure{10, {uint8_t(0xa0 | (voice.packet.bytes[0] & 15)), voice.packet.bytes[1], packet.bytes[2]}};
+                        Packet pressure = packet;
+                        if (!owned_fields(pressure, voice.owner, input)) continue;
+                        if (pressure.bytes[0] >> 4 == 10) { pressure.bytes[0] = uint8_t(0xa0 | (voice.packet.bytes[0] & 15)); pressure.bytes[1] = voice.packet.bytes[1]; }
                         enqueue({now + voice.delay, voice.owner, 0, 0, input, voice.output, pressure});
                     }
                     for (const auto &capture : captures_) if (capture.work.token == note.token && capture.work.packet.bytes[0] >> 4 == 9) pressure_captures.push_back(capture);
                 }
             for (const auto &capture : pressure_captures) {
                 Work pressure = capture.work;
-                pressure.packet = {10, {uint8_t(0xa0 | (capture.work.packet.bytes[0] & 15)), capture.work.packet.bytes[1], packet.bytes[2]}};
+                pressure.packet = packet;
+                if (!owned_fields(pressure.packet, capture.work.owner, input, capture.route, capture.step)) continue;
+                if (pressure.packet.bytes[0] >> 4 == 10) { pressure.packet.bytes[0] = uint8_t(0xa0 | (capture.work.packet.bytes[0] & 15)); pressure.packet.bytes[1] = capture.work.packet.bytes[1]; }
                 pressure.token = 0; pressure.due = now + capture.delay;
                 process(capture.route, capture.step, pressure);
             }
@@ -374,6 +380,7 @@ private:
         uint64_t start, end = 0, delay = 0, frame = 0;
         bool closed = false;
     };
+    struct Visit { uint64_t token, owner; unsigned route, step, input; Packet onset; };
     Limits limits_;
     Diagnostics diagnostics_;
     bool explicit_system_ = false;
@@ -396,6 +403,7 @@ private:
     unsigned clock_sources_[16] = {};
     uint64_t clock_owners_[16] = {};
     std::vector<Capture> captures_;
+    std::vector<Visit> visits_;
     StreamFileProvider *file_provider_ = nullptr;
     struct GeneratedSink : Sink {
         Streams &streams; unsigned route; uint64_t now;
@@ -418,7 +426,7 @@ private:
             } else if (!work.token && (kind == 8 || (kind == 9 && !packet.bytes[2]))) {
                 auto note = std::find_if(engine.notes_.begin(), engine.notes_.end(), [&](const Note &note) { return note.input == work.input && note.channel == (packet.bytes[0] & 15) && note.pitch == packet.bytes[1]; });
                 if (note == engine.notes_.end()) return true;
-                uint64_t token = note->token; engine.notes_.erase(note); engine.release_note(token, transformed.due, packet.bytes[2]); return true;
+                uint64_t token = note->token; engine.notes_.erase(note); engine.release_note(token, transformed.due, packet.bytes[2], &packet); return true;
             }
             engine.process(route, position, transformed); return true;
         }
@@ -434,7 +442,7 @@ private:
         } else if (kind == 8 || (kind == 9 && !packet.bytes[2])) {
             auto note = std::find_if(notes_.begin(), notes_.end(), [&](const Note &note) { return note.input == input && note.channel == (packet.bytes[0] & 15) && note.pitch == packet.bytes[1]; });
             if (note == notes_.end()) return;
-            token = note->token; notes_.erase(note); release_note(token, now, packet.bytes[2]); return;
+            token = note->token; notes_.erase(note); release_note(token, now, packet.bytes[2], &packet); return;
         }
         process(route, 1, {packet, now, token, input, 0});
     }
@@ -498,8 +506,12 @@ private:
         erase_if(voices_, [owners](const Voice &voice) { return bool(voice.owner & owners); });
         erase_if(events_, [owners](const Event &event) { return bool(event.owner & owners); });
         erase_if(captures_, [owners](const Capture &capture) { return bool(capture.work.owner & owners); });
+        erase_if(visits_, [owners](const Visit &visit) { return bool(visit.owner & owners); });
     }
     void retire_source(unsigned input) {
+        std::vector<uint64_t> stopped;
+        for (const auto &visit : visits_) if (visit.input == input && std::find(stopped.begin(), stopped.end(), visit.token) == stopped.end()) stopped.push_back(visit.token);
+        for (auto token : stopped) notify_release(token, 0, current_time_);
         for (unsigned output = 0; output < outputs_.size(); ++output)
             if (clock_claimed_[output] && clock_sources_[output] == input) clock_claimed_[output] = false;
         retire_holds([input](const Hold &claim) { return claim.input == input; });
@@ -517,26 +529,87 @@ private:
         if (input < inputs_.size()) inputs_[input].blocked = false;
     }
     void overload(uint64_t owners) {
+        if (!owners) return;
+        // The final node owns a failure. Upstream nodes may still feed healthy
+        // siblings and must remain active.
+        while (owners & (owners - 1)) owners &= owners - 1;
         ++diagnostics_.overloaded;
         retire(owners);
         for (unsigned i = 0; i < routes_.size(); ++i) if (owners & (uint64_t(1) << i)) routes_[i].failed = true;
     }
+    unsigned used_outputs() const {
+        unsigned mask = 0, count = 0;
+        for (unsigned i = 0; i < routes_.size(); ++i) if (active(i)) mask |= routes_[i].outputs;
+        while (mask) { mask &= mask - 1; ++count; }
+        return std::max(1u, count);
+    }
+    unsigned output_event_limit() const { return std::max(1u, limits_.events / used_outputs()); }
+    unsigned output_voice_limit() const { return std::max(1u, limits_.voices / used_outputs()); }
+    unsigned output_events(unsigned output) const {
+        unsigned count = 0;
+        for (const auto &event : events_) if (event.output == output) ++count;
+        return count;
+    }
+    unsigned output_voices(unsigned output) const {
+        unsigned count = 0;
+        for (const auto &voice : voices_) if (voice.output == output) ++count;
+        return count;
+    }
+    void fail_output(unsigned route, unsigned output) {
+        ++diagnostics_.overloaded;
+        uint64_t owner = uint64_t(1) << route;
+        routes_[route].failed_outputs |= uint16_t(1u << output);
+        retire_holds([&](const Hold &hold) { return hold.output == output && bool(hold.owner & owner); });
+        for (const auto &voice : voices_) if (voice.output == output && (voice.owner & owner) && voice.sounding) {
+            bool shared = false;
+            for (const auto &other : voices_) if (!(other.owner & owner) && other.sounding && same_key(other, voice)) shared = true;
+            if (!shared) owe(voice);
+        }
+        erase_if(voices_, [&](const Voice &voice) { return voice.output == output && bool(voice.owner & owner); });
+        erase_if(events_, [&](const Event &event) { return event.output == output && bool(event.owner & owner); });
+        if ((sysex_outputs_ & (1u << output)) && (sysex_owners_[output] & owner)) cleanup_packet(output, {5, {0xf7,0,0}});
+        if (clock_claimed_[output] && (clock_owners_[output] & owner)) clock_claimed_[output] = false;
+    }
     bool enqueue(Event event) {
         bool release = event.packet.bytes[0] >> 4 == 8;
-        if (events_.size() + (release ? 0 : voices_.size()) >= limits_.events) { ++diagnostics_.dropped; return false; }
+        if (events_.size() + (release ? 0 : voices_.size()) >= limits_.events
+            || output_events(event.output) + (release ? 0 : output_voices(event.output)) >= output_event_limit()) { ++diagnostics_.dropped; return false; }
         event.sequence = ++serial_;
         auto position = std::upper_bound(events_.begin(), events_.end(), event, [](const Event &a, const Event &b) { return a.due < b.due; });
         events_.insert(position, event); return true;
     }
-    void release_note(uint64_t token, uint64_t now, uint8_t velocity) {
+    void release_note(uint64_t token, uint64_t now, uint8_t velocity, const Packet *source = nullptr) {
+        notify_release(token, velocity, now);
         for (auto &capture : captures_) if (capture.work.token == token && !capture.closed) {
             capture.end = now + capture.delay; capture.closed = true;
         }
         std::vector<Event> releases;
-        for (const auto &voice : voices_) if (voice.token == token)
-            releases.push_back({now + voice.delay, voice.owner, voice.id, 0, voice.input, voice.output,
-                {8, {uint8_t(0x80 | (voice.packet.bytes[0] & 15)), voice.packet.bytes[1], velocity}}});
-        for (const auto &event : releases) if (!enqueue(event)) { overload(event.owner); break; }
+        for (const auto &voice : voices_) if (voice.token == token) {
+            Packet release = source ? *source : Packet{8, {uint8_t(0x80 | (voice.packet.bytes[0] & 15)), voice.packet.bytes[1], velocity}};
+            release.cin = 8; release.bytes[0] = uint8_t(0x80 | (release.bytes[0] & 15));
+            // Transform release fields from the original input coordinates, then
+            // restore the mapping recorded when its onset was admitted.
+            owned_fields(release, voice.owner, voice.input);
+            release.cin = 8; release.bytes[0] = uint8_t(0x80 | (voice.packet.bytes[0] & 15)); release.bytes[1] = voice.packet.bytes[1];
+            releases.push_back({now + voice.delay, voice.owner, voice.id, 0, voice.input, voice.output, release});
+        }
+        for (const auto &event : releases) if (!enqueue(event)) {
+            unsigned route = 0;
+            for (unsigned i = 0; i < routes_.size(); ++i) if (event.owner & (uint64_t(1) << i)) route = i;
+            fail_output(route, event.output);
+        }
+    }
+    void notify_release(uint64_t token, uint8_t velocity, uint64_t now) {
+        std::vector<Visit> completed;
+        for (const auto &visit : visits_) if (visit.token == token) completed.push_back(visit);
+        erase_if(visits_, [token](const Visit &visit) { return visit.token == token; });
+        for (const auto &visit : completed) {
+            Packet release{8, {uint8_t(0x80 | (visit.onset.bytes[0] & 15)), visit.onset.bytes[1], velocity}};
+            Work work{release, now, 0, max_routes * (visit.step + 1) + visit.route, visit.owner};
+            ProcessorOutput output(*this, visit.route, visit.step + 1, work, limits_.events);
+            auto &processor = routes_[visit.route].steps[visit.step].processor;
+            if (processor && !processor->push(release, visit.input, output)) { ++diagnostics_.failed; overload(uint64_t(1) << visit.route); }
+        }
     }
     static int field(const Packet &packet, unsigned id, unsigned input) {
         unsigned status = packet.bytes[0], kind = status >> 4;
@@ -579,6 +652,45 @@ private:
         else return false;
         return true;
     }
+    static bool numeric_fields(const Step &step, Work &work) {
+        if ((step.kind == 2 || step.kind == 3) && field(work.packet, 2, work.input) >= 0) {
+            int pitch = work.packet.bytes[1]; pitch = step.kind == 2 ? pitch + step.value : 2 * step.value - pitch;
+            if (pitch < 0 || pitch > 127) return false;
+            work.packet.bytes[1] = uint8_t(pitch); return true;
+        }
+        if (!matches(step, work)) return true;
+        if (step.kind == 4) {
+            int original = field(work.packet, step.field, work.input);
+            if (original < 0) return true;
+            int minimum = step.field == 1 || step.field == 6 ? 1 : 0;
+            int maximum = step.field == 1 ? 16 : step.field == 6 ? 128 : step.field == 5 && (work.packet.bytes[0] >> 4 == 14 || work.packet.bytes[0] == 0xf2) ? 16383 : 127;
+            int low = step.input_low, high = step.input_high;
+            if (low == -1 && high == -1) { low = minimum; high = maximum; }
+            double fraction = double(std::clamp(original, low, high) - low) / (high - low);
+            int value = int(std::floor(step.output_low + fraction * (step.output_high - step.output_low) + 0.5));
+            return set(work.packet, step.field, std::clamp(value, minimum, maximum));
+        }
+        if (step.kind == 5) {
+            Packet original = work.packet, mapped = original;
+            for (const auto &assignment : step.assignments) {
+                if (assignment.field && field(mapped, assignment.field, work.input) < 0) return true;
+                int value = assignment.value;
+                if (assignment.source != 255) { int source = field(original, assignment.source, work.input); if (source < 0) return true; value += source; }
+                if (!set(mapped, assignment.field, value)) return false;
+            }
+            work.packet = mapped;
+        }
+        return true;
+    }
+    bool owned_fields(Packet &packet, uint64_t owner, unsigned input, unsigned stop_route = max_routes, unsigned stop_step = 0) const {
+        Work work{packet, 0, 0, input, owner};
+        for (unsigned route = 0; route < routes_.size() && route <= stop_route; ++route) if (owner & (uint64_t(1) << route)) {
+            unsigned count = route == stop_route ? stop_step : unsigned(routes_[route].steps.size());
+            for (unsigned step = 0; step < count; ++step)
+                if (!numeric_fields(routes_[route].steps[step], work)) return false;
+        }
+        packet = work.packet; return true;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_process)
 #endif
@@ -589,6 +701,13 @@ private:
         for (unsigned i = position; i < entry.steps.size(); ++i) {
             auto &step = entry.steps[i];
             if (step.processor) {
+                if (work.token && work.packet.bytes[0] >> 4 == 9) {
+                    auto visit = std::find_if(visits_.begin(), visits_.end(), [&](const Visit &entry) { return entry.token == work.token && entry.route == route && entry.step == i; });
+                    if (visit == visits_.end()) {
+                        if (visits_.size() >= limits_.voices) { overload(uint64_t(1) << route); return; }
+                        visits_.push_back({work.token, work.owner, route, i, work.input, work.packet});
+                    }
+                }
                 ProcessorOutput output(*this, route, i + 1, work, limits_.events);
                 if (!step.processor->push(work.packet, work.input, output)) { ++diagnostics_.failed; overload(work.owner); }
                 return;
@@ -600,25 +719,8 @@ private:
                 pitch = step.kind == 2 ? pitch + step.value : 2 * step.value - pitch;
                 if (pitch < 0 || pitch > 127) return;
                 work.packet.bytes[1] = uint8_t(pitch);
-            } else if (step.kind == 4 && match) {
-                int original = field(work.packet, step.field, work.input);
-                if (original >= 0) {
-                    int low = step.input_low, high = step.input_high;
-                    if (low == -1 && high == -1) { low = step.field == 1 || step.field == 6 ? 1 : 0; high = step.field == 1 ? 16 : step.field == 6 ? 128 : step.field == 5 && (work.packet.bytes[0] >> 4 == 14 || work.packet.bytes[0] == 0xf2) ? 16383 : 127; }
-                    double fraction = double(std::clamp(original, low, high) - low) / (high - low);
-                    int value = int(std::floor(step.output_low + fraction * (step.output_high - step.output_low) + 0.5));
-                    int minimum = step.field == 1 || step.field == 6 ? 1 : 0;
-                    int maximum = step.field == 1 ? 16 : step.field == 6 ? 128 : step.field == 5 && (work.packet.bytes[0] >> 4 == 14 || work.packet.bytes[0] == 0xf2) ? 16383 : 127;
-                    value = std::clamp(value, minimum, maximum);
-                    if (!set(work.packet, step.field, value)) return;
-                }
-            } else if (step.kind == 5 && match) {
-                Packet original = work.packet;
-                for (const auto &assignment : step.assignments) {
-                    int value = assignment.value;
-                    if (assignment.source != 255) { int source = field(original, assignment.source, work.input); if (source < 0) return; value += source; }
-                    if (!set(work.packet, assignment.field, value)) return;
-                }
+            } else if (step.kind == 4 || step.kind == 5) {
+                if (!numeric_fields(step, work)) return;
             } else if (step.kind == 6) {
                 for (unsigned copy = 1; copy <= step.repeats; ++copy) {
                     Work echo = work; echo.due += step.time * copy;
@@ -662,14 +764,17 @@ private:
         }
         if (work.packet.bytes[0] >> 4 == 9 && !work.packet.bytes[2]) return;
         for (unsigned output = 0; output < outputs_.size(); ++output) if (entry.outputs & (1u << output)) {
+            if (entry.failed_outputs & (1u << output)) continue;
             if (!outputs_[output].present || recovering(output)) { ++diagnostics_.dropped; continue; }
             uint64_t voice = 0;
             if (work.packet.bytes[0] >> 4 == 9 && work.token) {
-                if (voices_.size() >= limits_.voices || events_.size() + voices_.size() + 2 >= limits_.events) { overload(work.owner); return; }
+                if (voices_.size() >= limits_.voices || output_voices(output) >= output_voice_limit()
+                    || events_.size() + voices_.size() + 2 >= limits_.events
+                    || output_events(output) + output_voices(output) + 2 >= output_event_limit()) { fail_output(route, output); continue; }
                 voice = ++serial_;
                 voices_.push_back({voice, work.token, work.owner, work.due - current_time_, work.input, output, work.packet, false});
             }
-            if (!enqueue({work.due, work.owner, voice, 0, work.input, output, work.packet})) { overload(work.owner); return; }
+            if (!enqueue({work.due, work.owner, voice, 0, work.input, output, work.packet})) { fail_output(route, output); continue; }
         }
         for (unsigned downstream = route + 1; downstream < routes_.size(); ++downstream) if (active(downstream))
             for (const auto &source : routes_[downstream].inputs) if (source.kind && source.index == route) { process(downstream, 0, work); break; }
@@ -751,9 +856,10 @@ private:
         for (const auto &capture : captures_) if (capture.frame && !capture.closed) {
             uint64_t latest = capture.start;
             for (const auto &other : captures_) if (other.frame == capture.frame) latest = std::max(latest, other.start);
-            if (now >= latest && now - latest >= 1000000) timed_out |= capture.work.owner;
+            if (now >= latest && now - latest >= 1000000) timed_out |= uint64_t(1) << capture.route;
         }
-        if (timed_out) overload(timed_out);
+        for (unsigned route = 0; route < routes_.size(); ++route)
+            if (timed_out & (uint64_t(1) << route)) overload(uint64_t(1) << route);
         for (unsigned route = 0; route < routes_.size(); ++route)
             for (unsigned step = 0; step < routes_[route].steps.size(); ++step)
                 if (routes_[route].steps[step].kind == 7 && routes_[route].steps[step].time)

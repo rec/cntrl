@@ -88,11 +88,15 @@ enabled = false
 ```
 
 Queues, voices and capture buffers are bounded. Overload stops and cleans up
-the affected route. Reconnection discards stale performance traffic. A confirmed
-returning device receives pending cleanup before new traffic, while a replacement
-starts with fresh local state. Stable identity requires support from the endpoint
+the affected branch or destination. Reconnection discards stale performance
+traffic. A confirmed returning device receives pending cleanup before new
+traffic, while a replacement starts with fresh local state. Stable identity
+requires support from the endpoint
 provider. Passive DIN and TRS cables have no reliable disconnect notification.
 Use the existing panic operation when the physical receiver needs a reset.
+The initial limits are 64 routes per compiled document, 16 processing steps per
+route, 256 input notes, 256 output voices and 512 queued events. Setup memory
+planning uses a conservative pool estimate while runtime state grows sparsely.
 
 The existing serial command channel accepts `CNTRL MIDI STREAMS`. Its reply
 reports the selected scope, queued events, voices, pending cleanup records,

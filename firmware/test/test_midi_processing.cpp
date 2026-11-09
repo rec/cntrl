@@ -19,6 +19,7 @@ void integer(std::vector<uint8_t> &data, uint64_t value, unsigned bytes) {
 }
 struct Route {
     unsigned scope = 65535, input = 0, output = 2;
+    unsigned input_kind = 0;
     std::vector<uint8_t> steps;
     unsigned count = 0;
 };
@@ -29,7 +30,7 @@ std::vector<uint8_t> compiled(std::initializer_list<Route> routes) {
     for (const auto &route : routes) {
         integer(bytes, route.scope, 2); integer(bytes, 1, 2); integer(bytes, route.output, 2); integer(bytes, route.count, 2);
         bytes.push_back(uint8_t('a' + index++)); bytes.insert(bytes.end(), 63, 0);
-        bytes.push_back(0); integer(bytes, route.input, 2);
+        bytes.push_back(uint8_t(route.input_kind)); integer(bytes, route.input, 2);
         bytes.insert(bytes.end(), route.steps.begin(), route.steps.end());
     }
     uint32_t size = uint32_t(bytes.size());
@@ -178,6 +179,105 @@ void merged_clocks_have_one_owner_until_disconnect() {
     streams.receive(1, {15,{0xf8,0,0}}, 40000); poll(streams, output, 40000);
     assert(output.packets[1].size() == 2);
 }
+void blocked_fanout_does_not_interrupt_healthy_notes_or_releases() {
+    Route route; route.output = 3; auto data = compiled({route});
+    Streams streams({24,12,32,8}); Output output; output.blocked[0] = true;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    note(streams, 0x90, 60, 100); poll(streams, output, 0);
+    for (unsigned i = 0; i < 1000; ++i) {
+        streams.receive(0, {11,{0xb0,7,uint8_t(i % 128)}}, i);
+        note(streams, 0x90, 61, 90, i); note(streams, 0x80, 61, 0, i);
+        poll(streams, output, i);
+        assert(streams.pending() <= 12);
+    }
+    note(streams, 0x80, 60, 23, 1001); poll(streams, output, 1001);
+    assert(output.packets[0].empty());
+    assert(output.packets[1].size() == 3002);
+    assert(output.packets[1].back().bytes[1] == 60 && output.packets[1].back().bytes[2] == 23);
+    assert(streams.diagnostics().overloaded > 0 && !streams.voices());
+}
+void overloaded_derived_branch_keeps_shared_dry_route_running() {
+    Route dry; dry.output = 1;
+    Route echo; echo.input_kind = 1; echo.input = 0; echo.count = 2;
+    echo.steps = {6,0,14,0}; integer(echo.steps, 100000, 8); integer(echo.steps, 8, 2);
+    float gain = 1; uint32_t bits; std::memcpy(&bits, &gain, 4); integer(echo.steps, bits, 4);
+    echo.steps.insert(echo.steps.end(), {7,0,8,0}); integer(echo.steps, 1000000, 8);
+    auto data = compiled({dry, echo}); Streams streams({32,16,32,2}); Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    streams.receive(0, {11,{0xb0,7,100}}, 0); poll(streams, output, 0);
+    assert(streams.diagnostics().overloaded == 1);
+    streams.receive(0, {11,{0xb0,7,101}}, 1); poll(streams, output, 1);
+    assert(output.packets[0].size() == 2 && output.packets[0].back().bytes[2] == 101);
+    assert(output.packets[1].empty());
+}
+void paired_pressure_and_release_fields_follow_written_transforms() {
+    Route route = transpose();
+    auto scale = [&](unsigned field, unsigned match_field, unsigned match_value) {
+        std::vector<uint8_t> payload{1,uint8_t(match_field),1}; integer(payload, match_value, 4);
+        payload.push_back(uint8_t(field)); integer(payload, 0, 4); integer(payload, 127, 4);
+        integer(payload, 0, 4); integer(payload, 63, 4);
+        route.steps.insert(route.steps.end(), {4,0,uint8_t(payload.size()),0});
+        route.steps.insert(route.steps.end(), payload.begin(), payload.end()); ++route.count;
+    };
+    scale(7,2,72); scale(3,0,8);
+    route.steps.insert(route.steps.end(), {6,0,14,0}); integer(route.steps, 1000, 8); integer(route.steps, 1, 2);
+    float gain = 1; uint32_t bits; std::memcpy(&bits, &gain, 4); integer(route.steps, bits, 4); ++route.count;
+    auto data = compiled({route}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    note(streams, 0x90, 60, 90, 0); poll(streams, output, 1000);
+    streams.receive(0, {10,{0xa0,60,127}}, 2000); poll(streams, output, 2999);
+    assert(output.packets[1].size() == 1);
+    poll(streams, output, 3000);
+    assert(output.packets[1].size() == 2 && output.packets[1].back().bytes[1] == 72 && output.packets[1].back().bytes[2] == 63);
+    note(streams, 0x80, 60, 100, 4000); poll(streams, output, 5000);
+    assert(output.packets[1].size() == 3 && output.packets[1].back().bytes[1] == 72 && output.packets[1].back().bytes[2] == 50);
+}
+void controller_only_map_preserves_unrelated_notes() {
+    Route route; route.count = 1; route.steps = {5,0,8,0, 0,1, 4,255,11,0,0,0};
+    auto data = compiled({route}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    note(streams, 0x90, 60, 90); streams.receive(0, {11,{0xb0,7,100}}, 0); note(streams, 0x80, 60, 5); poll(streams, output, 0);
+    assert(output.packets[1].size() == 3);
+    assert(output.packets[1][0].bytes[0] == 0x90 && output.packets[1][1].bytes[1] == 11 && output.packets[1][2].bytes[0] == 0x80);
+}
+unsigned plugin_onsets = 0, plugin_releases = 0;
+struct Stateful : Streams::Processor {
+    bool push(const Packet &packet, unsigned, Streams::Emit &output) override {
+        if (packet.bytes[0] >> 4 == 9) ++plugin_onsets;
+        if (packet.bytes[0] >> 4 == 8) ++plugin_releases;
+        return output.emit(packet);
+    }
+};
+std::unique_ptr<Streams::Processor> stateful(const uint8_t *, unsigned size) {
+    if (size) return {};
+    return std::make_unique<Stateful>();
+}
+void stateful_processor_observes_each_input_release_once_across_fanout() {
+    assert(Streams::register_processor(129, 1, stateful));
+    Route route; route.output = 3; route.count = 1; route.steps = {129,1,0,0};
+    auto data = compiled({route}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    note(streams, 0x90, 60, 90); poll(streams, output, 0);
+    note(streams, 0x80, 60, 5); poll(streams, output, 0);
+    assert(plugin_onsets == 1 && plugin_releases == 1);
+    assert(output.packets[0].size() == 2 && output.packets[1].size() == 2);
+    note(streams, 0x90, 61, 90); poll(streams, output, 0);
+    streams.connection(0, false, 1); poll(streams, output, 0);
+    assert(plugin_onsets == 2 && plugin_releases == 2);
+    assert(output.packets[0].size() == 4 && output.packets[1].size() == 4);
+}
+void unused_ports_do_not_reduce_active_output_capacity() {
+    auto data = compiled({Route{}}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    for (unsigned i = 0; i < 150; ++i) {
+        note(streams, 0x90, 60, 100, i); poll(streams, output, i);
+    }
+    assert(streams.voices() == 150 && !streams.diagnostics().overloaded);
+    for (unsigned i = 0; i < 150; ++i) {
+        note(streams, 0x80, 60, 0, 150 + i); poll(streams, output, 150 + i);
+    }
+    assert(!streams.voices() && output.packets[1].size() == 300);
+}
 }
 int main() {
     transforms_and_release(); patch_scope_and_cleanup(); reconnect_and_independent_outputs();
@@ -186,5 +286,10 @@ int main() {
     registered_processor_uses_shared_delivery_and_cleanup(); external_patch_scope_restores_local_routes();
     system_message_conversion_has_correct_payload_width();
     merged_clocks_have_one_owner_until_disconnect();
+    blocked_fanout_does_not_interrupt_healthy_notes_or_releases();
+    overloaded_derived_branch_keeps_shared_dry_route_running();
+    paired_pressure_and_release_fields_follow_written_transforms(); controller_only_map_preserves_unrelated_notes();
+    stateful_processor_observes_each_input_release_once_across_fanout();
+    unused_ports_do_not_reduce_active_output_capacity();
     std::cout << "MIDI stream processing passed\n";
 }

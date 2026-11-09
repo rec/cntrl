@@ -49,7 +49,7 @@ public:
         unsigned available = s.clock_available();
         pages.clock_connections(available);
         unsigned stream_clocks = streams_.clock_outputs();
-        streams_.clock_owner(files.player.clock_outputs());
+        streams_.clock_owner(files.player.clock_outputs() | (pages.clock_owner() & ~stream_clocks));
         bridge.clock_owner(pages.clock_owner() | files.player.clock_outputs() | stream_clocks);
         pages.generator.poll(s.microseconds(), available & ~files.player.clock_outputs() & ~stream_clocks, s);
         unsigned count = s.midi_source_count();

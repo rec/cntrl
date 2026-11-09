@@ -173,9 +173,13 @@ class Clock(BaseModel, frozen=True):
 class File(BaseModel, frozen=True):
     filename: Annotated[str, Field(max_length=95)] = ''
     loops: Annotated[int, Field(strict=True, ge=0, le=4294967295)] = 1
-    pre_delay: Annotated[int, Field(ge=0, le=3600), units.unit_validator('second')] = 0
-    post_delay: Annotated[int, Field(ge=0, le=3600), units.unit_validator('second')] = 0
-    speed: Annotated[float, Field(gt=0, le=1000, allow_inf_nan=False)] = 1
+    pre_delay: Annotated[
+        int, Field(strict=True, ge=0, le=4294967295), units.unit_validator('second')
+    ] = 0
+    post_delay: Annotated[
+        int, Field(strict=True, ge=0, le=4294967295), units.unit_validator('second')
+    ] = 0
+    speed: Annotated[float, Field(gt=0, allow_inf_nan=False)] = 1
     reverse: bool = False
     transpose: Annotated[int, Field(strict=True, ge=-127, le=127)] = 0
 
