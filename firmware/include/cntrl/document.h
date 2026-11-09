@@ -165,8 +165,9 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!p[0] || !text_valid(p, 32) || p[32] > PageLayout::patch_switcher
-                || p[33] > windows || (p[32] == 10 && p[33])) return false;
+            if (!p[0] || !text_valid(p, 32) || p[32] > PageLayout::midi_monitor
+                || p[33] > windows || (p[32] == 10 && p[33])
+                || (p[32] == PageLayout::midi_monitor && (p[33] < 1 || p[33] > 3))) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < windows; ++j) {
                 if (p[34 + j] >= windows || seen[p[34 + j]]) return false;

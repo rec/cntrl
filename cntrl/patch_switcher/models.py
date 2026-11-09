@@ -859,6 +859,7 @@ class Page(BaseModel, frozen=True):
         'clock-transport',
         'clock-tempo',
         'keyboard',
+        'midi-monitor',
         'None',
     ] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
@@ -871,6 +872,8 @@ class Page(BaseModel, frozen=True):
             raise ValueError('give_up_windows must contain each window once')
         if self.type == 'None' and self.windows not in (None, 0):
             raise ValueError('None must have zero windows')
+        if self.type == 'midi-monitor' and self.windows not in (None, 1, 2, 3):
+            raise ValueError('midi-monitor requires one, two or three windows')
         return self
 
     model_config = ConfigDict(extra='forbid')

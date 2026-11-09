@@ -3,6 +3,7 @@
 #include <cntrl/tempo.h>
 #include <cntrl/clock_generator.h>
 #include <cntrl/midi_outputs.h>
+#include <cntrl/midi_monitor.h>
 #include <cntrl/cable_test.h>
 #include <cntrl/panic.h>
 #include "fonts.h"
@@ -57,7 +58,8 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, confirm_firmware };
+    midi::Monitor *monitor = nullptr;
     void layout(cntrl::PageLayout layout) {
         layout_ = layout;
         index_ = 0;
@@ -182,15 +184,17 @@ public:
     bool due(uint32_t now) {
         using R = cntrl::PageSettings;
         if (dirty_) return true;
+        if (page_ == Page::midi_monitor) return uint32_t(now - refreshed_) >= midi::Monitor::refresh_ms;
         if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready) {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1) {
         using R = cntrl::PageSettings;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
+        if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
         if (page_ == Page::confirm_firmware) {
             const unsigned height = title * 3 / 2;
@@ -386,6 +390,52 @@ public:
         return pane;
     }
 private:
+    void monitor_view(Pane &pane, unsigned window, unsigned count) {
+        using Direction = midi::Monitor::Direction;
+        using R = cntrl::PageSettings;
+        const Direction direction = count == 1 || (count == 3 && window == 1) ? Direction::both : window == 0 ? Direction::incoming : Direction::outgoing;
+        const char *heading = direction == Direction::both ? "Combined" : direction == Direction::incoming ? "Incoming" : "Outgoing";
+        const unsigned pad = pane.graphics.pad;
+        const unsigned title = std::min(unsigned(settings_[R::title_height]) + 4, viewport_.height / 4);
+        line(pane, 0, heading, pad, title, settings_[R::title_font], true);
+        pane.heading_band = true; pane.lines[0].graphics.foreground = 0xffff; pane.lines[0].graphics.background = 0;
+        pane.lines[0].graphics.line_height = uint16_t(title + 2 * pad); pane.lines[0].y = 0;
+        const unsigned row_height = 10, body_top = title + 2 * pad + row_height;
+        const unsigned bottom = viewport_.height > pad + row_height ? viewport_.height - pad - row_height : 0;
+        const unsigned rows = std::min(4u, bottom > body_top ? (bottom - body_top) / (3 * row_height) : 0u);
+        char text[64];
+        if (!monitor || !monitor->active()) std::snprintf(text, sizeof(text), "Unavailable: memory");
+        else std::snprintf(text, sizeof(text), "%s%s Hist-%llu", monitor->frozen() ? "Frozen" : "Live", monitor->advanced() ? " advanced" : "", (unsigned long long)monitor->overwritten());
+        line(pane, 1, text, body_top - row_height, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
+        const midi::Monitor::Entry *entries[4] = {}; unsigned used = 0;
+        if (monitor && monitor->active()) for (uint64_t position = monitor->cursor(); position > monitor->oldest() && used < rows;) {
+            const auto *e = monitor->entry(--position);
+            if (e && (direction == Direction::both || e->direction == direction || e->direction == Direction::both)) entries[used++] = e;
+        }
+        if (!used) line(pane, 2, direction == Direction::both ? "No traffic" : direction == Direction::incoming ? "No input" : "No output", body_top, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
+        for (unsigned i = 0; i < used; ++i) {
+            const auto &e = *entries[used - i - 1];
+            const auto *endpoint = outputs_.route(e.route);
+            const char *alias = endpoint ? endpoint->name : "unknown";
+            const char *direction_label = e.direction == Direction::incoming ? "I" : e.direction == Direction::outgoing ? "O" : "-";
+            std::snprintf(text, sizeof(text), "%llu.%03u %s%s %.12s%s/%u", (unsigned long long)(e.time / 1000000), unsigned(e.time / 1000 % 1000), direction_label,
+                e.flags & midi::Monitor::diagnostic ? "/test" : "", alias, std::strlen(alias) > 12 ? "~" : "", unsigned(e.cable));
+            const unsigned first = 2 + i * 3, y = body_top + i * 3 * row_height;
+            line(pane, first, text, y, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
+            midi::Monitor::describe(e, text, sizeof(text));
+            line(pane, first + 1, text, y + row_height, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
+            text[0] = 0;
+            unsigned start = e.flags & midi::Monitor::running ? 1 : 0;
+            for (unsigned j = start; j < e.size; ++j) {
+                const auto used_bytes = std::strlen(text);
+                std::snprintf(text + used_bytes, sizeof(text) - used_bytes, "%s%02X", used_bytes ? " " : "", unsigned(e.bytes[j]));
+            }
+            if (e.flags & midi::Monitor::running) std::strcat(text, " (running)");
+            line(pane, first + 2, text, y + 2 * row_height, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
+        }
+        const char *help = monitor && monitor->frozen() ? prompt("%s/%s History %s Live", controls_.previous, controls_.next, controls_.confirm) : prompt("%s Freeze", controls_.confirm);
+        line(pane, 14, help, bottom, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
+    }
     static constexpr unsigned design_width = 5 * 32, design_height = 4 * 32;
     Controls controls_;
     char prompt_[64] = {};

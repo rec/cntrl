@@ -127,11 +127,13 @@ struct Sink {
     bool submit(unsigned destination, const Packet &packet) {
         if (!write_packet(destination, packet)) return false;
         state_.record(destination, packet.bytes, packet.size());
+        packet_sent(destination, packet);
         return true;
     }
     const MidiState &state() const { return state_; }
     void forget_output(unsigned output) { state_.forget(output); }
 protected:
+    virtual void packet_sent(unsigned, const Packet &) {}
     virtual bool write_packet(unsigned destination, const Packet &packet) = 0;
 private:
     MidiState state_;

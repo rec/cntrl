@@ -43,6 +43,7 @@ struct Actions {
     enum View { performance, menu, switches, songs, setup } view = performance;
     std::vector<unsigned> actions;
     bool locked = false, reserved = false;
+    bool monitoring = false;
     bool switches_open() const { return view == switches; }
     bool menu_open() const { return view == menu; }
     bool songs_open() const { return view == songs; }
@@ -53,6 +54,7 @@ struct Actions {
     void browse(bool reverse) { actions.push_back(reverse ? 31 : 30); }
     bool midi_reserved() const { return reserved; }
     bool keyboard(unsigned, bool) { return false; }
+    bool monitor(unsigned, bool pressed) { if (monitoring) actions.push_back(pressed ? 91 : 92); return monitoring; }
     bool expression(unsigned) { return false; }
     bool port(unsigned) { return false; }
     bool clock(unsigned, bool) { return false; }
@@ -103,4 +105,8 @@ int main() {
     assert(actions.actions == std::vector<unsigned>{46}); // Adapter mapping, independent of physical index.
     actions.actions.clear(); actions.view = Actions::switches; actions.locked = true; events[1] = 2; router.route(actions, events, 0, 0);
     assert(actions.actions == std::vector<unsigned>{21}); // Release survives navigation lock.
+    actions.view = Actions::performance; actions.locked = false; actions.monitoring = true; actions.actions.clear(); events[1] = 1;
+    router.route(actions, events, 2, 0); assert(actions.actions == std::vector<unsigned>{91});
+    actions.actions.clear(); events[1] = 2;
+    router.route(actions, events, 0, 0); assert(actions.actions == std::vector<unsigned>{92}); // Monitor controls never reach the patch-switcher.
 }

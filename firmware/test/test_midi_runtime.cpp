@@ -58,6 +58,7 @@ struct Panic {
     void tick(uint32_t, bool ready) { ++ticks; if (ready) running = false; }
 };
 struct Services : cntrl::midi::Sink {
+    cntrl::midi::Monitor *observer = nullptr;
     std::vector<std::string> log, replies;
     std::vector<unsigned> reads, writes;
     std::vector<cntrl::midi::Packet> packets;
@@ -105,6 +106,9 @@ struct Services : cntrl::midi::Sink {
     }
     bool write_packet(unsigned route, const cntrl::midi::Packet &packet) override {
         writes.push_back(route); packets.push_back(packet); log.push_back("send"); return true;
+    }
+    void packet_sent(unsigned route, const cntrl::midi::Packet &packet) override {
+        if (observer) observer->packet(cntrl::midi::Monitor::Direction::outgoing, route, 0, packet, time, cable_test.enabled());
     }
 };
 
@@ -194,7 +198,40 @@ void test_explicit_routes_replace_forwarding_and_yield_to_utilities() {
     runtime.stream_status(services);
     assert(services.replies.back().find("CNTRL MIDI STREAMS ") == 0);
 }
+void test_monitor_observes_inputs_before_gates_and_actual_transformed_outputs() {
+    cntrl::memory_budget = 128 * 1024;
+    Services services(1); services.sources[0].clear();
+    cntrl::midi::Runtime runtime; services.observer = &runtime.monitor();
+    assert(runtime.monitor().open(services.time));
+    services.bridge.configure_usb(false, true, 0);
+    cntrl::midi::InputEvent event;
+    event.input = 1; event.cable = 3; event.packetized = true; event.packet = {9, {0x90,60,100}};
+    services.sources[0].push_back(event); runtime.poll(services);
+    assert(runtime.monitor().tail() == 1 && services.writes.empty());
+    assert(runtime.monitor().entry(0)->route == 1 && runtime.monitor().entry(0)->cable == 3);
+    runtime.monitor().close(); assert(runtime.monitor().open(services.time));
+    services.cable_test.running = true; event.input = 0;
+    services.sources[0].push_back(event); runtime.poll(services);
+    assert(runtime.monitor().tail() == 1);
+    assert(runtime.monitor().entry(0)->flags & cntrl::midi::Monitor::diagnostic);
+    services.cable_test.running = false;
+    std::vector<uint8_t> graph(87, 0);
+    graph.insert(graph.end(), {2,0,4,0,12,0,0,0}); // Transpose by twelve semitones.
+    std::memcpy(graph.data(), "CSTR", 4); cntrl::put32(graph.data() + 4, unsigned(graph.size()));
+    graph[8] = graph[10] = graph[14] = graph[18] = 1;
+    graph[12] = graph[13] = 255; graph[16] = 1; graph[20] = 'a'; // Input 0, output 0.
+    assert(runtime.streams().load(graph.data(), unsigned(graph.size()), services.midi_outputs(), 0));
+    services.sources[0].push_back(event); runtime.poll(services);
+    assert(runtime.monitor().tail() == 3 && services.writes.size() == 1);
+    assert(runtime.monitor().entry(1)->direction == cntrl::midi::Monitor::Direction::incoming);
+    assert(runtime.monitor().entry(2)->direction == cntrl::midi::Monitor::Direction::outgoing);
+    assert(runtime.monitor().entry(2)->bytes[1] == 72);
+    runtime.streams().stop_all(); runtime.poll(services);
+    assert(runtime.monitor().tail() == 4);
+    assert(runtime.monitor().entry(3)->bytes[0] == 0x80 && runtime.monitor().entry(3)->bytes[1] == 72);
+}
 int main() {
+    test_monitor_observes_inputs_before_gates_and_actual_transformed_outputs();
     test_rotating_sources_and_delivery_precede_file_work();
     test_time_budget_zero_sources_and_failure_edges();
     test_exclusive_utilities_and_diagnostics();

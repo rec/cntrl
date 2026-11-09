@@ -1,6 +1,7 @@
 #pragma once
 #include "document.h"
 #include "midi_bridge.h"
+#include "midi_monitor.h"
 #include <cstdio>
 #include <limits>
 
@@ -8,6 +9,7 @@ namespace cntrl::midi {
 struct InputEvent {
     static constexpr unsigned absent = std::numeric_limits<unsigned>::max();
     unsigned input = 0, forward = absent, clock_source = 0, cable_input = absent;
+    unsigned cable = 0;
     Packet packet{};
     uint8_t byte = 0;
     bool packetized = false, relay = false;
@@ -17,6 +19,7 @@ struct InputEvent {
 // This class owns fairness, musical service order and diagnostics policy.
 class Runtime {
 public:
+    Monitor &monitor() { return monitor_; }
     Streams &streams() { return streams_; }
     uint64_t stream_time(uint32_t now) { return extend(now); }
     Runtime(unsigned source_items = 64, unsigned input_budget_us = 180)
@@ -36,6 +39,7 @@ public:
                 || (endpoint.transport == OutputTransport::usb_host ? s.midi_host_connected() : s.midi_device_connected());
             uint64_t identity = endpoint_identity(s, endpoint.route, 0);
             uint64_t generation = endpoint_generation(s, endpoint.route, 0);
+            if (monitor_.active()) monitor_.connection(endpoint.route, present, identity, generation, s.microseconds());
             if (generation != generations_[endpoint.route]) {
                 streams_.connection(endpoint.route, false, identity, stream_time);
                 streams_.output_connection(endpoint.route, false, identity);
@@ -58,8 +62,14 @@ public:
             for (unsigned item = 0; item < source_items_ && uint32_t(s.microseconds() - begin) < input_budget_us_; ++item) {
                 InputEvent event;
                 if (!s.midi_read_event(source, event)) break;
-                if (!bridge.usb_enabled(event.input)) continue;
                 uint32_t timestamp = s.microseconds();
+                bool diagnostic_traffic = false;
+#if CNTRL_CABLE_TEST
+                diagnostic_traffic = s.cable_test.enabled();
+#endif
+                if (event.packetized) monitor_.packet(Monitor::Direction::incoming, event.input, event.cable, event.packet, timestamp, diagnostic_traffic);
+                else monitor_.byte(Monitor::Direction::incoming, event.input, event.cable, event.byte, timestamp, diagnostic_traffic);
+                if (!bridge.usb_enabled(event.input)) continue;
                 if (event.packetized) files.receive(event.input, event.packet, timestamp);
                 else files.receive(event.input, event.byte, timestamp);
                 if ((event.packetized ? event.packet.bytes[0] : event.byte) == 0xf8)
@@ -114,6 +124,7 @@ public:
         else streams_.service(s, extend(s.microseconds()), available,
             bridge.busy_outputs() | files.player.sysex_outputs());
         s.midi_flush();
+        if (monitor_.active()) monitor_.poll(s.microseconds());
         files.recorder.poll(s.microseconds());
         if (files.recorder.failed() && !recording_failed_) s.error("MIDI recording write failed");
         recording_failed_ = files.recorder.failed();
@@ -153,6 +164,7 @@ public:
         s.reply(response);
     }
 private:
+    Monitor monitor_;
     Streams streams_;
     uint64_t generations_[max_routes] = {};
     uint64_t stream_time_ = 0;

@@ -77,6 +77,9 @@ struct VisitFile : cntrl::files::File {
     bool sync() override { return true; }
 };
 struct PagePlatform : Hardware {
+    cntrl::midi::Monitor monitor;
+    cntrl::midi::Monitor &midi_monitor() { return monitor; }
+    uint32_t microseconds() const { return 0; }
     bool switch_firmware() { return false; }
     struct Expression {
         unsigned index = 0;
@@ -146,6 +149,30 @@ static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Doc
     const auto none = host.pages_.view(0, 0, {});
     assert(std::strstr(none.lines[1].text, "No configurable") != nullptr && !none.lines[3].text[0] && !none.lines[4].text[0]);
 }
+static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents &documents, cntrl::ui::Application &app) {
+    PagePlatform platform; PageFonts fonts; PageDisplay display;
+    uint16_t work[64 * 64] = {}, cache[64 * 64] = {}, previous[64 * 64] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64, cache, previous, 64 * 64);
+    constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"},{3,"D"},{4,"E"},{5,"F"}};
+    cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0,1,2,3,4,5,4,3,2,bindings,6});
+    uint8_t layout[8 + 32 + 35] = {'C','P','A','G',1,1,1,0};
+    layout[8 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_monitor); layout[8 + 32 + 33] = 1;
+    host.pages_.layout({layout}); host.enter_page();
+    assert(platform.monitor.active());
+    platform.monitor.packet(cntrl::midi::Monitor::Direction::incoming, 0, 0, {12,{0xc0,1,0}}, 10);
+    assert(host.monitor_button(2, true) && platform.monitor.frozen());
+    assert(host.monitor_button(2, false) && platform.monitor.frozen());
+    assert(host.monitor_button(2, true) && !platform.monitor.frozen());
+    host.leave_page(); assert(!platform.monitor.active());
+    host.enter_page(); assert(platform.monitor.active() && platform.monitor.tail() == 0);
+    assert(host.monitor_button(5, true) && !platform.monitor.active() && app.menu.open());
+    app.menu.leave(); host.enter_page(); assert(platform.monitor.active());
+    host.configure_page_settings({}); assert(!platform.monitor.active());
+    const unsigned budget = cntrl::memory_budget; cntrl::memory_budget = cntrl::memory_used;
+    host.enter_page(); assert(!platform.monitor.active());
+    assert(host.monitor_button(2, true) && !platform.monitor.frozen());
+    cntrl::memory_budget = budget;
+}
 static void selecting_pages_preserves_state_and_background_work(const char *path) {
     struct Context : Hardware {
         cntrl::ui::Application *application = nullptr;
@@ -161,6 +188,12 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
     std::vector<uint8_t> bytes;
     for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     cntrl::Document document; assert(document.load(bytes.data(), unsigned(bytes.size()), hardware));
+    const unsigned monitor_page = unsigned(document.page_layout().page(1) - bytes.data());
+    for (unsigned count : {0u,1u,2u,3u,4u}) {
+        auto monitored = bytes; monitored[monitor_page] = cntrl::PageLayout::midi_monitor; monitored[monitor_page + 1] = uint8_t(count);
+        cntrl::put32(monitored.data() + 20, cntrl::checksum(monitored.data() + 28, unsigned(monitored.size() - 28)));
+        cntrl::Document checked; assert(checked.load(monitored.data(), unsigned(monitored.size()), hardware) == (count >= 1 && count <= 3));
+    }
     // Match the pedal's one-window Tap Tempo page followed by its patch page.
     const unsigned tap = unsigned(document.page_layout().page(4) - bytes.data());
     bytes[tap + 1] = 1;
@@ -270,6 +303,7 @@ int main(int argc, char **argv) {
         assert(!source.activate(missing, {}, false));
         firmware_handoff_is_durable_and_corrupt_return_is_rejected(hardware, documents, app, songs, source);
         page_ports_follow_declared_sparse_ids_and_supported_modes(documents, app);
+        monitor_page_controls_and_capture_follow_lifecycle(documents, app);
         assert(app.state(1, 91, hardware) && hardware.brightness == 91);
         assert(app.state(9, 0, hardware) && app.pending_operation == 9);
         assert(!app.state(11, 0, hardware)); hardware.editor = true; assert(app.state(11, 0, hardware)); hardware.editor = false;

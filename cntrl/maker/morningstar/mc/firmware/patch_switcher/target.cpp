@@ -444,6 +444,18 @@ public:
         }
         return unsigned(serial->availableForWrite()) >= n && serial->write(p.bytes, n) == n;
     }
+    void packet_sent(unsigned route, const cntrl::midi::Packet &packet) override {
+        if (!midi_runtime_.monitor().active()) return;
+        const auto *connection = midi_outputs().route(route);
+        const auto binding = cntrl::device::midi_binding(*connection);
+        bool diagnostic_traffic = false;
+#if CNTRL_CABLE_TEST
+        diagnostic_traffic = cable_test.enabled();
+#endif
+        midi_runtime_.monitor().packet(cntrl::midi::Monitor::Direction::outgoing, route,
+            connection->transport == cntrl::midi::OutputTransport::physical ? 0 : binding.index, packet, micros(), diagnostic_traffic);
+    }
+    cntrl::midi::Monitor &midi_monitor() { return midi_runtime_.monitor(); }
     void midi_reset() { midi_runtime_.reset(*this); }
     void midi_status(unsigned route) { midi_runtime_.status(bridge_, route, documents.document(), *this); }
     void midi_stream_status() { midi_runtime_.stream_status(*this); }
@@ -560,6 +572,7 @@ public:
             const auto *input = cntrl::device::midi_endpoint(midi_outputs(), cntrl::device::MidiDriver::usb_device);
             event.input = input ? input->route : cntrl::midi::InputEvent::absent;
             event.clock_source = (packet >> 4) & 15;
+            event.cable = event.clock_source;
             event.packetized = true;
             event.packet = {uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}};
             if (event.clock_source == 6) {
@@ -590,6 +603,7 @@ public:
         uint32_t packet = host_midi.read_packed();
         if (!packet) return false;
         unsigned cable = (packet >> 4) & 15;
+        event.cable = cable;
         event.clock_source = 18 + cable;
         event.packetized = true;
         event.packet = {uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}};
@@ -884,6 +898,7 @@ public:
         return reserved;
     }
     bool keyboard(unsigned i, bool pressed) { return board.keyboard_button(i, pressed); }
+    bool monitor(unsigned i, bool pressed) { return board.monitor_button(i, pressed); }
     bool expression(unsigned i) { return board.expression_button(i); }
     bool port(unsigned i) { return board.trs_button(i); }
     bool clock(unsigned i, bool pressed) { return board.clock_control(i, pressed); }

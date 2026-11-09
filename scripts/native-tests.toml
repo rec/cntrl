@@ -1,4 +1,5 @@
 [tests]
+"test/test_midi_monitor.cpp" = []
 "test/test_counters.cpp" = ["test/counters.golden"]
 "test/test_buttons.cpp" = []
 "test/test_input_pipeline.cpp" = ["test/show.golden"]

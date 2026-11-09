@@ -20,6 +20,8 @@ def pack(pages: dict[str, models.Page], windows: list[str]) -> bytes:
                 if page.type == 'patch-switcher'
                 else 0
                 if page.type == 'None'
+                else 2
+                if page.type == 'midi-monitor'
                 else 1
             )
         if count > len(windows):
@@ -88,4 +90,5 @@ PAGE_TYPES = (
     'keyboard',
     'None',
     'patch-switcher',
+    'midi-monitor',
 )

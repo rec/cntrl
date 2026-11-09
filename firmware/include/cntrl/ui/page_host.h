@@ -15,7 +15,19 @@ public:
     PageHost(Platform &platform, Application &application, Documents &documents,
              Display &display, const Fonts &fonts, Renderer &renderer, Controls controls)
         : pages_(fonts, display.viewport(display.count() - 1)), platform_(platform),
-          application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) { pages_.controls(controls); }
+          application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) { pages_.controls(controls); pages_.monitor = &platform_.midi_monitor(); }
+    bool monitor_button(unsigned input, bool pressed) {
+        if (pages_.page() != Pages::Page::midi_monitor) return false;
+        if (!pressed) return true;
+        if (input == controls_.back) {
+            leave_page();
+            application_.operation_ui(Operation::menu_open, platform_); return true;
+        }
+        if (!platform_.midi_monitor().active()) return true;
+        if (input == controls_.confirm) platform_.midi_monitor().freeze();
+        else if (input == controls_.previous || input == controls_.next) platform_.midi_monitor().browse(input == controls_.previous);
+        pages_.revisit(); return true;
+    }
     bool keyboard_button(unsigned i, bool pressed) {
         if (pages_.page() != Pages::Page::keyboard || (i != controls_.previous && i != controls_.next && i != controls_.confirm)) return false;
         if (i == controls_.confirm) {
@@ -102,6 +114,13 @@ public:
         return true;
     }
     void enter_page() {
+        if (pages_.page() == Pages::Page::midi_monitor) {
+            application_.controller().cancel_gesture();
+            if (!platform_.midi_monitor().active()) {
+                monitor_unavailable_ = !platform_.midi_monitor().open(platform_.microseconds());
+                if (monitor_unavailable_) error("MIDI monitor memory unavailable");
+            }
+        }
         if (pages_.page() == Pages::Page::ports && documents_.document().valid()) select_trs_jack();
         if (pages_.page() == Pages::Page::expression) {
             if (expression_ports_.empty()) pages_.expression_status("No configurable ports", "", "");
@@ -116,6 +135,7 @@ public:
 #endif
     }
     void leave_page() {
+        if (pages_.page() == Pages::Page::midi_monitor) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
         keyboard_.clear(); pages_.keyboard_held(false);
         if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();
 #if CNTRL_CABLE_TEST
@@ -301,6 +321,7 @@ public:
 #endif
         if (!splash_visible_ && !application_.feature_open(platform_) && documents_.document().valid()
             && pages_.windows() && pages_.due(now)) {
+            if (pages_.page() == Pages::Page::midi_monitor && !platform_.midi_monitor().active() && !monitor_unavailable_) enter_page();
             // Prepare the incoming card during the renderer's bounded transition preparation.
             PerformanceStatus status = pages_.page() == Pages::Page::status ? platform_.status() : PerformanceStatus{};
             for (unsigned i = 0; i < pages_.windows(); ++i) {
@@ -317,8 +338,9 @@ public:
 #else
                 , cntrl::Panic::Status::ready
 #endif
+                , i, pages_.windows()
             );
-                renderer_.show(screen, Pages::window_view(content, i, pages_.windows()));
+                renderer_.show(screen, pages_.page() == Pages::Page::midi_monitor ? content : Pages::window_view(content, i, pages_.windows()));
             }
         }
         if (!splash_visible_) draw();
@@ -372,6 +394,7 @@ private:
     bool port_save_pending_ = false, performance_visible_ = false, splash_visible_ = false;
     int pending_patch_ = -1;
     bool brightness_feedback_ = false;
+    bool monitor_unavailable_ = false;
     uint8_t feedback_brightness_ = 255;
     int applied_brightness_ = -1;
 };

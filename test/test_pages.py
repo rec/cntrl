@@ -88,4 +88,41 @@ def test_patch_switcher_instance_limit_is_preserved() -> None:
         layout.pack({str(i): models.Page() for i in range(5)}, ['screen'])
 
 
+@pytest.mark.parametrize('count', [1, 2, 3])
+def test_midi_monitor_layout_round_trips(count: int) -> None:
+    data = compiler.compile_show(
+        {'pages': {'monitor': {'type': 'midi-monitor', 'windows': count}}},
+        {},
+        [],
+        target(),
+    )
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['pages']['monitor']['type'] == 'midi-monitor'
+    assert exported['pages']['monitor']['windows'] == count
+    assert compiler.compile_show(exported, {}, [], target()) == data
+
+
+def test_midi_monitor_defaults_to_two_windows_and_supports_single_display() -> None:
+    data = layout.pack(
+        {'monitor': models.Page(type='midi-monitor')}, ['one', 'two', 'three']
+    )
+    assert layout.unpack(data, 0)['pages']['monitor']['windows'] == 2
+    data = layout.pack(
+        {'monitor': models.Page(type='midi-monitor', windows=1)}, ['one']
+    )
+    assert layout.unpack(data, 0)['pages']['monitor']['windows'] == 1
+    with pytest.raises(ValueError, match='more windows'):
+        layout.pack({'monitor': models.Page(type='midi-monitor')}, ['one'])
+    with pytest.raises(ValueError, match='more windows'):
+        layout.pack(
+            {'monitor': models.Page(type='midi-monitor', windows=3)}, ['one', 'two']
+        )
+
+
+@pytest.mark.parametrize('count', [0, 4])
+def test_invalid_midi_monitor_window_count_is_rejected(count: int) -> None:
+    with pytest.raises(ValueError, match='one, two or three'):
+        models.Page(type='midi-monitor', windows=count)
+
+
 ROOT = Path(__file__).parents[1] / 'firmware/test'
