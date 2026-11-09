@@ -60,6 +60,7 @@ class Library(BaseModel, frozen=True):
     instruments: dict[str, object] = Field(default_factory=dict)
     definitions: models.Definitions | None = None
     patches: dict[str, object] = Field(default_factory=dict)
+    midi: dict[str, object] | None = None
     fonts: dict[str, str] = Field(default_factory=dict)
     tag_styles: dict[str, models.Style] = Field(default_factory=dict)
     songs: list[Song] = Field(default_factory=list)
@@ -124,7 +125,7 @@ def encode(
         positions.append(values)
     source = b''
     roots: list[int] = []
-    if values_for_source or library.patches:
+    if values_for_source or library.patches or library.midi is not None:
         if target is None:
             raise ValueError(
                 'song patches require --target to compile their setup context'
@@ -144,6 +145,7 @@ def encode(
             'auxiliary_switches': {},
             'instruments': library.instruments,
             'patches': library.patches,
+            **({'midi': library.midi} if library.midi is not None else {}),
             'patch_cycles': {'Songs': values_for_source} if values_for_source else {},
             'fonts': library.fonts,
             'tag_styles': {
@@ -295,9 +297,14 @@ def decode(data: bytes) -> Library:
     source_fonts: list[dict[str, str]] = []
     tags: dict[str, object] = {}
     source_tags: list[set[str]] = []
+    system_routes: dict[str, object] | None = None
     for index, source in enumerate(sources):
         exported = tomlkit.parse(resolved.export(source)).unwrap()
         prefix = f'source-{index}-' if len(sources) > 1 else ''
+        if 'midi' in exported:
+            if system_routes is None:
+                system_routes = {}
+            system_routes.update(_rebind_routes(exported['midi'], prefix, system=True))
         renamed = {k: prefix + k for k in exported.get('fonts', {})}
         source_fonts.append(renamed)
         fonts.update({renamed[k]: v for k, v in exported.get('fonts', {}).items()})
@@ -325,6 +332,8 @@ def decode(data: bytes) -> Library:
     context['patches'] = definitions
     context['fonts'] = fonts
     context['tag_styles'] = tags
+    if system_routes is not None:
+        context['midi'] = system_routes
     if sources:
         context['definitions'] = {'profiles': profiles, 'programs': programs}
     songs = []
@@ -370,6 +379,8 @@ def _rebind(
     work = [result]
     while work:
         item = work.pop()
+        if isinstance(routes := item.get('midi'), dict):
+            item['midi'] = _rebind_routes(routes, prefix)
         if 'parent' in item:
             item['parent'] = _qualified(prefix, str(item['parent']), 63)
         if 'instrument' in item and (
@@ -395,6 +406,26 @@ def _rebind(
         ):
             style['font_name'] = fonts[font]
     return result
+
+
+def _rebind_routes(
+    routes: dict[str, object], prefix: str, *, system: bool = False
+) -> dict[str, object]:
+    result = deepcopy(routes)
+    for value in result.values():
+        if not isinstance(value, dict) or 'from' not in value:
+            continue
+        sources = value['from']
+        names = sources if isinstance(sources, list) else [sources]
+        rebound = []
+        for name in names:
+            if isinstance(name, str) and name.startswith('system/'):
+                name = 'system/' + _qualified(prefix, name[7:], 63)
+            elif system and name in routes:
+                name = _qualified(prefix, name, 63)
+            rebound.append(name)
+        value['from'] = rebound if isinstance(sources, list) else rebound[0]
+    return {_qualified(prefix, k, 63) if system else k: v for k, v in result.items()}
 
 
 def _qualified(prefix: str, name: str, maximum: int) -> str:

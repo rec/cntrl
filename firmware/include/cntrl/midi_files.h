@@ -39,7 +39,38 @@ private:
     bool cached_ = false;
 };
 
-class MidiFiles {
+class StreamFilePlayer : public StreamFileSource {
+public:
+    StreamFilePlayer(files::FileSystem &filesystem, std::unique_ptr<files::File> source,
+                     std::unique_ptr<files::File> index, const char *index_path)
+        : filesystem_(filesystem), source_file_(std::move(source)), index_file_(std::move(index)),
+          source_(*source_file_), index_(*index_file_), player_(source_, index_) {
+        std::snprintf(index_path_, sizeof(index_path_), "%s", index_path);
+    }
+    ~StreamFilePlayer() override {
+        player_.cancel(); source_.close(); index_.close();
+        if (opened_index_) filesystem_.remove(index_path_);
+    }
+    bool start(const char *path, PlayMidiFilePatch settings) {
+        settings.outputs = 1;
+        if (!source_.open(path, files::Mode::read)) return false;
+        opened_index_ = index_.open(index_path_, files::Mode::truncate);
+        return opened_index_ && player_.start(settings);
+    }
+    void poll(uint32_t now, Sink &sink) override { player_.poll(now, 1, sink); }
+    bool failed() const override { return player_.status() == MidiFilePlayer::Status::failed; }
+    bool finished() const override { return player_.status() == MidiFilePlayer::Status::complete && !player_.cleaning(); }
+    bool clock() const override { return player_.clock_outputs() != 0; }
+private:
+    files::FileSystem &filesystem_;
+    std::unique_ptr<files::File> source_file_, index_file_;
+    CachedMidiFile source_, index_;
+    MidiFilePlayer player_;
+    char index_path_[160] = {};
+    bool opened_index_ = false;
+};
+
+class MidiFiles : public StreamFileProvider {
     CachedMidiFile source_, index_, recording_;
 public:
     MidiFiles(files::FileSystem &filesystem, files::File &source, files::File &index,
@@ -49,6 +80,20 @@ public:
           entries_(entries), parsers_(inputs), directory_(directory), index_path_(index_path) {}
     cntrl::midi::MidiFilePlayer player{source_, index_};
     cntrl::midi::MidiFileRecorder recorder{recording_};
+    std::unique_ptr<StreamFileSource> open_stream(const PlayMidiFilePatch &settings, unsigned route) override {
+        const char *filename = settings.filename[0] ? settings.filename : latest_;
+        if (!filename[0] || (recorder.active() && !std::strcmp(filename, recording_name_))) return {};
+        auto source = filesystem_.file(), index = filesystem_.file();
+        if (!source || !index) return {};
+        char path[128], index_path[160];
+        int source_size = std::snprintf(path, sizeof(path), "%s/%s", directory_, filename);
+        int index_size = std::snprintf(index_path, sizeof(index_path), "%s.stream-%u", index_path_, route);
+        if (source_size < 0 || unsigned(source_size) >= sizeof(path)
+            || index_size < 0 || unsigned(index_size) >= sizeof(index_path)) return {};
+        auto stream = std::make_unique<StreamFilePlayer>(filesystem_, std::move(source), std::move(index), index_path);
+        if (!stream->start(path, settings)) return {};
+        return stream;
+    }
     bool play(unsigned invocation, const cntrl::midi::PlayMidiFilePatch &settings) {
         if (invocation >= cntrl::midi::Bridge::owners || player.active() || player.cleaning()) return false;
         const char *filename = settings.filename[0] ? settings.filename : latest_;

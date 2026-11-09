@@ -1,5 +1,6 @@
 #pragma once
 #include "midi_bridge.h"
+#include "midi_stream_timeline.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -138,11 +139,7 @@ public:
                 if (note < 0 || note > 127) return;
                 packet_.bytes[1] = uint8_t(note);
                 if (settings_.reverse && (kind == 8 || kind == 9)) {
-                    bool off = kind == 8 || !event.second;
-                    if (off && !event.velocity) return; // Unmatched release has no onset to reverse.
-                    packet_.cin = off ? 9 : 8;
-                    packet_.bytes[0] = uint8_t((off ? 0x90 : 0x80) | (event.status & 15));
-                    packet_.bytes[2] = off ? event.velocity : 0;
+                    if (!reverse_note(packet_, event.velocity)) return;
                 }
             }
             pending_outputs_ = settings_.outputs; packet_pending_ = true;

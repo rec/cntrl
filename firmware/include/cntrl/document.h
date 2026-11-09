@@ -1,6 +1,7 @@
 #pragma once
 #include "hardware.h"
 #include "midi_bridge.h"
+#include "midi_processing.h"
 #include <cstring>
 #include <cstdio>
 #include <cmath>
@@ -243,6 +244,13 @@ public:
             }
             names += 6 + relay_count * 33;
         }
+        unsigned streams = 0;
+        if (names + 4 <= length && !std::memcmp(bytes + names, "CSTR", 4)) {
+            if (length - names < 12) return false;
+            unsigned size = u32(bytes + names + 4);
+            if (size < 12 || size > length - names) return false;
+            streams = names; names += size;
+        }
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -254,6 +262,19 @@ public:
         }
         unsigned graph = end;
         if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count)) return false;
+        if (streams) {
+            std::vector<midi::OutputConnection> configured;
+            for (auto connection : hardware.midi_outputs()) {
+                connection.input = bool(input_routes & (1u << connection.route));
+                connection.output = bool(output_routes & (1u << connection.route));
+                if (connection.port != midi::no_port
+                    && !midi::midi_output(midi::TrsMode(bytes[meta + trs_modes_offset + connection.port])))
+                    connection.input = connection.output = false;
+                configured.push_back(connection);
+            }
+            if (!midi::Streams::valid(bytes + streams, u32(bytes + streams + 4),
+                {configured.data(), unsigned(configured.size())}, u16(bytes + graph + 8))) return false;
+        }
         unsigned switch_count = u16(bytes + graph + 10);
         unsigned switch_start = graph + 16 + u16(bytes + graph + 8) * 4 + np * 2;
         if (has_hooks) {
@@ -377,11 +398,32 @@ public:
         if (next != np) return false;
         data_ = bytes; length_ = length; instruments_ = ni; patch_cycles_ = nc; patches_ = np;
         styles_ = styles; pages_ = page_start; texts_ = texts;
-        graph_ = graph;
+        graph_ = graph; streams_ = streams;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
     unsigned switches() const { return u16(data_ + graph_ + 10); }
+    const uint8_t *midi_streams() const { return streams_ ? data_ + streams_ : nullptr; }
+    unsigned midi_streams_size() const { return streams_ ? u32(data_ + streams_ + 4) : 0; }
+    unsigned stream_scope(unsigned root) const {
+        std::vector<unsigned> pending{root};
+        std::vector<bool> visited(nodes(), false);
+        while (!pending.empty()) {
+            unsigned index = pending.back(); pending.pop_back();
+            if (index >= nodes() || visited[index]) continue;
+            visited[index] = true;
+            const uint8_t *record = node(index), *p = record + 4;
+            if (record[0] == 12) return index;
+            if (record[0] == 10) pending.push_back(u16(p));
+            else if (record[0] == 5) {
+                for (unsigned i = u16(p); i; --i) pending.push_back(u16(p + 2 + (i - 1) * 2));
+            } else if (record[0] == 6 && u16(p) == 65535) {
+                int child = named_patch(reinterpret_cast<const char *>(p + 2));
+                if (child >= 0) pending.push_back(unsigned(child));
+            }
+        }
+        return midi::Streams::system_scope;
+    }
     const uint8_t *switch_assignment(unsigned i) const { return data_ + graph_ + 16 + nodes() * 4 + patches_ * 2 + i * 72; }
     unsigned nodes() const { return u16(data_ + graph_ + 8); }
     unsigned graph_metadata() const { return graph_; }
@@ -673,6 +715,12 @@ private:
                 if (!found) return false;
                 break;
             }
+            case 12:
+                if (n[1] || length != 2 || u16(p) >= count) return false;
+                break;
+            case 13:
+                if (n[1] || length != 73 || !text_valid(p, 72) || p[72] > 1) return false;
+                break;
             case 7:
                 if (n[1] || length != 4 || !u32(p) || u32(p) > 65535) return false;
                 break;
@@ -694,7 +742,7 @@ private:
             const uint8_t *node = nullptr;
             while (visited++ <= count) {
                 node = g + u32(g + 16 + root * 4);
-                if (node[0] == 10) { root = u16(node + 4); continue; }
+                if (node[0] == 10 || node[0] == 12) { root = u16(node + 4); continue; }
                 if (node[0] != 6 || u16(node + 4) != 65535) break;
                 bool found = false;
                 for (unsigned j = 0; j < named; ++j)
@@ -777,6 +825,6 @@ private:
     const uint8_t *data_ = nullptr;
     unsigned length_ = 0, instruments_ = 0, patch_cycles_ = 0, patches_ = 0;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
-    unsigned graph_ = 0;
+    unsigned graph_ = 0, streams_ = 0;
 };
 } // namespace cntrl

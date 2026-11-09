@@ -11,6 +11,7 @@ from . import (
     layout,
     midi_endpoints,
     midi_messages,
+    midi_processing,
     page_settings,
     relay_outputs,
 )
@@ -87,6 +88,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     labels = inputs.unpack(data, cursor)
     cursor += inputs.HEADER.size + len(labels) * inputs.RECORD.size
     cursor = relay_outputs.section_end(data, cursor)
+    cursor = midi_processing.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -404,8 +406,12 @@ def _patch(
     properties = cast(dict[str, object], metadata.get(str(index), {}))
     if isinstance(authored := properties.get('_derived'), dict):
         program_cursor, program_kind = cursor, kind
-        if kind == 10:
-            child = struct.unpack_from('<H', data, cursor)[0]
+        program_seen = {index}
+        while program_kind in (10, 12):
+            child = struct.unpack_from('<H', data, program_cursor)[0]
+            if child >= count or child in program_seen:
+                raise ValueError('invalid or cyclic Patch graph')
+            program_seen.add(child)
             child_address = (
                 offset
                 + struct.unpack_from('<I', data, offset + GRAPH.size + child * 4)[0]
@@ -609,6 +615,23 @@ def _patch(
         )
         if duration:
             value['duration'] = duration / 1000
+    elif kind == 12:
+        entry = _patch(
+            data,
+            offset,
+            struct.unpack_from('<H', data, cursor)[0],
+            metadata,
+            ancestors | {index},
+            labels,
+        )
+        return entry | value
+    elif kind == 13:
+        stream, enabled = struct.unpack_from('<72sB', data, cursor)
+        value.update(
+            operation='midi-stream',
+            stream=stream.split(b'\0')[0].decode('ascii'),
+            enabled=bool(enabled),
+        )
     elif kind == 7:
         value.update(duration=struct.unpack_from('<I', data, cursor)[0] / 1000)
     elif kind == 6:
@@ -642,7 +665,7 @@ def _edited_program(
             return origin['program'] != data[address + 6] + 1 or origin.get('bank') != (
                 None if bank == 0xFFFFFFFF else bank
             )
-        if data[address] == 10:
+        if data[address] in (10, 12):
             index = struct.unpack_from('<H', data, address + 4)[0]
             continue
         if (

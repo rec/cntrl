@@ -60,6 +60,7 @@ struct Panic {
 struct Services : cntrl::midi::Sink {
     std::vector<std::string> log, replies;
     std::vector<unsigned> reads, writes;
+    std::vector<cntrl::midi::Packet> packets;
     std::vector<std::deque<cntrl::midi::InputEvent>> sources;
     cntrl::midi::Bridge bridge{{endpoints, 2}};
     Files files{log};
@@ -102,8 +103,8 @@ struct Services : cntrl::midi::Sink {
         if (sources[source].empty()) return false;
         event = sources[source].front(); sources[source].pop_front(); reads.push_back(source); return true;
     }
-    bool write_packet(unsigned route, const cntrl::midi::Packet &) override {
-        writes.push_back(route); log.push_back("send"); return true;
+    bool write_packet(unsigned route, const cntrl::midi::Packet &packet) override {
+        writes.push_back(route); packets.push_back(packet); log.push_back("send"); return true;
     }
 };
 
@@ -168,9 +169,35 @@ void test_relay_runs_when_physical_interface_is_disabled() {
     runtime.poll(services);
     assert(services.writes == std::vector<unsigned>{1});
 }
+void test_explicit_routes_replace_forwarding_and_yield_to_utilities() {
+    Services services(1); services.sources[0].clear();
+    cntrl::midi::Runtime runtime;
+    std::vector<uint8_t> graph(87, 0);
+    std::memcpy(graph.data(), "CSTR", 4); cntrl::put32(graph.data() + 4, unsigned(graph.size()));
+    graph[8] = graph[10] = graph[14] = 1;
+    graph[12] = graph[13] = 255; graph[16] = 2; graph[20] = 'a';
+    assert(runtime.streams().load(graph.data(), unsigned(graph.size()), services.midi_outputs(), 0));
+    cntrl::midi::InputEvent event;
+    event.input = event.forward = 0; event.packetized = true;
+    event.packet = {9, {0x90, 60, 100}};
+    services.sources[0].push_back(event);
+    runtime.poll(services);
+    assert(services.writes == std::vector<unsigned>{1});
+    runtime.streams().receive(0, {9, {0x90, 62, 100}}, services.time);
+    services.cable_test.running = true;
+    runtime.poll(services);
+    assert(services.writes.size() == 1);
+    services.cable_test.running = false;
+    runtime.poll(services);
+    assert(services.writes.size() == 2);
+    assert(services.packets.back().bytes[0] == 0x80 && services.packets.back().bytes[1] == 60);
+    runtime.stream_status(services);
+    assert(services.replies.back().find("CNTRL MIDI STREAMS ") == 0);
+}
 int main() {
     test_rotating_sources_and_delivery_precede_file_work();
     test_time_budget_zero_sources_and_failure_edges();
     test_exclusive_utilities_and_diagnostics();
     test_relay_runs_when_physical_interface_is_disabled();
+    test_explicit_routes_replace_forwarding_and_yield_to_utilities();
 }

@@ -140,6 +140,22 @@ public:
     unsigned midi_file_clock_outputs() const { return midi_files.player.clock_outputs(); }
     bool keyboard_connected() const { return usb_configuration != 0; }
     cntrl::midi::Bridge &midi_bridge() { return bridge_; }
+    bool gate_midi_stream(const char *name, bool enabled) override {
+        return midi_runtime_.streams().gate(name, enabled);
+    }
+    void configure_midi_streams(const cntrl::Document &document) override {
+        midi_runtime_.streams().file_provider(&midi_files);
+        if (!midi_runtime_.streams().load(document.midi_streams(), document.midi_streams_size(), midi_outputs(), document.nodes(), midi_runtime_.stream_time(micros())))
+            error("Invalid MIDI stream graph");
+    }
+    bool select_midi_streams(const cntrl::Document &document, unsigned node) override {
+        if (document.midi_streams_size() != documents.document().midi_streams_size()
+            || (document.midi_streams_size() && std::memcmp(document.midi_streams(), documents.document().midi_streams(), document.midi_streams_size())))
+            return midi_runtime_.streams().select_external(document.midi_streams(), document.midi_streams_size(),
+                midi_outputs(), document.nodes(), document.stream_scope(node), midi_runtime_.stream_time(micros()));
+        midi_runtime_.streams().select(document.stream_scope(node), midi_runtime_.stream_time(micros()));
+        return true;
+    }
     cntrl::midi::TrsMode port_mode(unsigned jack) const { return trs_ports.mode(jack); }
     unsigned port_count() const { return cntrl::target::port_count; }
     auto &expression_controls() { return expression_.controls(); }
@@ -429,6 +445,7 @@ public:
     }
     void midi_reset() { midi_runtime_.reset(*this); }
     void midi_status(unsigned route) { midi_runtime_.status(bridge_, route, documents.document(), *this); }
+    void midi_stream_status() { midi_runtime_.stream_status(*this); }
     void scanned(uint32_t gap) { midi_runtime_.scanned(gap); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
@@ -485,6 +502,32 @@ public:
     }
     bool midi_host_connected() const { return bool(host_midi); }
     bool midi_device_connected() const { return usb_configuration != 0; }
+    uint64_t midi_endpoint_identity(unsigned route) {
+        const auto *endpoint = midi_outputs().route(route);
+        if (!endpoint) return 0;
+        if (endpoint->transport == cntrl::midi::OutputTransport::physical) return route + 1;
+        if (endpoint->transport == cntrl::midi::OutputTransport::usb_host) {
+            if (host_midi) {
+                const auto *serial = host_midi.serialNumber();
+                uint64_t identity = uint64_t(host_midi.idVendor()) << 32 | uint64_t(host_midi.idProduct()) << 16;
+                if (serial && *serial) {
+                    for (; *serial; ++serial) identity = (identity ^ *serial) * 1099511628211ull;
+                } else identity = (identity ^ host_midi.generation) * 1099511628211ull;
+                stream_identities_[route] = identity;
+            }
+        } else {
+            bool connected = usb_configuration != 0;
+            if (connected && !stream_device_connected_) ++stream_device_generation_;
+            stream_device_connected_ = connected;
+            stream_identities_[route] = uint64_t(stream_device_generation_) << 32 | (route + 1);
+        }
+        return stream_identities_[route];
+    }
+    uint64_t midi_endpoint_generation(unsigned route) {
+        const auto *endpoint = midi_outputs().route(route);
+        if (!endpoint || endpoint->transport == cntrl::midi::OutputTransport::physical) return 0;
+        return endpoint->transport == cntrl::midi::OutputTransport::usb_host ? host_midi.generation : stream_device_generation_;
+    }
     bool midi_document_valid() const { return documents.document().valid(); }
     unsigned midi_source_count() const { return 4; }
     cntrl::midi::MidiFiles &runtime_midi_files() { return midi_files; }
@@ -592,6 +635,9 @@ private:
     BoardDisplay display_;
     cntrl::midi::Bridge bridge_{cntrl::target::midi_connections};
     cntrl::midi::Runtime midi_runtime_;
+    uint64_t stream_identities_[cntrl::midi::max_routes] = {};
+    uint32_t stream_device_generation_ = 0;
+    bool stream_device_connected_ = false;
     cntrl::midi::UsbMidiForward hosted_forward_;
     RenderPixels pixels_;
     cntrl::ui::Renderer renderer_{display_, fonts, pixels_.work, cntrl::target::maximum_display_area, pixels_.cache, pixels_.previous, cntrl::target::total_display_area};
@@ -724,6 +770,9 @@ PerformanceStatus performance_status() {
 void midi_status(unsigned route) { board.midi_status(route); }
 void midi_reset() { board.midi_reset(); }
 bool native_asset_command(const char *line) {
+    if (!std::strcmp(line, "CNTRL MIDI STREAMS")) {
+        board.midi_stream_status(); return true;
+    }
 #ifdef CNTRL_DIAGNOSTICS
     if (!std::strcmp(line, "CNTRL DISPLAY EDGE")) {
         if (application.feature_open(board) || documents.busy()) { board.reply("CNTRL ERROR busy"); return true; }
