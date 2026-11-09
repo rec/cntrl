@@ -21,7 +21,7 @@ One movie is chosen at random from the relevant list whenever startup or idle
 playback begins, then loops until dismissed. The two categories are independent.
 Missing or invalid SD assets fall through to the normal interface. No selected
 setup means no movie. These fields replace `splash`; recompile setups for
-the current document version; the host converts legacy assets when rebuilding.
+the current document version; rebuild outdated assets from their source images.
 
 Movies stream from SD in packets of at most 320 bytes held in the player. Full
 `.cnsa` sizes do not consume RAM2. Keys and portable filenames are included in
@@ -109,7 +109,7 @@ not apply to this full-bleed splash.
 
 ## Portable implementation
 
-Animation preparation, conversion, timing, transfer and playback are implemented
+Animation preparation, timing, transfer and playback are implemented
 in `cntrl/animation/` and `firmware/include/cntrl/animation/`. The adapter's target
 export declares 160x128 images and two streams: the first serves both outer
 screens; the second is precomputed with horizontal mirroring for the centre.
@@ -117,16 +117,8 @@ Only `board.h` maps logical streams to physical screen masks and binds SD access
 The player retains one 320-byte packet until the output accepts the next region;
 no complete animation framebuffer is allocated.
 
-The prepared asset format is CNSA version 2. The compiler converts an existing
-version-1 asset using the explicitly supplied target geometry before generating
-its new checksum and setup reference. Original assets remain available for
-backup and recovery. For an individual offline conversion, run the generic CLI:
-
-```bash
-uv run python -m cntrl.animation.cli convert old.cnsa --output new.cnsa --target exported-target.toml
-```
-
-Preparing a source image likewise uses the complete target descriptor:
+The prepared asset format is CNSA version 2. Older assets must be rebuilt from
+their source images. Preparing a source image uses the complete target descriptor:
 
 ```bash
 uv run python -m cntrl.animation.cli prepare source.gif --output prepared.cnsa --target exported-target.toml

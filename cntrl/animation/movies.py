@@ -5,7 +5,7 @@ from pathlib import Path
 from zlib import crc32
 
 from ..patch_switcher.models import Setup
-from .asset import Geometry, convert_legacy, inspect_asset, prepare_movie
+from .asset import Geometry, inspect_asset, prepare_movie
 
 
 def prepare(
@@ -24,8 +24,6 @@ def prepare(
             if path.suffix.lower() == '.cnsa'
             else prepare_movie(path, geometry)
         )
-        if data[:6] == b'CNSA\x01\x00':
-            data = convert_legacy(data, geometry)
         info = inspect_asset(data)
         if (info.width, info.height, info.streams) != (
             geometry.width,

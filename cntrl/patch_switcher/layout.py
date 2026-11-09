@@ -75,45 +75,6 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     return {'pages': pages}
 
 
-def upgrade_legacy_section(
-    data: bytes, offset: int, window_ids: list[str]
-) -> tuple[bytes, int]:
-    """Convert the format-34 three-window record without touching its graph.
-
-    The caller supplies the historical window identities and replaces the
-    returned section through the old end offset before updating the setup CRC.
-    """
-    if len(window_ids) != 3 or len(set(window_ids)) != 3:
-        raise ValueError('legacy layout needs its three distinct window IDs')
-    if offset + 6 > len(data) or data[offset : offset + 4] != b'CLAY':
-        raise ValueError('missing legacy app/page layout')
-    apps, pages = data[offset + 4 : offset + 6]
-    end = offset + 6 + apps * 35 + pages * 2
-    if apps > 4 or pages > 32 or end > len(data):
-        raise ValueError('invalid legacy app/page layout')
-    entries: dict[str, models.Page] = {}
-    old_names = {
-        data[offset + 6 + i * 35 : offset + 38 + i * 35].split(b'\0')[0].decode('ascii')
-        for i in range(apps)
-    }
-    for i in range(pages):
-        kind, count = data[
-            offset + 6 + apps * 35 + i * 2 : offset + 8 + apps * 35 + i * 2
-        ]
-        name = PAGE_TYPES[kind]
-        suffix = 1
-        while name in entries or name in old_names:
-            name = f'{PAGE_TYPES[kind]}-{suffix}'
-            suffix += 1
-        entries[name] = models.Page(type=PAGE_TYPES[kind], windows=count)
-    for i in range(apps):
-        start = offset + 6 + i * 35
-        name = data[start : start + 32].split(b'\0')[0].decode('ascii')
-        priority = [window_ids[j] for j in data[start + 32 : start + 35]]
-        entries[name] = models.Page(give_up_windows=priority)
-    return pack(entries, window_ids), end
-
-
 PAGE_TYPES = (
     'tap-tempo',
     'status',

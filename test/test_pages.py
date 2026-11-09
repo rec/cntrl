@@ -83,31 +83,6 @@ def test_window_priority_requires_every_declared_id() -> None:
         )
 
 
-def test_legacy_conversion_produces_the_single_named_page_collection() -> None:
-    old = b'CLAY\x01\x01' + b'example'.ljust(32, b'\0') + bytes((2, 0, 1, 1, 2))
-    section, end = layout.upgrade_legacy_section(
-        old + b'unchanged', 0, ['one', 'two', 'three']
-    )
-    assert end == len(old)
-    restored = layout.unpack(section, 0)
-    assert list(restored) == ['pages']
-    assert restored['pages']['example']['give_up_windows'] == ['three', 'one', 'two']
-    assert restored['pages']['status']['windows'] == 2
-
-
-def test_all_historical_pages_fit_with_unique_names() -> None:
-    controllers = b''.join(
-        n.ljust(32, b'\0') + bytes((2, 1, 0))
-        for n in (b'status', b'lead', b'rhythm', b'other')
-    )
-    old = b'CLAY' + bytes((4, 32)) + controllers + bytes((1, 1)) * 32
-    section, _ = layout.upgrade_legacy_section(old, 0, ['left', 'center', 'right'])
-    restored = layout.unpack(section, 0)['pages']
-    assert len(restored) == 36
-    assert restored['status']['type'] == 'patch-switcher'
-    assert all(len(n) <= 31 for n in restored)
-
-
 def test_patch_switcher_instance_limit_is_preserved() -> None:
     with pytest.raises(ValueError, match='four patch-switcher'):
         layout.pack({str(i): models.Page() for i in range(5)}, ['screen'])

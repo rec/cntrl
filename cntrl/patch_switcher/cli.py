@@ -16,7 +16,6 @@ from reccy.configuration import units
 
 from .. import build, flash
 from . import (
-    backup_upgrade,
     backups,
     compiler,
     data_files,
@@ -106,7 +105,6 @@ class SetupCLI(BaseModel, frozen=True):
         | Annotated[backups.Backup, tyro.conf.subcommand(name='backup')]
         | Annotated[backups.Restore, tyro.conf.subcommand(name='restore')]
         | Annotated[backups.Verify, tyro.conf.subcommand(name='verify')]
-        | Annotated[backup_upgrade.Upgrade, tyro.conf.subcommand(name='upgrade-backup')]
     )
 
 
@@ -257,12 +255,8 @@ def run_setup(
     | history.History
     | backups.Backup
     | backups.Restore
-    | backups.Verify
-    | backup_upgrade.Upgrade,
+    | backups.Verify,
 ) -> None:
-    if isinstance(command, backup_upgrade.Upgrade):
-        backup_upgrade.run(command)
-        return
     if isinstance(command, backups.Backup):
         backups.backup_pedal(command.directory, command.port)
         return

@@ -153,6 +153,24 @@ def test_missing_and_unsupported_movies_fail_before_transfer(tmp_path: Path) -> 
         compiler.compile_show({'idle_movie': [str(path)]}, {}, [], target)
 
 
+def test_old_movie_format_is_rejected_without_conversion(tmp_path: Path) -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(ROOT / 'firmware/test/target.json')
+    ).model_copy(update={'animation': GEOMETRY})
+    path = tmp_path / 'old.cnsa'
+    frame = struct.pack('<I', 100) + bytes(GEOMETRY.width * GEOMETRY.height * 4)
+    data = (
+        struct.pack(
+            '<4sHHHHI', b'CNSA', 1, GEOMETRY.width, GEOMETRY.height, 1, 16 + len(frame)
+        )
+        + frame
+    )
+    path.write_bytes(data)
+    with pytest.raises(compiler.CompilationError, match='version-2'):
+        compiler.compile_show({'splash_movie': str(path)}, {}, [], target)
+    assert path.read_bytes() == data
+
+
 ROOT = Path(__file__).resolve().parents[1]
 
 GEOMETRY = asset.Geometry(

@@ -3,6 +3,10 @@
 Date: 2026-11-07. Portable implementation: `4ea6e30`, with the warning and
 porting-guide correction in `38a5bd5`. Additional work beyond the prompt: None.
 
+This is a historical deployment record. Format migration and the
+`setup upgrade-backup` command were removed on 2026-11-09; current tools accept
+only the current formats.
+
 The portable application extraction is implemented; its maintained contract is
 in the [porting guide](../../../../doc/porting.md).
 The final image has also been flashed and the converted backup restored and

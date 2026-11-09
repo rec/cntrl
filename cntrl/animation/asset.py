@@ -104,35 +104,6 @@ def inspect_asset(data: bytes) -> AnimationInfo:
     )
 
 
-def convert_legacy(data: bytes, geometry: Geometry) -> bytes:
-    """Convert an old two-stream asset, with its geometry explicitly supplied."""
-    legacy = struct.Struct('<4sHHHHI')
-    if len(data) < legacy.size:
-        raise ValueError('truncated legacy animation header')
-    magic, version, width, height, count, size = legacy.unpack_from(data)
-    frame_bytes = 4 + width * height * 4
-    if (
-        magic != b'CNSA'
-        or version != 1
-        or not count
-        or size != len(data)
-        or size != legacy.size + count * frame_bytes
-    ):
-        raise ValueError('invalid legacy animation asset')
-    if (width, height, 2) != (geometry.width, geometry.height, len(geometry.streams)):
-        raise ValueError(
-            'legacy animation geometry does not match the supplied geometry'
-        )
-    result = (
-        HEADER.pack(
-            b'CNSA', 2, width, height, 2, count, 1, HEADER.size + count * frame_bytes
-        )
-        + data[legacy.size :]
-    )
-    inspect_asset(result)
-    return result
-
-
 def prepare_movie(source: Path, geometry: Geometry) -> bytes:
     """Convert image animations or stills to logical output streams."""
     frames = bytearray()

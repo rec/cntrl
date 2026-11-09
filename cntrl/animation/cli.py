@@ -10,18 +10,10 @@ from pydantic import BaseModel
 from ..patch_switcher.compiler import read_document
 from ..patch_switcher.models import Target
 from ..patch_switcher.transport import SerialConnection, SetupClient
-from .asset import convert_legacy, inspect_asset, prepare_movie
+from .asset import inspect_asset, prepare_movie
 
 
 class Prepare(BaseModel, frozen=True):
-    source: Annotated[Path, tyro.conf.Positional]
-    output: Path
-    target: Path
-
-
-class Convert(BaseModel, frozen=True):
-    """Convert a legacy asset without changing its precomputed pixel streams."""
-
     source: Annotated[Path, tyro.conf.Positional]
     output: Path
     target: Path
@@ -40,18 +32,14 @@ def upload_asset(port: Path, data: bytes) -> str:
 
 
 def main() -> None:
-    options = tyro.cli(Prepare | Convert | Upload)
+    options = tyro.cli(Prepare | Upload)
     try:
-        if isinstance(options, (Prepare, Convert)):
+        if isinstance(options, Prepare):
             target = Target.model_validate(read_document(options.target))
             geometry = target.animation
             if geometry is None:
                 raise ValueError('target must declare animation geometry')
-            data = (
-                prepare_movie(options.source, geometry)
-                if isinstance(options, Prepare)
-                else convert_legacy(options.source.read_bytes(), geometry)
-            )
+            data = prepare_movie(options.source, geometry)
             info = inspect_asset(data)
             options.output.parent.mkdir(parents=True, exist_ok=True)
             options.output.write_bytes(data)

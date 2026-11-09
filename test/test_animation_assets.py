@@ -126,22 +126,6 @@ GEOMETRY = asset.Geometry(
 )
 
 
-def test_legacy_conversion_preserves_stream_pixels_and_timing() -> None:
-    geometry = asset.Geometry(
-        width=3, height=2, streams=[asset.Stream(), asset.Stream(mirror_x=True)]
-    )
-    raw = bytes(range(24))
-    legacy = (
-        struct.pack('<4sHHHHI', b'CNSA', 1, 3, 2, 1, 44) + struct.pack('<I', 250) + raw
-    )
-    converted = asset.convert_legacy(legacy, geometry)
-    info = asset.inspect_asset(converted)
-    assert (info.width, info.height, info.streams, info.duration_ms) == (3, 2, 2, 250)
-    assert converted[asset.HEADER.size + 4 :] == raw
-    with pytest.raises(ValueError, match='geometry'):
-        asset.convert_legacy(legacy, asset.Geometry(width=4, height=2))
-
-
 def test_vertical_stream_transform_uses_requested_geometry() -> None:
     geometry = asset.Geometry(width=2, height=3, streams=[asset.Stream(mirror_y=True)])
     data = asset.encode_frames(bytes(range(12)), [100], geometry)

@@ -372,26 +372,14 @@ supports at most four patch-switchers, 36 named pages and 255 declared windows; 
 limits are declared separately by `Target`. These are format/product limits,
 not processor pins or implied transport positions.
 
-Use the offline conversion modules before deploying a format-changing image.
-`legacy.upgrade` normalizes formats 20 through 33 into format 34;
-`migrate.upgrade_setup` converts 34 into 35 using the supplied target descriptor,
-updates layout/input/endpoint metadata and movie references, and preserves musical
-graph bytes and stored edits. It also permutes the old physical-input-indexed
-switch arrays into switch-record order. `migrate.upgrade_movies` returns converted
-assets and an old-to-new checksum map, including identity mappings for current
-assets. Missing referenced assets are conversion errors.
-
-`migrate.upgrade_songs` preserves selection/setlist ordering and upgrades embedded
-setup containers. Apply the same setup conversion to every saved history body,
-retaining revision number, label and modification time while updating manifest
-length/version. Restore through the verified history import path so original
-slots remain recoverable. Font assets, song libraries, current selection and
-all referenced resources must accompany the converted setup/history data.
-Ordinary loading and firmware accept only the current format.
+Host tools and firmware accept only the current setup and animation formats.
+There is no format migration. Rebuild outdated setups and animation assets from
+their source files when a format changes. Backups retain the saved bytes;
+restoration requires data in the current format.
 
 Qualify the result with the shared Python tests, sanitized native C++ tests,
 an isolated implementation build, image/memory inspection and an explicit backup,
-conversion, upload and read-back check on the existing device. Native tests use
+upload and read-back check on the existing device. Native tests use
 service fakes; they do not establish physical timing, visual quality or wiring.
 
 ## Logical input pipeline
