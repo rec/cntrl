@@ -8,6 +8,7 @@ dependencies = [
     "freetype-py>=2.5.1",
     "pillow>=13.0.0",
     "pydantic>=2,<3",
+    "pyserial>=3.5",
     "python-bidi>=0.6.12",
     "reccy",
     "tomlkit>=0.15.1",
