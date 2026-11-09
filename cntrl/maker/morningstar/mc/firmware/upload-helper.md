@@ -13,7 +13,7 @@ Review `cntrl/maker/morningstar/mc/upload_helper.py`, then run:
 
 ```bash
 cd /Users/tom/code/cntrl
-python -m cntrl.maker.morningstar.mc.upload_helper serve
+cntrl upload-helper --target-dir cntrl/maker/morningstar/mc serve
 ```
 
 Keep that Terminal open. Do not use `sudo`. The helper must be launched by you,
@@ -84,7 +84,7 @@ After building and inspecting the image, close any serial monitor and request
 bootloader entry from the running application:
 
 ```bash
-python -m cntrl.maker.morningstar.mc.upload_helper bootloader
+cntrl upload-helper --target-dir cntrl/maker/morningstar/mc bootloader
 ```
 
 This local command discovers the serial port for pedal serial `14468280` and
@@ -103,7 +103,7 @@ necessary for broken firmware that cannot process the USB request.
 Request the upload with the exact image digest:
 
 ```bash
-python -m cntrl.maker.morningstar.mc.upload_helper upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
+cntrl upload-helper --target-dir cntrl/maker/morningstar/mc upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
 ```
 
 Codex runs this client command, not the server. `DIGEST` is the SHA-256 of the

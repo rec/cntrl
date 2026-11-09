@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from ....firmware.intel_hex import read_hex
 from ....patch_switcher import backups, devices, songs
+from ....upload import Upload
 from . import legacy_usb, upload_helper
 
 
@@ -47,9 +48,7 @@ def run(command: Flash) -> None:
         if time.monotonic() >= deadline:
             raise TimeoutError('pedal did not leave application USB mode')
         time.sleep(0.1)
-    result = upload_helper.request_upload(
-        upload_helper.Upload(image=source, sha256=image.sha256)
-    )
+    result = upload_helper.request_upload(Upload(image=source, sha256=image.sha256))
     print(result.output, end='', flush=True)
     deadline = time.monotonic() + 30
     while not any(

@@ -1,8 +1,21 @@
 # Firmware upload helper
 
-Firmware upload helpers belong to the selected implementation and run through
-its Python module. The common CLI remains usable without implementation code.
-Use the implementation's helper guide for its entry point and command arguments.
+Firmware upload helpers belong to the selected implementation and are accessed
+through `cntrl upload-helper --target-dir TARGET_DIR`. The selected directory
+provides `upload_helper_entry.py`; the common CLI does not import maker code.
+
+The independent operations are:
+
+```bash
+cntrl upload-helper --target-dir TARGET_DIR serve
+cntrl upload-helper --target-dir TARGET_DIR bootloader
+cntrl upload-helper --target-dir TARGET_DIR upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
+```
+
+`serve` starts the helper in your Terminal. `bootloader` requests bootloader
+entry without uploading. `upload` sends an existing image without rebuilding or
+transferring setups. The target owns validation and device access; uploader
+output and exit status are returned unchanged.
 
 Use the running, user-launched upload helper for firmware flashing. Reuse that
 process; do not start a second server. Each upload request supplies an absolute

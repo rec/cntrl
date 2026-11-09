@@ -110,9 +110,9 @@ Firmware byte-for-byte reproducibility is therefore not established by these
 builds. The qualification checks validate image structure and readback and
 compare static section layouts separately from the deterministic asset fixtures.
 
-On macOS, `python -m cntrl.maker.morningstar.mc.upload_helper serve` defaults to
-the installed Morningstar updater. Set `CNTRL_TYCMD` to override that path; other
-hosts currently require an explicit override. The helper snapshots the requested
+On macOS, `cntrl upload-helper --target-dir cntrl/maker/morningstar/mc serve`
+defaults to the installed Morningstar updater. Set `CNTRL_TYCMD` to override that
+path; other hosts currently require an explicit override. The helper snapshots the requested
 worktree image and preserves the sole allowed pedal serial/tag. The bootloader
 command discovers that serial number and sends the same 134-baud line-coding
 request through pySerial, with no serial payload.

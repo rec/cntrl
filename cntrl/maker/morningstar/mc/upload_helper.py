@@ -11,28 +11,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import tyro
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from serial import Serial
 
 from ....firmware.intel_hex import FirmwareImage, read_hex
 from ....patch_switcher.devices import connected
-
-
-class Serve(BaseModel, frozen=True):
-    """Serve upload requests. Launch manually from Terminal, not from Codex."""
-
-
-class Upload(BaseModel, frozen=True):
-    """Upload a registered worktree's HEX image only if its SHA-256 matches."""
-
-    image: Path
-    sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
-
-    model_config = ConfigDict(extra='forbid')
-
-
-class Bootloader(BaseModel, frozen=True):
-    """Enter HalfKay through the fixed pedal's USB serial port, without uploading."""
+from ....upload import Bootloader, Serve, Upload
 
 
 class UploadResult(BaseModel, frozen=True):
@@ -280,7 +264,3 @@ SOCKET_PATH = (
 BOARD_SERIAL = '14468280'
 BOARD_TAG = '14468280-Teensy'
 FLASH_CONFIG_SHA256 = '65b509525e8b0e6e92e4e6bc8fa39575399b27532e04a55f7a7883212042fe7a'
-
-
-if __name__ == '__main__':
-    main()

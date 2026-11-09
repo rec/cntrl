@@ -16,6 +16,7 @@ from test_firmware import hex_record
 from cntrl.firmware.intel_hex import read_hex
 from cntrl.maker.morningstar.mc import upload_helper
 from cntrl.patch_switcher.devices import Device
+from cntrl.upload import Bootloader, Serve, Upload
 
 
 def test_upload_request_uses_authenticated_local_bytes(
@@ -24,9 +25,7 @@ def test_upload_request_uses_authenticated_local_bytes(
     key = os.urandom(32)
     (tmp_path / 'authentication.key').write_bytes(key)
     monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path)
-    request = upload_helper.Upload(
-        image=(tmp_path / 'firmware.hex').resolve(), sha256='a' * 64
-    )
+    request = Upload(image=(tmp_path / 'firmware.hex').resolve(), sha256='a' * 64)
     expected = upload_helper.UploadResult(returncode=0, output='validated bytes')
 
     def respond() -> bytes:
@@ -41,10 +40,7 @@ def test_upload_request_uses_authenticated_local_bytes(
         with ThreadPoolExecutor(max_workers=1) as workers:
             pending = workers.submit(respond)
             assert upload_helper.request_upload(request) == expected
-            assert (
-                upload_helper.Upload.model_validate_json(pending.result(timeout=5))
-                == request
-            )
+            assert Upload.model_validate_json(pending.result(timeout=5)) == request
 
 
 def test_helper_keeps_listening_after_a_client_disconnect_or_bad_authentication(
@@ -120,22 +116,20 @@ def firmware_path(tmp_path: Path) -> Path:
 @pytest.mark.parametrize(
     'arguments, expected',
     [
-        (['serve'], upload_helper.Serve()),
-        (['bootloader'], upload_helper.Bootloader()),
+        (['serve'], Serve()),
+        (['bootloader'], Bootloader()),
         (
             ['upload', '--image', '/worktree/firmware.hex', '--sha256', 'a' * 64],
-            upload_helper.Upload(image=Path('/worktree/firmware.hex'), sha256='a' * 64),
+            Upload(image=Path('/worktree/firmware.hex'), sha256='a' * 64),
         ),
     ],
 )
 def test_adapter_module_dispatches_helper_commands(
     arguments: list[str],
-    expected: upload_helper.Serve | upload_helper.Upload | upload_helper.Bootloader,
+    expected: Serve | Upload | Bootloader,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    received: list[
-        upload_helper.Serve | upload_helper.Upload | upload_helper.Bootloader
-    ] = []
+    received: list[Serve | Upload | Bootloader] = []
     monkeypatch.setattr(upload_helper, 'run', received.append)
     monkeypatch.setattr(sys, 'argv', ['upload-helper', *arguments])
     upload_helper.main()
@@ -276,7 +270,7 @@ def test_bootloader_uses_the_identified_pedal_and_special_line_coding(
 def test_invalid_requests_never_reach_uploader(
     body: bytes, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def unexpected_upload(request: upload_helper.Upload) -> upload_helper.UploadResult:
+    def unexpected_upload(request: Upload) -> upload_helper.UploadResult:
         pytest.fail('invalid request reached the uploader')
 
     monkeypatch.setattr(upload_helper, 'upload_image', unexpected_upload)
@@ -294,7 +288,7 @@ def test_upload_client_does_not_create_server_state(
 ) -> None:
     cache = tmp_path / 'server-cache'
     monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', cache)
-    request = upload_helper.Upload(image=tmp_path / 'firmware.hex', sha256='0' * 64)
+    request = Upload(image=tmp_path / 'firmware.hex', sha256='0' * 64)
     with pytest.raises(FileNotFoundError):
         upload_helper.request_upload(request)
     assert not cache.exists()
@@ -326,7 +320,7 @@ def test_disallowed_image_locations_never_reach_device_access(
         pytest.fail('disallowed image caused device access')
 
     monkeypatch.setattr(subprocess, 'run', unexpected_run)
-    request = upload_helper.Upload(image=source, sha256='0' * 64)
+    request = Upload(image=source, sha256='0' * 64)
     result = upload_helper.process_request(request.model_dump_json().encode() + b'\n')
     assert result.returncode == 1
     assert (
@@ -393,7 +387,7 @@ def test_changed_image_is_rejected_before_device_access(
         pytest.fail('changed image caused device access')
 
     monkeypatch.setattr(subprocess, 'run', unexpected_run)
-    request = upload_helper.Upload(image=firmware_path, sha256='0' * 64)
+    request = Upload(image=firmware_path, sha256='0' * 64)
     result = upload_helper.process_request(request.model_dump_json().encode() + b'\n')
     assert result.returncode == 1
     assert 'SHA-256 changed' in result.output
@@ -450,7 +444,7 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         )
 
     monkeypatch.setattr(subprocess, 'run', run)
-    request = upload_helper.Upload(image=firmware_path, sha256=digest)
+    request = Upload(image=firmware_path, sha256=digest)
     result = upload_helper.process_request(request.model_dump_json().encode() + b'\n')
     if wrong_target:
         assert result.returncode == 1
