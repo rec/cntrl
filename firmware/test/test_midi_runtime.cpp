@@ -6,6 +6,7 @@
 #include <cassert>
 #include <deque>
 #include <sstream>
+#include <iterator>
 #include <string>
 #include <vector>
 

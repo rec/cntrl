@@ -1,6 +1,7 @@
 #include "../patch_hardware.h"
 #include <fstream>
 #include <iterator>
+#include <string>
 #include <vector>
 #include <cassert>
 

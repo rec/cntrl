@@ -1,4 +1,4 @@
-"""A manually launched, single-pedal firmware upload service over a Unix socket."""
+"""A manually launched, single-pedal upload service over authenticated local IPC."""
 
 import hashlib
 import os

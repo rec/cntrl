@@ -4,9 +4,21 @@ Use Python 3.13 and `uv`. Check out this repository beside the compatible
 `reccy` checkout and run `uv sync --frozen --group dev`. The workflow pins that
 dependency to `5d7e42b47ed8b14fba185a6be1581a013ccd9a67`.
 
+Provision FreeType 2.14.3 after syncing dependencies so font pixels match the
+committed assets. This uses CMake and the host compiler, downloads digest-checked
+FreeType/HarfBuzz sources, and installs the library into the current environment
+without modifying uv's cached wheel. It retains freetype-py 2.5.1.
+
+```sh
+uv run --frozen python -m cntrl.fonts.provision
+```
+
+Generated sources/build outputs live in `build/freetype`; the tracked provisioning
+module contains the complete build recipe. Re-run it after replacing the environment.
+
 The qualification lanes are macOS 15, Ubuntu 24.04 x64 and Windows Server 2025
 x64. Windows requires Visual Studio C++ build tools with the developer command
-environment active. macOS requires Xcode command line tools; Linux requires
+environment active. All hosts require CMake. macOS requires Xcode command line tools; Linux requires
 GCC/G++. No Unix shell or make is required on Windows.
 
 Run common checks from the repository root:

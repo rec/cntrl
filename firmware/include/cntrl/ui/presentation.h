@@ -36,8 +36,8 @@ void present(Hardware &hardware, const Pane (&parts)[Count], unsigned primary) {
         auto &pane = merged[window]; pane.graphics.pad = 0;
         const unsigned size = lines[window] * 16 <= hardware.display_height() ? 16 : 8;
         for (unsigned i = 0; i < lines[window]; ++i) {
-            auto &line = pane.lines[i]; line.graphics.size = line.graphics.line_height = size;
-            line.graphics.pad = 0; line.x = std::min<unsigned>(line.x, hardware.display_width() / 8);
+            auto &line = pane.lines[i]; line.graphics.size = uint8_t(size); line.graphics.line_height = uint16_t(size);
+            line.graphics.pad = 0; line.x = uint16_t(std::min<unsigned>(line.x, hardware.display_width() / 8));
         }
         hardware.show(window, pane);
     }

@@ -82,9 +82,10 @@ def run(options: Run) -> None:
             Path(__file__).with_name('native-tests.toml').read_text()
         ).unwrap()
     )
+    failures: list[str] = []
     for source, arguments in suite.tests.items():
         binary = output / Path(source).with_suffix('')
-        compile_native(
+        result = compile_native(
             [
                 'c++',
                 '-std=c++17',
@@ -98,9 +99,17 @@ def run(options: Run) -> None:
                 str(root / source),
                 '-o',
                 str(binary),
-            ]
+            ],
+            check=False,
         )
-        run_native([str(binary), *(str(root / a) for a in arguments)])
+        if result.returncode:
+            failures.append(source)
+        elif run_native(
+            [str(binary), *(str(root / a) for a in arguments)], check=False
+        ).returncode:
+            failures.append(source)
+    if failures:
+        sys.exit('Native tests failed: ' + ', '.join(failures))
 
 
 if __name__ == '__main__':

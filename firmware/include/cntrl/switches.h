@@ -543,7 +543,7 @@ private:
                 panes[pane].lines[group * 3 + j].y = int16_t(4 + group * 58 + j * 18);
             }
         }
-        auto &back = panes[2].lines[15]; back.graphics.size = back.graphics.line_height = 8;
+        auto &back = panes[2].lines[15]; back.graphics.size = 8; back.graphics.line_height = 8;
         back.y = int16_t(hardware_.display_height() - 12);
         std::snprintf(back.text, 64, "%s%.52s", closing_ ? "Closing: " : shifted_ ? "Shifted | " : "", prompt.add(Role::back, closing_ ? "abandon" : "Back").text());
         if (!count_) std::snprintf(panes[1].lines[0].text, 64, "No switches");

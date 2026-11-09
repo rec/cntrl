@@ -175,7 +175,8 @@ class SerialConnection:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError('USB serial response timed out')
-            self.serial.timeout = remaining
+            if not self.serial.in_waiting:
+                self.serial.timeout = remaining
             value = self.serial.read(1)
             if not value:
                 raise TimeoutError('USB serial response timed out')

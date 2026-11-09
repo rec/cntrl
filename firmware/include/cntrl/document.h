@@ -363,8 +363,8 @@ public:
                     if (page >= pages) return false;
                     const uint8_t *entry = bytes + page_start;
                     while (page--) entry += 1 + entry[0] * 8;
-                    unsigned count = *entry++, height = 0;
-                    for (unsigned k = 0; k < count; ++k, entry += 8) {
+                    unsigned lines = *entry++, height = 0;
+                    for (unsigned k = 0; k < lines; ++k, entry += 8) {
                         const uint8_t *g = bytes + styles + u16(entry + 2) * 16;
                         if (g[2] != bytes[30 + s * 16]) return false;
                         height += u16(g + 8);
@@ -553,16 +553,16 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(document_graph_valid)
 #endif
-    static bool graph_valid(const uint8_t *bytes, unsigned length, unsigned start,
+    static bool graph_valid(const uint8_t *bytes, unsigned document_length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,
                             unsigned mappings, const Hardware &hardware, unsigned output_routes, unsigned input_routes, unsigned input_count,
                             const uint8_t *relay_records, unsigned relay_count) {
-        if (start > length || length - start < 16 || std::memcmp(bytes + start, "CPAT", 4)) return false;
+        if (start > document_length || document_length - start < 16 || std::memcmp(bytes + start, "CPAT", 4)) return false;
         const uint8_t *g = bytes + start;
         unsigned size = u32(g + 4), count = u16(g + 8), switches = u16(g + 10), named = u16(g + 14);
         unsigned browser = 16 + count * 4, assignments = browser + browser_count * 2;
         unsigned names = assignments + switches * 72, first = names + named * 66;
-        if (size > length - start || size < first || u16(g + 12) != browser_count
+        if (size > document_length - start || size < first || u16(g + 12) != browser_count
             || switches > 5 || switches > hardware.switch_capacity()) return false;
         for (unsigned i = 0; i < browser_count; ++i) if (u16(g + browser + i * 2) >= count) return false;
         unsigned buttons = 0;

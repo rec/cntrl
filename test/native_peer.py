@@ -38,6 +38,8 @@ class NativePeer:
     def open(
         self, port: str, *, baudrate: int, timeout: float, write_timeout: float
     ) -> 'PipePort':
+        if self.process.poll() is not None:
+            raise RuntimeError('native peer exited before the exchange completed')
         assert port == 'cntrl-test-peer' and baudrate == 115200
         return PipePort(self, timeout, write_timeout)
 
@@ -74,6 +76,10 @@ class PipePort:
         self.timeout = timeout
         self.write_timeout = write_timeout
 
+    @property
+    def in_waiting(self) -> int:
+        return len(self.peer.pending) or int(not self.peer.output.empty())
+
     def read(self, size: int) -> bytes:
         deadline = time.monotonic() + self.timeout
         while not self.peer.pending:
@@ -84,7 +90,7 @@ class PipePort:
             except Empty:
                 return b''
             if not value:
-                raise OSError('native peer disconnected')
+                raise RuntimeError('native peer disconnected')
             self.peer.pending.extend(value)
         result = bytes(self.peer.pending[:size])
         del self.peer.pending[:size]

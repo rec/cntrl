@@ -84,6 +84,6 @@ uv run --frozen pytest
 
 See [cross-platform build and uploader setup](cross-platform.md).
 Builds do not flash anything. The helper uploads the
-fixed `firmware/build/patch-switcher.hex` path only. Keep an existing helper
-running between uploads; restart it when its source or fixed paths change. An
+image only from a registered project worktree. Keep an existing helper
+running between uploads; restart it when its source or IPC changes. An
 address-in-use error can mean it is already serving, not that its socket is stale.

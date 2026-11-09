@@ -27,15 +27,6 @@ def validate_name(name: str) -> str:
     return name
 
 
-WINDOWS_DEVICES = {
-    'CON',
-    'PRN',
-    'AUX',
-    'NUL',
-    *(f'{p}{i}' for p in ('COM', 'LPT') for i in range(1, 10)),
-}
-
-
 def expressions(
     arguments: list[str], errors: list[str] | None = None
 ) -> list[DataFile]:
@@ -179,3 +170,12 @@ def _merge(
                 f'{origins[path]} and {source}: {path}: '
                 f'conflicting values {old!r} and {new!r}'
             )
+
+
+WINDOWS_DEVICES = {
+    'CON',
+    'PRN',
+    'AUX',
+    'NUL',
+    *(f'{p}{i}' for p in ('COM', 'LPT') for i in range(1, 10)),
+}
