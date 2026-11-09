@@ -32,7 +32,10 @@ def provision(options: Provision) -> None:
         else 'libfreetype.so'
     )
     library = prefix / ('bin/freetype.dll' if os.name == 'nt' else f'lib/{name}')
-    identity = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    patch = Path(__file__).with_name('freetype-mono64.patch')
+    identity = hashlib.sha256(
+        Path(__file__).read_bytes() + patch.read_bytes()
+    ).hexdigest()
     marker = root / 'provenance.toml'
     if (
         not marker.exists()
@@ -50,6 +53,17 @@ def provision(options: Provision) -> None:
             with tarfile.open(archive) as source:
                 source.extractall(root, filter='data')
             sources[package] = root / package
+        # Keep monochrome coordinates and the profile pool layout identical
+        # across LP64 (macOS/Linux) and LLP64 (Windows), without changing the ABI.
+        patch_command = [
+            'git',
+            'apply',
+            '--unidiff-zero',
+            '--unsafe-paths',
+            f'--directory={sources["freetype-2.14.3"].as_posix()}',
+        ]
+        subprocess.run([*patch_command, '--check', str(patch)], check=True, timeout=30)
+        subprocess.run([*patch_command, str(patch)], check=True, timeout=30)
         common = [
             f'-DCMAKE_INSTALL_PREFIX={prefix}',
             f'-DCMAKE_PREFIX_PATH={prefix}',

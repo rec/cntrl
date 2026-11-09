@@ -8,6 +8,10 @@ Provision FreeType 2.14.3 after syncing dependencies so font pixels match the
 committed assets. This uses CMake and the host compiler, downloads digest-checked
 FreeType/HarfBuzz sources, and installs the library into the current environment
 without modifying uv's cached wheel. It retains freetype-py 2.5.1.
+Legacy bitmap fonts also use this library. A tracked source patch fixes the
+monochrome raster's internal coordinates and profile pool to 64 bits on every
+host, preserving the committed pixels on Windows without changing FreeType's
+public ABI. Pillow remains available for image and animation conversion.
 
 ```sh
 uv run --frozen python -m cntrl.fonts.provision
@@ -18,7 +22,7 @@ module contains the complete build recipe. Re-run it after replacing the environ
 
 The qualification lanes are macOS 15, Ubuntu 24.04 x64 and Windows Server 2025
 x64. Windows requires Visual Studio C++ build tools with the developer command
-environment active. All hosts require CMake. macOS requires Xcode command line tools; Linux requires
+environment active. All hosts require CMake and Git. macOS requires Xcode command line tools; Linux requires
 GCC/G++. No Unix shell or make is required on Windows.
 
 Run common checks from the repository root:
