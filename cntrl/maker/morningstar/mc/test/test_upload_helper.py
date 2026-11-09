@@ -14,7 +14,6 @@ from test_firmware import hex_record
 
 from cntrl.firmware.intel_hex import read_hex
 from cntrl.maker.morningstar.mc import upload_helper
-from cntrl.patch_switcher import cli
 from cntrl.patch_switcher.devices import Device
 
 
@@ -107,7 +106,7 @@ def firmware_path(tmp_path: Path) -> Path:
         ),
     ],
 )
-def test_cntrl_dispatches_helper_commands(
+def test_adapter_module_dispatches_helper_commands(
     arguments: list[str],
     expected: upload_helper.Serve | upload_helper.Upload | upload_helper.Bootloader,
     monkeypatch: pytest.MonkeyPatch,
@@ -116,12 +115,12 @@ def test_cntrl_dispatches_helper_commands(
         upload_helper.Serve | upload_helper.Upload | upload_helper.Bootloader
     ] = []
     monkeypatch.setattr(upload_helper, 'run', received.append)
-    monkeypatch.setattr(sys, 'argv', ['cntrl', 'upload-helper', *arguments])
-    cli.main()
+    monkeypatch.setattr(sys, 'argv', ['upload-helper', *arguments])
+    upload_helper.main()
     assert received == [expected]
 
 
-def test_cntrl_returns_upload_output_and_exit_status(
+def test_adapter_module_returns_upload_output_and_exit_status(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(
@@ -135,7 +134,6 @@ def test_cntrl_returns_upload_output_and_exit_status(
         sys,
         'argv',
         [
-            'cntrl',
             'upload-helper',
             'upload',
             '--image',
@@ -145,7 +143,7 @@ def test_cntrl_returns_upload_output_and_exit_status(
         ],
     )
     with pytest.raises(SystemExit) as error:
-        cli.main()
+        upload_helper.main()
     assert error.value.code == 7
     assert capsys.readouterr().out == 'upload output\n'
 

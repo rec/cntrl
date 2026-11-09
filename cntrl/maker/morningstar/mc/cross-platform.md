@@ -30,7 +30,7 @@ The Makefile wraps portable Python commands for POSIX convenience. Old diagnosti
 transcripts describe historical commands, not the current build contract.
 Physical observations apply only to the recorded host/device combination.
 
-On macOS, `cntrl upload-helper serve` defaults to the installed Morningstar
+On macOS, `python -m cntrl.maker.morningstar.mc.upload_helper serve` defaults to the installed Morningstar
 updater. Set `CNTRL_TYCMD` to override that path; other hosts currently require
 an explicit override. The helper snapshots the requested worktree image and
 preserves the sole allowed pedal serial/tag. The bootloader command discovers
