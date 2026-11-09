@@ -139,12 +139,14 @@ public:
                 packet_.bytes[1] = uint8_t(note);
                 if (settings_.reverse && (kind == 8 || kind == 9)) {
                     bool off = kind == 8 || !event.second;
-                    if (off && !event.velocity) return; // Unmatched release has no onset to reverse.
+                    if (off && !event.reverse_value) return; // Unmatched release has no onset to reverse.
                     packet_.cin = off ? 9 : 8;
                     packet_.bytes[0] = uint8_t((off ? 0x90 : 0x80) | (event.status & 15));
-                    packet_.bytes[2] = off ? event.velocity : 0;
+                    packet_.bytes[2] = off ? event.reverse_value : 0;
                 }
             }
+            if (settings_.reverse && kind == 11 && event.first >= 64 && event.first <= 69)
+                packet_.bytes[2] = event.reverse_value;
             pending_outputs_ = settings_.outputs; packet_pending_ = true;
             return;
         }
@@ -156,12 +158,13 @@ public:
             position_ = 0; elapsed_ = 0; parser_.reset(); post_waiting_ = false;
         } else status_ = Status::complete;
     }
-    void cancel() { terminate_outputs_ |= sysex_outputs(); tracks_.clear(); notes_.clear(); parser_.reset(); status_ = Status::idle; }
+    void cancel() { terminate_outputs_ |= sysex_outputs(); tracks_.clear(); notes_.clear(); std::memset(controls_, 0, sizeof(controls_)); parser_.reset(); status_ = Status::idle; }
 private:
     struct Event {
         uint64_t time = 0;
         uint32_t offset = 0, length = 0, previous = 0, next = 0;
-        uint8_t status = 0, first = 0, second = 0, velocity = 0;
+        // Reverse playback uses the matched note velocity or previous CC value.
+        uint8_t status = 0, first = 0, second = 0, reverse_value = 0;
         bool complete_sysex = false, meta = false;
     };
     struct Track { uint32_t cursor = 0, end = 0; uint64_t tick = 0; uint8_t running = 0; Event head; bool ready = false, ended = false; };
@@ -174,6 +177,7 @@ private:
     PlayMidiFilePatch settings_;
     std::vector<Track> tracks_;
     std::vector<Held> notes_;
+    uint8_t controls_[16][6] = {};
     Status status_ = Status::idle;
     unsigned owner_ = 0;
     std::array<Bridge::Delivery, Bridge::owners> deliveries_{};
@@ -200,7 +204,7 @@ private:
             auto n = std::find_if(sounding_.begin(), sounding_.end(), [&](const auto &v) { return v.output == route && v.channel == channel && v.note == packet_.bytes[1]; });
             if (n != sounding_.end()) sounding_.erase(n);
         }
-        if (kind == 11 && (packet_.bytes[1] == 64 || packet_.bytes[1] == 66 || packet_.bytes[1] == 69)) {
+        if (kind == 11 && packet_.bytes[1] >= 64 && packet_.bytes[1] <= 69) {
             auto p = std::find_if(pedals_.begin(), pedals_.end(), [&](const auto &v) { return v.output == route && v.channel == channel && v.controller == packet_.bytes[1]; });
             if (packet_.bytes[2] >= 64) {
                 if (p == pedals_.end()) pedals_.push_back({route, channel, packet_.bytes[1]});
@@ -292,9 +296,16 @@ private:
             if (!notes_.empty()) {
                 auto note = notes_.back(); notes_.pop_back();
                 Event release; release.time = time_; release.status = uint8_t(0x80 | note.channel);
-                release.first = note.note; release.velocity = note.velocity;
+                release.first = note.note; release.reverse_value = note.velocity;
                 append_event(release); return;
             }
+            if (settings_.reverse) for (unsigned channel = 0; channel < 16; ++channel)
+                for (unsigned controller = 0; controller < 6; ++controller) if (controls_[channel][controller]) {
+                    Event release; release.time = time_; release.status = uint8_t(0xb0 | channel);
+                    release.first = uint8_t(64 + controller); release.reverse_value = controls_[channel][controller];
+                    controls_[channel][controller] = 0;
+                    append_event(release); return;
+                }
             if (!index_.sync()) { fail(); return; }
             notes_.clear(); tracks_.clear(); status_ = Status::playing; return;
         }
@@ -318,7 +329,11 @@ private:
         if (kind == 9 && event.second) notes_.push_back({uint8_t(event.status & 15), event.first, event.second});
         if (kind == 8 || (kind == 9 && !event.second)) {
             auto note = std::find_if(notes_.rbegin(), notes_.rend(), [&](const auto &n) { return n.channel == (event.status & 15) && n.note == event.first; });
-            if (note != notes_.rend()) { event.velocity = note->velocity; notes_.erase(std::next(note).base()); }
+            if (note != notes_.rend()) { event.reverse_value = note->velocity; notes_.erase(std::next(note).base()); }
+        }
+        if (kind == 11 && event.first >= 64 && event.first <= 69) {
+            auto &value = controls_[event.status & 15][event.first - 64];
+            event.reverse_value = value; value = event.second;
         }
         if (event.status == 0xf0) {
             if (group_last_) { fail(); return; }
@@ -339,7 +354,7 @@ private:
         uint8_t record[32] = {};
         for (unsigned i = 0; i < 8; ++i) record[i] = uint8_t(event.time >> (i * 8));
         for (unsigned i = 0; i < 4; ++i) { record[8 + i] = uint8_t(event.offset >> (i * 8)); record[12 + i] = uint8_t(event.length >> (i * 8)); }
-        record[16] = event.status; record[17] = event.first; record[18] = event.second; record[19] = event.velocity; record[20] = event.complete_sysex;
+        record[16] = event.status; record[17] = event.first; record[18] = event.second; record[19] = event.reverse_value; record[20] = event.complete_sysex;
         for (unsigned i = 0; i < 4; ++i) record[24 + i] = uint8_t(event.previous >> (i * 8));
         if (events_ == UINT32_MAX / 32 || !index_.write(events_ * 32, record, 32)) { fail(); return; }
         ++events_;
@@ -353,7 +368,7 @@ private:
         for (unsigned i = 0; i < 8; ++i) event.time |= uint64_t(record[i]) << (i * 8);
         for (unsigned i = 0; i < 4; ++i) { event.offset |= uint32_t(record[8 + i]) << (i * 8); event.length |= uint32_t(record[12 + i]) << (i * 8); }
         for (unsigned i = 0; i < 4; ++i) { event.previous |= uint32_t(record[24 + i]) << (i * 8); event.next |= uint32_t(record[28 + i]) << (i * 8); }
-        event.status = record[16]; event.first = record[17]; event.second = record[18]; event.velocity = record[19]; event.complete_sysex = record[20];
+        event.status = record[16]; event.first = record[17]; event.second = record[18]; event.reverse_value = record[19]; event.complete_sysex = record[20];
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE

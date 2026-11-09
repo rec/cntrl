@@ -37,13 +37,20 @@ Reverse playback mirrors event times over the complete file duration and
 exchanges Note On and Note Off, including zero-velocity Note On releases. Each
 reversed release uses its matched original Note On velocity. Unmatched releases
 have no onset to reverse and are skipped. Notes still held at the file end
-receive a matching release there, so they also play when reversed. SysEx messages retain their byte order,
+receive a matching release there, so they also play when reversed.
+Sustain, portamento, sostenuto, soft pedal, legato and hold-2 switches (CC 64–69)
+restore their previous values at each mirrored event, independently per channel
+and controller. Their initial value is assumed to be 0 (off). This preserves
+repeated presses and intermediate pedal values. Controls still held at the file
+end are activated at the beginning of reverse playback and released at their
+mirrored original onset. Other control changes retain their original values.
+SysEx messages retain their byte order,
 including messages stored in several continuation events. Transposition applies
 to note numbers and polyphonic pressure; notes outside 0–127 are skipped.
 
 Playback occupies its invoking patch until all passes and delays finish. Normal
-patch cancellation releases its outstanding notes, turns off sustain/sostenuto/
-hold-2 pedals held by the file, and terminates any open SysEx. Held notes and
+patch cancellation releases its outstanding notes, turns off CC 64–69 switches
+held by the file, and terminates any open SysEx. Held notes and
 pedals are also released at each pass end.
 A momentary or latched switch provides cancellation for an indefinitely looping
 On patch through its usual release or Off action, for example:
@@ -78,8 +85,8 @@ unfinished.
 
 Playback prepares a temporary `.playback-index` in the same directory, with one
 32-byte record per event. This supports seeking backward while keeping only
-track heads and active notes in RAM. Preparation and playback advance in bounded
-polling steps. Record input is queued with timestamps and drained outside the
+track heads, active notes and CC 64–69 values in RAM. Preparation and playback
+advance in bounded polling steps. Record input is queued with timestamps and drained outside the
 input-reading loop. Concurrent input streams are serialized around SysEx
 messages; deferred channel events follow the complete message. An unfinished
 SysEx is closed when recording stops. During a playback SysEx message, ordinary bridge traffic on
