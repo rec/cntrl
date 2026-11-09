@@ -1,9 +1,10 @@
 # USB host and hub support
 
-This document records the investigation and proposed implementation of item 5
-in [the feature plan](feature-set.md#5-usb-host-and-hub-support). The proposal
-requires changes to the shared destination model. Implementation and the
-device-binding policy remain undecided. Item 5 stays in the feature plan.
+This document records the USB host and hub investigation and proposed design.
+Remaining device-binding and independent-routing work is tracked in
+[issue #3](https://github.com/rec/cntrl/issues/3). The proposal requires changes
+to the shared destination model. The device-binding policy, hub drivers,
+capacity and physical qualification remain unsettled.
 
 ## Intended behavior
 

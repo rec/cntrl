@@ -29,25 +29,6 @@ Remaining qualification is tracked in [midi-processing.md](midi-processing.md).
 Dependencies below identify prerequisites, not a requirement to implement the
 entire plan. An item is complete only when its acceptance criteria are met.
 
-## 5. USB host and hub support
-
-**Outcome:** Connect multiple USB MIDI instruments or controllers through a USB
-hub and address each independently. The current USB host implementation handles
-a single MIDI device.
-
-**Scope:** Extend the USB host driver with hub support and independent MIDI
-endpoints. Bind setup routes using available device identity and port
-information. Decide how users resolve indistinguishable devices rather than
-relying silently on discovery order. Show unavailable destinations without
-blocking the controller.
-
-**Dependencies:** None.
-
-**Acceptance:** Reordering connections does not silently redirect assignments;
-disconnecting one device leaves others usable; reconnection does not replay
-stale performance traffic. Qualify supported hubs, power arrangements and
-device counts.
-
 ## 11. MIDI CC waveform generators
 
 **Outcome:** Start or stop an LFO that sends MIDI CC values, such as a
@@ -108,9 +89,8 @@ offline workflow separately from serialization tests.
 
 Start with waveforms and timed sequences (items 11 and 12).
 
-USB host and hub work (item 5) should follow available test
-hardware and actual connection needs. The graphical editor (16) can begin
-against the current schema without waiting for the other items.
+The graphical editor (16) can begin against the current schema without waiting
+for the other items.
 
 This order is a recommendation. Select an item and settle its stated behavior
 decisions before starting implementation.
