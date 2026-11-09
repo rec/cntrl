@@ -1,0 +1,1038 @@
+brightness = 192
+splash = true
+animation_color_cycle = false
+is_midi_interface = false
+usb_device_midi = true
+usb_host_midi = true
+screensaver_timeout = 0
+seed = 0
+fill_in_styles = true
+background_color = "0xFFF8D8"
+foreground_brightness_limit = 0.5
+pad = 4
+contrast = 0.6
+tags = []
+
+[target_pulse]
+period = 4.0
+delay = 2.0
+minimum = 64
+maximum = 128
+
+[navigation]
+hold_delay = 1.5
+repeat_interval = 1.0
+
+[utility_pages]
+refresh_interval = 1.0
+clock_timeout = 1.0
+clocks_per_quarter = 24
+clock_average_beats = 1
+tap_intervals = 4
+minimum_taps = 2
+minimum_interval = 0.1
+reset_gap = 3.0
+flash_fraction = 0.4
+flasher_diameter = 40
+annulus = 5
+title_height = 12
+tempo_height = 40
+padding = 2
+tempo_font = "CourierPrime"
+status_font = "classic"
+title_font = "classic"
+off_color = "0x620000"
+on_color = "0xFF0000"
+ring_color = "0x000000"
+background_color = "0xFFF283"
+digits = 3
+decimals = 1
+
+[windows.next]
+page = "patch"
+
+[windows.sent]
+page = "patch"
+
+[windows.undo]
+page = "patch"
+
+[pages.patch]
+fields = ["patch_cycle.name", "names.vl70m", "names.patchman"]
+
+[pages.patch.line_styles]
+
+[tag_styles]
+
+[parameters]
+
+[fonts]
+CourierPrimeBold = "fonts/27024954.cfont"
+CaveatBold = "fonts/c2572058.cfont"
+CollegeBlock = "fonts/57b56d9d.cfont"
+MetalLord = "fonts/ad932cd8.cfont"
+"StillTime@1.5x" = "fonts/4bb0ba20.cfont"
+DecoRound = "fonts/3047b280.cfont"
+OrnamentalSlab = "fonts/87f2728c.cfont"
+RubikDistressed = "fonts/db806bab.cfont"
+CourierPrime = "fonts/7ed23e15.cfont"
+
+[instruments.both]
+instrument = "both"
+profile = "default"
+channel = 1
+output = "din"
+
+[patches]
+
+[[patch_cycles.bass]]
+type = "program-change"
+instrument = "both"
+program = 6
+
+[[patch_cycles.bass]]
+type = "program-change"
+instrument = "both"
+program = 7
+
+[[patch_cycles.bass]]
+type = "program-change"
+instrument = "both"
+program = 8
+
+[[patch_cycles.bass]]
+type = "program-change"
+instrument = "both"
+program = 9
+
+[[patch_cycles.bass]]
+type = "program-change"
+instrument = "both"
+program = 10
+
+[[patch_cycles.sax]]
+type = "program-change"
+instrument = "both"
+program = 11
+
+[[patch_cycles.sax]]
+type = "program-change"
+instrument = "both"
+program = 12
+
+[[patch_cycles.sax]]
+type = "program-change"
+instrument = "both"
+program = 13
+
+[[patch_cycles.sax]]
+type = "program-change"
+instrument = "both"
+program = 14
+
+[[patch_cycles.sax]]
+type = "program-change"
+instrument = "both"
+program = 15
+
+[[patch_cycles.reed]]
+type = "program-change"
+instrument = "both"
+program = 16
+
+[[patch_cycles.reed]]
+type = "program-change"
+instrument = "both"
+program = 17
+
+[[patch_cycles.reed]]
+type = "program-change"
+instrument = "both"
+program = 18
+
+[[patch_cycles.reed]]
+type = "program-change"
+instrument = "both"
+program = 19
+
+[[patch_cycles.reed]]
+type = "program-change"
+instrument = "both"
+program = 20
+
+[[patch_cycles.reed]]
+type = "program-change"
+instrument = "both"
+program = 21
+
+[[patch_cycles.flute]]
+type = "program-change"
+instrument = "both"
+program = 22
+
+[[patch_cycles.flute]]
+type = "program-change"
+instrument = "both"
+program = 23
+
+[[patch_cycles.flute]]
+type = "program-change"
+instrument = "both"
+program = 24
+
+[[patch_cycles.flute]]
+type = "program-change"
+instrument = "both"
+program = 25
+
+[[patch_cycles.flute]]
+type = "program-change"
+instrument = "both"
+program = 26
+
+[[patch_cycles.world]]
+type = "program-change"
+instrument = "both"
+program = 27
+
+[[patch_cycles.world]]
+type = "program-change"
+instrument = "both"
+program = 28
+
+[[patch_cycles.world]]
+type = "program-change"
+instrument = "both"
+program = 29
+
+[[patch_cycles.world]]
+type = "program-change"
+instrument = "both"
+program = 30
+
+[[patch_cycles.world]]
+type = "program-change"
+instrument = "both"
+program = 31
+
+[[patch_cycles.brass]]
+type = "program-change"
+instrument = "both"
+program = 32
+
+[[patch_cycles.brass]]
+type = "program-change"
+instrument = "both"
+program = 33
+
+[[patch_cycles.brass]]
+type = "program-change"
+instrument = "both"
+program = 34
+
+[[patch_cycles.brass]]
+type = "program-change"
+instrument = "both"
+program = 35
+
+[[patch_cycles.brass]]
+type = "program-change"
+instrument = "both"
+program = 36
+
+[[patch_cycles.guitar]]
+type = "program-change"
+instrument = "both"
+program = 37
+
+[[patch_cycles.guitar]]
+type = "program-change"
+instrument = "both"
+program = 38
+
+[[patch_cycles.guitar]]
+type = "program-change"
+instrument = "both"
+program = 39
+
+[[patch_cycles.guitar]]
+type = "program-change"
+instrument = "both"
+program = 40
+
+[[patch_cycles.guitar]]
+type = "program-change"
+instrument = "both"
+program = 41
+
+[[patch_cycles.strings]]
+type = "program-change"
+instrument = "both"
+program = 42
+
+[[patch_cycles.strings]]
+type = "program-change"
+instrument = "both"
+program = 43
+
+[[patch_cycles.strings]]
+type = "program-change"
+instrument = "both"
+program = 44
+
+[[patch_cycles.strings]]
+type = "program-change"
+instrument = "both"
+program = 45
+
+[[patch_cycles.strings]]
+type = "program-change"
+instrument = "both"
+program = 46
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 47
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 48
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 49
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 50
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 51
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 52
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 53
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 54
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 55
+
+[[patch_cycles.synth]]
+type = "program-change"
+instrument = "both"
+program = 56
+
+[[patch_cycles.fx]]
+type = "program-change"
+instrument = "both"
+program = 57
+
+[[patch_cycles.fx]]
+type = "program-change"
+instrument = "both"
+program = 58
+
+[[patch_cycles.fx]]
+type = "program-change"
+instrument = "both"
+program = 59
+
+[[patch_cycles.fx]]
+type = "program-change"
+instrument = "both"
+program = 60
+
+[[patch_cycles.fx]]
+type = "program-change"
+instrument = "both"
+program = 61
+
+[[patch_cycles.fx]]
+type = "program-change"
+instrument = "both"
+program = 62
+
+[[patch_cycles.fx]]
+type = "program-change"
+instrument = "both"
+program = 63
+
+[[patch_cycles.fx]]
+type = "program-change"
+instrument = "both"
+program = 64
+
+[switches]
+
+[[definitions.profiles]]
+instrument = "both"
+name = "default"
+
+[definitions.profiles.banks]
+
+[[definitions.programs]]
+program = 6
+name = "New Slap / SnapBass"
+tags = ["bass"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "New Slap"
+patchman = "SnapBass"
+
+[[definitions.programs]]
+program = 7
+name = "Upright / PickBass"
+tags = ["bass"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Upright"
+patchman = "PickBass"
+
+[[definitions.programs]]
+program = 8
+name = "Fnground / JacoBass"
+tags = ["bass"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Fnground"
+patchman = "JacoBass"
+
+[[definitions.programs]]
+program = 9
+name = "Birdland / StratoBs"
+tags = ["bass"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Birdland"
+patchman = "StratoBs"
+
+[[definitions.programs]]
+program = 10
+name = "MuteHrBs / GnarlyBs"
+tags = ["bass"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "MuteHrBs"
+patchman = "GnarlyBs"
+
+[[definitions.programs]]
+program = 11
+name = "SoprSax! / SoprnoSx"
+tags = ["sax"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "SoprSax!"
+patchman = "SoprnoSx"
+
+[[definitions.programs]]
+program = 12
+name = "NuAltSax / Alto Sax"
+tags = ["sax"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "NuAltSax"
+patchman = "Alto Sax"
+
+[[definitions.programs]]
+program = 13
+name = "AltoSax! / NY Tenor"
+tags = ["sax"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "AltoSax!"
+patchman = "NY Tenor"
+
+[[definitions.programs]]
+program = 14
+name = "FnkyTenr / RaspyTnr"
+tags = ["sax"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "FnkyTenr"
+patchman = "RaspyTnr"
+
+[[definitions.programs]]
+program = 15
+name = "BariSax! / Bari Sax"
+tags = ["sax"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "BariSax!"
+patchman = "Bari Sax"
+
+[[definitions.programs]]
+program = 16
+name = "BassCla! / Bs.Clrnt"
+tags = ["clarinet"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "BassCla!"
+patchman = "Bs.Clrnt"
+
+[[definitions.programs]]
+program = 17
+name = "WX Oboe / Oboe"
+tags = ["reed"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "WX Oboe"
+patchman = "Oboe"
+
+[[definitions.programs]]
+program = 18
+name = "DblReedy / Eng.Horn"
+tags = ["reed"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "DblReedy"
+patchman = "Eng.Horn"
+
+[[definitions.programs]]
+program = 19
+name = "Bassoon! / Bassoon"
+tags = ["reed"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Bassoon!"
+patchman = "Bassoon"
+
+[[definitions.programs]]
+program = 20
+name = "Chanter"
+tags = ["reed"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Chanter"
+patchman = "Chanter"
+
+[[definitions.programs]]
+program = 21
+name = "WahUpHp / ThaiReed"
+tags = ["synth", "reed"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "WahUpHp"
+patchman = "ThaiReed"
+
+[[definitions.programs]]
+program = 22
+name = "Vento / Real Flt"
+tags = ["flute"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Vento"
+patchman = "Real Flt"
+
+[[definitions.programs]]
+program = 23
+name = "Piccol!2 / Piccolo"
+tags = ["flute"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Piccol!2"
+patchman = "Piccolo"
+
+[[definitions.programs]]
+program = 24
+name = "JazFlute / VoxFlute"
+tags = ["flute"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "JazFlute"
+patchman = "VoxFlute"
+
+[[definitions.programs]]
+program = 25
+name = "Flutuen / Bass Flt"
+tags = ["flute"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Flutuen"
+patchman = "Bass Flt"
+
+[[definitions.programs]]
+program = 26
+name = "Nz Flute / Afri Flt"
+tags = ["flute"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Nz Flute"
+patchman = "Afri Flt"
+
+[[definitions.programs]]
+program = 27
+name = "Sitar! / Sitar"
+tags = ["sitar"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Sitar!"
+patchman = "Sitar"
+
+[[definitions.programs]]
+program = 28
+name = "India / Tambura"
+tags = ["world"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "India"
+patchman = "Tambura"
+
+[[definitions.programs]]
+program = 29
+name = "MokoPipe / SoftPipe"
+tags = ["pipe"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "MokoPipe"
+patchman = "SoftPipe"
+
+[[definitions.programs]]
+program = 30
+name = "WX Shaku / Shakuhat"
+tags = ["pipe"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "WX Shaku"
+patchman = "Shakuhat"
+
+[[definitions.programs]]
+program = 31
+name = "Andean"
+tags = ["flute"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Andean"
+patchman = "Andean"
+
+[[definitions.programs]]
+program = 32
+name = "Trmbone! / Trombone"
+tags = ["trombone"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Trmbone!"
+patchman = "Trombone"
+
+[[definitions.programs]]
+program = 33
+name = "FluglHr! / Mangione"
+tags = ["trumpet"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "FluglHr!"
+patchman = "Mangione"
+
+[[definitions.programs]]
+program = 34
+name = "WXTrumpt / Trumpet"
+tags = ["trumpet"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "WXTrumpt"
+patchman = "Trumpet"
+
+[[definitions.programs]]
+program = 35
+name = "MuteTp! / WahMtTpt"
+tags = ["trumpet"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "MuteTp!"
+patchman = "WahMtTpt"
+
+[[definitions.programs]]
+program = 36
+name = "Tuba! / Tuba"
+tags = ["tuba"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Tuba!"
+patchman = "Tuba"
+
+[[definitions.programs]]
+program = 37
+name = "Spanish / Les Gtr"
+tags = ["guitar"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Spanish"
+patchman = "Les Gtr"
+
+[[definitions.programs]]
+program = 38
+name = "WetPluck / Wah Lead"
+tags = ["guitar"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "WetPluck"
+patchman = "Wah Lead"
+
+[[definitions.programs]]
+program = 39
+name = "Comp Gtr / Eddie4th"
+tags = ["guitar"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Comp Gtr"
+patchman = "Eddie4th"
+
+[[definitions.programs]]
+program = 40
+name = "FunkyGtr / Feedback"
+tags = ["guitar"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "FunkyGtr"
+patchman = "Feedback"
+
+[[definitions.programs]]
+program = 41
+name = "WX J Gtr / Hendrix"
+tags = ["guitar"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "WX J Gtr"
+patchman = "Hendrix"
+
+[[definitions.programs]]
+program = 42
+name = "BrtViola / SwtViola"
+tags = ["violin"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "BrtViola"
+patchman = "SwtViola"
+
+[[definitions.programs]]
+program = 43
+name = "ViolOutt / Solo Vln"
+tags = ["violin"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "ViolOutt"
+patchman = "Solo Vln"
+
+[[definitions.programs]]
+program = 44
+name = "Cello! / SoloCell"
+tags = ["cello"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Cello!"
+patchman = "SoloCell"
+
+[[definitions.programs]]
+program = 45
+name = "DoublBow / Bow Bass"
+tags = ["bass"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "DoublBow"
+patchman = "Bow Bass"
+
+[[definitions.programs]]
+program = 46
+name = "PicoStrg / Pizzicat"
+tags = ["strings"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "PicoStrg"
+patchman = "Pizzicat"
+
+[[definitions.programs]]
+program = 47
+name = "Igneous / TalkBox!"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Igneous"
+patchman = "TalkBox!"
+
+[[definitions.programs]]
+program = 48
+name = "Wynth / !XTREME!"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Wynth"
+patchman = "!XTREME!"
+
+[[definitions.programs]]
+program = 49
+name = "Blue / Hercules"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Blue"
+patchman = "Hercules"
+
+[[definitions.programs]]
+program = 50
+name = "OsciLead / SynClav"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "OsciLead"
+patchman = "SynClav"
+
+[[definitions.programs]]
+program = 51
+name = "Babalog / Syncro!"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Babalog"
+patchman = "Syncro!"
+
+[[definitions.programs]]
+program = 52
+name = "Q.Klav / Theremin"
+tags = ["keyboard", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Q.Klav"
+patchman = "Theremin"
+
+[[definitions.programs]]
+program = 53
+name = "Ossyncro / Avalana"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Ossyncro"
+patchman = "Avalana"
+
+[[definitions.programs]]
+program = 54
+name = "Talk Box / Voxanne"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Talk Box"
+patchman = "Voxanne"
+
+[[definitions.programs]]
+program = 55
+name = "SimpleSy / Beauty!"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "SimpleSy"
+patchman = "Beauty!"
+
+[[definitions.programs]]
+program = 56
+name = "WahUpHp / SpaceOut"
+tags = ["synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "WahUpHp"
+patchman = "SpaceOut"
+
+[[definitions.programs]]
+program = 57
+name = "Mad Tube / Squeezy"
+tags = ["fx", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Mad Tube"
+patchman = "Squeezy"
+
+[[definitions.programs]]
+program = 58
+name = "YamSteel / Lyricon"
+tags = ["guitar", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "YamSteel"
+patchman = "Lyricon"
+
+[[definitions.programs]]
+program = 59
+name = "StungSt / Ana.Lead"
+tags = ["bass", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "StungSt"
+patchman = "Ana.Lead"
+
+[[definitions.programs]]
+program = 60
+name = "Waterphn / Mobius"
+tags = ["violin", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Waterphn"
+patchman = "Mobius"
+
+[[definitions.programs]]
+program = 61
+name = "DinoPerc / 70s Lead"
+tags = ["fx", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "DinoPerc"
+patchman = "70s Lead"
+
+[[definitions.programs]]
+program = 62
+name = "Formula / Osc Lead"
+tags = ["fx", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Formula"
+patchman = "Osc Lead"
+
+[[definitions.programs]]
+program = 63
+name = "Jurassic / Saw Lead"
+tags = ["fx", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Jurassic"
+patchman = "Saw Lead"
+
+[[definitions.programs]]
+program = 64
+name = "Devil / SAWS/|/|"
+tags = ["fx", "synth"]
+instrument = "both"
+profile = "default"
+
+[definitions.programs.names]
+vl70m = "Devil"
+patchman = "SAWS/|/|"

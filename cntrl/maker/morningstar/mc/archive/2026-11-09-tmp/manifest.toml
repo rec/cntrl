@@ -1,0 +1,882 @@
+archive_date = "2026-11-09"
+source_root = "/private/tmp"
+original_commit = "883d95eee242a8f130a53a21ec967dd32fee139f"
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/catalogue.txt"
+bytes = 85
+sha256 = "5bbb7ab004817670a314f9bc9a9a97ac6af7f1d10f7630bdc730140618a71d10"
+sources = ["cntrl-before-latest-88mcxda6/catalogue.txt"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/27024954.cfont"
+bytes = 2274
+sha256 = "ee5b6bddbb7c97a2c9a4110f07128fafcc92f73aecf235d916920e73c6884d50"
+sources = ["cntrl-before-latest-88mcxda6/fonts/27024954.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/3047b280.cfont"
+bytes = 2586
+sha256 = "f84f0ba038b7e461ca9f44ce745267a604f669ffe7026f8be9d0f0dc31d6642e"
+sources = ["cntrl-before-latest-88mcxda6/fonts/3047b280.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/4bb0ba20.cfont"
+bytes = 3430
+sha256 = "484165b4a6d71d3bb156a636b97bcb0d6d3f2508d0a84853028fe50727c392bf"
+sources = ["cntrl-before-latest-88mcxda6/fonts/4bb0ba20.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/57b56d9d.cfont"
+bytes = 3596
+sha256 = "664ce59628a6b512ff2b6cafc51dd9092951881899d26f6dddc4c02466d402fe"
+sources = ["cntrl-before-latest-88mcxda6/fonts/57b56d9d.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/6550fefa.cfont"
+bytes = 1734
+sha256 = "335b63bcfa37392baba996bb542244ea4030132f1cd0b76d5768d746beecdce6"
+sources = ["cntrl-before-latest-88mcxda6/fonts/6550fefa.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/7ed23e15.cfont"
+bytes = 3058
+sha256 = "cd5cce4536a952058192f3bda367d313f8ba5b917dd0ba749be0636fdf46f79d"
+sources = ["cntrl-before-latest-88mcxda6/fonts/7ed23e15.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/87f2728c.cfont"
+bytes = 4375
+sha256 = "1f147bdbce287b492bb4158fc9c78e2d96c42fcbeec39c1b306aa04c8f4203fd"
+sources = ["cntrl-before-latest-88mcxda6/fonts/87f2728c.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/ad932cd8.cfont"
+bytes = 2773
+sha256 = "7253b91eca6a9539d09eca118e5a009230eb05e3b93b6e3b91a41a3a0c085a37"
+sources = ["cntrl-before-latest-88mcxda6/fonts/ad932cd8.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/c2572058.cfont"
+bytes = 2599
+sha256 = "25202e3b07308b08f98322de1df4f053d972a954ac90ffcc32b756daaf705497"
+sources = ["cntrl-before-latest-88mcxda6/fonts/c2572058.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/db806bab.cfont"
+bytes = 2844
+sha256 = "febed326a700a64bd1353d30825a8e301ee32e647592f0c39419145fd78a9a82"
+sources = ["cntrl-before-latest-88mcxda6/fonts/db806bab.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/fonts/fe42ef04.cfont"
+bytes = 1904
+sha256 = "12f899713b2ac21f183937ecb463bbe56942b881ac52c0a3a0f9c72d268aaeae"
+sources = ["cntrl-before-latest-88mcxda6/fonts/fe42ef04.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/27024954.cfont"
+bytes = 2274
+sha256 = "ee5b6bddbb7c97a2c9a4110f07128fafcc92f73aecf235d916920e73c6884d50"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/27024954.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/3047b280.cfont"
+bytes = 2586
+sha256 = "f84f0ba038b7e461ca9f44ce745267a604f669ffe7026f8be9d0f0dc31d6642e"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/3047b280.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/4bb0ba20.cfont"
+bytes = 3430
+sha256 = "484165b4a6d71d3bb156a636b97bcb0d6d3f2508d0a84853028fe50727c392bf"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/4bb0ba20.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/57b56d9d.cfont"
+bytes = 3596
+sha256 = "664ce59628a6b512ff2b6cafc51dd9092951881899d26f6dddc4c02466d402fe"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/57b56d9d.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/6550fefa.cfont"
+bytes = 1734
+sha256 = "335b63bcfa37392baba996bb542244ea4030132f1cd0b76d5768d746beecdce6"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/6550fefa.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/7ed23e15.cfont"
+bytes = 3058
+sha256 = "cd5cce4536a952058192f3bda367d313f8ba5b917dd0ba749be0636fdf46f79d"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/7ed23e15.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/87f2728c.cfont"
+bytes = 4375
+sha256 = "1f147bdbce287b492bb4158fc9c78e2d96c42fcbeec39c1b306aa04c8f4203fd"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/87f2728c.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/ad932cd8.cfont"
+bytes = 2773
+sha256 = "7253b91eca6a9539d09eca118e5a009230eb05e3b93b6e3b91a41a3a0c085a37"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/ad932cd8.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/c2572058.cfont"
+bytes = 2599
+sha256 = "25202e3b07308b08f98322de1df4f053d972a954ac90ffcc32b756daaf705497"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/c2572058.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/db806bab.cfont"
+bytes = 2844
+sha256 = "febed326a700a64bd1353d30825a8e301ee32e647592f0c39419145fd78a9a82"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/db806bab.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/fonts/fe42ef04.cfont"
+bytes = 1904
+sha256 = "12f899713b2ac21f183937ecb463bbe56942b881ac52c0a3a0f9c72d268aaeae"
+sources = ["cntrl-before-latest-88mcxda6/format-30/fonts/fe42ef04.cfont"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/readability-demo.bin"
+bytes = 1881
+sha256 = "299097e841532a181577db974099d20520c27fdb69461eccbf69e8c086690885"
+sources = ["cntrl-before-latest-88mcxda6/format-30/readability-demo.bin"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/readability-demo.toml"
+bytes = 1859
+sha256 = "5ca2a71ba3605f2aa4adcf84d06ef975a635897a8f75ab2e2aac50f3919c6b04"
+sources = ["cntrl-before-latest-88mcxda6/format-30/readability-demo.toml"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/simple-setup.bin"
+bytes = 22229
+sha256 = "e78a611f85f6b20ab181c420f019bbc3579419612f8787b0fcd5ef2116531479"
+sources = ["cntrl-before-latest-88mcxda6/format-30/simple-setup.bin"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/format-30/simple-setup.toml"
+bytes = 18010
+sha256 = "85d5c72cef2fb9be106ebc29113c00ab8a3b6dc59ed2f86ccce71668206fdb61"
+sources = ["cntrl-before-latest-88mcxda6/format-30/simple-setup.toml"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/readability-demo.bin"
+bytes = 1876
+sha256 = "dfc1e7c49767004918504cb843d2fa0205b4813fc1df3884e6cd80c5e317a8cb"
+sources = ["cntrl-before-latest-88mcxda6/readability-demo.bin"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/readability-demo.toml"
+bytes = 1747
+sha256 = "b7099d1fffbbe2ccd88347859a4535dc10a90a2988bccb7c3745ff977e49999f"
+sources = ["cntrl-before-latest-88mcxda6/readability-demo.toml"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/selected.txt"
+bytes = 12
+sha256 = "8d84762520347c89cdd12d65b3c131d4494d4ffd71e96c4c82caa31262db3bba"
+sources = ["cntrl-before-latest-88mcxda6/selected.txt"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/simple-setup.bin"
+bytes = 22224
+sha256 = "3e911a3b27b34c92749a6fbeab6842b4c010c38d07eb4a7521593a7cb4a63b0c"
+sources = ["cntrl-before-latest-88mcxda6/simple-setup.bin"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/simple-setup.toml"
+bytes = 17898
+sha256 = "9a646f9796549ddb90a4bfe155168fe88a80db4f7b83338b413012b3ee6e9ad7"
+sources = ["cntrl-before-latest-88mcxda6/simple-setup.toml"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/songs.bin"
+bytes = 16
+sha256 = "3d187aa5c61e1167c5864e5736e03210905efafd5498a4a22d6eedc898500dcc"
+sources = ["cntrl-before-latest-88mcxda6/songs.bin"]
+
+[[files]]
+path = "backups/cntrl-before-latest-88mcxda6/status.txt"
+bytes = 29
+sha256 = "6452d01f789bd8b73d9a7527fb8dd210cbe565f50c76d2bc281d8e1f57b96237"
+sources = ["cntrl-before-latest-88mcxda6/status.txt"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/catalogue.txt"
+bytes = 85
+sha256 = "5bbb7ab004817670a314f9bc9a9a97ac6af7f1d10f7630bdc730140618a71d10"
+sources = ["cntrl-trs-ports-device-backup/catalogue.txt"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/27024954.cfont"
+bytes = 2274
+sha256 = "ee5b6bddbb7c97a2c9a4110f07128fafcc92f73aecf235d916920e73c6884d50"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/27024954.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/3047b280.cfont"
+bytes = 2586
+sha256 = "f84f0ba038b7e461ca9f44ce745267a604f669ffe7026f8be9d0f0dc31d6642e"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/3047b280.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/4bb0ba20.cfont"
+bytes = 3430
+sha256 = "484165b4a6d71d3bb156a636b97bcb0d6d3f2508d0a84853028fe50727c392bf"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/4bb0ba20.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/57b56d9d.cfont"
+bytes = 3596
+sha256 = "664ce59628a6b512ff2b6cafc51dd9092951881899d26f6dddc4c02466d402fe"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/57b56d9d.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/6550fefa.cfont"
+bytes = 1734
+sha256 = "335b63bcfa37392baba996bb542244ea4030132f1cd0b76d5768d746beecdce6"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/6550fefa.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/7ed23e15.cfont"
+bytes = 3058
+sha256 = "cd5cce4536a952058192f3bda367d313f8ba5b917dd0ba749be0636fdf46f79d"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/7ed23e15.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/87f2728c.cfont"
+bytes = 4375
+sha256 = "1f147bdbce287b492bb4158fc9c78e2d96c42fcbeec39c1b306aa04c8f4203fd"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/87f2728c.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/ad932cd8.cfont"
+bytes = 2773
+sha256 = "7253b91eca6a9539d09eca118e5a009230eb05e3b93b6e3b91a41a3a0c085a37"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/ad932cd8.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/c2572058.cfont"
+bytes = 2599
+sha256 = "25202e3b07308b08f98322de1df4f053d972a954ac90ffcc32b756daaf705497"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/c2572058.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/db806bab.cfont"
+bytes = 2844
+sha256 = "febed326a700a64bd1353d30825a8e301ee32e647592f0c39419145fd78a9a82"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/db806bab.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/fonts/fe42ef04.cfont"
+bytes = 1904
+sha256 = "12f899713b2ac21f183937ecb463bbe56942b881ac52c0a3a0f9c72d268aaeae"
+sources = ["cntrl-trs-ports-device-backup/prepared/fonts/fe42ef04.cfont"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/readability-demo.bin"
+bytes = 1876
+sha256 = "dfc1e7c49767004918504cb843d2fa0205b4813fc1df3884e6cd80c5e317a8cb"
+sources = ["cntrl-trs-ports-device-backup/prepared/readability-demo.bin"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/readability-demo.toml"
+bytes = 1747
+sha256 = "b7099d1fffbbe2ccd88347859a4535dc10a90a2988bccb7c3745ff977e49999f"
+sources = ["cntrl-trs-ports-device-backup/prepared/readability-demo.toml"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/simple-setup.bin"
+bytes = 22224
+sha256 = "3e911a3b27b34c92749a6fbeab6842b4c010c38d07eb4a7521593a7cb4a63b0c"
+sources = ["cntrl-trs-ports-device-backup/prepared/simple-setup.bin"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/prepared/simple-setup.toml"
+bytes = 17898
+sha256 = "9a646f9796549ddb90a4bfe155168fe88a80db4f7b83338b413012b3ee6e9ad7"
+sources = ["cntrl-trs-ports-device-backup/prepared/simple-setup.toml"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/readability-demo.bin"
+bytes = 1872
+sha256 = "5b1b8b87cb7b05c07da956ee5692be3e94de55167dd9d3f1b1b8daf60e5702fa"
+sources = ["cntrl-trs-ports-device-backup/readability-demo.bin"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/readability-demo.toml"
+bytes = 1747
+sha256 = "b7099d1fffbbe2ccd88347859a4535dc10a90a2988bccb7c3745ff977e49999f"
+sources = ["cntrl-trs-ports-device-backup/readability-demo.toml"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/selected.txt"
+bytes = 12
+sha256 = "8d84762520347c89cdd12d65b3c131d4494d4ffd71e96c4c82caa31262db3bba"
+sources = ["cntrl-trs-ports-device-backup/selected.txt"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/simple-setup.bin"
+bytes = 22220
+sha256 = "5c68fdb8f9c1ddb4e3bebb213ab78284b1c30247c151e27eb114b87e4fe36a49"
+sources = ["cntrl-trs-ports-device-backup/simple-setup.bin"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/simple-setup.toml"
+bytes = 17898
+sha256 = "9a646f9796549ddb90a4bfe155168fe88a80db4f7b83338b413012b3ee6e9ad7"
+sources = ["cntrl-trs-ports-device-backup/simple-setup.toml"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/songs-status.txt"
+bytes = 23
+sha256 = "c03bccdd80af1de383c0e2fa5abee58d88fdad7282dc578838e3aa92b8a43889"
+sources = ["cntrl-trs-ports-device-backup/songs-status.txt"]
+
+[[files]]
+path = "backups/cntrl-trs-ports-device-backup/songs.bin"
+bytes = 16
+sha256 = "3d187aa5c61e1167c5864e5736e03210905efafd5498a4a22d6eedc898500dcc"
+sources = ["cntrl-trs-ports-device-backup/songs.bin"]
+
+[[files]]
+path = "diagnostics/cntrl-derived-peer.cpp"
+bytes = 4115
+sha256 = "d9e5cc7fafdb6ce968b7e632359466d69c85f2664d9220f1ff09a976dd1d2587"
+sources = ["cntrl-derived-peer.cpp"]
+
+[[files]]
+path = "diagnostics/cntrl-derived-song.bin"
+bytes = 2854
+sha256 = "cad356be33fef0e1ff8ba552e7e2c02e9a43ea61f3f9f192c270b8c02d284c50"
+sources = ["cntrl-derived-song.bin"]
+
+[[files]]
+path = "diagnostics/cntrl-expression-probe.cpp"
+bytes = 1077
+sha256 = "bfc54c188667a29b584e73d461233e3ff62c5c96fe9a486c1485058e9bb4d2f5"
+sources = ["cntrl-expression-probe.cpp"]
+
+[[files]]
+path = "diagnostics/cntrl-expression-probe.bin"
+bytes = 22376
+sha256 = "5c11cb1e22e442e8f1b4cfae95cbcbae72f68cb8edc8ae8cf78a42113444ec96"
+sources = ["cntrl-expression-probe.bin"]
+
+[[files]]
+path = "diagnostics/expression-mock/Arduino.h"
+bytes = 102
+sha256 = "8a48ef4d75545ec0dbf849fd85f755f4087601ccc411960ca340dcc237e2d441"
+sources = ["cntrl-expression-mock/Arduino.h"]
+
+[[files]]
+path = "diagnostics/expression-mock/SD.h"
+bytes = 937
+sha256 = "33cd94c540ac6d39e2f6efe4a3350c70303caf97f11d80bd6ac37db5cd103ede"
+sources = ["cntrl-expression-mock/SD.h"]
+
+[[files]]
+path = "diagnostics/expression-mock/test.cpp"
+bytes = 1983
+sha256 = "5a27316539e4c48872c989f6794231c2131eda091f7d7b47ea8025748dd53e5c"
+sources = ["cntrl-expression-mock/test.cpp"]
+
+[[files]]
+path = "patches/cntrl-8994-feedback.patch"
+bytes = 3423
+sha256 = "a9f4b13124b1ecd6bff2438a1e9295814c1e5e94e87fbbeda6ffa0dcbe3d51fd"
+sources = ["cntrl-8994-feedback.patch"]
+
+[[files]]
+path = "patches/cntrl-8994-just-clock.patch"
+bytes = 70103
+sha256 = "91e33a44af410894c1992db7e54195f847dd884edaca2fe8249ccd1b3cb92bdf"
+sources = ["cntrl-8994-just-clock.patch"]
+
+[[files]]
+path = "patches/cntrl-8994-own-pages.patch"
+bytes = 8494
+sha256 = "eb294a379d69a5fd75faba0e01ff1e85dc0b18b64013dc59265ae24f19505d75"
+sources = ["cntrl-8994-own-pages.patch"]
+
+[[files]]
+path = "patches/cntrl-8994-preexisting.patch"
+bytes = 5335
+sha256 = "99c4dffba66fa3f6861516a57b1826c39f5c552a7add9309c6c88ec371282391"
+sources = ["cntrl-8994-preexisting.patch"]
+
+[[files]]
+path = "patches/cntrl-8994-restoration-placement.patch"
+bytes = 510
+sha256 = "a9712909fe210837d1405482bbc07a12e996aee016aa35d1f9145b936561fcbf"
+sources = ["cntrl-8994-restoration-placement.patch"]
+
+[[files]]
+path = "patches/cntrl-8994-uncommitted-trs.patch"
+bytes = 5536
+sha256 = "39dece3a33411db958f249ddba046bb55dbeac9ca4e22236cb9a218b03fa6d8c"
+sources = ["cntrl-8994-uncommitted-trs.patch"]
+
+[[files]]
+path = "patches/cntrl-clock-ui-test.patch"
+bytes = 1847
+sha256 = "20051542740e192964440915fe3cf0f4dc09ff9b00edf5581e60af303825413d"
+sources = ["cntrl-clock-ui-test.patch"]
+
+[[files]]
+path = "patches/cntrl-expr-feature.patch"
+bytes = 39619
+sha256 = "485093f53713f42673356af82af12729b80cd1e749761e6874f69e20014a2049"
+sources = ["cntrl-expr-feature.patch"]
+
+[[files]]
+path = "patches/cntrl-other-window-trs.patch"
+bytes = 59225
+sha256 = "78e01aa90decf76b858248aa873e02b251670bbb0eadd60a9ec4b92adefdc853"
+sources = ["cntrl-other-window-trs.patch"]
+
+[[files]]
+path = "snapshots/cntrl-expr-apply/firmware/include/cntrl/expression.h"
+bytes = 2847
+sha256 = "c77163f710018d995d37015e93cf314e5a5437ea24bf4c9cb17fba5b97ee9d28"
+sources = ["cntrl-expr-apply/firmware/include/cntrl/expression.h"]
+
+[[files]]
+path = "snapshots/cntrl-expr-apply/firmware/test/test_expression.cpp"
+bytes = 1845
+sha256 = "0bc777d12b9d074a0bc7683e0b043a238953314525349b20d0f81c254724aa75"
+sources = ["cntrl-expr-apply/firmware/test/test_expression.cpp"]
+
+[[files]]
+path = "snapshots/cntrl-expr-trs-base/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp"
+bytes = 58361
+sha256 = "66cab00edf2606281c3887dcd8c25b26c817caed4fd2c2e93e1cefc7085486dd"
+sources = ["cntrl-expr-trs-base/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp"]
+
+[[files]]
+path = "snapshots/cntrl-expr-trs-base/firmware/README.md"
+bytes = 37243
+sha256 = "fbf688a8780754b8ce927cf6706605a6d9ce0209f41335d6575a2410874f76c4"
+sources = ["cntrl-expr-trs-base/firmware/README.md"]
+
+[[files]]
+path = "snapshots/cntrl-midi-files-final-8994/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h"
+bytes = 22386
+sha256 = "0aeff447996304651af830204f6615fbc984f7f0a1ebc9436c24e88dfb35fd1f"
+sources = ["cntrl-midi-files-final-8994/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h"]
+
+[[files]]
+path = "snapshots/cntrl-other-window-trs-files/trs_ports.h"
+bytes = 2021
+sha256 = "524440e980396283cc614e0c5aa03c84648cad887e223e1ed3137309e827885a"
+sources = ["cntrl-other-window-trs-files/trs_ports.h"]
+
+[[files]]
+path = "snapshots/cntrl-other-window-trs-files/flex-serial-release.patch"
+bytes = 1521
+sha256 = "3baf247b985db8cf6cd9782e3c26e1719d7c045112e1ed714ab101b954c905f9"
+sources = ["cntrl-other-window-trs-files/flex-serial-release.patch"]
+
+[[files]]
+path = "firmware/60000000-27a74468b118d160e7b5045be627703fe458b0d8e32196cb0daf8f19d8e0e896.bin"
+bytes = 610304
+sha256 = "27a74468b118d160e7b5045be627703fe458b0d8e32196cb0daf8f19d8e0e896"
+sources = ["cntrl-8994-restoration-check/cntrl/maker/morningstar/mc/firmware/build/patch-switcher/patch_switcher.ino.hex", "cntrl-8994-restoration-check/cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex"]
+
+[[files]]
+path = "firmware/60100000-e1fd60d27d75251d87b322b881af69de400213062218f80ee32da1be7d1ec467.bin"
+bytes = 585728
+sha256 = "e1fd60d27d75251d87b322b881af69de400213062218f80ee32da1be7d1ec467"
+sources = ["cntrl-before-latest-09r5f2xa/new-image.hex", "cntrl-before-latest-_gk93xu8/previous-upload-image.hex"]
+
+[[files]]
+path = "firmware/60100000-7447dc3972184ce03866fecb2072af73637b5aa6224b5a7647aa4ae89eda97c4.bin"
+bytes = 575488
+sha256 = "7447dc3972184ce03866fecb2072af73637b5aa6224b5a7647aa4ae89eda97c4"
+sources = ["cntrl-before-latest-09r5f2xa/previous-upload-image.hex"]
+
+[[files]]
+path = "firmware/60100000-112262a793481921aed60b43881aa5c5d6721784aa4656435421db6f6eb5e1fb.bin"
+bytes = 589824
+sha256 = "112262a793481921aed60b43881aa5c5d6721784aa4656435421db6f6eb5e1fb"
+sources = ["cntrl-before-latest-88mcxda6/new-image.hex"]
+
+[[files]]
+path = "firmware/60100000-776b67b213dcf9cab6b413b728d3ceb72a876b64daaa1d2754479599c5ded6bc.bin"
+bytes = 587776
+sha256 = "776b67b213dcf9cab6b413b728d3ceb72a876b64daaa1d2754479599c5ded6bc"
+sources = ["cntrl-before-latest-88mcxda6/previous-upload-image.hex", "cntrl-before-latest-c7cgdnly/new-image.hex"]
+
+[[files]]
+path = "firmware/60100000-fda948fa1eaa175ea2d72a78a93140a7951600f47e80ef50b6d30f6e41b27bdd.bin"
+bytes = 586752
+sha256 = "fda948fa1eaa175ea2d72a78a93140a7951600f47e80ef50b6d30f6e41b27bdd"
+sources = ["cntrl-before-latest-_gk93xu8/new-image.hex", "cntrl-before-latest-o86vh8d8/previous-upload-image.hex"]
+
+[[files]]
+path = "firmware/60100000-a4a7a32cb98aee52184ca2564b484d0fca8733ea15d12e8e7b6c6e72669e7ed3.bin"
+bytes = 586752
+sha256 = "a4a7a32cb98aee52184ca2564b484d0fca8733ea15d12e8e7b6c6e72669e7ed3"
+sources = ["cntrl-before-latest-a6503_ns/new-image.hex", "cntrl-before-latest-e3atwo4s/previous-upload-image.hex"]
+
+[[files]]
+path = "firmware/60100000-eacc10723be29f53ee0aaa66254f02731c45f2fb45fa3d84c0ccfc6bb9528637.bin"
+bytes = 586752
+sha256 = "eacc10723be29f53ee0aaa66254f02731c45f2fb45fa3d84c0ccfc6bb9528637"
+sources = ["cntrl-before-latest-a6503_ns/previous-upload-image.hex", "cntrl-before-latest-l3d48dgh/new-image.hex"]
+
+[[files]]
+path = "firmware/60100000-352c4598b6a2da1f76793816d99d4aaa60c5d4e2ce7fc91aa14fe915536635bd.bin"
+bytes = 586752
+sha256 = "352c4598b6a2da1f76793816d99d4aaa60c5d4e2ce7fc91aa14fe915536635bd"
+sources = ["cntrl-before-latest-c7cgdnly/previous-upload-image.hex", "cntrl-before-latest-e3atwo4s/new-image.hex"]
+
+[[files]]
+path = "firmware/60100000-52a7248f00e7fe454b7c615196ec797223cbb6dd317226fb6c0c3042fe20d9a6.bin"
+bytes = 586752
+sha256 = "52a7248f00e7fe454b7c615196ec797223cbb6dd317226fb6c0c3042fe20d9a6"
+sources = ["cntrl-before-latest-l3d48dgh/previous-upload-image.hex", "cntrl-before-latest-pbksvnug/new-image.hex"]
+
+[[files]]
+path = "firmware/60100000-5ef1a7c0d23188591afbd0bf3ac9a3f20dff316283c0fd3c1f4f2890f1e3e11d.bin"
+bytes = 585728
+sha256 = "5ef1a7c0d23188591afbd0bf3ac9a3f20dff316283c0fd3c1f4f2890f1e3e11d"
+sources = ["cntrl-before-latest-o86vh8d8/new-image.hex", "cntrl-before-latest-pbksvnug/previous-upload-image.hex"]
+
+[[files]]
+path = "firmware/60000000-435624eb8b77b7a7701757905dc3511ae790a31bf9e62411f7842f1a745b9c27.bin"
+bytes = 569344
+sha256 = "435624eb8b77b7a7701757905dc3511ae790a31bf9e62411f7842f1a745b9c27"
+sources = ["cntrl-cable-disabled.hex"]
+
+[[files]]
+path = "firmware/60100000-b21ee29bc27eb7c71fcf59310c81517da5d91f686c992c92f045fe1217a45e0d.bin"
+bytes = 582656
+sha256 = "b21ee29bc27eb7c71fcf59310c81517da5d91f686c992c92f045fe1217a45e0d"
+sources = ["cntrl-clock-8994-stage/cntrl/maker/morningstar/mc/firmware/build/boot-switch/cntrl/patch_switcher.ino.hex", "cntrl-clock-8994-stage/cntrl/maker/morningstar/mc/firmware/build/boot-switch/cntrl.hex", "cntrl-clock-8994-stage/cntrl/maker/morningstar/mc/firmware/build/boot-switch/combined.hex"]
+
+[[files]]
+path = "firmware/60000000-490b2620a742b7c001842b9348bf480127ee6960299a25351d22e5e362da0b2a.bin"
+bytes = 610304
+sha256 = "490b2620a742b7c001842b9348bf480127ee6960299a25351d22e5e362da0b2a"
+sources = ["cntrl-midi-files-final-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher/patch_switcher.ino.hex", "cntrl-midi-files-final-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex"]
+
+[[files]]
+path = "firmware/60000000-7813f491987a6321d668c2cc79909fdc14c72655f62aeb1a74fd360e737f8a05.bin"
+bytes = 589824
+sha256 = "7813f491987a6321d668c2cc79909fdc14c72655f62aeb1a74fd360e737f8a05"
+sources = ["cntrl-midi-state-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher/patch_switcher.ino.hex", "cntrl-midi-state-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex"]
+
+[[files]]
+path = "firmware/60000000-b46febc196183ca09968b2bf153a562878c932f976df4367a40a1a4e9fc3a5f1.bin"
+bytes = 587776
+sha256 = "b46febc196183ca09968b2bf153a562878c932f976df4367a40a1a4e9fc3a5f1"
+sources = ["cntrl-midi-state-baseline-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher/patch_switcher.ino.hex", "cntrl-midi-state-baseline-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex"]
+
+[[files]]
+path = "firmware/60100000-9db45a4f5cd193610121d563d541b44de36e73cd20e2c7243caf3a9d1f71354d.bin"
+bytes = 569344
+sha256 = "9db45a4f5cd193610121d563d541b44de36e73cd20e2c7243caf3a9d1f71354d"
+sources = ["cntrl-trs-ports-device-backup/previous.hex"]
+
+[[firmware]]
+path = "firmware/60000000-27a74468b118d160e7b5045be627703fe458b0d8e32196cb0daf8f19d8e0e896.bin"
+load_address = 0x60000000
+entry_address = 0x60001000
+requires_boot_selector = false
+
+[[firmware.sources]]
+path = "cntrl-8994-restoration-check/cntrl/maker/morningstar/mc/firmware/build/patch-switcher/patch_switcher.ino.hex"
+hex_sha256 = "003f9a4aa742c10b6d884a0ae6eec23f3828a2dc4f1c462360adca857481f229"
+stock_region_removed = false
+
+[[firmware.sources]]
+path = "cntrl-8994-restoration-check/cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex"
+hex_sha256 = "003f9a4aa742c10b6d884a0ae6eec23f3828a2dc4f1c462360adca857481f229"
+stock_region_removed = false
+
+[[firmware]]
+path = "firmware/60100000-e1fd60d27d75251d87b322b881af69de400213062218f80ee32da1be7d1ec467.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-09r5f2xa/new-image.hex"
+hex_sha256 = "3b2d18dbbbefa18894a431cd116ed23fdf472ced9403a7f8de742f14e6033027"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware.sources]]
+path = "cntrl-before-latest-_gk93xu8/previous-upload-image.hex"
+hex_sha256 = "3b2d18dbbbefa18894a431cd116ed23fdf472ced9403a7f8de742f14e6033027"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-7447dc3972184ce03866fecb2072af73637b5aa6224b5a7647aa4ae89eda97c4.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-09r5f2xa/previous-upload-image.hex"
+hex_sha256 = "170913c2d4dfca6c6220a6b05e4f62b4c5695767a058f875959bb1d68ff5ef54"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-112262a793481921aed60b43881aa5c5d6721784aa4656435421db6f6eb5e1fb.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-88mcxda6/new-image.hex"
+hex_sha256 = "ae71f900ba2c7d337c5fae28085361f65994a7acef8ea3b68e68d8af77d6864c"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-776b67b213dcf9cab6b413b728d3ceb72a876b64daaa1d2754479599c5ded6bc.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-88mcxda6/previous-upload-image.hex"
+hex_sha256 = "a5a55038995c717750d09108c3899a45726c98ad92ace24d98d7f309c7d03d95"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware.sources]]
+path = "cntrl-before-latest-c7cgdnly/new-image.hex"
+hex_sha256 = "a5a55038995c717750d09108c3899a45726c98ad92ace24d98d7f309c7d03d95"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-fda948fa1eaa175ea2d72a78a93140a7951600f47e80ef50b6d30f6e41b27bdd.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-_gk93xu8/new-image.hex"
+hex_sha256 = "d3ac20cd377d37b0335d9a8ca9de42375781eab042486b2f25439bec199f32ee"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware.sources]]
+path = "cntrl-before-latest-o86vh8d8/previous-upload-image.hex"
+hex_sha256 = "d3ac20cd377d37b0335d9a8ca9de42375781eab042486b2f25439bec199f32ee"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-a4a7a32cb98aee52184ca2564b484d0fca8733ea15d12e8e7b6c6e72669e7ed3.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-a6503_ns/new-image.hex"
+hex_sha256 = "7f4cc06d1734a5ff139dfed7083ccb5c910ef6423c2387fcae4e80c9e13822e1"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware.sources]]
+path = "cntrl-before-latest-e3atwo4s/previous-upload-image.hex"
+hex_sha256 = "7f4cc06d1734a5ff139dfed7083ccb5c910ef6423c2387fcae4e80c9e13822e1"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-eacc10723be29f53ee0aaa66254f02731c45f2fb45fa3d84c0ccfc6bb9528637.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-a6503_ns/previous-upload-image.hex"
+hex_sha256 = "f8bf56989c0a97c89824628069973d15be3a7e1b43f91a0ba2c144309a4182dd"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware.sources]]
+path = "cntrl-before-latest-l3d48dgh/new-image.hex"
+hex_sha256 = "f8bf56989c0a97c89824628069973d15be3a7e1b43f91a0ba2c144309a4182dd"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-352c4598b6a2da1f76793816d99d4aaa60c5d4e2ce7fc91aa14fe915536635bd.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-c7cgdnly/previous-upload-image.hex"
+hex_sha256 = "51d6041763ca8d9c5db6ca8928ceb668f2969af823b575e36ddaa652600b95d8"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware.sources]]
+path = "cntrl-before-latest-e3atwo4s/new-image.hex"
+hex_sha256 = "51d6041763ca8d9c5db6ca8928ceb668f2969af823b575e36ddaa652600b95d8"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-52a7248f00e7fe454b7c615196ec797223cbb6dd317226fb6c0c3042fe20d9a6.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-l3d48dgh/previous-upload-image.hex"
+hex_sha256 = "92ee7cd428810e7633f219d94fd7d813699d0f117c98049daca7a0aa1579365e"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware.sources]]
+path = "cntrl-before-latest-pbksvnug/new-image.hex"
+hex_sha256 = "92ee7cd428810e7633f219d94fd7d813699d0f117c98049daca7a0aa1579365e"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60100000-5ef1a7c0d23188591afbd0bf3ac9a3f20dff316283c0fd3c1f4f2890f1e3e11d.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-before-latest-o86vh8d8/new-image.hex"
+hex_sha256 = "1c9bdace3578c439a19194dacad2467801c9fea4b29aa8d7db1cd383c73c7bc2"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware.sources]]
+path = "cntrl-before-latest-pbksvnug/previous-upload-image.hex"
+hex_sha256 = "1c9bdace3578c439a19194dacad2467801c9fea4b29aa8d7db1cd383c73c7bc2"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60000000-435624eb8b77b7a7701757905dc3511ae790a31bf9e62411f7842f1a745b9c27.bin"
+load_address = 0x60000000
+entry_address = 0x60001000
+requires_boot_selector = false
+
+[[firmware.sources]]
+path = "cntrl-cable-disabled.hex"
+hex_sha256 = "9667c5e3481744fc1bcfea305968f6d182a05904a4e4cb2303f83a06bcc50806"
+stock_region_removed = false
+
+[[firmware]]
+path = "firmware/60100000-b21ee29bc27eb7c71fcf59310c81517da5d91f686c992c92f045fe1217a45e0d.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-clock-8994-stage/cntrl/maker/morningstar/mc/firmware/build/boot-switch/cntrl/patch_switcher.ino.hex"
+hex_sha256 = "2bd89b0ff267b256d4d94ed826dc80c578a648ede9c4f8bf6fc6fbd3b3551fc4"
+stock_region_removed = false
+
+[[firmware.sources]]
+path = "cntrl-clock-8994-stage/cntrl/maker/morningstar/mc/firmware/build/boot-switch/cntrl.hex"
+hex_sha256 = "2bd89b0ff267b256d4d94ed826dc80c578a648ede9c4f8bf6fc6fbd3b3551fc4"
+stock_region_removed = false
+
+[[firmware.sources]]
+path = "cntrl-clock-8994-stage/cntrl/maker/morningstar/mc/firmware/build/boot-switch/combined.hex"
+hex_sha256 = "f4d088065d123d3e8f38633ab54bd48273b90d4b86cc3466f6d327cc6b6cd3c4"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000
+
+[[firmware]]
+path = "firmware/60000000-490b2620a742b7c001842b9348bf480127ee6960299a25351d22e5e362da0b2a.bin"
+load_address = 0x60000000
+entry_address = 0x60001000
+requires_boot_selector = false
+
+[[firmware.sources]]
+path = "cntrl-midi-files-final-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher/patch_switcher.ino.hex"
+hex_sha256 = "59125f21cac1a324b71c86c99de0965eb395a4f7e0c8df216fa6b234743d1bc1"
+stock_region_removed = false
+
+[[firmware.sources]]
+path = "cntrl-midi-files-final-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex"
+hex_sha256 = "59125f21cac1a324b71c86c99de0965eb395a4f7e0c8df216fa6b234743d1bc1"
+stock_region_removed = false
+
+[[firmware]]
+path = "firmware/60000000-7813f491987a6321d668c2cc79909fdc14c72655f62aeb1a74fd360e737f8a05.bin"
+load_address = 0x60000000
+entry_address = 0x60001000
+requires_boot_selector = false
+
+[[firmware.sources]]
+path = "cntrl-midi-state-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher/patch_switcher.ino.hex"
+hex_sha256 = "8aaabebca8e8339bb04154a13fe3bc7c72c15a80d7ee412fb1b5ffa7955d5876"
+stock_region_removed = false
+
+[[firmware.sources]]
+path = "cntrl-midi-state-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex"
+hex_sha256 = "8aaabebca8e8339bb04154a13fe3bc7c72c15a80d7ee412fb1b5ffa7955d5876"
+stock_region_removed = false
+
+[[firmware]]
+path = "firmware/60000000-b46febc196183ca09968b2bf153a562878c932f976df4367a40a1a4e9fc3a5f1.bin"
+load_address = 0x60000000
+entry_address = 0x60001000
+requires_boot_selector = false
+
+[[firmware.sources]]
+path = "cntrl-midi-state-baseline-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher/patch_switcher.ino.hex"
+hex_sha256 = "17541da48a1532293efce11a5d75308a2a7a0fefa125b74605f25bcf9863ad12"
+stock_region_removed = false
+
+[[firmware.sources]]
+path = "cntrl-midi-state-baseline-8994/cntrl/maker/morningstar/mc/firmware/build/patch-switcher.hex"
+hex_sha256 = "17541da48a1532293efce11a5d75308a2a7a0fefa125b74605f25bcf9863ad12"
+stock_region_removed = false
+
+[[firmware]]
+path = "firmware/60100000-9db45a4f5cd193610121d563d541b44de36e73cd20e2c7243caf3a9d1f71354d.bin"
+load_address = 0x60100000
+entry_address = 0x60101000
+requires_boot_selector = true
+
+[[firmware.sources]]
+path = "cntrl-trs-ports-device-backup/previous.hex"
+hex_sha256 = "6b6d94c2dfca3f7e996250d1ebaca3f79105b46441523bc34178078d88850952"
+stock_region_removed = true
+excluded_address_start = 0x60000000
+excluded_address_end_exclusive = 0x60100000

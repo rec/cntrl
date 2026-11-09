@@ -1,0 +1,894 @@
+--- /dev/null
++++ b/cntrl/maker/morningstar/mc/firmware/expression-pedal.md
+@@ -0,0 +1,49 @@
++# Expression pedal
++
++Configure the jack as an expression input in the setup, then give it a MIDI
++assignment. For a pedal on configurable jack 2 controlling expression (CC 11)
++on DIN channel 1:
++
++```toml
++[trs_ports]
++configurable-2 = 'expression'
++
++[utility_pages.expression.configurable-2]
++output = 'din'
++channel = 1
++controller = 11
++minimum = 0
++maximum = 127
++reverse = false
++curve = 'linear'
++```
++
++Each jack has one assignment per setup. Channel is 1..16; controller and both
++limits are 0..127. Set `reverse = true` for maximum at the heel. The `slow`
++curve rises more gradually at the heel (quadratic); `fast` rises more quickly
++there (inverse quadratic). Both reach the configured endpoints. The assignment
++is included in compiled setup downloads and history. An assignment requires an
++expression-role input and an available output in the target configuration.
++
++Browse with F to **Expression**. A selects a jack. Press C to begin calibration,
++move fully to heel and press C, then move fully to toe and press C again.
++B cancels, as does leaving the page. A short or missing stroke cannot replace
++a working calibration. The page shows the jack, channel/controller, calibrated
++position, connection and calibration status. Heel and toe can have either
++electrical polarity. Calibration is shared by setups and stored separately on
++the SD card in two checksummed records per jack.
++
++Assignments work during performance, including away from this page. On setup
++selection, calibration, or reconnection, movement is required before sending.
++No CC is sent during calibration on that jack. Filtered position and movement
++hysteresis suppress repeated stationary values. When an output is busy, only
++the most recent position is eligible. The cable tester and panic retain their
++exclusive access.
++
++The MC6 Pro role driver supplies the ring and samples the tip of a passive TRS
++pedal. The reader alternates weak tip biases and measures them after settling.
++A tip that follows both biases is treated as disconnected. This is a continuity
++estimate, not a mechanical jack switch. Physical qualification remains pending:
++with a known pedal, verify silence unplugged and at rest, the complete heel/toe
++travel in both directions, and unplug/reconnect at heel, middle and toe. No
++expression pedal was available for those checks.
+--- /dev/null
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/expression_pedals.h
+@@ -0,0 +1,142 @@
++#pragma once
++#include <Arduino.h>
++#include <SD.h>
++#include <cntrl/document.h>
++#include <cstdio>
++
++// The TRS role driver owns the ring supply and pin mux. Only probe a tip while
++// its committed role is expression. Bias settles between polls, never in a delay.
++class ExpressionPedals {
++public:
++    void load_calibrations() {
++        for (unsigned i = 0; i < 4; ++i) {
++            char path[40]; filename(i, path);
++            auto file = SD.sdfs.open(path, O_RDONLY);
++            if (!file) continue;
++            for (unsigned slot = 0; slot < 2; ++slot) {
++                Record record{};
++                if (!file.seekSet(slot * sizeof(record)) || file.read(&record, sizeof(record)) != sizeof(record)) continue;
++                if (record.valid() && record.generation > saved_[i].generation) saved_[i] = record;
++            }
++        }
++    }
++    void configure(const cntrl::UtilityPageSettings &settings) {
++        for (unsigned i = 0; i < 4; ++i) {
++            assignments_[i] = settings.expression[i];
++            inputs_[i].reset();
++        }
++        phase_ = 0;
++        cancel();
++    }
++    void cancel() {
++        if (stage_ != Capture::idle) inputs_[selected_].disarm();
++        stage_ = Capture::idle;
++        message_ = nullptr;
++    }
++    void next_jack() { cancel(); selected_ = (selected_ + 1) % 4; }
++    void calibrate(bool enabled) {
++        if (!enabled) { cancel(); return; }
++        if (stage_ == Capture::idle) {
++            stage_ = Capture::heel;
++            message_ = nullptr;
++            inputs_[selected_].reset();
++            return;
++        }
++        int reading = inputs_[selected_].reading();
++        if (reading < 0) { message_ = "No pedal"; return; }
++        if (stage_ == Capture::heel) {
++            heel_ = reading;
++            stage_ = Capture::toe;
++            message_ = nullptr;
++            return;
++        }
++        cntrl::ExpressionCalibration cal{uint16_t(heel_), uint16_t(reading)};
++        if (!cal.valid()) { message_ = "Travel too short"; return; }
++        if (!save(selected_, cal)) { message_ = "Save failed"; return; }
++        cancel(); inputs_[selected_].reset();
++    }
++
++    // Sample all enabled jacks in parallel, with at most four ADC reads per poll.
++    template<class TipPin, class Available, class Send>
++    void poll(uint32_t now, TipPin tip_pin, Available available, Send send) {
++        if (uint32_t(now - tick_) < (phase_ ? 2u : 8u)) return;
++        tick_ = now;
++        for (unsigned slot = 0; slot < 4; ++slot) {
++            const unsigned i = (first_ + slot) % 4;
++            const int pin = tip_pin(i);
++            if (pin < 0) {
++                inputs_[i].reset();
++                if (selected_ == i && stage_ != Capture::idle) cancel();
++                continue;
++            }
++            if (phase_ == 0) { pinMode(pin, INPUT_PULLDOWN); continue; }
++            if (phase_ == 1) { low_[i] = analogRead(pin); pinMode(pin, INPUT_PULLUP); continue; }
++            inputs_[i].sample(low_[i], analogRead(pin), saved_[i].cal);
++            pinMode(pin, INPUT);
++            if (stage_ != Capture::idle && i == selected_) {
++                if (inputs_[i].reading() < 0 && stage_ == Capture::toe) {
++                    stage_ = Capture::heel;
++                    message_ = "Reconnect: heel";
++                }
++                continue;
++            }
++            const auto &a = assignments_[i];
++            if (!a.channel) continue;
++            if (!available(a.output)) { inputs_[i].disarm(); continue; }
++            int value = inputs_[i].pending(a);
++            if (value >= 0) {
++                uint8_t data[] = {uint8_t(0xb0 | (a.channel - 1)), a.controller, uint8_t(value)};
++                if (send(a.output, data)) inputs_[i].sent(value);
++            }
++        }
++        phase_ = (phase_ + 1) % 3;
++        if (!phase_) first_ = (first_ + 1) % 4;
++    }
++    unsigned selected() const { return selected_; }
++    void status(bool enabled, char (&title)[40], char (&position)[40], char (&prompt)[40]) const {
++        const auto &a = assignments_[selected_];
++        if (a.channel) std::snprintf(title, sizeof(title), "Jack %u  CC %u Ch %u", selected_ + 1, a.controller, a.channel);
++        else std::snprintf(title, sizeof(title), "Jack %u  Unassigned", selected_ + 1);
++        const auto &input = inputs_[selected_];
++        if (!enabled) std::strcpy(position, "Select expression role");
++        else if (input.reading() < 0) std::strcpy(position, "No pedal");
++        else if (!saved_[selected_].cal.valid()) std::snprintf(position, sizeof(position), "Raw %d  Uncalibrated", input.reading());
++        else std::snprintf(position, sizeof(position), "%d%%  Calibrated", (input.position() * 100 + 511) / 1023);
++        std::snprintf(prompt, sizeof(prompt), "%s", message_ ? message_ : !enabled ? "Use TRS Ports" :
++            stage_ == Capture::heel ? "Heel down: C" : stage_ == Capture::toe ? "Toe down: C" : "C: Calibrate");
++    }
++private:
++    struct Record {
++        uint32_t generation = 0;
++        cntrl::ExpressionCalibration cal{};
++        uint32_t crc = 0;
++        uint32_t checksum() const { return cntrl::checksum(reinterpret_cast<const uint8_t *>(this), 8); }
++        bool valid() const { return generation && cal.valid() && crc == checksum(); }
++    };
++    static_assert(sizeof(Record) == 12);
++    static void filename(unsigned jack, char (&path)[40]) {
++        std::snprintf(path, sizeof(path), "/cntrl/expression-%u.cal", jack + 1);
++    }
++    bool save(unsigned jack, cntrl::ExpressionCalibration cal) {
++        char path[40]; filename(jack, path);
++        auto file = SD.sdfs.open(path, O_CREAT | O_RDWR);
++        Record record{saved_[jack].generation + 1, cal};
++        record.crc = record.checksum();
++        unsigned offset = ((record.generation - 1) & 1) * sizeof(record);
++        Record verify{};
++        if (!file || !file.seekSet(offset) || file.write(&record, sizeof(record)) != sizeof(record)
++            || !file.sync() || !file.seekSet(offset) || file.read(&verify, sizeof(verify)) != sizeof(verify)
++            || std::memcmp(&record, &verify, sizeof(record))) return false;
++        saved_[jack] = record;
++        return true;
++    }
++    cntrl::ExpressionInput inputs_[4];
++    cntrl::ExpressionAssignment assignments_[4];
++    Record saved_[4];
++    enum class Capture { idle, heel, toe };
++    Capture stage_ = Capture::idle;
++    unsigned selected_ = 0, phase_ = 0, first_ = 0;
++    uint32_t tick_ = 0;
++    int heel_ = 0, low_[4] = {};
++    const char *message_ = nullptr;
++};
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
+@@ -5,6 +5,7 @@
+ #endif
+ #include <Arduino.h>
+ #include <SD.h>
++#include "expression_pedals.h"
+ #include <USBHost_t36.h>
+ #include <malloc.h>
+ extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
+@@ -295,6 +296,7 @@
+ #endif
+     }
+     void leave_utility_page() {
++        if (utility_pages_.page() == UtilityPages::Page::expression) expression_.cancel();
+ #if CNTRL_CABLE_TEST
+         if (utility_pages_.page() == UtilityPages::Page::cable) leave_cable_test();
+ #endif
+@@ -304,6 +306,7 @@
+     }
+     void configure_utility_pages(const cntrl::UtilityPageSettings &settings) override {
+         leave_utility_page();
++        expression_.configure(settings);
+         utility_pages_.configure(settings);
+         enter_utility_page();
+     }
+@@ -351,6 +354,10 @@
+             return;
+         }
+ #endif
++        if (utility_pages_.page() == UtilityPages::Page::expression) {
++            expression_.calibrate(trs_ports.expression_pin(expression_.selected()) >= 0);
++            return;
++        }
+         utility_pages_.tap(now);
+     }
+     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override {
+@@ -458,6 +465,34 @@
+         if (splash_session.take_redraw()) renderer_.invalidate();
+         renderer_.draw(micros());
+     }
++    void load_expression_calibrations() { expression_.load_calibrations(); }
++    bool expression_button(unsigned i) {
++        if (utility_pages_.page() != UtilityPages::Page::expression || i > 1) return false;
++        if (i == 0) expression_.next_jack(); else expression_.cancel();
++        return true;
++    }
++    void poll_expression(uint32_t now) {
++        if (!documents.document().valid()) return;
++        expression_.poll(now, [](unsigned i) { return trs_ports.expression_pin(i); },
++            [this](const char *out) {
++#if CNTRL_PANIC
++                if (panic_owns_midi) return false;
++#endif
++#if CNTRL_CABLE_TEST
++                if (cable_test.enabled()) return false;
++#endif
++                return available(out) && !documents.busy() && !documents.dirty();
++            },
++            [this](const char *out, const uint8_t *bytes) {
++                return !patch_work_pending() && output_idle() && send(out, bytes, 3);
++            });
++        if (utility_pages_.page() == UtilityPages::Page::expression && uint32_t(now - expression_refresh_) >= 80) {
++            expression_refresh_ = now;
++            char title[40], position[40], prompt[40];
++            expression_.status(trs_ports.expression_pin(expression_.selected()) >= 0, title, position, prompt);
++            utility_pages_.expression_status(title, position, prompt);
++        }
++    }
+     void display(uint32_t now, bool transfer_busy) {
+ #if CNTRL_CABLE_TEST
+         transfer_busy = transfer_busy || cable_test.enabled();
+@@ -516,6 +551,8 @@
+         }
+     }
+     PixelThrob throb_;
++    ExpressionPedals expression_;
++    uint32_t expression_refresh_ = 0;
+     UtilityPages utility_pages_;
+     bool port_save_pending_ = false;
+     bool performance_visible_ = false;
+@@ -1111,6 +1148,7 @@
+     initialize_displays(false);
+     board.begin();
+     card.ready = SD.begin(BUILTIN_SDCARD);
++    if (card.ready) board.load_expression_calibrations();
+     capture_disk_space();
+     font_files.ready = card.ready;
+     splash_card.ready = card.ready;
+@@ -1189,6 +1227,7 @@
+ #if CNTRL_PANIC
+                     if (board.panic_owns_midi && i != 2 && i != 5) continue;
+ #endif
++                    if ((events[i] & press_event) && board.expression_button(i)) continue;
+                     if ((events[i] & press_event) && board.trs_button(i)) continue;
+                     if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
+                     if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
+@@ -1227,6 +1266,10 @@
+     songs.tick();
+     if (board.reply_ready()) font_files.poll(now, board);
+     board.poll();
++#if CNTRL_ORIGINAL_FIRMWARE
++    if (!firmware_visit_stage)
++#endif
++        board.poll_expression(now);
+ #if CNTRL_SWITCHES
+     static bool switches_open = false;
+     if (switches_open && !board.switches.open()) {
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/trs_ports.h
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/trs_ports.h
+@@ -39,6 +39,7 @@
+         }
+         initialized_ = true;
+     }
++    int expression_pin(unsigned i) const { return mode_[i] == Mode::expression ? tip[i] : -1; }
+     Mode mode(unsigned i) const { return mode_[i]; }
+     bool idle() const {
+         for (const auto &tx : serial_) if (tx && tx->transmitting()) return false;
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
+@@ -17,7 +17,7 @@
+ 
+ class UtilityPages {
+ public:
+-    enum class Page { tap, status, firmware, cable, panic, ports, confirm_firmware };
++    enum class Page { tap, status, firmware, cable, panic, ports, expression, confirm_firmware };
+     void configure(const cntrl::UtilityPageSettings &settings) {
+         settings_ = settings;
+         using R = cntrl::UtilityPageSettings;
+@@ -28,7 +28,7 @@
+     bool browse(bool reverse, const char *setup) {
+         if (page_ == Page::confirm_firmware) return !reverse;
+         do {
+-            page_ = Page((unsigned(page_) + (reverse ? 5 : 1)) % 6);
++            page_ = Page((unsigned(page_) + (reverse ? 6 : 1)) % 7);
+ #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
+             if (page_ == Page::cable) continue;
+ #endif
+@@ -69,6 +69,15 @@
+         uptime_ += uint32_t(now - previous_); previous_ = now;
+         clock_.poll(now_us); tap_.flash(now, 0);
+     }
++    void expression_status(const char *title, const char *position, const char *prompt) {
++        const char *fields[] = {title, position, prompt};
++        for (unsigned i = 0; i < 3; ++i) {
++            if (std::strcmp(expression_lines_[i], fields[i])) {
++                std::snprintf(expression_lines_[i], sizeof(expression_lines_[i]), "%s", fields[i]);
++                dirty_ = true;
++            }
++        }
++    }
+     bool due(uint32_t now) {
+         using R = cntrl::UtilityPageSettings;
+         if (dirty_) return true;
+@@ -90,7 +99,7 @@
+         }
+         const unsigned heading_text_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
+         const unsigned heading_height = heading_text_height + 4;
+-        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : "Firmware";
++        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::expression ? "Expression" : "Firmware";
+         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
+         pane.heading_band = true;
+         auto &header = pane.lines[0];
+@@ -113,6 +122,13 @@
+                 pane.circles[i] = {uint16_t(i < 2 ? 78 : 130), uint16_t(i % 2 ? 94 : 68), 12, 0, color, 0};
+             }
+             pane.toggle = {128, 110, true, cable.enabled, false};
++            return pane;
++        }
++        if (page_ == Page::expression) {
++            const unsigned font = settings_[R::status_font];
++            for (unsigned i = 0; i < 3; ++i)
++                line(pane, i + 1, expression_lines_[i], 30 + 24 * i, 20, font, true);
++            line(pane, 4, "A: Jack   B: Cancel", 105, 18, font, true);
+             return pane;
+         }
+         if (page_ == Page::ports) {
+@@ -267,6 +283,7 @@
+             return;
+         }
+     }
++    char expression_lines_[3][40] = {};
+     cntrl::UtilityPageSettings settings_;
+     cntrl::TapTempo tap_;
+     cntrl::ClockTempo clock_;
+--- a/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
++++ b/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
+@@ -815,7 +815,12 @@
+     assert(!std::strcmp(view.lines[0].text, "TRS Ports"));
+     assert(!std::strcmp(view.lines[1].text, "Jack 1: Off"));
+     assert(!std::strcmp(view.lines[2].text, "MIDI Type A"));
++    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::expression);
++    pages.expression_status("Jack 2  CC 11 Ch 1", "50%  Calibrated", "C: Calibrate");
++    view = pages.view(4010, 4010000, status);
++    assert(!std::strcmp(view.lines[0].text, "Expression") && !std::strcmp(view.lines[2].text, "50%  Calibrated"));
+     pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
++    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::expression);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::ports);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::panic);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::cable);
+--- a/cntrl/patch_switcher/compiler.py
++++ b/cntrl/patch_switcher/compiler.py
+@@ -369,6 +369,7 @@
+             },
+         )
+         utility_settings = utility_pages.pack(show, target)
++        expression = utility_pages.pack_expression(show, target, TRS_JACKS)
+     except (OSError, ValueError) as error:
+         raise CompilationError(errors + [str(error)]) from error
+     if generated:
+@@ -436,7 +437,8 @@
+         + b''.join(struct.pack('<I', b) for b in banks)
+     )
+     body += (
+-        b'CNAM'
++        expression
++        + b'CNAM'
+         + b''.join(names)
+         + compiler.pack(roots, switch_records)
+         + display_records
+@@ -462,7 +464,8 @@
+             | int(show.is_midi_interface) << 9
+             | int(show.animation_color_cycle) << 10
+             | int(show.usb_device_midi) << 11
+-            | int(show.usb_host_midi) << 12,
++            | int(show.usb_host_midi) << 12
++            | (utility_pages.EXPRESSION_FLAG if expression else 0),
+             crc32(body),
+             show.screensaver_timeout * 1000,
+         )
+--- a/cntrl/patch_switcher/models.py
++++ b/cntrl/patch_switcher/models.py
+@@ -428,7 +428,28 @@
+     model_config = ConfigDict(extra='forbid')
+ 
+ 
++class ExpressionAssignment(BaseModel, frozen=True):
++    output: str
++    channel: Annotated[int, Field(strict=True, ge=1, le=16)]
++    controller: Annotated[int, Field(strict=True, ge=0, le=127)]
++    minimum: Annotated[int, Field(strict=True, ge=0, le=127)] = 0
++    maximum: Annotated[int, Field(strict=True, ge=0, le=127)] = 127
++    reverse: bool = Field(default=False, strict=True)
++    curve: Literal['linear', 'slow', 'fast'] = 'linear'
++
++    @model_validator(mode='after')
++    def ordered_range(self) -> 'ExpressionAssignment':
++        if self.maximum < self.minimum:
++            raise ValueError(
++                'minimum exceeds maximum; use reverse for toe-to-heel control'
++            )
++        return self
++
++    model_config = ConfigDict(extra='forbid')
++
++
+ class UtilityPages(BaseModel, frozen=True):
++    expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)
+     refresh_interval: Annotated[
+         float,
+         Field(strict=True, ge=0.001, le=65.535),
+--- a/cntrl/patch_switcher/resolved.py
++++ b/cntrl/patch_switcher/resolved.py
+@@ -29,7 +29,7 @@
+     if (
+         magic != b'CSW1'
+         or version != DOCUMENT_VERSION
+-        or flags >> 13
++        or flags & ~(0x1FFF | utility_pages.EXPRESSION_FLAG)
+         or length != len(data)
+         or crc32(data[28:]) != crc
+     ):
+@@ -39,6 +39,8 @@
+         raise ValueError('missing setup metadata')
+     nb = struct.unpack_from('<H', data, meta + 4)[0]
+     cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
++    if flags & utility_pages.EXPRESSION_FLAG:
++        cursor += utility_pages.EXPRESSION.size * 4
+     if data[cursor : cursor + 4] != b'CNAM':
+         raise ValueError('missing name metadata')
+     cursor += 4
+@@ -92,7 +94,12 @@
+     }
+     repeat = struct.unpack_from('<H', data, meta + 12)[0]
+     result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
+-    result['utility_pages'] = utility_pages.unpack(data, meta + 16)
++    pages = utility_pages.unpack(data, meta + 16)
++    if flags & utility_pages.EXPRESSION_FLAG:
++        pages['expression'] = utility_pages.unpack_expression(
++            data, meta + METADATA.size + ni * 64 + nb * 8 + np * 4, TRS_JACKS
++        )
++    result['utility_pages'] = pages
+     modes = data[meta + METADATA.size - 4 : meta + METADATA.size]
+     if any(m >= len(TRS_MODES) for m in modes):
+         raise ValueError('invalid TRS port role')
+--- a/cntrl/patch_switcher/utility_pages.py
++++ b/cntrl/patch_switcher/utility_pages.py
+@@ -84,3 +84,71 @@
+         )
+     result['digits'], result['decimals'] = w[19], w[20]
+     return result
++
++
++def pack_expression(
++    show: models.Setup, target: models.Target, jacks: tuple[str, ...]
++) -> bytes:
++    assignments = show.utility_pages.expression
++    if not assignments:
++        return b''
++    data = bytearray(EXPRESSION.size * 4)
++    for jack, assignment in assignments.items():
++        if jack not in jacks or 'expression' not in target.trs_ports.get(jack, []):
++            raise ValueError(f'expression jack {jack} unavailable on target')
++        if show.trs_ports.get(jack) != 'expression':
++            raise ValueError(f'expression jack {jack} requires the expression TRS role')
++        if assignment.output not in target.outputs:
++            raise ValueError(
++                f'expression jack {jack}: unavailable output {assignment.output!r}'
++            )
++        if (
++            assignment.output == 'usb-device'
++            and not show.usb_device_midi
++            or assignment.output == 'usb-host'
++            and not show.usb_host_midi
++        ):
++            raise ValueError(
++                f'expression jack {jack}: disabled output {assignment.output!r}'
++            )
++        name = assignment.output.encode('ascii')
++        if not name or len(name) >= 32:
++            raise ValueError('expression output name must fit the MIDI output record')
++        EXPRESSION.pack_into(
++            data,
++            EXPRESSION.size * jacks.index(jack),
++            name,
++            assignment.channel,
++            assignment.controller,
++            assignment.minimum,
++            assignment.maximum,
++            assignment.reverse,
++            CURVES.index(assignment.curve),
++        )
++    return bytes(data)
++
++
++def unpack_expression(
++    data: bytes, offset: int, jacks: tuple[str, ...]
++) -> dict[str, object]:
++    result: dict[str, object] = {}
++    for i in range(4):
++        output, channel, cc, low, high, reverse, curve = EXPRESSION.unpack_from(
++            data, offset + i * EXPRESSION.size
++        )
++        if channel:
++            result[jacks[i]] = dict(
++                output=output.split(b'\0')[0].decode('ascii'),
++                channel=channel,
++                controller=cc,
++                minimum=low,
++                maximum=high,
++                reverse=bool(reverse),
++                curve=CURVES[curve],
++            )
++    return result
++
++
++EXPRESSION = struct.Struct('<32s6B')
++EXPRESSION_FLAG = 1 << 15
++CURVES = ('linear', 'slow', 'fast')
+--- a/firmware/Makefile
++++ b/firmware/Makefile
+@@ -2,6 +2,9 @@
+ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+ .PHONY: test
+ test:
++	mkdir -p "$(ROOT)/build"
++	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_expression.cpp" -o "$(ROOT)/build/test_expression"
++	"$(ROOT)/build/test_expression"
+ 	mkdir -p "$(ROOT)/build"
+ 	$(CXX) -std=c++17 -Wall -Wextra -Werror -I"$(ROOT)/include" -fsanitize=address,undefined "$(ROOT)/test/test_usb_session.cpp" -o "$(ROOT)/build/test_usb_session"
+ 	"$(ROOT)/build/test_usb_session"
+--- a/firmware/README.md
++++ b/firmware/README.md
+@@ -521,6 +521,19 @@
+ Interrupted and short writes are covered by host tests; filesystem and physical
+ power-loss guarantees depend on the board's storage implementation and require
+ separate qualification.
++
++### Expression pedal
++
++The Expression utility page selects a jack, shows live travel and calibration
++status, and captures its heel and toe. Setup assignments map movement to MIDI
++CCs with a range, direction and response curve. See the
++[expression pedal guide](../cntrl/maker/morningstar/mc/firmware/expression-pedal.md)
++for the setup fields, controls and hardware qualification limits.
++
++When expression assignments are present, setup flag bit 15 adds four 38-byte
++records between the bank indices and `CNAM`. Each record holds a 32-byte
++output name followed by channel, CC, minimum, maximum, reverse and curve bytes.
++A zero channel denotes an unassigned jack.
+ 
+ ### Auxiliary patch-manager pages (format 26)
+ 
+--- a/firmware/include/cntrl/document.h
++++ b/firmware/include/cntrl/document.h
+@@ -62,7 +62,7 @@
+     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
+         if (length < 76 || length > max_document || std::memcmp(bytes, "CSW1", 4)
+             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
+-            || u32(bytes + 8) != length || bytes[19] > 31 || u32(bytes + 24) > 2147483000u
++            || u32(bytes + 8) != length || (bytes[19] & ~0x9f) || u32(bytes + 24) > 2147483000u
+             || checksum(bytes + 28, length - 28) != u32(bytes + 20)) return false;
+         unsigned ni = u16(bytes + 12), nc = u16(bytes + 14), np = u16(bytes + 16);
+         unsigned meta = 76 + ni * 68 + nc * 68 + np * 82;
+@@ -91,6 +91,20 @@
+             || (right[R::tempo_font] != 8 && right[R::tempo_font] != 9) || right[R::status_font] > 2 || right[R::title_font] > 2
+             || !right[R::digits] || right[R::digits] > 4 || right[R::decimals] > 2) return false;
+         unsigned names = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
++        if (bytes[19] & 0x80) {
++            if (names + expression_section_size > length) return false;
++            for (unsigned i = 0; i < 4; ++i) {
++                const uint8_t *p = bytes + names + i * expression_record_size;
++                if (!p[32]) continue;
++                if (midi::TrsMode(bytes[meta + trs_modes_offset + i]) != midi::TrsMode::expression || !text_valid(p, 32)
++                    || !output_valid(bytes + meta + trs_modes_offset, p, hardware)
++                    || (!std::strcmp(reinterpret_cast<const char *>(p), "usb-device") && !(bytes[19] & 8))
++                    || (!std::strcmp(reinterpret_cast<const char *>(p), "usb-host") && !(bytes[19] & 16))
++                    || p[32] > 16 || p[33] > 127 || p[34] > p[35] || p[35] > 127
++                    || p[36] > 1 || p[37] > 2) return false;
++            }
++            names += expression_section_size;
++        }
+         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
+         unsigned end = names + 4;
+         for (unsigned i = 0; i < np * 3; ++i) {
+@@ -230,11 +244,19 @@
+     UtilityPageSettings utility_pages() const {
+         UtilityPageSettings settings;
+         for (unsigned i = 0; i < UtilityPageSettings::count; ++i) settings.words[i] = u16(data_ + metadata() + utility_page_settings_offset + 2 * i);
++        if (data_[19] & 0x80) for (unsigned i = 0; i < 4; ++i) {
++            const uint8_t *p = bank(patches()) + i * expression_record_size;
++            auto &a = settings.expression[i];
++            std::memcpy(a.output, p, sizeof(a.output));
++            a.channel = p[32]; a.controller = p[33]; a.minimum = p[34]; a.maximum = p[35];
++            a.reverse = p[36]; a.curve = ExpressionCurve(p[37]);
++        }
+         return settings;
+     }
+     bool splash() const { return data_[19] & 1; }
+     bool animation_color_cycle() const { return data_[19] & 4; }
+     bool usb_device_midi() const { return data_[19] & 8; }
++    unsigned expression_size() const { return (data_[19] & 0x80) ? expression_section_size : 0; }
+     const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }
+     bool usb_host_midi() const { return data_[19] & 16; }
+     bool is_midi_interface() const { return data_[19] & 2; }
+--- a/firmware/include/cntrl/documents.h
++++ b/firmware/include/cntrl/documents.h
+@@ -472,14 +472,16 @@
+                 || std::memcmp(old.named_patch(i), current.named_patch(i), 66)) ++patches;
+         for (unsigned i = 0; i < old.instruments() || i < current.instruments(); ++i)
+             if (i >= old.instruments() || i >= current.instruments() || std::memcmp(old.instrument(i), current.instrument(i), 68)) ++routes;
+-        settings = std::memcmp(old.trs_modes(), current.trs_modes(), 4) || old.navigation_hold_ms() != current.navigation_hold_ms()
++        settings = old.expression_size() != current.expression_size()
++            || std::memcmp(old.bank(old.patches()), current.bank(current.patches()), old.expression_size())
++            || std::memcmp(old.trs_modes(), current.trs_modes(), 4) || old.navigation_hold_ms() != current.navigation_hold_ms()
+             || old.navigation_repeat_ms() != current.navigation_repeat_ms() || old.brightness() != current.brightness()
+             || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
+             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
+             || old.animation_color_cycle() != current.animation_color_cycle()
+             || old.screensaver_timeout() != current.screensaver_timeout() || old.transition_ms() != current.transition_ms();
+         auto names_end = [](const Document &d) {
+-            unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + 4;
++            unsigned cursor = unsigned(d.bank(d.patches()) - d.data()) + d.expression_size() + 4;
+             for (unsigned i = 0; i < d.patches() * 3; ++i) { unsigned n = u16(d.data() + cursor); cursor += 2 + (n == 65535 ? 0 : n); }
+             return cursor;
+         };
+--- /dev/null
++++ b/firmware/include/cntrl/expression.h
+@@ -0,0 +1,62 @@
++#pragma once
++#include <algorithm>
++#include <cstdlib>
++#include <cstdint>
++
++namespace cntrl {
++constexpr unsigned expression_record_size = 38; // 32-byte output followed by six assignment bytes.
++constexpr unsigned expression_section_size = 4 * expression_record_size;
++
++struct ExpressionCalibration {
++    uint16_t heel = 0, toe = 0;
++    bool valid() const { return heel <= 1023 && toe <= 1023 && std::abs(int(toe) - int(heel)) >= 64; }
++};
++
++enum class ExpressionCurve : uint8_t { linear, slow, fast };
++
++struct ExpressionAssignment {
++    char output[32] = {};
++    uint8_t channel = 0, controller = 0, minimum = 0, maximum = 127;
++    bool reverse = false;
++    ExpressionCurve curve = ExpressionCurve::linear;
++
++    int value(unsigned position) const {
++        unsigned x = reverse ? 1023 - position : position;
++        if (curve == ExpressionCurve::slow) x = (x * x + 511) / 1023;
++        if (curve == ExpressionCurve::fast) x = 1023 - ((1023 - x) * (1023 - x) + 511) / 1023;
++        return minimum + (x * (maximum - minimum) + 511) / 1023;
++    }
++};
++
++class ExpressionInput {
++public:
++    void reset() { samples_ = 0; baseline_ = last_value_ = -1; position_ = -1; }
++    void disarm() { baseline_ = last_value_ = -1; }
++    int position() const { return position_; } // 0..1023 between calibrated endpoints.
++    int reading() const { return samples_ >= 3 ? filtered_ : -1; }
++
++    // An open wiper follows the two weak biases. Only accept successive connected samples.
++    void sample(int low, int high, const ExpressionCalibration &cal) {
++        if (low < 0 || high < 0 || low > 1023 || high > 1023 || std::abs(high - low) > 256) { reset(); return; }
++        const int raw = (low + high + 1) / 2;
++        filtered_ = samples_ ? (3 * filtered_ + raw + 2) / 4 : raw;
++        if (samples_ < 3) ++samples_;
++        if (samples_ < 3 || !cal.valid()) { position_ = -1; return; }
++        position_ = std::clamp((filtered_ - int(cal.heel)) * 1023 / (int(cal.toe) - int(cal.heel)), 0, 1023);
++    }
++    // Call after every sample. Keep just the current value if an output is busy.
++    int pending(const ExpressionAssignment &assignment) {
++        if (position_ < 0 || !assignment.channel) return -1;
++        if (baseline_ < 0) { baseline_ = position_; baseline_raw_ = filtered_; last_value_ = assignment.value(position_); return -1; }
++        int value = assignment.value(position_);
++        if (value == last_value_) return -1;
++        const bool moved = std::abs(position_ - baseline_) >= 8 && std::abs(filtered_ - baseline_raw_) >= 3;
++        if (!moved && position_ != 0 && position_ != 1023) return -1;
++        return value;
++    }
++    void sent(int value) { last_value_ = value; baseline_ = position_; baseline_raw_ = filtered_; }
++private:
++    unsigned samples_ = 0;
++    int filtered_ = 0, position_ = -1, baseline_ = -1, baseline_raw_ = 0, last_value_ = -1;
++};
++}
+--- a/firmware/include/cntrl/utility_page_settings.h
++++ b/firmware/include/cntrl/utility_page_settings.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include <cstdint>
++#include "expression.h"
+ 
+ namespace cntrl {
+ struct UtilityPageSettings {
+@@ -10,6 +11,7 @@
+         off_color, on_color, ring_color, digits, decimals, background, title_font, count
+     };
+     uint16_t words[count] = {};
++    ExpressionAssignment expression[4] = {};
+     uint16_t operator[](Word word) const { return words[word]; }
+ };
+ } // namespace cntrl
+--- /dev/null
++++ b/firmware/test/test_expression.cpp
+@@ -0,0 +1,46 @@
++#include <cntrl/expression.h>
++#include <cassert>
++
++using namespace cntrl;
++
++int main() {
++    ExpressionCalibration cal{100, 900};
++    ExpressionAssignment a;
++    a.channel = 1; a.minimum = 10; a.maximum = 110;
++    for (auto curve : {ExpressionCurve::linear, ExpressionCurve::slow, ExpressionCurve::fast}) {
++        a.curve = curve;
++        for (bool reverse : {false, true}) {
++            a.reverse = reverse;
++            assert(a.value(0) == (reverse ? 110 : 10));
++            assert(a.value(1023) == (reverse ? 10 : 110));
++            for (unsigned x = 1; x <= 1023; ++x)
++                assert(reverse ? a.value(x) <= a.value(x - 1) : a.value(x) >= a.value(x - 1));
++        }
++    }
++    a.reverse = false;
++    a.curve = ExpressionCurve::slow; assert(a.value(512) == 35);
++    a.curve = ExpressionCurve::fast; assert(a.value(512) == 85);
++    a.curve = ExpressionCurve::linear;
++    ExpressionInput input;
++    for (int n = 0; n < 12; ++n) {
++        input.sample(500, 500, {}); assert(input.pending(a) < 0);
++    }
++    input.reset();
++    for (int n = 0; n < 100; ++n) {
++        input.sample(500 + n % 3, 504 - n % 2, cal);
++        assert(input.pending(a) < 0); // stationary jitter across a CC boundary
++    }
++    for (int n = 0; n < 50; ++n) input.sample(950, 950, cal);
++    assert(input.position() == 1023 && input.pending(a) == 110);
++    // A busy destination receives only the latest position on recovery.
++    for (int n = 0; n < 50; ++n) input.sample(80, 80, cal);
++    assert(input.pending(a) == 10);
++    input.sent(10); assert(input.pending(a) < 0);
++    input.sample(0, 1023, cal);
++    assert(input.reading() == -1 && input.pending(a) < 0);
++    for (int n = 0; n < 12; ++n) {
++        input.sample(950, 950, {900, 100});
++        assert(input.pending(a) < 0); // reconnection and reversed physical travel
++    }
++    assert(input.position() == 0);
++}
+--- a/plan/feature-set.md
++++ b/plan/feature-set.md
+@@ -27,6 +27,10 @@
+ 
+ ## 2. Expression-pedal input
+ 
++**Implementation:** The [Expression utility page](../cntrl/maker/morningstar/mc/firmware/expression-pedal.md)
++provides calibration and setup-specific CC mappings. Physical full-travel,
++stationary-noise and disconnect qualification remains pending.
++
+ **Outcome:** An expression pedal sends MIDI CC messages for volume, wah, effect
+ mix or another configured parameter.
+ 
+--- /dev/null
++++ b/test/test_expression.py
+@@ -0,0 +1,74 @@
++"""Expression assignments in editable and compiled setups."""
++
++from pathlib import Path
++
++import pytest
++import tomlkit
++
++from cntrl.patch_switcher import compiler, models, resolved
++
++
++@pytest.fixture
++def target() -> models.Target:
++    data = compiler.read_document(Path('firmware/test/target.json'))
++    return models.Target.model_validate(data).model_copy(
++        update={'trs_ports': {'configurable-2': ['expression']}}
++    )
++
++
++def setup(**fields: object) -> dict[str, object]:
++    return {
++        'trs_ports': {'configurable-2': 'expression'},
++        'utility_pages': {
++            'expression': {
++                'configurable-2': {
++                    'output': 'din',
++                    'channel': 16,
++                    'controller': 11,
++                    'minimum': 20,
++                    'maximum': 96,
++                    'reverse': True,
++                    'curve': 'slow',
++                    **fields,
++                }
++            }
++        },
++    }
++
++
++def test_expression_assignment_survives_download(target: models.Target) -> None:
++    source = setup()
++    compiled = compiler.compile_show(source, {}, [], target)
++    exported = tomlkit.parse(resolved.export(compiled)).unwrap()
++    assert (
++        models.Setup.model_validate(exported).utility_pages.expression
++        == models.Setup.model_validate(source).utility_pages.expression
++    )
++    assert compiler.compile_show(exported, {}, [], target) == compiled
++
++
++def test_expression_requires_the_configured_input_role(target: models.Target) -> None:
++    source = setup()
++    source['trs_ports'] = {}
++    with pytest.raises(
++        compiler.CompilationError, match='requires the expression TRS role'
++    ):
++        compiler.compile_show(source, {}, [], target)
++
++
++@pytest.mark.parametrize(
++    'fields',
++    [
++        {'channel': 0},
++        {'controller': 128},
++        {'minimum': 110},
++        {'curve': 'unknown'},
++        {'output': 'unavailable'},
++    ],
++)
++def test_invalid_expression_assignment_is_rejected(
++    target: models.Target, fields: dict[str, object]
++) -> None:
++    source = setup(**fields)
++    with pytest.raises(compiler.CompilationError):
++        compiler.compile_show(source, {}, [], target)

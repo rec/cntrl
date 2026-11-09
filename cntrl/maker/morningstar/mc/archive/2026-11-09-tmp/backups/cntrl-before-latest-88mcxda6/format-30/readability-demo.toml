@@ -1,0 +1,113 @@
+brightness = 192
+splash = false
+animation_color_cycle = false
+is_midi_interface = false
+usb_device_midi = true
+usb_host_midi = true
+screensaver_timeout = 0
+seed = 0
+fill_in_styles = false
+background_color = "0xFFF8D8"
+foreground_brightness_limit = 0.5
+pad = 4
+contrast = 0.6
+tags = []
+
+[scrolling]
+horizontal_duration = 0.075
+vertical_duration = 0.2
+send = "right"
+patches = "right"
+cycles = "up"
+
+[target_pulse]
+period = 4.0
+delay = 2.0
+minimum = 64
+maximum = 128
+
+[navigation]
+hold_delay = 1.5
+repeat_interval = 1.0
+
+[utility_pages]
+refresh_interval = 1.0
+clock_timeout = 1.0
+clocks_per_quarter = 24
+clock_average_beats = 1
+tap_intervals = 4
+minimum_taps = 2
+minimum_interval = 0.1
+reset_gap = 3.0
+flash_fraction = 0.4
+flasher_diameter = 40
+annulus = 5
+title_height = 12
+tempo_height = 40
+padding = 2
+tempo_font = "CourierPrime"
+status_font = "classic"
+title_font = "classic"
+off_color = "0x620000"
+on_color = "0xFF0000"
+ring_color = "0x000000"
+background_color = "0xFFF283"
+digits = 3
+decimals = 1
+
+[style]
+background_color = "0xFFF8D8"
+foreground_color = "0x202040"
+
+[windows.next]
+page = "patch"
+
+[windows.sent]
+page = "patch"
+
+[windows.undo]
+page = "patch"
+
+[pages.patch]
+fields = ["comparison", "display_name", "name"]
+
+[pages.patch.line_styles.display_name]
+font_name = "AtkinsonNextSemiBold"
+
+[pages.patch.line_styles.name]
+font_name = "BarlowCondensedSemiBold"
+
+[tag_styles]
+
+[parameters.comparison]
+value = "Atkinson / Barlow"
+
+[fonts]
+AtkinsonNextSemiBold = "fonts/fe42ef04.cfont"
+BarlowCondensedSemiBold = "fonts/6550fefa.cfont"
+
+[instruments]
+
+[patches]
+
+[[patch_cycles.samples]]
+name = "Breathy Sax"
+patches = []
+
+[[patch_cycles.samples]]
+name = "BowedSaw"
+patches = []
+
+[[patch_cycles.samples]]
+name = "GuitHero 0123"
+patches = []
+
+[[patch_cycles.samples]]
+name = "WX Clari"
+patches = []
+
+[switches]
+
+[definitions]
+profiles = []
+programs = []

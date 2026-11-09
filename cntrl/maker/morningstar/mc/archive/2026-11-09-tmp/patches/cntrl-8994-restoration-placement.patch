@@ -1,0 +1,6 @@
+diff --git a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
+@@ -139,1 +139,1 @@
+-    bool state(unsigned operation, uint32_t value) override { return patch_state(operation, value); }
++    FLASHMEM bool state(unsigned operation, uint32_t value) override { return patch_state(operation, value); }

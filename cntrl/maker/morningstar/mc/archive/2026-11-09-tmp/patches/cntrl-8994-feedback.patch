@@ -1,0 +1,60 @@
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
+@@ -2,6 +2,7 @@
+ #include <cntrl/hardware.h>
+ #include <cntrl/tempo.h>
+ #include <cntrl/clock_generator.h>
++#include <cntrl/midi_outputs.h>
+ #include <cntrl/cable_test.h>
+ #include <cntrl/panic.h>
+ #include "show_graphics.h"
+@@ -51,6 +52,13 @@
+     unsigned clock_outputs() const { return settings_[cntrl::UtilityPageSettings::clock_outputs]; }
+     unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
+     bool clock_page() const { return page_ == Page::clock_transport || page_ == Page::clock_tempo; }
++    void clock_connections(unsigned available) {
++        available &= clock_outputs();
++        if (available != available_outputs_) {
++            available_outputs_ = available;
++            if (clock_page()) dirty_ = true;
++        }
++    }
+     void clock_button(unsigned button, uint32_t now_us, unsigned available) {
+         using R = cntrl::UtilityPageSettings;
+         if (page_ == Page::clock_transport) {
+@@ -123,12 +131,22 @@
+             std::snprintf(tempo, sizeof(tempo), "%u BPM", generator.bpm());
+             if (page_ == Page::clock_transport) {
+                 const char *state = external_ ? (clock_.active() ? "External: receiving" : "External: waiting")
+-                    : !clock_outputs() ? "No outputs configured" : generator.running() ? "Internal: running" : "Internal: stopped";
++                    : !clock_outputs() ? "No outputs configured" : !available_outputs_ ? "Outputs offline" : generator.running() ? "Internal: running" : "Internal: stopped";
+                 line(pane, 1, state, 30, 19, font, true);
+                 if (external_) number_text(tempo, sizeof(tempo), clock_.period_us(), true, true);
+-                line(pane, 2, tempo, 52, 20, font, true);
+-                line(pane, 3, "A Start  B Continue", 82, 16, font, true);
+-                line(pane, 4, "C Stop  E Source", 102, 16, font, true);
++                line(pane, 2, tempo, 48, 19, font, true);
++                detail[0] = 0;
++                auto output = [&](const cntrl::midi::OutputConnection &port) {
++                    if (!(clock_outputs() & (1u << port.route))) return;
++                    auto used = std::strlen(detail);
++                    std::snprintf(detail + used, sizeof(detail) - used, "%s%s%s", used ? " " : "",
++                        port.label, available_outputs_ & (1u << port.route) ? "" : "*");
++                };
++                for (const auto &port : cntrl::midi::output_connections) output(port);
++                for (const auto &port : cntrl::midi::usb_output_connections) output(port);
++                line(pane, 3, detail, 67, 14, font, true);
++                line(pane, 4, "A Start  B Continue", 82, 16, font, true);
++                line(pane, 5, "C Stop  E Source", 102, 16, font, true);
+             } else {
+                 std::snprintf(detail, sizeof(detail), "Slot %u: %u BPM", slot_ + 1, settings_.words[R::slot1 + slot_]);
+                 line(pane, 1, detail, 28, 18, font, true);
+@@ -246,7 +264,7 @@
+         return pane;
+     }
+ private:
+-    unsigned slot_ = 0;
++    unsigned available_outputs_ = 0, slot_ = 0;
+     bool external_ = false;
+     void recall_slot() {
+         unsigned bpm = settings_.words[cntrl::UtilityPageSettings::slot1 + slot_];

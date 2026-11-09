@@ -1,0 +1,5 @@
+font-demo False
+pman False
+readability-demo True
+sd-font-demo False
+simple-setup True

@@ -1,0 +1,803 @@
+diff --git a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
+index 747200a..8a2f1e7 100644
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
+@@ -278,9 +278,31 @@ public:
+         if (utility_pages_.page() == UtilityPages::Page::panic) leave_panic();
+ #endif
+     }
++    unsigned clock_available() const {
++        unsigned mask = 0;
++        for (const auto &c : cntrl::midi::output_connections)
++            if (available(c.name)) mask |= 1u << c.route;
++        for (const auto &c : cntrl::midi::usb_output_connections)
++            if (available(c.name)) mask |= 1u << c.route;
++        return mask;
++    }
++    bool stop_clock() {
++        utility_pages_.generator.stop();
++        utility_pages_.generator.poll(micros(), clock_available(), *this);
++        return !utility_pages_.generator.stopping();
++    }
++    bool clock_control(unsigned button, bool pressed) {
++        if (!utility_pages_.clock_page()) return false;
++        if (pressed) {
++            if (button == 5) browse_utility_page(held_controls & (1u << 3));
++            else utility_pages_.clock_button(button, micros(), clock_available());
++        }
++        return true;
++    }
+     void configure_utility_pages(const cntrl::UtilityPageSettings &settings) override {
+         leave_utility_page();
+         utility_pages_.configure(settings);
++        bridge_.clock_owner(utility_pages_.clock_owner());
+         enter_utility_page();
+     }
+     void browse_utility_page(bool reverse) override {
+@@ -295,13 +317,14 @@ public:
+             error("Stock firmware unavailable");
+ #endif
+         } else renderer_.transition(reverse, documents.document().transition_ms(), 2);
++        if (utility_pages_.clock_page()) controller.cancel_gesture();
+         enter_utility_page();
+     }
+     void tap_tempo(uint32_t now) override {
+         if (!documents.document().valid()) return;
+ #if CNTRL_CABLE_TEST
+         if (utility_pages_.page() == UtilityPages::Page::cable) {
+-            if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy())) return;
++            if (!cable_test.enabled() && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
+             controller.cancel_gesture();
+             cable_test.toggle(now);
+             bridge_.configure(cable_test.enabled() ? false : runtime.interface);
+@@ -310,7 +333,7 @@ public:
+ #endif
+ #if CNTRL_PANIC
+         if (utility_pages_.page() == UtilityPages::Page::panic) {
+-            if (!panic_owns_midi && (patch_work_pending() || !output_idle() || documents.busy())) return;
++            if (!panic_owns_midi && (patch_work_pending() || !output_idle() || documents.busy() || !stop_clock())) return;
+             controller.cancel_gesture();
+             if (!panic_owns_midi) bridge_.configure(false);
+             panic_owns_midi = true;
+@@ -362,6 +385,11 @@ public:
+         bridge_.host_connected(bool(host_midi));
+         uint32_t begin = micros(), now = millis();
+         bridge_.connected(usb_configuration != 0, now);
++        if (!documents.document().valid()) utility_pages_.generator.stop();
++        unsigned available = clock_available();
++        utility_pages_.clock_connections(available);
++        bridge_.clock_owner(utility_pages_.clock_owner());
++        utility_pages_.generator.poll(micros(), available, *this);
+         // Separate source limits plus an aggregate time budget. Rotate the
+         // first source, so a saturated cable cannot starve later sources.
+         for (unsigned i = 0; i < 3 && uint32_t(micros() - begin) < 180; ++i) {
+@@ -750,6 +778,7 @@ bool request_stock(uint8_t pair, const cntrl::SongContinuation *continuation) {
+     if (firmware_visit_stage || !valid_exit_pair(pair) || documents.busy() || documents.dirty() || songs_transfer.busy() || !board.output_idle()) return false;
+     auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
+     if (!can_enter_stock(state) || (continuation && !card.ready)) return false;
++    if (!board.stop_clock()) return false;
+     firmware_visit = FirmwareVisitRecord(); firmware_exit_pair = pair; firmware_visit_offset = 0;
+     if (continuation) {
+         firmware_visit.token = state.next; firmware_visit.continuation = *continuation;
+@@ -1148,6 +1177,7 @@ void poll_target() {
+ #if CNTRL_PANIC
+                     if (board.panic_owns_midi && i != 2 && i != 5) continue;
+ #endif
++                    if (board.clock_control(i, events[i] & press_event)) continue;
+                     if (events[i] & press_event) controller.button(mirrored_button(i), true, now);
+                     if (events[i] & release_event) controller.button(mirrored_button(i), false, now);
+                 }
+diff --git a/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h b/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
+index 8017089..1897da4 100644
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
+@@ -1,6 +1,8 @@
+ #pragma once
+ #include <cntrl/hardware.h>
+ #include <cntrl/tempo.h>
++#include <cntrl/clock_generator.h>
++#include <cntrl/midi_outputs.h>
+ #include <cntrl/cable_test.h>
+ #include <cntrl/panic.h>
+ #include "show_graphics.h"
+@@ -17,10 +19,14 @@ struct PerformanceStatus {
+ 
+ class UtilityPages {
+ public:
+-    enum class Page { tap, status, firmware, cable, panic, confirm_firmware };
++    enum class Page { tap, status, firmware, cable, panic, clock_transport, clock_tempo, confirm_firmware };
+     void configure(const cntrl::UtilityPageSettings &settings) {
++        generator.stop();
++        slot_ = 0;
+         settings_ = settings;
+         using R = cntrl::UtilityPageSettings;
++        external_ = settings[R::clock_external];
++        recall_slot();
+         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
+         clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
+         dirty_ = true;
+@@ -28,7 +34,8 @@ public:
+     bool browse(bool reverse, const char *setup) {
+         if (page_ == Page::confirm_firmware) return !reverse;
+         do {
+-            page_ = Page((unsigned(page_) + (reverse ? 4 : 1)) % 5);
++            constexpr unsigned count = unsigned(Page::confirm_firmware);
++            page_ = Page((unsigned(page_) + (reverse ? count - 1 : 1)) % count);
+ #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
+             if (page_ == Page::cable) continue;
+ #endif
+@@ -41,13 +48,44 @@ public:
+         dirty_ = true;
+         return false;
+     }
++    cntrl::ClockGenerator generator;
++    unsigned clock_outputs() const { return settings_[cntrl::UtilityPageSettings::clock_outputs]; }
++    unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
++    bool clock_page() const { return page_ == Page::clock_transport || page_ == Page::clock_tempo; }
++    void clock_connections(unsigned available) {
++        available &= clock_outputs();
++        if (available != available_outputs_) {
++            available_outputs_ = available;
++            if (clock_page()) dirty_ = true;
++        }
++    }
++    void clock_button(unsigned button, uint32_t now_us, unsigned available) {
++        using R = cntrl::UtilityPageSettings;
++        if (page_ == Page::clock_transport) {
++            if (button == 2) generator.stop();
++            if (!external_ && button < 2)
++                generator.start(now_us, clock_outputs() & available, button == 1);
++            if (button == 4) { generator.stop(); external_ = !external_; }
++        } else if (page_ == Page::clock_tempo) {
++            if (button < 2) {
++                unsigned bpm = std::clamp(int(generator.bpm()) + (button ? 1 : -1), 20, 600);
++                generator.set_tempo((60000000u + bpm / 2) / bpm);
++            } else if (button == 2) {
++                if (++slot_ == 4 || !settings_.words[R::slot1 + slot_]) slot_ = 0;
++                recall_slot();
++            }
++        }
++        dirty_ = true;
++    }
+     Page page() const { return page_; }
+     void revisit(const char *setup) {
+         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
+         dirty_ = true;
+     }
+     void tap(uint32_t now) {
+-        if (page_ == Page::tap) tap_.tap(now);
++        if (page_ == Page::tap) {
++            if (tap_.tap(now)) generator.set_tempo(tap_.period() * 1000);
++        }
+         else if (page_ == Page::firmware) page_ = Page::confirm_firmware;
+         else if (page_ == Page::confirm_firmware) page_ = Page::firmware;
+         else return;
+@@ -62,7 +100,7 @@ public:
+     bool due(uint32_t now) {
+         using R = cntrl::UtilityPageSettings;
+         if (dirty_) return true;
+-        if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
++        if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
+         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
+     }
+     cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready) {
+@@ -80,13 +118,45 @@ public:
+         }
+         const unsigned heading_text_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
+         const unsigned heading_height = heading_text_height + 4;
+-        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : "Firmware";
++        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : "Firmware";
+         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
+         pane.heading_band = true;
+         auto &header = pane.lines[0];
+         header.graphics.line_height += 4;
+         header.graphics.foreground = 0xffff; header.graphics.background = 0;
+         header.graphics.top = header.y; header.y = 0;
++        if (clock_page()) {
++            const unsigned font = settings_[R::status_font];
++            char tempo[32], detail[64];
++            std::snprintf(tempo, sizeof(tempo), "%u BPM", generator.bpm());
++            if (page_ == Page::clock_transport) {
++                const char *state = external_ ? (clock_.active() ? "External: receiving" : "External: waiting")
++                    : !clock_outputs() ? "No outputs configured" : !available_outputs_ ? "Outputs offline" : generator.running() ? "Internal: running" : "Internal: stopped";
++                line(pane, 1, state, 30, 19, font, true);
++                if (external_) number_text(tempo, sizeof(tempo), clock_.period_us(), true, true);
++                line(pane, 2, tempo, 48, 19, font, true);
++                detail[0] = 0;
++                auto output = [&](const cntrl::midi::OutputConnection &port) {
++                    if (!(clock_outputs() & (1u << port.route))) return;
++                    auto used = std::strlen(detail);
++                    std::snprintf(detail + used, sizeof(detail) - used, "%s%s%s", used ? " " : "",
++                        port.label, available_outputs_ & (1u << port.route) ? "" : "*");
++                };
++                for (const auto &port : cntrl::midi::output_connections) output(port);
++                for (const auto &port : cntrl::midi::usb_output_connections) output(port);
++                line(pane, 3, detail, 67, 14, font, true);
++                line(pane, 4, "A Start  B Continue", 82, 16, font, true);
++                line(pane, 5, "C Stop  E Source", 102, 16, font, true);
++            } else {
++                std::snprintf(detail, sizeof(detail), "Slot %u: %u BPM", slot_ + 1, settings_.words[R::slot1 + slot_]);
++                line(pane, 1, detail, 28, 18, font, true);
++                line(pane, 2, tempo, 50, 24, font, true);
++                line(pane, 3, "A -1   B +1   C Slot", 80, 17, font, true);
++                std::snprintf(detail, sizeof(detail), "Late %uus  Lost %u", generator.late_us, generator.skipped + generator.blocked);
++                line(pane, 4, detail, 102, 16, font, true);
++            }
++            return pane;
++        }
+         if (page_ == Page::cable) {
+             const bool active = cable.enabled;
+             const unsigned font = settings_[R::status_font];
+@@ -194,6 +264,12 @@ public:
+         return pane;
+     }
+ private:
++    unsigned available_outputs_ = 0, slot_ = 0;
++    bool external_ = false;
++    void recall_slot() {
++        unsigned bpm = settings_.words[cntrl::UtilityPageSettings::slot1 + slot_];
++        if (bpm) generator.set_tempo((60000000u + bpm / 2) / bpm);
++    }
+     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
+         using R = cntrl::UtilityPageSettings;
+         unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];
+diff --git a/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp b/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
+index 4a4c5cc..3cb3ef6 100644
+--- a/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
++++ b/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
+@@ -662,6 +662,9 @@ static void test_utility_pages() {
+     custom.configure(settings);
+     assert(custom.view(0, 0, {}).lines[0].graphics.font == 1);
+     settings.words[cntrl::UtilityPageSettings::title_font] = 0;
++    settings.words[cntrl::UtilityPageSettings::clock_outputs] = 1;
++    settings.words[cntrl::UtilityPageSettings::slot1] = 90;
++    settings.words[cntrl::UtilityPageSettings::slot2] = 144;
+     UtilityPages pages; pages.configure(settings);
+     PerformanceStatus status; status.cycles = 10; status.patches = 59;
+     status.ram_used[0] = 49 * 1024; status.ram_free[0] = 463 * 1024;
+@@ -809,7 +812,24 @@ static void test_utility_pages() {
+     assert(!std::strcmp(view.lines[3].text, "Incomplete"));
+     view = pages.view(4003, 4003000, status, {}, cntrl::Panic::Status::sending);
+     assert(!std::strcmp(view.lines[3].text, "Sending"));
++    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
++    view = pages.view(4005, 4005000, status);
++    assert(!std::strcmp(view.lines[0].text, "MIDI Clock"));
++    assert(pages.generator.bpm() == 120); // Two taps changed the initial 90 BPM.
++    pages.clock_button(0, 4005000, 1);
++    assert(pages.generator.running() && pages.clock_owner() == 1);
++    pages.clock_button(4, 4006000, 1); // External mode stops the internal stream.
++    assert(!pages.generator.running());
++    pages.clock_button(0, 4007000, 1);
++    assert(!pages.generator.running());
++    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
++    pages.clock_button(2, 4008000, 1);
++    assert(pages.generator.bpm() == 144);
++    pages.clock_button(0, 4009000, 1);
++    assert(pages.generator.bpm() == 143);
+     pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
++    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
++    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::panic);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::cable);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::firmware);
+diff --git a/cntrl/patch_switcher/compiler.py b/cntrl/patch_switcher/compiler.py
+index bd6340f..ec28a99 100644
+--- a/cntrl/patch_switcher/compiler.py
++++ b/cntrl/patch_switcher/compiler.py
+@@ -1408,5 +1408,5 @@ def _optional(value: int | None) -> int:
+ 
+ 
+ HEADER = struct.Struct('<4sHHIHHHHII')
+-METADATA = struct.Struct('<4sHHHBBHH23H')
+-DOCUMENT_VERSION = 28
++METADATA = struct.Struct('<4sHHHBBHH29H')
++DOCUMENT_VERSION = 30
+diff --git a/cntrl/patch_switcher/models.py b/cntrl/patch_switcher/models.py
+index ba4ef16..0504803 100644
+--- a/cntrl/patch_switcher/models.py
++++ b/cntrl/patch_switcher/models.py
+@@ -429,6 +429,12 @@ class NavigationSettings(BaseModel, frozen=True):
+ 
+ 
+ class UtilityPages(BaseModel, frozen=True):
++    clock_outputs: list[str] = Field(default_factory=list)
++    clock_bpms: Annotated[
++        list[Annotated[int, Field(strict=True, ge=20, le=600)]],
++        Field(min_length=1, max_length=4),
++    ] = Field(default_factory=lambda: [120])
++    clock_source: Literal['internal', 'external'] = 'internal'
+     refresh_interval: Annotated[
+         float,
+         Field(strict=True, ge=0.001, le=65.535),
+diff --git a/cntrl/patch_switcher/utility_pages.py b/cntrl/patch_switcher/utility_pages.py
+index 609dfd2..2d1f0e2 100644
+--- a/cntrl/patch_switcher/utility_pages.py
++++ b/cntrl/patch_switcher/utility_pages.py
+@@ -21,6 +21,20 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
+         )
+     if r.flasher_diameter + 2 * r.annulus + 2 * r.padding > target.display_width:
+         raise ValueError('utility_pages: flasher exceeds display width')
++    if len(set(r.clock_outputs)) != len(r.clock_outputs):
++        raise ValueError('utility_pages.clock_outputs: duplicate output')
++    for name in r.clock_outputs:
++        if (
++            name not in CLOCK_ROUTES
++            or name not in target.outputs
++            or (
++                (name == 'usb-device' and not show.usb_device_midi)
++                or (name == 'usb-host' and not show.usb_host_midi)
++            )
++        ):
++            raise ValueError(
++                f'utility_pages.clock_outputs: unavailable output {name!r}'
++            )
+     return [
+         round(r.refresh_interval * 1000),
+         round(r.clock_timeout * 1000),
+@@ -45,11 +59,15 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
+         r.decimals,
+         graphics.rgb565(graphics.color(r.background_color)),
+         ['classic', 'Arial', 'ComicSansMS'].index(r.title_font),
++        sum(1 << CLOCK_ROUTES[n] for n in r.clock_outputs),
++        int(r.clock_source == 'external'),
++        *r.clock_bpms,
++        *([0] * (4 - len(r.clock_bpms))),
+     ]
+ 
+ 
+ def unpack(data: bytes, offset: int) -> dict[str, object]:
+-    w = struct.unpack_from('<23H', data, offset)
++    w = struct.unpack_from('<29H', data, offset)
+     result: dict[str, object] = {}
+     names = [
+         'refresh_interval',
+@@ -83,4 +101,10 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
+             r * 255 // 31, g * 255 // 63, b * 255 // 31
+         )
+     result['digits'], result['decimals'] = w[19], w[20]
++    result['clock_outputs'] = [n for n, i in CLOCK_ROUTES.items() if w[23] & (1 << i)]
++    result['clock_source'] = 'external' if w[24] else 'internal'
++    result['clock_bpms'] = [b for b in w[25:29] if b]
+     return result
++
++
++CLOCK_ROUTES = {'din': 0, 'trs': 1, 'usb-device': 6, 'usb-host': 8}
+diff --git a/doc/midi-clock.md b/doc/midi-clock.md
+new file mode 100644
+index 0000000..43979cb
+--- /dev/null
++++ b/doc/midi-clock.md
+@@ -0,0 +1,62 @@
++# MIDI Clock utility pages
++
++Use **MIDI Clock** to control transport. A sends Start, B sends Continue,
++C sends Stop, and E switches between internal and external clock. The internal
++clock starts stopped, and runs across page changes. F browses pages; hold D
++and press F to browse backward from a clock page. An asterisk marks an unavailable output. The transport controls on
++this page take precedence over patch actions.
++
++**Clock Tempo** shows the working BPM and the selected stored slot. A and B
++adjust the working tempo by one BPM; C recalls the next slot, wrapping to the
++first. Two taps on **Tap Tempo** set the working tempo to the measured period.
++After a pause the first tap preserves the tempo until a second valid tap.
++Changing tempo during playback preserves fractional tick phase. Setup slots
++are authored values; live adjustments last until another slot or setup is
++selected.
++
++Configure these preferences under the existing utility page settings:
++
++```toml
++[utility_pages]
++clock_outputs = ['din', 'usb-device']
++clock_bpms = [90, 120, 135]
++clock_source = 'internal'
++```
++
++Set one to four integer tempos (20–600 BPM). The first is selected on setup
++activation. The default is one 120 BPM slot and no outputs. Choose available
++target output names: DIN, TRS, USB device or USB host. Disabled USB ports and
++duplicate destinations are rejected. These fields use setup format 30; recompile
++setups and embedded song sources for the new firmware.
++
++Internal mode reserves the configured outputs for local Clock, Start, Continue
++and Stop, even while stopped. Other forwarded messages and unselected routes
++retain their existing behavior. At Start or Continue only currently available
++outputs join. Disconnect removes an output from that run. Reconnection requires
++a fresh transport command. External mode forwards through the existing bridge
++when enabled and shows the measured incoming tempo. Loss of incoming clock
++shows “waiting” after the setup's clock timeout. Selecting external mode,
++activating a setup, entering stock firmware or starting a port-owning
++diagnostic stops local generation.
++
++The scheduler generates 24 ticks per quarter note. Each poll sends at most one
++current tick per active destination; time spent late never creates a burst.
++A blocked destination misses its tick independently. Transport precedes ticks
++on that destination. Stop is retried while the output is available.
++
++## Timing qualification
++
++Clock Tempo reports the worst scheduler lateness (microseconds) and the sum of
++skipped deadlines and failed tick submissions since Start/Continue. At 120 BPM
++the expected wire spacing is 20,833⅓ microseconds. To measure physical jitter,
++capture the selected output with an independently timestamped MIDI receiver,
++first idle, then during display scrolling and a setup download. Record observed
++tick count, mean and maximum interval error, transport order and page counters.
++Scheduler counters measure submission, not receipt at an instrument.
++
++The native scheduler test models alternating 307 µs and 1,999 µs poll delays
++across timer rollover. At 120 BPM it submits 24 ticks in 500 ms; intervals
++from Start through the last tick range from 20,352 to 22,753 µs with a mean
++of 20,833⅓ µs. A separate 250 ms stall at 240 BPM yields one current tick
++and 23 skipped deadlines. These are simulated poll delays, not measurements
++on a physical MIDI port.
+diff --git a/firmware/README.md b/firmware/README.md
+index 0808082..ac37427 100644
+--- a/firmware/README.md
++++ b/firmware/README.md
+@@ -522,7 +522,7 @@ separate qualification.
+ 
+ ### Auxiliary patch-manager pages (format 26)
+ 
+-The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test and Panic using
++The rightmost window starts on Status. F cycles through Tap Tempo, Status, Firmware, MIDI Cable Test, Panic, MIDI Clock and Clock Tempo using
+ horizontal scrolling. Hold D to browse backward; pressing D while F is held also
+ steps backward immediately. F never repeats automatically. C taps only on Tap
+ Tempo. Sending and undo keep an auxiliary utility page in place.
+@@ -584,13 +584,15 @@ digits = 3
+ decimals = 1
+ ```
+ 
+-The 23 metadata words are, in order: refresh milliseconds, clock-timeout
++The first 23 utility-page metadata words are, in order: refresh milliseconds, clock-timeout
+ milliseconds, clocks per quarter, clock averaging beats, tap averaging intervals,
+ minimum taps, minimum tap interval milliseconds, tap reset-gap milliseconds,
+ flash fraction in thousandths, center diameter, annulus width, title height, tempo height,
+ padding, tempo font ID, status font ID, off RGB565, on RGB565, ring RGB565,
+ integer digits, decimal digits, page-background RGB565, and title font ID.
+-Recompile saved setups for format 27, which adds the configurable title font.
++Setup format 30 adds six words for the output mask, external-source flag and
++four zero-padded BPM slots. Recompile saved setups for the new format. See
++[MIDI Clock](../doc/midi-clock.md) for transport controls and timing qualification.
+ `flash_fraction` accepts 0.001..1 in steps of 0.001, including percentage strings.
+ 
+ The Firmware page has the shared centered title and a two-line “Use stock firmware”
+diff --git a/firmware/include/cntrl/clock_generator.h b/firmware/include/cntrl/clock_generator.h
+new file mode 100644
+index 0000000..8062696
+--- /dev/null
++++ b/firmware/include/cntrl/clock_generator.h
+@@ -0,0 +1,65 @@
++#pragma once
++#include "midi_bridge.h"
++#include <array>
++
++namespace cntrl {
++// Transport is retried per destination. Expired clock ticks are never queued.
++class ClockGenerator {
++public:
++    void set_tempo(uint32_t quarter_us) {
++        phase_ = phase_ * quarter_us / quarter_us_;
++        quarter_us_ = quarter_us;
++    }
++    unsigned bpm() const { return (60000000u + quarter_us_ / 2) / quarter_us_; }
++    bool running() const { return running_; }
++    unsigned skipped = 0, blocked = 0, late_us = 0;
++
++    void start(uint32_t now, unsigned outputs, bool resume) {
++        if (running_ || stopping() || !outputs) return;
++        running_ = true; active_ = outputs; previous_ = now; phase_ = 0;
++        skipped = blocked = late_us = 0;
++        for (unsigned i = 0; i < pending_.size(); ++i)
++            if (outputs & (1u << i)) pending_[i] = resume ? 0xfb : 0xfa;
++    }
++    void stop() {
++        for (unsigned i = 0; i < pending_.size(); ++i)
++            if (active_ & (1u << i)) pending_[i] = 0xfc;
++        active_ = 0; running_ = false;
++    }
++    unsigned stopping() const {
++        unsigned mask = 0;
++        for (unsigned i = 0; i < pending_.size(); ++i)
++            if (pending_[i] == 0xfc) mask |= 1u << i;
++        return mask;
++    }
++    void poll(uint32_t now, unsigned available, midi::Sink &sink) {
++        bool tick = false;
++        active_ &= available;
++        if (!active_) running_ = false;
++        if (running_) {
++            phase_ += uint64_t(uint32_t(now - previous_)) * 24;
++            if (phase_ >= quarter_us_) {
++                unsigned due = unsigned(phase_ / quarter_us_);
++                skipped += due - 1;
++                unsigned late = unsigned((phase_ - quarter_us_) / 24);
++                if (late > late_us) late_us = late;
++                phase_ %= quarter_us_;
++                tick = true;
++            }
++        }
++        previous_ = now;
++        for (unsigned i = 0; i < pending_.size(); ++i) {
++            unsigned bit = 1u << i;
++            if (!(available & bit)) { pending_[i] = 0; continue; }
++            if (pending_[i] && sink.submit(i, {15, {pending_[i], 0, 0}})) pending_[i] = 0;
++            if (tick && (active_ & bit) && (pending_[i] || !sink.submit(i, {15, {0xf8, 0, 0}}))) ++blocked;
++        }
++    }
++private:
++    std::array<uint8_t, midi::Bridge::destinations> pending_{};
++    uint64_t phase_ = 0;
++    uint32_t previous_ = 0, quarter_us_ = 500000;
++    unsigned active_ = 0;
++    bool running_ = false;
++};
++}
+diff --git a/firmware/include/cntrl/document.h b/firmware/include/cntrl/document.h
+index 26f71c5..3ed8246 100644
+--- a/firmware/include/cntrl/document.h
++++ b/firmware/include/cntrl/document.h
+@@ -7,7 +7,7 @@
+ namespace cntrl {
+ constexpr unsigned utility_page_settings_offset = 16;
+ constexpr unsigned metadata_header_size = utility_page_settings_offset + 2 * UtilityPageSettings::count;
+-constexpr unsigned document_version = 28;
++constexpr unsigned document_version = 30;
+ inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
+ inline uint32_t u32(const uint8_t *p) {
+     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
+@@ -85,6 +85,13 @@ public:
+             || unsigned(right[R::diameter]) + 2u * right[R::annulus] + 2u * right[R::padding] > hardware.display_width()
+             || (right[R::tempo_font] != 8 && right[R::tempo_font] != 9) || right[R::status_font] > 2 || right[R::title_font] > 2
+             || !right[R::digits] || right[R::digits] > 4 || right[R::decimals] > 2) return false;
++        if (right[R::clock_external] > 1 || !right[R::slot1] || (right[R::clock_outputs] & ~0x143u)
++            || ((right[R::clock_outputs] & (1u << 6)) && !(bytes[19] & 8))
++            || ((right[R::clock_outputs] & (1u << 8)) && !(bytes[19] & 16))) return false;
++        for (unsigned i = R::slot1; i <= R::slot4; ++i) {
++            unsigned bpm = right.words[i];
++            if (bpm && (bpm < 20 || bpm > 600 || (i > R::slot1 && !right.words[i - 1]))) return false;
++        }
+         unsigned names = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
+         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
+         unsigned end = names + 4;
+diff --git a/firmware/include/cntrl/midi_bridge.h b/firmware/include/cntrl/midi_bridge.h
+index 6326472..924d4ae 100644
+--- a/firmware/include/cntrl/midi_bridge.h
++++ b/firmware/include/cntrl/midi_bridge.h
+@@ -156,6 +156,22 @@ public:
+         b.delivery = Delivery::cancelled;
+     }
+     static constexpr unsigned destinations = 9, capacity = 256, pedal_capacity = 8;
++    // Only forwarded clock/transport is filtered. Notes, SysEx and other real-time
++    // bytes keep their order, including those queued before a source change.
++    void clock_owner(unsigned mask) {
++        unsigned acquired = mask & ~clock_owner_;
++        clock_owner_ = mask;
++        for (unsigned i = 0; i < destinations; ++i) if (acquired & (1u << i)) {
++            auto &r = routes_[i];
++            unsigned kept = 0;
++            for (unsigned j = 0; j < r.count; ++j) {
++                Packet packet = r.queue[(r.head + j) % capacity];
++                if (!clock_transport(packet))
++                    r.queue[(r.head + kept++) % capacity] = packet;
++            }
++            r.count = kept;
++        }
++    }
+     bool enabled() const { return enabled_; }
+     const Counters &counters(unsigned route) const { return routes_[route].counts; }
+     bool idle() const {
+@@ -384,7 +400,12 @@ private:
+         for (unsigned i = 1; i < n; ++i) if (p.bytes[i] & 0x80) return false;
+         return true;
+     }
++    unsigned clock_owner_ = 0;
++    static bool clock_transport(const Packet &p) {
++        return p.cin == 15 && (p.bytes[0] == 0xf8 || (p.bytes[0] >= 0xfa && p.bytes[0] <= 0xfc));
++    }
+     void enqueue(unsigned index, const Packet &p) {
++        if ((clock_owner_ & (1u << index)) && clock_transport(p)) return;
+         auto &r = routes_[index]; ++r.counts.received;
+         if (r.count == capacity) {
+             ++r.counts.dropped;
+diff --git a/firmware/include/cntrl/tempo.h b/firmware/include/cntrl/tempo.h
+index 70cb2f4..2aa1f22 100644
+--- a/firmware/include/cntrl/tempo.h
++++ b/firmware/include/cntrl/tempo.h
+@@ -8,22 +8,24 @@ public:
+         window_ = window; taps_ = taps; minimum_ = minimum; gap_ = gap;
+         count_ = next_ = 0; sum_ = 0; last_known_ = false;
+     }
+-    void tap(uint32_t now) {
+-        if (!window_) return;
++    bool tap(uint32_t now) {
++        if (!window_) return false;
+         const uint32_t interval = now - last_;
+         if (!last_known_ || interval > gap_
+             || (count_ && period_ && uint64_t(interval) > uint64_t(period_) * 2)) {
+             count_ = next_ = 0; sum_ = 0; last_ = now; last_known_ = true;
+-            beat_anchor_ = now; beat_known_ = true; return;
++            beat_anchor_ = now; beat_known_ = true; return false;
+         }
+-        if (interval < minimum_) return;
++        if (interval < minimum_) return false;
+         last_ = now;
+         beat_anchor_ = now; beat_known_ = true;
+         if (count_ == window_) sum_ -= intervals_[next_];
+         else ++count_;
+         intervals_[next_] = interval; sum_ += interval;
+         next_ = (next_ + 1) % window_;
+-        if (count_ + 1 >= taps_) period_ = (sum_ + count_ / 2) / count_;
++        if (count_ + 1 < taps_) return false;
++        period_ = (sum_ + count_ / 2) / count_;
++        return true;
+     }
+     uint32_t period() const { return period_; }
+     bool flash(uint32_t now, unsigned fraction) {
+diff --git a/firmware/include/cntrl/utility_page_settings.h b/firmware/include/cntrl/utility_page_settings.h
+index 7e7e9c5..ea936f7 100644
+--- a/firmware/include/cntrl/utility_page_settings.h
++++ b/firmware/include/cntrl/utility_page_settings.h
+@@ -7,7 +7,7 @@ struct UtilityPageSettings {
+         refresh, clock_timeout, clocks_per_quarter, clock_beats,
+         tap_intervals, minimum_taps, minimum_interval, reset_gap, flash_fraction,
+         diameter, annulus, title_height, tempo_height, padding, tempo_font, status_font,
+-        off_color, on_color, ring_color, digits, decimals, background, title_font, count
++        off_color, on_color, ring_color, digits, decimals, background, title_font, clock_outputs, clock_external, slot1, slot2, slot3, slot4, count
+     };
+     uint16_t words[count] = {};
+     uint16_t operator[](Word word) const { return words[word]; }
+diff --git a/firmware/test/actions.golden b/firmware/test/actions.golden
+index d29981c..03a1226 100644
+--- a/firmware/test/actions.golden
++++ b/firmware/test/actions.golden
+@@ -1 +1 @@
+-435357311c00dc05ea0e0000020002000400c019a9ff16fb00000000000804000000ffff0800000000000000000804000000ffff0800000000000000000804000000ffff0800000000000000610000000000000000000000000000000000000000000000000000000000000064696e000000000000000000000000000000000000000000000000000000000000000000620000000000000000000000000000000000000000000000000000000000000074727300000000000000000000000000000000000000000000000000000000000100000077696e640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030073796e7468000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000100000000000001026400000000466c75746500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001ffffffff000000536178000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100010001000100000002ffffffff000000537472696e6773000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020002000200010001007fffffffff00000050616400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030003000300434d544102000000a00f4080e803d007e803e80318000100040002006400b80b9001280005000c002800020008000000006000f800000300010090ff000073796e746800000000000000000000000000000000000000000000000000000073746f636b00000000000000000000000000000000000000000000000000000073796e746800000000000000000000000000000000000000000000000000000073746f636b0000000000000000000000000000000000000000000000000000000000000000000102010000000000010200000000ffffffffffffffffffffffff434e414d0500466c757465ffffffff0300536178ffffffff0700537472696e6773ffffffff0300506164ffffffff435041544c0400000e00030004000400300200003f0200004e0200005d0200006c0200007b0200008a02000099020000a8020000cf020000f60200001d03000044030000c803000004000500060007000001080009007375737461696e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040001020a000b00736f6c6f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000050002010c000d00616c7465726e617465000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600466c75746500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000536178000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100537472696e6773000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020050616400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030001000b00000000010264000000000001000b00000001ffffffffffffffff01000b00010002ffffffffffffffff01000b0001007fffffffffffffffff01000b00000000010264000000000001000b00000001ffffffffffffffff01000b00010002ffffffffffffffff01000b0001007fffffffffffffffff0200230064696e0000000000000000000000000000000000000000000000000000000000b0407f0200230064696e0000000000000000000000000000000000000000000000000000000000b040000200230064696e0000000000000000000000000000000000000000000000000000000000b0076e0200230064696e0000000000000000000000000000000000000000000000000000000000b007550600800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000537472696e677300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005061640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000043445350060007000c008f006f050000003004000000ffff3000000000000000002804000000ffff2800000000000000003804000000ffff3800000000000000001804000000ffff1800000000000000001004000000ffff1000000000000000000804000000ffff0800000000000000020000000008000000010101000500010002000000000800000001010200110002000200000000080000000101030011000300020000010005000400010102001100050003ff00040014000600ff0004001a000700160005001400080003ff00040026000900ff00040026000a00160005001400080003ff00040008000b00ff0004001a0007001600050014000800050077696e64000600466c757465000400536178000800537472696e677300060073796e7468000400506164000b00413a207375737461696e000a006d6f6d656e74617279001500556e6b6e6f776e2072656d6f7465207374617465000800423a20736f6c6f0008006c617463686564000d00433a20616c7465726e6174650073656564203d20300a66696c6c5f696e5f7374796c6573203d2066616c73650a6261636b67726f756e645f636f6c6f72203d20223078464646384438220a666f726567726f756e645f6272696768746e6573735f6c696d6974203d20302e350a706164203d20340a636f6e7472617374203d20302e360a74616773203d205b5d0a0a5b77696e646f77732e6e6578745d0a70616765203d20227061746368220a0a5b77696e646f77732e73656e745d0a70616765203d20227061746368220a0a5b77696e646f77732e756e646f5d0a70616765203d20227061746368220a0a5b70616765732e70617463685d0a6669656c6473203d205b2270617463685f6379636c652e6e616d65222c2022646973706c61795f6e616d65225d0a0a5b70616765732e70617463682e6c696e655f7374796c65735d0a0a5b7461675f7374796c65735d0a0a5b706172616d65746572735d0a0a5b73776974636865732e7375737461696e5d0a0a5b73776974636865732e736f6c6f5d0a0a5b73776974636865732e616c7465726e6174655d0a0a5b70617463685f6d657461646174612e305d0a6e616d65203d2022466c757465220a0a5b70617463685f6d657461646174612e302e5f70726f6772616d5d0a70726f6772616d203d20310a62616e6b203d20300a6e616d65203d2022466c757465220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e315d0a6e616d65203d2022536178220a0a5b70617463685f6d657461646174612e312e5f70726f6772616d5d0a70726f6772616d203d20320a6e616d65203d2022536178220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e325d0a6e616d65203d2022537472696e6773220a0a5b70617463685f6d657461646174612e322e5f70726f6772616d5d0a70726f6772616d203d20330a6e616d65203d2022537472696e6773220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e335d0a6e616d65203d2022506164220a0a5b70617463685f6d657461646174612e332e5f70726f6772616d5d0a70726f6772616d203d203132380a6e616d65203d2022506164220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e345d0a6e616d65203d2022466c757465220a0a5b70617463685f6d657461646174612e342e5f70726f6772616d5d0a70726f6772616d203d20310a62616e6b203d20300a6e616d65203d2022466c757465220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e355d0a6e616d65203d2022536178220a0a5b70617463685f6d657461646174612e352e5f70726f6772616d5d0a70726f6772616d203d20320a6e616d65203d2022536178220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e365d0a6e616d65203d2022537472696e6773220a0a5b70617463685f6d657461646174612e362e5f70726f6772616d5d0a70726f6772616d203d20330a6e616d65203d2022537472696e6773220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e375d0a6e616d65203d2022506164220a0a5b70617463685f6d657461646174612e372e5f70726f6772616d5d0a70726f6772616d203d203132380a6e616d65203d2022506164220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e385d0a0a5b70617463685f6d657461646174612e395d0a0a5b70617463685f6d657461646174612e31305d0a0a5b70617463685f6d657461646174612e31315d0a0a5b70617463685f6d657461646174612e31325d0a0a5b70617463685f6d657461646174612e31335d0a0a5b70617463685f7374796c65735d0a0a5b70726f6772616d5f7374796c65735d0a0a5b70617463685f746167735d0a
++435357311e00dc05f60e0000020002000400c0190a69bf4500000000000804000000ffff0800000000000000000804000000ffff0800000000000000000804000000ffff0800000000000000610000000000000000000000000000000000000000000000000000000000000064696e000000000000000000000000000000000000000000000000000000000000000000620000000000000000000000000000000000000000000000000000000000000074727300000000000000000000000000000000000000000000000000000000000100000077696e640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030073796e7468000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000100000000000001026400000000466c75746500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001ffffffff000000536178000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100010001000100000002ffffffff000000537472696e6773000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020002000200010001007fffffffff00000050616400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030003000300434d544102000000a00f4080e803d007e803e80318000100040002006400b80b9001280005000c002800020008000000006000f800000300010090ff000000000000780000000000000073796e746800000000000000000000000000000000000000000000000000000073746f636b00000000000000000000000000000000000000000000000000000073796e746800000000000000000000000000000000000000000000000000000073746f636b0000000000000000000000000000000000000000000000000000000000000000000102010000000000010200000000ffffffffffffffffffffffff434e414d0500466c757465ffffffff0300536178ffffffff0700537472696e6773ffffffff0300506164ffffffff435041544c0400000e00030004000400300200003f0200004e0200005d0200006c0200007b0200008a02000099020000a8020000cf020000f60200001d03000044030000c803000004000500060007000001080009007375737461696e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040001020a000b00736f6c6f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000050002010c000d00616c7465726e617465000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600466c75746500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000536178000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100537472696e6773000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020050616400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030001000b00000000010264000000000001000b00000001ffffffffffffffff01000b00010002ffffffffffffffff01000b0001007fffffffffffffffff01000b00000000010264000000000001000b00000001ffffffffffffffff01000b00010002ffffffffffffffff01000b0001007fffffffffffffffff0200230064696e0000000000000000000000000000000000000000000000000000000000b0407f0200230064696e0000000000000000000000000000000000000000000000000000000000b040000200230064696e0000000000000000000000000000000000000000000000000000000000b0076e0200230064696e0000000000000000000000000000000000000000000000000000000000b007550600800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000537472696e677300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005061640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000043445350060007000c008f006f050000003004000000ffff3000000000000000002804000000ffff2800000000000000003804000000ffff3800000000000000001804000000ffff1800000000000000001004000000ffff1000000000000000000804000000ffff0800000000000000020000000008000000010101000500010002000000000800000001010200110002000200000000080000000101030011000300020000010005000400010102001100050003ff00040014000600ff0004001a000700160005001400080003ff00040026000900ff00040026000a00160005001400080003ff00040008000b00ff0004001a0007001600050014000800050077696e64000600466c757465000400536178000800537472696e677300060073796e7468000400506164000b00413a207375737461696e000a006d6f6d656e74617279001500556e6b6e6f776e2072656d6f7465207374617465000800423a20736f6c6f0008006c617463686564000d00433a20616c7465726e6174650073656564203d20300a66696c6c5f696e5f7374796c6573203d2066616c73650a6261636b67726f756e645f636f6c6f72203d20223078464646384438220a666f726567726f756e645f6272696768746e6573735f6c696d6974203d20302e350a706164203d20340a636f6e7472617374203d20302e360a74616773203d205b5d0a0a5b77696e646f77732e6e6578745d0a70616765203d20227061746368220a0a5b77696e646f77732e73656e745d0a70616765203d20227061746368220a0a5b77696e646f77732e756e646f5d0a70616765203d20227061746368220a0a5b70616765732e70617463685d0a6669656c6473203d205b2270617463685f6379636c652e6e616d65222c2022646973706c61795f6e616d65225d0a0a5b70616765732e70617463682e6c696e655f7374796c65735d0a0a5b7461675f7374796c65735d0a0a5b706172616d65746572735d0a0a5b73776974636865732e7375737461696e5d0a0a5b73776974636865732e736f6c6f5d0a0a5b73776974636865732e616c7465726e6174655d0a0a5b70617463685f6d657461646174612e305d0a6e616d65203d2022466c757465220a0a5b70617463685f6d657461646174612e302e5f70726f6772616d5d0a70726f6772616d203d20310a62616e6b203d20300a6e616d65203d2022466c757465220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e315d0a6e616d65203d2022536178220a0a5b70617463685f6d657461646174612e312e5f70726f6772616d5d0a70726f6772616d203d20320a6e616d65203d2022536178220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e325d0a6e616d65203d2022537472696e6773220a0a5b70617463685f6d657461646174612e322e5f70726f6772616d5d0a70726f6772616d203d20330a6e616d65203d2022537472696e6773220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e335d0a6e616d65203d2022506164220a0a5b70617463685f6d657461646174612e332e5f70726f6772616d5d0a70726f6772616d203d203132380a6e616d65203d2022506164220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e345d0a6e616d65203d2022466c757465220a0a5b70617463685f6d657461646174612e342e5f70726f6772616d5d0a70726f6772616d203d20310a62616e6b203d20300a6e616d65203d2022466c757465220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e355d0a6e616d65203d2022536178220a0a5b70617463685f6d657461646174612e352e5f70726f6772616d5d0a70726f6772616d203d20320a6e616d65203d2022536178220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e365d0a6e616d65203d2022537472696e6773220a0a5b70617463685f6d657461646174612e362e5f70726f6772616d5d0a70726f6772616d203d20330a6e616d65203d2022537472696e6773220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e375d0a6e616d65203d2022506164220a0a5b70617463685f6d657461646174612e372e5f70726f6772616d5d0a70726f6772616d203d203132380a6e616d65203d2022506164220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e385d0a0a5b70617463685f6d657461646174612e395d0a0a5b70617463685f6d657461646174612e31305d0a0a5b70617463685f6d657461646174612e31315d0a0a5b70617463685f6d657461646174612e31325d0a0a5b70617463685f6d657461646174612e31335d0a0a5b70617463685f7374796c65735d0a0a5b70726f6772616d5f7374796c65735d0a0a5b70617463685f746167735d0a
+diff --git a/firmware/test/display.golden b/firmware/test/display.golden
+index 09f1a2c..b555ff2 100644
+--- a/firmware/test/display.golden
++++ b/firmware/test/display.golden
+@@ -1 +1 @@
+-435357311c00dc058a060000010001000100c019b36a1d500000000000080400e0ff1f000800000000000000000804000000ffff0800000000000000000804000000ffff0800000000000000610000000000000000000000000000000000000000000000000000000000000064696e00000000000000000000000000000000000000000000000000000000000000000077696e64000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000ffffffff000000466c7574650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000200434d544101000000a00f4080e803d007e803e80318000100040002006400b80b9001280005000c002800020008000000006000f800000300010090ff000073796e746800000000000000000000000000000000000000000000000000000073746f636b0000000000000000000000000000000000000000000000000000000000000000000102ffffffff434e414d0500466c757465ffffffff4350415425000000010000000100000016000000000001000b00000000ffffffffffffffff43445350040003000a007b00a203000000100400e0ff1f00100000000000000000100400ffff1f001000000000000000001804000000ffff180000000000000000100400ffff0000100000000000000005100000003e0000000101010032000100040001004a000200ff0000003e000300110000003800040004120002002300050013000200470006001400020035000700150002004700020006020003004a000800030003004a000200040003004a000200050003004a000200060003004a00090007000300320001000400313932000600466c7574650002002d0004003132300005007472756500060066616c736500020030000400312e3500020031000200610073656564203d20300a66696c6c5f696e5f7374796c6573203d2066616c73650a6261636b67726f756e645f636f6c6f72203d20223078464646384438220a666f726567726f756e645f6272696768746e6573735f6c696d6974203d20302e350a706164203d20340a636f6e7472617374203d20302e360a74616773203d205b5d0a0a5b77696e646f77732e6e6578745d0a70616765203d20227061746368220a0a5b77696e646f77732e6e6578742e7374796c655d0a6261636b67726f756e645f636f6c6f72203d2022626c7565220a0a5b77696e646f77732e73656e745d0a70616765203d202273657474696e6773220a0a5b77696e646f77732e756e646f5d0a70616765203d20226e756d65726963220a0a5b70616765732e70617463685d0a6669656c6473203d205b226272696768746e657373222c2022646973706c61795f6e616d65222c2022766f6c756d65222c202274656d706f222c202273706c617368225d0a0a5b70616765732e70617463682e6c696e655f7374796c65735d0a0a5b70616765732e6e756d657269635d0a6669656c6473203d205b2270726f6772616d222c202262616e6b222c2022766f6c756d65222c202270616e222c2022696e737472756d656e74222c20226e616d65225d0a0a5b70616765732e6e756d657269632e6c696e655f7374796c65735d0a0a5b70616765732e73657474696e67735d0a6669656c6473203d205b2269735f6d6964695f696e74657266616365222c202273637265656e73617665725f74696d656f7574222c20226e617669676174696f6e2e686f6c645f64656c6179222c20227472616e736974696f6e225d0a0a5b70616765732e73657474696e67732e6c696e655f7374796c65735d0a0a5b7461675f7374796c65735d0a0a5b706172616d65746572732e74656d706f5d0a76616c7565203d203132300a0a5b73776974636865735d0a0a5b70617463685f6d657461646174612e305d0a6e616d65203d2022466c757465220a0a5b70617463685f6d657461646174612e302e7374796c655d0a666f726567726f756e645f636f6c6f72203d20227768697465220a0a5b70617463685f6d657461646174612e302e5f70726f6772616d5d0a70726f6772616d203d20310a6e616d65203d2022466c757465220a74616773203d205b5d0a0a5b70617463685f7374796c65732e305d0a666f726567726f756e645f636f6c6f72203d20227768697465220a0a5b70726f6772616d5f7374796c65735d0a0a5b70617463685f746167735d0a
++435357311e00dc0596060000010001000100c01968b711c50000000000080400e0ff1f000800000000000000000804000000ffff0800000000000000000804000000ffff0800000000000000610000000000000000000000000000000000000000000000000000000000000064696e00000000000000000000000000000000000000000000000000000000000000000077696e64000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000ffffffff000000466c7574650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000200434d544101000000a00f4080e803d007e803e80318000100040002006400b80b9001280005000c002800020008000000006000f800000300010090ff000000000000780000000000000073796e746800000000000000000000000000000000000000000000000000000073746f636b0000000000000000000000000000000000000000000000000000000000000000000102ffffffff434e414d0500466c757465ffffffff4350415425000000010000000100000016000000000001000b00000000ffffffffffffffff43445350040003000a007b00a203000000100400e0ff1f00100000000000000000100400ffff1f001000000000000000001804000000ffff180000000000000000100400ffff0000100000000000000005100000003e0000000101010032000100040001004a000200ff0000003e000300110000003800040004120002002300050013000200470006001400020035000700150002004700020006020003004a000800030003004a000200040003004a000200050003004a000200060003004a00090007000300320001000400313932000600466c7574650002002d0004003132300005007472756500060066616c736500020030000400312e3500020031000200610073656564203d20300a66696c6c5f696e5f7374796c6573203d2066616c73650a6261636b67726f756e645f636f6c6f72203d20223078464646384438220a666f726567726f756e645f6272696768746e6573735f6c696d6974203d20302e350a706164203d20340a636f6e7472617374203d20302e360a74616773203d205b5d0a0a5b77696e646f77732e6e6578745d0a70616765203d20227061746368220a0a5b77696e646f77732e6e6578742e7374796c655d0a6261636b67726f756e645f636f6c6f72203d2022626c7565220a0a5b77696e646f77732e73656e745d0a70616765203d202273657474696e6773220a0a5b77696e646f77732e756e646f5d0a70616765203d20226e756d65726963220a0a5b70616765732e70617463685d0a6669656c6473203d205b226272696768746e657373222c2022646973706c61795f6e616d65222c2022766f6c756d65222c202274656d706f222c202273706c617368225d0a0a5b70616765732e70617463682e6c696e655f7374796c65735d0a0a5b70616765732e6e756d657269635d0a6669656c6473203d205b2270726f6772616d222c202262616e6b222c2022766f6c756d65222c202270616e222c2022696e737472756d656e74222c20226e616d65225d0a0a5b70616765732e6e756d657269632e6c696e655f7374796c65735d0a0a5b70616765732e73657474696e67735d0a6669656c6473203d205b2269735f6d6964695f696e74657266616365222c202273637265656e73617665725f74696d656f7574222c20226e617669676174696f6e2e686f6c645f64656c6179222c20227472616e736974696f6e225d0a0a5b70616765732e73657474696e67732e6c696e655f7374796c65735d0a0a5b7461675f7374796c65735d0a0a5b706172616d65746572732e74656d706f5d0a76616c7565203d203132300a0a5b73776974636865735d0a0a5b70617463685f6d657461646174612e305d0a6e616d65203d2022466c757465220a0a5b70617463685f6d657461646174612e302e7374796c655d0a666f726567726f756e645f636f6c6f72203d20227768697465220a0a5b70617463685f6d657461646174612e302e5f70726f6772616d5d0a70726f6772616d203d20310a6e616d65203d2022466c757465220a74616773203d205b5d0a0a5b70617463685f7374796c65732e305d0a666f726567726f756e645f636f6c6f72203d20227768697465220a0a5b70726f6772616d5f7374796c65735d0a0a5b70617463685f746167735d0a
+diff --git a/firmware/test/show.golden b/firmware/test/show.golden
+index 99fa0ea..4497ea2 100644
+--- a/firmware/test/show.golden
++++ b/firmware/test/show.golden
+@@ -1 +1 @@
+-435357311c00dc05fe070000020002000400c019d9dce62400000000000804000000ffff0800000000000000000804000000ffff0800000000000000000804000000ffff0800000000000000610000000000000000000000000000000000000000000000000000000000000064696e000000000000000000000000000000000000000000000000000000000000000000620000000000000000000000000000000000000000000000000000000000000074727300000000000000000000000000000000000000000000000000000000000100000077696e640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030073796e7468000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000100000000000001026400000000466c75746500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001ffffffff000000536178000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100010001000100000002ffffffff000000537472696e6773000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020002000200010001007fffffffff00000050616400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030003000300434d544102000000a00f4080e803d007e803e80318000100040002006400b80b9001280005000c002800020008000000006000f800000300010090ff000073796e746800000000000000000000000000000000000000000000000000000073746f636b00000000000000000000000000000000000000000000000000000073796e746800000000000000000000000000000000000000000000000000000073746f636b0000000000000000000000000000000000000000000000000000000000000000000102010000000000010200000000ffffffffffffffffffffffff434e414d0500466c757465ffffffff0300536178ffffffff0700537472696e6773ffffffff0300506164ffffffff4350415464000000040000000400000028000000370000004600000055000000000001000200030001000b00000000010264000000000001000b00000001ffffffffffffffff01000b00010002ffffffffffffffff01000b0001007fffffffffffffffff43445350040004000600440029030000003004000000ffff3000000000000000002804000000ffff2800000000000000003804000000ffff3800000000000000001804000000ffff18000000000000000200000000080000000101010005000100020000000008000000010102001100020002000000000800000001010300110003000200000100050004000101020011000500050077696e64000600466c757465000400536178000800537472696e677300060073796e74680004005061640073656564203d20300a66696c6c5f696e5f7374796c6573203d2066616c73650a6261636b67726f756e645f636f6c6f72203d20223078464646384438220a666f726567726f756e645f6272696768746e6573735f6c696d6974203d20302e350a706164203d20340a636f6e7472617374203d20302e360a74616773203d205b5d0a0a5b77696e646f77732e6e6578745d0a70616765203d20227061746368220a0a5b77696e646f77732e73656e745d0a70616765203d20227061746368220a0a5b77696e646f77732e756e646f5d0a70616765203d20227061746368220a0a5b70616765732e70617463685d0a6669656c6473203d205b2270617463685f6379636c652e6e616d65222c2022646973706c61795f6e616d65225d0a0a5b70616765732e70617463682e6c696e655f7374796c65735d0a0a5b7461675f7374796c65735d0a0a5b706172616d65746572735d0a0a5b73776974636865735d0a0a5b70617463685f6d657461646174612e305d0a6e616d65203d2022466c757465220a0a5b70617463685f6d657461646174612e302e5f70726f6772616d5d0a70726f6772616d203d20310a62616e6b203d20300a6e616d65203d2022466c757465220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e315d0a6e616d65203d2022536178220a0a5b70617463685f6d657461646174612e312e5f70726f6772616d5d0a70726f6772616d203d20320a6e616d65203d2022536178220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e325d0a6e616d65203d2022537472696e6773220a0a5b70617463685f6d657461646174612e322e5f70726f6772616d5d0a70726f6772616d203d20330a6e616d65203d2022537472696e6773220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e335d0a6e616d65203d2022506164220a0a5b70617463685f6d657461646174612e332e5f70726f6772616d5d0a70726f6772616d203d203132380a6e616d65203d2022506164220a74616773203d205b5d0a0a5b70617463685f7374796c65735d0a0a5b70726f6772616d5f7374796c65735d0a0a5b70617463685f746167735d0a
++435357311e00dc050a080000020002000400c01973b6a2bf00000000000804000000ffff0800000000000000000804000000ffff0800000000000000000804000000ffff0800000000000000610000000000000000000000000000000000000000000000000000000000000064696e000000000000000000000000000000000000000000000000000000000000000000620000000000000000000000000000000000000000000000000000000000000074727300000000000000000000000000000000000000000000000000000000000100000077696e640000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030073796e7468000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000100000000000001026400000000466c75746500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001ffffffff000000536178000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100010001000100000002ffffffff000000537472696e6773000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020002000200010001007fffffffff00000050616400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030003000300434d544102000000a00f4080e803d007e803e80318000100040002006400b80b9001280005000c002800020008000000006000f800000300010090ff000000000000780000000000000073796e746800000000000000000000000000000000000000000000000000000073746f636b00000000000000000000000000000000000000000000000000000073796e746800000000000000000000000000000000000000000000000000000073746f636b0000000000000000000000000000000000000000000000000000000000000000000102010000000000010200000000ffffffffffffffffffffffff434e414d0500466c757465ffffffff0300536178ffffffff0700537472696e6773ffffffff0300506164ffffffff4350415464000000040000000400000028000000370000004600000055000000000001000200030001000b00000000010264000000000001000b00000001ffffffffffffffff01000b00010002ffffffffffffffff01000b0001007fffffffffffffffff43445350040004000600440029030000003004000000ffff3000000000000000002804000000ffff2800000000000000003804000000ffff3800000000000000001804000000ffff18000000000000000200000000080000000101010005000100020000000008000000010102001100020002000000000800000001010300110003000200000100050004000101020011000500050077696e64000600466c757465000400536178000800537472696e677300060073796e74680004005061640073656564203d20300a66696c6c5f696e5f7374796c6573203d2066616c73650a6261636b67726f756e645f636f6c6f72203d20223078464646384438220a666f726567726f756e645f6272696768746e6573735f6c696d6974203d20302e350a706164203d20340a636f6e7472617374203d20302e360a74616773203d205b5d0a0a5b77696e646f77732e6e6578745d0a70616765203d20227061746368220a0a5b77696e646f77732e73656e745d0a70616765203d20227061746368220a0a5b77696e646f77732e756e646f5d0a70616765203d20227061746368220a0a5b70616765732e70617463685d0a6669656c6473203d205b2270617463685f6379636c652e6e616d65222c2022646973706c61795f6e616d65225d0a0a5b70616765732e70617463682e6c696e655f7374796c65735d0a0a5b7461675f7374796c65735d0a0a5b706172616d65746572735d0a0a5b73776974636865735d0a0a5b70617463685f6d657461646174612e305d0a6e616d65203d2022466c757465220a0a5b70617463685f6d657461646174612e302e5f70726f6772616d5d0a70726f6772616d203d20310a62616e6b203d20300a6e616d65203d2022466c757465220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e315d0a6e616d65203d2022536178220a0a5b70617463685f6d657461646174612e312e5f70726f6772616d5d0a70726f6772616d203d20320a6e616d65203d2022536178220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e325d0a6e616d65203d2022537472696e6773220a0a5b70617463685f6d657461646174612e322e5f70726f6772616d5d0a70726f6772616d203d20330a6e616d65203d2022537472696e6773220a74616773203d205b5d0a0a5b70617463685f6d657461646174612e335d0a6e616d65203d2022506164220a0a5b70617463685f6d657461646174612e332e5f70726f6772616d5d0a70726f6772616d203d203132380a6e616d65203d2022506164220a74616773203d205b5d0a0a5b70617463685f7374796c65735d0a0a5b70726f6772616d5f7374796c65735d0a0a5b70617463685f746167735d0a
+diff --git a/firmware/test/test_midi_bridge.cpp b/firmware/test/test_midi_bridge.cpp
+index 56147db..a794c2c 100644
+--- a/firmware/test/test_midi_bridge.cpp
++++ b/firmware/test/test_midi_bridge.cpp
+@@ -1,3 +1,4 @@
++#include <cntrl/clock_generator.h>
+ #include <cntrl/midi_bridge.h>
+ #include <cntrl/midi_outputs.h>
+ #include <cassert>
+@@ -292,7 +293,63 @@ void test_usb_ports_enable_independently() {
+     assert(!out.bytes[0].empty() && out.bytes[8].empty());
+ }
+ 
++void test_generated_clock_under_load() {
++    cntrl::ClockGenerator clock;
++    Output out;
++    constexpr uint32_t start = UINT32_MAX - 40000;
++    clock.start(start, 3, false);
++    out.blocked[1] = true;
++    clock.poll(start, 3, out);
++    assert(out.bytes[0] == std::vector<uint8_t>{0xfa});
++    for (uint32_t t = 0; t < 500000;) {
++        // Vary scheduler latency across the microsecond-counter rollover.
++        t = std::min(500000u, t + ((t & 1) ? 1999u : 307u));
++        clock.poll(start + t, 3, out);
++        assert(out.bytes[0].size() == 1 + uint64_t(t) * 24 / 500000);
++    }
++    assert(clock.skipped == 0 && clock.late_us < 2000 && clock.blocked == 24);
++    assert(out.bytes[1].empty());
++    out.blocked[1] = false;
++    clock.set_tempo(250000);
++    clock.poll(start + 750000, 3, out);
++    assert(clock.skipped == 23 && out.bytes[0].size() == 26);
++    assert((out.bytes[1] == std::vector<uint8_t>{0xfa, 0xf8}));
++    clock.poll(start + 750000, 3, out);
++    assert(out.bytes[0].size() == 26);
++    clock.poll(start + 760000, 1, out);
++    clock.poll(start + 780000, 3, out);
++    assert(out.bytes[1].size() == 2); // Reconnect never replays missed clocks.
++    clock.stop();
++    out.blocked[0] = true;
++    clock.poll(start + 800000, 3, out);
++    assert(clock.stopping() == 1);
++    out.blocked[0] = false;
++    clock.poll(start + 810000, 3, out);
++    assert(out.bytes[0].back() == 0xfc && !clock.running() && !clock.stopping());
++    clock.start(start + 820000, 1, true);
++    clock.poll(start + 820000, 1, out);
++    assert(out.bytes[0].back() == 0xfb);
++}
++
++void test_clock_source_handoff() {
++    cntrl::midi::Bridge bridge; Output out;
++    bridge.configure(true); bridge.connected(true, 0);
++    input(bridge, 0, {0xfa, 0xf8, 0x90, 60, 100});
++    bridge.clock_owner(1);
++    input(bridge, 0, {0xf8, 0xfc, 0xfe});
++    input(bridge, 1, {0xf8});
++    for (unsigned i = 0; i < 6; ++i) bridge.service(out, i);
++    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0xfe}));
++    assert(out.bytes[1] == std::vector<uint8_t>{0xf8});
++    bridge.clock_owner(0);
++    input(bridge, 0, {0xfb, 0xf8});
++    bridge.service(out, 7); bridge.service(out, 8);
++    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0xfe, 0xfb, 0xf8}));
++}
++
+ int main() {
++    test_generated_clock_under_load();
++    test_clock_source_handoff();
+     test_usb_ports_enable_independently();
+     test_automatic_interface_retries_without_replaying_waiting_traffic();
+     test_interface_retry_clock_wrap();
+diff --git a/plan/feature-set.md b/plan/feature-set.md
+index 50a4adc..e72aea0 100644
+--- a/plan/feature-set.md
++++ b/plan/feature-set.md
+@@ -186,8 +186,7 @@ does not imply acknowledgement by an external instrument.
+ 
+ **Outcome:** Generate MIDI Clock at 24 pulses per quarter note from a
+ configured BPM or the Tap Tempo page, and send it to selected MIDI outputs.
+-Currently we measure incoming clock and display tapped tempo without generating
+-that clock.
++The controller can also measure incoming clock and display tapped tempo.
+ 
+ **Scope:** Connect the existing tempo calculation to a scheduled clock source.
+ Add MIDI Start, Stop and Continue, stored BPM slots and tempo adjustment.
+@@ -203,6 +202,10 @@ load; tempo changes do not create duplicate clock streams; missed deadlines
+ cannot produce an unbounded burst of catch-up ticks. Test timer rollover and
+ clock-source transitions, then qualify timing on physical outputs.
+ 
++The [MIDI Clock utility pages](../doc/midi-clock.md) implement this item.
++Independent timing measurements on the selected physical outputs remain part
++of hardware qualification.
++
+ ## 11. MIDI CC waveform generators
+ 
+ **Outcome:** Start or stop an LFO that sends MIDI CC values, such as a
+diff --git a/test/test_patch_switcher.py b/test/test_patch_switcher.py
+index de11931..570182f 100644
+--- a/test/test_patch_switcher.py
++++ b/test/test_patch_switcher.py
+@@ -85,6 +85,9 @@ def test_utility_page_settings_round_trip(
+         'tap_intervals': 6,
+         'minimum_taps': 3,
+         'title_font': 'Arial',
++        'clock_bpms': [90, 123, 405],
++        'clock_outputs': ['din', 'trs'],
++        'clock_source': 'external',
+         'minimum_interval': '80 ms',
+         'reset_gap': 4,
+         'flash_fraction': '20%',
+@@ -100,6 +103,10 @@ def test_utility_page_settings_round_trip(
+     exported = tomlkit.parse(resolved.export(data)).unwrap()
+     settings = models.Setup.model_validate(exported).utility_pages
+     assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
++    assert settings.clock_bpms == [90, 123, 405]
++    assert (
++        settings.clock_outputs == ['din', 'trs'] and settings.clock_source == 'external'
++    )
+     assert settings.title_font == 'Arial'
+     assert settings.refresh_interval == 2 and settings.flash_fraction == 0.2
+     assert settings.tempo_font == 'CourierPrimeBold'
+@@ -110,6 +117,10 @@ def test_utility_page_settings_round_trip(
+     'settings',
+     [
+         {'clocks_per_quarter': 0},
++        {'clock_outputs': ['din', 'din']},
++        {'clock_outputs': ['missing']},
++        {'clock_bpms': []},
++        {'clock_bpms': [0]},
+         {'tap_intervals': 9},
+         {'minimum_taps': 6},
+         {'minimum_interval': 4, 'reset_gap': 3},

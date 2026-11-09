@@ -1,0 +1,50 @@
+--- a/libraries/FlexIO_t4/src/FlexIO_t4.cpp
++++ b/libraries/FlexIO_t4/src/FlexIO_t4.cpp
+@@ -315,8 +315,7 @@
+     if (n == 0xff)
+         return; // don't free if we did not allocate
+     uint8_t mask = (cnt == 1) ? 0x1 : 0x3;
+-    for (; n < 0; n--)
+-        mask <<= 1;
++    mask <<= n;
+     _used_timers &= ~mask;
+ }
+ 
+@@ -324,8 +323,7 @@
+     if (n == 0xff)
+         return; // don't free if we did not allocate
+     uint8_t mask = 0x1;
+-    for (; n < 0; n--)
+-        mask <<= 1;
++    mask <<= n;
+     _used_shifters &= ~mask;
+ }
+ 
+--- a/libraries/FlexIO_t4/src/FlexSerial.cpp
++++ b/libraries/FlexIO_t4/src/FlexSerial.cpp
+@@ -312,6 +312,15 @@
+ void FlexSerial::end(void) {
+     // If the transmit was allocated free it now as well as timers and shifters.
+     if (_tx_pflex) {
++        IMXRT_FLEXIO_t &p = _tx_pflex->port();
++        if (_tx_shifter < 8) {
++            p.SHIFTSIEN &= ~(1u << _tx_shifter);
++            p.SHIFTCTL[_tx_shifter] = 0;
++        }
++        if (_tx_timer < 8) {
++            p.TIMIEN &= ~(1u << _tx_timer);
++            p.TIMCTL[_tx_timer] = 0;
++        }
+         _tx_pflex->freeTimers(_tx_timer);
+         _tx_timer = 0xff;
+         _tx_pflex->freeShifter(_tx_shifter);
+--- a/libraries/FlexIO_t4/src/FlexSerial.h
++++ b/libraries/FlexIO_t4/src/FlexSerial.h
+@@ -58,6 +58,7 @@
+ 
+     void clear(void);
+     int availableForWrite(void);
++    bool transmitting() const { return _transmitting != 0; }
+ 
+     float setClock(float frequency);
+     float setClockUsingAudioPLL(float frequency);

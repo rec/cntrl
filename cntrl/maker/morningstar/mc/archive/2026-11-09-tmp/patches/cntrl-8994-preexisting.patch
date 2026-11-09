@@ -1,0 +1,94 @@
+diff --git a/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h b/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
+index 8017089..8d1af97 100644
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
+@@ -17,7 +17,7 @@ struct PerformanceStatus {
+ 
+ class UtilityPages {
+ public:
+-    enum class Page { tap, status, firmware, cable, panic, confirm_firmware };
++    enum class Page { tap, status, firmware, cable, panic, ports, confirm_firmware };
+     void configure(const cntrl::UtilityPageSettings &settings) {
+         settings_ = settings;
+         using R = cntrl::UtilityPageSettings;
+@@ -28,7 +28,7 @@ public:
+     bool browse(bool reverse, const char *setup) {
+         if (page_ == Page::confirm_firmware) return !reverse;
+         do {
+-            page_ = Page((unsigned(page_) + (reverse ? 4 : 1)) % 5);
++            page_ = Page((unsigned(page_) + (reverse ? 5 : 1)) % 6);
+ #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
+             if (page_ == Page::cable) continue;
+ #endif
+@@ -41,6 +41,16 @@ public:
+         dirty_ = true;
+         return false;
+     }
++    enum class PortMode : uint8_t { off, midi_a, midi_b, expression, aux };
++    unsigned jack = 0;
++    PortMode candidate = PortMode::off;
++    void port_status(PortMode active, const char *message = nullptr) {
++        active_port_ = active; port_message_ = message; dirty_ = true;
++    }
++    void next_port_mode() {
++        candidate = PortMode((unsigned(candidate) + 1) % 5);
++        port_message_ = nullptr; dirty_ = true;
++    }
+     Page page() const { return page_; }
+     void revisit(const char *setup) {
+         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
+@@ -80,7 +90,7 @@ public:
+         }
+         const unsigned heading_text_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
+         const unsigned heading_height = heading_text_height + 4;
+-        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : "Firmware";
++        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : "Firmware";
+         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
+         pane.heading_band = true;
+         auto &header = pane.lines[0];
+@@ -105,6 +115,17 @@ public:
+             pane.toggle = {128, 110, true, cable.enabled, false};
+             return pane;
+         }
++        if (page_ == Page::ports) {
++            constexpr const char *names[] = {"Off", "MIDI Type A", "MIDI Type B", "Expression", "Aux switch"};
++            char current[40];
++            std::snprintf(current, sizeof(current), "Jack %u: %s", jack + 1, names[unsigned(active_port_)]);
++            const unsigned font = settings_[R::status_font];
++            line(pane, 1, current, 34, 22, font, true);
++            line(pane, 2, port_message_ ? port_message_ : names[unsigned(candidate)], 60, 22, font, true);
++            line(pane, 3, "A: Jack   B: Mode", 87, 17, font, true);
++            line(pane, 4, "C: Apply", 106, 17, font, true);
++            return pane;
++        }
+         if (page_ == Page::panic) {
+             line(pane, 1, "Press C", 40, 22, settings_[R::status_font], true);
+             line(pane, 2, "Hold to repeat", 66, 22, settings_[R::status_font], true);
+@@ -194,6 +215,8 @@ public:
+         return pane;
+     }
+ private:
++    PortMode active_port_ = PortMode::off;
++    const char *port_message_ = nullptr;
+     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
+         using R = cntrl::UtilityPageSettings;
+         unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];
+diff --git a/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp b/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
+index 4a4c5cc..a28a087 100644
+--- a/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
++++ b/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
+@@ -809,7 +809,14 @@ static void test_utility_pages() {
+     assert(!std::strcmp(view.lines[3].text, "Incomplete"));
+     view = pages.view(4003, 4003000, status, {}, cntrl::Panic::Status::sending);
+     assert(!std::strcmp(view.lines[3].text, "Sending"));
++    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::ports);
++    pages.next_port_mode();
++    view = pages.view(4004, 4004000, status);
++    assert(!std::strcmp(view.lines[0].text, "TRS Ports"));
++    assert(!std::strcmp(view.lines[1].text, "Jack 1: Off"));
++    assert(!std::strcmp(view.lines[2].text, "MIDI Type A"));
+     pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
++    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::ports);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::panic);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::cable);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::firmware);

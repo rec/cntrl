@@ -1,0 +1,150 @@
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/utility_pages.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ #include <cntrl/hardware.h>
+ #include <cntrl/tempo.h>
++#include <cntrl/clock_generator.h>
+ #include <cntrl/cable_test.h>
+ #include <cntrl/panic.h>
+ #include "show_graphics.h"
+@@ -17,10 +18,14 @@
+ 
+ class UtilityPages {
+ public:
+-    enum class Page { tap, status, firmware, cable, panic, confirm_firmware };
++    enum class Page { tap, status, firmware, cable, panic, clock_transport, clock_tempo, confirm_firmware };
+     void configure(const cntrl::UtilityPageSettings &settings) {
++        generator.stop();
++        slot_ = 0;
+         settings_ = settings;
+         using R = cntrl::UtilityPageSettings;
++        external_ = settings[R::clock_external];
++        recall_slot();
+         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
+         clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
+         dirty_ = true;
+@@ -28,7 +33,8 @@
+     bool browse(bool reverse, const char *setup) {
+         if (page_ == Page::confirm_firmware) return !reverse;
+         do {
+-            page_ = Page((unsigned(page_) + (reverse ? 4 : 1)) % 5);
++            constexpr unsigned count = unsigned(Page::confirm_firmware);
++            page_ = Page((unsigned(page_) + (reverse ? count - 1 : 1)) % count);
+ #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
+             if (page_ == Page::cable) continue;
+ #endif
+@@ -41,13 +47,37 @@
+         dirty_ = true;
+         return false;
+     }
++    cntrl::ClockGenerator generator;
++    unsigned clock_outputs() const { return settings_[cntrl::UtilityPageSettings::clock_outputs]; }
++    unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
++    bool clock_page() const { return page_ == Page::clock_transport || page_ == Page::clock_tempo; }
++    void clock_button(unsigned button, uint32_t now_us, unsigned available) {
++        using R = cntrl::UtilityPageSettings;
++        if (page_ == Page::clock_transport) {
++            if (button == 2) generator.stop();
++            if (!external_ && button < 2)
++                generator.start(now_us, clock_outputs() & available, button == 1);
++            if (button == 4) { generator.stop(); external_ = !external_; }
++        } else if (page_ == Page::clock_tempo) {
++            if (button < 2) {
++                unsigned bpm = std::clamp(int(generator.bpm()) + (button ? 1 : -1), 20, 600);
++                generator.set_tempo((60000000u + bpm / 2) / bpm);
++            } else if (button == 2) {
++                if (++slot_ == 4 || !settings_.words[R::slot1 + slot_]) slot_ = 0;
++                recall_slot();
++            }
++        }
++        dirty_ = true;
++    }
+     Page page() const { return page_; }
+     void revisit(const char *setup) {
+         if (page_ == Page::status) std::snprintf(setup_, sizeof(setup_), "%.63s", setup);
+         dirty_ = true;
+     }
+     void tap(uint32_t now) {
+-        if (page_ == Page::tap) tap_.tap(now);
++        if (page_ == Page::tap) {
++            if (tap_.tap(now)) generator.set_tempo(tap_.period() * 1000);
++        }
+         else if (page_ == Page::firmware) page_ = Page::confirm_firmware;
+         else if (page_ == Page::confirm_firmware) page_ = Page::firmware;
+         else return;
+@@ -62,7 +92,7 @@
+     bool due(uint32_t now) {
+         using R = cntrl::UtilityPageSettings;
+         if (dirty_) return true;
+-        if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
++        if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
+         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
+     }
+     cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready) {
+@@ -80,13 +110,35 @@
+         }
+         const unsigned heading_text_height = std::min(title * 3 / 2, (128 - 2 * pad) / 2);
+         const unsigned heading_height = heading_text_height + 4;
+-        const char *heading = page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : "Firmware";
++        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : "Firmware";
+         line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
+         pane.heading_band = true;
+         auto &header = pane.lines[0];
+         header.graphics.line_height += 4;
+         header.graphics.foreground = 0xffff; header.graphics.background = 0;
+         header.graphics.top = header.y; header.y = 0;
++        if (clock_page()) {
++            const unsigned font = settings_[R::status_font];
++            char tempo[32], detail[64];
++            std::snprintf(tempo, sizeof(tempo), "%u BPM", generator.bpm());
++            if (page_ == Page::clock_transport) {
++                const char *state = external_ ? (clock_.active() ? "External: receiving" : "External: waiting")
++                    : !clock_outputs() ? "No outputs configured" : generator.running() ? "Internal: running" : "Internal: stopped";
++                line(pane, 1, state, 30, 19, font, true);
++                if (external_) number_text(tempo, sizeof(tempo), clock_.period_us(), true, true);
++                line(pane, 2, tempo, 52, 20, font, true);
++                line(pane, 3, "A Start  B Continue", 82, 16, font, true);
++                line(pane, 4, "C Stop  E Source", 102, 16, font, true);
++            } else {
++                std::snprintf(detail, sizeof(detail), "Slot %u: %u BPM", slot_ + 1, settings_.words[R::slot1 + slot_]);
++                line(pane, 1, detail, 28, 18, font, true);
++                line(pane, 2, tempo, 50, 24, font, true);
++                line(pane, 3, "A -1   B +1   C Slot", 80, 17, font, true);
++                std::snprintf(detail, sizeof(detail), "Late %uus  Lost %u", generator.late_us, generator.skipped + generator.blocked);
++                line(pane, 4, detail, 102, 16, font, true);
++            }
++            return pane;
++        }
+         if (page_ == Page::cable) {
+             const bool active = cable.enabled;
+             const unsigned font = settings_[R::status_font];
+@@ -194,6 +246,12 @@
+         return pane;
+     }
+ private:
++    unsigned slot_ = 0;
++    bool external_ = false;
++    void recall_slot() {
++        unsigned bpm = settings_.words[cntrl::UtilityPageSettings::slot1 + slot_];
++        if (bpm) generator.set_tempo((60000000u + bpm / 2) / bpm);
++    }
+     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
+         using R = cntrl::UtilityPageSettings;
+         unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];
+--- a/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
++++ b/cntrl/maker/morningstar/mc/firmware/test_renderer.cpp
+@@ -809,7 +809,13 @@
+     assert(!std::strcmp(view.lines[3].text, "Incomplete"));
+     view = pages.view(4003, 4003000, status, {}, cntrl::Panic::Status::sending);
+     assert(!std::strcmp(view.lines[3].text, "Sending"));
++    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
++    view = pages.view(4005, 4005000, status);
++    assert(!std::strcmp(view.lines[0].text, "MIDI Clock"));
++    pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
+     pages.browse(false, "ignored"); assert(pages.page() == UtilityPages::Page::tap);
++    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_tempo);
++    pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::clock_transport);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::panic);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::cable);
+     pages.browse(true, "ignored"); assert(pages.page() == UtilityPages::Page::firmware);
