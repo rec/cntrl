@@ -13,11 +13,16 @@ Review `cntrl/maker/morningstar/mc/upload_helper.py`, then run:
 
 ```bash
 cd /Users/tom/code/cntrl
-CNTRL_TYCMD='/Applications/Morningstar Firmware Updater.app/Contents/Resources/extraResources/tycmd' cntrl upload-helper serve
+cntrl upload-helper serve
 ```
 
 Keep that Terminal open. Do not use `sudo`. The helper must be launched by you,
 not inside Codex's sandbox, otherwise it will inherit the same HID restriction.
+On macOS, the default updater is
+`/Applications/Morningstar Firmware Updater.app/Contents/Resources/extraResources/tycmd`.
+Set `CNTRL_TYCMD` to override it. Other operating systems currently require that
+override; without it, the helper reports an error before starting. An unset or
+empty `CNTRL_TYCMD` selects the platform default.
 No HID operation occurs at startup. On macOS it listens on the owner-only Unix
 socket `~/Library/Caches/cntrl-upload/helper.sock`. The manually launched server
 creates an authentication key there; clients only read it. Linux uses
@@ -95,8 +100,8 @@ The helper then:
 2. Checks its digest, Intel HEX checksums and contiguous address range, matching
    MC6 Pro flash configuration, boot header, Thumb reset entry and zero CSF.
    Images cannot extend into the reserved `0x607c0000` flash tail.
-3. Calls only the server's `tycmd` executable, selected by `CNTRL_TYCMD` at startup
-   (default `tycmd` on PATH). Use the official updater path shown above on macOS.
+3. Calls only the server's updater executable, using `CNTRL_TYCMD` when set or
+   the installed Morningstar updater path on macOS.
    A read-only listing must identify exactly the expected board tag, serial
    `14468280`, HalfKay description, Teensy 4.1 model and upload capability.
 4. Uploads with compatibility checks enabled and the fixed board selector.
