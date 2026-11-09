@@ -116,6 +116,20 @@ def validate_firmware(image: FirmwareImage) -> None:
         raise ValueError('unexpected boot header, reset entry, boot data or CSF')
 
 
+def updater_path() -> Path:
+    """Use the explicit updater, or the installed macOS application."""
+    if executable := os.environ.get('CNTRL_TYCMD'):
+        return Path(executable)
+    if sys.platform != 'darwin':
+        raise ValueError(
+            f'no default updater for {sys.platform}; set CNTRL_TYCMD explicitly'
+        )
+    return (
+        Path('/Applications/Morningstar Firmware Updater.app')
+        / 'Contents/Resources/extraResources/tycmd'
+    )
+
+
 def upload_image(request: Upload) -> UploadResult:
     """Snapshot a worktree image, validate it, then upload to the sole target."""
     if not request.image.is_absolute():
@@ -133,8 +147,9 @@ def upload_image(request: Upload) -> UploadResult:
         if image.sha256 != request.sha256:
             raise ValueError('firmware SHA-256 changed; no upload was attempted')
         validate_firmware(image)
+        updater = str(updater_path())
         listing = subprocess.run(
-            [str(UPLOADER_PATH), 'list', '--verbose', '--output', 'json'],
+            [updater, 'list', '--verbose', '--output', 'json'],
             capture_output=True,
             text=True,
             check=False,
@@ -159,7 +174,7 @@ def upload_image(request: Upload) -> UploadResult:
             )
         print(f'Uploading SHA-256 {image.sha256} to {BOARD_TAG}', flush=True)
         result = subprocess.run(
-            [str(UPLOADER_PATH), 'upload', '--board', BOARD_TAG, str(snapshot)],
+            [updater, 'upload', '--board', BOARD_TAG, str(snapshot)],
             capture_output=True,
             text=True,
             check=False,
@@ -183,6 +198,7 @@ def process_request(line: bytes) -> UploadResult:
 
 def serve() -> None:
     """Handle one upload at a time; never replace an existing socket."""
+    updater_path()
     if os.name != 'nt':
         os.umask(0o077)
     with Listener(
@@ -262,7 +278,6 @@ SOCKET_PATH = (
     if os.name == 'nt'
     else CACHE_DIRECTORY / 'helper.sock'
 )
-UPLOADER_PATH = Path(os.environ.get('CNTRL_TYCMD', 'tycmd'))
 BOARD_SERIAL = '14468280'
 BOARD_TAG = '14468280-Teensy'
 FLASH_CONFIG_SHA256 = '65b509525e8b0e6e92e4e6bc8fa39575399b27532e04a55f7a7883212042fe7a'

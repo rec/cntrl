@@ -291,6 +291,43 @@ def test_unsafe_boot_envelopes_are_rejected(firmware_path: Path, offset: int) ->
         upload_helper.validate_firmware(image.model_copy(update={'data': bytes(data)}))
 
 
+@pytest.mark.parametrize('platform', ['darwin', 'linux', 'win32'])
+def test_explicit_updater_overrides_platform_default(
+    platform: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executable = tmp_path / 'custom-tycmd'
+    monkeypatch.setenv('CNTRL_TYCMD', str(executable))
+    monkeypatch.setattr(sys, 'platform', platform)
+    assert upload_helper.updater_path() == executable
+
+
+@pytest.mark.parametrize('override', [None, ''])
+def test_macos_defaults_to_installed_morningstar_updater(
+    override: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv('CNTRL_TYCMD', raising=False)
+    if override is not None:
+        monkeypatch.setenv('CNTRL_TYCMD', override)
+    monkeypatch.setattr(sys, 'platform', 'darwin')
+    assert upload_helper.updater_path() == Path(
+        '/Applications/Morningstar Firmware Updater.app/'
+        'Contents/Resources/extraResources/tycmd'
+    )
+
+
+@pytest.mark.parametrize('platform', ['linux', 'win32'])
+def test_unsupported_platform_requires_explicit_updater_before_serving(
+    platform: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv('CNTRL_TYCMD', raising=False)
+    monkeypatch.setattr(sys, 'platform', platform)
+    cache = tmp_path / 'cache'
+    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', cache)
+    with pytest.raises(ValueError, match='set CNTRL_TYCMD explicitly'):
+        upload_helper.serve()
+    assert not cache.exists()
+
+
 def test_changed_image_is_rejected_before_device_access(
     firmware_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -320,6 +357,8 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
 ) -> None:
     original = firmware_path.read_bytes()
     digest = hashlib.sha256(original).hexdigest()
+    updater = tmp_path / 'tycmd'
+    monkeypatch.setenv('CNTRL_TYCMD', str(updater))
     roots = [tmp_path / 'primary', tmp_path / 'other worktree']
     roots[worktree_index] = tmp_path
     monkeypatch.setattr(upload_helper, 'project_worktrees', lambda: roots)
@@ -332,7 +371,7 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
     ) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         assert capture_output and text and not check
-        assert command[0] == str(upload_helper.UPLOADER_PATH)
+        assert command[0] == str(updater)
         if command[1] == 'list':
             boards = [
                 {

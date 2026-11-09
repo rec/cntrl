@@ -30,20 +30,21 @@ The Makefile wraps portable Python commands for POSIX convenience. Old diagnosti
 transcripts describe historical commands, not the current build contract.
 Physical observations apply only to the recorded host/device combination.
 
-Install `tycmd` for the host on PATH, or set `CNTRL_TYCMD` to its full path before
-manually starting the upload helper. The helper preserves the fixed image path
-and sole allowed pedal serial/tag. The bootloader command discovers that serial
-number and sends the same 134-baud line-coding request through pySerial, with no
-serial payload.
+On macOS, `cntrl upload-helper serve` defaults to the installed Morningstar
+updater. Set `CNTRL_TYCMD` to override that path; other hosts currently require
+an explicit override. The helper snapshots the requested worktree image and
+preserves the sole allowed pedal serial/tag. The bootloader command discovers
+that serial number and sends the same 134-baud line-coding request through
+pySerial, with no serial payload.
 
 The helper uses authenticated local byte messages over named pipes on Windows
 and Unix sockets on POSIX. It uses neither TCP nor pickle. Authentication keys
 and image snapshots live in the user's platform cache directory (`LOCALAPPDATA`,
 `~/Library/Caches`, or `XDG_CACHE_HOME`/`~/.cache`). Unix cache/key permissions
 are restricted to the user. Named pipes use local access control plus the cache
-authentication key. Requests remain bounded and accept only the expected digest;
-board/image checks run before uploader invocation. Restart an old helper after
-updating its transport code.
+authentication key. Requests remain bounded and accept only an image path and
+digest; board/image checks run before uploader invocation. Restart an old helper
+after updating its transport code.
 
 Windows/Linux physical upload, serial permissions, reboot and MIDI qualification
 remain unverified. Builds and pipe peers do not supply that evidence.
