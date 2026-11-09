@@ -94,7 +94,7 @@ public:
             int value = inputs_[i].pending(a);
             if (value >= 0) {
                 uint8_t data[] = {uint8_t(0xb0 | (a.channel - 1)), a.controller, uint8_t(value)};
-                if (send(a.output, data)) inputs_[i].sent(value);
+                if (send(i, a.output, data)) inputs_[i].sent(value);
             }
         }
         phase_ = (phase_ + 1) % 3;

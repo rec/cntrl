@@ -5,6 +5,7 @@
 using namespace cntrl::midi;
 namespace {
 struct Output : Sink {
+    Output() { pickup(false); }
     std::vector<Packet> packets[2];
     bool blocked[2] = {};
     bool write_packet(unsigned output, const Packet &packet) override {
@@ -278,6 +279,22 @@ void unused_ports_do_not_reduce_active_output_capacity() {
     }
     assert(!streams.voices() && output.packets[1].size() == 300);
 }
+void pickup_uses_mapped_destination_and_separate_live_sources() {
+    Route route; route.count = 1; route.steps = {5,0,8,0, 0,1, 4,255,74,0,0,0};
+    auto data = compiled({route}); Streams streams; Output output;
+    output.pickup(true, 0);
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    output.submit(1, {11,{0xb0,74,64}});
+    streams.receive(0, {11,{0xb0,7,20},0}, 0); poll(streams, output, 0);
+    assert(output.state().value(1, 0, 74) == 64 && !streams.diagnostics().transmitted);
+    streams.receive(0, {11,{0xb0,7,70},0}, 1); poll(streams, output, 1);
+    assert(output.state().value(1, 0, 74) == 70 && streams.diagnostics().transmitted == 1);
+    streams.receive(0, {11,{0xb0,7,40},1}, 2); poll(streams, output, 2);
+    assert(output.state().value(1, 0, 74) == 70);
+    streams.receive(0, {11,{0xb0,7,80},1}, 3); poll(streams, output, 3);
+    streams.receive(0, {11,{0xb0,7,60},0}, 4); poll(streams, output, 4);
+    assert(output.state().value(1, 0, 74) == 80 && streams.diagnostics().transmitted == 2);
+}
 }
 int main() {
     transforms_and_release(); patch_scope_and_cleanup(); reconnect_and_independent_outputs();
@@ -291,5 +308,6 @@ int main() {
     paired_pressure_and_release_fields_follow_written_transforms(); controller_only_map_preserves_unrelated_notes();
     stateful_processor_observes_each_input_release_once_across_fanout();
     unused_ports_do_not_reduce_active_output_capacity();
+    pickup_uses_mapped_destination_and_separate_live_sources();
     std::cout << "MIDI stream processing passed\n";
 }

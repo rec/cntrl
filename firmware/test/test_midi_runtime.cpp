@@ -75,6 +75,7 @@ struct Services : cntrl::midi::Sink {
     uint32_t time = 0, timer_step = 1;
     unsigned errors = 0;
     explicit Services(unsigned count = 3) : sources(count) {
+        pickup(false);
         bridge.configure(true);
         for (unsigned i = 0; i < count; ++i) {
             cntrl::midi::InputEvent event;

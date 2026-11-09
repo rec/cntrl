@@ -269,6 +269,14 @@ public:
             if (size < 12 || size > length - names) return false;
             streams = names; names += size;
         }
+        unsigned pickup = 0;
+        if (names + 4 <= length && !std::memcmp(bytes + names, "CPUP", 4)) {
+            if (length - names < 9 || bytes[names + 6] > 2) return false;
+            unsigned count = u16(bytes + names + 4);
+            if (count > length - names - 9) return false;
+            for (unsigned i = 0; i < count; ++i) if (bytes[names + 9 + i] > 2) return false;
+            pickup = names; names += 9 + count;
+        }
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -280,6 +288,7 @@ public:
         }
         unsigned graph = end;
         if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count)) return false;
+        if (pickup && u16(bytes + pickup + 4) != u16(bytes + graph + 8)) return false;
         if (streams) {
             std::vector<midi::OutputConnection> configured;
             for (auto connection : hardware.midi_outputs()) {
@@ -416,13 +425,19 @@ public:
         if (next != np) return false;
         data_ = bytes; length_ = length; instruments_ = ni; patch_cycles_ = nc; patches_ = np;
         styles_ = styles; pages_ = page_start; texts_ = texts;
-        graph_ = graph; streams_ = streams;
+        graph_ = graph; streams_ = streams; pickup_ = pickup;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
     unsigned switches() const { return u16(data_ + graph_ + 10); }
     const uint8_t *midi_streams() const { return streams_ ? data_ + streams_ : nullptr; }
     unsigned midi_streams_size() const { return streams_ ? u32(data_ + streams_ + 4) : 0; }
+    bool pickup(unsigned root = 65535) const {
+        unsigned policy = pickup_ ? data_[pickup_ + 6] : 0;
+        if (pickup_ && root < nodes() && data_[pickup_ + 9 + root]) policy = data_[pickup_ + 9 + root];
+        return policy != 1;
+    }
+    unsigned pickup_pairing_ms() const { return pickup_ ? u16(data_ + pickup_ + 7) : 2; }
     unsigned stream_scope(unsigned root) const {
         std::vector<unsigned> pending{root};
         std::vector<bool> visited(nodes(), false);
@@ -528,9 +543,10 @@ public:
         return u16(p) != 65535 ? p : nullptr;
     }
     unsigned page_section_size() const {
-        const uint8_t *endpoints = movie_section() + 8 + 4 * (movies(false) + movies(true));
-        const uint8_t *inputs = endpoints + 6 + 68 * u16(endpoints + 4);
-        return unsigned(inputs - bank(patches())) + 6 + 32 * u16(inputs + 4) + (relay_count() ? 6 + relay_count() * 33 : 0) + (counters() ? 6 + counters() * 104 : 0);
+        const uint8_t *end = counter_section() + (counters() ? 6 + counters() * 104 : 0);
+        if (!std::memcmp(end, "CSTR", 4)) end += u32(end + 4);
+        if (!std::memcmp(end, "CPUP", 4)) end += 9 + u16(end + 4);
+        return unsigned(end - bank(patches()));
     }
     const uint8_t *movie_section() const {
         const auto layout = page_layout();
@@ -862,6 +878,6 @@ private:
     const uint8_t *data_ = nullptr;
     unsigned length_ = 0, instruments_ = 0, patch_cycles_ = 0, patches_ = 0;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
-    unsigned graph_ = 0, streams_ = 0;
+    unsigned graph_ = 0, streams_ = 0, pickup_ = 0;
 };
 } // namespace cntrl

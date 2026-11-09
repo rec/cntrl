@@ -300,6 +300,8 @@ def compile_display(
         for k, v in show.model_dump(exclude_none=True).items()
         if k in SOURCE_FIELDS
     }
+    if show.pickup_pairing_ms == 2:
+        source.pop('pickup_pairing_ms', None)
     if not show.inline_patches:
         source['inline_patches'] = False
     source['switches'] = {
@@ -428,6 +430,8 @@ FIELDS = {
     'scrolling.vertical_duration': 23,
 }
 SOURCE_FIELDS = (
+    'pickup',
+    'pickup_pairing_ms',
     'midi',
     'splash_movie',
     'idle_movie',

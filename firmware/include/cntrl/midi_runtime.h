@@ -32,6 +32,7 @@ public:
         auto &pages = s.runtime_pages();
         bridge.host_connected(s.midi_host_connected());
         uint32_t begin = s.microseconds(), now = s.milliseconds();
+        s.pickup_time(begin);
         bridge.connected(s.midi_device_connected(), now);
         uint64_t stream_time = extend(s.microseconds());
         for (const auto &endpoint : s.midi_outputs()) {
@@ -39,6 +40,7 @@ public:
                 || (endpoint.transport == OutputTransport::usb_host ? s.midi_host_connected() : s.midi_device_connected());
             uint64_t identity = endpoint_identity(s, endpoint.route, 0);
             uint64_t generation = endpoint_generation(s, endpoint.route, 0);
+            if (!present || generation != generations_[endpoint.route]) s.forget_pickup_source(endpoint.route);
             if (monitor_.active()) monitor_.connection(endpoint.route, present, identity, generation, s.microseconds());
             if (generation != generations_[endpoint.route]) {
                 streams_.connection(endpoint.route, false, identity, stream_time);
@@ -62,6 +64,7 @@ public:
             for (unsigned item = 0; item < source_items_ && uint32_t(s.microseconds() - begin) < input_budget_us_; ++item) {
                 InputEvent event;
                 if (!s.midi_read_event(source, event)) break;
+                event.packet.source = uint16_t(event.input * 16 + event.cable);
                 uint32_t timestamp = s.microseconds();
                 bool diagnostic_traffic = false;
 #if CNTRL_CABLE_TEST
@@ -86,7 +89,7 @@ public:
                 if (s.panic_owns_midi) continue;
 #endif
                 if (event.packetized) streams_.receive(event.input, event.packet, extend(timestamp));
-                else streams_.byte(event.input, event.byte, extend(timestamp));
+                else streams_.byte(event.input, event.byte, extend(timestamp), event.cable);
                 if (streams_.explicit_system()) continue;
                 if (event.forward == InputEvent::absent) continue;
                 if (event.relay) {
@@ -96,7 +99,7 @@ public:
                 if (event.packetized) {
                     const auto *output = s.midi_outputs().route(event.forward);
                     if (output && s.available(output->name)) bridge.forward_packet(event.forward, event.packet, now);
-                } else bridge.receive(event.forward, event.byte, now);
+                } else bridge.receive(event.forward, event.byte, now, event.input * 16 + event.cable);
             }
         }
         source_cursor_ = count ? (source_cursor_ + 1) % count : 0;
@@ -127,6 +130,8 @@ public:
             streams_.service(s, extend(s.microseconds()), available,
                 bridge.busy_outputs() | files.player.sysex_outputs(), 64, files.player.sysex_outputs());
         }
+        if (!exclusive) s.pickup_poll(s.microseconds(), bridge.destinations(),
+            available & ~bridge.busy_outputs() & ~files.player.sysex_outputs() & ~streams_.sysex_outputs());
         s.midi_flush();
         if (monitor_.active()) monitor_.poll(s.microseconds());
         files.recorder.poll(s.microseconds());

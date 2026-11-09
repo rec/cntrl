@@ -35,6 +35,12 @@ def parse_tags(value: object) -> object:
     return value
 
 
+def parse_pickup(value: object) -> object:
+    if isinstance(value, str) and value in ('none', 'None'):
+        return None
+    return value
+
+
 def parse_movies(value: object) -> object:
     if isinstance(value, str):
         return value.split(':') if value else []
@@ -128,6 +134,9 @@ class Style(BaseModel, frozen=True):
 
 
 class Presentation(BaseModel, frozen=True):
+    pickup: Annotated[
+        Annotated[bool, Field(strict=True)] | None, BeforeValidator(parse_pickup)
+    ] = None
     name: str | None = None
     display_name: str | None = None
     style: Style | None = None
@@ -905,6 +914,10 @@ class Page(BaseModel, frozen=True):
 
 
 class Setup(BaseModel, frozen=True):
+    pickup: Annotated[
+        Annotated[bool, Field(strict=True)] | None, BeforeValidator(parse_pickup)
+    ] = None
+    pickup_pairing_ms: Annotated[int, Field(strict=True, ge=0, le=65535)] = 2
     midi: dict[str, object] | None = None
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)

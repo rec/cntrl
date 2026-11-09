@@ -1,5 +1,7 @@
 #pragma once
 #include "midi_state.h"
+#include "midi_packet.h"
+#include "midi_pickup.h"
 #include <cstdint>
 #include <vector>
 #include "midi_outputs.h"
@@ -52,19 +54,6 @@ inline bool batch_valid(const uint8_t *bytes, unsigned size) {
     }
     return true;
 }
-// A complete short message, or up to three bytes of a streamed SysEx.
-struct Packet {
-    uint8_t cin = 0, bytes[3] = {};
-    unsigned size() const {
-        static constexpr uint8_t lengths[] = {0, 0, 2, 3, 3, 1, 2, 3, 3, 3, 3, 3, 2, 2, 3, 1};
-        return lengths[cin & 15];
-    }
-    uint32_t packed(unsigned cable = 0) const {
-        return cin | (cable << 4) | uint32_t(bytes[0]) << 8
-            | uint32_t(bytes[1]) << 16 | uint32_t(bytes[2]) << 24;
-    }
-};
-
 class Parser {
 public:
     bool sysex() const { return sysex_; }
@@ -124,15 +113,32 @@ struct Counters {
 
 struct Sink {
     virtual ~Sink() = default;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_submit)
+#endif
     bool submit(unsigned destination, const Packet &packet) {
-        if (destination >= 16) return false;
-        if (observer_ && !observer_->parameter_write(destination, packet.bytes, packet.size(), nullptr, 0)) return false;
-        if (parameter_locks_[destination].token && packet.bytes[0] < 0xf8) return false;
-        if (!write_packet(destination, packet)) return false;
-        state_.record(destination, packet.bytes, packet.size());
-        packet_sent(destination, packet);
+        if (!pickup_.flush(destination, now_, state_, Writer{*this}, true)) return false;
+        if (!write(destination, packet)) return false;
+        pickup_.observe(state_);
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_submit_live)
+#endif
+    bool submit_live(unsigned destination, const Packet &packet, uint32_t *transmitted = nullptr) {
+        return pickup_.submit(destination, packet, now_, state_, Writer{*this}, transmitted);
+    }
+    void pickup(bool enabled, unsigned pairing_ms = 2) { pickup_.configure(enabled, pairing_ms); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_pickup_poll)
+#endif
+    void pickup_poll(uint32_t now, unsigned outputs, unsigned available = ~0u) {
+        now_ = now;
+        for (unsigned i = 0; i < outputs; ++i) if (available & (1u << i))
+            pickup_.flush(i, now, state_, Writer{*this});
+    }
+    void pickup_time(uint32_t now) { now_ = now; }
+    void forget_pickup_source(unsigned input) { pickup_.forget_source(input); }
     const MidiState &state() const { return state_; }
     void parameter_observer(ParameterObserver *observer) { observer_ = observer; }
     int parameter_value(unsigned output, const Parameter &parameter) const {
@@ -140,11 +146,15 @@ struct Sink {
         return state_.parameter_value(output, parameter);
     }
     bool parameter_locked(unsigned output) const { return output < 16 && parameter_locks_[output].token; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_submit_parameter)
+#endif
     bool submit_parameter(unsigned output, ParameterTransaction &transaction) {
         if (output >= 16 || !transaction.token || !transaction.parameter.valid()
             || transaction.position >= transaction.parameter.messages()) return false;
         auto &lock = parameter_locks_[output];
         if (lock.token && lock.token != transaction.token) return false;
+        if (!transaction.position && !pickup_.flush(output, now_, state_, Writer{*this}, true)) return false;
         uint8_t bytes[3] = {};
         transaction.parameter.message(transaction.position, bytes);
         if (!transaction.position && observer_ && !observer_->parameter_write(output, bytes, 3, &transaction.parameter, transaction.origin)) return false;
@@ -154,26 +164,48 @@ struct Sink {
         packet_sent(output, packet);
         lock = {transaction.parameter, transaction.token, 0};
         if (++transaction.position == transaction.parameter.messages()) lock.token = 0;
+        if (!lock.token) pickup_.observe(state_);
         return true;
     }
     void abandon_parameter(unsigned output, ParameterTransaction &transaction) {
         if (output < 16 && parameter_locks_[output].token == transaction.token) {
             parameter_locks_[output].token = 0;
             state_.forget_parameter(output, transaction.parameter);
+            pickup_.observe(state_);
         }
         transaction = {};
     }
     void forget_output(unsigned output) {
         if (output < 16) parameter_locks_[output] = {};
         state_.forget(output);
+        pickup_.forget(output);
     }
 protected:
     virtual void packet_sent(unsigned, const Packet &) {}
     virtual bool write_packet(unsigned destination, const Packet &packet) = 0;
 private:
+    struct Writer {
+        Sink &sink;
+        bool operator()(unsigned destination, const Packet &packet) const { return sink.write(destination, packet); }
+    };
+    Pickup pickup_;
+    uint32_t now_ = 0;
     MidiState state_;
     ParameterTransaction parameter_locks_[16] = {};
     ParameterObserver *observer_ = nullptr;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_write)
+#endif
+    bool write(unsigned destination, const Packet &packet) {
+        if (destination >= 16) return false;
+        bool live_selection = packet.source != 65535 && packet.bytes[0] >> 4 == 11 && packet.bytes[1] >= 98 && packet.bytes[1] <= 101;
+        if (observer_ && !live_selection && !observer_->parameter_write(destination, packet.bytes, packet.size(), nullptr, 0)) return false;
+        if (parameter_locks_[destination].token && packet.bytes[0] < 0xf8) return false;
+        if (!write_packet(destination, packet)) return false;
+        state_.record(destination, packet.bytes, packet.size());
+        packet_sent(destination, packet);
+        return true;
+    }
 };
 
 // Route storage follows the supplied endpoint table. One service attempts
@@ -301,18 +333,18 @@ public:
         host_connected_ = connected;
         if (!connected) for (unsigned i = 0; i < destinations(); ++i) if (host_routes_ & (1u << i)) disconnect_output(i);
     }
-    bool pedal(unsigned route, const uint8_t *bytes, unsigned size) {
+    bool pedal(unsigned route, const uint8_t *bytes, unsigned size, unsigned source = 65535) {
         if (route >= destinations() || !usb_enabled(route) || !batch_valid(bytes, size) || ((device_routes_ & (1u << route)) && !connected_)) return false;
         auto &r = routes_[route];
         if (r.pedal_count == pedal_capacity) return false;
         auto &b = r.pedal[(r.pedal_head + r.pedal_count) % pedal_capacity];
-        std::memcpy(b.bytes, bytes, size); b.size = size; ++r.pedal_count;
+        std::memcpy(b.bytes, bytes, size); b.size = size; b.source = source; ++r.pedal_count;
         return true;
     }
     // Report physical packet completion even without an available USB receiver.
-    bool receive(unsigned route, uint8_t b, uint32_t now) {
+    bool receive(unsigned route, uint8_t b, uint32_t now, unsigned source = 65535) {
         if (route >= destinations() || (host_routes_ & (1u << route)) || !usb_device_ || !enabled_ || (!forwarding_ && (physical_routes_ & (1u << route)))) return false;
-        return receive_byte(route, b, now, forwarding_);
+        return receive_byte(route, b, now, forwarding_, source);
     }
     // Hosted-device forwarding is independent of the physical MIDI-interface switch.
     void relay_packet(unsigned route, const Packet &packet, uint32_t now) {
@@ -325,7 +357,7 @@ public:
         receive_packet(route, packet, now);
     }
 private:
-    bool receive_byte(unsigned route, uint8_t b, uint32_t now, bool forwarding) {
+    bool receive_byte(unsigned route, uint8_t b, uint32_t now, bool forwarding, unsigned source = 65535) {
         auto &r = routes_[route];
         bool was_sysex = r.parser.sysex();
         // Close an interrupted physical SysEx before forwarding a new status.
@@ -333,6 +365,7 @@ private:
         if (b == 0xf0 && was_sysex) abort(route);
         Packet p;
         bool complete = r.parser.receive(b, p);
+        p.source = uint16_t(source);
         if (b < 0xf8 && (was_sysex || r.parser.sysex())) r.last_sysex = now;
         if (complete && forwarding) enqueue(route, p);
         return complete;
@@ -341,7 +374,7 @@ private:
         if (!valid(packet, routes_[route].parser.sysex() || routes_[route].parser.discarding())) {
             ++routes_[route].counts.dropped; return;
         }
-        for (unsigned i = 0; i < packet.size(); ++i) receive_byte(route, packet.bytes[i], now, true);
+        for (unsigned i = 0; i < packet.size(); ++i) receive_byte(route, packet.bytes[i], now, true, packet.source);
     }
 public:
     bool handoff(Sink &sink) {
@@ -359,6 +392,9 @@ public:
             if ((outputs & (1u << b.route)) && b.delivery == Delivery::pending && b.offset) return false;
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(bridge_service)
+#endif
     void service(Sink &sink, uint32_t now, unsigned reserved_outputs = 0) {
         for (unsigned i = 0; i < destinations(); ++i) if (invalidated_ & (1u << i)) sink.forget_output(i);
         invalidated_ = 0;
@@ -385,8 +421,10 @@ public:
                 unsigned n = status >> 4 == 12 || status >> 4 == 13 ? 2 : 3;
                 Packet p{uint8_t(status >> 4), {status, b.bytes[r.pedal_offset + 1], 0}};
                 if (n == 3) p.bytes[2] = b.bytes[r.pedal_offset + 2];
-                if (sink.submit(index, p)) {
-                    ++r.counts.transmitted; r.pedal_offset += n;
+                p.source = uint16_t(b.source);
+                if (p.source == 65535 ? sink.submit(index, p) : sink.submit_live(index, p, &r.counts.transmitted)) {
+                    if (p.source == 65535) ++r.counts.transmitted;
+                    r.pedal_offset += n;
                     if (r.pedal_offset == b.size) {
                         r.pedal_offset = 0; r.pedal_head = (r.pedal_head + 1) % pedal_capacity; --r.pedal_count;
                     }
@@ -395,10 +433,10 @@ public:
             }
             if (!r.count) continue;
             const Packet &p = r.queue[r.head];
-            if (!sink.submit(index, p)) continue;
+            if (!(p.source == 65535 ? sink.submit(index, p) : sink.submit_live(index, p, &r.counts.transmitted))) continue;
             if (p.cin == 4) r.wire_sysex = true;
             else if (p.cin >= 5 && p.cin <= 7 && p.bytes[p.size() - 1] == 0xf7) r.wire_sysex = false;
-            ++r.counts.transmitted;
+            if (p.source == 65535) ++r.counts.transmitted;
             r.head = (r.head + 1) % capacity; --r.count;
         }
         if (destinations()) cursor_ = (cursor_ + 1) % destinations();
@@ -466,7 +504,7 @@ private:
         auto &r = routes_[index];
         if (sink.submit(index, {5, {0xf7, 0, 0}})) r.terminate = r.wire_sysex = false;
     }
-    struct Batch { uint8_t bytes[14] = {}; unsigned size = 0; };
+    struct Batch { uint8_t bytes[14] = {}; unsigned size = 0, source = 65535; };
     struct Route {
         Packet queue[capacity]; Batch pedal[pedal_capacity]; Parser parser; Counters counts;
         unsigned head = 0, count = 0, pedal_head = 0, pedal_count = 0, pedal_offset = 0;

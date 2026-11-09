@@ -14,6 +14,7 @@ from . import (
     midi_messages,
     midi_processing,
     page_settings,
+    pickup,
     relay_outputs,
 )
 from .compiler import (
@@ -91,6 +92,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     cursor = relay_outputs.section_end(data, cursor)
     cursor = counters.section_end(data, cursor)
     cursor = midi_processing.section_end(data, cursor)
+    cursor = pickup.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4

@@ -145,11 +145,13 @@ public:
         return midi_runtime_.streams().gate(name, enabled);
     }
     void configure_midi_streams(const cntrl::Document &document) override {
+        pickup(document.pickup(), document.pickup_pairing_ms());
         midi_runtime_.streams().file_provider(&midi_files);
         if (!midi_runtime_.streams().load(document.midi_streams(), document.midi_streams_size(), midi_outputs(), document.nodes(), midi_runtime_.stream_time(micros())))
             error("Invalid MIDI stream graph");
     }
     bool select_midi_streams(const cntrl::Document &document, unsigned node) override {
+        pickup(document.pickup(node), document.pickup_pairing_ms());
         if (document.midi_streams_size() != documents.document().midi_streams_size()
             || (document.midi_streams_size() && std::memcmp(document.midi_streams(), documents.document().midi_streams(), document.midi_streams_size())))
             return midi_runtime_.streams().select_external(document.midi_streams(), document.midi_streams_size(),
@@ -635,8 +637,10 @@ public:
 #endif
                 return available(out) && !documents.busy() && !documents.dirty();
             },
-            [this](const char *out, const uint8_t *bytes) {
-                return !application.patch_pending() && output_idle() && send(out, bytes, 3);
+            [this](unsigned input, const char *out, const uint8_t *bytes) {
+                const auto *connection = midi_outputs().find(out);
+                return connection && !application.patch_pending() && output_idle()
+                    && bridge_.pedal(connection->route, bytes, 3, 256 + input);
             });
     }
     void display(uint32_t now, bool transfer_busy) {

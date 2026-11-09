@@ -273,12 +273,13 @@ public:
         if (replacement) erase_if(cleanup_, [output](const Cleanup &entry) { return entry.output == output; });
         sysex_outputs_ &= ~(1u << output);
     }
-    void byte(unsigned input, uint8_t byte, uint64_t now) {
+    void byte(unsigned input, uint8_t byte, uint64_t now, unsigned cable = 0) {
         if (input >= parsers_.size()) return;
         Packet packet;
-        if (parsers_[input].receive(byte, packet)) receive(input, packet, now);
+        if (parsers_[input].receive(byte, packet)) { packet.source = uint16_t(input * 16 + cable); receive(input, packet, now); }
     }
     void receive(unsigned input, Packet packet, uint64_t now) {
+        if (packet.source == 65535) packet.source = uint16_t(input * 16);
         if (input >= inputs_.size() || !inputs_[input].present) return;
         current_time_ = now;
         unsigned kind = packet.bytes[0] >> 4;
@@ -430,8 +431,9 @@ public:
                     if (claim.output == event->output && claim.channel == (event->packet.bytes[0] & 15) && claim.controller == event->packet.bytes[1]
                         && (claim.owner != event->owner || claim.input != event->input)) write = false;
             }
-            if (write && !sink.submit(event->output, event->packet)) { attempted |= bit; ++event; continue; }
-            if (write) { ++diagnostics_.transmitted; delivered |= bit; }
+            bool live = event->input < max_routes && event->packet.source != 65535;
+            if (write && !(live ? sink.submit_live(event->output, event->packet, &diagnostics_.transmitted) : sink.submit(event->output, event->packet))) { attempted |= bit; ++event; continue; }
+            if (write) { if (!live) ++diagnostics_.transmitted; delivered |= bit; }
             if (write && clock) { clock_claimed_[event->output] = true; clock_sources_[event->output] = event->input; clock_owners_[event->output] = event->owner; }
             if (voice && onset) voice->sounding = true;
             if (write && (event->packet.bytes[0] == 0xff || (event->packet.bytes[0] >> 4 == 11 && event->packet.bytes[1] >= 120))) {
@@ -764,6 +766,7 @@ private:
             if (!credits || engine.events_.size() + engine.voices_.size() >= engine.limits_.events) return false;
             --credits;
             Work transformed = work; transformed.packet = packet; transformed.due += delay;
+            transformed.packet.source = work.packet.source;
             unsigned kind = packet.bytes[0] >> 4;
             if (!work.token && kind == 9 && packet.bytes[2]) {
                 if (engine.notes_.size() >= engine.limits_.notes) return false;
@@ -1233,6 +1236,7 @@ private:
         std::vector<Token> tokens;
         for (const auto &event : sequence) {
             Work reversed{event.packet, boundary + event.time, event.token, event.source, event.owner};
+            reversed.packet.source = 65535;
             unsigned kind = event.packet.bytes[0] >> 4;
             if (kind == 9 && event.token) {
                 reversed.token = ++serial_; tokens.push_back({event.token, reversed.token});

@@ -1,3 +1,5 @@
+pickup = false
+pickup_pairing_ms = 2
 seed = 0
 fill_in_styles = true
 inline_patches = true

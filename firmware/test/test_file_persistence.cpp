@@ -38,7 +38,7 @@ void test_calibration_survives_reload(TestFileSystem &filesystem) {
     unsigned raw = 100;
     auto cycle = [&](uint32_t now) {
         pedals.poll(now, [](unsigned) { return true; }, [&](unsigned, unsigned) { return int(raw); },
-            [](const char *) { return true; }, [](const char *, const uint8_t *) { return true; });
+            [](const char *) { return true; }, [](unsigned, const char *, const uint8_t *) { return true; });
     };
     for (unsigned now = 8; now <= 44; now += 2) cycle(now);
     pedals.calibrate(true); // Capture heel.
@@ -51,7 +51,7 @@ void test_calibration_survives_reload(TestFileSystem &filesystem) {
     recovered.load_calibrations(); recovered.configure(&assignment);
     for (unsigned now = 8; now <= 44; now += 2)
         recovered.poll(now, [](unsigned) { return true; }, [](unsigned, unsigned) { return 500; },
-            [](const char *) { return true; }, [](const char *, const uint8_t *) { return true; });
+            [](const char *) { return true; }, [](unsigned, const char *, const uint8_t *) { return true; });
     char title[40], position[40], prompt[40];
     recovered.status("Pedal", true, title, position, prompt);
     assert(std::strstr(position, "Calibrated"));

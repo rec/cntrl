@@ -20,6 +20,7 @@ from . import (
     midi_processing,
     models,
     page_settings,
+    pickup,
     relay_outputs,
 )
 
@@ -529,6 +530,11 @@ def compile_show(
                     if k in models.Presentation.model_fields and k != 'bindings'
                 }
                 | (
+                    {'pickup': 'none'}
+                    if 'pickup' in p.model_fields_set and p.pickup is None
+                    else {}
+                )
+                | (
                     {
                         'bindings': {
                             k: models.parse_binding(v).model_dump(exclude_none=True)
@@ -688,6 +694,11 @@ def compile_show(
         + relay_settings
         + counter_settings
         + stream_settings
+        + pickup.pack(
+            show.pickup,
+            show.pickup_pairing_ms,
+            [compiler.presentation(i)[1].pickup for i in range(len(compiler.values))],
+        )
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -1411,7 +1422,9 @@ class PatchCompiler:
         value = self.values[index]
         if self.nodes[index][0] in (10, 12) and index not in seen:
             seen.add(index)
-            return self.presentation(self.children[index][0], seen)
+            return self.presentation(
+                struct.unpack_from('<H', self.nodes[index], 4)[0], seen
+            )
         if (
             index not in seen
             and isinstance(value, models.Reference)

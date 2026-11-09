@@ -72,6 +72,9 @@ public:
             if (v.controller == control && v.known) return v.value;
         return -1;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_state_parameter_value)
+#endif
     int parameter_value(unsigned output, const Parameter &parameter) const {
         for (const auto &o : outputs) if (o.output == output)
             for (const auto &c : o.channels) if (c.channel == parameter.channel) {
@@ -83,8 +86,10 @@ public:
                 if (parameter.kind == Parameter::bend) return c.pitch_known && c.pitch_bend ? int(*c.pitch_bend) - 8192 : Parameter::unknown;
                 if (parameter.kind == Parameter::pressure) return c.pressure ? *c.pressure : Parameter::unknown;
                 if (parameter.kind == Parameter::program) return c.program ? *c.program + 1 : Parameter::unknown;
-                if (parameter.kind == Parameter::key_pressure)
+                if (parameter.kind == Parameter::key_pressure) {
                     for (const auto &n : c.notes) if (n.note == parameter.address) return n.pressure ? *n.pressure : Parameter::unknown;
+                    return Parameter::unknown;
+                }
                 for (const auto &p : c.parameters) if (p.parameter == parameter.address && p.registered == (parameter.kind == Parameter::rpn14))
                     return parameter.kind == Parameter::nrpn7 ? p.coarse ? *p.coarse : Parameter::unknown : p.value ? *p.value : Parameter::unknown;
             }
