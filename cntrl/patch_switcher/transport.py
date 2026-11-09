@@ -88,7 +88,8 @@ class SerialConnection:
                     self.connect()
                 self.write_frame(frame)
                 while True:
-                    response = self.read_frame().split()
+                    raw_response = self.read_frame()
+                    response = raw_response.split()
                     if response == ['CNTRL', 'USB', 'LOST']:
                         if self.sequence == 0:
                             return
@@ -102,13 +103,18 @@ class SerialConnection:
                             lost_reported = True
                         raise OSError('USB session lost')
                     if len(response) == 6 and response[:2] == ['CNTRL', 'USB']:
-                        raise UsbProtocolError(
+                        raise self.protocol_error(
                             'USB protocol mismatch: the connected device is running '
                             'older cntrl firmware. Update its firmware before using '
-                            'this version of cntrl.'
+                            'this version of cntrl.',
+                            raw_response,
                         )
                     if len(response) != 7 or response[:2] != ['CNTRL', 'USB']:
-                        raise UsbProtocolError('Invalid USB transport response')
+                        raise self.protocol_error(
+                            'Invalid USB transport response: expected 7 fields '
+                            f'starting with CNTRL USB, received {len(response)} fields',
+                            raw_response,
+                        )
                     try:
                         session = int(response[2], 16)
                         sequence, reply = int(response[3]), int(response[4])
@@ -119,18 +125,22 @@ class SerialConnection:
                             b'' if response[6] == '-' else bytes.fromhex(response[6])
                         )
                     except ValueError as error:
-                        raise UsbProtocolError(
-                            'Invalid USB transport response'
+                        raise self.protocol_error(
+                            f'Invalid USB transport response: {error}', raw_response
                         ) from error
                     if session != self.session or sequence < self.sequence:
                         continue
                     if sequence != self.sequence:
-                        raise UsbProtocolError('Unexpected USB sequence')
+                        raise self.protocol_error(
+                            'Unexpected USB sequence', raw_response
+                        )
                     if payload and reply == self.acknowledged + 1:
                         self.received.extend(payload)
                         self.acknowledged = reply
                     elif payload and reply != self.acknowledged:
-                        raise UsbProtocolError('Unexpected USB reply sequence')
+                        raise self.protocol_error(
+                            'Unexpected USB reply sequence', raw_response
+                        )
                     self.usb_block_size = block_size
                     self.sequence += 1
                     return
@@ -149,6 +159,19 @@ class SerialConnection:
                     for _ in range(delay):
                         time.sleep(1)
                     delay *= 2
+
+    def protocol_error(self, reason: str, response: str | bytes) -> UsbProtocolError:
+        return UsbProtocolError(
+            f'ERROR: {reason}\n'
+            f'Port: {self.port}\n'
+            f'Host transport: {__file__}\n'
+            'Expected reply: CNTRL USB SESSION_HEX SEQUENCE REPLY_ID '
+            'BLOCK_SIZE PAYLOAD_HEX\n'
+            f'Host state: session={self.session:x}, sequence={self.sequence}, '
+            f'acknowledged_reply={self.acknowledged}, '
+            f'usb_block_size={self.usb_block_size}\n'
+            f'Received (length={len(response)}): {response!r}'
+        )
 
     def write_frame(self, data: bytes) -> None:
         assert self.serial is not None
@@ -184,9 +207,11 @@ class SerialConnection:
                 try:
                     return result.decode('ascii').rstrip('\r')
                 except UnicodeDecodeError as error:
-                    raise UsbProtocolError('Invalid USB response encoding') from error
+                    raise self.protocol_error(
+                        f'Invalid USB response encoding: {error}', bytes(result)
+                    ) from error
             result.extend(value)
-        raise UsbProtocolError('USB transport response too long')
+        raise self.protocol_error('USB transport response too long', bytes(result))
 
     def write(self, data: bytes) -> None:
         for i in range(0, len(data), self.usb_block_size):

@@ -1,0 +1,6 @@
+ERROR: Invalid USB transport response: invalid USB block size
+Port: unused
+Host transport: <transport.py>
+Expected reply: CNTRL USB SESSION_HEX SEQUENCE REPLY_ID BLOCK_SIZE PAYLOAD_HEX
+Host state: session=1234, sequence=9, acknowledged_reply=7, usb_block_size=4096
+Received (length=25): 'CNTRL  USB 1234 9 8 0 - \r'
