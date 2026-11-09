@@ -30,19 +30,17 @@ perform SD I/O; physical timing during those operations remains unqualified.
 
 ## Preparing an upload image
 
-After building the combined firmware, stage it for the existing upload helper:
+After building and inspecting the combined firmware, use its absolute path and
+exact SHA-256 with the existing upload helper:
 
 ```bash
-uv run -m cntrl.maker.morningstar.mc.upload_helper prepare \
-  --source cntrl/maker/morningstar/mc/firmware/build/boot-switch/combined.hex \
-  --directory backups/before-flash/firmware
+cntrl upload-helper upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
 ```
 
-The directory must not exist. The command validates a snapshot of the HEX file,
-saves it as `new-image.hex`, retains any previous staged upload image as
-`previous-upload-image.hex`, and atomically replaces the helper's fixed
-`firmware/build/patch-switcher.hex`. It prints the exact file's SHA-256 for the
-upload request. It does not enter the bootloader or flash the pedal.
+The helper snapshots and validates the requested worktree image before flashing
+the expected pedal. No staging copy in another checkout is needed. Start the
+helper manually and enter the bootloader first, following the
+[upload helper guide](upload-helper.md).
 
 ## Switch response
 

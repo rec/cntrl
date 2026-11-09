@@ -7,8 +7,8 @@ import subprocess
 import sys
 from multiprocessing.connection import Client, Listener
 from pathlib import Path
-from shutil import copyfile
 from tempfile import TemporaryDirectory
+from typing import Annotated
 
 import tyro
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -23,8 +23,9 @@ class Serve(BaseModel, frozen=True):
 
 
 class Upload(BaseModel, frozen=True):
-    """Upload the fixed project image only if its SHA-256 matches."""
+    """Upload a registered worktree's HEX image only if its SHA-256 matches."""
 
+    image: Path
     sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
     model_config = ConfigDict(extra='forbid')
@@ -34,11 +35,14 @@ class Bootloader(BaseModel, frozen=True):
     """Enter HalfKay through the fixed pedal's USB serial port, without uploading."""
 
 
-class Prepare(BaseModel, frozen=True):
-    """Validate and stage a HEX image, retaining images in a new backup directory."""
+class Helper(BaseModel, frozen=True):
+    """Serve firmware uploads, request an upload, or enter the pedal's bootloader."""
 
-    source: Path
-    directory: Path
+    command: (
+        Annotated[Serve, tyro.conf.subcommand(name='serve')]
+        | Annotated[Upload, tyro.conf.subcommand(name='upload')]
+        | Annotated[Bootloader, tyro.conf.subcommand(name='bootloader')]
+    )
 
 
 class UploadResult(BaseModel, frozen=True):
@@ -54,19 +58,19 @@ class Board(BaseModel, frozen=True):
     capabilities: list[str]
 
 
-def prepare_image(source: Path, directory: Path) -> FirmwareImage:
-    IMAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix='prepare-', dir=IMAGE_PATH.parent) as staging:
-        snapshot = Path(staging) / 'patch-switcher.hex'
-        snapshot.write_bytes(source.read_bytes())
-        image = read_hex(snapshot)
-        validate_firmware(image)
-        directory.mkdir(parents=True)
-        if IMAGE_PATH.exists():
-            copyfile(IMAGE_PATH, directory / 'previous-upload-image.hex')
-        copyfile(snapshot, directory / 'new-image.hex')
-        snapshot.replace(IMAGE_PATH)
-    return image
+def project_worktrees() -> list[Path]:
+    """Read Git's registered checkouts, with the primary checkout first."""
+    result = subprocess.run(
+        ['git', '-C', str(ROOT), 'worktree', 'list', '--porcelain', '-z'],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [
+        Path(f.removeprefix('worktree ')).resolve()
+        for f in result.stdout.split('\0')
+        if f.startswith('worktree ')
+    ]
 
 
 def request_bootloader() -> None:
@@ -113,11 +117,18 @@ def validate_firmware(image: FirmwareImage) -> None:
 
 
 def upload_image(request: Upload) -> UploadResult:
-    """Snapshot and validate the sole allowed image, then upload to the sole target."""
+    """Snapshot a worktree image, validate it, then upload to the sole target."""
+    if not request.image.is_absolute():
+        raise ValueError('firmware image path must be absolute')
+    source = request.image.resolve(strict=True)
+    if source.suffix != '.hex' or not any(
+        source.is_relative_to(w) for w in project_worktrees()
+    ):
+        raise ValueError('expected a HEX file inside a registered project worktree')
     CACHE_DIRECTORY.mkdir(mode=0o700, parents=True, exist_ok=True)
     with TemporaryDirectory(prefix='upload-', dir=CACHE_DIRECTORY) as directory:
         snapshot = Path(directory) / 'patch-switcher.hex'
-        snapshot.write_bytes(IMAGE_PATH.read_bytes())
+        snapshot.write_bytes(source.read_bytes())
         image = read_hex(snapshot)
         if image.sha256 != request.sha256:
             raise ValueError('firmware SHA-256 changed; no upload was attempted')
@@ -159,14 +170,14 @@ def upload_image(request: Upload) -> UploadResult:
 
 
 def process_request(line: bytes) -> UploadResult:
-    """The protocol accepts only one bounded JSON object containing a digest."""
+    """Accept one bounded JSON object containing an image path and digest."""
     try:
-        if len(line) > 256 or not line.endswith(b'\n'):
+        if len(line) > REQUEST_LIMIT or not line.endswith(b'\n'):
             raise ValueError(
-                'expected a newline-terminated request of at most 256 bytes'
+                f'expected a newline-terminated request (maximum {REQUEST_LIMIT} bytes)'
             )
         return upload_image(Upload.model_validate_json(line))
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
         return UploadResult(returncode=1, output=f'Upload helper: {error}\n')
 
 
@@ -184,7 +195,9 @@ def serve() -> None:
                 with listener.accept() as connection:
                     try:
                         if connection.poll(5):
-                            result = process_request(connection.recv_bytes(256))
+                            result = process_request(
+                                connection.recv_bytes(REQUEST_LIMIT)
+                            )
                             connection.send_bytes(result.model_dump_json().encode())
                     except OSError as error:
                         # A disconnected client must not cancel an upload in progress.
@@ -195,7 +208,9 @@ def serve() -> None:
 
 def request_upload(request: Upload) -> UploadResult:
     with Client(
-        str(SOCKET_PATH), family=IPC_FAMILY, authkey=authentication_key()
+        str(SOCKET_PATH),
+        family=IPC_FAMILY,
+        authkey=(CACHE_DIRECTORY / 'authentication.key').read_bytes(),
     ) as connection:
         connection.send_bytes(request.model_dump_json().encode() + b'\n')
         if not connection.poll(300):
@@ -216,28 +231,24 @@ def authentication_key() -> bytes:
     return path.read_bytes()
 
 
-def main() -> None:
-    options = tyro.cli(Serve | Upload | Bootloader | Prepare)
+def run(options: Serve | Upload | Bootloader) -> None:
     try:
         if isinstance(options, Serve):
             serve()
         elif isinstance(options, Bootloader):
             request_bootloader()
-        elif isinstance(options, Prepare):
-            image = prepare_image(options.source, options.directory)
-            print(f'Prepared {IMAGE_PATH}\nSHA256: {image.sha256}')
         else:
             result = request_upload(options)
             print(result.output, end='')
             sys.exit(result.returncode)
     except KeyboardInterrupt:
         sys.exit(130)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
         sys.exit(f'Upload helper: {error}')
 
 
 ROOT = Path(__file__).resolve().parent
-IMAGE_PATH = ROOT / 'firmware/build/patch-switcher.hex'
+REQUEST_LIMIT = 8192
 CACHE_DIRECTORY = (
     Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local'))
     if os.name == 'nt'
@@ -255,7 +266,3 @@ UPLOADER_PATH = Path(os.environ.get('CNTRL_TYCMD', 'tycmd'))
 BOARD_SERIAL = '14468280'
 BOARD_TAG = '14468280-Teensy'
 FLASH_CONFIG_SHA256 = '65b509525e8b0e6e92e4e6bc8fa39575399b27532e04a55f7a7883212042fe7a'
-
-
-if __name__ == '__main__':
-    main()

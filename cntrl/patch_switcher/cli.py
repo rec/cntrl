@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from reccy.configuration import units
 
 from .. import build
+from ..maker.morningstar.mc import upload_helper
 from . import (
     backup_upgrade,
     backups,
@@ -465,12 +466,15 @@ def main() -> None:
         | Annotated[SetupCLI, tyro.conf.subcommand(name='setup')]
         | Annotated[Status, tyro.conf.subcommand(name='status')]
         | Annotated[Songs, tyro.conf.subcommand(name='songs')]
-        | Annotated[build.Build, tyro.conf.subcommand(name='build')],
+        | Annotated[build.Build, tyro.conf.subcommand(name='build')]
+        | Annotated[upload_helper.Helper, tyro.conf.subcommand(name='upload-helper')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
         if isinstance(command, build.Build):
             build.run(command)
+        elif isinstance(command, upload_helper.Helper):
+            upload_helper.run(command.command)
         elif isinstance(command, Compile):
             assets: dict[str, dict[int, bytes]] = {}
             movies: dict[int, bytes] = {}

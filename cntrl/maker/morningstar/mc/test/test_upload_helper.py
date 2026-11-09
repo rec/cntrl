@@ -7,11 +7,11 @@ import sys
 from pathlib import Path
 
 import pytest
-import tyro
 from test_firmware import hex_record
 
 from cntrl.firmware.intel_hex import read_hex
 from cntrl.maker.morningstar.mc import upload_helper
+from cntrl.patch_switcher import cli
 from cntrl.patch_switcher.devices import Device
 
 
@@ -64,90 +64,95 @@ def firmware_path(tmp_path: Path) -> Path:
     return path
 
 
-@pytest.mark.parametrize('previous', [None, b'previous upload image'])
-def test_prepare_stages_the_validated_image_and_preserves_previous(
-    firmware_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    previous: bytes | None,
-) -> None:
-    destination = tmp_path / 'upload.hex'
-    monkeypatch.setattr(upload_helper, 'IMAGE_PATH', destination)
-    if previous is not None:
-        destination.write_bytes(previous)
-    backup = tmp_path / 'backup'
-    image = upload_helper.prepare_image(firmware_path, backup)
-    expected = firmware_path.read_bytes()
-    assert image.sha256 == hashlib.sha256(expected).hexdigest()
-    assert destination.read_bytes() == expected
-    assert (backup / 'new-image.hex').read_bytes() == expected
-    if previous is None:
-        assert not (backup / 'previous-upload-image.hex').exists()
-    else:
-        assert (backup / 'previous-upload-image.hex').read_bytes() == previous
-
-
-@pytest.mark.parametrize('malformed', [False, True])
-def test_prepare_rejects_invalid_image_without_replacing_previous(
-    firmware_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    malformed: bool,
-) -> None:
-    source = tmp_path / 'invalid.hex'
-    source.write_text(
-        'not an Intel HEX image'
-        if malformed
-        else firmware_path.read_text().replace(
-            hex_record(4, bytes.fromhex('6000')),
-            hex_record(4, bytes.fromhex('7000')),
-        )
-    )
-    destination = tmp_path / 'upload.hex'
-    destination.write_bytes(b'previous')
-    monkeypatch.setattr(upload_helper, 'IMAGE_PATH', destination)
-    backup = tmp_path / 'backup'
-    with pytest.raises(ValueError):
-        upload_helper.prepare_image(source, backup)
-    assert destination.read_bytes() == b'previous'
-    assert not backup.exists()
-
-
-def test_prepare_refuses_to_overwrite_a_backup(
-    firmware_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    destination = tmp_path / 'upload.hex'
-    destination.write_bytes(b'previous')
-    monkeypatch.setattr(upload_helper, 'IMAGE_PATH', destination)
-    backup = tmp_path / 'backup'
-    backup.mkdir()
-    (backup / 'new-image.hex').write_bytes(b'recovery image')
-    with pytest.raises(FileExistsError):
-        upload_helper.prepare_image(firmware_path, backup)
-    assert destination.read_bytes() == b'previous'
-    assert (backup / 'new-image.hex').read_bytes() == b'recovery image'
-
-
-def test_cli_uses_explicit_commands() -> None:
-    assert isinstance(
-        tyro.cli(upload_helper.Serve | upload_helper.Upload, args=['serve']),
-        upload_helper.Serve,
-    )
-    options = tyro.cli(
-        upload_helper.Serve | upload_helper.Upload,
-        args=['upload', '--sha256', 'a' * 64],
-    )
-    assert isinstance(options, upload_helper.Upload)
-    assert options.sha256 == 'a' * 64
-    assert isinstance(
-        tyro.cli(
-            upload_helper.Serve | upload_helper.Upload | upload_helper.Bootloader,
-            args=['bootloader'],
+@pytest.mark.parametrize(
+    'arguments, expected',
+    [
+        (['serve'], upload_helper.Serve()),
+        (['bootloader'], upload_helper.Bootloader()),
+        (
+            ['upload', '--image', '/worktree/firmware.hex', '--sha256', 'a' * 64],
+            upload_helper.Upload(image=Path('/worktree/firmware.hex'), sha256='a' * 64),
         ),
-        upload_helper.Bootloader,
+    ],
+)
+def test_cntrl_dispatches_helper_commands(
+    arguments: list[str],
+    expected: upload_helper.Serve | upload_helper.Upload | upload_helper.Bootloader,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: list[
+        upload_helper.Serve | upload_helper.Upload | upload_helper.Bootloader
+    ] = []
+    monkeypatch.setattr(upload_helper, 'run', received.append)
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'upload-helper', *arguments])
+    cli.main()
+    assert received == [expected]
+
+
+def test_cntrl_returns_upload_output_and_exit_status(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        upload_helper,
+        'request_upload',
+        lambda request: upload_helper.UploadResult(
+            returncode=7, output='upload output\n'
+        ),
     )
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'cntrl',
+            'upload-helper',
+            'upload',
+            '--image',
+            '/worktree/firmware.hex',
+            '--sha256',
+            'a' * 64,
+        ],
+    )
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 7
+    assert capsys.readouterr().out == 'upload output\n'
+
+
+def test_worktree_discovery_includes_primary_and_linked_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    primary = tmp_path / 'primary checkout'
+    secondary = tmp_path / 'agent checkout'
+    subprocess.run(['git', 'init', str(primary)], check=True, capture_output=True)
+    subprocess.run(
+        [
+            'git',
+            '-C',
+            str(primary),
+            '-c',
+            'user.name=Test',
+            '-c',
+            'user.email=test@example.com',
+            'commit',
+            '--allow-empty',
+            '--no-gpg-sign',
+            '-m',
+            'Initial test commit',
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ['git', '-C', str(primary), 'worktree', 'add', '--detach', str(secondary)],
+        check=True,
+        capture_output=True,
+    )
+    for root in (primary, secondary):
+        monkeypatch.setattr(upload_helper, 'ROOT', root)
+        assert upload_helper.project_worktrees() == [
+            primary.resolve(),
+            secondary.resolve(),
+        ]
 
 
 @pytest.mark.skipif(sys.platform == 'win32', reason='POSIX tty line-coding check')
@@ -188,9 +193,13 @@ def test_bootloader_selects_special_baud_without_serial_payload(
         b'not JSON\n',
         b'{"sha256":"' + b'a' * 64 + b'"}',
         b'{"sha256":"' + b'a' * 64 + b'","path":"/some/file"}\n',
-        b'{"sha256":"' + b'a' * 64 + b'","command":"reset"}\n',
-        b'{"sha256":"' + b'a' * 64 + b'","board":"another"}\n',
-        b' ' * 257 + b'\n',
+        b'{"image":"/worktree/image.hex","sha256":"'
+        + b'a' * 64
+        + b'","command":"reset"}\n',
+        b'{"image":"/worktree/image.hex","sha256":"'
+        + b'a' * 64
+        + b'","board":"another"}\n',
+        b' ' * (upload_helper.REQUEST_LIMIT + 1) + b'\n',
     ],
 )
 def test_invalid_requests_never_reach_uploader(
@@ -209,6 +218,52 @@ def test_valid_boot_image_is_accepted(firmware_path: Path) -> None:
     upload_helper.validate_firmware(read_hex(firmware_path))
 
 
+def test_upload_client_does_not_create_server_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = tmp_path / 'server-cache'
+    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', cache)
+    request = upload_helper.Upload(image=tmp_path / 'firmware.hex', sha256='0' * 64)
+    with pytest.raises(FileNotFoundError):
+        upload_helper.request_upload(request)
+    assert not cache.exists()
+
+
+@pytest.mark.parametrize('location', ['outside', 'symlink', 'relative', 'extension'])
+def test_disallowed_image_locations_never_reach_device_access(
+    firmware_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    location: str,
+) -> None:
+    worktree = tmp_path / 'worktree'
+    worktree.mkdir()
+    source = firmware_path
+    if location == 'symlink':
+        source = worktree / 'firmware.hex'
+        source.symlink_to(firmware_path)
+    elif location == 'relative':
+        source = Path('firmware.hex')
+    elif location == 'extension':
+        source = worktree / 'firmware.txt'
+        source.write_bytes(firmware_path.read_bytes())
+    monkeypatch.setattr(upload_helper, 'project_worktrees', lambda: [worktree])
+
+    def unexpected_run(
+        *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        pytest.fail('disallowed image caused device access')
+
+    monkeypatch.setattr(subprocess, 'run', unexpected_run)
+    request = upload_helper.Upload(image=source, sha256='0' * 64)
+    result = upload_helper.process_request(request.model_dump_json().encode() + b'\n')
+    assert result.returncode == 1
+    assert (
+        'path must be absolute' in result.output
+        or 'registered project worktree' in result.output
+    )
+
+
 @pytest.mark.parametrize('offset', [0x0C, 0x1000, 0x1004, 0x100C, 0x1024, 0x2400])
 def test_unsafe_boot_envelopes_are_rejected(firmware_path: Path, offset: int) -> None:
     image = read_hex(firmware_path)
@@ -221,7 +276,7 @@ def test_unsafe_boot_envelopes_are_rejected(firmware_path: Path, offset: int) ->
 def test_changed_image_is_rejected_before_device_access(
     firmware_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(upload_helper, 'IMAGE_PATH', firmware_path)
+    monkeypatch.setattr(upload_helper, 'project_worktrees', lambda: [tmp_path])
     monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path / 'staging')
 
     def unexpected_run(
@@ -230,22 +285,26 @@ def test_changed_image_is_rejected_before_device_access(
         pytest.fail('changed image caused device access')
 
     monkeypatch.setattr(subprocess, 'run', unexpected_run)
-    request = upload_helper.Upload(sha256='0' * 64)
+    request = upload_helper.Upload(image=firmware_path, sha256='0' * 64)
     result = upload_helper.process_request(request.model_dump_json().encode() + b'\n')
     assert result.returncode == 1
     assert 'SHA-256 changed' in result.output
 
 
 @pytest.mark.parametrize('wrong_target', [False, True])
+@pytest.mark.parametrize('worktree_index', [0, 1])
 def test_upload_uses_snapshot_and_only_the_expected_halfkay(
     firmware_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     wrong_target: bool,
+    worktree_index: int,
 ) -> None:
     original = firmware_path.read_bytes()
     digest = hashlib.sha256(original).hexdigest()
-    monkeypatch.setattr(upload_helper, 'IMAGE_PATH', firmware_path)
+    roots = [tmp_path / 'primary', tmp_path / 'other worktree']
+    roots[worktree_index] = tmp_path
+    monkeypatch.setattr(upload_helper, 'project_worktrees', lambda: roots)
     monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path / 'staging')
     calls: list[list[str]] = []
     snapshots: list[Path] = []
@@ -281,7 +340,7 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         )
 
     monkeypatch.setattr(subprocess, 'run', run)
-    request = upload_helper.Upload(sha256=digest)
+    request = upload_helper.Upload(image=firmware_path, sha256=digest)
     result = upload_helper.process_request(request.model_dump_json().encode() + b'\n')
     if wrong_target:
         assert result.returncode == 1
