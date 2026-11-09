@@ -36,12 +36,12 @@ entering channel and controller numbers manually. Show the captured message
 and let the user confirm its role, such as controlling a parameter or selecting
 a scene.
 
-### Expression-pedal curves and ranges
+### Expression travel zones and multiple assignments
 
-Give each expression assignment its own minimum, maximum, direction and response
-curve. One pedal could raise an effect level over part of its travel while
-reducing another parameter. Include a dead zone where small movements should
-have no effect.
+Allow one pedal to control several parameters over different portions of its
+travel, such as raising an effect level while reducing another parameter.
+Add configurable dead zones. Per-assignment minimum, maximum, direction and
+linear/slow/fast response curves are already supported.
 
 ### Parameter pages
 
@@ -63,14 +63,6 @@ Use an expression pedal to move between two sets of continuous parameter values.
 For example, move from a quiet, dry sound to a brighter sound with more delay
 and modulation. Treat discrete patch changes separately from interpolated
 controller values.
-
-## MIDI routing and processing
-
-- MIDI routing.
-- Filtering.
-- Remapping.
-- Converting.
-- Delay.
 
 ## Clock, synchronization and scheduling
 

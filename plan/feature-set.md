@@ -6,7 +6,9 @@ Product-specific integrations, device-name databases and proprietary protocol
 handlers are excluded. Use standard MIDI messages and configurable mappings
 instead of hard-coded knowledge of particular instruments or effects.
 
-MIDI routing and processing have moved to [midi-processing.md](midi-processing.md).
+MIDI routing and processing are implemented; see the
+[usage guide](../doc/midi-processing.md).
+Remaining qualification is tracked in [midi-processing.md](midi-processing.md).
 
 ## Delivery rules
 
@@ -123,8 +125,6 @@ offline workflow separately from serialization tests.
 Start with counters (item 13), which extend existing execution paths without
 new physical inputs.
 Next implement waveforms and timed sequences (items 11 and 12).
-Routing and conversion follow the implementation sequence in
-[midi-processing.md](midi-processing.md).
 
 USB host and hub work (item 5) should follow available test
 hardware and actual connection needs. The graphical editor (16) can begin

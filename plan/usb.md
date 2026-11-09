@@ -21,9 +21,9 @@ The investigation inspected the following paths.
 - `cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp` creates one
   `USBHost` and one hosted MIDI driver. It creates no `USBHub` drivers. Availability,
   packet submission and disconnect handling use that one MIDI driver.
-- `firmware/include/cntrl/midi_outputs.h` exposes one `usb-host` output on
-  scheduler route 8. The existing physical and USB-device outputs have their
-  own routes.
+- The target endpoint registry exposes one `usb-host` destination. Shared
+  `firmware/include/cntrl/midi_outputs.h` resolves declared endpoint routes
+  rather than assigning a fixed USB-host route number.
 - `firmware/include/cntrl/midi_bridge.h` sizes destinations from the endpoint
   description and has one host connection state. Host disconnection clears the
   host route and cancels its pending
@@ -32,7 +32,8 @@ The investigation inspected the following paths.
 - `forward_device_to_host`, enabled by default, relays the current hosted
   device's first MIDI cable bidirectionally through a product-named port on
   the computer. Presence changes re-enumerate the computer-facing USB connection.
-  This is configured in the setup; a general routing matrix remains item 6.
+  This default is configured in the setup. Explicit system and patch routes
+  now use the shared [MIDI routing engine](../doc/midi-processing.md).
 - Setup compilation, output validation, expression assignments, MIDI Clock
   destinations and target capability declarations use the existing output
   names and route model. The implementation must update their shared path.

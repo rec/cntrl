@@ -3,7 +3,8 @@
 Date: 2026-11-07. Portable implementation: `4ea6e30`, with the warning and
 porting-guide correction in `38a5bd5`. Additional work beyond the prompt: None.
 
-The source/build/conversion portion of `plan/abstract-split.md` is implemented.
+The portable application extraction is implemented; its maintained contract is
+in the [porting guide](../../../../doc/porting.md).
 The final image has also been flashed and the converted backup restored and
 verified on the pedal. Host and hardware evidence are distinguished below.
 
