@@ -7,6 +7,8 @@ from typing import Annotated, Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from reccy.configuration import units
 
+from . import lfos
+
 
 class Endpoint(Protocol):
     @property
@@ -32,6 +34,7 @@ class Match(BaseModel, frozen=True):
     program: int | list[int] | None = None
     pressure: int | list[int] | None = None
     origin: str | list[str] | None = None
+    parameter: int | list[int] | None = None
 
     @model_validator(mode='before')
     @classmethod
@@ -362,6 +365,7 @@ def compile_routes(
 
     for key in definitions:
         visit(key)
+    validate_lfo_routes(definitions, ordered, references)
     clock_sources: dict[tuple[int, str], int] = {}
     clock_outputs: dict[str, dict[int, int]] = {}
     for key in ordered:
@@ -436,6 +440,128 @@ def names(value: str | list[str] | None) -> list[str]:
     return [] if value is None else [value] if isinstance(value, str) else value
 
 
+def validate_lfo_routes(
+    definitions: dict[tuple[int, str], Route],
+    ordered: list[tuple[int, str]],
+    references: dict[tuple[int, str], list[tuple[int, str]]],
+) -> None:
+    bindings: list[tuple[int, str, lfos.Target]] = []
+    generators = 0
+    for root in ordered:
+        generator = definitions[root].generate
+        if generator is None or 'lfo' not in generator:
+            continue
+        generators += 1
+        lfo = lfos.Lfo.model_validate(generator['lfo'])
+        reached: dict[tuple[int, str], lfos.Target] = {root: lfo.target}
+        for key in ordered[ordered.index(root) :]:
+            sources = [reached[s] for s in references[key] if s in reached]
+            if key != root and not sources:
+                continue
+            if len(sources) > 1:
+                raise ValueError(f'{key[1]}: LFO paths cannot reconverge')
+            target = sources[0] if sources else lfo.target
+            for step in definitions[key].via:
+                name, raw = next(iter(step.items()))
+                if name in ('transpose', 'invert') and target.note is not None:
+                    assert isinstance(raw, int)
+                    note = (
+                        target.note + raw
+                        if name == 'transpose'
+                        else 2 * raw - target.note
+                    )
+                    target = lfos.Target.model_validate(
+                        target.model_dump() | {'note': note}
+                    )
+                elif name == 'scale':
+                    scale = Scale.model_validate(raw)
+                    field = (
+                        'program'
+                        if target.type == 'program-change'
+                        else 'pressure'
+                        if 'pressure' in target.type
+                        else 'value'
+                    )
+                    if scale.field != field:
+                        raise ValueError(
+                            'LFO scale must preserve its parameter address'
+                        )
+                    low, high = target.bounds
+                    if any(not low <= v <= high for v in scale.output):
+                        raise ValueError('LFO scale exceeds destination resolution')
+                elif name == 'map':
+                    mapping = Map.model_validate(raw)
+                    updates: dict[str, object] = {}
+                    field = (
+                        'program'
+                        if target.type == 'program-change'
+                        else 'pressure'
+                        if 'pressure' in target.type
+                        else 'value'
+                    )
+                    for n, v in mapping.set.items():
+                        if n == field:
+                            continue
+                        if (
+                            isinstance(v, dict)
+                            or mapping.match.model_dump(exclude_none=True)
+                            or (n == 'type' and v != target.type)
+                        ):
+                            raise ValueError(
+                                'LFO mapping requires a fixed target type and address'
+                            )
+                        updates[n] = v
+                    target = lfos.Target.model_validate(target.model_dump() | updates)
+                elif name == 'delay':
+                    delay = Delay.model_validate(
+                        raw if isinstance(raw, dict) else {'time': raw}
+                    )
+                    if delay.repeats != 1 or delay.feedback != 1:
+                        raise ValueError(
+                            'LFO delay must move one stream, without overlapping echoes'
+                        )
+                elif name not in ('keep', 'drop', 'transpose', 'invert', 'reverse'):
+                    raise ValueError(
+                        f'{name}: packet plug-ins do not support typed LFO values'
+                    )
+            reached[key] = target
+            if (
+                lfo.off.value is not None
+                and not target.bounds[0] <= lfo.off.value <= target.bounds[1]
+            ):
+                raise ValueError('LFO off value is outside the final destination range')
+            for output in names(definitions[key].to):
+                scope = key[0] if key[0] != 65535 else root[0]
+                for other_scope, other_output, other in bindings:
+                    if output != other_output or target.channel != other.channel:
+                        continue
+                    coexist = scope == other_scope or 65535 in (scope, other_scope)
+                    same = (
+                        target.type == other.type
+                        and target.address_number == other.address_number
+                    )
+                    cc_pair = target.type == other.type == 'control-change' and (
+                        target.bits == 14
+                        and target.address_number + 32 == other.address_number
+                        or other.bits == 14
+                        and other.address_number + 32 == target.address_number
+                    )
+                    if coexist and (same or cc_pair):
+                        raise ValueError(
+                            f'{output}: overlapping active LFO parameter writers'
+                        )
+                bindings.append((scope, output, target))
+    if generators > 16:
+        raise ValueError('MIDI graph exceeds 16 LFO generators')
+    scopes = {s for s, _, _ in bindings if s != 65535}
+    if (
+        sum(s == 65535 for s, _, _ in bindings)
+        + max((sum(s == p for s, _, _ in bindings) for p in scopes), default=0)
+        > 128
+    ):
+        raise ValueError('MIDI graph exceeds 128 active LFO destinations')
+
+
 def section_end(data: bytes, offset: int) -> int:
     if data[offset : offset + 4] != b'CSTR':
         return offset
@@ -461,6 +587,7 @@ def estimate_ram(section: bytes) -> int:
     count = HEADER.unpack_from(section)[2]
     cursor = HEADER.size
     plugin_memory: dict[int, int] = {}
+    has_lfo = False
     by_opcode = {p.opcode: p for p in REGISTERED_PROCESSORS.values()}
     for _ in range(count):
         scope, inputs, _, steps, _ = ROUTE.unpack_from(section, cursor)
@@ -468,6 +595,7 @@ def estimate_ram(section: bytes) -> int:
         for _ in range(steps):
             opcode, _, size = STEP.unpack_from(section, cursor)
             cursor += STEP.size + size
+            has_lfo |= opcode == 10
             if opcode in by_opcode:
                 plugin_memory[scope] = (
                     plugin_memory.get(scope, 0) + by_opcode[opcode].ram_bytes
@@ -475,7 +603,7 @@ def estimate_ram(section: bytes) -> int:
     system_memory = plugin_memory.pop(65535, 0)
     return (
         4096
-        + (163840 if count else 0)
+        + ((196608 if has_lfo else 163840) if count else 0)
         + 4 * len(section)
         + system_memory
         + max(plugin_memory.values(), default=0)
@@ -550,6 +678,9 @@ def _pack_generator(value: dict[str, object]) -> bytes:
     name, raw = next(iter(value.items()))
     if name in REGISTERED_PROCESSORS:
         return _pack_step(value, {})
+    if name == 'lfo':
+        payload = lfos.pack(lfos.Lfo.model_validate(raw))
+        return STEP.pack(10, 1, len(payload)) + payload
     if name == 'clock':
         payload = struct.pack('<d', Clock.model_validate(raw).bpm)
     else:
@@ -577,15 +708,17 @@ FIELDS = (
     'program',
     'pressure',
     'origin',
+    'parameter',
 )
 RANGES = {
     'channel': (1, 16),
     'note': (0, 127),
     'velocity': (0, 127),
     'controller': (0, 127),
-    'value': (0, 16383),
+    'value': (-8192, 16383),
     'program': (1, 128),
     'pressure': (0, 127),
+    'parameter': (0, 16383),
 }
 TYPES = {
     'note-off': 8,
@@ -595,6 +728,8 @@ TYPES = {
     'program-change': 12,
     'channel-pressure': 13,
     'pitch-bend': 14,
+    'nrpn': 16,
+    'rpn': 17,
     'sysex': 240,
     'time-code-quarter-frame': 241,
     'song-position-pointer': 242,
@@ -615,6 +750,8 @@ MESSAGE_FIELDS = {
     'program-change': {'channel', 'program'},
     'channel-pressure': {'channel', 'pressure'},
     'pitch-bend': {'channel', 'value'},
+    'nrpn': {'channel', 'parameter', 'value'},
+    'rpn': {'channel', 'parameter', 'value'},
     **{
         n: set()
         for n in TYPES
@@ -627,6 +764,8 @@ MESSAGE_FIELDS = {
             'program-change',
             'channel-pressure',
             'pitch-bend',
+            'nrpn',
+            'rpn',
         )
     },
     'time-code-quarter-frame': {'value'},
@@ -641,7 +780,7 @@ PROCESSORS = {
     'delay': Delay,
     'reverse': Reverse,
 }
-GENERATORS = {'clock': Clock, 'file': File}
+GENERATORS = {'clock': Clock, 'file': File, 'lfo': lfos.Lfo}
 STEPS = (
     'keep',
     'drop',
@@ -653,6 +792,7 @@ STEPS = (
     'reverse',
     'clock',
     'file',
+    'lfo',
 )
 HEADER = struct.Struct('<4sIHH')
 ROUTE = struct.Struct('<HHHH64s')

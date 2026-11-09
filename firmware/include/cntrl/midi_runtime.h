@@ -72,8 +72,9 @@ public:
                 if (!bridge.usb_enabled(event.input)) continue;
                 if (event.packetized) files.receive(event.input, event.packet, timestamp);
                 else files.receive(event.input, event.byte, timestamp);
-                if ((event.packetized ? event.packet.bytes[0] : event.byte) == 0xf8)
-                    pages.clock(event.clock_source, timestamp);
+                uint8_t status = event.packetized ? event.packet.bytes[0] : event.byte;
+                if (status == 0xf8 || (status >= 0xfa && status <= 0xfc))
+                    pages.clock_message(event.clock_source, status, timestamp);
 #if CNTRL_CABLE_TEST
                 if (s.cable_test.enabled()) {
                     if (!event.packetized && event.cable_input != InputEvent::absent)
@@ -121,8 +122,11 @@ public:
         exclusive = exclusive || s.cable_test.enabled();
 #endif
         if (exclusive) streams_.stop_all();
-        else streams_.service(s, extend(s.microseconds()), available,
-            bridge.busy_outputs() | files.player.sysex_outputs());
+        else {
+            streams_.beat_position(pages.beat_position(s.microseconds()));
+            streams_.service(s, extend(s.microseconds()), available,
+                bridge.busy_outputs() | files.player.sysex_outputs(), 64, files.player.sysex_outputs());
+        }
         s.midi_flush();
         if (monitor_.active()) monitor_.poll(s.microseconds());
         files.recorder.poll(s.microseconds());
@@ -138,11 +142,15 @@ public:
     template<class Replies>
     void stream_status(Replies &replies) const {
         const auto &counts = streams_.diagnostics();
-        char response[240];
-        std::snprintf(response, sizeof(response), "CNTRL MIDI STREAMS %u %u %u %u %lu %lu %lu %lu",
+        const auto lfos = streams_.lfo_status();
+        char response[400];
+        std::snprintf(response, sizeof(response), "CNTRL MIDI STREAMS %u %u %u %u %lu %lu %lu %lu lfos=%u pending=%u stopping=%u waiting=%u missing=%u failed=%llx coalesced=%lu skipped=%lu bytes=%lu",
             streams_.selected(), streams_.pending(), streams_.voices(), streams_.recovery(),
             (unsigned long)counts.transmitted, (unsigned long)counts.dropped,
-            (unsigned long)counts.overloaded, (unsigned long)counts.failed);
+            (unsigned long)counts.overloaded, (unsigned long)counts.failed,
+            lfos.running, lfos.pending, lfos.stopping, lfos.waiting, lfos.missing,
+            (unsigned long long)lfos.failed, (unsigned long)counts.coalesced, (unsigned long)counts.skipped,
+            (unsigned long)streams_.retained_bytes());
         replies.reply(response);
     }
     template<class Replies>

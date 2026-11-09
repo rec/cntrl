@@ -77,6 +77,11 @@ backing = {generate = {file = {filename = 'intro.mid'}}, to = 'usb-host/synth'}
 File generators use the existing fixed MIDI recording directory and playback
 settings. An empty filename selects the latest completed recording.
 
+An [`lfo` generator](lfos.md) modulates typed MIDI values or numbered programs,
+with duration/beat timing, eight shapes and explicit hold/final/restore policies.
+Fine values remain complete parameters through supported processing and are
+encoded into grouped MIDI messages at delivery.
+
 Use a patch operation to mute or enable a route. A qualified name addresses a
 system route. A bare name addresses the selected patch's route.
 

@@ -83,6 +83,7 @@ public:
         recall_slot();
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
         clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
+        clock_changed_ = true;
         dirty_ = true;
     }
     bool browse(bool reverse) {
@@ -126,6 +127,7 @@ public:
         }
     }
     void clock_button(unsigned button, uint32_t now_us, unsigned available) {
+        generator.beat_position(now_us);
         using R = cntrl::PageSettings;
         if (page_ == Page::clock_transport) {
             if (button == 2) generator.stop();
@@ -167,6 +169,15 @@ public:
         dirty_ = true;
     }
     void clock(unsigned source, uint32_t now_us) { clock_.clock(source, now_us); }
+    void clock_message(unsigned source, uint8_t status, uint32_t now_us) { clock_.transport(source, status, now_us); }
+    cntrl::midi::BeatPosition beat_position(uint32_t now_us) {
+        if (external_) clock_.poll(now_us);
+        auto position = external_ ? clock_.beat_position(now_us) : generator.beat_position(now_us);
+        if (clock_changed_ || external_ != beat_external_ || position.restart != beat_source_restart_) {
+            ++beat_restart_; beat_source_restart_ = position.restart; beat_external_ = external_; clock_changed_ = false;
+        }
+        position.restart = beat_restart_; return position;
+    }
     void time(uint32_t now, uint32_t now_us, bool held) {
         held_ = held;
         uptime_ += uint32_t(now - previous_); previous_ = now;
@@ -188,6 +199,9 @@ public:
         if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_view)
+#endif
     cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1) {
         using R = cntrl::PageSettings;
         dirty_ = false; refreshed_ = now;
@@ -436,6 +450,8 @@ private:
         const char *help = monitor && monitor->frozen() ? prompt("%s/%s History %s Live", controls_.previous, controls_.next, controls_.confirm) : prompt("%s Freeze", controls_.confirm);
         line(pane, 14, help, bottom, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
     }
+    bool clock_changed_ = false, beat_external_ = false;
+    uint32_t beat_restart_ = 0, beat_source_restart_ = 0;
     static constexpr unsigned design_width = 5 * 32, design_height = 4 * 32;
     Controls controls_;
     char prompt_[64] = {};

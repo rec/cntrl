@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
+#include "midi_parameter.h"
 
 namespace cntrl::midi {
 struct NoteState {
@@ -18,6 +19,8 @@ struct ControllerState {
 struct ParameterState {
     uint16_t parameter;
     std::optional<uint16_t> value;
+    bool registered = false;
+    std::optional<uint8_t> coarse = {};
 };
 
 struct ChannelState {
@@ -59,12 +62,48 @@ public:
         if (control == 130) return c->bank_msb ? *c->bank_msb : -1;
         if (control == 131) return c->bank_lsb ? *c->bank_lsb : -1;
         if (control >= 256) {
-            for (const auto &p : c->parameters) if (p.parameter == control - 256) return p.value ? *p.value : -1;
+            bool registered = control >= 33024, coarse = control >= 16640 && !registered;
+            unsigned parameter = control - (registered ? 33024 : coarse ? 16640 : 256);
+            for (const auto &p : c->parameters) if (p.registered == registered && p.parameter == parameter)
+                return coarse ? p.coarse ? *p.coarse : -1 : p.value ? *p.value : -1;
             return -1;
         }
         for (const auto &v : c->controllers)
             if (v.controller == control && v.known) return v.value;
         return -1;
+    }
+    int parameter_value(unsigned output, const Parameter &parameter) const {
+        for (const auto &o : outputs) if (o.output == output)
+            for (const auto &c : o.channels) if (c.channel == parameter.channel) {
+                if (parameter.kind == Parameter::cc7) { int v = value(output, c.channel, parameter.address); return v < 0 ? Parameter::unknown : v; }
+                if (parameter.kind == Parameter::cc14) {
+                    int hi = value(output, c.channel, parameter.address), lo = value(output, c.channel, parameter.address + 32);
+                    return hi < 0 || lo < 0 ? Parameter::unknown : hi * 128 + lo;
+                }
+                if (parameter.kind == Parameter::bend) return c.pitch_known && c.pitch_bend ? int(*c.pitch_bend) - 8192 : Parameter::unknown;
+                if (parameter.kind == Parameter::pressure) return c.pressure ? *c.pressure : Parameter::unknown;
+                if (parameter.kind == Parameter::program) return c.program ? *c.program + 1 : Parameter::unknown;
+                if (parameter.kind == Parameter::key_pressure)
+                    for (const auto &n : c.notes) if (n.note == parameter.address) return n.pressure ? *n.pressure : Parameter::unknown;
+                for (const auto &p : c.parameters) if (p.parameter == parameter.address && p.registered == (parameter.kind == Parameter::rpn14))
+                    return parameter.kind == Parameter::nrpn7 ? p.coarse ? *p.coarse : Parameter::unknown : p.value ? *p.value : Parameter::unknown;
+            }
+        return Parameter::unknown;
+    }
+    void forget_parameter(unsigned output, const Parameter &parameter) {
+        for (auto &o : outputs) if (o.output == output)
+            for (auto &c : o.channels) if (c.channel == parameter.channel) {
+                for (auto &v : c.controllers)
+                    if ((parameter.kind == Parameter::cc7 && v.controller == parameter.address)
+                        || (parameter.kind == Parameter::cc14 && (v.controller == parameter.address || v.controller == parameter.address + 32))) v.known = false;
+                if (parameter.kind == Parameter::bend) c.pitch_known = false;
+                if (parameter.kind == Parameter::pressure) c.pressure.reset();
+                if (parameter.kind == Parameter::program) c.program.reset();
+                if (parameter.kind == Parameter::key_pressure) for (auto &n : c.notes) if (n.note == parameter.address) n.pressure.reset();
+                if (parameter.kind == Parameter::nrpn7 || parameter.kind == Parameter::nrpn14 || parameter.kind == Parameter::rpn14)
+                    for (auto &p : c.parameters) if (p.parameter == parameter.address && p.registered == (parameter.kind == Parameter::rpn14)) { p.value.reset(); p.coarse.reset(); }
+                ++revision_;
+            }
     }
 private:
     friend struct Sink;
@@ -125,8 +164,8 @@ private:
                 c->parameters.clear();
                 for (auto &entry : controllers) if (entry.controller == 6 || entry.controller == 38) entry.known = false;
             }
-            if ((controller == 6 || controller == 38) && c->nrpn) {
-                int high = value(output, channel, 99), low = value(output, channel, 98);
+            if (controller == 6 || controller == 38) {
+                int high = value(output, channel, c->nrpn ? 99 : 101), low = value(output, channel, c->nrpn ? 98 : 100);
                 if (high >= 0 && low >= 0 && (high != 127 || low != 127)) {
                     uint16_t parameter = uint16_t(high * 128 + low);
                     std::optional<uint16_t> data;
@@ -136,9 +175,10 @@ private:
                         if (entry.controller == 38) lsb = entry.value;
                     }
                     if (msb >= 0 && lsb >= 0) data = uint16_t(msb * 128 + lsb);
-                    auto p = std::find_if(c->parameters.begin(), c->parameters.end(), [parameter](const auto &v) { return v.parameter == parameter; });
-                    if (p == c->parameters.end()) c->parameters.push_back({parameter, data});
+                    auto p = std::find_if(c->parameters.begin(), c->parameters.end(), [&](const auto &v) { return v.parameter == parameter && v.registered == !c->nrpn; });
+                    if (p == c->parameters.end()) { c->parameters.push_back({parameter, data, !c->nrpn, {}}); p = c->parameters.end() - 1; }
                     else p->value = data;
+                    p->coarse = msb < 0 ? std::nullopt : std::optional<uint8_t>(uint8_t(msb));
                 }
             }
         } else if (kind == 12) {

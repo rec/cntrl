@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <algorithm>
+#include "clock_generator.h"
 
 namespace cntrl {
 class TapTempo {
@@ -46,13 +48,22 @@ public:
     void configure(unsigned clocks, unsigned beats, uint32_t timeout) {
         clocks_ = clocks; window_ = clocks * beats; timeout_ = timeout;
         source_ = -1; count_ = 0; stale_ = true;
+        beat_value_ = 0; beat_remainder_ = 0; ++restart_;
+        playing_ = true; first_tick_ = true;
     }
     void clock(unsigned source, uint32_t now) {
         if (!clocks_) return;
         if (source_ < 0 || stale_ || uint32_t(now - last_) > timeout_) {
-            source_ = int(source); last_ = now; count_ = 0; elapsed_ = 0; stale_ = false; return;
+            source_ = int(source); last_ = now; count_ = 0; elapsed_ = 0; stale_ = false; first_tick_ = false; return;
         }
         if (source_ != int(source)) return;
+        if (playing_) {
+            if (first_tick_) first_tick_ = false;
+            else {
+                uint64_t numerator = (uint64_t(1) << 32) + beat_remainder_;
+                beat_value_ += numerator / clocks_; beat_remainder_ = unsigned(numerator % clocks_);
+            }
+        }
         elapsed_ += uint32_t(now - last_);
         last_ = now;
         ++count_;
@@ -62,9 +73,34 @@ public:
         }
     }
     uint64_t period_us() const { return period_us_; }
-    void poll(uint32_t now) { if (source_ >= 0 && uint32_t(now - last_) > timeout_) stale_ = true; }
+    void transport(unsigned source, uint8_t status, uint32_t now) {
+        if (status == 0xf8) { clock(source, now); return; }
+        if (status < 0xfa || status > 0xfc || (source_ >= 0 && source_ != int(source) && !stale_)) return;
+        if (status == 0xfc) beat_value_ = beat_position(now).value;
+        source_ = int(source);
+        playing_ = status != 0xfc;
+        if (status == 0xfa) { beat_value_ = 0; beat_remainder_ = 0; ++restart_; }
+        if (playing_) { first_tick_ = true; last_ = now; stale_ = true; }
+    }
+    midi::BeatPosition beat_position(uint32_t now) const {
+        uint64_t value = beat_value_;
+        if (playing_ && !stale_ && period_us_ && clocks_) {
+            uint64_t elapsed = std::min(uint64_t(uint32_t(now - last_)), period_us_ / clocks_);
+            value += elapsed * (uint64_t(1) << 32) / period_us_;
+        }
+        return {value, restart_, playing_ && active()};
+    }
+    void poll(uint32_t now) {
+        if (!stale_ && source_ >= 0 && uint32_t(now - last_) > timeout_) {
+            beat_value_ = beat_position(now).value; stale_ = true; first_tick_ = true;
+        }
+    }
     bool active() const { return source_ >= 0 && !stale_; }
 private:
+    uint64_t beat_value_ = 0;
+    uint32_t restart_ = 0;
+    unsigned beat_remainder_ = 0;
+    bool playing_ = true, first_tick_ = true;
     unsigned clocks_ = 0, window_ = 0, count_ = 0;
     int source_ = -1;
     uint32_t timeout_ = 0, last_ = 0;

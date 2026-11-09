@@ -125,18 +125,55 @@ struct Counters {
 struct Sink {
     virtual ~Sink() = default;
     bool submit(unsigned destination, const Packet &packet) {
+        if (destination >= 16) return false;
+        if (observer_ && !observer_->parameter_write(destination, packet.bytes, packet.size(), nullptr, 0)) return false;
+        if (parameter_locks_[destination].token && packet.bytes[0] < 0xf8) return false;
         if (!write_packet(destination, packet)) return false;
         state_.record(destination, packet.bytes, packet.size());
         packet_sent(destination, packet);
         return true;
     }
     const MidiState &state() const { return state_; }
-    void forget_output(unsigned output) { state_.forget(output); }
+    void parameter_observer(ParameterObserver *observer) { observer_ = observer; }
+    int parameter_value(unsigned output, const Parameter &parameter) const {
+        if (output >= 16 || (parameter_locks_[output].token && parameter_locks_[output].parameter.overlaps(parameter))) return Parameter::unknown;
+        return state_.parameter_value(output, parameter);
+    }
+    bool parameter_locked(unsigned output) const { return output < 16 && parameter_locks_[output].token; }
+    bool submit_parameter(unsigned output, ParameterTransaction &transaction) {
+        if (output >= 16 || !transaction.token || !transaction.parameter.valid()
+            || transaction.position >= transaction.parameter.messages()) return false;
+        auto &lock = parameter_locks_[output];
+        if (lock.token && lock.token != transaction.token) return false;
+        uint8_t bytes[3] = {};
+        transaction.parameter.message(transaction.position, bytes);
+        if (!transaction.position && observer_ && !observer_->parameter_write(output, bytes, 3, &transaction.parameter, transaction.origin)) return false;
+        Packet packet{uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}};
+        if (!write_packet(output, packet)) return false;
+        state_.record(output, packet.bytes, packet.size());
+        packet_sent(output, packet);
+        lock = {transaction.parameter, transaction.token, 0};
+        if (++transaction.position == transaction.parameter.messages()) lock.token = 0;
+        return true;
+    }
+    void abandon_parameter(unsigned output, ParameterTransaction &transaction) {
+        if (output < 16 && parameter_locks_[output].token == transaction.token) {
+            parameter_locks_[output].token = 0;
+            state_.forget_parameter(output, transaction.parameter);
+        }
+        transaction = {};
+    }
+    void forget_output(unsigned output) {
+        if (output < 16) parameter_locks_[output] = {};
+        state_.forget(output);
+    }
 protected:
     virtual void packet_sent(unsigned, const Packet &) {}
     virtual bool write_packet(unsigned destination, const Packet &packet) = 0;
 private:
     MidiState state_;
+    ParameterTransaction parameter_locks_[16] = {};
+    ParameterObserver *observer_ = nullptr;
 };
 
 // Route storage follows the supplied endpoint table. One service attempts

@@ -663,10 +663,14 @@ private:
                 }
                 break;
             case 2:
-                if ((n[1] != 0 && n[1] != 1 && n[1] != 2 && n[1] != 4 && n[1] != 9)
+                if ((n[1] != 0 && n[1] != 1 && n[1] != 2 && n[1] != 4 && n[1] != 9 && n[1] != 10)
                     || length <= 32 || !text_valid(p, 32)
                     || !output_valid(bytes + metadata + trs_modes_offset, p, hardware, output_routes)
-                    || !(n[1] == 4 ? midi::stream_valid(p + 32, length - 32) : midi::message_valid(p + 32, length - 32))) return false;
+                    || !((n[1] == 4 || n[1] == 10) ? midi::stream_valid(p + 32, length - 32) : midi::message_valid(p + 32, length - 32))) return false;
+                if (n[1] == 10) {
+                    midi::Parameter parameter;
+                    if (!parameter.decode_messages(p + 32, length - 32)) return false;
+                }
                 if (n[1] == 0 && (length != 35 || p[32] >> 4 != 11)) return false;
                 if (n[1] == 2 && (length != 35 || p[32] >> 4 != 14)) return false;
                 if (n[1] == 9 && p[32] != 0xf0) return false;

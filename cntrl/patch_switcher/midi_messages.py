@@ -1,9 +1,34 @@
-"""Translate named MIDI 1.0 messages to and from a single wire message."""
+"""Translate named MIDI 1.0 messages and complete parameter transactions."""
 
 from . import models
 
 
 def encode(value: models.OutputMessage) -> bytes:
+    if isinstance(value, models.ControlChange) and value.resolution == 14:
+        assert value.channel is not None
+        return bytes(
+            (
+                0xB0 | (value.channel - 1),
+                value.controller,
+                value.value >> 7,
+                0xB0 | (value.channel - 1),
+                value.controller + 32,
+                value.value & 127,
+            )
+        )
+    if isinstance(value, (models.Nrpn, models.Rpn)):
+        assert value.channel is not None
+        registered = isinstance(value, models.Rpn)
+        resolution = 14 if registered else value.resolution
+        messages = [
+            (101 if registered else 99, value.parameter >> 7),
+            (100 if registered else 98, value.parameter & 127),
+            (6, value.value if resolution == 7 else value.value >> 7),
+        ]
+        if resolution == 14:
+            messages.append((38, value.value & 127))
+        messages.extend([(101, 127), (100, 127)])
+        return b''.join(bytes((0xB0 | (value.channel - 1), c, v)) for c, v in messages)
     if isinstance(value, models.SysEx):
         return bytes((0xF0, *value.data, 0xF7))
     status, fields = MESSAGES[value.type]
@@ -51,6 +76,40 @@ def decode(message: bytes) -> dict[str, object]:
             result['position'] = number
     else:
         result.update(zip(MESSAGES[name][1], data, strict=True))
+    return result
+
+
+def decode_parameter(message: bytes) -> dict[str, object]:
+    if len(message) not in (6, 15, 18):
+        raise ValueError('invalid MIDI parameter transaction length')
+    channel = (message[0] & 15) + 1
+    if len(message) == 6:
+        result: dict[str, object] = {
+            'type': 'control-change',
+            'channel': channel,
+            'controller': message[1],
+            'value': message[2] * 128 + message[5],
+            'resolution': 14,
+        }
+        value = models.ControlChange.model_validate(result)
+    else:
+        result = {
+            'type': 'rpn' if message[1] == 101 else 'nrpn',
+            'channel': channel,
+            'parameter': message[2] * 128 + message[5],
+            'value': message[8]
+            if len(message) == 15
+            else message[8] * 128 + message[11],
+        }
+        if len(message) == 15:
+            result['resolution'] = 7
+        value = (
+            models.Rpn.model_validate(result)
+            if result['type'] == 'rpn'
+            else models.Nrpn.model_validate(result)
+        )
+    if encode(value) != message:
+        raise ValueError('invalid MIDI parameter transaction')
     return result
 
 

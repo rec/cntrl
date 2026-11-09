@@ -493,6 +493,8 @@ def _patch(
                 parameter=message[2] << 7 | message[5],
                 value=message[8] << 7 | message[11],
             )
+        elif flags == 10:
+            value.update(midi_messages.decode_parameter(message))
         else:
             value.update(midi_messages.decode(message))
     elif kind == 3:

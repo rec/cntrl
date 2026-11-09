@@ -1053,7 +1053,14 @@ class PatchCompiler:
                 self.errors.append(
                     f'{path}.output: unavailable output {value.output!r}'
                 )
-            if isinstance(value, models.Nrpn):
+            if (
+                (isinstance(value, models.ControlChange) and value.resolution == 14)
+                or isinstance(value, models.Rpn)
+                or (isinstance(value, models.Nrpn) and value.resolution == 7)
+            ):
+                flags = 10
+                data = midi_messages.encode(value)
+            elif isinstance(value, models.Nrpn):
                 assert value.channel is not None
                 flags = 4
                 data = b''.join(
@@ -1662,20 +1669,27 @@ class PatchCompiler:
                             models.ChannelProgramChange,
                             models.PitchBend,
                             models.Nrpn,
+                            models.Rpn,
                         ),
                     ):
                         channel = value.channel
                         assert channel is not None
                         if isinstance(value, models.ControlChange):
                             resources.add((output, channel, value.controller))
+                            if value.resolution == 14:
+                                resources.add((output, channel, value.controller + 32))
                         elif isinstance(value, models.ChannelProgramChange):
                             resources.add((output, channel, 128))
                         elif isinstance(value, models.PitchBend):
                             resources.add((output, channel, 129))
                         else:
-                            resources.update(
-                                (output, channel, c) for c in (99, 98, 6, 38)
+                            controls = (
+                                (99, 98, 6, 38)
+                                if isinstance(value, models.Nrpn)
+                                and value.resolution == 14
+                                else (99, 98, 6, 38, 101, 100)
                             )
+                            resources.update((output, channel, c) for c in controls)
                     else:
                         resources.add((output, 0, -1))
             for previous, mode, other in ownership:

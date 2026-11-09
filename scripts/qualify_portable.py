@@ -13,7 +13,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field
 
-from cntrl.patch_switcher import data_files, models
+from cntrl.patch_switcher import data_files, models, setup_bundle
 from cntrl.patch_switcher.compiler import read_document
 
 
@@ -71,6 +71,25 @@ def qualify(options: Qualification) -> None:
         if not families:
             raise ValueError('export qualification requires a declared font source')
         source['style'] = {'font_name': families[0], 'horizontal_scale': 1.25}
+        source['midi'] = {
+            'sweep': {
+                'generate': {
+                    'lfo': {
+                        'target': {
+                            'type': 'control-change',
+                            'channel': 1,
+                            'controller': 1,
+                            'resolution': 14,
+                        },
+                        'shape': 'smooth-random',
+                        'range': [0, 16383],
+                        'period': '2 s',
+                        'off': {'action': 'value', 'value': 0},
+                    }
+                },
+                'to': target.default_midi_output,
+            }
+        }
         fixture = root / 'qualification.toml'
         fixture.write_text(tomlkit.dumps(source))
         definitions = root / 'definitions.toml'
@@ -112,6 +131,13 @@ def qualify(options: Qualification) -> None:
             )
         if not compiled.is_file() or not list((root / 'fonts').glob('*.cfont')):
             raise ValueError('export qualification did not prepare native font assets')
+        data = compiled.read_bytes()
+        bundle = setup_bundle.build(
+            {'qualified': data}, {'qualified': source}, target.memory
+        ).pack()
+        if setup_bundle.unpack(bundle) != {'qualified': data}:
+            raise ValueError('relocated LFO bundle did not round-trip')
+        (options.output / 'lfo-setups.bin').write_bytes(bundle)
         (options.output / 'result.toml').write_text(
             tomlkit.dumps(
                 {

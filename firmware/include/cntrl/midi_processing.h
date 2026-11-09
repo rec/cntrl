@@ -2,6 +2,7 @@
 #include "midi_bridge.h"
 #include "midi_file.h"
 #include "midi_stream_timeline.h"
+#include "midi_lfo.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -11,7 +12,7 @@
 namespace cntrl::midi {
 // The wire section is shared with patch_switcher/midi_processing.py.
 // All retained traffic has an explicit owner and a bounded storage allowance.
-class Streams {
+class Streams : public ParameterObserver {
 public:
     struct Emit {
         virtual ~Emit() = default;
@@ -31,7 +32,8 @@ public:
     }
     static constexpr unsigned system_scope = 65535, max_routes = 64;
     struct Limits { unsigned events = 512, voices = 256, notes = 256, captures = 256; };
-    struct Diagnostics { uint32_t dropped = 0, overloaded = 0, transmitted = 0, failed = 0; };
+    struct Diagnostics { uint32_t dropped = 0, overloaded = 0, transmitted = 0, failed = 0, coalesced = 0, skipped = 0; };
+    struct LfoStatus { unsigned running = 0, pending = 0, stopping = 0, waiting = 0, missing = 0; uint64_t failed = 0; };
     struct Field { uint8_t id = 0; std::vector<int32_t> values; };
     struct Assignment { uint8_t field = 0, source = 255; int32_t value = 0; };
     struct Step {
@@ -58,6 +60,7 @@ public:
         std::unique_ptr<StreamFileSource> file;
         bool started = false;
         bool foreign = false;
+        std::unique_ptr<Lfo> lfo;
     };
     Streams() = default;
     explicit Streams(Limits limits) : limits_(limits) {}
@@ -71,6 +74,61 @@ public:
     unsigned voices() const { return unsigned(voices_.size()); }
     unsigned recovery() const { return unsigned(cleanup_.size()); }
     void file_provider(StreamFileProvider *provider) { file_provider_ = provider; }
+    void beat_position(BeatPosition position) { beat_ = position; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(lfo_status)
+#endif
+    LfoStatus lfo_status() const {
+        LfoStatus result;
+        for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].lfo) {
+            if (routes_[i].failed) result.failed |= uint64_t(1) << i;
+            if (active(i) && routes_[i].started && !routes_[i].lfo->ended) {
+                if (routes_[i].lfo->waiting) ++result.waiting;
+                else ++result.running;
+            }
+        }
+        for (const auto &delivery : parameters_) {
+            if (!delivery.finished && !delivery.initial) ++result.pending;
+            if (!delivery.finished && delivery.stopping) ++result.stopping;
+            if (!outputs_[delivery.output].present) ++result.missing;
+        }
+        return result;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_retained_bytes)
+#endif
+    size_t retained_bytes() const {
+        size_t bytes = routes_.capacity() * sizeof(Route) + parsers_.capacity() * sizeof(Parser)
+            + (inputs_.capacity() + outputs_.capacity()) * sizeof(Connection)
+            + notes_.capacity() * sizeof(Note) + voices_.capacity() * sizeof(Voice)
+            + events_.capacity() * sizeof(Event) + cleanup_.capacity() * sizeof(Cleanup)
+            + holds_.capacity() * sizeof(Hold) + captures_.capacity() * sizeof(Capture)
+            + reverse_parameters_.capacity() * sizeof(Work)
+            + visits_.capacity() * sizeof(Visit) + parameters_.capacity() * sizeof(ParameterDelivery)
+            + bindings_.capacity() * sizeof(ParameterBinding);
+        for (const auto &route : routes_) {
+            bytes += route.inputs.capacity() * sizeof(Input) + route.steps.capacity() * sizeof(Step);
+            if (route.lfo) bytes += sizeof(Lfo);
+            for (const auto &step : route.steps) {
+                bytes += step.match.capacity() * sizeof(Field) + step.assignments.capacity() * sizeof(Assignment)
+                    + step.parameters.capacity();
+                for (const auto &field : step.match) bytes += field.values.capacity() * sizeof(int32_t);
+            }
+        }
+        return bytes;
+    }
+    bool parameter_write(unsigned output, const uint8_t *bytes, unsigned size, const Parameter *logical, uint64_t origin) override {
+        bool blocked = false;
+        for (auto &delivery : parameters_) if (delivery.output == output && !delivery.finished && (!origin || delivery.lfo != origin)
+            && (logical ? delivery.target.overlaps(*logical) || (logical->kind == Parameter::program && delivery.target.channel == logical->channel)
+                : delivery.target.conflicts(bytes, size))) {
+            bool bank = size >= 3 && bytes[0] >> 4 == 11 && (bytes[1] == 0 || bytes[1] == 32);
+            stop_parameter(delivery, false);
+            if (bank && delivery.target.kind == Parameter::program) delivery.off = 0;
+            if (delivery.touched || delivery.flight.position) blocked = true;
+        }
+        return !blocked;
+    }
     unsigned clock_outputs() const {
         unsigned mask = 0;
         for (unsigned i = 0; i < routes_.size(); ++i) if (active(i) && !routes_[i].steps.empty()) {
@@ -97,7 +155,16 @@ public:
         parsers_.assign(outputs.route_count(), Parser{});
         inputs_.assign(outputs.route_count(), Connection{});
         outputs_.resize(outputs.route_count());
-        for (auto &route : routes_) route.next = now;
+        outputs_count_ = outputs.route_count();
+        for (auto &route : routes_) {
+            route.next = now;
+            if (route.lfo) route.lfo->scope(now, beat_);
+        }
+        if (std::any_of(routes_.begin(), routes_.end(), [](const Route &route) { return bool(route.lfo); })) {
+            parameters_.reserve(256); bindings_.reserve(128); events_.reserve(limits_.events); captures_.reserve(limits_.captures);
+            reverse_parameters_.reserve(limits_.captures);
+        }
+        activated_ = ~uint64_t(0);
         return true;
     }
     void select(unsigned scope, uint64_t now = 0) {
@@ -108,7 +175,9 @@ public:
         if (external_selected_) { routes_.resize(base_routes_); external_selected_ = false; }
         for (auto &route : routes_) if (route.scope == scope) {
             route.enabled = true; route.failed = false; route.failed_outputs = 0; route.next = now; route.started = false;
+            if (route.lfo) route.lfo->scope(now, beat_);
         }
+        for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].scope == scope) activated_ |= uint64_t(1) << i;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_select_external)
@@ -123,6 +192,10 @@ public:
         unsigned local_count = 0;
         for (const auto &route : candidate.routes_) if (route.scope == scope) ++local_count;
         if (base_routes_ + local_count > max_routes) return false;
+        for (const auto &route : candidate.routes_) if (route.lfo) {
+            parameters_.reserve(256); bindings_.reserve(128); events_.reserve(limits_.events); captures_.reserve(limits_.captures);
+            reverse_parameters_.reserve(limits_.captures); break;
+        }
         std::vector<unsigned> mapping(candidate.routes_.size(), max_routes);
         unsigned next = base_routes_;
         for (unsigned i = 0; i < candidate.routes_.size(); ++i) {
@@ -140,7 +213,9 @@ public:
         for (auto &route : candidate.routes_) if (route.scope == scope) {
             for (auto &input : route.inputs) if (input.kind) input.index = uint16_t(mapping[input.index]);
             route.foreign = true; route.next = now;
+            if (route.lfo) route.lfo->scope(now, beat_);
             routes_.push_back(std::move(route));
+            activated_ |= uint64_t(1) << (routes_.size() - 1);
         }
         selected_ = scope; foreign_scope_ = scope; foreign_signature_ = signature; external_selected_ = true; return true;
     }
@@ -158,6 +233,7 @@ public:
         routes_[route].file.reset(); routes_[route].started = false;
         routes_[route].enabled = enabled;
         if (enabled) { routes_[route].failed = false; routes_[route].failed_outputs = 0; }
+        if (enabled) activated_ |= uint64_t(1) << route;
     }
     void stop_all() {
         retire(~uint64_t(0));
@@ -180,6 +256,12 @@ public:
         if (connection.present == present && connection.identity == identity) return;
         bool replacement = connection.identity != identity;
         connection.present = present; connection.identity = identity; ++connection.generation;
+        for (auto &delivery : parameters_) if (delivery.output == output && !delivery.finished) {
+            stop_parameter(delivery, false);
+            if (sink_) sink_->abandon_parameter(output, delivery.flight);
+            if (replacement) delivery.finished = true;
+        }
+        if (sink_) sink_->forget_output(output);
         clock_claimed_[output] = false;
         for (auto &route : routes_) route.failed_outputs &= uint16_t(~(1u << output));
         for (auto &voice : voices_) if (voice.output == output && voice.sounding) owe(voice);
@@ -245,9 +327,15 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_service)
 #endif
-    void service(Sink &sink, uint64_t now, unsigned available = ~0u, unsigned busy = 0, unsigned budget = 64) {
+    void service(Sink &sink, uint64_t now, unsigned available = ~0u, unsigned busy = 0, unsigned budget = 64, unsigned exclusive = 0) {
         current_time_ = now;
+        sink_ = &sink; sink.parameter_observer(this);
         unsigned used = 0;
+        bool modulation = false;
+        for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].lfo && active(i)) modulation = true;
+        for (const auto &delivery : parameters_) if (!delivery.finished) modulation = true;
+        unsigned work_budget = modulation ? budget - std::min(budget / 2, unsigned(outputs_.size())) : budget;
+        service_lfos(now, used, work_budget);
         for (auto cleanup = cleanup_.begin(); cleanup != cleanup_.end() && used < budget;) {
             unsigned bit = 1u << cleanup->output;
             if (!(available & bit) || (busy & bit) || !outputs_[cleanup->output].present) { ++cleanup; continue; }
@@ -260,12 +348,12 @@ public:
         for (unsigned i = 0; i < routes_.size(); ++i) if (active(i) && !routes_[i].steps.empty() && routes_[i].steps[0].kind == 8) {
             auto &route = routes_[i];
             if (!route.started) { route.clock.start(now, unsigned(std::llround(route.steps[0].bpm * 1000))); route.started = true; }
-            if (route.clock.poll(now) && used < budget) {
+            if (route.clock.poll(now) && used < work_budget) {
                 Work work{{15, {0xf8, 0, 0}}, now, 0, system_scope, 0};
                 process(i, 1, work); ++used;
             }
         }
-        for (unsigned i = 0; i < routes_.size() && used < budget; ++i) if (active(i) && !routes_[i].steps.empty() && routes_[i].steps[0].kind == 9) {
+        for (unsigned i = 0; i < routes_.size() && used < work_budget; ++i) if (active(i) && !routes_[i].steps.empty() && routes_[i].steps[0].kind == 9) {
             auto &route = routes_[i];
             if (!route.started) {
                 route.started = true;
@@ -287,21 +375,26 @@ public:
                 else if (route.file->finished()) { finish_reverse(i, now); route.file.reset(); }
             }
         }
-        for (unsigned i = 0; i < routes_.size() && used < budget; ++i) if (active(i)) {
-            for (unsigned position = 0; position < routes_[i].steps.size() && used < budget; ++position) {
+        for (unsigned i = 0; i < routes_.size() && used < work_budget; ++i) if (active(i)) {
+            for (unsigned position = 0; position < routes_[i].steps.size() && used < work_budget; ++position) {
                 auto &step = routes_[i].steps[position];
                 if (!step.processor) continue;
                 Work work{{}, now, 0, max_routes * (position + 1) + i, uint64_t(1) << i};
-                ProcessorOutput output(*this, i, position + 1, work, budget - used);
-                step.processor->service(now, budget - used, output); ++used;
+                ProcessorOutput output(*this, i, position + 1, work, work_budget - used);
+                step.processor->service(now, work_budget - used, output); ++used;
             }
         }
         flush_reverse(now);
         unsigned delivered = 0;
-        for (auto event = events_.begin(); event != events_.end() && used < budget;) {
+        unsigned attempted = 0;
+        for (auto event = events_.begin(); event != events_.end() && used < work_budget;) {
             if (event->due > now) { ++event; continue; }
+            if (event->parameter.kind) {
+                accept_parameter(*event);
+                event = events_.erase(event); ++used; continue;
+            }
             unsigned bit = 1u << event->output;
-            if ((delivered & bit) || !(available & bit) || (busy & bit) || recovering(event->output) || !outputs_[event->output].present) { ++event; continue; }
+            if (((delivered | attempted) & bit) || !(available & bit) || (busy & bit) || recovering(event->output) || !outputs_[event->output].present) { ++event; continue; }
             bool realtime = event->packet.cin == 15;
             if ((sysex_outputs_ & bit) && !realtime && (sysex_owners_[event->output] != event->owner || sysex_sources_[event->output] != event->input)) { ++event; continue; }
             bool blocked_before = false;
@@ -337,7 +430,7 @@ public:
                     if (claim.output == event->output && claim.channel == (event->packet.bytes[0] & 15) && claim.controller == event->packet.bytes[1]
                         && (claim.owner != event->owner || claim.input != event->input)) write = false;
             }
-            if (write && !sink.submit(event->output, event->packet)) { ++event; continue; }
+            if (write && !sink.submit(event->output, event->packet)) { attempted |= bit; ++event; continue; }
             if (write) { ++diagnostics_.transmitted; delivered |= bit; }
             if (write && clock) { clock_claimed_[event->output] = true; clock_sources_[event->output] = event->input; clock_owners_[event->output] = event->owner; }
             if (voice && onset) voice->sounding = true;
@@ -358,12 +451,32 @@ public:
             if (voice && release) { auto id = voice->id; erase_if(voices_, [id](const Voice &entry) { return entry.id == id; }); }
             event = events_.erase(event);
         }
+        service_parameters(sink, available, busy, exclusive, used, budget, delivered);
+        for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].lfo && routes_[i].lfo->ended && !routes_[i].lfo->finishing) {
+            auto &lfo = *routes_[i].lfo;
+            bool pending = false;
+            for (const auto &event : events_) if (event.lfo == lfo.id && event.sample != 1) pending = true;
+            for (const auto &capture : captures_) if (capture.work.lfo == lfo.id && capture.work.sample != 1) pending = true;
+            if (!pending) {
+                lfo.finishing = true; routes_[i].enabled = false;
+                for (auto &delivery : parameters_) if (delivery.lfo == lfo.id) stop_parameter(delivery, true);
+            }
+        }
+        erase_if(parameters_, [&](const ParameterDelivery &delivery) {
+            if (!delivery.finished) return false;
+            for (unsigned i = 0; i < routes_.size(); ++i) if ((delivery.owner & (uint64_t(1) << i)) && !active(i)) return true;
+            for (const auto &route : routes_) if (route.lfo && route.lfo->id == delivery.lfo) return false;
+            return true;
+        });
     }
 private:
     struct Registration { unsigned opcode, version; Factory factory; bool generator; };
     static std::vector<Registration> &registry() { static std::vector<Registration> result; return result; }
     struct Connection { bool present = true, blocked = false; uint64_t identity = 0; unsigned generation = 0; };
-    struct Work { Packet packet; uint64_t due, token; unsigned input; uint64_t owner; };
+    struct Work {
+        Packet packet; uint64_t due, token; unsigned input; uint64_t owner;
+        Parameter parameter = {}; uint64_t lfo = 0; uint8_t sample = 1;
+    };
     struct Note { uint64_t token; unsigned input; uint8_t channel, pitch; };
     struct Voice {
         uint64_t id, token, owner, delay;
@@ -371,7 +484,20 @@ private:
         Packet packet;
         bool sounding = false;
     };
-    struct Event { uint64_t due, owner, voice, sequence; unsigned input, output; Packet packet; };
+    struct Event {
+        uint64_t due, owner, voice, sequence; unsigned input, output; Packet packet;
+        Parameter parameter = {}; uint64_t lfo = 0; uint8_t sample = 1;
+    };
+    struct ParameterBinding { unsigned output; uint64_t owner; Parameter target; };
+    struct ParameterDelivery {
+        unsigned output; uint64_t owner, lfo, identity;
+        Parameter target;
+        uint8_t off = 0, sample = 1;
+        int final_value = 0, snapshot = Parameter::unknown, last = Parameter::unknown;
+        int values[3] = {Parameter::unknown, Parameter::unknown, Parameter::unknown};
+        ParameterTransaction flight = {};
+        bool initial = false, touched = false, stopping = false, finished = false;
+    };
     struct Cleanup { unsigned output; Packet packet; };
     struct Hold { unsigned input, output; uint64_t owner; uint8_t channel, controller; };
     struct Capture {
@@ -397,12 +523,232 @@ private:
     std::vector<Event> events_;
     std::vector<Cleanup> cleanup_;
     std::vector<Hold> holds_;
+    std::vector<ParameterDelivery> parameters_;
+    std::vector<ParameterBinding> bindings_;
+    uint64_t activated_ = 0;
+    BeatPosition beat_;
+    Sink *sink_ = nullptr;
+    static bool parameter_step(const Step &step, Parameter &target) {
+        if (step.processor || step.kind >= 8) return false;
+        if (step.kind == 2 || step.kind == 3) {
+            if (target.kind == Parameter::key_pressure)
+                return target.set(2, step.kind == 2 ? target.address + step.value : 2 * step.value - target.address);
+        } else if (step.kind == 4) {
+            if (step.field != target.value_field() || step.output_low < target.minimum() || step.output_low > target.maximum()
+                || step.output_high < target.minimum() || step.output_high > target.maximum()) return false;
+        } else if (step.kind == 5) {
+            for (const auto &a : step.assignments) if (a.field != target.value_field()) {
+                if (!step.match.empty() || a.source != 255 || !target.set(a.field, a.value)) return false;
+            }
+        } else if (step.kind == 6) return step.repeats == 1 && step.feedback == 1;
+        else if (step.kind == 7) return step.time != 0;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(lfo_bindings)
+#endif
+    bool parameter_bindings(unsigned root) {
+        bindings_.clear();
+        Parameter targets[max_routes] = {};
+        uint64_t owners[max_routes] = {};
+        targets[root] = routes_[root].lfo->config.target;
+        for (unsigned i = root; i < routes_.size(); ++i) if (active(i)) {
+            unsigned sources = 0;
+            if (i == root) owners[i] = uint64_t(1) << root;
+            else for (const auto &input : routes_[i].inputs) if (input.kind && owners[input.index]) {
+                if (++sources > 1) return false;
+                targets[i] = targets[input.index]; owners[i] = owners[input.index] | (uint64_t(1) << i);
+            }
+            if (!owners[i]) continue;
+            unsigned begin = i == root ? 1 : 0;
+            for (unsigned j = begin; j < routes_[i].steps.size(); ++j)
+                if (!parameter_step(routes_[i].steps[j], targets[i])) return false;
+            for (unsigned output = 0; output < outputs_count_; ++output) if (routes_[i].outputs & (1u << output)) {
+                if (bindings_.size() >= 128) return false;
+                bindings_.push_back({output, owners[i], targets[i]});
+            }
+        }
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(lfo_validation)
+#endif
+    bool validate_lfos() {
+        unsigned generators = 0;
+        for (const auto &route : routes_) generators += bool(route.lfo);
+        if (generators > 16) return false;
+        std::vector<ParameterBinding> all;
+        for (unsigned context = 0; context <= routes_.size(); ++context) {
+            selected_ = context == routes_.size() ? system_scope : routes_[context].scope;
+            all.clear();
+            for (unsigned root = 0; root < routes_.size(); ++root) if (routes_[root].lfo && active(root)) {
+                if (!parameter_bindings(root) || all.size() + bindings_.size() > 128) return false;
+                for (const auto &binding : bindings_) {
+                    if (routes_[root].lfo->config.off == 1 && (routes_[root].lfo->config.final_value < binding.target.minimum()
+                        || routes_[root].lfo->config.final_value > binding.target.maximum())) return false;
+                    for (const auto &other : all) if (binding.output == other.output && binding.target.overlaps(other.target)) return false;
+                    all.push_back(binding);
+                }
+            }
+        }
+        selected_ = system_scope; bindings_.clear(); return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(lfo_bind)
+#endif
+    bool bind_lfo(unsigned root, uint64_t id, bool fresh) {
+        auto &route = routes_[root];
+        if (!parameter_bindings(root)) { route.failed = true; ++diagnostics_.failed; return false; }
+        unsigned needed = 0;
+        for (const auto &binding : bindings_) {
+            bool existing = false;
+            for (const auto &delivery : parameters_) if (delivery.lfo == id && delivery.output == binding.output
+                && delivery.owner == binding.owner && delivery.target.same(binding.target)) {
+                if (!delivery.finished || (!fresh && !(binding.owner & activated_))) existing = true;
+            }
+            if (existing || (!fresh && !(binding.owner & activated_))) continue;
+            ++needed;
+            for (const auto &delivery : parameters_) if (!delivery.finished && delivery.output == binding.output && delivery.target.overlaps(binding.target)) {
+                if (!delivery.stopping) { route.failed = true; ++diagnostics_.failed; }
+                return false;
+            }
+            if (outputs_[binding.output].present && route.lfo->config.off == 2 && sink_->parameter_value(binding.output, binding.target) == Parameter::unknown) {
+                route.failed = true; ++diagnostics_.failed; return false;
+            }
+        }
+        if (parameters_.size() + needed > 256) { ++diagnostics_.overloaded; return false; }
+        for (const auto &binding : bindings_) {
+            bool existing = false;
+            for (const auto &delivery : parameters_) if (delivery.lfo == id && delivery.output == binding.output
+                && delivery.owner == binding.owner && delivery.target.same(binding.target)
+                && (!delivery.finished || (!fresh && !(binding.owner & activated_)))) existing = true;
+            if (existing || (!fresh && !(binding.owner & activated_))) continue;
+            ParameterDelivery delivery{binding.output, binding.owner, id, outputs_[binding.output].identity, binding.target};
+            delivery.off = route.lfo->config.off; delivery.final_value = route.lfo->config.final_value;
+            delivery.snapshot = sink_->parameter_value(binding.output, binding.target);
+            delivery.finished = !outputs_[binding.output].present;
+            parameters_.push_back(delivery);
+        }
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(lfo_service)
+#endif
+    void service_lfos(uint64_t now, unsigned &used, unsigned budget) {
+        bool synchronized = true;
+        for (unsigned root = 0; root < routes_.size() && used < budget; ++root) {
+            auto &route = routes_[root];
+            if (!route.lfo || (route.scope != system_scope && (route.scope != selected_ || route.foreign != external_selected_))) continue;
+            auto &lfo = *route.lfo;
+            lfo.advance(now, beat_, active(root) && route.started);
+            if (!active(root)) continue;
+            if (!route.started) {
+                uint64_t id = serial_ + 1;
+                if (!bind_lfo(root, id, true)) { synchronized = false; continue; }
+                ++serial_; lfo.enable(now, beat_, id); route.started = true;
+            } else if (activated_ && !bind_lfo(root, lfo.id, false)) { synchronized = false; continue; }
+            if (lfo.ended || (lfo.generated && (now < lfo.next || lfo.waiting))) continue;
+            bool terminal = lfo.generated && lfo.complete();
+            uint8_t sample = !lfo.generated ? 0 : terminal ? 2 : 1;
+            if (terminal) {
+                erase_if(events_, [&](const Event &event) { return event.lfo == lfo.id && event.sample == 1; });
+                erase_if(captures_, [&](const Capture &capture) { return capture.work.lfo == lfo.id && capture.work.sample == 1; });
+            }
+            if (lfo.generated && now > lfo.next) diagnostics_.skipped += uint32_t((now - lfo.next) / lfo.config.interval);
+            Parameter value = lfo.config.target; value.value = lfo.sample(terminal);
+            uint8_t bytes[3] = {}; value.message(0, bytes);
+            Work work{{uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}}, now, 0, max_routes + root, 0, value, lfo.id, sample};
+            process(root, 1, work); ++used;
+            lfo.generated = true; lfo.ended = terminal; lfo.next = now + lfo.config.interval;
+        }
+        if (synchronized) activated_ = 0;
+    }
+    void stop_parameter(ParameterDelivery &delivery, bool terminal) {
+        if (delivery.finished) return;
+        delivery.stopping = true;
+        delivery.values[1] = Parameter::unknown;
+        if (!terminal) delivery.values[0] = delivery.values[2] = Parameter::unknown;
+        if (!delivery.flight.position && (!terminal || delivery.sample == 1)) delivery.flight = {};
+    }
+    void accept_parameter(const Event &event) {
+        for (auto &delivery : parameters_) if (delivery.lfo == event.lfo && delivery.owner == event.owner
+            && delivery.output == event.output && delivery.target.same(event.parameter)) {
+            if (delivery.finished || delivery.stopping) continue;
+            unsigned slot = event.sample;
+            if (slot == 1 && delivery.flight.token && !delivery.flight.position && delivery.sample == 1) {
+                delivery.flight.parameter.value = event.parameter.value;
+                ++diagnostics_.coalesced; return;
+            }
+            if (!delivery.initial && delivery.values[0] == Parameter::unknown && slot == 1
+                && !(delivery.flight.token && delivery.sample == 0)) slot = 0;
+            if (slot == 1 && delivery.values[slot] != Parameter::unknown) ++diagnostics_.coalesced;
+            if (slot != 1 && delivery.values[slot] != Parameter::unknown) return;
+            delivery.values[slot] = event.parameter.value; return;
+        }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(parameter_service)
+#endif
+    void service_parameters(Sink &sink, unsigned available, unsigned busy, unsigned exclusive, unsigned &used, unsigned budget, unsigned delivered) {
+        if (parameters_.empty()) return;
+        for (unsigned output = 0; output < outputs_.size() && used < budget; ++output) {
+            unsigned bit = 1u << output;
+            if ((delivered & bit) || !(available & bit) || !outputs_[output].present || ((exclusive | sysex_outputs_) & bit)) continue;
+            uint64_t lock = 0;
+            for (const auto &d : parameters_) if (d.output == output && d.flight.position) lock = d.flight.token;
+            for (unsigned scan = 0; scan < parameters_.size(); ++scan) {
+                unsigned index = (parameter_cursor_[output] + scan) % unsigned(parameters_.size());
+                auto &delivery = parameters_[index];
+                if (delivery.output != output || delivery.finished || outputs_[output].identity != delivery.identity
+                    || (lock && delivery.flight.token != lock)) continue;
+                if (!delivery.flight.token) {
+                    if (!delivery.stopping && (busy & bit)) continue;
+                    int value = Parameter::unknown;
+                    unsigned slot = 0;
+                    if (delivery.values[0] != Parameter::unknown) { value = delivery.values[0]; slot = 0; }
+                    else if (delivery.values[2] != Parameter::unknown) {
+                        bool initial_pending = false;
+                        for (const auto &event : events_) if (event.lfo == delivery.lfo && event.sample == 0 && event.output == delivery.output) initial_pending = true;
+                        for (const auto &capture : captures_) if (capture.work.lfo == delivery.lfo && capture.work.sample == 0) initial_pending = true;
+                        if (initial_pending) continue;
+                        value = delivery.values[2]; slot = 2;
+                    }
+                    else if (delivery.stopping) {
+                        if (!delivery.touched || !delivery.off) { delivery.finished = true; continue; }
+                        value = delivery.off == 1 ? delivery.final_value : delivery.snapshot; slot = 3;
+                    } else if (delivery.values[1] != Parameter::unknown) { value = delivery.values[1]; slot = 1; }
+                    if (value == Parameter::unknown) continue;
+                    if (slot < 3) delivery.values[slot] = Parameter::unknown;
+                    if (delivery.last == value) {
+                        if (slot == 0) delivery.initial = true;
+                        if (slot == 3) delivery.finished = true;
+                        continue;
+                    }
+                    delivery.sample = uint8_t(slot);
+                    delivery.flight = {delivery.target, ++serial_, 0, delivery.lfo}; delivery.flight.parameter.value = value;
+                }
+                ++used;
+                parameter_cursor_[output] = (index + 1) % unsigned(parameters_.size());
+                if (!sink.submit_parameter(delivery.output, delivery.flight)) break;
+                ++diagnostics_.transmitted; delivered |= bit; delivery.touched = true;
+                if (delivery.flight.position == delivery.flight.parameter.messages()) {
+                    delivery.last = delivery.flight.parameter.value; delivery.flight = {};
+                    if (delivery.sample == 0) delivery.initial = true;
+                    if (delivery.sample == 3) delivery.finished = true;
+                }
+                break;
+            }
+        }
+    }
+    unsigned outputs_count_ = 0;
+    unsigned parameter_cursor_[16] = {};
     uint64_t sysex_owners_[16] = {};
     unsigned sysex_sources_[16] = {};
     bool clock_claimed_[16] = {};
     unsigned clock_sources_[16] = {};
     uint64_t clock_owners_[16] = {};
     std::vector<Capture> captures_;
+    std::vector<Work> reverse_parameters_;
     std::vector<Visit> visits_;
     StreamFileProvider *file_provider_ = nullptr;
     struct GeneratedSink : Sink {
@@ -489,6 +835,7 @@ private:
         cleanup_packet(voice.output, packet);
     }
     void retire(uint64_t owners) {
+        for (auto &delivery : parameters_) if (delivery.owner & owners) stop_parameter(delivery, false);
         for (unsigned output = 0; output < outputs_.size(); ++output)
             if (clock_claimed_[output] && (clock_owners_[output] & owners)) clock_claimed_[output] = false;
         for (unsigned i = 0; i < routes_.size(); ++i) if (owners & (uint64_t(1) << i)) {
@@ -571,6 +918,13 @@ private:
         if (clock_claimed_[output] && (clock_owners_[output] & owner)) clock_claimed_[output] = false;
     }
     bool enqueue(Event event) {
+        if (event.parameter.kind && event.sample == 1 && event.due <= current_time_) {
+            for (auto &pending : events_) if (pending.lfo == event.lfo && pending.output == event.output && pending.sample == 1
+                && pending.due <= current_time_ && pending.parameter.same(event.parameter)) {
+                if (event.due >= pending.due) { pending.parameter = event.parameter; pending.due = event.due; }
+                ++diagnostics_.coalesced; return true;
+            }
+        }
         bool release = event.packet.bytes[0] >> 4 == 8;
         if (events_.size() + (release ? 0 : voices_.size()) >= limits_.events
             || output_events(event.output) + (release ? 0 : output_voices(event.output)) >= output_event_limit()) { ++diagnostics_.dropped; return false; }
@@ -629,8 +983,8 @@ private:
     }
     static bool matches(const Step &step, const Work &work) {
         for (const auto &match : step.match) {
-            int value = field(work.packet, match.id, work.input);
-            if (value < 0 || std::find(match.values.begin(), match.values.end(), value) == match.values.end()) return false;
+            int value = work_field(work, match.id);
+            if (value == Parameter::unknown || std::find(match.values.begin(), match.values.end(), value) == match.values.end()) return false;
         }
         return true;
     }
@@ -652,7 +1006,36 @@ private:
         else return false;
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_numeric_fields)
+#endif
     static bool numeric_fields(const Step &step, Work &work) {
+        if (work.parameter.kind) {
+            if (!matches(step, work)) return true;
+            if ((step.kind == 2 || step.kind == 3) && work.parameter.kind == Parameter::key_pressure)
+                return work.parameter.set(2, step.kind == 2 ? work.parameter.address + step.value : 2 * step.value - work.parameter.address);
+            if (step.kind == 4) {
+                int original = work_field(work, step.field);
+                if (original == Parameter::unknown) return true;
+                int low = step.input_low, high = step.input_high;
+                if (low == -1 && high == -1) { low = work.parameter.minimum(); high = work.parameter.maximum(); }
+                double fraction = double(std::clamp(original, low, high) - low) / (high - low);
+                return work.parameter.set(step.field, int(std::floor(step.output_low + fraction * (step.output_high - step.output_low) + 0.5)));
+            }
+            if (step.kind == 5) {
+                Parameter original = work.parameter;
+                for (const auto &a : step.assignments) {
+                    int value = a.value;
+                    if (a.source != 255) {
+                        int source = original.field(a.source, work.input);
+                        if (source == Parameter::unknown) return true;
+                        value += source;
+                    }
+                    if (!work.parameter.set(a.field, value)) return false;
+                }
+            }
+            return true;
+        }
         if ((step.kind == 2 || step.kind == 3) && field(work.packet, 2, work.input) >= 0) {
             int pitch = work.packet.bytes[1]; pitch = step.kind == 2 ? pitch + step.value : 2 * step.value - pitch;
             if (pitch < 0 || pitch > 127) return false;
@@ -681,6 +1064,11 @@ private:
             work.packet = mapped;
         }
         return true;
+    }
+    static int work_field(const Work &work, unsigned id) {
+        if (work.parameter.kind) return work.parameter.field(id, work.input);
+        int value = field(work.packet, id, work.input);
+        return value < 0 ? Parameter::unknown : value;
     }
     bool owned_fields(Packet &packet, uint64_t owner, unsigned input, unsigned stop_route = max_routes, unsigned stop_step = 0) const {
         Work work{packet, 0, 0, input, owner};
@@ -715,6 +1103,10 @@ private:
             bool match = matches(step, work);
             if ((step.kind == 0 && !match) || (step.kind == 1 && match)) return;
             if ((step.kind == 2 || step.kind == 3) && field(work.packet, 2, work.input) >= 0) {
+                if (work.parameter.kind) {
+                    if (!numeric_fields(step, work)) return;
+                    continue;
+                }
                 int pitch = work.packet.bytes[1];
                 pitch = step.kind == 2 ? pitch + step.value : 2 * step.value - pitch;
                 if (pitch < 0 || pitch > 127) return;
@@ -766,6 +1158,10 @@ private:
         for (unsigned output = 0; output < outputs_.size(); ++output) if (entry.outputs & (1u << output)) {
             if (entry.failed_outputs & (1u << output)) continue;
             if (!outputs_[output].present || recovering(output)) { ++diagnostics_.dropped; continue; }
+            if (work.parameter.kind) {
+                if (!enqueue({work.due, work.owner, 0, 0, work.input, output, work.packet, work.parameter, work.lfo, work.sample})) fail_output(route, output);
+                continue;
+            }
             uint64_t voice = 0;
             if (work.packet.bytes[0] >> 4 == 9 && work.token) {
                 if (voices_.size() >= limits_.voices || output_voices(output) >= output_voice_limit()
@@ -780,6 +1176,9 @@ private:
             for (const auto &source : routes_[downstream].inputs) if (source.kind && source.index == route) { process(downstream, 0, work); break; }
     }
     uint64_t current_time_ = 0;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_reverse_group)
+#endif
     void reverse_group(unsigned route, unsigned step, uint64_t now, bool finite) {
         uint64_t window = routes_[route].steps[step].time;
         uint64_t begin = finite ? routes_[route].next : UINT64_MAX;
@@ -794,11 +1193,19 @@ private:
         // A service stall cannot turn into an unbounded burst of old windows.
         if (!finite && now - boundary >= window) { overload(uint64_t(1) << route); return; }
         std::vector<TimelinePacket> sequence;
+        reverse_parameters_.clear();
         for (auto capture = captures_.begin(); capture != captures_.end();) {
             if (capture->route != route || capture->step != step
                 || (capture->frame && !capture->closed)) { ++capture; continue; }
             uint64_t time = capture->frame ? capture->end : capture->start;
             if (time < begin || (!finite && time >= boundary)) { ++capture; continue; }
+            if (capture->work.parameter.kind) {
+                Work reversed = capture->work;
+                reversed.due = boundary + boundary - capture->start;
+                reverse_parameters_.push_back(reversed);
+                capture = captures_.erase(capture);
+                continue;
+            }
             TimelinePacket onset{time - begin, capture->work.packet, capture->work.input,
                 capture->work.token, capture->work.owner};
             sequence.push_back(onset);
@@ -816,6 +1223,7 @@ private:
             }
             capture = captures_.erase(capture);
         }
+        for (const auto &value : reverse_parameters_) process(route, step + 1, value);
         if (sequence.empty()) return;
         std::stable_sort(sequence.begin(), sequence.end(), [](const TimelinePacket &a, const TimelinePacket &b) { return a.time < b.time; });
         if (!reverse_sequence(sequence, boundary - begin, limits_.captures * 2)) {
@@ -876,7 +1284,7 @@ private:
             unsigned fields = 0;
             for (unsigned i = 0; i < count; ++i) {
                 Field field; field.id = uint8_t(byte()); unsigned values = byte();
-                if (field.id > 8 || !values || (fields & (1u << field.id))) return false;
+                if (field.id > 9 || !values || (fields & (1u << field.id))) return false;
                 fields |= 1u << field.id;
                 for (unsigned j = 0; j < values; ++j) field.values.push_back(int32_t(integer(4)));
                 step.match.push_back(std::move(field));
@@ -888,6 +1296,7 @@ private:
     CNTRL_FLASH_ROUTINE(streams_decode)
 #endif
     bool decode(const uint8_t *data, unsigned size, Outputs outputs, unsigned nodes) {
+        outputs_count_ = outputs.route_count();
         if (!data && !size) return true;
         if (!data || size < 12 || std::memcmp(data, "CSTR", 4)) return false;
         Reader reader{data + 4, data + size};
@@ -912,7 +1321,8 @@ private:
             }
             for (unsigned j = 0; j < steps; ++j) {
                 Step step; step.kind = uint8_t(reader.byte()); unsigned reserved = reader.byte(), length = unsigned(reader.integer(2));
-                if (!reader.ok || length > unsigned(reader.end - reader.cursor) || (step.kind < 128 && (reserved || step.kind > 9))) return false;
+                if (!reader.ok || length > unsigned(reader.end - reader.cursor)
+                    || (step.kind < 128 && (step.kind > 10 || reserved != (step.kind == 10 ? 1u : 0u)))) return false;
                 Reader payload{reader.cursor, reader.cursor + length}; reader.cursor += length;
                 if (step.kind >= 128) {
                     for (const auto &registration : registry()) if (registration.opcode == step.kind && registration.version == reserved) {
@@ -930,7 +1340,7 @@ private:
                     if (!payload.match(step)) return false;
                     step.field = uint8_t(payload.byte()); step.input_low = int32_t(payload.integer(4)); step.input_high = int32_t(payload.integer(4));
                     step.output_low = int32_t(payload.integer(4)); step.output_high = int32_t(payload.integer(4));
-                    int minimum = step.field == 6 ? 1 : 0, maximum = step.field == 6 ? 128 : step.field == 5 ? 16383 : 127;
+                    int minimum = step.field == 6 ? 1 : step.field == 5 ? -8192 : 0, maximum = step.field == 6 ? 128 : step.field == 5 ? 16383 : 127;
                     bool implicit = step.input_low == -1 && step.input_high == -1;
                     if ((step.field != 2 && step.field != 3 && step.field != 5 && step.field != 6 && step.field != 7)
                         || (!implicit && (step.input_low < minimum || step.input_high > maximum || step.input_low >= step.input_high))
@@ -941,15 +1351,15 @@ private:
                     if (!assignments || assignments > 8) return false;
                     for (unsigned k = 0; k < assignments; ++k) {
                         Assignment assignment; assignment.field = uint8_t(payload.byte()); assignment.source = uint8_t(payload.byte()); assignment.value = int32_t(payload.integer(4));
-                        if (assignment.field > 7 || (assignment.source > 7 && assignment.source != 255)) return false;
+                        if (assignment.field > 9 || assignment.field == 8 || (assignment.source > 7 && assignment.source != 9 && assignment.source != 255)) return false;
                         if (assignment.value < -16383 || assignment.value > 16383) return false;
                         if (assignment.source != 255 && (!assignment.source || assignment.field == 0)) return false;
                         if (assignment.source == 255) {
-                            int minimum = assignment.field == 1 || assignment.field == 6 ? 1 : 0;
-                            int maximum = assignment.field == 1 ? 16 : assignment.field == 6 ? 128 : assignment.field == 5 ? 16383 : 127;
+                            int minimum = assignment.field == 1 || assignment.field == 6 ? 1 : assignment.field == 5 ? -8192 : 0;
+                            int maximum = assignment.field == 1 ? 16 : assignment.field == 6 ? 128 : assignment.field == 5 || assignment.field == 9 ? 16383 : 127;
                             if (assignment.field == 0) {
                                 int type = assignment.value;
-                                if (!((type >= 8 && type <= 14) || type == 0xf1 || type == 0xf2 || type == 0xf3 || type == 0xf6 || type == 0xf8 || type == 0xfa || type == 0xfb || type == 0xfc || type == 0xfe || type == 0xff)) return false;
+                                if (!((type >= 8 && type <= 14) || type == 16 || type == 17 || type == 0xf1 || type == 0xf2 || type == 0xf3 || type == 0xf6 || type == 0xf8 || type == 0xfa || type == 0xfb || type == 0xfc || type == 0xfe || type == 0xff)) return false;
                             } else if (assignment.value < minimum || assignment.value > maximum) return false;
                         }
                         step.assignments.push_back(assignment);
@@ -961,6 +1371,11 @@ private:
                 else if (step.kind == 8) {
                     uint64_t bits = payload.integer(8); std::memcpy(&step.bpm, &bits, 8);
                     if (!std::isfinite(step.bpm) || step.bpm <= 0 || step.bpm > 1000 || j || inputs) return false;
+                } else if (step.kind == 10) {
+                    if (j || inputs) return false;
+                    route.lfo = std::make_unique<Lfo>();
+                    if (!route.lfo->config.decode(payload.cursor, length)) return false;
+                    payload.cursor = payload.end;
                 } else {
                     step.parameters.assign(payload.cursor, payload.end); payload.cursor = payload.end;
                     if (j || inputs || length != 126 || !std::memchr(step.parameters.data(), 0, 96)) return false;
@@ -984,7 +1399,7 @@ private:
             if (!inputs && (route.steps.empty() || route.steps[0].kind < 8)) return false;
             routes_.push_back(std::move(route));
         }
-        return reader.ok && reader.cursor == reader.end;
+        return reader.ok && reader.cursor == reader.end && validate_lfos();
     }
 };
 } // namespace cntrl::midi

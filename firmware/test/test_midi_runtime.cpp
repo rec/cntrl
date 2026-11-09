@@ -42,7 +42,8 @@ struct Pages {
     Generator generator;
     void clock_connections(unsigned) {}
     unsigned clock_owner() const { return 0; }
-    void clock(unsigned, uint32_t) {}
+    void clock_message(unsigned, uint8_t, uint32_t) {}
+    cntrl::midi::BeatPosition beat_position(uint32_t) { return {}; }
 };
 struct Cable {
     bool running = false;

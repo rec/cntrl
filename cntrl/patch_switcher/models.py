@@ -176,7 +176,18 @@ class ChannelMessage(OutputMessage, frozen=True):
 class ControlChange(ChannelMessage, frozen=True):
     type: Literal['control-change']
     controller: Annotated[int, Field(strict=True, ge=0, le=127)]
-    value: Annotated[int, Field(strict=True, ge=0, le=127)]
+    value: Annotated[int, Field(strict=True, ge=0, le=16383)]
+    resolution: Literal[7, 14] = Field(default=7, exclude_if=lambda v: v == 7)
+
+    @model_validator(mode='after')
+    def native_resolution(self) -> 'ControlChange':
+        if self.resolution == 7 and self.value > 127:
+            raise ValueError('7-bit CC value exceeds 127')
+        if self.resolution == 14 and (
+            self.controller > 31 or self.controller in (0, 6)
+        ):
+            raise ValueError('fine CC requires a continuous MSB controller in 1..31')
+        return self
 
 
 class PitchBend(ChannelMessage, frozen=True):
@@ -187,6 +198,19 @@ class PitchBend(ChannelMessage, frozen=True):
 class Nrpn(ChannelMessage, frozen=True):
     type: Literal['nrpn']
     parameter: Annotated[int, Field(strict=True, ge=0, le=16383)]
+    value: Annotated[int, Field(strict=True, ge=0, le=16383)]
+    resolution: Literal[7, 14] = Field(default=14, exclude_if=lambda v: v == 14)
+
+    @model_validator(mode='after')
+    def native_resolution(self) -> 'Nrpn':
+        if self.resolution == 7 and self.value > 127:
+            raise ValueError('7-bit NRPN value exceeds 127')
+        return self
+
+
+class Rpn(ChannelMessage, frozen=True):
+    type: Literal['rpn']
+    parameter: Literal[1] = 1
     value: Annotated[int, Field(strict=True, ge=0, le=16383)]
 
 
@@ -461,6 +485,7 @@ ConcretePatch = (
         | ControlChange
         | PitchBend
         | Nrpn
+        | Rpn
         | SysEx
         | Note
         | ChannelPressure

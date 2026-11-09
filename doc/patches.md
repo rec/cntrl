@@ -344,9 +344,10 @@ above.
 | Type | Required fields | Optional executable fields |
 | --- | --- | --- |
 | `program-change` (instrument) | `program`, `instrument` unless there is only one | `bank`, `volume`, `pan` |
-| `control-change` | `output`, `channel`, `controller`, `value` | None |
+| `control-change` | `output`, `channel`, `controller`, `value` | `resolution` (7 or 14) |
 | `pitch-bend` | `output`, `channel`, `value` | None |
-| `nrpn` | `output`, `channel`, `parameter`, `value` | None |
+| `nrpn` | `output`, `channel`, `parameter`, `value` | `resolution` (7 or 14) |
+| `rpn` | `output`, `channel`, `parameter` (1), `value` | None |
 | `sysex` | `output`, `data` | None |
 | `program-change` (direct) | `output`, `channel`, `program` (1..128) | None |
 | `note-on`, `note-off` | `output`, `channel`, `note`, `velocity` | None |
@@ -372,6 +373,13 @@ expression lookup. Volume, CC controllers and CC values use 0..127; pan uses
 use 0..16383. Program selections send bank MSB, bank LSB, program, optional volume
 and optional pan, in that order. NRPN sends CC 99, 98, 6 and 38 as one ordered
 message sequence on its output, allowing MIDI real-time traffic to interleave.
+Fine CC uses `resolution = 14`, an MSB controller in 1..31 except 6, and a
+value in 0..16383; it sends that controller followed by its LSB at controller+32.
+NRPN defaults to resolution 14; `resolution = 7` accepts values 0..127.
+The 7-bit form and `rpn` channel fine tuning send complete parameter selection
+and data entry followed by RPN Null. Fine tuning uses RPN 1 and values 0..16383,
+with 8192 neutral. These typed parameters are also available to
+[LFO generators](lfos.md).
 
 SysEx `data` contains 0..127 payload bytes, without F0/F7; the compiler adds those
 delimiters. Notes, velocities and pressures use 0..127. Direct Program Change

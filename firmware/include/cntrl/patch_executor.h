@@ -412,6 +412,18 @@ private:
                 for (unsigned c : {99u, 98u, 6u, 38u}) if (!resource(output, p[32] & 15, c)) return false;
                 return true;
             }
+            if (node[1] == 10) {
+                midi::Parameter parameter;
+                if (!parameter.decode_messages(p + 32, u16(node + 2) - 32)) return false;
+                if (parameter.kind == midi::Parameter::cc14)
+                    return resource(output, parameter.channel, parameter.address, parameter.value >> 7)
+                        && resource(output, parameter.channel, parameter.address + 32, parameter.value & 127);
+                unsigned base = parameter.kind == midi::Parameter::nrpn7 ? 16640 : parameter.kind == midi::Parameter::rpn14 ? 33024 : 256;
+                if (!resource(output, parameter.channel, base + parameter.address, parameter.value)) return false;
+                for (unsigned i = 0; i < parameter.messages(); ++i)
+                    if (!resource(output, parameter.channel, p[33 + i * 3])) return false;
+                return true;
+            }
             for (unsigned offset = 32; offset < u16(node + 2); offset += 3) {
                 unsigned status = p[offset], control = status >> 4 == 14 ? 129 : p[offset + 1];
                 int expected = status >> 4 == 14 ? p[offset + 1] | (p[offset + 2] << 7) : p[offset + 2];
