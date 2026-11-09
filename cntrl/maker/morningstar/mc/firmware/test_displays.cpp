@@ -285,7 +285,7 @@ int main() {
     const auto &batch = transfers[1];
     assert(transactions == before + 32 && batch.size() == previous + 32 * 3);
     for (unsigned x = 0; x < 32; ++x) {
-        unsigned first = previous + x * 3;
+        auto first = previous + x * 3;
         assert((batch[first].bytes == std::vector<uint8_t>{0x2a, 0, 2, 0, 129}));
         assert((batch[first + 1].bytes == std::vector<uint8_t>{0x2b, 0, uint8_t(129 + x), 0, uint8_t(129 + x)}));
         assert(batch[first + 2].bytes.size() == 257 && batch[first + 2].bytes[0] == 0x2c);
