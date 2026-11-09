@@ -41,6 +41,8 @@ def test_firmware_glyphs_preserve_pixels_and_baseline(
     fields = [f.strip() for f in raw.split(',') if f.strip()]
     bi, bw, bh, bx, by, bd, _, cap = (int(f) for f in fields[9:])
     font = ImageFont.truetype(outline, size, layout_engine=ImageFont.Layout.BASIC)
+    face = freetype.Face.from_bytes(outline.read_bytes())
+    face.set_pixel_sizes(size, size)
     for c in range(32, 127):
         offset = read_bits(index, (c - 32) * bi, bi) * 8
         assert read_bits(data, offset, 3) == 0
@@ -85,7 +87,29 @@ def test_firmware_glyphs_preserve_pixels_and_baseline(
             assert (width, height) == mask.size
             assert (left, cap - height - y) == (origin[0], cap + origin[1])
             assert advance == round(font.getlength(chr(c)))
-            expected = [int(bool(mask[i])) for i in range(width * height)]
+            # Pillow remains the legacy canvas/metrics reference. Pixels come
+            # from the pinned library, whose mono raster has a fixed word size.
+            face.load_char(
+                chr(c),
+                freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO,  # ty: ignore[unresolved-attribute]  # Public C extension API.
+            )
+            slot = face.glyph
+            bitmap = slot.bitmap
+            native = bytes(bitmap.buffer)
+            expected = []
+            for r in range(height):
+                for x in range(width):
+                    px = x - max(0, slot.bitmap_left)
+                    py = r - max(0, -slot.bitmap_top)
+                    expected.append(
+                        int(
+                            0 <= px < bitmap.width
+                            and 0 <= py < bitmap.rows
+                            and bool(
+                                native[py * bitmap.pitch + px // 8] & (128 >> (px % 8))
+                            )
+                        )
+                    )
         pixels = []
         for _ in range(height):
             assert read_bits(data, offset, 1) == 0
@@ -98,12 +122,11 @@ def test_firmware_glyphs_preserve_pixels_and_baseline(
 def test_generated_fonts_and_exported_metrics_are_current(tmp_path: Path) -> None:
     root = Path(__file__).parents[1]
     build_bitmap_fonts.generate(tmp_path)
+    diagnose(Diagnostic())
     target = models.Target.model_validate(
         compiler.read_document(root / 'patch-switcher-target.json')
     )
     for p in tmp_path.iterdir():
-        if p.read_bytes() != (root / 'firmware/patch_switcher' / p.name).read_bytes():
-            diagnose(Diagnostic())
         assert (
             p.read_bytes() == (root / 'firmware/patch_switcher' / p.name).read_bytes()
         )

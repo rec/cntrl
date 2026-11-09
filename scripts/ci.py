@@ -58,6 +58,9 @@ def run(options: QualificationRun) -> None:
         else os.environ.get('VCToolsVersion', ''),
         'lock_sha256': hashlib.sha256((root / 'uv.lock').read_bytes()).hexdigest(),
         'freetype': '.'.join(str(n) for n in freetype.version()),
+        'freetype_raster_patch_sha256': hashlib.sha256(
+            (root / 'cntrl/fonts/freetype-mono64.patch').read_bytes()
+        ).hexdigest(),
         'pillow_freetype': features.version('freetype2') or '',
     }
     (output / 'provenance.toml').write_text(tomlkit.dumps(provenance))

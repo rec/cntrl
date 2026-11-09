@@ -1,0 +1,9 @@
+diff --git a/src/raster/ftraster.c b/src/raster/ftraster.c
+--- a/src/raster/ftraster.c
++++ b/src/raster/ftraster.c
+@@ -304,1 +304,1 @@
+-  typedef long            Long, *PLong;
++  typedef FT_Int64        Long, *PLong;
+@@ -358,1 +358,1 @@
+-    FT_F26Dot6  X;           /* current coordinate during sweep          */
++    Long        X;           /* current coordinate during sweep          */
