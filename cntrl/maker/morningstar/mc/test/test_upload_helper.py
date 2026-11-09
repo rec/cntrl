@@ -6,6 +6,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.connection import Listener
+from multiprocessing.context import AuthenticationError
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -44,6 +45,27 @@ def test_upload_request_uses_authenticated_local_bytes(
                 upload_helper.Upload.model_validate_json(pending.result(timeout=5))
                 == request
             )
+
+
+def test_helper_keeps_listening_after_a_client_disconnect_or_bad_authentication(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    listener = MagicMock()
+    listener.accept.side_effect = [
+        EOFError('disconnected'),
+        AuthenticationError('bad authentication'),
+        KeyboardInterrupt,
+    ]
+    factory = MagicMock()
+    factory.return_value.__enter__.return_value = listener
+    monkeypatch.setattr(upload_helper, 'Listener', factory)
+    monkeypatch.setattr(upload_helper, 'authentication_key', lambda: b'key')
+    monkeypatch.setattr(upload_helper, 'updater_path', lambda: Path('tycmd'))
+    monkeypatch.setattr(os, 'umask', MagicMock())
+    with pytest.raises(KeyboardInterrupt):
+        upload_helper.serve()
+    assert listener.accept.call_count == 3
+    assert 'disconnected' in capsys.readouterr().err
 
 
 @pytest.fixture
@@ -151,7 +173,7 @@ def test_adapter_module_returns_upload_output_and_exit_status(
 def test_worktree_discovery_includes_primary_and_linked_checkout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    primary = tmp_path / 'primary checkout'
+    primary = tmp_path / 'primary café checkout'
     secondary = tmp_path / 'agent checkout'
     subprocess.run(['git', 'init', str(primary)], check=True, capture_output=True)
     subprocess.run(
