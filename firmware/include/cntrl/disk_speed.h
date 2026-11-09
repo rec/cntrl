@@ -25,6 +25,20 @@ public:
         if (state_ != State::idle && uint32_t(now - last_) > 10000) error("disk-timeout");
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(disk_speed_data)
+#endif
+    bool data(const uint8_t *bytes, unsigned length, uint32_t now) {
+        last_ = now;
+        if (state_ != State::upload || !length || length > usb_block_size || length > file_size - received_)
+            return error("disk-data");
+        if (!file_.write(received_, bytes, length)) return error("disk-write");
+        for (unsigned i = 0; i < length; ++i) {
+            crc_ ^= bytes[i];
+            for (unsigned b = 0; b < 8; ++b) crc_ = (crc_ >> 1) ^ (0xedb88320u & (0u - (crc_ & 1)));
+        }
+        received_ += length; replies_.reply("CNTRL OK"); return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(disk_speed_command)
 #endif
     bool command(const char *line, uint32_t now) {
@@ -43,25 +57,6 @@ public:
             expected_crc_ = uint32_t(crc); crc_ = 0xffffffff;
             replies_.reply("CNTRL OK"); return true;
         }
-        if (!std::strncmp(line, "CNTRL DISK DATA ", 16)) {
-            const char *hex = line + 16; unsigned width = unsigned(std::strlen(hex));
-            if (state_ != State::upload || !width || width % 2 || width > usb_block_size * 2
-                || width / 2 > file_size - received_) return error("disk-data");
-            UsbBlock block; if (!block.bytes) return error("disk-allocation");
-            for (unsigned i = 0; i < width; ++i) {
-                char c = hex[i]; int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
-                if (digit < 0) return error("disk-data");
-                if (i % 2) block.bytes[i / 2] |= uint8_t(digit);
-                else block.bytes[i / 2] = uint8_t(digit << 4);
-            }
-            unsigned length = width / 2;
-            if (!file_.write(received_, block.bytes, length)) return error("disk-write");
-            for (unsigned i = 0; i < length; ++i) {
-                crc_ ^= block.bytes[i];
-                for (unsigned b = 0; b < 8; ++b) crc_ = (crc_ >> 1) ^ (0xedb88320u & (0u - (crc_ & 1)));
-            }
-            received_ += length; replies_.reply("CNTRL OK"); return true;
-        }
         if (!std::strcmp(line, "CNTRL DISK END")) {
             if (state_ != State::upload || received_ != file_size || ~crc_ != expected_crc_) return error("disk-checksum");
             if (!file_.sync()) return error("disk-sync");
@@ -71,12 +66,10 @@ public:
         }
         if (std::sscanf(line, "CNTRL DISK READ %u%n", &offset, &end) == 1 && end && !line[end]) {
             if (state_ != State::download || offset >= file_size) return error("disk-read");
-            UsbBlock block; if (!block.bytes) return error("disk-allocation");
             unsigned length = std::min(usb_block_size, file_size - offset);
-            if (!file_.read(offset, block.bytes, length)) return error("disk-read");
-            std::strcpy(block.text, "CNTRL DATA ");
-            for (unsigned i = 0; i < length; ++i) std::snprintf(block.text + 11 + i * 2, 3, "%02x", block.bytes[i]);
-            replies_.reply(block.text); return true;
+            MemoryBuffer buffer; if (!buffer.resize(length)) return error("disk-allocation");
+            if (!file_.read(offset, buffer.data, length)) return error("disk-read");
+            replies_.data(buffer.data, length); return true;
         }
         return error("disk-command");
     }

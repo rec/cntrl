@@ -183,21 +183,25 @@ def test_restore_uploads_saved_song_library_before_restoring_selection(
             assert data.startswith(b'CSTB') and overwrite
 
         def request(self, command: str) -> str:
-            if command.startswith('CNTRL SONGS DATA '):
-                self.uploaded.extend(bytes.fromhex(command[17:]))
-            elif command == 'CNTRL SONGS END':
+            if command == 'CNTRL SONGS END':
                 self.saved = bytes(self.uploaded)
             elif command == 'CNTRL SONGS SIZE':
                 return f'CNTRL SONGS {len(self.saved)} {crc32(self.saved):08x}'
-            elif command.startswith('CNTRL SONGS READ '):
-                offset = int(command[17:])
-                return 'CNTRL DATA ' + self.saved[offset : offset + 128].hex()
             else:
                 assert (
                     command.startswith('CNTRL SONGS BEGIN ')
                     or command == 'CNTRL SETUP FINISH'
                 )
             return 'CNTRL OK'
+
+        def send_data(self, kind: transport.Kind, data: bytes) -> None:
+            assert kind == transport.Kind.songs
+            self.uploaded.extend(data)
+
+        def request_data(self, command: str) -> bytes:
+            assert command.startswith('CNTRL SONGS READ ')
+            offset = int(command[17:])
+            return self.saved[offset : offset + self.connection.usb_block_size]
 
         def select(self, name: str) -> None:
             assert self.saved == library

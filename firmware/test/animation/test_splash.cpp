@@ -12,6 +12,7 @@ constexpr unsigned width = 17, height = 11, row_bytes = width * 2, frame_bytes =
 struct Responses : Replies {
     std::vector<std::string> lines;
     void reply(const char *line) override { lines.emplace_back(line); }
+    void data(const uint8_t *, unsigned) override { assert(false); }
 };
 
 struct Screen : Output {

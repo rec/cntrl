@@ -12,6 +12,7 @@ struct Hardware {
 struct Replies {
     std::string response;
     void reply(const char *text) { response = text; }
+    void data(const uint8_t *bytes, unsigned n) { response.assign(reinterpret_cast<const char *>(bytes), n); }
 };
 struct Recorder {
     bool recording = false;
@@ -86,7 +87,7 @@ int main() {
     assert(services.replies.response == "CNTRL OK");
     assert(services.counter_file.writes != 0 && !services.counter_file.opened());
     assert(commands.command("CNTRL STARTS READ 0", 9));
-    assert(services.replies.response.find("CNTRL DATA ") == 0);
+    assert(services.replies.response.size() == 128);
     assert(!services.counter_file.opened());
 
     services.hardware.locked = false;

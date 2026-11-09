@@ -21,6 +21,7 @@ struct Peer : TestPatchHardware, cntrl::Replies {
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
     void reply(const char *text) override { usb.reply(text); }
+    void data(const uint8_t *bytes, unsigned n) override { usb.data(bytes, n); }
 };
 
 int main() {
@@ -45,5 +46,10 @@ int main() {
         } else if (used + 1 < sizeof(line)) line[used++] = char(byte);
     }, [&]() { documents.tick(0); transfer.poll(0); history.tick(0); },
        [&]() { return documents.accepts_input(); },
-       [&]() { documents.cancel_transfer(); transfer.cancel(); history.cancel(); });
+       [&]() { documents.cancel_transfer(); transfer.cancel(); history.cancel(); },
+       [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) {
+           if (kind == cntrl::UsbKind::bundle) transfer.data(bytes, n, 0);
+           else if (kind == cntrl::UsbKind::history) history.data(bytes, n, 0);
+           else { assert(kind == cntrl::UsbKind::setup); documents.receive_data(bytes, n, 0); }
+       });
 }

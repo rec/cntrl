@@ -24,6 +24,7 @@ struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
     void reply(const char *line) override { usb.reply(line); }
+    void data(const uint8_t *bytes, unsigned n) override { usb.data(bytes, n); }
 };
 
 int main() {
@@ -32,5 +33,6 @@ int main() {
     cntrl::Documents docs(peer, peer, app, peer);
     docs.boot();
     return usb_peer(peer.usb, [&](uint8_t b) { docs.receive(b, 0); },
-        [&]() { docs.tick(0); }, [&]() { return docs.accepts_input(); }, [&]() { docs.cancel_transfer(); });
+        [&]() { docs.tick(0); }, [&]() { return docs.accepts_input(); }, [&]() { docs.cancel_transfer(); },
+        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) { assert(kind == cntrl::UsbKind::setup); docs.receive_data(bytes, n, 0); });
 }

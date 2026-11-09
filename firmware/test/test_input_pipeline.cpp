@@ -34,6 +34,7 @@ struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServi
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override { assert(false); }
     void reply(const char *) override {}
+    void data(const uint8_t *, unsigned) override { assert(false); }
     uint32_t application_time() const override { return timestamp; }
     void blank_performance() override {}
     bool output_idle() const override { return bridge.idle(); }

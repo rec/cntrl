@@ -205,7 +205,7 @@ def test_asset_transfer_and_failed_load_preserve_active_fonts(
                 client.request(f'CNTRL FONT BEGIN {bad_key:08x} {len(bitmap)}')
                 == 'CNTRL SEND'
             )
-            client.ok('CNTRL FONT DATA ' + bitmap[:128].hex())
+            client.send_data(transport.Kind.font, bitmap[:128])
             client.copy_font(key, bitmap)
             client.ok(f'ACTIVE {key:08x} 24')
             broken = bytearray(bitmap)

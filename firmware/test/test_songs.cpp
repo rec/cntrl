@@ -95,19 +95,23 @@ void test_rename_read_failure_can_be_retried() {
     assert(board.sends == 0);
 }
 void test_abandoned_imports_close_without_changing_library() {
-    struct Replies : cntrl::Replies { void reply(const char *) override {} } replies;
+    struct Replies : cntrl::Replies {
+        void reply(const char *) override {}
+        void data(const uint8_t *, unsigned) override { assert(false); }
+    } replies;
     SongStorage storage; Board board; cntrl::Songs songs(storage, board);
     assert(songs.boot()); auto before = snapshot(songs);
     cntrl::SongsTransfer transfer(songs, replies);
     auto begin = [&]() { assert(transfer.command("CNTRL SONGS BEGIN 12 0 1", 1)); assert(transfer.busy()); };
     begin(); unsigned finishes = storage.finishes;
     transfer.poll(10002); assert(!transfer.busy() && storage.finishes == ++finishes);
-    begin(); transfer.command("CNTRL SONGS DATA xx", 2);
+    begin(); transfer.data(nullptr, 0, 2);
     assert(!transfer.busy() && storage.finishes == ++finishes);
     begin(); transfer.command("CNTRL SONGS END", 2);
     assert(!transfer.busy() && storage.finishes == ++finishes);
     begin(); begin(); assert(storage.finishes == ++finishes);
-    storage.remaining = 0; transfer.command("CNTRL SONGS DATA 00", 2);
+    const uint8_t byte = 0;
+    storage.remaining = 0; transfer.data(&byte, 1, 2);
     assert(!transfer.busy() && storage.finishes == ++finishes);
     assert(snapshot(songs) == before);
 }
@@ -115,6 +119,7 @@ void test_import_progress_and_failure_keep_the_active_generation() {
     struct Replies : cntrl::Replies {
         unsigned count = 0, waits = 0; std::string last;
         void reply(const char *text) override { ++count; waits += !std::strcmp(text, "CNTRL WAIT"); last = text; }
+        void data(const uint8_t *, unsigned) override { assert(false); }
     } replies;
     SongStorage storage; Board board; cntrl::Songs songs(storage, board);
     assert(songs.boot());
@@ -133,10 +138,8 @@ void test_import_progress_and_failure_keep_the_active_generation() {
         char line[280]; std::snprintf(line, sizeof(line), "CNTRL SONGS BEGIN %u %08lx 1", unsigned(bytes.size()), (unsigned long)crc);
         assert(transfer.command(line));
         for (unsigned offset = 0; offset < bytes.size(); offset += 128) {
-            std::strcpy(line, "CNTRL SONGS DATA ");
             unsigned n = std::min(128u, unsigned(bytes.size()) - offset);
-            for (unsigned i = 0; i < n; ++i) std::snprintf(line + 17 + i * 2, 3, "%02x", bytes[offset + i]);
-            assert(transfer.command(line));
+            assert(transfer.data(bytes.data() + offset, n, 0));
         }
         auto replies_before = replies.count, generation = songs.generation(), active_crc = songs.crc();
         assert(transfer.command("CNTRL SONGS END"));

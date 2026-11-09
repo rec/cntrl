@@ -29,6 +29,7 @@ struct Device : TestPatchHardware, cntrl::Replies, cntrl::animation::Replies {
     void set_splash(bool enabled, uint32_t idle_ms = 0) override { session->configure(enabled, idle_ms, 0); }
     void error(const char *) override {}
     void reply(const char *line) override { replies.emplace_back(line); }
+    void data(const uint8_t *bytes, unsigned n) override { replies.emplace_back(reinterpret_cast<const char *>(bytes), n); }
 };
 
 struct Panels : cntrl::animation::Output {

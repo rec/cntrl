@@ -8,6 +8,7 @@
 struct Replies : cntrl::Replies {
     cntrl::UsbSession usb;
     void reply(const char *text) override { usb.reply(text); }
+    void data(const uint8_t *bytes, unsigned n) override { usb.data(bytes, n); }
 };
 struct File : TestFile {
     const std::string failure;
@@ -36,5 +37,6 @@ int main(int argc, char **argv) {
         if (byte != '\n') line += char(byte);
         else { assert(transfer.command(line.c_str(), 0)); line.clear(); }
     }, [&]() { transfer.poll(0); }, []() { return true; },
-        [&]() { transfer.cancel(); line.clear(); });
+        [&]() { transfer.cancel(); line.clear(); },
+        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) { assert(kind == cntrl::UsbKind::disk); transfer.data(bytes, n, 0); });
 }

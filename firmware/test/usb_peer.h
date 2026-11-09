@@ -9,8 +9,8 @@
 #endif
 
 // Run the production transport over binary pipes, including fragmented output.
-template<class Receive, class Poll, class Ready, class Reset>
-int usb_peer(cntrl::UsbSession &usb, Receive receive, Poll poll, Ready ready, Reset reset) {
+template<class Receive, class Poll, class Ready, class Reset, class Data>
+int usb_peer(cntrl::UsbSession &usb, Receive receive, Poll poll, Ready ready, Reset reset, Data data) {
 #ifndef _WIN32
     pollfd input{0, POLLIN, 0};
 #endif
@@ -35,6 +35,9 @@ int usb_peer(cntrl::UsbSession &usb, Receive receive, Poll poll, Ready ready, Re
         if (input.revents & POLLHUP) return 0;
 #endif
         if (usb.resetting() && ready()) { reset(); usb.reset_done(); }
+        if (usb.input_size() && usb.input_kind() != cntrl::UsbKind::command && usb.reply_ready() && ready()) {
+            unsigned n = usb.input_size(); data(usb.input_kind(), usb.input_bytes(), n); usb.consumed(n);
+        }
         while (usb.input_size() && usb.reply_ready() && ready()) {
             receive(usb.input()); usb.consumed();
         }

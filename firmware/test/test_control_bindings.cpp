@@ -19,6 +19,7 @@ struct Board : TestPatchHardware, cntrl::midi::Sink, cntrl::Replies {
     bool exiting = false;
     std::string response;
     void reply(const char *text) override { response = text; }
+    void data(const uint8_t *, unsigned) override { assert(false); }
     void begin() override { ++pins; }
     void end() override { assert(pins); --pins; }
     unsigned switch_capacity() const override { return 5; }

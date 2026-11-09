@@ -9,9 +9,16 @@ class Router {
 public:
     Router(cntrl::Documents &documents, Receiver &assets, Session &session, cntrl::Replies &replies,
            void (*storage_info)(bool), void (*midi_status)(unsigned) = nullptr,
-           bool (*asset_command)(const char *) = nullptr, void (*midi_reset)() = nullptr)
+           bool (*asset_command)(const char *) = nullptr, void (*midi_reset)() = nullptr,
+           bool (*asset_data)(UsbKind, const uint8_t *, unsigned, uint32_t) = nullptr)
         : documents_(documents), assets_(assets), session_(session), replies_(replies),
-          storage_info_(storage_info), midi_status_(midi_status), asset_command_(asset_command), midi_reset_(midi_reset) {}
+          storage_info_(storage_info), midi_status_(midi_status), asset_command_(asset_command), midi_reset_(midi_reset), asset_data_(asset_data) {}
+    void receive_data(UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) {
+        last_ = now;
+        if (kind == UsbKind::setup) documents_.receive_data(bytes, length, now);
+        else if (kind == UsbKind::movie) assets_.receive_data(bytes, length, now);
+        else if (!asset_data_ || !asset_data_(kind, bytes, length, now)) replies_.reply("CNTRL ERROR unexpected-binary-data");
+    }
     bool accepts_input() const { return assets_.accepts_input() && documents_.accepts_input(); }
     void keepalive(uint32_t now) { last_ = now; documents_.keepalive(now); assets_.keepalive(now); }
     void cancel_transfer() { used_ = 0; overflow_ = false; documents_.cancel_transfer(); assets_.cancel_transfer(); }
@@ -81,6 +88,7 @@ private:
     void (*midi_status_)(unsigned);
     bool (*asset_command_)(const char *);
     void (*midi_reset_)();
+    bool (*asset_data_)(UsbKind, const uint8_t *, unsigned, uint32_t);
     char line_[usb_text_size];
     unsigned used_ = 0;
     uint32_t last_ = 0;

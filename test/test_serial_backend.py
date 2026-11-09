@@ -8,6 +8,7 @@ import pytest
 from serial import SerialTimeoutException
 
 from cntrl.patch_switcher import transport
+from cntrl.patch_switcher.usb_frames import Frame, Kind
 
 
 def test_serial_endpoint_and_line_coding_are_passed_without_path_resolution(
@@ -53,36 +54,54 @@ def test_failed_writes_raise_transport_errors(
 
 
 def test_fragmented_reply_is_decoded_without_reading_the_next_frame() -> None:
+    frame = Frame(
+        kind=Kind.text, session=1, sequence=1, block_size=4096, payload=b'CNTRL OK\n'
+    )
     connection = transport.SerialConnection(Path('unused'))
     backend = Mock()
     backend.in_waiting = 0
-    backend.read.side_effect = [bytes([c]) for c in b'CNTRL OK\r\nnext']
+    backend.read.side_effect = [bytes([c]) for c in frame.encode() + b'next']
     connection.serial = backend
-    assert connection.read_frame() == 'CNTRL OK'
-    assert backend.read.call_count == len(b'CNTRL OK\r\n')
+    assert connection.read_frame() == frame
+    assert backend.read.call_count == len(frame.encode())
 
 
 def test_queued_frames_are_read_in_bulk_without_losing_the_next_reply() -> None:
-    wire = b'CNTRL DATA ' + b'ab' * 4096 + b'\r\nCNTRL OK\n'
+    data = Frame(
+        kind=Kind.data,
+        session=1,
+        sequence=1,
+        block_size=4096,
+        payload=bytes(range(256)) * 16,
+    )
+    ok = Frame(
+        kind=Kind.text, session=1, sequence=2, block_size=4096, payload=b'CNTRL OK\n'
+    )
+    wire = data.encode() + ok.encode()
     source = BytesIO(wire)
     backend = Mock(in_waiting=len(wire))
     backend.read.side_effect = source.read
     connection = transport.SerialConnection(Path('unused'))
     connection.serial = backend
-    assert connection.read_frame() == 'CNTRL DATA ' + 'ab' * 4096
-    assert connection.read_frame() == 'CNTRL OK'
-    backend.read.assert_called_once_with(len(wire))
+    assert connection.read_frame() == data
+    assert connection.read_frame() == ok
+    assert backend.read.call_count <= 3
 
 
 def test_closing_discards_prefetched_replies_before_reconnecting() -> None:
-    source = BytesIO(b'first\nstale\n')
-    backend = Mock(in_waiting=12)
+    first = Frame(
+        kind=Kind.text, session=1, sequence=1, block_size=4096, payload=b'first'
+    )
+    stale = first.model_copy(update={'payload': b'stale'})
+    fresh = first.model_copy(update={'payload': b'fresh'})
+    source = BytesIO(first.encode() + stale.encode())
+    backend = Mock(in_waiting=100)
     backend.read.side_effect = source.read
     connection = transport.SerialConnection(Path('unused'))
     connection.serial = backend
-    assert connection.read_frame() == 'first'
+    assert connection.read_frame() == first
     connection.close()
-    replacement = Mock(in_waiting=6)
-    replacement.read.side_effect = BytesIO(b'fresh\n').read
+    replacement = Mock(in_waiting=100)
+    replacement.read.side_effect = BytesIO(fresh.encode()).read
     connection.serial = replacement
-    assert connection.read_frame() == 'fresh'
+    assert connection.read_frame() == fresh

@@ -60,6 +60,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     void set_animation_color_cycle(bool enabled) override { animation_color_cycle = enabled; }
     void error(const char *) override { ++errors; }
     void reply(const char *s) override { replies.emplace_back(s); }
+    void data(const uint8_t *, unsigned) override { assert(false); }
 };
 
 void command(cntrl::Documents &docs, const std::string &line, uint32_t now = 0) {

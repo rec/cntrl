@@ -13,6 +13,17 @@ public:
     void keepalive(uint32_t now) { last_ = now; }
     void cancel_transfer() { writer_.close(); }
     bool busy() const { return writer_.opened(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_data)
+#endif
+    bool data(const uint8_t *bytes, unsigned length, cntrl::Replies &replies, uint32_t now) {
+        last_ = now;
+        if (!writer_.opened() || !length || length > cntrl::usb_block_size || length > expected_ - received_
+            || !writer_.write(received_, bytes, length)) {
+            writer_.close(); replies.reply("CNTRL ERROR font-asset"); return true;
+        }
+        received_ += length; replies.reply("CNTRL OK"); return true;
+    }
     void poll(uint32_t now, cntrl::Replies &replies) {
         if (writer_.opened() && uint32_t(now - last_) > 10000) {
             writer_.close(); replies.reply("CNTRL ERROR font-timeout");
@@ -53,19 +64,6 @@ public:
             expected_ = length; received_ = 0; key_ = uint32_t(key);
             replies.reply("CNTRL SEND"); return true;
         }
-        if (!std::strncmp(line, "CNTRL FONT DATA ", 16)) {
-            unsigned n = unsigned(std::strlen(line + 16));
-            cntrl::UsbBlock block; if (!block.bytes) return error();
-            auto *bytes = block.bytes;
-            if (!writer_.opened() || !n || n % 2 || n > cntrl::usb_block_size * 2 || n / 2 > expected_ - received_) return error();
-            for (unsigned i = 0; i < n; ++i) {
-                char c = line[16 + i]; int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
-                if (digit < 0) return error();
-                if (i % 2) bytes[i / 2] |= uint8_t(digit); else bytes[i / 2] = uint8_t(digit << 4);
-            }
-            if (!writer_.write(received_, bytes, n / 2)) { writer_.close(); return error(); }
-            received_ += n / 2; replies.reply("CNTRL OK"); return true;
-        }
         if (!std::strcmp(line, "CNTRL FONT END")) {
             bool good = writer_.opened() && received_ == expected_ && writer_.sync(); writer_.close();
             auto &file = reader_;
@@ -83,15 +81,11 @@ public:
         }
         end = 0;
         if (std::sscanf(line, "CNTRL FONT READ %lx %u%n", &key, &length, &end) == 2 && end && !line[end] && key && key <= 0xfffffffful) {
-            auto &file = reader_; cntrl::UsbBlock block;
-            if (!block.bytes) return error();
-            auto *bytes = block.bytes;
+            auto &file = reader_;
             if (!open(uint32_t(key)) || length >= file.size()) return error();
             unsigned n = unsigned(file.size() - length); if (n > cntrl::usb_block_size) n = cntrl::usb_block_size;
-            if (!file.read(length, bytes, n)) return error();
-            char *response = block.text; std::strcpy(response, "CNTRL DATA ");
-            for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", bytes[i]);
-            replies.reply(response); return true;
+            cntrl::MemoryBuffer buffer; if (!buffer.resize(n) || !file.read(length, buffer.data, n)) return error();
+            replies.data(buffer.data, n); return true;
         }
         return error();
     }

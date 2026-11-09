@@ -561,18 +561,40 @@ prints `Waiting x seconds for USB (hit control-C to exit)` and retries after
 130. Command validation and storage errors still fail normally. Firmware
 uploads and live MIDI output are outside this policy.
 
-Each wire request starts with byte 0x1e, then
-`CNTRL USB SESSION_HEX SEQUENCE REPLY_ACK DATA_HEX\n`. Data is at most `usb_block_size` bytes (4096 by default);
-`-` means no data. Sequence 1 opens a random session with empty data. Later
-sequences deliver bytes or poll for a reply; sequence 0 releases the session.
+Each wire frame has a 40-byte little-endian header followed by an unencoded
+payload. There is no escaping or hexadecimal encoding of file data.
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 8 | Magic bytes `89 43 4e 54 52 4c 0d 0a` |
+| 8 | 1 | Protocol version, currently 1 |
+| 9 | 1 | Frame kind |
+| 10 | 2 | Status: OK=0, lost=1, invalid=2, unsupported version=3 |
+| 12 | 4 | Session nonce |
+| 16 | 4 | Request sequence |
+| 20 | 4 | Acknowledged reply ID (request), reply ID (response) |
+| 24 | 4 | Firmware block size (zero in requests) |
+| 28 | 4 | Payload length |
+| 32 | 4 | Payload CRC32 |
+| 36 | 4 | Header CRC32 over bytes 0 through 35 |
+
+CRCs use the IEEE CRC32 used by Python's `zlib.crc32`. Request kinds are
+open=1, close=2, command=3, poll=4, setup=16, bundle=17, songs=18, font=19,
+history=20, movie=21 and disk=22. Response kinds are text=128, data=129 and
+protocol error=255. Command and text payloads contain the existing ASCII command
+lines; transfer payloads contain raw file bytes, at most `usb_block_size` bytes
+(4096 by default). Text replies may occupy up to 1024 bytes even with smaller
+configured blocks. Open (sequence 1), close (sequence 0), and poll carry no payload.
+Open starts a random nonzero session; subsequent requests increment the sequence.
 The firmware target configures `usb_block_size` in bytes. Its generated
 capability header sizes the transport and transfer buffers; the host learns the
 value from replies, including the initial session handshake.
 
-Responses are `CNTRL USB SESSION_HEX SEQUENCE REPLY_ID BLOCK_SIZE REPLY_HEX\n`, with `-`
-when no application reply is ready. A retry keeps the same session and sequence.
+Replies echo the session and request sequence, with an empty payload when no
+application reply is ready. A retry keeps the same session and sequence.
 The receiver delivers input bytes once and retains each application reply until
-acknowledged. The leading separator discards a partial wire frame before retry.
+acknowledged. Receivers find the magic and validate both CRCs, resynchronizing
+after a partial or corrupted frame before accepting a retry.
 This protects incremental uploads, listing cursors, rotation and history creation
 from duplicate execution when a write or acknowledgement is lost. Storage
 listings are also pulled one entry at a time with `CNTRL STORAGE NEXT`.
@@ -580,7 +602,7 @@ listings are also pulled one entry at a time with `CNTRL STORAGE NEXT`.
 An active session keeps unfinished transfers alive across USB outages. Releasing
 it, or opening a new session, discards incomplete incoming transfers after any
 already-running commit finishes. The retained state is in RAM: the pedal must
-remain powered. A reboot or replacement session produces `CNTRL USB LOST`; the
+remain powered. A reboot or replacement session produces a lost-status frame; the
 client explains that the outcome may be uncertain and continues waiting rather
 than replaying an operation that might already have completed. Control-C and a
 fresh command are required after that loss. This is USB reconnect recovery, not
@@ -602,7 +624,7 @@ never paths. Requests are:
 - `CNTRL SETUP FINISH`: select the earliest setup if selection is empty after
   a copy batch; otherwise retain the selection, reply `CNTRL OK`.
 - `CNTRL SETUP GET NAME_HEX`: reply `CNTRL FILE SIZE CRC`. Each `CNTRL NEXT`
-  returns `CNTRL DATA HEX_BYTES` with up to `usb_block_size` bytes, until SIZE is complete.
+  returns a data frame with up to `usb_block_size` raw bytes, until SIZE is complete.
 - `CNTRL SETUP SET NAME_HEX`, `CNTRL SETUP FORWARD` and
   `CNTRL SETUP BACKWARD`: persist selection and restart the GUI, reply `CNTRL OK`.
 - `CNTRL SETUP DELETE SIZE CRC`: receive a checksummed binary list of
@@ -778,10 +800,9 @@ measured intervals. The rates include USB framing, acknowledgements and filesyst
 I/O, so they measure the complete USB/storage path.
 
 The host reads queued serial bytes in bulk and retains prefetched replies, avoiding
-an OS read and availability query for each byte. This is a host-only change using
-the existing protocol. Application data and outer USB frames are both hex encoded,
-so each payload byte still uses approximately four wire bytes, plus protocol
-headers and acknowledgements.
+an OS read and availability query for each byte. Binary frames send each payload
+byte once, plus a 40-byte header and acknowledgements. The firmware also avoids
+the former per-byte hexadecimal formatting and parsing in both transport layers.
 
 The command exclusively uses `/cntrl/.disk-speed.tmp`, which is reserved for this
 test and may be replaced on the next run after a power loss. Success, transfer
@@ -790,10 +811,12 @@ failure during a command is reported as `disk-delete`. The test uses the
 firmware's advertised `usb_block_size` and never requires the 1 MB file to fit in device RAM.
 
 The device must run firmware containing the disk-speed commands and configurable
-USB blocks. An older USB reply format produces an immediate firmware-update
-message, rather than retrying as though the USB device were disconnected.
+USB blocks and the binary protocol. Host and firmware must be updated together.
+An unanswered initial handshake or an incompatible reply reports a protocol error
+with the received bytes and a matching-firmware diagnostic.
 
-The wire commands are `CNTRL DISK BEGIN CRC_HEX`, `CNTRL DISK DATA HEX_BYTES`,
-`CNTRL DISK END`, `CNTRL DISK READ OFFSET`, and `CNTRL DISK DELETE`. Data blocks
-are at most `usb_block_size` bytes. END acknowledges only after length/checksum
-validation, disk sync, and reopening for reads. READ replies `CNTRL DATA HEX_BYTES`.
+The commands are `CNTRL DISK BEGIN CRC_HEX`, `CNTRL DISK END`,
+`CNTRL DISK READ OFFSET`, and `CNTRL DISK DELETE`. Between BEGIN and END, disk-kind
+frames upload raw blocks of at most `usb_block_size` bytes and receive `CNTRL OK`
+text replies. END acknowledges only after length/checksum validation, disk sync,
+and reopening for reads. READ replies with a raw data frame.

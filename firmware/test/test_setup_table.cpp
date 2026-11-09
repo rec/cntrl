@@ -10,6 +10,7 @@
 struct Board : TestPatchHardware, cntrl::Replies {
     unsigned sent = 0;
     void reply(const char *) override {}
+    void data(const uint8_t *, unsigned) override { assert(false); }
     bool send(const char *, const uint8_t *, unsigned) override { ++sent; return true; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned, unsigned) const override { return true; }

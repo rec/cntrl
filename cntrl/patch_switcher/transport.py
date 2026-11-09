@@ -11,6 +11,7 @@ from serial import Serial, SerialTimeoutException
 
 from .data_files import validate_name
 from .models import TargetMemory
+from .usb_frames import HEADER, MAGIC, Frame, Kind, Status
 
 
 class UsbProtocolError(ValueError):
@@ -28,12 +29,12 @@ class SerialConnection:
         self.session = secrets.randbits(32) or 1
         self.sequence = 1
         self.acknowledged = 0
-        self.received = bytearray()
+        self.received: list[Frame] = []
         self.frame_received = bytearray()
 
     def __enter__(self) -> 'SerialConnection':
         try:
-            self.exchange(b'')
+            self.exchange(b'', Kind.open)
         except (KeyboardInterrupt, UsbProtocolError):
             self.release()
             self.close()
@@ -46,14 +47,16 @@ class SerialConnection:
                 self.release()
             else:
                 self.sequence = 0
-                self.exchange(b'')
+                self.exchange(b'', Kind.close)
         finally:
             self.close()
 
     def release(self) -> None:
         if self.serial is not None:
             try:
-                self.serial.write(f'\x1eCNTRL USB {self.session:x} 0 0 -\n'.encode())
+                self.serial.write(
+                    Frame(kind=Kind.close, session=self.session, sequence=0).encode()
+                )
             except OSError:
                 pass  # Cancellation must not wait for an unplugged device.
 
@@ -77,11 +80,14 @@ class SerialConnection:
         self.serial.reset_input_buffer()
         self.frame_received.clear()
 
-    def exchange(self, data: bytes) -> None:
-        frame = (
-            f'\x1eCNTRL USB {self.session:x} {self.sequence} '
-            f'{self.acknowledged} {data.hex() or "-"}\n'
-        ).encode('ascii')
+    def exchange(self, data: bytes, kind: Kind = Kind.command) -> None:
+        frame = Frame(
+            kind=kind,
+            session=self.session,
+            sequence=self.sequence,
+            acknowledged=self.acknowledged,
+            payload=data,
+        ).encode()
         failures = 0
         delay = 1
         lost_reported = False
@@ -91,9 +97,14 @@ class SerialConnection:
                     self.connect()
                 self.write_frame(frame)
                 while True:
-                    raw_response = self.read_frame()
-                    response = raw_response.split()
-                    if response == ['CNTRL', 'USB', 'LOST']:
+                    response = self.read_frame()
+                    raw_response = response.encode()
+                    if (
+                        response.session != self.session
+                        or response.sequence < self.sequence
+                    ):
+                        continue
+                    if response.status == Status.lost:
                         if self.sequence == 0:
                             return
                         if not lost_reported:
@@ -105,46 +116,32 @@ class SerialConnection:
                             )
                             lost_reported = True
                         raise OSError('USB session lost')
-                    if len(response) == 6 and response[:2] == ['CNTRL', 'USB']:
+                    if response.status != Status.ok or response.kind not in (
+                        Kind.text,
+                        Kind.data,
+                    ):
                         raise self.protocol_error(
-                            'USB protocol mismatch: the connected device is running '
-                            'older cntrl firmware. Update its firmware before using '
-                            'this version of cntrl.',
+                            f'Binary USB status={response.status.name}, '
+                            f'kind={response.kind.name}',
                             raw_response,
                         )
-                    if len(response) != 7 or response[:2] != ['CNTRL', 'USB']:
-                        raise self.protocol_error(
-                            'Invalid USB transport response: expected 7 fields '
-                            f'starting with CNTRL USB, received {len(response)} fields',
-                            raw_response,
-                        )
-                    try:
-                        session = int(response[2], 16)
-                        sequence, reply = int(response[3]), int(response[4])
-                        block_size = int(response[5])
-                        if not 1 <= block_size <= 65535:
-                            raise ValueError('invalid USB block size')
-                        payload = (
-                            b'' if response[6] == '-' else bytes.fromhex(response[6])
-                        )
-                    except ValueError as error:
-                        raise self.protocol_error(
-                            f'Invalid USB transport response: {error}', raw_response
-                        ) from error
-                    if session != self.session or sequence < self.sequence:
-                        continue
-                    if sequence != self.sequence:
+                    if response.sequence != self.sequence:
                         raise self.protocol_error(
                             'Unexpected USB sequence', raw_response
                         )
-                    if payload and reply == self.acknowledged + 1:
-                        self.received.extend(payload)
-                        self.acknowledged = reply
-                    elif payload and reply != self.acknowledged:
+                    if (
+                        response.payload
+                        and response.acknowledged == self.acknowledged + 1
+                    ):
+                        self.received.append(response)
+                        self.acknowledged = response.acknowledged
+                    elif (
+                        response.payload and response.acknowledged != self.acknowledged
+                    ):
                         raise self.protocol_error(
                             'Unexpected USB reply sequence', raw_response
                         )
-                    self.usb_block_size = block_size
+                    self.usb_block_size = response.block_size
                     self.sequence += 1
                     return
             except OSError as error:
@@ -163,13 +160,13 @@ class SerialConnection:
                         time.sleep(1)
                     delay *= 2
 
-    def protocol_error(self, reason: str, response: str | bytes) -> UsbProtocolError:
+    def protocol_error(self, reason: str, response: bytes) -> UsbProtocolError:
         return UsbProtocolError(
             f'ERROR: {reason}\n'
             f'Port: {self.port}\n'
             f'Host transport: {__file__}\n'
-            'Expected reply: CNTRL USB SESSION_HEX SEQUENCE REPLY_ID '
-            'BLOCK_SIZE PAYLOAD_HEX\n'
+            'Expected reply: binary CNTRL version 1, '
+            '40-byte CRC-protected header and raw payload\n'
             f'Host state: session={self.session:x}, sequence={self.sequence}, '
             f'acknowledged_reply={self.acknowledged}, '
             f'usb_block_size={self.usb_block_size}\n'
@@ -193,59 +190,110 @@ class SerialConnection:
                 raise OSError('USB serial disconnected')
             pending = pending[count:]
 
-    def read_frame(self) -> str:
+    def read_frame(self) -> Frame:
         assert self.serial is not None
         deadline = time.monotonic() + self.timeout
-        limit = (self.usb_block_size * 2 + 128) * 2 + 64
+        discarded = bytearray()
+        failure = (
+            'expected a binary CNTRL frame; install matching binary-protocol firmware'
+        )
         while True:
-            newline = self.frame_received.find(b'\n')
-            if newline >= 0:
-                result = bytes(self.frame_received[:newline])
-                del self.frame_received[: newline + 1]
-                if len(result) >= limit:
-                    raise self.protocol_error('USB transport response too long', result)
-                try:
-                    return result.decode('ascii').rstrip('\r')
-                except UnicodeDecodeError as error:
+            limit = HEADER.size + max(1024, self.usb_block_size)
+            if self.frame_received and not MAGIC.startswith(
+                self.frame_received[: len(MAGIC)]
+            ):
+                discarded.extend(self.frame_received[:1])
+                del self.frame_received[:1]
+                if len(discarded) > limit:
+                    raise self.protocol_error(failure, bytes(discarded))
+                continue
+            if len(self.frame_received) >= HEADER.size:
+                header = bytes(self.frame_received[: HEADER.size])
+                fields = HEADER.unpack(header)
+                if crc32(header[:-4]) != fields[-1]:
+                    failure = 'invalid binary USB header CRC'
+                    discarded.extend(self.frame_received[:1])
+                    del self.frame_received[:1]
+                    continue
+                if fields[1] != 1 or not 1 <= fields[7] <= 65535:
                     raise self.protocol_error(
-                        f'Invalid USB response encoding: {error}', result
-                    ) from error
-            if len(self.frame_received) >= limit:
-                raise self.protocol_error(
-                    'USB transport response too long', bytes(self.frame_received)
-                )
+                        f'unsupported USB version={fields[1]} '
+                        f'or block_size={fields[7]}',
+                        header,
+                    )
+                if fields[8] > max(1024, fields[7]):
+                    raise self.protocol_error(
+                        f'invalid binary USB payload length {fields[8]}', header
+                    )
+                limit = HEADER.size + fields[8]
+                if len(self.frame_received) >= limit:
+                    raw = bytes(self.frame_received[:limit])
+                    if crc32(raw[HEADER.size :]) != fields[9]:
+                        failure = 'invalid binary USB payload CRC'
+                        discarded.extend(self.frame_received[:1])
+                        del self.frame_received[:1]
+                        continue
+                    del self.frame_received[:limit]
+                    try:
+                        return Frame.decode(raw)
+                    except ValueError as error:
+                        raise self.protocol_error(str(error), raw) from error
             remaining = deadline - time.monotonic()
             if remaining <= 0:
+                if discarded or self.sequence == 1:
+                    raise self.protocol_error(
+                        failure, bytes(discarded + self.frame_received)
+                    )
                 raise TimeoutError('USB serial response timed out')
             available = self.serial.in_waiting
             if not available:
                 self.serial.timeout = remaining
-            count = min(max(1, available), limit - len(self.frame_received))
+            count = min(max(1, available), max(1, limit - len(self.frame_received)))
             value = self.serial.read(count)
             if not value:
+                if discarded or self.sequence == 1:
+                    raise self.protocol_error(
+                        failure, bytes(discarded + self.frame_received)
+                    )
                 raise TimeoutError('USB serial response timed out')
             self.frame_received.extend(value)
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: bytes, kind: Kind = Kind.command) -> None:
         for i in range(0, len(data), self.usb_block_size):
-            self.exchange(data[i : i + self.usb_block_size])
+            self.exchange(data[i : i + self.usb_block_size], kind)
 
     def line(self, limit: int | None = None) -> str:
         if limit is None:
-            limit = self.usb_block_size * 2 + 128
+            limit = 1024
         while True:
-            if b'\n' in self.received:
-                line, _, remaining = self.received.partition(b'\n')
-                self.received = remaining
+            if self.received:
+                frame = self.received.pop(0)
+                if frame.kind != Kind.text:
+                    raise self.protocol_error(
+                        'expected text reply, received binary data', frame.encode()
+                    )
+                line = frame.payload.rstrip(b'\r\n')
                 if len(line) >= limit:
                     raise ValueError(f'USB serial response exceeds {limit - 1} bytes')
                 response = line.decode('ascii').rstrip('\r')
                 if response != 'CNTRL WAIT':
                     return response
             else:
-                self.exchange(b'')
+                self.exchange(b'', Kind.poll)
                 if not self.received:
                     time.sleep(0.01)
+
+    def data(self) -> bytes:
+        while True:
+            if self.received:
+                frame = self.received.pop(0)
+                if frame.kind == Kind.data:
+                    return frame.payload
+                text = frame.payload.decode('ascii').rstrip('\r\n')
+                if text != 'CNTRL WAIT':
+                    raise ValueError(text)
+            else:
+                self.exchange(b'', Kind.poll)
 
 
 class SetupEntry(BaseModel, frozen=True):
@@ -270,6 +318,15 @@ class SetupClient:
     def ok(self, command: str) -> None:
         if (response := self.request(command)) != 'CNTRL OK':
             raise ValueError(f'unexpected response: {response}')
+
+    def send_data(self, kind: Kind, data: bytes) -> None:
+        self.connection.write(data, kind)
+        if (response := self.connection.line()) != 'CNTRL OK':
+            raise ValueError(response)
+
+    def request_data(self, command: str) -> bytes:
+        self.connection.write((command + '\n').encode('ascii'))
+        return self.connection.data()
 
     def memory(self) -> TargetMemory:
         response = self.request('CNTRL MEMORY')
@@ -324,7 +381,7 @@ class SetupClient:
         )
         if (response := self.request(command)) != 'CNTRL SEND':
             raise ValueError(response)
-        self.connection.write(data)
+        self.connection.write(data, Kind.setup)
         if (response := self.connection.line()) != 'CNTRL OK':
             raise ValueError(response)
         # Read back the committed bytes, not merely the acknowledged checksum.
@@ -338,10 +395,7 @@ class SetupClient:
         if response != 'CNTRL SEND':
             raise ValueError(response)
         for i in range(0, len(data), self.connection.usb_block_size):
-            self.ok(
-                'CNTRL BUNDLE DATA '
-                + data[i : i + self.connection.usb_block_size].hex()
-            )
+            self.send_data(Kind.bundle, data[i : i + self.connection.usb_block_size])
         self.ok('CNTRL BUNDLE END')
         if self.download_bundle() != data:
             raise ValueError('bundle read-back verification failed')
@@ -354,10 +408,7 @@ class SetupClient:
         result = bytearray()
         for i in range(0, length, self.connection.usb_block_size):
             count = min(self.connection.usb_block_size, length - i)
-            response = self.request(f'CNTRL BUNDLE GET {i} {count}')
-            if not response.startswith('CNTRL BUNDLE '):
-                raise ValueError('invalid bundle data response')
-            result.extend(bytes.fromhex(response[13:]))
+            result.extend(self.request_data(f'CNTRL BUNDLE GET {i} {count}'))
         if len(result) != length or crc32(result) != checksum:
             raise ValueError('bundle checksum mismatch')
         return bytes(result)
@@ -377,10 +428,7 @@ class SetupClient:
             raise ValueError('invalid download length')
         result = bytearray()
         while len(result) < length:
-            response = self.request('CNTRL NEXT')
-            if not response.startswith('CNTRL DATA '):
-                raise ValueError(response)
-            chunk = bytes.fromhex(response[11:])
+            chunk = self.request_data('CNTRL NEXT')
             if not 1 <= len(chunk) <= self.connection.usb_block_size:
                 raise ValueError('invalid download chunk')
             result.extend(chunk)
@@ -397,7 +445,7 @@ class SetupClient:
         )
         if response != 'CNTRL SEND':
             raise ValueError(response)
-        self.connection.write(payload)
+        self.connection.write(payload, Kind.setup)
         if (response := self.connection.line()) != 'CNTRL OK':
             raise ValueError(response)
 
@@ -409,10 +457,7 @@ class SetupClient:
             raise ValueError(response)
         if response == 'CNTRL SEND':
             for i in range(0, len(data), self.connection.usb_block_size):
-                self.ok(
-                    'CNTRL FONT DATA '
-                    + data[i : i + self.connection.usb_block_size].hex()
-                )
+                self.send_data(Kind.font, data[i : i + self.connection.usb_block_size])
             self.ok('CNTRL FONT END')
         if self.download_font(key) != data:
             raise ValueError('font asset read-back mismatch or checksum collision')
@@ -425,7 +470,9 @@ class SetupClient:
         response = self.request(f'CNTRL SPLASH BEGIN {len(data)} {key:08x}')
         if response == 'CNTRL SPLASH SEND':
             for i in range(0, len(data), self.connection.usb_block_size):
-                self.connection.write(data[i : i + self.connection.usb_block_size])
+                self.connection.write(
+                    data[i : i + self.connection.usb_block_size], Kind.movie
+                )
                 received = min(i + self.connection.usb_block_size, len(data))
                 expected = (
                     f'CNTRL SPLASH NEXT {received}'
@@ -452,10 +499,7 @@ class SetupClient:
             raise ValueError('invalid movie asset length')
         result = bytearray()
         while len(result) < length:
-            response = self.request(f'CNTRL SPLASH READ {key:08x} {len(result)}')
-            if not response.startswith('CNTRL DATA '):
-                raise ValueError(response)
-            chunk = bytes.fromhex(response[11:])
+            chunk = self.request_data(f'CNTRL SPLASH READ {key:08x} {len(result)}')
             if (
                 not 1
                 <= len(chunk)
@@ -477,10 +521,7 @@ class SetupClient:
             raise ValueError('invalid font asset length')
         result = bytearray()
         while len(result) < length:
-            response = self.request(f'CNTRL FONT READ {key:08x} {len(result)}')
-            if not response.startswith('CNTRL DATA '):
-                raise ValueError(response)
-            chunk = bytes.fromhex(response[11:])
+            chunk = self.request_data(f'CNTRL FONT READ {key:08x} {len(result)}')
             if not 1 <= len(chunk) <= self.connection.usb_block_size:
                 raise ValueError('invalid font asset chunk')
             result.extend(chunk)

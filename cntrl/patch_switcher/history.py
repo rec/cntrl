@@ -13,6 +13,7 @@ import tyro
 from pydantic import BaseModel, Field
 
 from . import data_files, display, resolved, setup_bundle, transport
+from .usb_frames import Kind
 
 
 class Command(StrEnum):
@@ -116,9 +117,8 @@ def import_revision(
     if response != 'CNTRL SEND':
         raise ValueError(f'unexpected history import response: {response}')
     for offset in range(0, len(record), client.connection.usb_block_size):
-        client.ok(
-            'CNTRL HISTORY DATA '
-            + record[offset : offset + client.connection.usb_block_size].hex()
+        client.send_data(
+            Kind.history, record[offset : offset + client.connection.usb_block_size]
         )
     if (response := client.request('CNTRL HISTORY END')) not in (
         'CNTRL OK',

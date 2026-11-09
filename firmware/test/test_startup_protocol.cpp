@@ -6,23 +6,28 @@ using cntrl::StartupCounter;
 #include <string>
 #include <vector>
 
+struct Response {
+    char text[80] = {};
+    std::vector<char> bytes;
+    operator const char *() const { return text; }
+    void reply(const char *value) { std::strcpy(text, value); bytes.clear(); }
+    void data(const uint8_t *value, unsigned n) { text[0] = 0; bytes.assign(value, value + n); }
+};
 
 void test_raw_reads_preserve_every_byte() {
     CounterFile file; file.data.resize(1031);
     for (unsigned i = 0; i < file.data.size(); ++i) file.data[i] = char(i % 256);
     const auto original = file.data;
-    char response[280];
+    Response response;
     StartupCounter::read_command("CNTRL STARTS SIZE", file, response);
     assert(!std::strcmp(response, "CNTRL STARTS SIZE 1031"));
     std::vector<char> received;
     for (unsigned offset = 0; offset < original.size(); offset += 128) {
         char command[64]; std::snprintf(command, sizeof(command), "CNTRL STARTS READ %u", offset);
         StartupCounter::read_command(command, file, response);
-        assert(!std::strncmp(response, "CNTRL DATA ", 11));
         unsigned n = std::min(128u, unsigned(original.size()) - offset);
-        assert(std::strlen(response) == 11 + n * 2);
-        for (unsigned i = 0; i < n; ++i)
-            received.push_back(char(std::stoul(std::string(response + 11 + i * 2, 2), nullptr, 16)));
+        assert(response.bytes.size() == n);
+        received.insert(received.end(), response.bytes.begin(), response.bytes.end());
     }
     assert(received == original && file.data == original && !file.writes);
     StartupCounter::read_command("CNTRL STARTS READ 1031", file, response);

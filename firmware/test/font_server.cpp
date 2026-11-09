@@ -38,6 +38,7 @@ struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
     void reply(const char *text) override { usb.reply(text); }
+    void data(const uint8_t *bytes, unsigned n) override { usb.data(bytes, n); }
 };
 int main(int argc, char **argv) {
     if (argc != 2) return 1;
@@ -46,6 +47,7 @@ int main(int argc, char **argv) {
         struct Replies : cntrl::Replies {
             std::string last;
             void reply(const char *text) override { last = text; }
+            void data(const uint8_t *, unsigned) override { assert(false); }
         } replies;
         TestFile reader(peer.filesystem), writer(peer.filesystem);
         font_assets::Storage files(peer.filesystem, reader, writer); files.ready = true;
@@ -53,7 +55,7 @@ int main(int argc, char **argv) {
         files.poll(10002, replies);
         assert(!files.busy() && replies.last == "CNTRL ERROR font-timeout");
         assert(files.command("CNTRL FONT BEGIN 1 8", replies, 10003) && files.busy());
-        assert(files.command("CNTRL FONT DATA xx", replies, 10004));
+        assert(files.data(nullptr, 0, replies, 10004));
         assert(!files.busy() && replies.last == "CNTRL ERROR font-asset");
     }
     TestController controller(peer);
@@ -87,5 +89,9 @@ int main(int argc, char **argv) {
             line.clear();
         }
     }, [&]() { documents.tick(0); }, [&]() { return documents.accepts_input(); },
-        [&]() { documents.cancel_transfer(); peer.fonts.cancel_transfer(); line.clear(); });
+        [&]() { documents.cancel_transfer(); peer.fonts.cancel_transfer(); line.clear(); },
+        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) {
+            if (kind == cntrl::UsbKind::font) peer.fonts.data(bytes, n, peer, 0);
+            else { assert(kind == cntrl::UsbKind::setup); documents.receive_data(bytes, n, 0); }
+        });
 }

@@ -1,6 +1,6 @@
-ERROR: Invalid USB transport response: invalid USB block size
+ERROR: Binary USB status=invalid, kind=error
 Port: unused
 Host transport: <transport.py>
-Expected reply: CNTRL USB SESSION_HEX SEQUENCE REPLY_ID BLOCK_SIZE PAYLOAD_HEX
+Expected reply: binary CNTRL version 1, 40-byte CRC-protected header and raw payload
 Host state: session=1234, sequence=9, acknowledged_reply=7, usb_block_size=4096
-Received (length=25): 'CNTRL  USB 1234 9 8 0 - \r'
+Received (length=40): b'\x89CNTRL\r\n\x01\xff\x02\x004\x12\x00\x00\t\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00o\xa3\xcc='

@@ -16,6 +16,15 @@ public:
         writing_ = false; phase_ = Phase::idle; data_.clear();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(history_import_data)
+#endif
+    bool data(const uint8_t *bytes, unsigned length, uint32_t now) {
+        if (phase_ != Phase::receive || !length || length > usb_block_size || length > expected_ - received_)
+            return fail("history-import-data");
+        std::memcpy(data_.data + received_, bytes, length); received_ += length;
+        last_ = now; replies_.reply("CNTRL OK"); return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(history_import_command)
 #endif
     bool command(const char *line, uint32_t now) {
@@ -39,17 +48,6 @@ public:
                 || length < 208 || length > memory_budget || !data_.resize(length)) return fail("history-import-header");
             expected_ = length; expected_crc_ = uint32_t(crc); received_ = 0;
             phase_ = Phase::receive; last_ = progress_ = now; replies_.reply("CNTRL SEND"); return true;
-        }
-        if (!std::strncmp(line, "CNTRL HISTORY DATA ", 19)) {
-            if (phase_ != Phase::receive) return fail("history-import-state");
-            const char *hex = line + 19; unsigned width = unsigned(std::strlen(hex));
-            if (!width || width % 2 || width > usb_block_size * 2 || width / 2 > expected_ - received_) return fail("history-import-data");
-            for (unsigned i = 0; i < width; i += 2) {
-                int high = digit(hex[i]), low = digit(hex[i + 1]);
-                if (high < 0 || low < 0) return fail("history-import-data");
-                data_.data[received_++] = uint8_t(high * 16 + low);
-            }
-            last_ = now; replies_.reply("CNTRL OK"); return true;
         }
         if (!std::strcmp(line, "CNTRL HISTORY END")) {
             if (phase_ != Phase::receive || received_ != expected_ || checksum(data_.data, expected_) != expected_crc_

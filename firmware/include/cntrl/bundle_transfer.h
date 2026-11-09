@@ -9,6 +9,17 @@ public:
     BundleTransfer(BundledStorage &storage, Documents &documents, Hardware &hardware, Replies &replies)
         : storage_(storage), documents_(documents), hardware_(hardware), replies_(replies) {}
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(bundle_data)
+#endif
+    bool data(const uint8_t *bytes, unsigned length, uint32_t now) {
+        if (!active_ || !length || length > usb_block_size || length > expected_ - received_) return fail("bundle-data");
+        if (!storage_.upload_write(bytes, length)) return fail("bundle-write");
+        for (unsigned i = 0; i < length; ++i) {
+            crc_ ^= bytes[i]; for (unsigned b = 0; b < 8; ++b) crc_ = crc_ & 1 ? (crc_ >> 1) ^ 0xedb88320 : crc_ >> 1;
+        }
+        received_ += length; last_ = now; replies_.reply("CNTRL OK"); return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(bundle_command)
 #endif
     bool command(const char *line, uint32_t now) {
@@ -20,12 +31,9 @@ public:
         }
         if (std::sscanf(line, "CNTRL BUNDLE GET %u %u%n", &offset, &length, &end) == 2 && !line[end]
             && length && length <= usb_block_size) {
-            UsbBlock block; if (!block.bytes) return error("allocation");
-            auto *bytes = block.bytes; char *response = block.text;
-            std::strcpy(response, "CNTRL BUNDLE ");
-            if (!storage_.bundle_read(offset, bytes, length)) return error("bundle-read");
-            for (unsigned i = 0; i < length; ++i) std::snprintf(response + 13 + i * 2, 3, "%02x", bytes[i]);
-            replies_.reply(response); return true;
+            MemoryBuffer buffer; if (!buffer.resize(length)) return error("allocation");
+            if (!storage_.bundle_read(offset, buffer.data, length)) return error("bundle-read");
+            replies_.data(buffer.data, length); return true;
         }
         if (std::sscanf(line, "CNTRL BUNDLE BEGIN %u %lx %u%n", &length, &crc, &overwrite, &end) == 3
             && !line[end] && length >= 40 && length <= 0xffffffffu - 100 && crc <= 0xfffffffful && overwrite <= 1) {
@@ -36,27 +44,6 @@ public:
             if (!storage_.upload_begin(length, uint32_t(crc), 0)) return error("bundle-write");
             expected_ = length; expected_crc_ = uint32_t(crc); received_ = 0; crc_ = 0xffffffff;
             active_ = true; last_ = now; replies_.reply("CNTRL SEND"); return true;
-        }
-        if (!std::strncmp(line, "CNTRL BUNDLE DATA ", 18)) {
-            if (!active_) return error("no-bundle-transfer");
-            const char *hex = line + 18; unsigned width = unsigned(std::strlen(hex));
-            UsbBlock block; if (!block.bytes) return fail("allocation");
-            auto *bytes = block.bytes;
-            if (!width || width > usb_block_size * 2 || width % 2 || width / 2 > expected_ - received_) return fail("bundle-data");
-            for (unsigned i = 0; i < width; i += 2) {
-                unsigned value = 0;
-                for (unsigned j = 0; j < 2; ++j) {
-                    char c = hex[i + j];
-                    if (c >= '0' && c <= '9') value = value * 16 + unsigned(c - '0');
-                    else if (c >= 'a' && c <= 'f') value = value * 16 + unsigned(c - 'a' + 10);
-                    else return fail("bundle-data");
-                }
-                bytes[i / 2] = uint8_t(value);
-            }
-            unsigned n = width / 2;
-            if (!storage_.upload_write(bytes, n)) return fail("bundle-write");
-            for (unsigned i = 0; i < n; ++i) { crc_ ^= bytes[i]; for (unsigned b = 0; b < 8; ++b) crc_ = crc_ & 1 ? (crc_ >> 1) ^ 0xedb88320 : crc_ >> 1; }
-            received_ += n; last_ = now; replies_.reply("CNTRL OK"); return true;
         }
         if (!std::strcmp(line, "CNTRL BUNDLE END")) {
             if (!active_) return error("no-bundle-transfer");

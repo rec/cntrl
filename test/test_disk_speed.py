@@ -93,13 +93,13 @@ def test_session_cancellation_removes_an_unfinished_upload(
         with transport.SerialConnection(port) as connection:
             client = transport.SetupClient(connection)
             client.ok('CNTRL DISK BEGIN 0')
-            client.ok('CNTRL DISK DATA 01')
+            client.send_data(transport.Kind.disk, b'\x01')
             assert (tmp_path / 'cntrl/.disk-speed.tmp').exists()
         assert not (tmp_path / 'cntrl/.disk-speed.tmp').exists()
 
 
 @pytest.mark.parametrize(
-    'command', ['CNTRL DISK DATA zz', 'CNTRL DISK END', 'CNTRL DISK READ 1000000']
+    'command', ['CNTRL DISK INVALID', 'CNTRL DISK END', 'CNTRL DISK READ 1000000']
 )
 def test_invalid_transfer_is_rejected_and_removed(
     peer: Path, tmp_path: Path, command: str

@@ -19,6 +19,7 @@ inline void put32(uint8_t *p, uint32_t n) {
 struct Replies {
     virtual ~Replies() = default;
     virtual void reply(const char *line) = 0;
+    virtual void data(const uint8_t *bytes, unsigned length) = 0;
 };
 
 // Movies are immutable SD assets addressed by their CRC32. Commit verification
@@ -43,6 +44,15 @@ public:
     }
     bool busy() const { return state_ != State::command; }
     bool accepts_input() const { return state_ == State::command || state_ == State::receiving; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(movie_data)
+#endif
+    void receive_data(const uint8_t *bytes, unsigned length, uint32_t now) {
+        if (state_ != State::receiving || !length || length > incoming_ - offset_ - used_) {
+            replies_.reply("CNTRL SPLASH ERROR unexpected-binary-data"); return;
+        }
+        for (unsigned i = 0; i < length; ++i) receive(bytes[i], now);
+    }
     uint32_t size() override { return length_; }
     bool read(uint32_t offset, uint8_t *data, uint32_t length) override {
         return active_ >= 0 && offset <= length_ && length <= length_ - offset
@@ -145,13 +155,12 @@ private:
             && end && !line_[end] && crc <= 0xfffffffful) {
             uint32_t length;
             if (!asset_info(uint32_t(crc), length) || offset >= length) { replies_.reply("CNTRL SPLASH ERROR missing"); return; }
-            UsbBlock block; if (!block.bytes) { fail("allocation"); return; }
-            auto *bytes = block.bytes; unsigned n = length - offset;
+            unsigned n = length - offset;
             if (n > usb_block_size) n = usb_block_size;
-            if (!storage_.read(uint32_t(crc), 16 + offset, bytes, n)) { replies_.reply("CNTRL SPLASH ERROR read"); return; }
-            char *response = block.text; std::strcpy(response, "CNTRL DATA ");
-            for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", bytes[i]);
-            replies_.reply(response); return;
+            MemoryBuffer buffer;
+            if (!buffer.resize(n)) { fail("allocation"); return; }
+            if (!storage_.read(uint32_t(crc), 16 + offset, buffer.data, n)) { replies_.reply("CNTRL SPLASH ERROR read"); return; }
+            replies_.data(buffer.data, n); return;
         }
         end = 0;
         if (std::sscanf(line_, "CNTRL SPLASH BEGIN %lu %lx%n", &size, &crc, &end) != 2

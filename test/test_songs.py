@@ -314,7 +314,7 @@ def test_song_library_transfer_against_cpp_receiver(
             client = transport.SetupClient(connection)
             client.ok(f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} 0')
             for i in range(0, len(data), 128):
-                client.ok('CNTRL SONGS DATA ' + data[i : i + 128].hex())
+                client.send_data(transport.Kind.songs, data[i : i + 128])
             client.ok('CNTRL SONGS END')
             assert songs.download(client) == data
             with pytest.raises(ValueError, match='songs'):
@@ -327,13 +327,13 @@ def test_song_library_transfer_against_cpp_receiver(
             struct.pack_into('<I', malformed, 8 + songs.SELECTION.size + 64, 0xFFFFFFFF)
             client.ok(f'CNTRL SONGS BEGIN {len(malformed)} {crc32(malformed):08x} 1')
             for i in range(0, len(malformed), 128):
-                client.ok('CNTRL SONGS DATA ' + malformed[i : i + 128].hex())
+                client.send_data(transport.Kind.songs, malformed[i : i + 128])
             with pytest.raises(ValueError, match='songs'):
                 client.ok('CNTRL SONGS END')
             assert songs.download(client) == data
             # An incomplete replacement cannot change the committed library.
             client.ok(f'CNTRL SONGS BEGIN {len(data)} 00000000 1')
-            client.ok('CNTRL SONGS DATA ' + data[:128].hex())
+            client.send_data(transport.Kind.songs, data[:128])
             with pytest.raises(ValueError, match='songs'):
                 client.ok('CNTRL SONGS END')
             assert songs.download(client) == data
@@ -386,9 +386,7 @@ def test_empty_song_library_downloads() -> None:
     data = songs.encode(songs.Library())
     client = Mock(spec=transport.SetupClient)
     client.connection = Mock(usb_block_size=4096)
-    client.request.side_effect = [
-        f'CNTRL SONGS {len(data)} {crc32(data):08x}',
-        'CNTRL DATA ' + data.hex(),
-    ]
+    client.request.return_value = f'CNTRL SONGS {len(data)} {crc32(data):08x}'
+    client.request_data.return_value = data
     assert songs.download(client) == data
     assert not songs.decode(data).songs

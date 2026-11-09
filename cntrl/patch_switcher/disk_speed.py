@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from tqdm.std import tqdm
 
 from .transport import SerialConnection, SetupClient
+from .usb_frames import Kind
 
 
 class Throughput(BaseModel, frozen=True):
@@ -30,7 +31,7 @@ def measure(port: Path) -> Throughput:
                 client.ok(f'CNTRL DISK BEGIN {checksum:08x}')
                 for i in range(0, length, connection.usb_block_size):
                     chunk = data[i : i + connection.usb_block_size]
-                    client.ok('CNTRL DISK DATA ' + chunk.hex())
+                    client.send_data(Kind.disk, chunk)
                     progress.update(len(chunk))
                 client.ok('CNTRL DISK END')
                 upload_ns = perf_counter_ns() - start
@@ -40,10 +41,7 @@ def measure(port: Path) -> Throughput:
             ) as progress:
                 start = perf_counter_ns()
                 while len(result) < length:
-                    response = client.request(f'CNTRL DISK READ {len(result)}')
-                    if not response.startswith('CNTRL DATA '):
-                        raise ValueError(response)
-                    chunk = bytes.fromhex(response[11:])
+                    chunk = client.request_data(f'CNTRL DISK READ {len(result)}')
                     if (
                         not 1
                         <= len(chunk)

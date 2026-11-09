@@ -19,6 +19,7 @@ struct Board : TestPatchHardware, cntrl::Replies {
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
     void reply(const char *text) override { last = text; }
+    void data(const uint8_t *, unsigned) override { assert(false); }
 };
 void upload(cntrl::HistoryImport &transfer, Board &board, uint64_t number, const std::vector<uint8_t> &record) {
     char revision[21], command[320]; cntrl::revision_text(number, revision);
@@ -27,9 +28,7 @@ void upload(cntrl::HistoryImport &transfer, Board &board, uint64_t number, const
     assert(transfer.command(command, 0) && board.last == "CNTRL SEND");
     for (unsigned offset = 0; offset < record.size();) {
         unsigned n = std::min(128u, unsigned(record.size()) - offset);
-        std::strcpy(command, "CNTRL HISTORY DATA ");
-        for (unsigned i = 0; i < n; ++i) std::snprintf(command + 19 + i * 2, 3, "%02x", record[offset + i]);
-        assert(transfer.command(command, 0) && board.last == "CNTRL OK"); offset += n;
+        assert(transfer.data(record.data() + offset, n, 0) && board.last == "CNTRL OK"); offset += n;
     }
     assert(transfer.command("CNTRL HISTORY END", 0));
     for (unsigned now = 0; transfer.busy() && now < 10000; ++now) transfer.tick(now);

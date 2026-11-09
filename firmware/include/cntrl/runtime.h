@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include "usb_frame.h"
 
 namespace cntrl {
 // Cooperative ordering is policy. Clock/GPIO/USB and display readiness are
@@ -25,7 +26,11 @@ public:
         if (session.resetting() && commands.accepts_input() && !s.song_transfer().processing()) {
             commands.cancel_transfer(); s.song_transfer().cancel_transfer(); s.bundle_transfer().cancel(); s.history_transfer().cancel(); s.fonts().cancel_transfer(); s.cancel_listing(); s.disk_transfer().cancel(); session.reset_done();
         }
-        for (unsigned i = 0; i < command_budget && session.input_size() && s.reply_ready() && s.commands_allowed() && commands.accepts_input(); ++i) {
+        if (session.input_size() && session.input_kind() != UsbKind::command && s.reply_ready()
+            && s.commands_allowed() && commands.accepts_input()) {
+            unsigned n = session.input_size();
+            commands.receive_data(session.input_kind(), session.input_bytes(), n, now); session.consumed(n);
+        } else for (unsigned i = 0; i < command_budget && session.input_size() && s.reply_ready() && s.commands_allowed() && commands.accepts_input(); ++i) {
             commands.receive(session.input(), now); session.consumed();
         }
         // A resumable session retains unfinished transfers while disconnected.

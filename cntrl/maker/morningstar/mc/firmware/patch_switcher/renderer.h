@@ -43,7 +43,6 @@ private:
     bool initialized_ = false;
 };
 struct RenderPixels {
-    uint16_t work[cntrl::target::maximum_display_area] = {};
     uint16_t cache[cntrl::target::total_display_area] = {};
     uint16_t previous[cntrl::target::total_display_area] = {};
 };

@@ -254,7 +254,10 @@ def test_revision_commands_against_cpp_receiver(peer: Path) -> None:
 
 def test_progress_reply_is_not_returned_as_the_command_result() -> None:
     connection = transport.SerialConnection(Path('/unused'))
-    connection.received.extend(b'CNTRL WAIT\nCNTRL WAIT\nCNTRL OK\n')
+    connection.received.extend(
+        transport.Frame(kind=transport.Kind.text, session=1, sequence=1, payload=x)
+        for x in (b'CNTRL WAIT\n', b'CNTRL WAIT\n', b'CNTRL OK\n')
+    )
     assert connection.line() == 'CNTRL OK'
 
 
@@ -275,15 +278,15 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
                 nonlocal writes, data_frame
                 writes += 1
                 data_frame = (
-                    frame.split()[-1]
-                    == data[: connection.usb_block_size].hex().encode()
+                    transport.Frame.decode(frame).payload
+                    == data[: connection.usb_block_size]
                 )
                 if writes == 3:
                     write_frame(frame[: len(frame) // 2])
                     raise OSError('injected partial USB write')
                 write_frame(frame)
 
-            def lost_reply() -> str:
+            def lost_reply() -> transport.Frame:
                 nonlocal losses
                 result = read_frame()
                 if data_frame and losses == 0:
@@ -299,10 +302,10 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
             client.select('A')
             losses = 0
 
-            def lost_completion() -> str:
+            def lost_completion() -> transport.Frame:
                 nonlocal losses
                 result = read_frame()
-                if result.endswith(b'CNTRL OK\n'.hex()) and losses < 3:
+                if result.payload == b'CNTRL OK\n' and losses < 3:
                     losses += 1
                     raise OSError('injected lost command completion')
                 return result
@@ -353,17 +356,25 @@ def test_usb_wait_backoff_keeps_retrying_until_control_c(
 @pytest.mark.parametrize(
     'response,message',
     [
-        ('CNTRL USB abc 1 1 -', 'older cntrl firmware'),
-        ('not a USB frame', 'Invalid USB transport response'),
-        ('CNTRL USB abc 1 1 four -', 'Invalid USB transport response'),
-        ('CNTRL USB abc 1 1 4096 zz', 'Invalid USB transport response'),
-        ('CNTRL USB abc 2 1 4096 -', 'Unexpected USB sequence'),
+        (
+            transport.Frame(
+                kind=transport.Kind.error,
+                status=transport.Status.version,
+                session=0xABC,
+                sequence=1,
+            ),
+            'Binary USB status',
+        ),
+        (
+            transport.Frame(kind=transport.Kind.text, session=0xABC, sequence=2),
+            'Unexpected USB sequence',
+        ),
     ],
 )
 def test_incompatible_usb_replies_fail_without_reconnecting(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    response: str,
+    response: transport.Frame,
     message: str,
 ) -> None:
     connection = transport.SerialConnection(Path('unused'))
@@ -386,7 +397,7 @@ def test_incompatible_usb_replies_fail_without_reconnecting(
         assert transport.__file__ in report
         assert 'session=abc, sequence=1, acknowledged_reply=0' in report
         assert 'usb_block_size=4096' in report
-        assert repr(response) in report
+        assert repr(response.encode()) in report
         assert connection.serial is None
         assert 'Waiting' not in capsys.readouterr().err
     finally:
@@ -402,7 +413,17 @@ def test_invalid_usb_fields_report_the_full_diagnostic(
     connection.acknowledged = 7
     monkeypatch.setattr(connection, 'connect', lambda: None)
     monkeypatch.setattr(connection, 'write_frame', lambda _: None)
-    monkeypatch.setattr(connection, 'read_frame', lambda: 'CNTRL  USB 1234 9 8 0 - \r')
+    monkeypatch.setattr(
+        connection,
+        'read_frame',
+        lambda: transport.Frame(
+            kind=transport.Kind.error,
+            status=transport.Status.invalid,
+            session=0x1234,
+            sequence=9,
+            acknowledged=8,
+        ),
+    )
     with pytest.raises(transport.UsbProtocolError) as caught:
         connection.exchange(b'')
     file_regression.check(
@@ -417,10 +438,10 @@ def test_protocol_error_during_a_command_does_not_retry_session_cleanup(
         connection = transport.SerialConnection(Path(port))
         reads = 0
 
-        def invalid_response() -> str:
+        def invalid_response() -> transport.Frame:
             nonlocal reads
             reads += 1
-            return 'invalid USB frame'
+            raise connection.protocol_error('Invalid USB frame', b'invalid')
 
         with pytest.raises(transport.UsbProtocolError, match='Invalid USB'):
             with connection:

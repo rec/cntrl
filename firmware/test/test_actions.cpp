@@ -15,6 +15,7 @@ struct Board : TestPatchHardware, cntrl::midi::Sink, cntrl::Replies {
     std::string response;
     bool configuration_locked() const override { return locked; }
     void reply(const char *text) override { response = text; }
+    void data(const uint8_t *, unsigned) override { assert(false); }
     std::vector<cntrl::midi::Packet> sent;
     cntrl::Pane views[3];
     unsigned switch_capacity() const override { return 5; }

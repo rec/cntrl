@@ -10,6 +10,7 @@ struct Replies {
     virtual ~Replies() = default;
     virtual bool reply_ready() const { return true; }
     virtual void reply(const char *text) = 0;
+    virtual void data(const uint8_t *bytes, unsigned length) = 0;
 };
 
 class Documents {
@@ -152,12 +153,19 @@ public:
     bool accepts_input() const { return browse_phase_ == BrowsePhase::idle && history_action_ == HistoryAction::none && !writing_ && !erasing_; }
     void keepalive(uint32_t now) { last_byte_ = now; }
     void cancel_transfer() { receiving_ = listing_ = overflow_ = false; download_ = used_ = 0; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_data)
+#endif
+    void receive_data(const uint8_t *bytes, unsigned length, uint32_t now) {
+        if (!receiving_ || !length || length > expected_ - received_) { error("unexpected-binary-data"); return; }
+        last_byte_ = now; std::memcpy(staging_.data + received_, bytes, length); received_ += length;
+        if (received_ == expected_) { receiving_ = false; received(now); }
+    }
     void receive(uint8_t byte, uint32_t now) {
         if (browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || writing_ || erasing_) return;
         last_byte_ = now;
         if (receiving_) {
-            staging_.data[received_++] = byte;
-            if (received_ == expected_) { receiving_ = false; received(now); }
+            receive_data(&byte, 1, now);
             return;
         }
         if (byte == '\n') {
@@ -735,11 +743,9 @@ private:
             if (listing_) { listing(); return; }
             if (download_) {
                 unsigned n = length_ - (download_ - 1); if (n > usb_block_size) n = usb_block_size;
-                UsbBlock block; if (!block.bytes) { error("allocation"); return; }
-                char *response = block.text; std::strcpy(response, "CNTRL DATA ");
-                for (unsigned i = 0; i < n; ++i) std::snprintf(response + 11 + i * 2, 3, "%02x", staging_.data[download_ - 1 + i]);
+                replies_.data(staging_.data + download_ - 1, n);
                 download_ += n; if (download_ - 1 == length_) download_ = 0;
-                replies_.reply(response); return;
+                return;
             }
             error("no-transfer"); return;
         }

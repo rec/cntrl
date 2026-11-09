@@ -19,6 +19,7 @@ from pydantic import (
 
 from . import compiler, inputs, models, resolved, setup_bundle, transport
 from .data_files import validate_name
+from .usb_frames import Kind
 
 
 class Song(BaseModel, frozen=True):
@@ -468,10 +469,7 @@ def download(client: transport.SetupClient) -> bytes:
     length = int(response[2])
     result = bytearray()
     while len(result) < length:
-        response_line = client.request(f'CNTRL SONGS READ {len(result)}')
-        if not response_line.startswith('CNTRL DATA '):
-            raise ValueError(response_line)
-        chunk = bytes.fromhex(response_line[11:])
+        chunk = client.request_data(f'CNTRL SONGS READ {len(result)}')
         if not 1 <= len(chunk) <= client.connection.usb_block_size:
             raise ValueError('invalid song library chunk')
         result.extend(chunk)
@@ -485,9 +483,8 @@ def upload(client: transport.SetupClient, data: bytes, overwrite: bool) -> None:
     decode(data)
     client.ok(f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} {int(overwrite)}')
     for offset in range(0, len(data), client.connection.usb_block_size):
-        client.ok(
-            'CNTRL SONGS DATA '
-            + data[offset : offset + client.connection.usb_block_size].hex()
+        client.send_data(
+            Kind.songs, data[offset : offset + client.connection.usb_block_size]
         )
     client.ok('CNTRL SONGS END')
     if download(client) != data:

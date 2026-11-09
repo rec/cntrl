@@ -27,6 +27,7 @@ struct Board : TestInputHardware, cntrl::SongResolver, cntrl::Replies {
     cntrl::SongExecution execution_status() const override { return cntrl::SongExecution::completed; }
     bool capture_source(const cntrl::Document *&) override { return false; }
     void reply(const char *line) override { usb.reply(line); }
+    void data(const uint8_t *bytes, unsigned n) override { usb.data(bytes, n); }
 };
 int main() {
     Board board; TestStorage storage; cntrl::Songs songs(storage, board);
@@ -37,5 +38,6 @@ int main() {
         if (b != '\n') line += char(b);
         else { transfer.command(line.c_str()); line.clear(); }
     }, [&]() { songs.tick(); transfer.poll(0); }, [&]() { return !transfer.processing(); },
-        [&]() { transfer.cancel_transfer(); line.clear(); });
+        [&]() { transfer.cancel_transfer(); line.clear(); },
+        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) { assert(kind == cntrl::UsbKind::songs); transfer.data(bytes, n, 0); });
 }

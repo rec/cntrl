@@ -120,6 +120,7 @@ extern cntrl::ui::FirmwareVisit firmware_visit;
 bool append_boot_record(uint32_t value);
 #endif
 DMAMEM cntrl::UsbSession usb_session;
+DMAMEM uint16_t render_work[cntrl::target::maximum_display_area];
 static_assert(cntrl::target::button_count == sizeof(button_bits), "Button declaration must match the input wiring");
 
 
@@ -466,6 +467,7 @@ public:
     }
     bool reply_ready() const override { return usb_session.reply_ready(); }
     void reply(const char *text) override { startup_counter.reply(text, usb_session); }
+    void data(const uint8_t *bytes, unsigned length) override { usb_session.data(bytes, length); }
     void detach() {
         cntrl::device::detach_usb_device();
         for (const auto &endpoint : midi_outputs())
@@ -600,7 +602,7 @@ public:
     void poll() {
         midi_runtime_.poll(*this);
         if (usb_session.output_pending() && Serial.availableForWrite() > 0) {
-            unsigned n = std::strlen(usb_session.output());
+            unsigned n = usb_session.output_size();
             unsigned room = Serial.availableForWrite();
             if (n > room) n = room;
             usb_session.sent(Serial.write(usb_session.output(), n));
@@ -640,7 +642,7 @@ private:
     bool stream_device_connected_ = false;
     cntrl::midi::UsbMidiForward hosted_forward_;
     RenderPixels pixels_;
-    cntrl::ui::Renderer renderer_{display_, fonts, pixels_.work, cntrl::target::maximum_display_area, pixels_.cache, pixels_.previous, cntrl::target::total_display_area};
+    cntrl::ui::Renderer renderer_{display_, fonts, render_work, cntrl::target::maximum_display_area, pixels_.cache, pixels_.previous, cntrl::target::total_display_area};
     cntrl::ui::PageHost<Board> ui_{*this, application, documents, display_, fonts, renderer_, cntrl::target::controls};
 };
 
@@ -807,7 +809,8 @@ struct AssetServices {
     font_files, native_asset_command};
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
 bool asset_command(const char *line) { return asset_commands.command(line, millis()); }
-DMAMEM cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset);
+bool asset_data(cntrl::UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) { return asset_commands.data(kind, bytes, length, now); }
+DMAMEM cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset, asset_data);
 cntrl::ButtonState buttons[cntrl::target::button_count];
 cntrl::CooperativeRuntime cooperative_runtime(cntrl::target::scan_interval_ms);
 
@@ -819,6 +822,7 @@ FLASHMEM void initialize_target() {
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session.reset();
+    std::memset(render_work, 0, sizeof(render_work));
     for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i)
         new (extra_controllers[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::Switches::capacity + i);
     initialize_switches();

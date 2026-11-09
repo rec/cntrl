@@ -1,5 +1,6 @@
 #pragma once
 #include "startup_counter.h"
+#include "usb_frame.h"
 #include <cstdio>
 #include <cstring>
 
@@ -11,6 +12,21 @@ template<class Services>
 class AssetCommands {
 public:
     explicit AssetCommands(Services &services) : services_(services) {}
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(asset_data)
+#endif
+    bool data(UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) {
+        auto &s = services_;
+        if (s.hardware.configuration_locked()) { s.replies.reply("CNTRL ERROR close-switches-first"); return true; }
+        switch (kind) {
+        case UsbKind::history: return s.history.data(bytes, length, now);
+        case UsbKind::bundle: return s.bundle.data(bytes, length, now);
+        case UsbKind::disk: return s.disk.data(bytes, length, now);
+        case UsbKind::songs: return s.songs.data(bytes, length, now);
+        case UsbKind::font: return s.fonts.data(bytes, length, s.replies, now);
+        default: return false;
+        }
+    }
 
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(asset_commands)
@@ -37,8 +53,8 @@ public:
         }
         if (!std::strncmp(line, "CNTRL STARTS ", 13)) {
             s.counter_file.open(StartupCounter::path, files::Mode::read);
-            char response[280]; StartupCounter::read_command(line, s.counter_file, response);
-            s.counter_file.close(); s.replies.reply(response); return true;
+            StartupCounter::read_command(line, s.counter_file, s.replies);
+            s.counter_file.close(); return true;
         }
         if (!std::strncmp(line, "CNTRL BUNDLE ", 13)) return s.bundle.command(line, now);
         if (!std::strcmp(line, "CNTRL STORAGE NEXT")) {
