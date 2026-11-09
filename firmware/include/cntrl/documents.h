@@ -549,7 +549,7 @@ private:
         hardware_.set_midi_interface(false);
         hardware_.set_animation_color_cycle(false);
         Pane view; view.lines[1].centered = true;
-        view.lines[1].graphics.size = view.lines[1].graphics.line_height = 16;
+        view.lines[1].graphics.line_height = view.lines[1].graphics.size = 16;
         std::snprintf(view.lines[1].text, sizeof(view.lines[1].text), "No setups");
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, view);
     }

@@ -36,7 +36,7 @@ private:
         using Role = ControlRole;
         Pane views[3];
         for (auto &view : views) for (auto &line : view.lines)
-            line.graphics.size = line.graphics.line_height = 16;
+            line.graphics.line_height = line.graphics.size = 16;
         std::snprintf(views[0].lines[0].text, 64, "%s", prompt.pair(Role::previous, Role::next, "browse").text());
         std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, "OK").add(Role::back, "back", ", ").text());
         std::snprintf(views[1].lines[0].text, 64, "Pages and tools");

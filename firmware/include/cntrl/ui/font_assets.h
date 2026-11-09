@@ -58,7 +58,7 @@ struct View {
     const uint8_t *data = nullptr;
     const uint8_t *run(const char *text) const {
         unsigned offset = entry.glyphs() * 16 + entry.characters() * 8;
-        unsigned length = std::strlen(text);
+        auto length = std::strlen(text);
         for (unsigned i = 0; i < entry.runs(); ++i) {
             const auto *r = data + offset; unsigned n = cntrl::u16(r);
             if (n == length && !std::memcmp(r + 8, text, n)) return r;

@@ -61,6 +61,7 @@ def run(options: QualificationRun) -> None:
         'pillow_freetype': features.version('freetype2') or '',
     }
     (output / 'provenance.toml').write_text(tomlkit.dumps(provenance))
+    execute([sys.executable, 'scripts/native_tests.py'], output / 'native.log', root)
     if options.target_dir is not None and options.profile == 'full':
         execute(
             [
@@ -79,7 +80,6 @@ def run(options: QualificationRun) -> None:
             root,
         )
     commands = {
-        'native': [sys.executable, 'scripts/native_tests.py'],
         'pytest': [
             sys.executable,
             '-m',

@@ -4,6 +4,8 @@ import os
 import struct
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing.connection import Listener
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -14,6 +16,35 @@ from cntrl.firmware.intel_hex import read_hex
 from cntrl.maker.morningstar.mc import upload_helper
 from cntrl.patch_switcher import cli
 from cntrl.patch_switcher.devices import Device
+
+
+def test_upload_request_uses_authenticated_local_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    key = os.urandom(32)
+    (tmp_path / 'authentication.key').write_bytes(key)
+    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path)
+    request = upload_helper.Upload(
+        image=(tmp_path / 'firmware.hex').resolve(), sha256='a' * 64
+    )
+    expected = upload_helper.UploadResult(returncode=0, output='validated bytes')
+
+    def respond() -> bytes:
+        with listener.accept() as connection:
+            assert connection.poll(5)
+            payload = connection.recv_bytes(upload_helper.REQUEST_LIMIT)
+            connection.send_bytes(expected.model_dump_json().encode())
+            return payload
+
+    with Listener(family=upload_helper.IPC_FAMILY, authkey=key) as listener:
+        monkeypatch.setattr(upload_helper, 'SOCKET_PATH', listener.address)
+        with ThreadPoolExecutor(max_workers=1) as workers:
+            pending = workers.submit(respond)
+            assert upload_helper.request_upload(request) == expected
+            assert (
+                upload_helper.Upload.model_validate_json(pending.result(timeout=5))
+                == request
+            )
 
 
 @pytest.fixture

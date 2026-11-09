@@ -159,7 +159,7 @@ private:
         ui::Prompt prompt(hardware_);
         using Role = ControlRole;
         Pane panes[3];
-        for (auto &p : panes) for (auto &line : p.lines) { line.graphics.size = line.graphics.line_height = 16; line.wrap = true; }
+        for (auto &p : panes) for (auto &line : p.lines) { line.graphics.line_height = line.graphics.size = 16; line.wrap = true; }
         if (songs_.busy()) {
             std::strcpy(panes[1].lines[0].text, "Saving...");
             ui::present(hardware_, panes, 1);
@@ -223,7 +223,7 @@ private:
         for (unsigned i = 0; i < 3; ++i) {
             unsigned rows = 0;
             for (const auto &line : panes[i].lines) rows += (unsigned(std::strlen(line.text)) + 11) / 12;
-            if (rows > 7) for (auto &line : panes[i].lines) line.graphics.size = line.graphics.line_height = 8;
+            if (rows > 7) for (auto &line : panes[i].lines) line.graphics.line_height = line.graphics.size = 8;
         }
         ui::present(hardware_, panes, 1);
     }

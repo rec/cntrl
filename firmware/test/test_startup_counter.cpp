@@ -45,11 +45,13 @@ int main() {
     test_counter_text_preserves_values_above_32_bits();
     test_explicit_reset_replaces_both_slots_and_restarts_at_one();
     struct Replies { std::string value; void reply(const char *text) { value = text; } } replies;
-    StartupCounter counter; counter.count = 10; counter.status = StartupCounter::Status::ready;
-    counter.reply("CNTRL READY 35 123 aabbccdd", replies);
-    assert(replies.value == "CNTRL READY 35 123 aabbccdd starts=10 starts_status=ready");
-    counter.reply("CNTRL DATA 0001", replies); assert(replies.value == "CNTRL DATA 0001");
-    counter.reply("CNTRL ERROR test", replies); assert(replies.value == "CNTRL ERROR test");
+    {
+        StartupCounter counter; counter.count = 10; counter.status = StartupCounter::Status::ready;
+        counter.reply("CNTRL READY 35 123 aabbccdd", replies);
+        assert(replies.value == "CNTRL READY 35 123 aabbccdd starts=10 starts_status=ready");
+        counter.reply("CNTRL DATA 0001", replies); assert(replies.value == "CNTRL DATA 0001");
+        counter.reply("CNTRL ERROR test", replies); assert(replies.value == "CNTRL ERROR test");
+    }
     char response[160];
     StartupCounter absent; absent.usb_status("CNTRL READY 33 0 00000000", response, sizeof(response));
     assert(!std::strcmp(response, "CNTRL READY 33 0 00000000 starts=0 starts_status=unavailable"));

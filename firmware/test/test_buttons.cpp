@@ -3,10 +3,11 @@
 
 #include <cassert>
 #include <cstdint>
+#include <initializer_list>
 #include <vector>
 
 void test_configured_debounce() {
-    for (uint16_t delay : {5, 20, 40}) {
+    for (uint16_t delay : std::initializer_list<uint16_t>{5, 20, 40}) {
         uint8_t settings[20] = {};
         for (unsigned i = 0; i < 12; ++i) settings[i] = 255;
         settings[12] = uint8_t(delay);

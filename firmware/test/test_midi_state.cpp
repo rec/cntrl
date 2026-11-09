@@ -1,6 +1,7 @@
 #include "midi_endpoints.h"
 #include <cntrl/midi_bridge.h>
 #include <cassert>
+#include <initializer_list>
 
 struct Output : cntrl::midi::Sink {
     bool writable = true;
@@ -88,7 +89,7 @@ void test_channel_modes_clear_affected_state() {
     assert(channel.program == 12 && !channel.pressure && !channel.pitch_bend);
     assert(channel.controllers.size() == 1 && channel.controllers[0].controller == 121);
     assert(channel.notes.size() == 1 && channel.notes[0].velocity == 100 && !channel.notes[0].pressure);
-    for (uint8_t mode : {120, 123, 124, 125, 126, 127}) {
+    for (uint8_t mode : std::initializer_list<uint8_t>{120, 123, 124, 125, 126, 127}) {
         out.submit(0, {9, {0x90, 60, 100}});
         out.submit(0, {11, {0xb0, mode, 0}});
         assert(channel.notes.empty());
