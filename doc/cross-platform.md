@@ -20,16 +20,24 @@ uv run --frozen python -m cntrl.fonts.provision
 Generated sources/build outputs live in `build/freetype`; the tracked provisioning
 module contains the complete build recipe. Re-run it after replacing the environment.
 
-The qualification lanes are macOS 15, Ubuntu 24.04 x64 and Windows Server 2025
-x64. Windows requires Visual Studio C++ build tools with the developer command
-environment active. All hosts require CMake and Git. macOS requires Xcode command line tools; Linux requires
-GCC/G++. No Unix shell or make is required on Windows.
+The Actions qualification lanes are macOS 15 x64, Ubuntu 24.04 x64 and Windows
+Server 2025 x64. GitHub's arm64 macOS pool failed to provision a runner during
+acceptance, so the workflow uses the standard `macos-15-intel` label listed in
+[GitHub's runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+ARM64 macOS is checked locally. Windows requires Visual Studio C++ build tools
+with the developer command environment active. All hosts require CMake and Git.
+macOS requires Xcode command line tools; Linux requires GCC/G++. No Unix shell
+or make is required on Windows.
 
 Run common checks from the repository root:
 
 ```sh
 uv run --frozen python -m scripts.ci --profile core
 ```
+
+Type checking can target another host without that operating system installed,
+for example `uv run --frozen ty check --python-platform win32 cntrl`. This checks
+platform-specific Python APIs; native execution still requires the matrix.
 
 The full profile additionally requires `--target-dir path/to/implementation`.
 It runs the complete Python suite, native suite, installed-wheel smoke check,
@@ -61,6 +69,8 @@ do not consume RAM2.
 Setup names exclude Windows device names and unsafe filename characters. Use
 user-writable directories for exports and backups. Publication closes temporary
 handles before replacement and retains overwrite/readback checks.
+Catalogue/build metadata, backups, downloaded song sources and file reports use
+UTF-8 independently of the host's default text encoding.
 
 Native tests use Clang/GCC with ASan and UBSan on POSIX, and MSVC C++17 with
 warnings treated as errors on Windows. Windows has ordinary native coverage
