@@ -6,6 +6,7 @@ import struct
 import subprocess
 import sys
 from multiprocessing.connection import Client, Listener
+from multiprocessing.context import AuthenticationError
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -52,12 +53,11 @@ def project_worktrees() -> list[Path]:
     result = subprocess.run(
         ['git', '-C', str(ROOT), 'worktree', 'list', '--porcelain', '-z'],
         capture_output=True,
-        text=True,
         check=True,
     )
     return [
         Path(f.removeprefix('worktree ')).resolve()
-        for f in result.stdout.split('\0')
+        for f in result.stdout.decode().split('\0')
         if f.startswith('worktree ')
     ]
 
@@ -197,16 +197,16 @@ def serve() -> None:
             print(f'Upload-only helper listening on {SOCKET_PATH}', flush=True)
             print('Enter HalfKay before requesting upload. Ctrl-C stops the helper.')
             while True:
-                with listener.accept() as connection:
-                    try:
+                try:
+                    with listener.accept() as connection:
                         if connection.poll(5):
                             result = process_request(
                                 connection.recv_bytes(REQUEST_LIMIT)
                             )
                             connection.send_bytes(result.model_dump_json().encode())
-                    except OSError as error:
-                        # A disconnected client must not cancel an upload in progress.
-                        print(f'Upload client disconnected: {error}', file=sys.stderr)
+                except (OSError, EOFError, AuthenticationError) as error:
+                    # A disconnected client must not cancel an upload in progress.
+                    print(f'Upload client disconnected: {error}', file=sys.stderr)
         finally:
             print('Upload helper stopped.', flush=True)
 
@@ -248,7 +248,13 @@ def run(options: Serve | Upload | Bootloader) -> None:
             sys.exit(result.returncode)
     except KeyboardInterrupt:
         sys.exit(130)
-    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+    except (
+        OSError,
+        EOFError,
+        AuthenticationError,
+        ValueError,
+        subprocess.CalledProcessError,
+    ) as error:
         sys.exit(f'Upload helper: {error}')
 
 
