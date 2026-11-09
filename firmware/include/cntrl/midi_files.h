@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdio>
 #include <charconv>
 #include <cntrl/filesystem.h>
 

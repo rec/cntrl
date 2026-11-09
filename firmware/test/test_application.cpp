@@ -58,7 +58,8 @@ struct VisitFile : cntrl::files::File {
     unsigned opened_count = 0, maximum_io = 0;
     bool open(const char *, cntrl::files::Mode mode) override {
         ++opened_count; active = mode != cntrl::files::Mode::read || !bytes.empty();
-        if (mode == cntrl::files::Mode::truncate) bytes.clear(); return active;
+        if (mode == cntrl::files::Mode::truncate) bytes.clear();
+        return active;
     }
     void close() override { active = false; }
     bool opened() const override { return active; }

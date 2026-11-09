@@ -79,6 +79,7 @@ def run(options: QualificationRun) -> None:
             root,
         )
     commands = {
+        'native': [sys.executable, 'scripts/native_tests.py'],
         'pytest': [
             sys.executable,
             '-m',
@@ -93,7 +94,6 @@ def run(options: QualificationRun) -> None:
             *(['test'] if options.profile == 'core' else []),
             f'--junitxml={output / "pytest.xml"}',
         ],
-        'native': [sys.executable, 'scripts/native_tests.py'],
         'lint': [
             'uv',
             'run',
@@ -196,6 +196,18 @@ def wheel_smoke(root: Path, output: Path) -> None:
         execute(
             [str(python), '-m', 'cntrl.patch_switcher.cli', '--help'],
             output / 'installed-help.log',
+            directory,
+            environment,
+        )
+        execute(
+            [
+                str(python),
+                '-m',
+                'cntrl.fonts.provision',
+                '--build-directory',
+                str(root / 'build/freetype'),
+            ],
+            output / 'installed-rasterizer.log',
             directory,
             environment,
         )

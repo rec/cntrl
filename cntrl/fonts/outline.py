@@ -39,6 +39,11 @@ class Outline:
     def __init__(
         self, path: Path, horizontal_scale: float = 1.0, *, autohint: bool = False
     ) -> None:
+        if freetype.version() != (2, 14, 3):
+            raise ValueError(
+                'FreeType 2.14.3 is required; run python -m cntrl.fonts.provision '
+                'after dependency installation'
+            )
         self.horizontal_scale = horizontal_scale
         self.autohint = autohint
         self.data = path.read_bytes()

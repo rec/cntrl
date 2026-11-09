@@ -6,7 +6,8 @@
 
 ## How to install
 
-[TBD]
+See [installation and host qualification](doc/cross-platform.md) for macOS,
+Windows and Linux development setup.
 
 ## What is `cntrl`?
 

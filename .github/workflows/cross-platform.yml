@@ -53,12 +53,16 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c
         if: runner.os == 'Windows'
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        if: inputs.profile == 'full' && !inputs.cold_cache
+        if: ${{ !inputs.cold_cache }}
         with:
-          path: cntrl/cntrl/**/firmware/.tools
-          key: sdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cntrl/uv.lock', 'cntrl/cntrl/**/toolchain.py', 'cntrl/cntrl/**/*.patch') }}
+          path: |
+            cntrl/build/freetype
+            cntrl/cntrl/**/firmware/.tools
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.profile }}-${{ hashFiles('cntrl/uv.lock', 'cntrl/cntrl/fonts/provision.py', 'cntrl/cntrl/**/toolchain.py', 'cntrl/cntrl/**/*.patch') }}
       - name: Install locked dependencies
         run: uv sync --frozen --group dev
+      - name: Provision pinned native rasterizer
+        run: uv run --no-sync python -m cntrl.fonts.provision
       - name: Record tested revision
         run: git rev-parse HEAD
       - name: Qualify selected profile

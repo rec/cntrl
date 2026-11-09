@@ -128,7 +128,8 @@ public:
             || !copy(table_.offset(unsigned(index_)) + table_.length(unsigned(index_)), image_.length)
             || !commit_image()) {
             disk_.finish(); image_.slot = old_slot; image_.length = old_length;
-            if (!table_.pinned()) table_.open(image_, hardware_); return false;
+            if (!table_.pinned()) table_.open(image_, hardware_);
+            return false;
         }
         return true;
     }

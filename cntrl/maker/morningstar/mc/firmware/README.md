@@ -12,7 +12,11 @@ live upload and subsequent USB heartbeat have been verified on this pedal.
 It is an independent application using the public Teensy core, not a patched
 Morningstar executable. It is not yet a functional MIDI controller.
 
-## Build
+## Historical diagnostic build
+
+The commands and artifact names below record the original macOS diagnostic
+bring-up. The current Makefile wraps the portable product build and native tests;
+use [the cross-platform instructions](../cross-platform.md) for maintained builds.
 
 On macOS Apple Silicon, with `make`, `curl`, `tar`, `patch` and `shasum`:
 

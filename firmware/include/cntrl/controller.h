@@ -190,7 +190,7 @@ public:
             unsigned count = u16(document_.patch_cycle(selected_) + 66);
             if (count > 1)
                 scroll(1, operation == 4, 0);
-            cursors_[selected_] = (cursors_[selected_] + count + (operation == 4 ? -1 : 1)) % count;
+            cursors_[selected_] = uint16_t((cursors_[selected_] + count + (operation == 4 ? -1 : 1)) % count);
         } else if (operation == 7) {
             if (executor_.busy()) return false;
             unsigned p = candidate();
@@ -249,7 +249,7 @@ private:
             selected = (selected + document_.patch_cycles() + (operation == 6 ? -1 : 1)) % document_.patch_cycles();
         else if (operation == 3 || operation == 4) {
             unsigned count = u16(document_.patch_cycle(selected) + 66);
-            cursors[selected] = (cursors[selected] + count + (operation == 4 ? -1 : 1)) % count;
+            cursors[selected] = uint16_t((cursors[selected] + count + (operation == 4 ? -1 : 1)) % count);
         } else return false;
         return true;
     }
