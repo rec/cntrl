@@ -28,7 +28,7 @@ class Qualification(BaseModel, frozen=True):
 def qualify(options: Qualification) -> None:
     check_dependencies(options.source_root)
     options.output.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix='cntrl-portable-') as directory:
+    with TemporaryDirectory(prefix='cntrl portable ') as directory:
         root = Path(directory)
         for name in SOURCE_DIRECTORIES:
             shutil.copytree(
@@ -155,7 +155,7 @@ def check_dependencies(source_root: Path) -> None:
         )
     ]
     python = {
-        p: ast.parse(p.read_text(), filename=str(p))
+        p: ast.parse(p.read_bytes(), filename=str(p))
         for p in sources
         if p.suffix == '.py'
     }
@@ -197,7 +197,7 @@ def check_dependencies(source_root: Path) -> None:
         ):
             errors.append(f'{relative}: source alias escapes the portable tree')
             continue
-        text = path.read_text()
+        text = path.read_bytes().decode()
         host_fixture = relative.parts[:2] == ('firmware', 'test')
         production = relative.parts[0] not in ('test',) and not host_fixture
         if path.suffix in ('.ld', '.lds', '.s', '.S'):
