@@ -12,6 +12,7 @@ public:
         session_ = sequence_ = 0; reply_id_ = 1;
         used_ = size_ = offset_ = sent_ = output_size_ = reply_size_ = 0;
         reset_ = closed_ = false;
+        input_kind_ = UsbKind::command; reply_kind_ = UsbKind::text;
     }
     bool active() const { return session_ != 0 && !closed_; }
     bool resetting() const { return reset_; }

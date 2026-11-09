@@ -31,6 +31,8 @@ def compile_native(
     output_index = arguments.index('-o') + 1
     output = executable(Path(arguments[output_index])).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.parent / 'tmp'
+    temporary.mkdir(exist_ok=True)
     if sys.platform == 'win32':
         command = [
             os.environ.get('CXX', 'cl'),
@@ -62,7 +64,14 @@ def compile_native(
     else:
         command = [os.environ.get('CXX', arguments[0]), *arguments[1:]]
         command[output_index] = str(output)
-    return subprocess.run(command, check=check, timeout=180)
+    return subprocess.run(
+        command,
+        check=check,
+        timeout=180,
+        env=dict(
+            os.environ, TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary)
+        ),
+    )
 
 
 def run_native(

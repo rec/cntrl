@@ -20,6 +20,14 @@ cntrl::UsbFrame response(const cntrl::UsbSession &usb) {
     return frame;
 }
 int main() {
+    // DMA RAM retains arbitrary bytes at boot; reset must initialize the handshake.
+    cntrl::UsbSession retained;
+    std::memset(static_cast<void *>(&retained), 0x64, sizeof(retained));
+    retained.reset();
+    feed(retained, request(UsbKind::open, 0xabc, 1, 0));
+    assert(retained.resetting()); retained.reset_done();
+    assert(response(retained).kind == UsbKind::text && !response(retained).length);
+
     cntrl::UsbSession usb;
     feed(usb, request(UsbKind::open, 0xabc, 1, 0));
     assert(usb.resetting()); usb.reset_done();
