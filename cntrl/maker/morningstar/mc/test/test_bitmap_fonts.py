@@ -10,6 +10,7 @@ from PIL import ImageFont
 from cntrl.fonts.outline import Outline
 from cntrl.maker.morningstar.mc import build_bitmap_fonts, build_font_metrics
 from cntrl.maker.morningstar.mc.build_font_metrics import read_bits
+from cntrl.maker.morningstar.mc.font_diagnostics import Diagnostic, diagnose
 from cntrl.patch_switcher import compiler, models
 
 
@@ -101,6 +102,8 @@ def test_generated_fonts_and_exported_metrics_are_current(tmp_path: Path) -> Non
         compiler.read_document(root / 'patch-switcher-target.json')
     )
     for p in tmp_path.iterdir():
+        if p.read_bytes() != (root / 'firmware/patch_switcher' / p.name).read_bytes():
+            diagnose(Diagnostic())
         assert (
             p.read_bytes() == (root / 'firmware/patch_switcher' / p.name).read_bytes()
         )
