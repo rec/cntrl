@@ -59,7 +59,7 @@ static void descriptor_adds_named_cables_and_preserves_other_interfaces() {
     };
     assert(source.size() == 92);
     uint8_t output[124];
-    unsigned size = cntrl::midi::append_usb_midi_port(source.data(), source.size(), output, sizeof(output), 11);
+    unsigned size = cntrl::midi::append_usb_midi_port(source.data(), unsigned(source.size()), output, sizeof(output), 11);
     assert(size == 124 && output[2] == 124);
     assert(!std::memcmp(output + size - 9, source.data() + source.size() - 9, 9));
     assert(output[23] == 67); // Class-specific interface length includes new jacks.
@@ -75,9 +75,9 @@ static void descriptor_adds_named_cables_and_preserves_other_interfaces() {
         }
     }
     assert(named == 4 && associations == 2);
-    assert(!cntrl::midi::append_usb_midi_port(source.data(), source.size(), output, sizeof(output) - 1, 11));
+    assert(!cntrl::midi::append_usb_midi_port(source.data(), unsigned(source.size()), output, sizeof(output) - 1, 11));
     source[9] = 255;
-    assert(!cntrl::midi::append_usb_midi_port(source.data(), source.size(), output, sizeof(output), 11));
+    assert(!cntrl::midi::append_usb_midi_port(source.data(), unsigned(source.size()), output, sizeof(output), 11));
 }
 
 struct ForwardSink : cntrl::midi::Sink {

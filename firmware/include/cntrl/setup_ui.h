@@ -185,7 +185,7 @@ private:
         Pane views[3];
         for (auto &view : views) {
             for (unsigned i = 0; i < 2; ++i)
-                view.lines[i].graphics.size = view.lines[i].graphics.line_height = 16;
+                view.lines[i].graphics.line_height = view.lines[i].graphics.size = 16;
             view.lines[1].wrap = true;
         }
         std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, "browse").text());

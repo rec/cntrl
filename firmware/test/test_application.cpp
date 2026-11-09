@@ -63,7 +63,7 @@ struct VisitFile : cntrl::files::File {
     }
     void close() override { active = false; }
     bool opened() const override { return active; }
-    uint32_t size() const override { return bytes.size(); }
+    uint32_t size() const override { return uint32_t(bytes.size()); }
     bool read(uint32_t offset, uint8_t *data, unsigned length) override {
         maximum_io = std::max(maximum_io, length);
         if (offset + length > bytes.size()) return false;
@@ -207,7 +207,7 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         assert(!documents.busy() && documents.select("Test"));
         host.select_page(5); host.select_page(4);
         for (unsigned screen = 0; screen < 3; ++screen) {
-            cntrl::Pane pane; pane.graphics.background = screen + 1; pane.graphics.pad = 0;
+            cntrl::Pane pane; pane.graphics.background = uint16_t(screen + 1); pane.graphics.pad = 0;
             renderer.show(screen, pane);
         }
         for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);

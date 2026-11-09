@@ -1,7 +1,9 @@
 #include "patch_hardware.h"
 #include <cntrl/documents.h>
 #include <cassert>
+#include <initializer_list>
 #include <fstream>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <iostream>
@@ -390,8 +392,9 @@ void test_first_send_blocks_undo_and_preserves_current_patch(const cntrl::Docume
 }
 
 void test_undo_light_uses_title_contrast_and_two_pixel_padding(const cntrl::Document &source) {
-    for (const auto &colors : {std::pair<uint16_t, uint16_t>{0, 0x07e0}, {0xffff, 0x001f},
-                             {0x07e0, 0x001f}, {0x001f, 0x07e0}, {0x8c51, 0}}) {
+    for (const auto &colors : std::initializer_list<std::pair<uint16_t, uint16_t>>{
+            {uint16_t(0), uint16_t(0x07e0)}, {uint16_t(0xffff), uint16_t(0x001f)},
+            {uint16_t(0x07e0), uint16_t(0x001f)}, {uint16_t(0x001f), uint16_t(0x07e0)}, {uint16_t(0x8c51), uint16_t(0)}}) {
         auto bytes = std::vector<uint8_t>(source.data(), source.data() + source.length());
         const unsigned display = source.display_metadata();
         for (unsigned i = 0; i < cntrl::u16(bytes.data() + display + 4); ++i) {
@@ -418,7 +421,7 @@ void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     hw.connected = true; app.action(2); // Flute.
     app.action(1); app.action(2); // Sax.
     app.action(1); // Browse away to Strings before undoing Sax.
-    unsigned sent = hw.sent.size();
+    auto sent = hw.sent.size();
     app.action(5);
     assert(hw.sent.size() == sent + 1); // Restore Flute for the same instrument.
     assert(!std::strcmp(hw.panes[0].lines[1].text, "Sax"));
@@ -430,8 +433,8 @@ void test_undo_restores_undone_candidate(const cntrl::Document &doc) {
     std::vector<uint8_t> configured(doc.data(), doc.data() + doc.length());
     configured[doc.metadata() + 6] = 0x4d;
     configured[doc.metadata() + 7] = 1; // 333 milliseconds.
-    cntrl::put32(configured.data() + 20, cntrl::checksum(configured.data() + 28, configured.size() - 28));
-    cntrl::Document custom; assert(custom.load(configured.data(), configured.size(), hw));
+    cntrl::put32(configured.data() + 20, cntrl::checksum(configured.data() + 28, unsigned(configured.size() - 28)));
+    cntrl::Document custom; assert(custom.load(configured.data(), unsigned(configured.size()), hw));
     app.activate(custom); hw.durations.clear();
     app.action(2); app.action(1); app.action(2); app.action(5);
     assert((hw.durations == std::vector<std::optional<unsigned>>{333, 333, 333}));
@@ -626,8 +629,8 @@ void test_catalogue_jobs_are_bounded_and_preserve_order(const std::vector<uint8_
             if (cntrl::setup_name(cursor->first.c_str())) std::snprintf(name, 64, "%s", cursor->first.c_str());
             ++cursor; return false;
         }
-        bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned n) override {
-            io += n; return TestStorage::read(slot, offset, data, n);
+        bool read(unsigned index, unsigned offset, uint8_t *data, unsigned n) override {
+            io += n; return TestStorage::read(index, offset, data, n);
         }
         bool write(const uint8_t *data, unsigned n) override { io += n; return TestStorage::write(data, n); }
     } card;
@@ -670,7 +673,7 @@ void test_catalogue_jobs_are_bounded_and_preserve_order(const std::vector<uint8_
 }
 
 static void test_pages_run_independently(const std::string &path) {
-    std::ifstream file(path.substr(0, path.find_last_of('/') + 1) + "pages.golden");
+    std::ifstream file(std::filesystem::path(path).parent_path() / "pages.golden");
     std::string hex; file >> hex;
     std::vector<uint8_t> bytes;
     for (unsigned i = 0; i < hex.size(); i += 2)
@@ -722,8 +725,8 @@ static void test_pages_run_independently(const std::string &path) {
     const unsigned app_offset = unsigned(reinterpret_cast<const uint8_t *>(layout.name(layout.controller_page(0))) - layout.records);
     const unsigned page_offset = unsigned(layout.page(0) - layout.records);
     for (const auto &bad : std::vector<std::pair<unsigned, uint8_t>>{
-            {4, 37}, {5, 0}, {6, 0}, {7, 1}, {app_offset + 34, 3}, {app_offset + 35, 2},
-            {page_offset, 12}, {page_offset + 1, 1}, {page_offset + 38, 4}}) {
+            {4u, uint8_t(37)}, {5u, uint8_t(0)}, {6u, uint8_t(0)}, {7u, uint8_t(1)}, {app_offset + 34, uint8_t(3)}, {app_offset + 35, uint8_t(2)},
+            {page_offset, uint8_t(12)}, {page_offset + 1, uint8_t(1)}, {page_offset + 38, uint8_t(4)}}) {
         auto corrupt = bytes; corrupt[offset + bad.first] = bad.second;
         cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
         cntrl::Document rejected; assert(!rejected.load(corrupt.data(), unsigned(corrupt.size()), hw));

@@ -118,7 +118,7 @@ void digitalWrite(uint8_t pin, uint8_t value) {
             if (!levels[chip_selects[i]]) selected |= 1u << i;
         }
         assert(selected);
-        byte = uint8_t((byte << 1) | levels[11]);
+        byte = uint8_t((byte << 1) | unsigned(levels[11]));
         if (++bits == 8) {
             for (unsigned i = 0; i < 3; ++i) if (selected & (1u << i)) {
                 transfers[i].back().bytes.push_back(byte);
@@ -279,7 +279,7 @@ int main() {
     assert(transactions == before);
     uint8_t stripe[32 * 256];
     for (unsigned i = 0; i < sizeof(stripe); ++i) stripe[i] = uint8_t(i);
-    unsigned previous = transfers[1].size();
+    auto previous = transfers[1].size();
     before = transactions;
     write_scroll_columns(1, 128, stripe, 32);
     const auto &batch = transfers[1];
@@ -372,7 +372,7 @@ int main() {
     // Splash output must restore landscape addressing and remove scroll offset.
     write_display_group(7, 0, 0, column, 1);
     for (const auto &panel : transfers) {
-        unsigned n = panel.size();
+        auto n = panel.size();
         assert((panel[n - 7].bytes == std::vector<uint8_t>{0xb1, 5, 60, 60}));
         assert((panel[n - 6].bytes == std::vector<uint8_t>{0x33, 0, 1, 0, 160, 0, 1}));
         assert((panel[n - 5].bytes == std::vector<uint8_t>{0x37, 0, 1}));

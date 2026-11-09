@@ -27,8 +27,10 @@ def test_slot_and_asset_commits_and_directory_listing(tmp_path: Path) -> None:
         check=True,
     )
     result = native_tests.run_native(
-        [str(program), str(card)], capture_output=True, text=True, check=True
+        [str(program), str(card)], capture_output=True, text=True, check=False
     )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (card / 'name café.bin').read_bytes() == b'test'
     lines = iter(
         [
             'CNTRL STORAGE 34359738368 32768000000 - 32768',

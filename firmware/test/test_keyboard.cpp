@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
     keyboard.poll(false, sink); keyboard.poll(true, sink);
     assert(sink.reports.back().keys[0] == 0 && sink.reports.back().modifiers == 0);
     cntrl::KeyboardShortcut full{};
-    for (unsigned i = 0; i < 6; ++i) full.keys[i] = 4 + i;
+    for (unsigned i = 0; i < 6; ++i) full.keys[i] = uint8_t(4 + i);
     assert(keyboard.press(0, full));
     assert(!keyboard.press(99, first));
     keyboard.poll(true, sink);

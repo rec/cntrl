@@ -284,14 +284,14 @@ int main(int argc, char **argv) {
         assert(brightness == 255u * (1000 - elapsed) * (1000 - elapsed) / 1000000);
         previous = brightness;
     }
-    assert(session.controls((1u << 2) | (1u << 5), 2003));
+    assert(session.controls(true, 2003));
     assert(session.controls(true, 2004));
     assert(session.controls(0, 2005));
     assert(!session.controls(0, 2006));
     unsigned before_fade = panels.rows;
     assert(session.poll(2502) && panels.rows > before_fade);
     for (unsigned target : {0u, 64u, 192u, 255u})
-        assert(session.brightness(target, 2502) == target / 4);
+        assert(session.brightness(uint8_t(target), 2502) == target / 4);
     // Normal musical actions resume after dismissal, not after the fade.
     if (!session.controls(true, 2503)) controller.button(2, true, 2503);
     assert(device.sent == 1);
@@ -361,11 +361,11 @@ int main(int argc, char **argv) {
     if (!session.controls(true, 62001)) controller.button(1, true, 62001);
     assert(device.sent == sent_before_wake);
     assert(!session.management_allowed());
-    assert(!session.controls(9, 62001) && !session.management_allowed());
-    assert(!session.controls(8, 62002) && !session.management_allowed());
+    assert(!session.controls(true, 62001) && !session.management_allowed());
+    assert(!session.controls(true, 62002) && !session.management_allowed());
     assert(!session.controls(0, 62002));
     assert(session.management_allowed());
-    assert(!session.controls(9, 62003) && session.management_allowed()); // Second A+D.
+    assert(!session.controls(true, 62003) && session.management_allowed()); // Second press.
     session.controls(0, 62004);
     assert(session.poll(62101) && session.brightness(192, 62101) == 48);
     assert(!session.poll(62201) && session.take_redraw());

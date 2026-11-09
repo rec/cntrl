@@ -92,7 +92,7 @@ public:
     uint8_t brightness(uint8_t target, uint32_t now) const {
         if (!first_image_ || pending_) return 0;
         uint32_t value = level(now);
-        return uint32_t(target) * value * value / 1000000;
+        return uint8_t(uint32_t(target) * value * value / 1000000);
     }
     bool take_redraw() {
         bool redraw = redraw_; redraw_ = false; return redraw;

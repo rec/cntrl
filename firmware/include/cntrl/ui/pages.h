@@ -86,7 +86,8 @@ public:
     bool browse(bool reverse) {
         if (page_ == Page::confirm_firmware) return !reverse;
         if (!layout_.pages()) return false;
-        for (unsigned i = 0; i < layout_.pages(); ++i) {
+        for (unsigned i = 0; i < layout_.pages();) {
+            ++i;
             index_ = (index_ + layout_.pages() + (reverse ? -1 : 1)) % layout_.pages();
             page_ = Page(layout_.page(index_)[0]);
 #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
@@ -189,7 +190,7 @@ public:
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
-        pane.graphics.foreground = 0; pane.graphics.pad = settings_[R::padding];
+        pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
         if (page_ == Page::confirm_firmware) {
             const unsigned height = title * 3 / 2;
@@ -263,9 +264,9 @@ public:
             return pane;
         }
         if (page_ == Page::keyboard) {
-            const auto shortcut = keyboard_shortcut();
+            const auto selected_shortcut = keyboard_shortcut();
             const unsigned font = settings_[R::status_font];
-            line(pane, 1, shortcut.name[0] ? shortcut.name : "No shortcuts", vertical(38), vertical(24), font, true);
+            line(pane, 1, selected_shortcut.name[0] ? selected_shortcut.name : "No shortcuts", vertical(38), vertical(24), font, true);
             line(pane, 2, shortcut_held ? "Held" : "Ready", vertical(66), vertical(20), font, true);
             line(pane, 3, prompt("%s/%s: Select", controls_.previous, controls_.next), vertical(91), vertical(16), font, true);
             line(pane, 4, prompt("Hold %s: Send", controls_.confirm), vertical(109), vertical(16), font, true);
@@ -315,9 +316,9 @@ public:
             line(pane, 1, number, pad + heading_height, settings_[R::tempo_height], settings_[R::tempo_font], false, sample);
             flashing_ = held_ || tap_.flash(now, settings_[R::flash_fraction]);
             pane.circles[0].diameter = settings_[R::diameter]; pane.circles[0].annulus = settings_[R::annulus];
-            pane.circles[0].x = viewport_.width / 2;
+            pane.circles[0].x = uint16_t(viewport_.width / 2);
             unsigned start = pad + heading_height + settings_[R::tempo_height];
-            pane.circles[0].y = (start + viewport_.height - pad) / 2;
+            pane.circles[0].y = uint16_t((start + viewport_.height - pad) / 2);
             pane.circles[0].color = settings_[flashing_ ? R::on_color : R::off_color];
             pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
@@ -340,7 +341,7 @@ public:
                     (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
             } else std::snprintf(rows[3], sizeof(rows[3]), "Disk:--/--G");
             uint64_t seconds = uptime_ / 1000;
-            unsigned disk_length = std::strlen(rows[3]);
+            auto disk_length = std::strlen(rows[3]);
             std::snprintf(rows[3] + disk_length, sizeof(rows[3]) - disk_length, " Up:%lu:%02u:%02u",
                 (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
             if (status.starts_status == StartsStatus::ready) {
@@ -433,7 +434,7 @@ private:
               unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 0, unsigned maximum_size = 96) {
         auto &l = pane.lines[index];
         std::snprintf(l.text, sizeof(l.text), "%s", text);
-        l.graphics = pane.graphics; l.graphics.font = face;
+        l.graphics = pane.graphics; l.graphics.font = uint8_t(face);
         int left = 0, top = 0, width = 0, ink_height = 0;
         const char *fitting = sample ? sample : l.text;
         if (!right_edge) right_edge = viewport_.width;
@@ -449,7 +450,7 @@ private:
             measure(fitting);
             const int available = std::max(0, int(right_edge - left_edge) - 2 * int(pane.graphics.pad));
             if ((width > available || ink_height > int(height)) && size > minimum_size) continue;
-            l.graphics.size = size; l.graphics.line_height = height; l.graphics.top = 0;
+            l.graphics.size = uint8_t(size); l.graphics.line_height = uint16_t(height); l.graphics.top = 0;
             if (!sample && width > available) {
                 unsigned n = unsigned(std::strlen(l.text));
                 while (n > 3 && width > available) {
@@ -457,8 +458,8 @@ private:
                 }
             }
             if (centered && sample) measure(l.text);
-            l.x = centered ? (int(left_edge + right_edge) - width) / 2 - left : sample ? int(right_edge - pane.graphics.pad) - width - left : left_edge + pane.graphics.pad;
-            l.y = int(y) + (int(height) - ink_height) / 2 - top;
+            l.x = uint16_t(centered ? (int(left_edge + right_edge) - width) / 2 - left : sample ? int(right_edge - pane.graphics.pad) - width - left : left_edge + pane.graphics.pad);
+            l.y = int16_t(int(y) + (int(height) - ink_height) / 2 - top);
             return;
         }
     }
