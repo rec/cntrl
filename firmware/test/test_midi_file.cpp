@@ -138,6 +138,64 @@ void test_playback_releases_held_sustain() {
     assert((sink.sent[0] == Bytes{0xb0,64,127,0x90,60,100,0x80,60,0,0xb0,64,0}));
 }
 
+void test_reverse_pedal_pairs_preserve_their_intervals() {
+    for (uint8_t cc = 64; cc <= 69; ++cc) {
+        auto source = smf({{0,0xb3,cc,0, 120,0xb3,cc,96, 120,0xb3,cc,0, 120,0xff,0x2f,0}});
+        File index; Sink sink; cntrl::midi::MidiFilePlayer player(source,index);
+        cntrl::midi::PlayMidiFilePatch settings; settings.reverse = true;
+        prepare(player,sink,settings); pump(player,sink,0);
+        assert(sink.sent[0].empty());
+        pump(player,sink,124999); assert(sink.sent[0].empty());
+        pump(player,sink,125000); assert((sink.sent[0] == Bytes{0xb3,cc,96}));
+        pump(player,sink,249999); assert(sink.sent[0].size() == 3);
+        pump(player,sink,250000); assert((sink.sent[0] == Bytes{0xb3,cc,96,0xb3,cc,0}));
+        pump(player,sink,375000);
+        assert((sink.sent[0] == Bytes{0xb3,cc,96,0xb3,cc,0,0xb3,cc,0}));
+        assert(player.status() == cntrl::midi::MidiFilePlayer::Status::complete);
+    }
+}
+
+void test_reverse_pedals_restore_previous_values_per_channel_across_tracks() {
+    auto source = smf({{0,0xb0,64,80, 120,0xb0,64,110, 120,0xb0,64,0, 0,0xff,0x2f,0},
+                       {0,0xb1,64,90, 120,0xb1,64,0, 120,0xb0,1,45, 0,0xff,0x2f,0}});
+    File index; Sink sink; cntrl::midi::MidiFilePlayer player(source,index);
+    cntrl::midi::PlayMidiFilePatch settings; settings.reverse = true;
+    prepare(player,sink,settings); pump(player,sink,0);
+    assert((sink.sent[0] == Bytes{0xb0,1,45,0xb0,64,110}));
+    pump(player,sink,125000);
+    assert((sink.sent[0] == Bytes{0xb0,1,45,0xb0,64,110,0xb1,64,90,0xb0,64,80}));
+    pump(player,sink,250000);
+    assert((sink.sent[0] == Bytes{0xb0,1,45,0xb0,64,110,0xb1,64,90,0xb0,64,80,0xb1,64,0,0xb0,64,0}));
+}
+
+void test_reverse_pedals_held_at_file_end_and_cancellation() {
+    for (uint8_t cc = 64; cc <= 69; ++cc) {
+        auto source = smf({{0,0xb0,cc,100, 120,0xff,0x2f,0}});
+        File index; Sink sink; cntrl::midi::MidiFilePlayer player(source,index);
+        cntrl::midi::PlayMidiFilePatch settings; settings.reverse = true; settings.loops = 2;
+        prepare(player,sink,settings); pump(player,sink,0);
+        assert((sink.sent[0] == Bytes{0xb0,cc,100}));
+        pump(player,sink,125000);
+        assert((sink.sent[0] == Bytes{0xb0,cc,100,0xb0,cc,0,0xb0,cc,100}));
+        player.cancel(); pump(player,sink,125000);
+        assert((sink.sent[0] == Bytes{0xb0,cc,100,0xb0,cc,0,0xb0,cc,100,0xb0,cc,0}));
+        prepare(player,sink,settings); pump(player,sink,0); pump(player,sink,125000); pump(player,sink,250000);
+        assert(player.status() == cntrl::midi::MidiFilePlayer::Status::complete);
+        assert(!player.cleaning());
+    }
+}
+
+void test_forward_pedal_values_are_unchanged_and_cancelled() {
+    for (uint8_t cc = 64; cc <= 69; ++cc) {
+        auto source = smf({{0,0xb0,cc,100, 120,0xb0,cc,0, 0,0xff,0x2f,0}});
+        File index; Sink sink; cntrl::midi::MidiFilePlayer player(source,index);
+        prepare(player,sink); pump(player,sink,0); pump(player,sink,125000);
+        assert((sink.sent[0] == Bytes{0xb0,cc,100,0xb0,cc,0}));
+        prepare(player,sink); pump(player,sink,0); player.cancel(); pump(player,sink,0);
+        assert((sink.sent[0] == Bytes{0xb0,cc,100,0xb0,cc,0,0xb0,cc,100,0xb0,cc,0}));
+    }
+}
+
 void test_recorded_system_messages_and_clock_are_preserved() {
     File source; cntrl::midi::MidiFileRecorder recorder(source);
     assert(recorder.start({},0));
@@ -192,6 +250,10 @@ void test_a_new_invocation_keeps_the_previous_delivery_result() {
 }
 
 int main() {
+    test_reverse_pedal_pairs_preserve_their_intervals();
+    test_reverse_pedals_restore_previous_values_per_channel_across_tracks();
+    test_reverse_pedals_held_at_file_end_and_cancellation();
+    test_forward_pedal_values_are_unchanged_and_cancelled();
     test_a_new_invocation_keeps_the_previous_delivery_result();
     test_recording_serializes_independent_input_sysex_streams();
     test_recorded_system_messages_and_clock_are_preserved();
