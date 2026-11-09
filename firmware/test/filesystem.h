@@ -8,7 +8,7 @@
 class TestFileSystem : public cntrl::files::FileSystem {
 public:
     explicit TestFileSystem(std::filesystem::path root) : root_(std::move(root)) {}
-    std::filesystem::path path(const char *name) const { return root_ / std::filesystem::path(name).relative_path(); }
+    std::filesystem::path path(const char *name) const { return root_ / std::filesystem::u8path(name).relative_path(); }
     bool exists(const char *name) override { return std::filesystem::exists(path(name)); }
     bool make_directory(const char *name) override {
         std::error_code error;
@@ -80,7 +80,7 @@ public:
     }
     bool next(char *name, unsigned capacity, bool &is_directory) override {
         while (cursor_ != std::filesystem::directory_iterator()) {
-            auto entry = *cursor_++; auto text = entry.path().filename().string();
+            auto entry = *cursor_++; auto text = entry.path().filename().u8string();
             if (text.size() + 1 > capacity) { failed_ = true; return false; }
             std::memcpy(name, text.c_str(), text.size() + 1);
             is_directory = entry.is_directory();

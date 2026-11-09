@@ -54,7 +54,7 @@ public:
             replies.reply("CNTRL SEND"); return true;
         }
         if (!std::strncmp(line, "CNTRL FONT DATA ", 16)) {
-            unsigned n = std::strlen(line + 16);
+            unsigned n = unsigned(std::strlen(line + 16));
             cntrl::UsbBlock block; if (!block.bytes) return error();
             auto *bytes = block.bytes;
             if (!writer_.opened() || !n || n % 2 || n > cntrl::usb_block_size * 2 || n / 2 > expected_ - received_) return error();

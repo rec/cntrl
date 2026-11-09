@@ -39,7 +39,7 @@ public:
     }
     void error(const char *message) {
         if (screens_.empty()) return;
-        const unsigned screen = screens_.size() / 2;
+        const unsigned screen = unsigned(screens_.size() / 2);
         Pane pane; pane.graphics = screens_[screen].requested.graphics;
         pane.graphics.font = 0; pane.graphics.size = 8; pane.graphics.asset = 0;
         pane.lines[0].graphics = pane.graphics;

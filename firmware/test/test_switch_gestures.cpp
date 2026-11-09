@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
     cntrl::Document rejected; assert(!rejected.load(bad.data(), unsigned(bad.size()), board));
     bad = bytes;
     for (unsigned flags = 0; flags < 4; ++flags) {
-        bad[document.metadata() + cntrl::scrolling_offset + 5] = flags;
+        bad[document.metadata() + cntrl::scrolling_offset + 5] = uint8_t(flags);
         cntrl::put32(bad.data() + 20, cntrl::checksum(bad.data() + 28, unsigned(bad.size()) - 28));
         assert(rejected.load(bad.data(), unsigned(bad.size()), board));
         assert(rejected.fast_switches() == bool(flags & 1));

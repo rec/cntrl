@@ -1,6 +1,7 @@
 #include "midi_endpoints.h"
 #include <cntrl/cable_test.h>
 #include <cassert>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -42,13 +43,13 @@ int main() {
     assert(test.status().inputs[1] == 0);
     assert(test.status().inputs[0] == 1);
     // Running status and interleaved MIDI clock use the shared parser.
-    for (uint8_t b : {2, 0xf8, 1}) test.receive(0, b, 120);
+    for (uint8_t b : std::initializer_list<uint8_t>{2, 0xf8, 1}) test.receive(0, b, 120);
     test.tick(369);
     assert(test.status().inputs[1] == -1 && test.status().inputs[0] == 1);
     test.tick(370); assert(test.status().inputs[0] == -1);
     receive(test, 0, 0xb0, 127, 371); // Never sent: no match.
     receive(test, 1, 0xb2, 1, 371); // Wrong channel.
-    for (uint8_t b : {0xb0, 3, 1}) test.receive(0, b, 371); // Wrong controller.
+    for (uint8_t b : std::initializer_list<uint8_t>{0xb0, 3, 1}) test.receive(0, b, 371); // Wrong controller.
     assert(test.status().inputs[0] == -1 && test.status().inputs[1] == -1);
     test.toggle(372);
     auto count = hw.messages.size(); test.tick(1000);

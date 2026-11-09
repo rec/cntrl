@@ -101,8 +101,8 @@ void test_bounded_async_packets() {
         bool pending = false, reject = true;
         unsigned calls = 0, x = 0, y = 0, length = 0;
         const uint8_t *bytes = nullptr;
-        bool begin(unsigned width, unsigned height, unsigned streams) override {
-            return width == 333 && height == 3 && streams == 1;
+        bool begin(unsigned columns, unsigned rows, unsigned streams) override {
+            return columns == 333 && rows == 3 && streams == 1;
         }
         bool ready() const override { return !pending; }
         bool pixels(unsigned stream, unsigned px, unsigned py, const uint8_t *data, unsigned count) override {
@@ -142,7 +142,7 @@ void test_player_color_cycle_matches_legacy_golden() {
         }
     } source;
     std::memcpy(source.bytes.data(), "CNSA", 4);
-    source.bytes[4] = 2; source.bytes[6] = uint8_t(pixels_per_stream); source.bytes[7] = pixels_per_stream >> 8;
+    source.bytes[4] = 2; source.bytes[6] = uint8_t(pixels_per_stream & 255); source.bytes[7] = pixels_per_stream >> 8;
     source.bytes[8] = 1; source.bytes[10] = 2; source.bytes[12] = 1; source.bytes[14] = 1;
     put32(source.bytes.data() + 16, source.size()); put32(source.bytes.data() + header_bytes, 1000);
     for (unsigned i = 0; i < pixels_per_stream * 2; ++i) {
@@ -237,7 +237,7 @@ int main() {
     put32(asset.data() + header_bytes, 100);
     // Distinct pre-oriented rows: firmware must not mirror/recolour them.
     for (unsigned row = 0; row < height * 2; ++row)
-        std::fill_n(asset.data() + header_bytes + 4 + row * row_bytes, row_bytes, row & 1 ? 23 : 17);
+        std::fill_n(asset.data() + header_bytes + 4 + row * row_bytes, row_bytes, uint8_t(row & 1 ? 23 : 17));
     uint32_t crc = ~crc_update(0xffffffff, asset.data(), unsigned(asset.size()));
     Memory memory;
     Responses replies;

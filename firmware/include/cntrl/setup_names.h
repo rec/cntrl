@@ -12,7 +12,7 @@ inline int name_compare(const char *a, const char *b) {
     }
 }
 inline bool setup_name(const char *name) {
-    unsigned n = std::strlen(name);
+    auto n = std::strlen(name);
     if (!n || n > 63 || name[n - 1] == ' ' || name[n - 1] == '.') return false;
     for (unsigned i = 0; i < n; ++i)
         if (uint8_t(name[i]) < 32 || uint8_t(name[i]) > 126 || std::strchr("<>:\"/\\|?*", name[i])) return false;
@@ -24,7 +24,7 @@ inline void hex_text(const char *text, char *hex) {
     *hex = 0;
 }
 inline bool unhex_name(const char *hex, char *name) {
-    unsigned n = std::strlen(hex);
+    auto n = std::strlen(hex);
     if (!n || n > 126 || n % 2) return false;
     for (unsigned i = 0; i < n; i += 2) {
         unsigned value = 0;

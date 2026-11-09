@@ -18,7 +18,7 @@ int main() {
         SwitchGesture<50> gesture;
         gesture.update(0, 0);
         for (uint32_t t = 1; t < 81; ++t) {
-            auto result = gesture.update(t < 51 ? first : 3, t);
+            auto result = gesture.update(uint8_t(t < 51 ? first : 3), t);
             assert(result.activate == (t == 66));
             if (t < 66) assert(!result.pressed);
         }

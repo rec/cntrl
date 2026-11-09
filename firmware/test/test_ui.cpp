@@ -92,7 +92,7 @@ static void portable_font_bearings_and_character_advances() {
     for (unsigned i = 0; i < 2; ++i) {
         cntrl::put32(data + i * 16, 65 + i); data[i * 16 + 4] = 2; data[i * 16 + 6] = 2; data[i * 16 + 10] = 2;
         cntrl::put32(data + i * 16 + 12, i * 2);
-        cntrl::put32(data + 32 + i * 8, 65 + i); data[32 + i * 8 + 4] = i; data[32 + i * 8 + 6] = 3;
+        cntrl::put32(data + 32 + i * 8, 65 + i); data[32 + i * 8 + 4] = uint8_t(i); data[32 + i * 8 + 6] = 3;
         data[48 + i * 2] = 0x80; data[49 + i * 2] = 0xc0;
     }
     font_assets::Entry descriptor; std::memcpy(descriptor.bytes, entry, 23);
@@ -133,12 +133,12 @@ static void distinct_geometries_and_reserved_windows() {
     Fonts fonts; MixedDisplay display;
     uint16_t work[231] = {}, cache[675] = {}, previous[675] = {};
     cntrl::ui::Renderer renderer(display, fonts, work, 231, cache, previous, 675);
-    for (unsigned i = 0; i < 5; ++i) { cntrl::Pane pane; pane.graphics.background = i + 1; renderer.show(i, pane); }
+    for (unsigned i = 0; i < 5; ++i) { cntrl::Pane pane; pane.graphics.background = uint16_t(i + 1); renderer.show(i, pane); }
     for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
     assert(renderer.ready());
     for (unsigned screen = 0; screen < 5; ++screen) for (auto pixel : display.pixels[screen]) assert(pixel == screen + 1);
     renderer.transition(false, 10, -1, 2, true, false);
-    for (unsigned i = 0; i < 3; ++i) { cntrl::Pane pane; pane.graphics.background = i + 11; renderer.show(i, pane); }
+    for (unsigned i = 0; i < 3; ++i) { cntrl::Pane pane; pane.graphics.background = uint16_t(i + 11); renderer.show(i, pane); }
     for (unsigned i = 0; i < 3000; ++i) renderer.draw(i * 1000);
     assert(renderer.ready());
     for (unsigned screen = 0; screen < 5; ++screen) for (auto pixel : display.pixels[screen]) assert(pixel == screen + (screen < 3 ? 11 : 1));
@@ -246,7 +246,7 @@ int main() {
     assert(view.lines[0].y == 0 && view.lines[0].graphics.top > 0);
     renderer.show(0, view);
     for (unsigned i = 0; i < 300; ++i) { renderer.draw(i * 1000); display.complete(); }
-    const unsigned title_x = (24 - std::strlen(view.lines[0].text) * 2) / 2;
+    const auto title_x = (24 - std::strlen(view.lines[0].text) * 2) / 2;
     assert(display.pixels[view.lines[0].graphics.top * 24 + title_x] == 0xffff);
     pages.viewport({200, 128, 0, 0});
     uint8_t layout[8 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 1, 0};

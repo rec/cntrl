@@ -52,6 +52,13 @@ def compile_native(
         objects = output.parent / (output.stem + '-objects')
         objects.mkdir(exist_ok=True)
         command.extend([f'/Fe{output}', f'/Fo{objects}{os.sep}'])
+        command.extend(
+            [
+                '/link',
+                '/MANIFEST:EMBED',
+                f'/MANIFESTINPUT:{Path(__file__).with_name("windows-native.manifest")}',
+            ]
+        )
     else:
         command = [os.environ.get('CXX', arguments[0]), *arguments[1:]]
         command[output_index] = str(output)

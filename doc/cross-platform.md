@@ -64,6 +64,11 @@ without sanitizer flags. Shared transfer tests use binary subprocess peers with
 the production C++ receivers. A POSIX tty test checks actual 134-baud line coding;
 a backend test checks the request and device identity on every OS.
 
+Windows native test executables declare UTF-8 process encoding and long-path
+support. Enable Win32 long paths on development hosts to exercise the same
+255-character filename tests as the hosted runner. Filesystem bindings explicitly
+convert protocol names to and from UTF-8.
+
 Hosted CI cannot establish physical USB discovery, reconnects, reboot/upload or
 MIDI behavior. These remain unverified on Windows and Linux until tested with
 the device. SDK and uploader instructions belong with the implementation.

@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     std::array<uint8_t, 208> record{};
     for (unsigned revision : {1, 2, 4}) {
         storage.choose_revision("example", revision);
-        assert(storage.begin(0)); assert(storage.write(record.data(), record.size())); assert(storage.finish());
+        assert(storage.begin(0)); assert(storage.write(record.data(), unsigned(record.size()))); assert(storage.finish());
         assert(!storage.begin(0)); // Existing history is immutable.
     }
     uint64_t best = 0;

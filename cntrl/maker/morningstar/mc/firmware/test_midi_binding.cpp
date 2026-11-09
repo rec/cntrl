@@ -65,7 +65,7 @@ int main() {
     for (unsigned i = 9; i < sizeof(expanded); i += expanded[i]) {
         if (expanded[i + 1] != 0x25) continue;
         const unsigned count = expanded[i + 3];
-        assert(count == (endpoints_seen ? 3 : 7));
+        assert(count == (endpoints_seen ? 3u : 7u));
         assert(expanded[i + 4 + count - 1] == (endpoints_seen ? 19 : 17));
         ++endpoints_seen;
     }

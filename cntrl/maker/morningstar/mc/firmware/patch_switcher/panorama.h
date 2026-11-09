@@ -9,6 +9,7 @@ constexpr unsigned display_ram_columns = 162;
 struct alignas(32) DisplayBand {
     uint8_t pixels[8 * 128 * 2];
     unsigned panel, column, columns, first, count;
+    uint8_t padding[12]; // Keep each DMA band on a complete 32-byte cache line.
 };
 DisplayBand *acquire_display_band();
 void queue_display_band(DisplayBand &band);

@@ -12,7 +12,7 @@ public:
         if (patch < 0 || held_buttons || !period_ms) { patch_ = -1; return normal; }
         if (patch != patch_) { patch_ = patch; started_ = now; waiting_ = true; }
         if (waiting_) {
-            if (uint32_t(now - started_) < delay_ms) return maximum;
+            if (uint32_t(now - started_) < delay_ms) return uint8_t(maximum);
             started_ += delay_ms; waiting_ = false;
         }
         uint32_t elapsed = now - started_;
@@ -23,7 +23,7 @@ public:
         // Smoothstep 3t^2 - 2t^3 has zero slope at both ends of each half-cycle.
         // Q10 arithmetic keeps every intermediate within 32 bits.
         const uint32_t eased = t * t * (3 * precision - 2 * t) / (precision * precision);
-        return maximum - ((maximum - minimum) * eased + precision / 2) / precision;
+        return uint8_t(maximum - ((maximum - minimum) * eased + precision / 2) / precision);
     }
 private:
     uint32_t minimum = 0, maximum = 0;

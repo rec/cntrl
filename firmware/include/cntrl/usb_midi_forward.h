@@ -55,8 +55,8 @@ inline unsigned append_usb_midi_port(const uint8_t *source, unsigned length,
         i += size;
     }
     if (midi == length || maximum_jack > 251) return 0;
-    const uint8_t a = maximum_jack + 1, b = maximum_jack + 2,
-                  c = maximum_jack + 3, d = maximum_jack + 4;
+    const uint8_t a = uint8_t(maximum_jack + 1), b = uint8_t(maximum_jack + 2),
+                  c = uint8_t(maximum_jack + 3), d = uint8_t(maximum_jack + 4);
     const uint8_t jacks[] = {
         6, 0x24, 2, 1, a, string_index,
         6, 0x24, 2, 2, b, string_index,
@@ -83,17 +83,17 @@ inline unsigned append_usb_midi_port(const uint8_t *source, unsigned length,
         std::memcpy(target + used, source + i, size);
         if (streaming && source[i + 1] == 0x24 && size == 7 && source[i + 2] == 1) {
             unsigned total = source[i + 5] | unsigned(source[i + 6]) << 8;
-            total += sizeof(jacks); target[used + 5] = total; target[used + 6] = total >> 8;
+            total += sizeof(jacks); target[used + 5] = uint8_t(total); target[used + 6] = uint8_t(total >> 8);
         }
         if (streaming && source[i + 1] == 0x25) {
             if (size < 4 || source[i + 2] != 1 || source[i + 3] != size - 4 || source[i + 3] >= 16) return 0;
-            target[used] = size + 1; ++target[used + 3];
+            target[used] = uint8_t(size + 1); ++target[used + 3];
             target[used + size] = input ? c : a; ++used; ++associations;
         }
         used += size; i += size;
     }
     if (!inserted || associations != 2 || used != length + 32) return 0;
-    target[2] = used; target[3] = used >> 8;
+    target[2] = uint8_t(used); target[3] = uint8_t(used >> 8);
     return used;
 }
 } // namespace cntrl::midi

@@ -48,8 +48,8 @@ struct SongStorage : TestStorage {
     unsigned io_bytes = 0;
     unsigned finishes = 0;
     bool finish() override { ++finishes; return TestStorage::finish(); }
-    bool read(unsigned slot, unsigned offset, uint8_t *data, unsigned n) override {
-        assert(n <= 256); io_bytes += n; if (fail_reads) return false; return TestStorage::read(slot, offset, data, n);
+    bool read(unsigned index, unsigned offset, uint8_t *data, unsigned n) override {
+        assert(n <= 256); io_bytes += n; if (fail_reads) return false; return TestStorage::read(index, offset, data, n);
     }
     bool write(const uint8_t *data, unsigned n) override {
         assert(n <= 256); io_bytes += n; return TestStorage::write(data, n);
