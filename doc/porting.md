@@ -25,6 +25,11 @@ source checkout and can be supplied to the public build command when building
 against a different checkout. The implementation must use that source root for
 shared includes and sources, rather than a sibling-path convention.
 
+`cntrl build` creates `tmp/` inside the output directory and sets `TMPDIR`, `TMP`,
+and `TEMP` to that directory for the implementation and its child tools. Build
+scratch files stay with the generated output; the calling process's environment
+is unchanged.
+
 The implementation performs its own compilation and exports:
 
 | Artifact | Purpose |

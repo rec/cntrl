@@ -24,9 +24,14 @@ class Artifacts(BaseModel, frozen=True):
 
 def run(command: Build) -> Artifacts:
     output = command.output.resolve()
+    temporary = output / 'tmp'
+    temporary.mkdir(parents=True, exist_ok=True)
     executable = command.target_dir.resolve() / 'build'
     environment = dict(
         os.environ,
+        TMPDIR=str(temporary),
+        TMP=str(temporary),
+        TEMP=str(temporary),
         CNTRL_PYTHON=sys.executable,
         PYTHONPATH=str(command.source_root.resolve())
         + (
