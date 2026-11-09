@@ -18,6 +18,7 @@ from . import (
     midi_messages,
     models,
     page_settings,
+    relay_outputs,
 )
 
 
@@ -546,6 +547,7 @@ def compile_show(
         expression = page_settings.pack_expression(show, target, jacks)
         keyboard = page_settings.pack_keyboard(show, target)
         page_layout = layout.pack(show.pages, [d.id for d in target.displays])
+        relay_settings = relay_outputs.pack(show, target)
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
     if generated:
@@ -666,6 +668,7 @@ def compile_show(
         + movie_records
         + midi_endpoints.pack(target)
         + inputs.pack(target)
+        + relay_settings
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -835,7 +838,13 @@ class PatchCompiler:
         ):
             default_label = 'state'
         elif isinstance(
-            value, (models.StockFirmware, models.PlayMidiFile, models.RecordMidiFile)
+            value,
+            (
+                models.StockFirmware,
+                models.PlayMidiFile,
+                models.RecordMidiFile,
+                models.Relay,
+            ),
         ):
             default_label = value.operation
         else:
@@ -852,7 +861,19 @@ class PatchCompiler:
             self.children[index] = [child]
             return index
         flags = 0
-        if isinstance(value, models.Delay):
+        if isinstance(value, models.Relay):
+            if value.relay not in self.target.relay_outputs:
+                self.errors.append(f'{path}.relay: unsupported contact {value.relay!r}')
+            kind, payload = (
+                11,
+                struct.pack(
+                    '<32sBI',
+                    _text(value.relay, 32, self.target, path + '.relay', self.errors),
+                    relay_outputs.ACTIONS.index(value.action),
+                    round((value.duration or 0) * 1000),
+                ),
+            )
+        elif isinstance(value, models.Delay):
             kind, payload = 7, struct.pack('<I', round(value.duration * 1000))
         elif isinstance(value, models.PlayMidiFile):
             outputs = (

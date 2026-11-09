@@ -25,22 +25,6 @@ instead of hard-coded knowledge of particular instruments or effects.
 Dependencies below identify prerequisites, not a requirement to implement the
 entire plan. An item is complete only when its acceptance criteria are met.
 
-## 4. Relay outputs
-
-**Outcome:** Patches can switch amplifier channels or send analog tap-tempo
-pulses through relay contacts.
-
-**Scope:** Add explicit engage, disengage, toggle and timed-pulse operations,
-including independently supported contacts and configured resting states. Keep
-pulse timing nonblocking. Specify power-up, setup-exit and cancellation
-behavior.
-
-**Dependencies:** None; requires a target with supported relay hardware.
-
-**Acceptance:** Contact states and pulse durations match configuration; a
-blocked MIDI output cannot prevent a pulse from ending. Verify electrical
-behavior and document connection limits for each target.
-
 ## 5. USB host and hub support
 
 **Outcome:** Connect multiple USB MIDI instruments or controllers through a USB
@@ -175,7 +159,7 @@ new physical inputs.
 Next implement waveforms and timed sequences (items 11 and 12).
 Routing and conversion (6 and 7) form a separate increment.
 
-Hardware-dependent work (items 4 and 5) should follow available test
+USB host and hub work (item 5) should follow available test
 hardware and actual connection needs. The graphical editor (16) can begin
 against the current schema without waiting for the other items.
 

@@ -155,6 +155,9 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 11:
+            if (!hardware_.relays.execute(reinterpret_cast<const char *>(p), p[32], u32(p + 33), now)) { fail("Relay operation failed"); return; }
+            started_ = true; complete_leaf(); return;
         case 10: {
             const auto &frame = frames_[depth_ - 1];
             auto delivery = outputs_.bind_controls(*frame.document, frame.node, *this);

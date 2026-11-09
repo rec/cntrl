@@ -68,6 +68,7 @@ public:
         services.blank_performance(); if (layout.controllers()) at(visible_index).refresh(); processing_index = previous;
     }
     void tick(uint32_t now) {
+        if (!hardware_.relays.tick(now)) hardware_.error("Relay pulse restore failed");
         for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) { processing_index = i; at(i).tick(now); }
         processing_index = PageLayout::max_controllers;
         if (next_song_patch_ && !patch_pending()) {

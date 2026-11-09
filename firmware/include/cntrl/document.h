@@ -230,6 +230,19 @@ public:
             if (index != inputs) return false;
         }
         names += 6 + inputs * 32;
+        unsigned relay_count = 0;
+        const uint8_t *relay_records = nullptr;
+        if (names + 4 <= length && !std::memcmp(bytes + names, "CREL", 4)) {
+            if (names + 6 > length) return false;
+            relay_count = u16(bytes + names + 4); relay_records = bytes + names + 6;
+            if (!relay_count || relay_count > 32 || relay_count > (length - names - 6) / 33) return false;
+            for (unsigned i = 0; i < relay_count; ++i) {
+                const uint8_t *p = relay_records + i * 33;
+                if (!p[0] || !text_valid(p, 32) || p[32] > 1 || !hardware.supports_relay(reinterpret_cast<const char *>(p))) return false;
+                for (unsigned j = 0; j < i; ++j) if (!std::strcmp(reinterpret_cast<const char *>(p), reinterpret_cast<const char *>(relay_records + j * 33))) return false;
+            }
+            names += 6 + relay_count * 33;
+        }
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -240,7 +253,7 @@ public:
             end += size;
         }
         unsigned graph = end;
-        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs)) return false;
+        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count)) return false;
         unsigned switch_count = u16(bytes + graph + 10);
         unsigned switch_start = graph + 16 + u16(bytes + graph + 8) * 4 + np * 2;
         if (has_hooks) {
@@ -397,6 +410,9 @@ public:
     }
     unsigned inputs() const { return u16(input_section() + 4); }
     const char *input_label(unsigned index) const { return reinterpret_cast<const char *>(input_section() + 6 + 32 * index); }
+    const uint8_t *relay_section() const { return input_section() + 6 + inputs() * 32; }
+    unsigned relay_count() const { return !std::memcmp(relay_section(), "CREL", 4) ? u16(relay_section() + 4) : 0; }
+    const uint8_t *relay_records() const { return relay_section() + 6; }
     unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
     uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 10); }
     uint8_t brightness() const { return data_[18]; }
@@ -451,7 +467,7 @@ public:
     unsigned page_section_size() const {
         const uint8_t *endpoints = movie_section() + 8 + 4 * (movies(false) + movies(true));
         const uint8_t *inputs = endpoints + 6 + 68 * u16(endpoints + 4);
-        return unsigned(inputs - bank(patches())) + 6 + 32 * u16(inputs + 4);
+        return unsigned(inputs - bank(patches())) + 6 + 32 * u16(inputs + 4) + (relay_count() ? 6 + relay_count() * 33 : 0);
     }
     const uint8_t *movie_section() const {
         const auto layout = page_layout();
@@ -539,7 +555,8 @@ private:
 #endif
     static bool graph_valid(const uint8_t *bytes, unsigned length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,
-                            unsigned mappings, const Hardware &hardware, unsigned output_routes, unsigned input_routes, unsigned input_count) {
+                            unsigned mappings, const Hardware &hardware, unsigned output_routes, unsigned input_routes, unsigned input_count,
+                            const uint8_t *relay_records, unsigned relay_count) {
         if (start > length || length - start < 16 || std::memcmp(bytes + start, "CPAT", 4)) return false;
         const uint8_t *g = bytes + start;
         unsigned size = u32(g + 4), count = u16(g + 8), switches = u16(g + 10), named = u16(g + 14);
@@ -647,6 +664,13 @@ private:
                     if (u16(s + 97) != 65535 && (s[1] ? u16(s + 99) == 65535 : u16(s + 99) != 65535)) return false;
                     if (!gestures_valid(s + 101, count, u16(s + 97) != 65535 && !s[1])) return false;
                 }
+                break;
+            }
+            case 11: {
+                if (n[1] || length != 37 || !text_valid(p, 32) || p[32] > 3 || (p[32] == 3 ? !u32(p + 33) || u32(p + 33) > 65535 : u32(p + 33) != 0)) return false;
+                bool found = false;
+                for (unsigned j = 0; j < relay_count; ++j) if (!std::strcmp(reinterpret_cast<const char *>(p), reinterpret_cast<const char *>(relay_records + j * 33))) found = true;
+                if (!found) return false;
                 break;
             }
             case 7:
