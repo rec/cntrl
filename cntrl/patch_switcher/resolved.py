@@ -7,6 +7,7 @@ from zlib import crc32
 import tomlkit
 
 from . import (
+    counters,
     inputs,
     layout,
     midi_endpoints,
@@ -88,6 +89,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     labels = inputs.unpack(data, cursor)
     cursor += inputs.HEADER.size + len(labels) * inputs.RECORD.size
     cursor = relay_outputs.section_end(data, cursor)
+    cursor = counters.section_end(data, cursor)
     cursor = midi_processing.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
@@ -210,6 +212,11 @@ def export(data: bytes) -> str:
     relay_offset = input_offset + inputs.HEADER.size + len(labels) * inputs.RECORD.size
     if relays := relay_outputs.unpack(data, relay_offset):
         result['relays'] = relays
+    counter_offset = relay_outputs.section_end(data, relay_offset)
+    if definitions := counters.unpack(data, counter_offset):
+        result['counters'] = {
+            k: v.model_dump(exclude_none=True) for k, v in definitions.items()
+        }
     instruments: dict[str, object] = {}
     profiles: list[dict[str, object]] = []
     for i in range(ni):
@@ -436,7 +443,21 @@ def _patch(
         # Export the actual program when an edit changes its catalogue identity
         # or clears an inherited setting (TOML has no null override).
     value = {k: v for k, v in properties.items() if not k.startswith('_')}
-    if kind == 1:
+    if kind == 14:
+        counter, backward = struct.unpack_from('<HB', data, cursor)
+        input_offset = _sections(data)[2]
+        relay_offset = (
+            input_offset + inputs.HEADER.size + len(labels) * inputs.RECORD.size
+        )
+        names = list(
+            counters.unpack(data, relay_outputs.section_end(data, relay_offset))
+        )
+        value.update(
+            operation='scroll-counter',
+            counter=names[counter],
+            direction='backward' if backward else 'forward',
+        )
+    elif kind == 1:
         instrument, program, msb, lsb, volume, pan, bank = struct.unpack_from(
             '<HBBBBBI', data, cursor
         )
@@ -521,11 +542,13 @@ def _patch(
             transpose=transpose,
         )
     elif kind == 9:
-        channels, inputs = struct.unpack_from('<HH', data, cursor)
+        channels, input_mask = struct.unpack_from('<HH', data, cursor)
         value.update(
             operation='record-midi-file',
             channels=[i + 1 for i in range(16) if channels & (1 << i)],
-            inputs=[e.name for e in endpoint_records(data) if inputs & (1 << e.route)],
+            inputs=[
+                e.name for e in endpoint_records(data) if input_mask & (1 << e.route)
+            ],
         )
     elif kind == 10:
         entry = _patch(

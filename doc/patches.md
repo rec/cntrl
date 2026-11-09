@@ -602,3 +602,9 @@ and song libraries preserve delay durations in seconds using the short form.
 
 The `play-midi-file` and `record-midi-file` operations are patches. See
 [MIDI file patches](midi-files.md) for fields, timing, recording names and examples.
+
+## MIDI PC/CC scroll counters
+
+`scroll-counter` actions share named PC or CC values across assignments, with
+configurable steps, wrap or bounce boundaries, and live display fields. See
+[MIDI counters](counters.md) for configuration and delivery behavior.

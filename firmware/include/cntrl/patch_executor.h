@@ -160,6 +160,22 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 14: {
+            const auto &document = *frames_[depth_ - 1].document;
+            const uint8_t *definition = document.counter(u16(p));
+            output = reinterpret_cast<const char *>(definition + 64);
+            if (!outputs_.available(output)) { fail("MIDI output unavailable"); return; }
+            auto &state = hardware_.counters.state(u32(document.data() + 20), u16(p), definition[98]);
+            auto step = Counters::next(state, definition, p[2]);
+            program_[0] = definition[96];
+            length = definition[96] >> 4 == 12 ? 2 : 3;
+            program_[1] = length == 2 ? step.value : definition[97]; program_[2] = step.value;
+            if (outputs_.send_patch(owner_, output, program_, length)) {
+                hardware_.counters.accepted(state, step);
+                waiting_ = started_ = true; waiting_output_ = output;
+            }
+            return;
+        }
         case 13:
             if (!outputs_.gate_midi_stream(reinterpret_cast<const char *>(p), p[72])) {
                 fail("Cannot change MIDI stream gate"); return;
@@ -402,6 +418,11 @@ private:
                 if ((control == 6 || control == 38 || control >= 96) && status >> 4 == 11) state_complete_ = false;
                 if (!resource(output, status & 15, control, expected)) return false;
             }
+        } else if (node[0] == 14) {
+            const uint8_t *definition = document.counter(u16(p));
+            state_complete_ = false;
+            return resource(reinterpret_cast<const char *>(definition + 64), definition[96] & 15,
+                definition[96] >> 4 == 12 ? 128 : definition[97]);
         } else if (node[0] == 8) {
             state_complete_ = false;
             unsigned mask = u16(p + 96);

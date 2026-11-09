@@ -100,6 +100,7 @@ public:
         cancel_gesture();
         document_ = document;
         if (configure) {
+            hardware_.counters.reset();
             hardware_.configure_midi_streams(document);
             if (!hardware_.relays.configure(document.relay_records(), document.relay_count())) hardware_.error("Relay setup failed");
             hardware_.configure_trs_ports(document.trs_modes());
@@ -166,6 +167,9 @@ public:
         }
         finish_execution();
         if (!document_.valid()) return;
+        if (counter_revision_ != hardware_.counters.revision()) {
+            counter_revision_ = hardware_.counters.revision(); render();
+        }
         for (unsigned i = 0; i < 2; ++i) {
             unsigned button = i ? 4 : 1;
             unsigned delay = repeating_[i] ? document_.navigation_repeat_ms() : document_.navigation_hold_ms();
@@ -223,6 +227,7 @@ public:
         for (auto &p : last_sent_) p = -1;
     }
 private:
+    unsigned counter_revision_ = 0;
     void scroll(unsigned action, bool reverse, int pane = -1) {
         const unsigned direction = document_.scroll_direction(action);
         hardware_.transition(reverse != bool(direction & 1), document_.scroll_ms(direction >= 2), pane, direction >= 2, direction == 0);
@@ -326,7 +331,7 @@ private:
             view.three_bands = true;
             const bool sent = already_sent(unsigned(index));
             view.pending_patch = slot == 0 && !sent ? index : -1;
-            document_.page(view, unsigned(index), slot, slot == 0 && sent);
+            document_.page(view, unsigned(index), slot, slot == 0 && sent, &hardware_.counters);
             if (view.lines[0].text[0]) {
                 view.heading_band = true;
                 auto &heading = view.lines[0].graphics;

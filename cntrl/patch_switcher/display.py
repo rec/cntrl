@@ -43,7 +43,8 @@ def compile_display(
     )
     generated_styles = formatting.cycle_styles(show, cycles, target)
     named_fields = {k for p in patches for k in p.values if k.startswith('names.')}
-    overlap = set(show.parameters) & (set(FIELDS) | named_fields)
+    counter_fields = {f'counters.{n}' for n in show.counters}
+    overlap = set(show.parameters) & (set(FIELDS) | named_fields | counter_fields)
     if overlap:
         raise ValueError(f'duplicate field definitions: {sorted(overlap)}')
     for name, page in show.patch_views.items():
@@ -51,7 +52,13 @@ def compile_display(
             raise ValueError(
                 f'patch_views.{name}: at most {MAX_LINES} fields are supported'
             )
-        unknown = set(page.fields) - set(FIELDS) - named_fields - set(show.parameters)
+        unknown = (
+            set(page.fields)
+            - set(FIELDS)
+            - named_fields
+            - set(show.parameters)
+            - counter_fields
+        )
         if unknown:
             raise ValueError(f'patch_views.{name}: unknown fields {sorted(unknown)}')
     windows = [getattr(show.windows, n) for n in WINDOW_NAMES]
@@ -70,6 +77,8 @@ def compile_display(
         raise ValueError('\n'.join(errors))
     base = show.style
     requests: list[tuple[int, str, models.Style, int, int, int]] = []
+    counter_names: dict[int, str] = {}
+    counter_texts: dict[int, list[str]] = {}
     instances: list[list[int]] = []
     contexts: list[str] = []
     paired_lines: list[list[int]] = []
@@ -91,6 +100,7 @@ def compile_display(
                 or any(
                     not n.startswith('switch.')
                     and n not in show.parameters
+                    and n not in counter_fields
                     and FIELDS.get(n) not in range(16, 22)
                     for n in page.fields
                 )
@@ -108,9 +118,11 @@ def compile_display(
             lines: list[int] = []
             for name in page.fields:
                 parameter = show.parameters.get(name)
-                code = FIELDS.get(name, CONSTANT)
+                code = 24 if name in counter_fields else FIELDS.get(name, CONSTANT)
                 value = (
-                    parameter.value
+                    show.counters[name[9:]].initial
+                    if code == 24
+                    else parameter.value
                     if parameter
                     else ', '.join(patch.effective_tags)
                     if name == 'tags'
@@ -150,6 +162,12 @@ def compile_display(
                 )
                 contexts.append(f'{patch.context}, field {name}')
                 lines.append(len(requests))
+                if code == 24:
+                    counter_names[len(requests)] = name[9:]
+                    counter = show.counters[name[9:]]
+                    counter_texts[len(requests)] = [
+                        str(i) for i in range(counter.minimum, counter.maximum + 1)
+                    ]
                 requests.append(
                     (
                         code,
@@ -179,9 +197,15 @@ def compile_display(
     target = prepared.target
     choices = [
         graphics.font_choice(
-            name, list(SWITCH_STATES) if c == 22 else [t], target, p, n
+            name,
+            counter_texts.get(i, list(SWITCH_STATES) if c == 22 else [t]),
+            target,
+            p,
+            n,
         )
-        for name, (c, t, s, p, n, _) in zip(prepared.names, requests, strict=True)
+        for i, (name, (c, t, s, p, n, _)) in enumerate(
+            zip(prepared.names, requests, strict=True)
+        )
     ]
     for indexes in paired_lines:
         limit = min(choices[i][1] for i in indexes)
@@ -210,8 +234,8 @@ def compile_display(
     styles: list[bytes] = []
     records: list[bytes] = []
     texts: list[bytes] = []
-    for (code, text, style, pad, _count, stipple), (face, size) in zip(
-        requests, choices, strict=True
+    for index, ((code, text, style, pad, _count, stipple), (face, size)) in enumerate(
+        zip(requests, choices, strict=True)
     ):
         metrics = face.sizes[size]
         fg, bg = graphics.colors(style, show.contrast)
@@ -223,7 +247,7 @@ def compile_display(
             styles.append(packed)
         left, width = graphics.bounds(text, metrics)
         x = pad + (target.display_width - 2 * pad - width) // 2 - left
-        encoded = text.encode('utf-8') + b'\0'
+        encoded = counter_names.get(index, text).encode('utf-8') + b'\0'
         if encoded not in texts:
             texts.append(encoded)
         records.append(
@@ -368,7 +392,7 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
 
 MAX_LINES = 16
 CONSTANT = 255
-DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22, 23)
+DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22, 23, 24)
 WINDOW_NAMES = ('next', 'sent', 'undo')
 LINE = struct.Struct('<BBHHH')
 HEADER = struct.Struct('<4sHHHHI')
