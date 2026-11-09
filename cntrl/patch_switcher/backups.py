@@ -51,12 +51,12 @@ def backup_pedal(directory: Path, port: Path) -> None:
         client = transport.SetupClient(connection)
         selected = client.current()
         entries = client.catalogue()
-        (directory / 'selected.txt').write_text(selected)
-        (directory / 'catalogue.txt').write_text(
-            '\n'.join(f'{e.name} {e.valid}' for e in entries)
+        (directory / 'selected.txt').write_bytes(selected.encode())
+        (directory / 'catalogue.txt').write_bytes(
+            '\n'.join(f'{e.name} {e.valid}' for e in entries).encode()
         )
         status = client.request('CNTRL STATUS')
-        (directory / 'status.txt').write_text(status)
+        (directory / 'status.txt').write_bytes(status.encode())
         fonts: set[int] = set()
         movies: set[int] = set()
         snapshots: list[dict[str, object]] = []
@@ -65,7 +65,7 @@ def backup_pedal(directory: Path, port: Path) -> None:
                 data = client.download(entry.name)
                 (setups / f'{entry.name}.bin').write_bytes(data)
                 text = resolved.export(data)
-                (setups / f'{entry.name}.toml').write_text(text)
+                (setups / f'{entry.name}.toml').write_bytes(text.encode())
                 backup_assets(client, data, setups, fonts, movies)
                 print(f'Saved {entry.name}: {len(data)} bytes', flush=True)
             else:
@@ -88,19 +88,21 @@ def backup_pedal(directory: Path, port: Path) -> None:
                         'version': version,
                     }
                 )
-                (directory / 'history.toml').write_text(
-                    tomlkit.dumps({'revisions': snapshots})
+                (directory / 'history.toml').write_bytes(
+                    tomlkit.dumps({'revisions': snapshots}).encode()
                 )
                 if version == compiler.DOCUMENT_VERSION:
-                    (folder / f'{revision.number}.toml').write_text(
-                        resolved.export(data)
+                    (folder / f'{revision.number}.toml').write_bytes(
+                        resolved.export(data).encode()
                     )
                     backup_assets(client, data, setups, fonts, movies)
                 print(
                     f'Saved {entry.name} revision {revision.number}: {len(data)} bytes',
                     flush=True,
                 )
-        (directory / 'history.toml').write_text(tomlkit.dumps({'revisions': snapshots}))
+        (directory / 'history.toml').write_bytes(
+            tomlkit.dumps({'revisions': snapshots}).encode()
+        )
         backup_stored_assets(client, directory)
         (directory / 'songs.bin').write_bytes(songs.download(client))
     print(f'Selected: {selected}\n{status}\nBackup complete.', flush=True)
@@ -143,8 +145,8 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
         return client.request(command)
 
     report = storage_info.read_storage_report(next_line)
-    (directory / 'storage.toml').write_text(
-        tomlkit.dumps(report.model_dump(exclude_none=True))
+    (directory / 'storage.toml').write_bytes(
+        tomlkit.dumps(report.model_dump(exclude_none=True)).encode()
     )
     for entry in report.entries:
         path = Path(entry.path)
@@ -175,7 +177,7 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
 
 def restore_setups(directory: Path, port: Path) -> None:
     folder = directory / 'setups'
-    selected = (directory / 'selected.txt').read_text()
+    selected = (directory / 'selected.txt').read_bytes().decode()
     setups = read_setup_binaries(directory)
     snapshots = read_history_binaries(directory)
     library = (directory / 'songs.bin').read_bytes()
@@ -241,8 +243,8 @@ def restore_setups(directory: Path, port: Path) -> None:
 
 def verify_after_flashing(directory: Path, port: Path) -> None:
     setups = read_setup_binaries(directory)
-    selected = (directory / 'selected.txt').read_text()
-    catalogue = (directory / 'catalogue.txt').read_text()
+    selected = (directory / 'selected.txt').read_bytes().decode()
+    catalogue = (directory / 'catalogue.txt').read_bytes().decode()
     library = (directory / 'songs.bin').read_bytes()
     fonts = {
         int(f.stem, 16): f.read_bytes()
@@ -320,7 +322,7 @@ def read_history_binaries(directory: Path) -> list[tuple[str, history.Revision, 
     path = directory / 'history.toml'
     if not path.exists():
         return []
-    document = tomlkit.parse(path.read_text()).unwrap()
+    document = tomlkit.parse(path.read_bytes().decode()).unwrap()
     snapshots = document.get('revisions', [])
     if not isinstance(snapshots, list):
         raise ValueError('invalid history backup manifest')

@@ -20,9 +20,9 @@ def run(command: Build) -> None:
     )
     with NamedTemporaryFile(dir=command.output / 'tmp', delete=False) as temporary:
         temporary.write(b'temporary build data\n')
-    (command.output / 'temporary-path.txt').write_text(temporary.name)
-    (command.output / 'build.toml').write_text(
-        "image = 'firmware.bin'\ntarget = 'target.toml'\n"
+    (command.output / 'temporary-path.txt').write_bytes(temporary.name.encode())
+    (command.output / 'build.toml').write_bytes(
+        "# Café А\nimage = 'firmware.bin'\ntarget = 'target.toml'\n".encode()
     )
     (command.output / 'firmware.bin').write_text('test image\n')
     (command.output / 'target.toml').write_text("buttons = ['one']\n")

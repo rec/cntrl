@@ -586,7 +586,9 @@ def run(command: Copy | Download) -> None:
                     port=command.port,
                 )
             )
-        destination.write_text(tomlkit.dumps(library.model_dump(exclude_none=True)))
+        destination.write_bytes(
+            tomlkit.dumps(library.model_dump(exclude_none=True)).encode()
+        )
         print(destination)
 
 

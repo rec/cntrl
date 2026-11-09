@@ -52,7 +52,7 @@ def run(command: Build) -> Artifacts:
         env=environment,
     )
     artifacts = Artifacts.model_validate(
-        tomlkit.parse((output / 'build.toml').read_text()).unwrap()
+        tomlkit.parse((output / 'build.toml').read_bytes().decode()).unwrap()
     )
     for name in (artifacts.image, artifacts.target):
         path = (output / name).resolve()

@@ -1,5 +1,6 @@
 """The implementation build protocol uses an executable and relocatable files."""
 
+import io
 import os
 import shutil
 import subprocess
@@ -13,13 +14,16 @@ from cntrl import build
 def test_build_exports_survive_relocation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(
+        io, 'text_encoding', lambda encoding, *args: encoding or 'cp1252'
+    )
     adapter = Path(__file__).parent / 'fixtures/build_target'
     output = tmp_path / 'output with spaces'
     inherited_temporary = str(tmp_path / 'outside output')
     for name in ('TMPDIR', 'TMP', 'TEMP'):
         monkeypatch.setenv(name, inherited_temporary)
     artifacts = build.run(build.Build(target_dir=adapter, output=output))
-    temporary_file = Path((output / 'temporary-path.txt').read_text().strip())
+    temporary_file = Path((output / 'temporary-path.txt').read_bytes().decode().strip())
     assert temporary_file.parent == output / 'tmp'
     assert temporary_file.read_text() == 'temporary build data\n'
     for name in ('TMPDIR', 'TMP', 'TEMP'):

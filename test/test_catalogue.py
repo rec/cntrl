@@ -1,8 +1,22 @@
+import io
 from pathlib import Path
 
 import pytest
 
 from cntrl import catalogue, enums, models
+
+
+def test_catalogue_names_preserve_unicode_with_a_legacy_locale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        io, 'text_encoding', lambda encoding, *args: encoding or 'cp1252'
+    )
+    path = tmp_path / 'catalogue.toml'
+    path.write_bytes(
+        "[example]\nname = 'Café А'\nbuttons = ''\ndisplays = []\nports = {}\n".encode()
+    )
+    assert catalogue.load_catalogue(path)['example'].name == 'Café А'
 
 
 def test_display_shorthand_and_connector_size_accept_units(tmp_path: Path) -> None:

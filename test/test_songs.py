@@ -1,6 +1,8 @@
 """Songs serialize both selection kinds and exchange with the real C++ receiver."""
 
+import io
 import struct
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import Mock
 from zlib import crc32
@@ -390,3 +392,32 @@ def test_empty_song_library_downloads() -> None:
     client.request_data.return_value = data
     assert songs.download(client) == data
     assert not songs.decode(data).songs
+
+
+def test_downloaded_song_source_preserves_unicode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        io, 'text_encoding', lambda encoding, *args: encoding or 'cp1252'
+    )
+    original = library()
+    value = original.model_copy(
+        update={
+            'songs': [
+                songs.Song(
+                    name='Simple',
+                    patches=[original.songs[0].patches[0] | {'display_name': 'Café А'}],
+                )
+            ],
+            'setlists': [],
+        }
+    )
+    monkeypatch.setattr(
+        transport, 'SerialConnection', lambda *a, **k: nullcontext(Mock())
+    )
+    monkeypatch.setattr(songs, 'download', lambda client: b'library')
+    monkeypatch.setattr(songs, 'decode', lambda data: value)
+    songs.run(songs.Download(directory=tmp_path, port=Path('unused')))
+    path = tmp_path / 'songs.toml'
+    assert 'Café А'.encode() in path.read_bytes()
+    assert songs.Library.model_validate(compiler.read_document(path)) == value

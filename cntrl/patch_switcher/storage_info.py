@@ -153,7 +153,7 @@ def main() -> None:
         if options.output is None:
             print(report, end='')
         else:
-            options.output.write_text(report)
+            options.output.write_bytes(report.encode())
     except KeyboardInterrupt:
         sys.exit(130)
     except (OSError, ValueError) as error:

@@ -11,7 +11,7 @@ from . import enums, models
 
 def load_catalogue(path: Traversable) -> dict[str, models.Controller]:
     """Load a catalogue file, excluding its shared ``@`` definitions."""
-    data = tomlkit.loads(path.read_text()).unwrap()
+    data = tomlkit.loads(path.read_bytes().decode()).unwrap()
     definitions = {k: v for k, v in data.items() if k.startswith('@')}
     return {
         k: models.Controller(

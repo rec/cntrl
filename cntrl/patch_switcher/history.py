@@ -136,7 +136,7 @@ def reserved_numbers(directory: Path) -> list[tuple[str, int]]:
     path = directory / 'storage.toml'
     if not path.exists():
         return []
-    report = tomlkit.parse(path.read_text()).unwrap()
+    report = tomlkit.parse(path.read_bytes().decode()).unwrap()
     result: set[tuple[str, int]] = set()
     for entry in report.get('entries', []):
         if not isinstance(entry, dict) or not entry.get('directory'):

@@ -45,11 +45,13 @@ def run(command: Upgrade) -> None:
         raise ValueError('backup contains no setup binaries')
     previous_movies: dict[str, list[int]] = {}
     for name in names:
-        text = tomlkit.parse((source / 'setups' / f'{name}.toml').read_text()).unwrap()
+        text = tomlkit.parse(
+            (source / 'setups' / f'{name}.toml').read_bytes().decode()
+        ).unwrap()
         previous_movies[name] = [
             int(Path(p).stem, 16) for p in text.get('splash_movie', [])
         ]
-    selected = (source / 'selected.txt').read_text()
+    selected = (source / 'selected.txt').read_bytes().decode()
     default_movies = previous_movies.get(selected, [])
     records: list[dict[str, object]] = []
 
@@ -80,7 +82,7 @@ def run(command: Upgrade) -> None:
         for n in names
     }
     history_document = (
-        tomlkit.parse((source / 'history.toml').read_text()).unwrap()
+        tomlkit.parse((source / 'history.toml').read_bytes().decode()).unwrap()
         if (source / 'history.toml').is_file()
         else {'revisions': []}
     )
@@ -104,17 +106,19 @@ def run(command: Upgrade) -> None:
     shutil.copytree(source, output, ignore=exclude_movies)
     for name, data in setups.items():
         (output / 'setups' / f'{name}.bin').write_bytes(data)
-        (output / 'setups' / f'{name}.toml').write_text(resolved.export(data))
+        (output / 'setups' / f'{name}.toml').write_bytes(resolved.export(data).encode())
     for path, data in snapshots.items():
         (output / path).write_bytes(data)
-        (output / path).with_suffix('.toml').write_text(resolved.export(data))
+        (output / path).with_suffix('.toml').write_bytes(resolved.export(data).encode())
     for key, data in converted_movies.items():
         (output / 'setups/movies').mkdir(exist_ok=True)
         (output / 'setups/movies' / f'{key:08x}.cnsa').write_bytes(data)
-    (output / 'history.toml').write_text(tomlkit.dumps(history_document))
+    (output / 'history.toml').write_bytes(tomlkit.dumps(history_document).encode())
     (output / 'songs.bin').write_bytes(library)
-    (output / 'conversion.toml').write_text(
-        tomlkit.dumps({'format': compiler.DOCUMENT_VERSION, 'records': records})
+    (output / 'conversion.toml').write_bytes(
+        tomlkit.dumps(
+            {'format': compiler.DOCUMENT_VERSION, 'records': records}
+        ).encode()
     )
     print(
         f'Converted {len(setups)} setups and {len(snapshots)} history revisions '
