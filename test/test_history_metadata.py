@@ -1,11 +1,11 @@
 """History backup metadata retains full revision identities and ordering."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from cntrl.patch_switcher import compiler, history, models, transport
+from scripts import native_tests
 
 
 class Client(transport.SetupClient):
@@ -57,7 +57,7 @@ def test_history_overlay_preserves_old_slots_and_reserved_numbers(
     image = tmp_path / 'revision.bin'
     image.write_bytes(record)
     program = tmp_path / 'history-import'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -72,4 +72,4 @@ def test_history_overlay_preserves_old_slots_and_reserved_numbers(
         ],
         check=True,
     )
-    subprocess.run([str(program), str(image)], check=True)
+    native_tests.run_native([str(program), str(image)], check=True)

@@ -1,7 +1,6 @@
 """Setup residency uses one indexed image and a bounded, byte-optimal prefill."""
 
 import struct
-import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -9,6 +8,7 @@ import pytest
 import tomlkit
 
 from cntrl.patch_switcher import cli, compiler, models, resolved, setup_bundle
+from scripts import native_tests
 
 
 def test_static_table_is_sorted_and_offsets_address_every_setup() -> None:
@@ -78,7 +78,7 @@ def test_native_table_and_lru_preserve_pinned_views(all_resident: bool) -> None:
         image = Path(directory) / 'setups.bin'
         image.write_bytes(bundle.pack())
         program = Path(directory) / 'table'
-        subprocess.run(
+        native_tests.compile_native(
             [
                 'c++',
                 '-std=c++17',
@@ -93,7 +93,9 @@ def test_native_table_and_lru_preserve_pinned_views(all_resident: bool) -> None:
             ],
             check=True,
         )
-        subprocess.run([str(program), str(image), str(int(all_resident))], check=True)
+        native_tests.run_native(
+            [str(program), str(image), str(int(all_resident))], check=True
+        )
 
 
 def test_history_translates_indices_after_the_bundle_name_table_changes() -> None:
@@ -135,7 +137,7 @@ def test_history_translates_indices_after_the_bundle_name_table_changes() -> Non
         )
         old.write_bytes(setup_bundle.build(first, sources, memory=MEMORY).pack())
         new.write_bytes(setup_bundle.build(second, expanded, memory=MEMORY).pack())
-        subprocess.run(
+        native_tests.compile_native(
             [
                 'c++',
                 '-std=c++17',
@@ -150,7 +152,9 @@ def test_history_translates_indices_after_the_bundle_name_table_changes() -> Non
             ],
             check=True,
         )
-        subprocess.run([str(program), str(old), 'history', str(new)], check=True)
+        native_tests.run_native(
+            [str(program), str(old), 'history', str(new)], check=True
+        )
 
 
 def test_build_collects_dependencies_in_sorted_index_order() -> None:

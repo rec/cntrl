@@ -1,12 +1,12 @@
 """Logical routes and transport roles come exclusively from a target descriptor."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, midi_endpoints, models, resolved
+from scripts import native_tests
 
 
 def test_file_and_clock_operations_use_declared_names_and_routes(
@@ -43,7 +43,7 @@ def test_file_and_clock_operations_use_declared_names_and_routes(
     assert compiler.compile_show(exported, {}, [], target) == data
     root = Path(__file__).resolve().parents[1]
     executable = tmp_path / 'receiver'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -60,7 +60,7 @@ def test_file_and_clock_operations_use_declared_names_and_routes(
     )
     path = tmp_path / 'setup.bin'
     path.write_bytes(data)
-    subprocess.run([str(executable), str(path)], check=True)
+    native_tests.run_native([str(executable), str(path)], check=True)
     with pytest.raises(compiler.CompilationError, match='unavailable MIDI file output'):
         compiler.compile_show(
             {

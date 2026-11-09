@@ -1,16 +1,15 @@
 """Prepared frame geometry and a real Python/C++ transfer over a pseudo-terminal."""
 
-import os
-import pty
 import struct
-import subprocess
 from pathlib import Path
 from zlib import crc32
 
 import pytest
+from native_peer import NativePeer
 from PIL import Image, ImageDraw
 
 from cntrl.animation import asset, cli
+from scripts import native_tests
 
 
 def test_output_streams_apply_explicit_transforms() -> None:
@@ -92,7 +91,7 @@ def test_malformed_asset_is_rejected_before_opening_serial() -> None:
 @pytest.fixture(scope='module')
 def peer(tmp_path_factory: pytest.TempPathFactory) -> Path:
     executable = tmp_path_factory.mktemp('splash-peer') / 'peer'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -116,16 +115,9 @@ def test_python_upload_is_verified_by_real_cpp_receiver(
     data = asset.encode_frames(
         bytes(GEOMETRY.width * GEOMETRY.height * 2 * frames), [100] * frames, GEOMETRY
     )
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    try:
-        result = cli.upload_asset(Path(os.ttyname(slave)), data)
+    with NativePeer([str(peer)]) as port:
+        result = cli.upload_asset(Path(port), data)
         assert result == f'CNTRL SPLASH READY {len(data)} {crc32(data):08x}'
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 ROOT = Path(__file__).resolve().parents[1]

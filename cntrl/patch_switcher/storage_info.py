@@ -1,7 +1,6 @@
 """Read storage capacity, optional implementation details, and directory entries."""
 
 import sys
-import termios
 from collections.abc import Callable
 from pathlib import Path
 
@@ -157,7 +156,7 @@ def main() -> None:
             options.output.write_text(report)
     except KeyboardInterrupt:
         sys.exit(130)
-    except (OSError, ValueError, termios.error) as error:
+    except (OSError, ValueError) as error:
         sys.exit(str(error))
 
 

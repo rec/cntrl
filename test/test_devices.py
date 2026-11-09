@@ -1,66 +1,38 @@
 """Discover USB metadata and select a device without opening serial ports."""
 
-import plistlib
 import sys
 from pathlib import Path
 
 import pytest
+from serial.tools.list_ports_common import ListPortInfo
 
 from cntrl.patch_switcher import devices
 
 
-def test_macos_discovery_keeps_usb_identity_and_ignores_unrelated_ports() -> None:
-    data = plistlib.dumps(
-        [
-            {
-                'USB Product Name': 'USB Hub',
-                'IORegistryEntryChildren': [
-                    {
-                        'USB Product Name': 'cntrl experimental',
-                        'USB Vendor Name': 'cntrl',
-                        'USB Serial Number': 'pedal-2',
-                        'IORegistryEntryChildren': [
-                            {
-                                'IORegistryEntryChildren': [
-                                    {'IOCalloutDevice': '/dev/cu.usbmodem2'}
-                                ]
-                            }
-                        ],
-                    },
-                    {
-                        'USB Product Name': 'Other serial device',
-                        'IORegistryEntryChildren': [
-                            {'IOCalloutDevice': '/dev/cu.other'}
-                        ],
-                    },
-                ],
-            }
-        ]
-    )
-    found = devices.registry_devices(data)
-    assert len(found) == 1
-    assert found[0].port == Path('/dev/cu.usbmodem2')
+@pytest.mark.parametrize('endpoint', ['COM10', '/dev/ttyACM0', '/dev/cu.usbmodem2'])
+def test_discovery_retains_identity_without_resolving_endpoint(
+    endpoint: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pedal = ListPortInfo(endpoint)
+    pedal.product = 'cntrl experimental'
+    pedal.serial_number = 'pedal-2'
+    unrelated = ListPortInfo('unrelated')
+    monkeypatch.setattr(devices, 'comports', lambda: [unrelated, pedal])
+    found = devices.connected()
+    assert found == [
+        devices.Device(port=Path(endpoint), name='cntrl experimental', serial='pedal-2')
+    ]
     assert found[0].label == 'cntrl experimental (pedal-2)'
 
 
-def test_linux_discovery_follows_tty_ancestry_to_usb_identity(tmp_path: Path) -> None:
-    tty = tmp_path / 'tty'
-    tty.mkdir()
-    for name, vendor in [('ttyACM0', 'cntrl'), ('ttyUSB0', 'Other')]:
-        usb = tmp_path / name
-        interface = usb / 'interface'
-        interface.mkdir(parents=True)
-        (usb / 'idVendor').write_text('1234')
-        (usb / 'manufacturer').write_text(vendor)
-        (usb / 'product').write_text('Foot Controller')
-        (usb / 'serial').write_text(name)
-        entry = tty / name
-        entry.mkdir()
-        (entry / 'device').symlink_to(interface, target_is_directory=True)
-    found = devices.linux_devices(tty)
-    assert len(found) == 1
-    assert found[0].port == Path('/dev/ttyACM0')
-    assert found[0].label == 'Foot Controller (ttyACM0)'
+def test_discovery_accepts_manufacturer_when_product_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pedal = ListPortInfo('COM11')
+    pedal.manufacturer = 'cntrl'
+    pedal.description = ''
+    monkeypatch.setattr(devices, 'comports', lambda: [pedal])
+    assert devices.connected() == [devices.Device(port=Path('COM11'), name='cntrl')]
 
 
 def test_sole_device_is_selected_without_prompting(

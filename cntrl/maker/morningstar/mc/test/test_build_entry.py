@@ -19,7 +19,7 @@ def test_adapter_entry_binds_selected_helpers(tmp_path: Path) -> None:
         check=True,
     )
     result = subprocess.run(
-        [str(directory / 'build'), '--help'],
+        [sys.executable, str(directory / 'build_entry.py'), '--help'],
         cwd=tmp_path,
         env=environment,
         capture_output=True,

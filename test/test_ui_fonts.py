@@ -1,7 +1,6 @@
 """Portable UI font preparation and declared family availability."""
 
 import struct
-import subprocess
 from pathlib import Path
 from zlib import crc32
 
@@ -13,6 +12,7 @@ from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.catalogue import bundled_sources
 from cntrl.fonts.outline import Outline
 from cntrl.patch_switcher import compiler, data_files, models, page_settings
+from scripts import native_tests
 
 
 @pytest.mark.parametrize(
@@ -55,7 +55,7 @@ def test_ui_font_header_compiles_and_renders_without_a_driver_sdk(
         ui.embedded_header({'AtkinsonNextSemiBold': data})
     )
     executable = tmp_path / 'font-provider'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -70,7 +70,7 @@ def test_ui_font_header_compiles_and_renders_without_a_driver_sdk(
         ],
         check=True,
     )
-    subprocess.run([str(executable)], check=True)
+    native_tests.run_native([str(executable)], check=True)
 
 
 def test_optional_classic_font_can_be_prepared_from_an_explicit_outline() -> None:

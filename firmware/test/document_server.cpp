@@ -2,8 +2,6 @@
 #include "usb_peer.h"
 // A host-only protocol peer. No device access, used by the Python PTY test.
 #include <cntrl/documents.h>
-#include <unistd.h>
-#include <poll.h>
 #include <vector>
 #include "storage.h"
 

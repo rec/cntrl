@@ -19,7 +19,7 @@ Select the implementation once:
 cntrl build --target-dir path/to/implementation --output build/device
 ```
 
-`cntrl.build.run` executes the implementation's executable named `build`, with
+`cntrl.build.run` executes the implementation's `build_entry.py` using the current Python interpreter, with
 `--source-root` and `--output` arguments. `--source-root` identifies the shared
 source checkout and can be supplied to the public build command when building
 against a different checkout. The implementation must use that source root for

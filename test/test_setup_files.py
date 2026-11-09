@@ -1,13 +1,14 @@
 """File-backed setup history and append/patch behavior through storage services."""
 
-import subprocess
 from pathlib import Path
+
+from scripts import native_tests
 
 
 def test_setup_history_preserves_commits_and_reserved_revisions(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     executable = tmp_path / 'setup-files'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -25,4 +26,4 @@ def test_setup_history_preserves_commits_and_reserved_revisions(tmp_path: Path) 
     )
     data = tmp_path / 'data'
     data.mkdir()
-    subprocess.run([str(executable), str(data)], check=True)
+    native_tests.run_native([str(executable), str(data)], check=True)

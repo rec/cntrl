@@ -1,18 +1,18 @@
 """Hosted-device forwarding survives compilation and editable download."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved
+from scripts import native_tests
 
 
 def test_hotplug_descriptors_and_bidirectional_midi(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     executable = tmp_path / 'usb-forward'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -28,7 +28,7 @@ def test_hotplug_descriptors_and_bidirectional_midi(tmp_path: Path) -> None:
         ],
         check=True,
     )
-    subprocess.run([str(executable)], check=True)
+    native_tests.run_native([str(executable)], check=True)
 
 
 @pytest.mark.parametrize('enabled', [False, True])

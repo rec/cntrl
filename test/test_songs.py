@@ -1,16 +1,15 @@
 """Songs serialize both selection kinds and exchange with the real C++ receiver."""
 
-import os
-import pty
 import struct
-import subprocess
 from pathlib import Path
 from unittest.mock import Mock
 from zlib import crc32
 
 import pytest
+from native_peer import NativePeer
 
 from cntrl.patch_switcher import compiler, models, songs, transport
+from scripts import native_tests
 
 
 def library() -> songs.Library:
@@ -233,7 +232,7 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
     image.write_bytes(data)
     root = Path(__file__).resolve().parents[1]
     executable = tmp_path / 'song-executor'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -248,7 +247,7 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
         ],
         check=True,
     )
-    subprocess.run([str(executable), str(image)], check=True)
+    native_tests.run_native([str(executable), str(image)], check=True)
 
 
 @pytest.mark.parametrize('large', [False, True])
@@ -257,7 +256,7 @@ def test_song_library_transfer_against_cpp_receiver(
 ) -> None:
     root = Path(__file__).resolve().parents[1]
     peer = tmp_path / 'songs-peer'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -272,46 +271,46 @@ def test_song_library_transfer_against_cpp_receiver(
         ],
         check=True,
     )
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    value = library()
-    if large:
-        value = songs.Library(
-            songs=[
-                songs.Song(
-                    name=f'Song {i}',
-                    patches=[
-                        {
-                            'type': 'control-change',
-                            'output': 'din',
-                            'channel': 1,
-                            'controller': 64,
-                            'value': 127,
-                        }
-                    ],
-                )
-                for i in range(130)
-            ],
-            setlists=[
-                songs.Setlist(name=f'Set {i}', songs=[f'Song {j}' for j in range(130)])
-                for i in range(20)
-            ],
-        )
-    data = songs.encode(
-        value,
-        target,
-        COMPANIONS,
-    )
-    assert (
-        songs.encode(
-            songs.decode(data),
+    with NativePeer([str(peer)]) as port:
+        value = library()
+        if large:
+            value = songs.Library(
+                songs=[
+                    songs.Song(
+                        name=f'Song {i}',
+                        patches=[
+                            {
+                                'type': 'control-change',
+                                'output': 'din',
+                                'channel': 1,
+                                'controller': 64,
+                                'value': 127,
+                            }
+                        ],
+                    )
+                    for i in range(130)
+                ],
+                setlists=[
+                    songs.Setlist(
+                        name=f'Set {i}', songs=[f'Song {j}' for j in range(130)]
+                    )
+                    for i in range(20)
+                ],
+            )
+        data = songs.encode(
+            value,
             target,
             COMPANIONS,
         )
-        == data
-    )
-    try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+        assert (
+            songs.encode(
+                songs.decode(data),
+                target,
+                COMPANIONS,
+            )
+            == data
+        )
+        with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             client.ok(f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} 0')
             for i in range(0, len(data), 128):
@@ -338,11 +337,6 @@ def test_song_library_transfer_against_cpp_receiver(
             with pytest.raises(ValueError, match='songs'):
                 client.ok('CNTRL SONGS END')
             assert songs.download(client) == data
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 COMPANIONS = {'pman': {'patches': {'clean': {'type': 'start', 'output': 'din'}}}}

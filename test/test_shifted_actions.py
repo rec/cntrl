@@ -1,12 +1,12 @@
 """A shared shift layer preserves action pairing and ordinary switch cleanup."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved
+from scripts import native_tests
 
 
 @pytest.fixture
@@ -87,7 +87,7 @@ def test_shifted_actions_round_trip_and_execute(
     image = tmp_path / 'shifted.bin'
     image.write_bytes(data)
     executable = tmp_path / 'shifted'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -102,7 +102,7 @@ def test_shifted_actions_round_trip_and_execute(
         ],
         check=True,
     )
-    subprocess.run([str(executable), str(image)], check=True)
+    native_tests.run_native([str(executable), str(image)], check=True)
 
 
 @pytest.mark.parametrize(

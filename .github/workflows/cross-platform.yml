@@ -46,12 +46,16 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: cntrl/uv.lock
+      - uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c
+        if: runner.os == 'Windows'
       - name: Install locked dependencies
         run: uv sync --frozen --group dev
       - name: Record tested revision
         run: git rev-parse HEAD
-      - name: Collect baseline tests
-        run: uv run --no-sync python -m pytest --collect-only -q --junitxml=reports/collection.xml
+      - name: Run Python tests
+        run: uv run --no-sync python -m pytest -q --junitxml=reports/pytest.xml
+      - name: Run native suite
+        run: uv run --no-sync python scripts/native_tests.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

@@ -1,12 +1,12 @@
 """Gesture patches survive authoring, compilation and native execution."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved
+from scripts import native_tests
 
 
 @pytest.mark.parametrize('fast_switches', [True, False])
@@ -47,7 +47,7 @@ def test_gesture_patches_round_trip_and_execute(
     fixture = tmp_path / 'gestures.bin'
     fixture.write_bytes(data)
     executable = tmp_path / 'gestures'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -62,7 +62,9 @@ def test_gesture_patches_round_trip_and_execute(
         ],
         check=True,
     )
-    subprocess.run([str(executable), str(fixture), str(int(fast_switches))], check=True)
+    native_tests.run_native(
+        [str(executable), str(fixture), str(int(fast_switches))], check=True
+    )
 
 
 @pytest.mark.parametrize(

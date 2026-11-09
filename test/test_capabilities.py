@@ -1,12 +1,12 @@
 """The exported target model and generated native capability API agree."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from cntrl.firmware.capabilities import header
 from cntrl.patch_switcher import compiler, models
+from scripts import native_tests
 
 
 @pytest.mark.parametrize(
@@ -32,7 +32,7 @@ def test_capabilities_compile_without_an_implementation(
     target = models.Target.model_validate(data)
     (tmp_path / 'target_capabilities.h').write_text(header(target))
     executable = tmp_path / 'capabilities'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -48,6 +48,6 @@ def test_capabilities_compile_without_an_implementation(
         ],
         check=True,
     )
-    subprocess.run(
+    native_tests.run_native(
         [str(executable), '803840', '177', str(count), str(len(buttons))], check=True
     )

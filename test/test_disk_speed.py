@@ -1,8 +1,5 @@
 """Disk timings exercise the production C++ transfer and real scratch files."""
 
-import os
-import pty
-import subprocess
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -10,15 +7,17 @@ from pathlib import Path
 
 import pytest
 import tyro
+from native_peer import NativePeer
 
 from cntrl.patch_switcher import cli, devices, disk_speed, transport
+from scripts import native_tests
 
 
 @pytest.fixture(scope='module')
 def peer(tmp_path_factory: pytest.TempPathFactory) -> Path:
     root = Path(__file__).parents[1]
     executable = tmp_path_factory.mktemp('disk-speed-peer') / 'peer'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -38,17 +37,8 @@ def peer(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @contextmanager
 def device(peer: Path, directory: Path, failure: str = '') -> Iterator[Path]:
-    master, slave = pty.openpty()
-    process = subprocess.Popen(
-        [str(peer), str(directory), failure], stdin=master, stdout=master
-    )
-    try:
-        yield Path(os.ttyname(slave))
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
+    with NativePeer([str(peer), str(directory), failure]) as port:
+        yield Path(port)
 
 
 def test_round_trip_reports_separate_times_and_removes_scratch_file(

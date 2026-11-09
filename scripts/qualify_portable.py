@@ -41,7 +41,7 @@ def qualify(options: Qualification) -> None:
         environment = dict(os.environ, PYTHONPATH=str(root))
         commands = {
             'python': [sys.executable, '-m', 'pytest', '-q', 'test'],
-            'native': ['make', '-C', 'firmware', 'test'],
+            'native': [sys.executable, 'scripts/native_tests.py'],
         }
         for name, command in commands.items():
             with (options.output / f'{name}.log').open('w') as log:
@@ -86,12 +86,13 @@ def qualify(options: Qualification) -> None:
                 }
             )
         )
-        executable = Path(sys.executable).with_name('cntrl')
         compiled = root / 'qualified.bin'
         with (options.output / 'export.log').open('w') as log:
             subprocess.run(
                 [
-                    str(executable),
+                    sys.executable,
+                    '-m',
+                    'cntrl.patch_switcher.cli',
                     'compile',
                     str(fixture),
                     '--target',

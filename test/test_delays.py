@@ -1,12 +1,12 @@
 """Authored waits execute through the shared nonblocking patch executor."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved
+from scripts import native_tests
 
 
 @pytest.mark.parametrize('duration', [0, -1, True, 65.536, '1 Hz', '0.1 ms'])
@@ -61,7 +61,7 @@ def test_delay_round_trip_and_native_execution(tmp_path: Path) -> None:
     image = tmp_path / 'delay.bin'
     image.write_bytes(data)
     executable = tmp_path / 'delay-test'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -76,4 +76,4 @@ def test_delay_round_trip_and_native_execution(tmp_path: Path) -> None:
         ],
         check=True,
     )
-    subprocess.run([str(executable), str(image)], check=True)
+    native_tests.run_native([str(executable), str(image)], check=True)

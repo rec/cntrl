@@ -1,10 +1,9 @@
 import hashlib
 import json
 import os
-import pty
 import struct
 import subprocess
-import termios
+import sys
 from pathlib import Path
 
 import pytest
@@ -13,6 +12,7 @@ from test_firmware import hex_record
 
 from cntrl.firmware.intel_hex import read_hex
 from cntrl.maker.morningstar.mc import upload_helper
+from cntrl.patch_switcher.devices import Device
 
 
 @pytest.fixture
@@ -150,18 +150,29 @@ def test_cli_uses_explicit_commands() -> None:
     )
 
 
+@pytest.mark.skipif(sys.platform == 'win32', reason='POSIX tty line-coding check')
 def test_bootloader_selects_special_baud_without_serial_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import pty
+    import termios
+
     master, slave = pty.openpty()
     try:
-        monkeypatch.setattr(upload_helper, 'SERIAL_PATH', Path(os.ttyname(slave)))
-        before = termios.tcgetattr(slave)
+        monkeypatch.setattr(
+            upload_helper,
+            'connected',
+            lambda: [
+                Device(
+                    port=Path(os.ttyname(slave)),
+                    name='cntrl',
+                    serial=upload_helper.BOARD_SERIAL,
+                )
+            ],
+        )
         upload_helper.request_bootloader()
         after = termios.tcgetattr(slave)
         assert after[4:6] == [termios.B134, termios.B134]
-        assert after[:4] == before[:4]
-        assert after[6] == before[6]
         os.set_blocking(master, False)
         with pytest.raises(BlockingIOError):
             os.read(master, 1)

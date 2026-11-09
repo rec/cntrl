@@ -1,9 +1,9 @@
 """Portable file commit policies and listing work through filesystem primitives."""
 
-import subprocess
 from pathlib import Path
 
 from cntrl.patch_switcher.storage_info import read_storage_report
+from scripts import native_tests
 
 
 def test_slot_and_asset_commits_and_directory_listing(tmp_path: Path) -> None:
@@ -11,7 +11,7 @@ def test_slot_and_asset_commits_and_directory_listing(tmp_path: Path) -> None:
     program = tmp_path / 'file-policies'
     card = tmp_path / 'card'
     card.mkdir()
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -26,7 +26,7 @@ def test_slot_and_asset_commits_and_directory_listing(tmp_path: Path) -> None:
         ],
         check=True,
     )
-    result = subprocess.run(
+    result = native_tests.run_native(
         [str(program), str(card)], capture_output=True, text=True, check=True
     )
     lines = iter(

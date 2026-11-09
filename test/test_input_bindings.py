@@ -1,12 +1,12 @@
 """Physical input bindings use declared identifiers and independent switch slots."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, inputs, models, resolved
+from scripts import native_tests
 
 
 def target() -> models.Target:
@@ -61,7 +61,7 @@ def test_declared_labels_and_high_input_bits_round_trip_and_execute(
     image = tmp_path / 'inputs.bin'
     image.write_bytes(data)
     program = tmp_path / 'inputs'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -76,7 +76,7 @@ def test_declared_labels_and_high_input_bits_round_trip_and_execute(
         ],
         check=True,
     )
-    subprocess.run([str(program), str(image)], check=True)
+    native_tests.run_native([str(program), str(image)], check=True)
 
 
 def test_back_control_remains_reserved_and_unknown_labels_are_rejected() -> None:

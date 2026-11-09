@@ -1,12 +1,12 @@
 """Keyboard page authoring and portable key ownership."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved
+from scripts import native_tests
 
 
 def test_keyboard_settings_round_trip_and_require_capability() -> None:
@@ -62,7 +62,7 @@ def test_keyboard_rejects_invalid_key_reports(keys: list[int]) -> None:
 
 def test_keyboard_holds_release_and_reconnect(tmp_path: Path) -> None:
     peer = tmp_path / 'keyboard'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -96,4 +96,4 @@ def test_keyboard_holds_release_and_reconnect(tmp_path: Path) -> None:
     )
     fixture = tmp_path / 'keyboard.bin'
     fixture.write_bytes(data)
-    subprocess.run([str(peer), str(fixture)], check=True)
+    native_tests.run_native([str(peer), str(fixture)], check=True)

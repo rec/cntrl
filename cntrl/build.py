@@ -26,13 +26,12 @@ def run(command: Build) -> Artifacts:
     output = command.output.resolve()
     temporary = output / 'tmp'
     temporary.mkdir(parents=True, exist_ok=True)
-    executable = command.target_dir.resolve() / 'build'
+    executable = command.target_dir.resolve() / 'build_entry.py'
     environment = dict(
         os.environ,
         TMPDIR=str(temporary),
         TMP=str(temporary),
         TEMP=str(temporary),
-        CNTRL_PYTHON=sys.executable,
         PYTHONPATH=str(command.source_root.resolve())
         + (
             os.pathsep + os.environ['PYTHONPATH']
@@ -42,6 +41,7 @@ def run(command: Build) -> Artifacts:
     )
     subprocess.run(
         [
+            sys.executable,
             str(executable),
             '--source-root',
             str(command.source_root.resolve()),

@@ -1,7 +1,6 @@
 """Configured movie lists compile to portable SD assets, not resident pixel buffers."""
 
 import struct
-import subprocess
 from pathlib import Path
 from zlib import crc32
 
@@ -11,6 +10,7 @@ from PIL import Image
 
 from cntrl.animation import asset
 from cntrl.patch_switcher import cli, compiler, models, resolved
+from scripts import native_tests
 
 
 @pytest.mark.parametrize(
@@ -105,7 +105,7 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     image = tmp_path / 'setup.bin'
     image.write_bytes(bundle.setups['setup'])
     executable = tmp_path / 'movie-setup'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -120,7 +120,7 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
         ],
         check=True,
     )
-    subprocess.run([str(executable), str(image), f'{key:08x}'], check=True)
+    native_tests.run_native([str(executable), str(image), f'{key:08x}'], check=True)
 
 
 def test_missing_and_unsupported_movies_fail_before_transfer(tmp_path: Path) -> None:

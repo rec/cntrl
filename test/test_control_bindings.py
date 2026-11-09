@@ -7,13 +7,14 @@ import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved, songs
+from scripts import native_tests
 
 
 @pytest.fixture
 def binding_runner(tmp_path: Path) -> Path:
     root = Path(__file__).parents[1]
     executable = tmp_path / 'bindings'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',

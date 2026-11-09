@@ -1,15 +1,13 @@
-"""Framed document transfer over a POSIX USB serial device."""
+"""Framed document transfer over a USB serial device."""
 
-import os
 import secrets
-import select
 import sys
-import termios
 import time
 from pathlib import Path
 from zlib import crc32
 
 from pydantic import BaseModel
+from serial import Serial, SerialTimeoutException
 
 from .data_files import validate_name
 from .models import TargetMemory
@@ -20,18 +18,17 @@ class UsbProtocolError(ValueError):
 
 
 class SerialConnection:
-    """A resumable, acknowledged byte stream over a replaceable serial fd."""
+    """A resumable, acknowledged byte stream over a replaceable serial port."""
 
     def __init__(self, port: Path, timeout: float = 30) -> None:
         self.port = port
         self.timeout = timeout
         self.usb_block_size = 4096
-        self.fd = -1
+        self.serial: Serial | None = None
         self.session = secrets.randbits(32) or 1
         self.sequence = 1
         self.acknowledged = 0
         self.received = bytearray()
-        self.previous: list[int | list[bytes | int]] = []
 
     def __enter__(self) -> 'SerialConnection':
         try:
@@ -53,42 +50,29 @@ class SerialConnection:
             self.close()
 
     def release(self) -> None:
-        if self.fd >= 0:
+        if self.serial is not None:
             try:
-                os.write(self.fd, f'\x1eCNTRL USB {self.session:x} 0 0 -\n'.encode())
+                self.serial.write(f'\x1eCNTRL USB {self.session:x} 0 0 -\n'.encode())
             except OSError:
                 pass  # Cancellation must not wait for an unplugged device.
 
     def close(self) -> None:
-        if self.fd < 0:
+        if self.serial is None:
             return
+        port, self.serial = self.serial, None
         try:
-            termios.tcsetattr(self.fd, termios.TCSANOW, self.previous)
-        except (OSError, termios.error):
+            port.close()
+        except OSError:
             pass  # The USB device may have disappeared during the command.
-        finally:
-            descriptor, self.fd = self.fd, -1
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass  # Closing a disconnected descriptor cannot resume a transfer.
 
     def connect(self) -> None:
-        self.fd = os.open(self.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-        try:
-            self.previous = termios.tcgetattr(self.fd)
-            settings = termios.tcgetattr(self.fd)
-            settings[0] = settings[1] = settings[3] = 0
-            settings[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
-            settings[4] = settings[5] = termios.B115200
-            settings[6][termios.VMIN] = 0
-            settings[6][termios.VTIME] = 0
-            termios.tcsetattr(self.fd, termios.TCSANOW, settings)
-            termios.tcflush(self.fd, termios.TCIFLUSH)
-        except (OSError, termios.error):
-            os.close(self.fd)
-            self.fd = -1
-            raise
+        self.serial = Serial(
+            str(self.port),
+            baudrate=115200,
+            timeout=self.timeout,
+            write_timeout=self.timeout,
+        )
+        self.serial.reset_input_buffer()
 
     def exchange(self, data: bytes) -> None:
         frame = (
@@ -100,7 +84,7 @@ class SerialConnection:
         lost_reported = False
         while True:
             try:
-                if self.fd < 0:
+                if self.serial is None:
                     self.connect()
                 self.write_frame(frame)
                 while True:
@@ -150,7 +134,7 @@ class SerialConnection:
                     self.usb_block_size = block_size
                     self.sequence += 1
                     return
-            except (OSError, termios.error) as error:
+            except OSError as error:
                 self.close()
                 failures += 1
                 if failures >= 3:
@@ -167,33 +151,34 @@ class SerialConnection:
                     delay *= 2
 
     def write_frame(self, data: bytes) -> None:
+        assert self.serial is not None
         deadline = time.monotonic() + self.timeout
         pending = memoryview(data)
         while pending:
             remaining = deadline - time.monotonic()
-            if remaining <= 0 or not select.select([], [self.fd], [], remaining)[1]:
+            if remaining <= 0:
                 raise TimeoutError('USB serial write timed out')
+            self.serial.write_timeout = remaining
             try:
-                count = os.write(self.fd, pending)
-            except BlockingIOError:
-                continue
+                count = self.serial.write(pending)
+            except SerialTimeoutException as error:
+                raise TimeoutError('USB serial write timed out') from error
             if count == 0:
                 raise OSError('USB serial disconnected')
             pending = pending[count:]
 
     def read_frame(self) -> str:
+        assert self.serial is not None
         deadline = time.monotonic() + self.timeout
         result = bytearray()
         while len(result) < (self.usb_block_size * 2 + 128) * 2 + 64:
             remaining = deadline - time.monotonic()
-            if remaining <= 0 or not select.select([self.fd], [], [], remaining)[0]:
+            if remaining <= 0:
                 raise TimeoutError('USB serial response timed out')
-            try:
-                value = os.read(self.fd, 1)
-            except BlockingIOError:
-                continue
+            self.serial.timeout = remaining
+            value = self.serial.read(1)
             if not value:
-                raise OSError('USB serial disconnected')
+                raise TimeoutError('USB serial response timed out')
             if value == b'\n':
                 try:
                     return result.decode('ascii').rstrip('\r')

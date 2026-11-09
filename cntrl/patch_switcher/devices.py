@@ -1,11 +1,10 @@
 """Find cntrl USB serial endpoints from OS metadata without opening them."""
 
-import plistlib
-import subprocess
 import sys
 from pathlib import Path
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel
+from serial.tools.list_ports import comports
 
 
 class Device(BaseModel, frozen=True):
@@ -18,69 +17,16 @@ class Device(BaseModel, frozen=True):
         return f'{self.name} ({self.serial})' if self.serial else self.name
 
 
-class RegistryNode(BaseModel, frozen=True):
-    product: str = Field(default='', alias='USB Product Name')
-    manufacturer: str = Field(default='', alias='USB Vendor Name')
-    serial: str = Field(default='', alias='USB Serial Number')
-    port: Path | None = Field(default=None, alias='IOCalloutDevice')
-    children: list['RegistryNode'] = Field(
-        default_factory=list, alias='IORegistryEntryChildren'
-    )
-
-
-def registry_devices(data: bytes) -> list[Device]:
-    roots = TypeAdapter(list[RegistryNode]).validate_python(plistlib.loads(data))
-    result: dict[Path, Device] = {}
-
-    def visit(
-        node: RegistryNode, name: str = '', manufacturer: str = '', serial: str = ''
-    ) -> None:
-        if node.product:
-            name, manufacturer, serial = node.product, node.manufacturer, node.serial
-        if node.port and is_cntrl(name, manufacturer):
-            result[node.port] = Device(
-                port=node.port, name=name or 'cntrl', serial=serial
-            )
-        for child in node.children:
-            visit(child, name, manufacturer, serial)
-
-    for node in roots:
-        visit(node)
-    return sorted(result.values(), key=lambda d: (d.name, d.serial, d.port))
-
-
-def linux_devices(root: Path = Path('/sys/class/tty')) -> list[Device]:
-    result: list[Device] = []
-    for entry in sorted(root.iterdir()):
-        device = (entry / 'device').resolve()
-        for directory in (device, *device.parents):
-            if not (directory / 'idVendor').is_file():
-                continue
-            name = usb_property(directory / 'product')
-            manufacturer = usb_property(directory / 'manufacturer')
-            if is_cntrl(name, manufacturer):
-                result.append(
-                    Device(
-                        port=Path('/dev') / entry.name,
-                        name=name or 'cntrl',
-                        serial=usb_property(directory / 'serial'),
-                    )
-                )
-            break
-    return result
-
-
 def connected() -> list[Device]:
-    if sys.platform == 'darwin':
-        result = subprocess.run(
-            ['ioreg', '-a', '-l', '-r', '-c', 'IOUSBHostDevice'],
-            check=True,
-            capture_output=True,
-        )
-        return registry_devices(result.stdout)
-    if sys.platform.startswith('linux'):
-        return linux_devices()
-    raise ValueError('Automatic cntrl discovery requires macOS or Linux')
+    result: dict[Path, Device] = {}
+    for port in comports():
+        name = port.product or port.description or ''
+        if is_cntrl(name, port.manufacturer or ''):
+            endpoint = Path(port.device)
+            result[endpoint] = Device(
+                port=endpoint, name=name or 'cntrl', serial=port.serial_number or ''
+            )
+    return sorted(result.values(), key=lambda d: (d.name, d.serial, str(d.port)))
 
 
 def select_port(port: Path | None = None) -> Path:
@@ -117,10 +63,3 @@ def is_cntrl(product: str, manufacturer: str) -> bool:
         manufacturer.casefold() == 'cntrl'
         or product.casefold().split(' ', 1)[0] == 'cntrl'
     )
-
-
-def usb_property(path: Path) -> str:
-    try:
-        return path.read_text().strip()
-    except FileNotFoundError:
-        return ''

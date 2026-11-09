@@ -1,8 +1,5 @@
 """Exercise the Python sender against the real C++ receiver through a PTY."""
 
-import os
-import pty
-import subprocess
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -10,8 +7,10 @@ from tempfile import TemporaryDirectory
 from zlib import crc32
 
 import pytest
+from native_peer import NativePeer
 
 from cntrl.patch_switcher import cli, compiler, models, resolved, transport
+from scripts import native_tests
 
 
 @pytest.fixture(scope='module', params=[1024, 4096])
@@ -22,7 +21,7 @@ def usb_block_size(request: pytest.FixtureRequest) -> int:
 @pytest.fixture(scope='module')
 def peer(tmp_path_factory: pytest.TempPathFactory, usb_block_size: int) -> Path:
     executable = tmp_path_factory.mktemp('document-peer') / 'peer'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -44,7 +43,7 @@ def peer(tmp_path_factory: pytest.TempPathFactory, usb_block_size: int) -> Path:
 def bundle_peer() -> Iterator[Path]:
     with TemporaryDirectory(prefix='cntrl-bundle-peer-') as directory:
         executable = Path(directory) / 'peer'
-        subprocess.run(
+        native_tests.compile_native(
             [
                 'c++',
                 '-std=c++17',
@@ -65,10 +64,7 @@ def test_named_setup_lifecycle_against_cpp_receiver(
     peer: Path, usb_block_size: int
 ) -> None:
     data = bytes.fromhex((ROOT / 'firmware/test/show.golden').read_text())
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    try:
-        port = Path(os.ttyname(slave))
+    with NativePeer([str(peer)]) as port:
         assert (
             transport.device_status(port)
             == f'CNTRL READY {compiler.DOCUMENT_VERSION} 0 00000000'
@@ -109,20 +105,12 @@ def test_named_setup_lifecycle_against_cpp_receiver(
             transport.device_status(port)
             == f'CNTRL READY {compiler.DOCUMENT_VERSION} {len(data)} {crc32(data):08x}'
         )
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 def test_cpp_receiver_rejects_corrupt_document(peer: Path) -> None:
     data = bytearray.fromhex((ROOT / 'firmware/test/show.golden').read_text())
     data[-1] ^= 1
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    try:
-        port = Path(os.ttyname(slave))
+    with NativePeer([str(peer)]) as port:
         with pytest.raises(ValueError, match='invalid-document'):
             with transport.SerialConnection(port) as connection:
                 transport.SetupClient(connection).copy('Bad', bytes(data), False)
@@ -130,11 +118,6 @@ def test_cpp_receiver_rejects_corrupt_document(peer: Path) -> None:
             transport.device_status(port)
             == f'CNTRL READY {compiler.DOCUMENT_VERSION} 0 00000000'
         )
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 def test_large_setup_uses_the_shared_document_budget(peer: Path) -> None:
@@ -157,10 +140,8 @@ def test_large_setup_uses_the_shared_document_budget(peer: Path) -> None:
     data = setup(40000)
     too_large_alongside_active = setup(60000)
     assert len(data) > 65536
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+    with NativePeer([str(peer)]) as port:
+        with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             client.copy('Large', data, False)
             client.ok('CNTRL SETUP FINISH')
@@ -171,11 +152,6 @@ def test_large_setup_uses_the_shared_document_budget(peer: Path) -> None:
                 client.copy('Large', setup(40000, 2), True)
             assert client.current() == 'Large'
             assert client.download('Large') == data
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -198,10 +174,7 @@ def test_setup_cli_copy_download_and_delete(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(bundle_peer)], stdin=master, stdout=master)
-    try:
-        port = os.ttyname(slave)
+    with NativePeer([str(bundle_peer)]) as port:
         with transport.SerialConnection(Path(port)) as connection:
             assert transport.SetupClient(connection).memory() == models.TargetMemory(
                 capacity=400000, runtime=240000
@@ -251,19 +224,12 @@ def test_setup_cli_copy_download_and_delete(
         capsys.readouterr()
         run(['list'])
         assert capsys.readouterr().out == ''
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 def test_revision_commands_against_cpp_receiver(peer: Path) -> None:
     data = bytes.fromhex((ROOT / 'firmware/test/show.golden').read_text())
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+    with NativePeer([str(peer)]) as port:
+        with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             client.copy('History', data, False)
             name = b'History'.hex()
@@ -280,11 +246,6 @@ def test_revision_commands_against_cpp_receiver(peer: Path) -> None:
             assert (
                 client.request(f'CNTRL HISTORY LIST {name} {2**64 - 1}') == 'CNTRL END'
             )
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 def test_progress_reply_is_not_returned_as_the_command_result() -> None:
@@ -297,12 +258,8 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
     peer: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     data = bytes.fromhex((ROOT / 'firmware/test/show.golden').read_text())
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    try:
-        with transport.SerialConnection(
-            Path(os.ttyname(slave)), timeout=1
-        ) as connection:
+    with NativePeer([str(peer)]) as port:
+        with transport.SerialConnection(Path(port), timeout=1) as connection:
             client = transport.SetupClient(connection)
             write_frame = connection.write_frame
             read_frame = connection.read_frame
@@ -358,11 +315,6 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
             assert revision.split()[2] == '1'
             assert client.request(f'CNTRL HISTORY LIST {b"A".hex()} 1') == 'CNTRL END'
             assert client.download('A') == data
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 def test_usb_wait_backoff_keeps_retrying_until_control_c(
@@ -410,8 +362,9 @@ def test_incompatible_usb_replies_fail_without_reconnecting(
     response: str,
     message: str,
 ) -> None:
-    master, slave = pty.openpty()
-    connection = transport.SerialConnection(Path(os.ttyname(slave)))
+    connection = transport.SerialConnection(Path('/unused'))
+    monkeypatch.setattr(connection, 'connect', lambda: None)
+    monkeypatch.setattr(connection, 'write_frame', lambda _: None)
     connection.session = 0xABC
     monkeypatch.setattr(connection, 'read_frame', lambda: response)
 
@@ -423,40 +376,30 @@ def test_incompatible_usb_replies_fail_without_reconnecting(
         with pytest.raises(transport.UsbProtocolError, match=message):
             with connection:
                 pytest.fail('An incompatible handshake must not open a session')
-        assert connection.fd == -1
+        assert connection.serial is None
         assert 'Waiting' not in capsys.readouterr().err
     finally:
         connection.close()
-        os.close(master)
-        os.close(slave)
 
 
 def test_protocol_error_during_a_command_does_not_retry_session_cleanup(
     peer: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    connection = transport.SerialConnection(Path(os.ttyname(slave)))
-    reads = 0
+    with NativePeer([str(peer)]) as port:
+        connection = transport.SerialConnection(Path(port))
+        reads = 0
 
-    def invalid_response() -> str:
-        nonlocal reads
-        reads += 1
-        return 'invalid USB frame'
+        def invalid_response() -> str:
+            nonlocal reads
+            reads += 1
+            return 'invalid USB frame'
 
-    try:
         with pytest.raises(transport.UsbProtocolError, match='Invalid USB'):
             with connection:
                 monkeypatch.setattr(connection, 'read_frame', invalid_response)
                 transport.SetupClient(connection).request('CNTRL STATUS')
         assert reads == 1
-        assert connection.fd == -1
-    finally:
-        connection.close()
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
+        assert connection.serial is None
 
 
 def test_midi_file_operations_survive_cpp_storage(peer: Path) -> None:
@@ -482,18 +425,11 @@ def test_midi_file_operations_survive_cpp_storage(peer: Path) -> None:
         [],
         target,
     )
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer)], stdin=master, stdout=master)
-    try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+    with NativePeer([str(peer)]) as port:
+        with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             client.copy('Files', data, False)
             assert client.download('Files') == data
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 def test_history_import_preserves_metadata_and_refuses_conflicting_retries(
@@ -508,10 +444,8 @@ def test_history_import_preserves_metadata_and_refuses_conflicting_retries(
     revision = history.Revision(
         number=42, modified=1234567890, length=len(data), label='Before soundcheck'
     )
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(bundle_peer)], stdin=master, stdout=master)
-    try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+    with NativePeer([str(bundle_peer)]) as port:
+        with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             expected = history.import_revision(client, 'Evening', revision, data)
             assert history.revisions(client, 'Evening') == [revision]
@@ -526,8 +460,3 @@ def test_history_import_preserves_metadata_and_refuses_conflicting_retries(
                     data,
                 )
             assert client.download('Evening', 42) == expected
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)

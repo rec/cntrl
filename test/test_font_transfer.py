@@ -1,14 +1,12 @@
 """Custom fonts compile locally, survive transfer, and load transactionally."""
 
-import os
-import pty
 import struct
-import subprocess
 from pathlib import Path
 from zlib import crc32
 
 import pytest
 import tomlkit
+from native_peer import NativePeer
 
 from cntrl.fonts import assets
 from cntrl.fonts.outline import Outline
@@ -22,6 +20,7 @@ from cntrl.patch_switcher import (
     setup_bundle,
     transport,
 )
+from scripts import native_tests
 
 
 @pytest.fixture(scope='module')
@@ -126,7 +125,7 @@ def test_autoformatting_prepares_every_bundled_outline_family() -> None:
 @pytest.fixture(scope='module')
 def peer(tmp_path_factory: pytest.TempPathFactory) -> Path:
     executable = tmp_path_factory.mktemp('font-peer') / 'peer'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -180,11 +179,9 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
 def test_asset_transfer_and_failed_load_preserve_active_fonts(
     peer: Path, bitmap: bytes, tmp_path: Path
 ) -> None:
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer), str(tmp_path)], stdin=master, stdout=master)
-    key = crc32(bitmap)
-    try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+    with NativePeer([str(peer), str(tmp_path)]) as port:
+        key = crc32(bitmap)
+        with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             client.copy_font(key, bitmap)
             path = tmp_path / 'cntrl/fonts' / f'{key:08x}.cfont'
@@ -217,11 +214,6 @@ def test_asset_transfer_and_failed_load_preserve_active_fonts(
             with pytest.raises(ValueError, match='font-load'):
                 client.ok(f'STAGE {key:08x} 24')
             client.ok(f'ACTIVE {key:08x} 24')
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 def test_show_activation_requires_assets_and_releases_previous_fonts(
@@ -241,10 +233,8 @@ def test_show_activation_requires_assets_and_releases_previous_fonts(
     data = compiler.compile_show(source, definitions, [], target, font_data)
     key, bitmap = next(iter(font_data.items()))
     size = next(iter(assets.entries(bitmap)))
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer), str(tmp_path)], stdin=master, stdout=master)
-    try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+    with NativePeer([str(peer), str(tmp_path)]) as port:
+        with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             with pytest.raises(ValueError, match='invalid-document'):
                 client.copy('Custom', data, False)
@@ -269,11 +259,6 @@ def test_show_activation_requires_assets_and_releases_previous_fonts(
             assert client.current() == 'Custom'
             client.ok(f'ACTIVE {key:08x} {size}')
             assert client.download('Custom') == data
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -322,21 +307,14 @@ def test_unicode_labels_compile_transfer_and_export(
         font_data,
     )
     assert 'Café e\u0301' in resolved.export(data)
-    master, slave = pty.openpty()
-    process = subprocess.Popen([str(peer), str(tmp_path)], stdin=master, stdout=master)
-    try:
-        with transport.SerialConnection(Path(os.ttyname(slave))) as connection:
+    with NativePeer([str(peer), str(tmp_path)]) as port:
+        with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             for k, b in font_data.items():
                 client.copy_font(k, b)
             client.copy('Unicode', data, False)
             client.ok('CNTRL SETUP FINISH')
             assert client.download('Unicode') == data
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
 
 
 def test_bundled_outline_fonts_use_sparse_unicode_assets() -> None:

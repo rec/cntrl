@@ -1,12 +1,12 @@
 """Function patches round-trip and activate through the portable controller."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved, songs
+from scripts import native_tests
 
 
 def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> None:
@@ -38,7 +38,7 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
     image = tmp_path / 'function.bin'
     image.write_bytes(data)
     peer = tmp_path / 'function-test'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -53,7 +53,7 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
         ],
         check=True,
     )
-    subprocess.run([str(peer), str(image)], check=True)
+    native_tests.run_native([str(peer), str(image)], check=True)
 
 
 @pytest.mark.parametrize('pair', ['A+A', 'AF', 'A+B+C', '+Back', 'Less+'])

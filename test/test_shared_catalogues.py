@@ -1,14 +1,14 @@
 """One MIDI action can describe the aligned sounds on several instruments."""
 
 import struct
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
+from test_display_format import lines
 
 from cntrl.patch_switcher import compiler, display, models, resolved
-from test.test_display_format import lines
+from scripts import native_tests
 
 
 @pytest.fixture
@@ -62,7 +62,7 @@ def test_dual_internal_setup_has_one_program_action_and_both_names(
     image.write_bytes(data)
     root = Path(__file__).resolve().parents[1]
     executable = tmp_path / 'shared-catalogues'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -77,7 +77,7 @@ def test_dual_internal_setup_has_one_program_action_and_both_names(
         ],
         check=True,
     )
-    subprocess.run([str(executable), str(image)], check=True)
+    native_tests.run_native([str(executable), str(image)], check=True)
 
 
 def test_named_sound_fields_render_and_reject_unknown_names(

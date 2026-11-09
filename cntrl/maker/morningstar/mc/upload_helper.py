@@ -2,19 +2,20 @@
 
 import hashlib
 import os
-import socket
 import struct
 import subprocess
 import sys
-import termios
+from multiprocessing.connection import Client, Listener
 from pathlib import Path
 from shutil import copyfile
 from tempfile import TemporaryDirectory
 
 import tyro
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from serial import Serial
 
 from ....firmware.intel_hex import FirmwareImage, read_hex
+from ....patch_switcher.devices import connected
 
 
 class Serve(BaseModel, frozen=True):
@@ -70,13 +71,11 @@ def prepare_image(source: Path, directory: Path) -> FirmwareImage:
 
 def request_bootloader() -> None:
     """Select the Teensy USB core's special 134-baud bootloader request."""
-    descriptor = os.open(SERIAL_PATH, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-    try:
-        attributes = termios.tcgetattr(descriptor)
-        attributes[4] = attributes[5] = termios.B134
-        termios.tcsetattr(descriptor, termios.TCSANOW, attributes)
-    finally:
-        os.close(descriptor)
+    ports = [d.port for d in connected() if d.serial == BOARD_SERIAL]
+    if len(ports) != 1:
+        raise ValueError('the expected pedal is not uniquely present in serial mode')
+    with Serial(str(ports[0]), baudrate=134, timeout=5, write_timeout=5):
+        pass
     # Do not restore line coding: USB must receive the reboot request.
     print('Bootloader requested; verify HalfKay enumeration before uploading.')
 
@@ -173,36 +172,48 @@ def process_request(line: bytes) -> UploadResult:
 
 def serve() -> None:
     """Handle one upload at a time; never replace an existing socket."""
-    os.umask(0o077)
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
-        listener.bind(str(SOCKET_PATH))
+    if os.name != 'nt':
+        os.umask(0o077)
+    with Listener(
+        str(SOCKET_PATH), family=IPC_FAMILY, authkey=authentication_key()
+    ) as listener:
         try:
-            listener.listen(1)
             print(f'Upload-only helper listening on {SOCKET_PATH}', flush=True)
             print('Enter HalfKay before requesting upload. Ctrl-C stops the helper.')
             while True:
-                connection, _ = listener.accept()
-                with connection:
-                    connection.settimeout(5)
+                with listener.accept() as connection:
                     try:
-                        with connection.makefile('rwb') as stream:
-                            result = process_request(stream.readline(257))
-                            stream.write(result.model_dump_json().encode() + b'\n')
-                            stream.flush()
+                        if connection.poll(5):
+                            result = process_request(connection.recv_bytes(256))
+                            connection.send_bytes(result.model_dump_json().encode())
                     except OSError as error:
                         # A disconnected client must not cancel an upload in progress.
                         print(f'Upload client disconnected: {error}', file=sys.stderr)
         finally:
-            SOCKET_PATH.unlink()
+            print('Upload helper stopped.', flush=True)
 
 
 def request_upload(request: Upload) -> UploadResult:
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-        connection.connect(str(SOCKET_PATH))
-        with connection.makefile('rwb') as stream:
-            stream.write(request.model_dump_json().encode() + b'\n')
-            stream.flush()
-            return UploadResult.model_validate_json(stream.readline())
+    with Client(
+        str(SOCKET_PATH), family=IPC_FAMILY, authkey=authentication_key()
+    ) as connection:
+        connection.send_bytes(request.model_dump_json().encode() + b'\n')
+        if not connection.poll(300):
+            raise TimeoutError('upload helper did not respond within 300 seconds')
+        return UploadResult.model_validate_json(connection.recv_bytes(1024 * 1024))
+
+
+def authentication_key() -> bytes:
+    CACHE_DIRECTORY.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path = CACHE_DIRECTORY / 'authentication.key'
+    try:
+        with path.open('xb') as stream:
+            stream.write(os.urandom(32))
+        if os.name != 'nt':
+            path.chmod(0o600)
+    except FileExistsError:
+        pass
+    return path.read_bytes()
 
 
 def main() -> None:
@@ -227,13 +238,20 @@ def main() -> None:
 
 ROOT = Path(__file__).resolve().parent
 IMAGE_PATH = ROOT / 'firmware/build/patch-switcher.hex'
-SOCKET_PATH = ROOT / 'firmware/.upload-helper.sock'
-SERIAL_PATH = Path('/dev/cu.usbmodem144682801')
-CACHE_DIRECTORY = Path.home() / 'Library/Caches/cntrl-upload'
-UPLOADER_PATH = (
-    Path('/Applications/Morningstar Firmware Updater.app')
-    / 'Contents/Resources/extraResources/tycmd'
+CACHE_DIRECTORY = (
+    Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local'))
+    if os.name == 'nt'
+    else Path.home() / 'Library/Caches'
+    if sys.platform == 'darwin'
+    else Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache'))
+) / 'cntrl-upload'
+IPC_FAMILY = 'AF_PIPE' if os.name == 'nt' else 'AF_UNIX'
+SOCKET_PATH = (
+    r'\\.\pipe\cntrl-upload-14468280'
+    if os.name == 'nt'
+    else CACHE_DIRECTORY / 'helper.sock'
 )
+UPLOADER_PATH = Path(os.environ.get('CNTRL_TYCMD', 'tycmd'))
 BOARD_SERIAL = '14468280'
 BOARD_TAG = '14468280-Teensy'
 FLASH_CONFIG_SHA256 = '65b509525e8b0e6e92e4e6bc8fa39575399b27532e04a55f7a7883212042fe7a'

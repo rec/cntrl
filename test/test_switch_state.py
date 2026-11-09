@@ -1,12 +1,12 @@
 """Shared MIDI state and selection hooks use the normal compiled switch path."""
 
-import subprocess
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, models, resolved
+from scripts import native_tests
 
 
 def test_shared_state_and_selection_hooks(tmp_path: Path) -> None:
@@ -76,7 +76,7 @@ def test_shared_state_and_selection_hooks(tmp_path: Path) -> None:
     held_fixture = tmp_path / 'held.bin'
     held_fixture.write_bytes(compiler.compile_show(momentary, {}, [], target))
     executable = tmp_path / 'state'
-    subprocess.run(
+    native_tests.compile_native(
         [
             'c++',
             '-std=c++17',
@@ -91,7 +91,9 @@ def test_shared_state_and_selection_hooks(tmp_path: Path) -> None:
         ],
         check=True,
     )
-    subprocess.run([str(executable), str(fixture), str(held_fixture)], check=True)
+    native_tests.run_native(
+        [str(executable), str(fixture), str(held_fixture)], check=True
+    )
 
 
 @pytest.mark.parametrize(

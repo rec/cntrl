@@ -1,4 +1,0 @@
-#!/bin/sh
-set -eu
-target_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec "${CNTRL_PYTHON:-python3}" "$target_dir/build_entry.py" "$@"
