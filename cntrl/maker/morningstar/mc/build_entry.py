@@ -1,5 +1,6 @@
 """Bind the selected adapter's helpers without importing another installation."""
 
+import subprocess
 import sys
 from importlib import import_module
 from pathlib import Path
@@ -8,7 +9,7 @@ from types import ModuleType
 import cntrl
 
 
-def load_target() -> ModuleType:
+def load_target(module: str = 'build_target') -> ModuleType:
     directory = Path(__file__).resolve().parent
     prefix = 'cntrl.maker.morningstar.mc'
     for name in list(sys.modules):
@@ -27,8 +28,10 @@ def load_target() -> ModuleType:
         sys.modules[namespace] = package
         setattr(parent, name, package)
         parent = package
-    return import_module(prefix + '.build_target')
+    return import_module(prefix + '.' + module)
 
 
 if __name__ == '__main__':
+    if '--help' not in sys.argv and '-h' not in sys.argv:
+        subprocess.run([sys.executable, '-m', 'cntrl.fonts.provision'], check=True)
     load_target().main()

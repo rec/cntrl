@@ -45,6 +45,41 @@ abnormal termination can leave a stale socket; diagnose that before removing it.
 
 ## Request an upload
 
+For a complete build, backup, firmware installation and verified data restore,
+use the public command from the repository root:
+
+```bash
+cntrl flash --target-dir cntrl/maker/morningstar/mc --output cntrl/maker/morningstar/mc/firmware/build/device-flash --port /dev/cu.usbmodem144682801
+```
+
+The upload helper must already be running in your Terminal. Use a fresh output
+directory for each installation. The command retains the immutable backup in
+`before/` and validates its current-format data before asking the pedal to
+reboot. Add `--legacy-usb` only when the installed firmware uses
+the old text-framed USB protocol. This uses the maintained MC backup adapter
+inside cntrl. The command restores and verifies the exact saved data without
+format conversion. Incompatible backups stop the operation before reboot.
+
+The final SD scan can find obsolete movie files that the installed firmware
+cannot read. Those paths are reported and retained in `unavailable-assets.txt`;
+the files on the pedal are left untouched. Failure to download an asset used by
+a current setup or history revision still stops the operation before reboot or
+upload.
+
+The MC build entry provisions the existing pinned FreeType recipe before
+loading its font-generation helpers, so a fresh dependency installation also
+uses the required rasterizer when invoked through `cntrl`.
+
+The helper's image validation, fixed device identity, snapshotting and sole
+uploader capability remain in force. Upload is not retried automatically. A
+nonzero uploader exit after reset is followed by application/data verification
+when the device returns, but remains an error because data verification alone
+does not prove that the new firmware was written. Success requires both a
+successful uploader result and matching selection, setups, history, assets and
+song library. The build export and all backups remain
+under the selected output directory. They are generated artifacts and must not
+be committed, particularly the combined image containing stock firmware.
+
 After building and inspecting the image, close any serial monitor and request
 bootloader entry from the running application:
 

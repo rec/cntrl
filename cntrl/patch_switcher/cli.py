@@ -14,7 +14,7 @@ import tyro
 from pydantic import BaseModel, ConfigDict, Field
 from reccy.configuration import units
 
-from .. import build
+from .. import build, flash
 from . import (
     backup_upgrade,
     backups,
@@ -480,11 +480,14 @@ def main() -> None:
         | Annotated[SetupCLI, tyro.conf.subcommand(name='setup')]
         | Annotated[Status, tyro.conf.subcommand(name='status')]
         | Annotated[Songs, tyro.conf.subcommand(name='songs')]
-        | Annotated[build.Build, tyro.conf.subcommand(name='build')],
+        | Annotated[build.Build, tyro.conf.subcommand(name='build')]
+        | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
-        if isinstance(command, build.Build):
+        if isinstance(command, flash.Flash):
+            flash.run(command)
+        elif isinstance(command, build.Build):
             build.run(command)
         elif isinstance(command, Compile):
             assets: dict[str, dict[int, bytes]] = {}

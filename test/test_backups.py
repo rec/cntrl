@@ -81,7 +81,8 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
                     'CNTRL ENTRY 6 1 D 0 686973746f7279',
                     'CNTRL ENTRY 7 6 D 0 4576656e696e67',
                     'CNTRL ENTRY 8 7 D 0 30303030303030303030303030303633',
-                    'CNTRL STORAGE END 8',
+                    'CNTRL ENTRY 9 4 F 5 64656164626565662e62696e',
+                    'CNTRL STORAGE END 9',
                 ]
             )
 
@@ -115,6 +116,8 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
             return b'font'
 
         def download_movie(self, key: int) -> bytes:
+            if key == 0xDEADBEEF:
+                raise FileNotFoundError('device cannot read the stored movie')
             assert key == 0x87654321
             return b'movie'
 
@@ -141,6 +144,9 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
     ]
     assert (directory / 'setups/fonts/12345678.cfont').read_bytes() == b'font'
     assert (directory / 'setups/movies/87654321.cnsa').read_bytes() == b'movie'
+    assert (directory / 'unavailable-assets.txt').read_bytes() == (
+        b'/cntrl/movies/deadbeef.bin\n'
+    )
     storage = tomlkit.parse((directory / 'storage.toml').read_text()).unwrap()
     assert '/cntrl/history/Evening/0000000000000063' in {
         e['path'] for e in storage['entries']

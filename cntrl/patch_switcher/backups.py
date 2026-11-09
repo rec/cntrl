@@ -1,6 +1,7 @@
 """Back up, restore and verify pedal data without recompiling saved setups."""
 
 import struct
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -42,12 +43,14 @@ class Verify(BaseModel, frozen=True):
     port: Path
 
 
-def backup_pedal(directory: Path, port: Path) -> None:
+def backup_pedal(
+    directory: Path, port: Path, connection: transport.SerialConnection | None = None
+) -> None:
     directory.mkdir(parents=True)
     setups = directory / 'setups'
     setups.mkdir()
     print(f'Backup: {directory}', flush=True)
-    with transport.SerialConnection(port, timeout=5) as connection:
+    with connection or transport.SerialConnection(port, timeout=5) as connection:
         client = transport.SetupClient(connection)
         selected = client.current()
         entries = client.catalogue()
@@ -133,7 +136,7 @@ def backup_assets(
 
 
 def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None:
-    """Save every stored asset, including assets used only by older snapshots."""
+    """Save readable stored assets, including those used only by older snapshots."""
     from .cli import save_asset
 
     first = True
@@ -148,6 +151,7 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
     (directory / 'storage.toml').write_bytes(
         tomlkit.dumps(report.model_dump(exclude_none=True)).encode()
     )
+    unavailable: list[str] = []
     for entry in report.entries:
         path = Path(entry.path)
         if (
@@ -169,10 +173,20 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
             path.parent.as_posix().lower() == '/cntrl/movies'
             and path.suffix.lower() == '.bin'
         ):
+            try:
+                data = client.download_movie(key)
+            except FileNotFoundError as error:
+                unavailable.append(entry.path)
+                print(f'Not backed up: {entry.path}: {error}', file=sys.stderr)
+                continue
             save_asset(
                 directory / 'setups/movies' / f'{key:08x}.cnsa',
-                client.download_movie(key),
+                data,
             )
+    if unavailable:
+        (directory / 'unavailable-assets.txt').write_bytes(
+            ('\n'.join(unavailable) + '\n').encode()
+        )
 
 
 def restore_setups(directory: Path, port: Path) -> None:

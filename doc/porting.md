@@ -19,6 +19,16 @@ Select the implementation once:
 cntrl build --target-dir path/to/implementation --output build/device
 ```
 
+Targets that support managed firmware installation also supply `flash_entry.py`.
+`cntrl flash --target-dir path/to/implementation --output build/device --port PORT`
+first completes the normal build and then executes that entry with the selected
+interpreter, `--directory` pointing to the build export and `--port` identifying
+the device. The shared source root and temporary-directory environment are the
+same as for the build. The target owns backup, bootloader entry, upload and
+post-upload verification. `--legacy-usb` is forwarded explicitly for upgrading a
+device still using the earlier text-framed cntrl protocol; binary USB remains
+the default. A target without a flash entry is rejected before building.
+
 `cntrl.build.run` executes the implementation's `build_entry.py` using the current Python interpreter, with
 `--source-root` and `--output` arguments. `--source-root` identifies the shared
 source checkout and can be supplied to the public build command when building

@@ -491,6 +491,8 @@ class SetupClient:
         from ..animation.asset import HEADER
 
         response = self.request(f'CNTRL SPLASH SIZE {key:08x}')
+        if response == 'CNTRL SPLASH ERROR missing':
+            raise FileNotFoundError(f'{key:08x}: device cannot read the stored movie')
         parts = response.split()
         if len(parts) != 4 or parts[:3] != ['CNTRL', 'SPLASH', 'SIZE']:
             raise ValueError(f'invalid movie response: {response}')
