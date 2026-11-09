@@ -156,9 +156,9 @@ changing the candidate, current patch, or other instruments; sending another pat
 on that instrument makes that later send undoable.
 
 When Undo can restore a patch, the candidate pane shows a circular undo light in
-the top-left corner of its title bar. It has two pixels of padding and is drawn
+the top-left corner of its title bar. It has twelve pixels of padding and is drawn
 behind the title text. Its colour is the first of green, blue, black, and white
-with at least 3:1 luminance contrast against the title background. The light is
+with at least 2:1 luminance contrast against the title background. The light is
 off at an undo barrier and while the controller is executing a patch.
 Pages keep their existing controls and displayed instructions.
 Animation does not delay MIDI/history actions.

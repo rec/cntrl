@@ -391,10 +391,12 @@ void test_first_send_blocks_undo_and_preserves_current_patch(const cntrl::Docume
     assert(!std::strcmp(hw.panes[1].lines[1].text, "Flute"));
 }
 
-void test_undo_light_uses_title_contrast_and_two_pixel_padding(const cntrl::Document &source) {
+void test_undo_light_uses_title_contrast_and_twelve_pixel_padding(const cntrl::Document &source) {
     for (const auto &colors : std::initializer_list<std::pair<uint16_t, uint16_t>>{
             {uint16_t(0), uint16_t(0x07e0)}, {uint16_t(0xffff), uint16_t(0x001f)},
-            {uint16_t(0x07e0), uint16_t(0x001f)}, {uint16_t(0x001f), uint16_t(0x07e0)}, {uint16_t(0x8c51), uint16_t(0)}}) {
+            {uint16_t(0x07e0), uint16_t(0x001f)}, {uint16_t(0x001f), uint16_t(0x07e0)},
+            {uint16_t(0x8c51), uint16_t(0x07e0)}, {uint16_t(0x94b2), uint16_t(0x07e0)},
+            {uint16_t(0x9cf3), uint16_t(0x001f)}}) {
         auto bytes = std::vector<uint8_t>(source.data(), source.data() + source.length());
         const unsigned display = source.display_metadata();
         for (unsigned i = 0; i < cntrl::u16(bytes.data() + display + 4); ++i) {
@@ -406,8 +408,8 @@ void test_undo_light_uses_title_contrast_and_two_pixel_padding(const cntrl::Docu
         TestController app(hw); app.activate(doc); app.action(2); app.action(1); app.action(2);
         const auto &light = hw.panes[0].circles[0];
         assert(light.color == colors.second && light.annulus == 0);
-        assert(light.diameter == hw.display_height() / 3 - 4);
-        assert(light.x - light.diameter / 2 == 2 && light.y - light.diameter / 2 == 2);
+        assert(light.diameter == hw.display_height() / 3 - 24);
+        assert(light.x - light.diameter / 2 == 12 && light.y - light.diameter / 2 == 12);
         assert(!hw.panes[1].circles[0].diameter && !hw.panes[2].circles[0].diameter);
         app.action(5); assert(!hw.panes[0].circles[0].diameter);
     }
@@ -838,7 +840,7 @@ int main(int argc, char **argv) {
     test_configured_scrolling(doc);
     test_undo_restores_undone_candidate(doc);
     test_first_send_blocks_undo_and_preserves_current_patch(doc);
-    test_undo_light_uses_title_contrast_and_two_pixel_padding(doc);
+    test_undo_light_uses_title_contrast_and_twelve_pixel_padding(doc);
     test_greyed_aliases(bytes);
     test_setup_editing_and_empty_ui(bytes);
     test_deletion_and_selection_power_loss(bytes);

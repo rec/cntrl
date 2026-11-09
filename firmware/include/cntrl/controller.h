@@ -267,7 +267,7 @@ private:
         const float luminance = 0.2126f * linear(background >> 11, 31)
             + 0.7152f * linear((background >> 5) & 63, 63) + 0.0722f * linear(background & 31, 31);
         const auto contrasts = [luminance](float other) {
-            return (std::max(luminance, other) + 0.05f) / (std::min(luminance, other) + 0.05f) >= 3;
+            return (std::max(luminance, other) + 0.05f) / (std::min(luminance, other) + 0.05f) >= 2;
         };
         if (contrasts(0.7152f)) return 0x07e0;
         if (contrasts(0.0722f)) return 0x001f;
@@ -334,8 +334,8 @@ private:
                 heading.background = foreground;
                 if (slot == 0 && !executor_.busy() && can_undo(depth_)) {
                     const unsigned height = hardware_.display_height() / 3;
-                    const unsigned diameter = height > 4 ? height - 4 : 0;
-                    view.circles[0] = {uint16_t(2 + diameter / 2), uint16_t(2 + diameter / 2), uint16_t(diameter), 0, undo_color(heading.background), 0};
+                    const unsigned pad = 12, diameter = height > 2 * pad ? height - 2 * pad : 0;
+                    view.circles[0] = {uint16_t(pad + diameter / 2), uint16_t(pad + diameter / 2), uint16_t(diameter), 0, undo_color(heading.background), 0};
                 }
             }
             if (slot == 2) for (auto &line : view.lines) line.stippled = true;
