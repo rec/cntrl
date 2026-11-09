@@ -1,0 +1,15 @@
+usage: cntrl status disk-speed [-h] [--port {None}|PATH] [--reset-starts | --no-reset-starts]
+
+Measure USB disk throughput in bytes/second with live byte progress.
+
+Upload, sync, download and verify a 1,000,000-byte scratch file. Report upload, download and round-trip throughput, then remove the scratch file.
+
+ options                                                                        
+ ------------------------------------------------------------------------------ 
+  -h, --help          show this help message and exit                           
+  --port {None}|PATH  Select automatically unless a serial endpoint is          
+                      explicitly supplied. (default: None)                      
+  --reset-starts, --no-reset-starts                                             
+                      Reset the saved startup counter to 1 before reporting     
+                      status. (default: False)                                  
+                                                                                

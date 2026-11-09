@@ -757,19 +757,31 @@ Panic stops an unfinished first sweep one second after C is released and shows
 
 ### USB disk-speed measurement
 
-Status commands discover cntrl devices automatically on macOS and Linux using
-USB device metadata. They select a sole match or offer a numbered choice by
+Status commands discover cntrl devices automatically using USB device metadata.
+They select a sole match or offer a numbered choice by
 product name and serial number when several devices are connected. Unrelated
 serial ports are not opened during discovery. No match produces a connection
 message; multiple matches require an interactive choice. `--port` remains an
 optional explicit endpoint override.
 
-`cntrl status disk-speed` uploads a 1 MB (1,000,000-byte) scratch file, syncs and reopens it, then downloads and verifies
-its contents. It prints `Upload`, `Download`, and their `Total` in milliseconds.
-The timings include USB framing, acknowledgements and filesystem I/O. Connection
-setup, payload generation, final comparison and scratch-file deletion are outside
-the measured intervals. This measures the USB/storage round trip, not isolated
-card throughput.
+`cntrl status disk-speed -h` shows the benchmark's own help page and options.
+`cntrl status disk-speed` uploads a 1 MB (1,000,000-byte) scratch file, syncs and
+reopens it, then downloads and verifies its contents. It reports `Upload`,
+`Download`, and `Round trip` in bytes/second. The round-trip rate is 2,000,000
+bytes divided by the combined upload and download time.
+
+Each direction has a tqdm byte progress bar on stderr, with elapsed time,
+remaining time and transfer rate. Bars are shown when stderr is a terminal;
+stdout contains the final throughput report. Connection setup, payload generation,
+progress-bar setup, final comparison and scratch-file deletion are outside the
+measured intervals. The rates include USB framing, acknowledgements and filesystem
+I/O, so they measure the complete USB/storage path.
+
+The host reads queued serial bytes in bulk and retains prefetched replies, avoiding
+an OS read and availability query for each byte. This is a host-only change using
+the existing protocol. Application data and outer USB frames are both hex encoded,
+so each payload byte still uses approximately four wire bytes, plus protocol
+headers and acknowledgements.
 
 The command exclusively uses `/cntrl/.disk-speed.tmp`, which is reserved for this
 test and may be replaced on the next run after a power loss. Success, transfer

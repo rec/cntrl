@@ -29,6 +29,7 @@ class SerialConnection:
         self.sequence = 1
         self.acknowledged = 0
         self.received = bytearray()
+        self.frame_received = bytearray()
 
     def __enter__(self) -> 'SerialConnection':
         try:
@@ -57,6 +58,7 @@ class SerialConnection:
                 pass  # Cancellation must not wait for an unplugged device.
 
     def close(self) -> None:
+        self.frame_received.clear()
         if self.serial is None:
             return
         port, self.serial = self.serial, None
@@ -73,6 +75,7 @@ class SerialConnection:
             write_timeout=self.timeout,
         )
         self.serial.reset_input_buffer()
+        self.frame_received.clear()
 
     def exchange(self, data: bytes) -> None:
         frame = (
@@ -193,25 +196,35 @@ class SerialConnection:
     def read_frame(self) -> str:
         assert self.serial is not None
         deadline = time.monotonic() + self.timeout
-        result = bytearray()
-        while len(result) < (self.usb_block_size * 2 + 128) * 2 + 64:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError('USB serial response timed out')
-            if not self.serial.in_waiting:
-                self.serial.timeout = remaining
-            value = self.serial.read(1)
-            if not value:
-                raise TimeoutError('USB serial response timed out')
-            if value == b'\n':
+        limit = (self.usb_block_size * 2 + 128) * 2 + 64
+        while True:
+            newline = self.frame_received.find(b'\n')
+            if newline >= 0:
+                result = bytes(self.frame_received[:newline])
+                del self.frame_received[: newline + 1]
+                if len(result) >= limit:
+                    raise self.protocol_error('USB transport response too long', result)
                 try:
                     return result.decode('ascii').rstrip('\r')
                 except UnicodeDecodeError as error:
                     raise self.protocol_error(
-                        f'Invalid USB response encoding: {error}', bytes(result)
+                        f'Invalid USB response encoding: {error}', result
                     ) from error
-            result.extend(value)
-        raise self.protocol_error('USB transport response too long', bytes(result))
+            if len(self.frame_received) >= limit:
+                raise self.protocol_error(
+                    'USB transport response too long', bytes(self.frame_received)
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('USB serial response timed out')
+            available = self.serial.in_waiting
+            if not available:
+                self.serial.timeout = remaining
+            count = min(max(1, available), limit - len(self.frame_received))
+            value = self.serial.read(count)
+            if not value:
+                raise TimeoutError('USB serial response timed out')
+            self.frame_received.extend(value)
 
     def write(self, data: bytes) -> None:
         for i in range(0, len(data), self.usb_block_size):
