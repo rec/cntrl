@@ -4,6 +4,7 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING
 from zlib import crc32
 
 import pytest
@@ -11,6 +12,9 @@ from native_peer import NativePeer
 
 from cntrl.patch_switcher import cli, compiler, models, resolved, transport
 from scripts import native_tests
+
+if TYPE_CHECKING:
+    from pytest_regressions.file_regression import FileRegressionFixture
 
 
 @pytest.fixture(scope='module', params=[1024, 4096])
@@ -362,7 +366,7 @@ def test_incompatible_usb_replies_fail_without_reconnecting(
     response: str,
     message: str,
 ) -> None:
-    connection = transport.SerialConnection(Path('/unused'))
+    connection = transport.SerialConnection(Path('unused'))
     monkeypatch.setattr(connection, 'connect', lambda: None)
     monkeypatch.setattr(connection, 'write_frame', lambda _: None)
     connection.session = 0xABC
@@ -373,13 +377,37 @@ def test_incompatible_usb_replies_fail_without_reconnecting(
 
     monkeypatch.setattr(transport.time, 'sleep', unexpected_wait)
     try:
-        with pytest.raises(transport.UsbProtocolError, match=message):
+        with pytest.raises(transport.UsbProtocolError, match=message) as caught:
             with connection:
                 pytest.fail('An incompatible handshake must not open a session')
+        report = str(caught.value)
+        assert report.startswith('ERROR: ')
+        assert 'Port: unused' in report
+        assert transport.__file__ in report
+        assert 'session=abc, sequence=1, acknowledged_reply=0' in report
+        assert 'usb_block_size=4096' in report
+        assert repr(response) in report
         assert connection.serial is None
         assert 'Waiting' not in capsys.readouterr().err
     finally:
         connection.close()
+
+
+def test_invalid_usb_fields_report_the_full_diagnostic(
+    monkeypatch: pytest.MonkeyPatch, file_regression: 'FileRegressionFixture'
+) -> None:
+    connection = transport.SerialConnection(Path('unused'))
+    connection.session = 0x1234
+    connection.sequence = 9
+    connection.acknowledged = 7
+    monkeypatch.setattr(connection, 'connect', lambda: None)
+    monkeypatch.setattr(connection, 'write_frame', lambda _: None)
+    monkeypatch.setattr(connection, 'read_frame', lambda: 'CNTRL  USB 1234 9 8 0 - \r')
+    with pytest.raises(transport.UsbProtocolError) as caught:
+        connection.exchange(b'')
+    file_regression.check(
+        str(caught.value).replace(transport.__file__, '<transport.py>')
+    )
 
 
 def test_protocol_error_during_a_command_does_not_retry_session_cleanup(
