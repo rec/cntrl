@@ -6,6 +6,8 @@ Product-specific integrations, device-name databases and proprietary protocol
 handlers are excluded. Use standard MIDI messages and configurable mappings
 instead of hard-coded knowledge of particular instruments or effects.
 
+MIDI routing and processing have moved to [midi-processing.md](midi-processing.md).
+
 ## Delivery rules
 
 - Reuse cntrl’s existing patch executor, switch assignments, output scheduler,
@@ -43,42 +45,6 @@ blocking the controller.
 disconnecting one device leaves others usable; reconnection does not replay
 stale performance traffic. Qualify supported hubs, power arrangements and
 device counts.
-
-## 6. MIDI routing matrix
-
-**Outcome:** Route MIDI between DIN, TRS, USB device and USB host ports. For
-example, forward DIN input to both TRS output and a connected computer.
-
-**Scope:** Extend the existing USB MIDI Interface bridge to configured input
-and output pairs, including physical-to-physical and USB-host routes. Add route
-enable controls and make ownership with active diagnostic tools explicit.
-Prevent internal recirculation; document that external cable loops require
-deliberate routing.
-
-**Dependencies:** None. Item 5 is needed only for multiple hosted devices.
-
-**Acceptance:** Only selected routes forward traffic; SysEx and real-time
-messages preserve their required ordering; congestion on one route does not
-stall unrelated routes or the interface. Disabled routes retain no traffic for
-later replay.
-
-## 7. MIDI filtering and conversion
-
-**Outcome:** Filter or transform MIDI on each route. For example, remap channel
-1 to channel 3, convert CC 7 into CC 11, or map a Program Change to a
-configured Control Change.
-
-**Scope:** Match input port, MIDI message type, channel and message fields.
-Support channel remapping, controller-number remapping, value scaling and
-explicit conversion between supported message types. Define rule order and
-whether a match replaces, consumes or passes the original message. Keep
-converted output out of its own input path.
-
-**Dependencies:** Item 6.
-
-**Acceptance:** Unmatched traffic follows the stated policy; transformed values
-remain valid; transformed Note On messages have matching Note Off messages.
-Test multiple rules, real-time interleaving and bounded processing under load.
 
 ## 11. MIDI CC waveform generators
 
@@ -157,7 +123,8 @@ offline workflow separately from serialization tests.
 Start with counters (item 13), which extend existing execution paths without
 new physical inputs.
 Next implement waveforms and timed sequences (items 11 and 12).
-Routing and conversion (6 and 7) form a separate increment.
+Routing and conversion follow the implementation sequence in
+[midi-processing.md](midi-processing.md).
 
 USB host and hub work (item 5) should follow available test
 hardware and actual connection needs. The graphical editor (16) can begin
