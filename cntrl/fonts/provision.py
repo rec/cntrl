@@ -128,10 +128,13 @@ def provision(options: Provision) -> None:
         )
     package = Path(str(distribution('freetype-py').locate_file('freetype')))
     destination = package / name
-    # Replace the directory entry so uv's cached wheel hard links stay untouched.
-    temporary = destination.with_suffix(destination.suffix + '.new')
-    temporary.write_bytes(library.read_bytes())
-    temporary.replace(destination)
+    data = library.read_bytes()
+    # Windows cannot replace a DLL loaded by another qualification process.
+    if not destination.exists() or destination.read_bytes() != data:
+        # Replace the entry so uv's cached wheel hard links stay untouched.
+        temporary = destination.with_suffix(destination.suffix + '.new')
+        temporary.write_bytes(data)
+        temporary.replace(destination)
     print(f'Provisioned FreeType 2.14.3: {destination}')
 
 

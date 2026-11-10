@@ -167,7 +167,7 @@ static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents 
     host.enter_page(); assert(platform.monitor.active() && platform.monitor.tail() == 0);
     assert(host.monitor_button(5, true) && !platform.monitor.active() && app.menu.open());
     app.menu.leave(); host.enter_page(); assert(platform.monitor.active());
-    host.configure_page_settings({}); assert(!platform.monitor.active());
+    host.configure_page_settings(cntrl::PageSettings{}); assert(!platform.monitor.active());
     const unsigned budget = cntrl::memory_budget; cntrl::memory_budget = cntrl::memory_used;
     host.enter_page(); assert(!platform.monitor.active());
     assert(host.monitor_button(2, true) && !platform.monitor.frozen());
