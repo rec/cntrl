@@ -43,7 +43,19 @@ def parse_pickup(value: object) -> object:
 
 def parse_movies(value: object) -> object:
     if isinstance(value, str):
-        return value.split(':') if value else []
+        if not value:
+            return []
+        entries: list[str] = []
+        for entry in value.split(':'):
+            if (
+                entries
+                and re.fullmatch('[A-Za-z]', entries[-1])
+                and entry.startswith(('/', '\\'))
+            ):
+                entries[-1] += ':' + entry
+            else:
+                entries.append(entry)
+        return entries
     return value
 
 

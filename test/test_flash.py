@@ -27,7 +27,9 @@ def test_selected_target_receives_the_completed_export(tmp_path: Path) -> None:
         )
     )
     assert (output / 'firmware.bin').read_bytes() == b'test image\n'
-    assert (output / 'flashed.txt').read_bytes() == b'/unused\nTrue\n'
+    assert (
+        output / 'flashed.txt'
+    ).read_bytes() == f'{Path("/unused")}\nTrue\n'.encode()
 
 
 def test_flash_options_select_a_target_and_explicit_legacy_usb() -> None:

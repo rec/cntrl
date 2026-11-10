@@ -60,9 +60,10 @@ through their distribution's serial-device group or a device-specific udev rule.
 Routine commands should run as the user. Windows needs the USB serial driver
 installed and the port free of other applications.
 
-Movie strings split on colons. Use the list form for Windows drive-qualified
-paths, for example `splash_movie = ['C:\media\startup.gif']` in TOML. UNC paths
-also work as list entries. Relative entries resolve from the setup file. Empty
+Movie strings split on colons, preserving a drive-letter colon before `/` or
+`\`, for example `splash_movie = 'C:\media\startup.gif:D:\media\other.gif'`
+in TOML. Lists support filenames containing other colons. UNC paths work in
+strings and lists. Relative entries resolve from the setup file. Empty
 strings and lists disable that category. Movies stay on SD; their pixel payloads
 do not consume RAM2.
 

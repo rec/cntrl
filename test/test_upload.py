@@ -1,5 +1,6 @@
 """Public helper commands delegate to the selected target without hardware."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -21,7 +22,7 @@ from cntrl.patch_switcher import cli
                 '--sha256',
                 'a' * 64,
             ],
-            'Upload\n/worktree/image with spaces.hex\n' + 'a' * 64 + '\n',
+            f'Upload\n{Path("/worktree/image with spaces.hex")}\n' + 'a' * 64 + '\n',
         ),
     ],
 )
@@ -38,7 +39,7 @@ def test_public_helper_commands_preserve_arguments_output_and_exit_status(
     with pytest.raises(SystemExit) as error:
         cli.main()
     assert error.value.code == 7
-    assert capfd.readouterr().out == expected
+    assert capfd.readouterr().out == expected.replace('\n', os.linesep)
 
 
 def test_public_helper_command_rejects_a_target_without_an_entry(

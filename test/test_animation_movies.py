@@ -20,6 +20,16 @@ from scripts import native_tests
         ([], []),
         ('a.gif', ['a.gif']),
         ('a.gif:b.webp', ['a.gif', 'b.webp']),
+        (r'C:\media\a.gif', [r'C:\media\a.gif']),
+        (
+            r'C:/media/a.gif:D:\media\b.webp',
+            ['C:/media/a.gif', r'D:\media\b.webp'],
+        ),
+        (
+            r'a.gif:C:\media\b.gif:/tmp/c.gif',
+            ['a.gif', r'C:\media\b.gif', '/tmp/c.gif'],
+        ),
+        ('/tmp/a.gif:/tmp/b.gif', ['/tmp/a.gif', '/tmp/b.gif']),
         (['a.gif', 'b.webp'], ['a.gif', 'b.webp']),
         (
             [r'C:\media\a.gif', r'\\server\media\b.gif'],

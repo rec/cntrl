@@ -24,7 +24,7 @@ def run(command: Build) -> None:
     (command.output / 'build.toml').write_bytes(
         "# Café А\nimage = 'firmware.bin'\ntarget = 'target.toml'\n".encode()
     )
-    (command.output / 'firmware.bin').write_text('test image\n')
+    (command.output / 'firmware.bin').write_bytes(b'test image\n')
     (command.output / 'target.toml').write_text("buttons = ['one']\n")
 
 
