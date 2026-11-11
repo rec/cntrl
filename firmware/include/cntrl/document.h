@@ -165,7 +165,7 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!p[0] || !text_valid(p, 32) || p[32] > PageLayout::midi_looper
+            if (!p[0] || !text_valid(p, 32) || p[32] > PageLayout::arpeggiator
                 || p[33] > windows || (p[32] == 10 && p[33])
                 || (p[32] == PageLayout::midi_monitor && (p[33] < 1 || p[33] > 3))) return false;
             bool seen[256] = {};
@@ -296,8 +296,28 @@ public:
             }
             looper = names; names += 14;
         }
+        unsigned arpeggiator = 0;
+        if (names + 4 <= length && !std::memcmp(bytes + names,"CARP",4)) {
+            if (length - names < 50) return false;
+            const auto *p = bytes + names;
+            uint64_t step = uint64_t(u32(p + 18)) | uint64_t(u32(p + 22)) << 32;
+            uint64_t gate = uint64_t(u32(p + 26)) | uint64_t(u32(p + 30)) << 32;
+            if (p[4] != 1 || p[5] > 1 || p[6] > 8 || p[7] > 15 || !u16(p + 8)
+                || !u16(p + 10) || (u16(p + 10) & ~input_routes) || !u16(p + 12) || (u16(p + 12) & ~output_routes)
+                || !u16(p + 14) || u16(p + 14) > 4096 || u16(p + 16) < 2
+                || !gate || gate > step || step > (uint64_t(64) << 32)
+                || !u32(p + 42) || uint64_t(u32(p + 34)) + u32(p + 38) > u32(p + 42) || !u32(p + 46)
+                || !output_mask_valid(u16(p + 12),bytes + meta + trs_modes_offset,bytes[19],hardware)) return false;
+            uint64_t required = uint64_t(u16(p + 14)) * 1536 + 32768;
+            if (looper) required += 156u * u16(bytes + looper + 12) + 33472u;
+            if (u32(bytes + meta + scrolling_offset + 6) < required || hardware.memory_capacity() < hardware.memory_runtime()
+                || u32(bytes + meta + scrolling_offset + 6) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
+            arpeggiator = names; names += 50;
+        }
         for (unsigned i = 0; i < page_count; ++i)
             if (arrangement.page(i)[0] == PageLayout::midi_looper && !looper) return false;
+        for (unsigned i = 0; i < page_count; ++i)
+            if (arrangement.page(i)[0] == PageLayout::arpeggiator && !arpeggiator) return false;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -454,6 +474,10 @@ public:
     const uint8_t *midi_streams() const { return streams_ ? data_ + streams_ : nullptr; }
     unsigned midi_streams_size() const { return streams_ ? u32(data_ + streams_ + 4) : 0; }
     const uint8_t *looper_settings() const { return looper_ ? data_ + looper_ : nullptr; }
+    const uint8_t *arpeggiator_settings() const {
+        const auto *p = arpeggiator_section();
+        return !std::memcmp(p,"CARP",4) ? p : nullptr;
+    }
     bool pickup(unsigned root = 65535) const {
         unsigned policy = pickup_ ? data_[pickup_ + 6] : 0;
         if (pickup_ && root < nodes() && data_[pickup_ + 9 + root]) policy = data_[pickup_ + 9 + root];
@@ -564,11 +588,16 @@ public:
         p += 4 + slot * 24;
         return u16(p) != 65535 ? p : nullptr;
     }
-    unsigned page_section_size() const {
+    const uint8_t *arpeggiator_section() const {
         const uint8_t *end = counter_section() + (counters() ? 6 + counters() * 104 : 0);
         if (!std::memcmp(end, "CSTR", 4)) end += u32(end + 4);
         if (!std::memcmp(end, "CPUP", 4)) end += 9 + u16(end + 4);
         if (!std::memcmp(end, "CLOP", 4)) end += 14;
+        return end;
+    }
+    unsigned page_section_size() const {
+        const uint8_t *end = arpeggiator_section();
+        if (!std::memcmp(end,"CARP",4)) end += 50;
         return unsigned(end - bank(patches()));
     }
     const uint8_t *movie_section() const {

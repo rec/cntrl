@@ -3,6 +3,7 @@
 #include "midi_bridge.h"
 #include "midi_monitor.h"
 #include "text_messages.h"
+#include "midi_arpeggiator.h"
 #include <cstdio>
 #include <limits>
 
@@ -21,17 +22,22 @@ struct InputEvent {
 class Runtime {
 public:
     TextMessages text_messages;
+    MidiArpeggiator arpeggiator;
     Monitor &monitor() { return monitor_; }
     Streams &streams() { return streams_; }
     uint64_t stream_time(uint32_t now) { return extend(now); }
     Runtime(unsigned source_items = 64, unsigned input_budget_us = 180)
         : source_items_(source_items), input_budget_us_(input_budget_us) {}
     template<class Services>
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_runtime_poll)
+#endif
     void poll(Services &s) {
         s.midi_transport_poll();
         auto &bridge = s.midi_bridge();
         auto &files = s.runtime_midi_files();
         auto &pages = s.runtime_pages();
+        s.note_routing = &arpeggiator;
         bridge.host_connected(s.midi_host_connected());
         uint32_t begin = s.microseconds(), now = s.milliseconds();
         text_messages.poll(now);
@@ -44,8 +50,11 @@ public:
             uint64_t identity = endpoint_identity(s, endpoint.route, 0);
             uint64_t generation = endpoint_generation(s, endpoint.route, 0);
             if (!present || generation != generations_[endpoint.route] || !bridge.usb_enabled(endpoint.route)) text_messages.forget(endpoint.route);
+            if (!bridge.usb_enabled(endpoint.route)) arpeggiator.disconnect(endpoint.route);
             if (!present || generation != generations_[endpoint.route]) s.forget_pickup_source(endpoint.route);
             if (!present || generation != generations_[endpoint.route]) {
+                arpeggiator.disconnect(endpoint.route);
+                for (unsigned cable = 0; cable < 16; ++cable) arpeggiator_parsers_[endpoint.route * 16 + cable].reset();
                 files.looper.connection(endpoint.route); files.forget_input(endpoint.route); s.forget_output(endpoint.route);
             }
             if (monitor_.active()) monitor_.connection(endpoint.route, present, identity, generation, s.microseconds());
@@ -60,6 +69,7 @@ public:
         if (!s.midi_document_valid()) streams_.stop_all();
         if (!s.midi_document_valid()) pages.generator.stop();
         if (!s.midi_document_valid()) files.looper.clear();
+        if (!s.midi_document_valid()) arpeggiator.stop();
         unsigned available = s.clock_available();
         bool reserved = false;
 #if CNTRL_PANIC
@@ -69,6 +79,7 @@ public:
         reserved = reserved || s.cable_test.enabled();
 #endif
         if (reserved) files.looper.stop();
+        if (reserved) arpeggiator.suspend();
         pages.clock_connections(available);
         unsigned stream_clocks = streams_.clock_outputs();
         streams_.clock_owner(files.player.clock_outputs() | (pages.clock_owner() & ~stream_clocks));
@@ -97,6 +108,15 @@ public:
                 if (status == 0xf8 || (status >= 0xfa && status <= 0xfc))
                     pages.clock_message(event.clock_source, status, timestamp);
                 auto position = pages.beat_position(timestamp);
+                if (!reserved) {
+                    auto arp_position = pages.arpeggiator_beat_position(timestamp);
+                    arpeggiator.poll(arp_position,available,bridge.busy_outputs() | files.player.sysex_outputs() | streams_.sysex_outputs(),s,pages.clock_period());
+                    if (event.packetized) arpeggiator.receive(event.input,event.cable,event.packet,arp_position);
+                    else if (event.input < 16 && event.cable < 16) {
+                        Packet packet;
+                        if (arpeggiator_parsers_[event.input * 16 + event.cable].receive(event.byte,packet)) arpeggiator.receive(event.input,event.cable,packet,arp_position);
+                    }
+                }
                 if (!reserved) files.looper.poll(position,pages.clock_ready(),available,s,pages.clock_period());
                 if (event.packetized) files.receive(event.input,event.packet,timestamp,reserved ? BeatPosition{} : position);
                 else files.receive(event.input,event.byte,timestamp,reserved ? BeatPosition{} : position);
@@ -126,6 +146,7 @@ public:
         }
         source_cursor_ = count ? (source_cursor_ + 1) % count : 0;
         files.looper.poll(pages.beat_position(s.microseconds()),pages.clock_ready(),available,s,pages.clock_period());
+        arpeggiator.poll(pages.arpeggiator_beat_position(s.microseconds()),available,bridge.busy_outputs() | files.player.sysex_outputs() | streams_.sysex_outputs(),s,pages.clock_period());
 #if CNTRL_SWITCHES
         s.midi_switch_tick(now);
 #endif
@@ -202,6 +223,7 @@ public:
     }
 private:
     Monitor monitor_;
+    std::array<Parser,256> arpeggiator_parsers_{};
     Streams streams_;
     uint64_t generations_[max_routes] = {};
     uint64_t stream_time_ = 0;

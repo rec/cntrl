@@ -15,9 +15,9 @@ physical timing and receiver qualification remain outstanding in
 
 ## Arpeggiator
 
-Implement the arpeggiator page and MIDI processing for both polyphonic and
-monophonic instruments, using arpeg as a reference. See the
-[arpeggiator plan](arpeggiator).
+Implemented the [arpeggiator](../doc/arpeggiator.md) for held polyphonic notes
+and captured monophonic gestures, synchronized to the shared beat clock.
+Hardware timing and receiver qualification remain outstanding.
 
 ## Drone controller
 

@@ -112,8 +112,23 @@ struct Counters {
     unsigned high_water = 0;
 };
 
+struct NoteRouting {
+    virtual ~NoteRouting() = default;
+    virtual bool suppress(unsigned output, const Packet &packet) = 0;
+    virtual void accepted(unsigned output, const Packet &packet) = 0;
+};
+
 struct Sink {
     virtual ~Sink() = default;
+    NoteRouting *note_routing = nullptr;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_submit_arpeggiator)
+#endif
+    bool submit_arpeggiator(unsigned output, const Packet &packet) {
+        if (!pickup_.flush(output,now_,state_,Writer{*this},true)) return false;
+        if (!ownership_.submit(output, packet, true, RawWriter{*this}, 65537)) return false;
+        pickup_.observe(state_); return true;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(sink_submit)
 #endif
@@ -123,7 +138,14 @@ struct Sink {
         pickup_.observe(state_);
         return true;
     }
-    bool reserve_loop_ownership(unsigned keys) { return ownership_.reserve(keys); }
+    bool reserve_loop_ownership(unsigned keys) {
+        if (!ownership_.reserve(std::max(keys,arpeggiator_keys_))) return false;
+        loop_keys_ = keys; return true;
+    }
+    bool reserve_arpeggiator_ownership(unsigned keys) {
+        if (!ownership_.reserve(std::max(keys,loop_keys_))) return false;
+        arpeggiator_keys_ = keys; return true;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(sink_submit_loop)
 #endif
@@ -237,6 +259,7 @@ private:
     };
     Pickup pickup_;
     Ownership ownership_;
+    unsigned loop_keys_ = 0, arpeggiator_keys_ = 0;
     uint32_t now_ = 0;
     MidiState state_;
     ParameterTransaction parameter_locks_[16] = {};
@@ -245,7 +268,10 @@ private:
     CNTRL_FLASH_ROUTINE(sink_write)
 #endif
     bool write(unsigned destination, const Packet &packet) {
-        return ownership_.submit(destination, packet, false, RawWriter{*this});
+        if (note_routing && note_routing->suppress(destination,packet)) return true;
+        bool accepted = ownership_.submit(destination, packet, false, RawWriter{*this});
+        if (accepted && note_routing) note_routing->accepted(destination,packet);
+        return accepted;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(sink_write_raw)

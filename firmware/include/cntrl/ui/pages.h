@@ -5,6 +5,7 @@
 #include <cntrl/midi_outputs.h>
 #include <cntrl/midi_monitor.h>
 #include <cntrl/midi_looper.h>
+#include <cntrl/midi_arpeggiator.h>
 #include <cntrl/cable_test.h>
 #include <cntrl/panic.h>
 #include "fonts.h"
@@ -59,7 +60,8 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, confirm_firmware };
+    midi::MidiArpeggiator *arpeggiator = nullptr;
     midi::Monitor *monitor = nullptr;
     midi::MidiLooper *looper = nullptr;
     char looper_prompt[96] = {};
@@ -120,6 +122,7 @@ public:
     }
     cntrl::ClockGenerator generator;
     unsigned clock_outputs() const { return settings_[cntrl::PageSettings::clock_outputs]; }
+    bool external_clock() const { return external_; }
     unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
     bool clock_page() const { return page_ == Page::clock_transport || page_ == Page::clock_tempo; }
     void clock_connections(unsigned available) {
@@ -172,7 +175,9 @@ public:
         dirty_ = true;
     }
     void clock(unsigned source, uint32_t now_us) { clock_.clock(source, now_us); }
-    void clock_message(unsigned source, uint8_t status, uint32_t now_us) { clock_.transport(source, status, now_us); }
+    void clock_message(unsigned source, uint8_t status, uint32_t now_us) {
+        if (clock_.transport(source,status,now_us) && external_ && status == 0xfc && arpeggiator) arpeggiator->stop();
+    }
     bool clock_ready() const { return !external_ || clock_.available(); }
     unsigned clock_period() const { return external_ ? unsigned(clock_.period_us()) : generator.period_us(); }
     cntrl::midi::BeatPosition beat_position(uint32_t now_us) {
@@ -182,6 +187,14 @@ public:
             ++beat_restart_; beat_source_restart_ = position.restart; beat_external_ = external_; clock_changed_ = false;
         }
         position.restart = beat_restart_; return position;
+    }
+    cntrl::midi::BeatPosition arpeggiator_beat_position(uint32_t now_us) {
+        auto position = beat_position(now_us);
+        if (external_) {
+            auto continuing = clock_.holdover_position(now_us);
+            position.value = continuing.value; position.running = continuing.running;
+        }
+        return position;
     }
     void time(uint32_t now, uint32_t now_us, bool held) {
         held_ = held;
@@ -202,6 +215,7 @@ public:
         if (dirty_) return true;
         if (page_ == Page::midi_monitor) return uint32_t(now - refreshed_) >= midi::Monitor::refresh_ms;
         if (page_ == Page::midi_looper) return uint32_t(now - refreshed_) >= 50;
+        if (page_ == Page::arpeggiator) return uint32_t(now - refreshed_) >= 50;
         if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
@@ -216,6 +230,7 @@ public:
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
         if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
         if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
+        if (page_ == Page::arpeggiator) { arpeggiator_view(pane); return pane; }
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
         if (page_ == Page::confirm_firmware) {
             const unsigned height = title * 3 / 2;
@@ -411,6 +426,24 @@ public:
         return pane;
     }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(arpeggiator_view)
+#endif
+    void arpeggiator_view(Pane &pane) {
+        using R = cntrl::PageSettings;
+        line(pane,0,"Arpeggiator",2,18,settings_[R::title_font],true);
+        const char *states[] = {"Off","Waiting","Playing","Record armed","Recording","Finish armed"};
+        const char *selections[] = {"Forward","Reverse","Played","Back and forth","Random","Random walk","Mod","Shuffle","Outside in"};
+        const char *errors[] = {"","Capacity exceeded","Clock unavailable","Output blocked"};
+        char text[96];
+        std::snprintf(text,sizeof(text),"%s %s",arpeggiator && arpeggiator->mono() ? "Mono" : "Poly",arpeggiator && arpeggiator->configured() ? states[unsigned(arpeggiator->state())] : "Unavailable");
+        line(pane,1,text,24,14,settings_[R::status_font],true);
+        line(pane,2,arpeggiator ? selections[arpeggiator->selection()] : "",42,12,settings_[R::status_font],true);
+        std::snprintf(text,sizeof(text),"%u entries",arpeggiator ? arpeggiator->size() : 0);
+        line(pane,3,text,58,12,settings_[R::status_font],true);
+        line(pane,4,arpeggiator ? errors[unsigned(arpeggiator->error())] : "",74,12,settings_[R::status_font],true);
+        line(pane,5,arpeggiator && arpeggiator->mono() ? prompt("%s Rec/Finish %s Play/Stop",controls_.previous,controls_.next) : prompt("%s On/Off",controls_.next),90,12,settings_[R::status_font],true);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_view)
 #endif

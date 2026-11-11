@@ -471,6 +471,7 @@ public:
             connection->transport == cntrl::midi::OutputTransport::physical ? 0 : binding.index, packet, micros(), diagnostic_traffic);
     }
     cntrl::midi::Monitor &midi_monitor() { return midi_runtime_.monitor(); }
+    cntrl::midi::MidiArpeggiator &arpeggiator() { return midi_runtime_.arpeggiator; }
     cntrl::TextMessages &text_messages() { return midi_runtime_.text_messages; }
     void midi_reset() { midi_runtime_.reset(*this); }
     void midi_status(unsigned route) { midi_runtime_.status(bridge_, route, documents.document(), *this); }
@@ -861,6 +862,7 @@ bool switch_scan_due() { return cooperative_runtime.scan_due(millis()); }
 FLASHMEM void initialize_target() {
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     board.page_host().looper_files(midi_files,board);
+    board.page_host().arpeggiator(board.arpeggiator());
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session.reset();
     usb_session.text_messages(board.text_messages());

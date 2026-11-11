@@ -11,6 +11,16 @@ def pack(show: models.Setup, target: models.Target) -> bytes:
         if not any(p.type == 'midi-looper' for p in show.pages.values()):
             return b''
         settings = models.LooperSettings()
+    channels, inputs, outputs = routing(settings, show, target)
+    return CONFIG.pack(b'CLOP', 1, channels, inputs, outputs, settings.events)
+
+
+def routing(
+    settings: models.LooperSettings, show: models.Setup, target: models.Target
+) -> tuple[int, int, int]:
+    label = (
+        'arpeggiator' if isinstance(settings, models.ArpeggiatorSettings) else 'looper'
+    )
     incoming = {
         e.name: e.route
         for e in target.midi_endpoints
@@ -28,20 +38,17 @@ def pack(show: models.Setup, target: models.Target) -> bytes:
     inputs = settings.inputs if settings.inputs is not None else list(incoming)
     outputs = settings.outputs or [target.default_midi_output]
     if not inputs:
-        raise ValueError('page_settings.looper: target has no MIDI inputs')
+        raise ValueError(f'page_settings.{label}: target has no MIDI inputs')
     for n in inputs:
         if n not in incoming:
-            raise ValueError(f'page_settings.looper: unavailable input {n!r}')
+            raise ValueError(f'page_settings.{label}: unavailable input {n!r}')
     for n in outputs:
         if n not in outgoing:
-            raise ValueError(f'page_settings.looper: unavailable output {n!r}')
-    return CONFIG.pack(
-        b'CLOP',
-        1,
+            raise ValueError(f'page_settings.{label}: unavailable output {n!r}')
+    return (
         sum(1 << (c - 1) for c in settings.channels),
         sum(1 << incoming[n] for n in inputs),
         sum(1 << outgoing[n] for n in outputs),
-        settings.events,
     )
 
 

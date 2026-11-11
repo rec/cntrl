@@ -92,4 +92,5 @@ PAGE_TYPES = (
     'patch-switcher',
     'midi-monitor',
     'midi-looper',
+    'arpeggiator',
 )

@@ -50,9 +50,11 @@ public:
         source_ = -1; count_ = 0; stale_ = true;
         beat_value_ = 0; beat_remainder_ = 0; ++restart_;
         playing_ = true; first_tick_ = true; waiting_ = false;
+        continuing_value_ = continuing_remainder_ = 0; continuing_time_ = 0;
     }
     void clock(unsigned source, uint32_t now) {
         if (!clocks_) return;
+        holdover_position(now);
         if (source_ < 0 || stale_ || uint32_t(now - last_) > timeout_) {
             source_ = int(source); last_ = now; count_ = 0; elapsed_ = 0; stale_ = false; first_tick_ = false; waiting_ = false; return;
         }
@@ -68,20 +70,25 @@ public:
         last_ = now;
         ++count_;
         if (count_ >= window_ && elapsed_) {
-            period_us_ = elapsed_ * clocks_ / count_;
+            uint64_t period = elapsed_ * clocks_ / count_;
+            if (period_us_) continuing_remainder_ = continuing_remainder_ * period / period_us_;
+            else continuing_value_ = beat_value_;
+            period_us_ = period;
             elapsed_ = 0; count_ = 0;
         }
     }
     uint64_t period_us() const { return period_us_; }
-    void transport(unsigned source, uint8_t status, uint32_t now) {
-        if (status == 0xf8) { clock(source, now); return; }
-        if (status < 0xfa || status > 0xfc || (source_ >= 0 && source_ != int(source) && !stale_)) return;
+    bool transport(unsigned source, uint8_t status, uint32_t now) {
+        if (status == 0xf8) { clock(source, now); return true; }
+        if (status < 0xfa || status > 0xfc || (source_ >= 0 && source_ != int(source) && !stale_)) return false;
+        holdover_position(now);
         if (status == 0xfc) beat_value_ = beat_position(now).value;
         source_ = int(source);
         playing_ = status != 0xfc;
         waiting_ = playing_;
-        if (status == 0xfa) { beat_value_ = 0; beat_remainder_ = 0; ++restart_; }
+        if (status == 0xfa) { beat_value_ = 0; beat_remainder_ = 0; continuing_value_ = continuing_remainder_ = 0; ++restart_; }
         if (playing_) { first_tick_ = true; last_ = now; stale_ = true; }
+        return true;
     }
     midi::BeatPosition beat_position(uint32_t now) const {
         uint64_t value = beat_value_;
@@ -90,6 +97,14 @@ public:
             value += elapsed * (uint64_t(1) << 32) / period_us_;
         }
         return {value, restart_, playing_ && active()};
+    }
+    midi::BeatPosition holdover_position(uint32_t now) {
+        uint64_t elapsed = uint32_t(now - continuing_time_); continuing_time_ = now;
+        if (playing_ && period_us_ && source_ >= 0) {
+            uint64_t numerator = elapsed * (uint64_t(1) << 32) + continuing_remainder_;
+            continuing_value_ += numerator / period_us_; continuing_remainder_ = numerator % period_us_;
+        }
+        return {continuing_value_,restart_,playing_ && period_us_ && source_ >= 0};
     }
     void poll(uint32_t now) {
         if (waiting_ && uint32_t(now - last_) > timeout_) waiting_ = false;
@@ -109,5 +124,7 @@ private:
     uint32_t timeout_ = 0, last_ = 0;
     uint64_t period_us_ = 0, elapsed_ = 0;
     bool stale_ = true;
+    uint64_t continuing_value_ = 0, continuing_remainder_ = 0;
+    uint32_t continuing_time_ = 0;
 };
 } // namespace cntrl

@@ -53,6 +53,7 @@ struct Pages {
     unsigned clock_owner() const { return 0; }
     void clock_message(unsigned, uint8_t, uint32_t) {}
     cntrl::midi::BeatPosition beat_position(uint32_t) { return {}; }
+    cntrl::midi::BeatPosition arpeggiator_beat_position(uint32_t) { return {}; }
     bool clock_ready() const { return true; }
     unsigned clock_period() const { return 500000; }
 };

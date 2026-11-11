@@ -261,7 +261,7 @@ public:
         if ((state_ == State::recording || state_ == State::overdubbing) && close_ && clock.value >= close_) close_take();
         if (state_ == State::overdubbing && !capture_edges(clock.value - capture_origin_)) return;
         if ((state_ == State::recording || state_ == State::overdubbing)
-            && !capture_.flush(clock.value - capture_origin_,false,Emitter{*this})) { abort_candidate(Error::capacity); return; }
+            && !capture_.flush(clock.value - capture_origin_,false,{this,emit_capture})) { abort_candidate(Error::capacity); return; }
         if (state_ == State::closing) {
             first_pending_ = active_ == absent;
             if (first_pending_ && late_us(clock.value - close_) > 1000) { abort_candidate(Error::late); return; }
@@ -323,7 +323,7 @@ private:
                     if (held_[j].channel == channel && held_[j].key == key) return;
             }
         }
-        if (!capture_.receive(source,packet,tick,Emitter{*this})) abort_candidate(Error::capacity);
+        if (!capture_.receive(source,packet,tick,{this,emit_capture})) abort_candidate(Error::capacity);
     }
     static constexpr unsigned absent = 3;
     struct Generation { LoopFile source, index; uint64_t length = 0, last_time = 0; unsigned count = 0; };
@@ -352,10 +352,9 @@ private:
     unsigned quarter_us_ = 500000, maximum_late_us_ = 0;
     unsigned peak_events_ = 0, peak_held_ = 0;
     unsigned pairing_ = 1;
-    struct Emitter {
-        MidiLooper &loop;
-        bool operator()(const Packet *packets, unsigned count, uint64_t tick) const { return loop.append_packets(packets,count,tick); }
-    };
+    static bool emit_capture(void *context,const Packet *packets,unsigned count,uint64_t tick) {
+        return static_cast<MidiLooper *>(context)->append_packets(packets,count,tick);
+    }
     static uint64_t next_beat(uint64_t position) { return (position / beat + 1) * beat; }
     static uint64_t indexed_ticks(uint64_t position) { return position / beat * ppqn + (position % beat * ppqn + beat - 1) / beat; }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -475,7 +474,7 @@ private:
     bool capture_edges(uint64_t position) {
         uint64_t cycle = position / length();
         if (cycle == capture_cycle_) return true;
-        if (!capture_.flush((capture_cycle_ + 1) * length(),true,Emitter{*this})) { abort_candidate(Error::capacity); return false; }
+        if (!capture_.flush((capture_cycle_ + 1) * length(),true,{this,emit_capture})) { abort_candidate(Error::capacity); return false; }
         if (!close_held((capture_cycle_ + 1) * length())) return false;
         capture_cycle_ = cycle; return true;
     }
@@ -484,7 +483,7 @@ private:
 #endif
     void close_take() {
         uint64_t duration = close_ - capture_origin_;
-        if (!capture_.flush(duration,true,Emitter{*this})) { abort_candidate(Error::capacity); return; }
+        if (!capture_.flush(duration,true,{this,emit_capture})) { abort_candidate(Error::capacity); return; }
         if (!close_held(duration)) return;
         auto &g = generations_[candidate_]; g.length = active_ < 3 ? length() : duration;
         length_ = g.length;
@@ -677,7 +676,7 @@ private:
                 if (state_ != State::loading) return;
             }
             if (import_cursor_ != import_count_) return;
-            if (!capture_.flush(import_length_,true,Emitter{*this}) || !close_held(import_length_)) { abort_candidate(Error::capacity); return; }
+            if (!capture_.flush(import_length_,true,{this,emit_capture}) || !close_held(import_length_)) { abort_candidate(Error::capacity); return; }
             generations_[candidate_].length = length_ = import_length_;
             import_pending_ = true; import_stage_ = 4;
             begin_merge(false); return;

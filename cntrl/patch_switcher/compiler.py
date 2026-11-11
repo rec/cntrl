@@ -11,6 +11,7 @@ import tomlkit
 from pydantic import ValidationError
 
 from . import (
+    arpeggiator,
     counters,
     display,
     inputs,
@@ -564,6 +565,7 @@ def compile_show(
         expression = page_settings.pack_expression(show, target, jacks)
         keyboard = page_settings.pack_keyboard(show, target)
         looper_settings = looper.pack(show, target)
+        arpeggiator_settings = arpeggiator.pack(show, target)
         page_layout = layout.pack(show.pages, [d.id for d in target.displays])
         relay_settings = relay_outputs.pack(show, target)
         counter_settings = counters.pack(compiler.counters, show, target)
@@ -659,7 +661,8 @@ def compile_show(
         ),
         sum(p.ram2_bytes for p in show.pages.values())
         + midi_processing.estimate_ram(stream_settings)
-        + looper.estimate_ram(looper_settings),
+        + looper.estimate_ram(looper_settings)
+        + arpeggiator.estimate_ram(arpeggiator_settings),
         crc32(setup_name_bytes),
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
@@ -703,6 +706,7 @@ def compile_show(
             [compiler.presentation(i)[1].pickup for i in range(len(compiler.values))],
         )
         + looper_settings
+        + arpeggiator_settings
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)

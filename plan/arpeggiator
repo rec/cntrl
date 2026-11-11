@@ -1,5 +1,9 @@
 # Tap-synced MIDI arpeggiator
 
+Implemented in the shared runtime and utility-page system. See
+[the arpeggiator guide](../doc/arpeggiator.md) for configuration and controls.
+Hardware timing and receiver qualification remain outstanding.
+
 A keyboard player toggles the arpeggiator on, holds a chord, and hears one
 selected note on each grid step. A monophonic player records a phrase with
 the looper gestures, then hears its complete note gestures in the selected
@@ -38,8 +42,9 @@ Schedule against the shared beat position from [MIDI Clock](../doc/midi-clock.md
 Tapping a new tempo changes the working BPM while preserving grid phase.
 Start on a grid boundary, derive deadlines from absolute beat positions, and
 service due releases before another attack. Use the selected external clock
-when configured. Transport stop or clock loss releases sounding notes.
-Proposed poly behavior when the internal transport is stopped: the On press
+when configured. An explicit transport Stop switches poly mode Off and restores
+the held chord. Missing external clock ticks continue at the last measured tempo.
+Approved poly behavior when the internal transport is stopped: the On press
 starts the internal beat so enabling the effect still takes one press. Off
 stops the arpeggiator only. External mode waits for a running external clock.
 
@@ -94,7 +99,7 @@ All selectors rest with zero entries and select 0 once per hit with one entry.
 Use a local seeded generator for reproducible random tests. Two additional
 ideas from arpeg are `shuffle`, which visits every rank once before drawing
 a fresh permutation, and `outside_in`, which alternates the lowest and highest
-remaining ranks. Treat these as optional selections after the requested six.
+remaining ranks. Both additional selections were approved for implementation.
 
 ## Implementation and acceptance
 

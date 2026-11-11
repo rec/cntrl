@@ -5,7 +5,7 @@
 namespace cntrl {
 // Named page records belong to the active document. Display IDs are in physical order.
 struct PageLayout {
-    static constexpr unsigned max_controllers = 4, max_pages = 36, patch_switcher = 11, midi_monitor = 12, midi_looper = 13;
+    static constexpr unsigned max_controllers = 4, max_pages = 36, patch_switcher = 11, midi_monitor = 12, midi_looper = 13, arpeggiator = 14;
     const uint8_t *records = nullptr;
     unsigned pages() const { return records ? records[4] : 0; }
     unsigned windows() const { return records ? records[5] : 0; }

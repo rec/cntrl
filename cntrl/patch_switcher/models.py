@@ -1,6 +1,7 @@
 """Setup and instrument-table formats, separate from hardware catalogues."""
 
 import re
+from fractions import Fraction
 from functools import cached_property
 from typing import Annotated, Literal
 
@@ -27,6 +28,15 @@ def millisecond_resolution(value: float) -> float:
     if value != round(value * 1000) / 1000:
         raise ValueError('duration must be a whole number of milliseconds')
     return value
+
+
+def arpeggiator_fraction(value: str) -> Fraction:
+    try:
+        return Fraction(value)
+    except ZeroDivisionError:
+        raise ValueError(
+            'arpeggiator fractions require a nonzero denominator'
+        ) from None
 
 
 def parse_tags(value: object) -> object:
@@ -820,7 +830,103 @@ class LooperSettings(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class ArpeggiatorSelection(BaseModel, frozen=True):
+    kind: Literal['ascending', 'descending', 'choice', 'shuffle', 'outside_in'] = (
+        'ascending'
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class ArpeggiatorPlayed(BaseModel, frozen=True):
+    kind: Literal['played'] = 'played'
+    direction: Literal['forward', 'reverse'] = 'forward'
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class ArpeggiatorAlternating(BaseModel, frozen=True):
+    kind: Literal['alternating'] = 'alternating'
+    repeat_begin: bool = False
+    repeat_end: bool = False
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class ArpeggiatorWalk(BaseModel, frozen=True):
+    kind: Literal['walk'] = 'walk'
+    cycle: bool = False
+    prob_up: str = '1/2'
+    prob_down: str = '1/2'
+
+    @model_validator(mode='after')
+    def valid_selection(self) -> 'ArpeggiatorWalk':
+        up = arpeggiator_fraction(self.prob_up)
+        down = arpeggiator_fraction(self.prob_down)
+        if up < 0 or down < 0 or up + down > 1:
+            raise ValueError(
+                'walk probabilities must be nonnegative and sum to at most one'
+            )
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class ArpeggiatorMod(BaseModel, frozen=True):
+    kind: Literal['mod'] = 'mod'
+    modulus: Annotated[int, Field(strict=True, ge=2, le=4096)] = 2
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class ArpeggiatorRhythm(BaseModel, frozen=True):
+    kind: Literal['grid'] = 'grid'
+    step: str = '1/4 beat'
+
+    @field_validator('step')
+    @classmethod
+    def valid_step(cls, value: str) -> str:
+        if (
+            not value.endswith(' beat')
+            or not 0 < arpeggiator_fraction(value[:-5]) <= 64
+        ):
+            raise ValueError(
+                'arpeggiator step must be a positive duration up to 64 beats'
+            )
+        return value
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class ArpeggiatorSettings(LooperSettings, frozen=True):
+    events: Annotated[int, Field(strict=True, ge=1, le=4096)] = 128
+    mode: Literal['poly', 'mono'] = 'poly'
+    selection: Annotated[
+        ArpeggiatorSelection
+        | ArpeggiatorPlayed
+        | ArpeggiatorAlternating
+        | ArpeggiatorWalk
+        | ArpeggiatorMod,
+        Field(discriminator='kind'),
+    ] = Field(default_factory=ArpeggiatorSelection)
+    rhythm: ArpeggiatorRhythm = Field(default_factory=ArpeggiatorRhythm)
+    gate: str = '4/5'
+    seed: Annotated[int, Field(strict=True, ge=1, le=4294967295)] = 42
+
+    @field_validator('gate')
+    @classmethod
+    def valid_gate(cls, value: str) -> str:
+        if not 0 < arpeggiator_fraction(value) <= 1:
+            raise ValueError(
+                'arpeggiator gate must be greater than zero and at most one'
+            )
+        return value
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class PageSettings(BaseModel, frozen=True):
+    arpeggiator: ArpeggiatorSettings | None = None
     looper: LooperSettings | None = None
     keyboard: list[KeyboardShortcut] = Field(default_factory=list)
     expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)
@@ -945,6 +1051,7 @@ class Page(BaseModel, frozen=True):
         'keyboard',
         'midi-monitor',
         'midi-looper',
+        'arpeggiator',
         'None',
     ] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)

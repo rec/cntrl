@@ -9,6 +9,9 @@ pytest_plugins = ['reccy.pytest_plugin']
 
 
 class ExamplePageSettings(models.PageSettings, frozen=True):
+    arpeggiator: models.ArpeggiatorSettings | None = models.ArpeggiatorSettings(
+        inputs=['usb'], outputs=['usb']
+    )
     looper: models.LooperSettings | None = models.LooperSettings(
         inputs=['usb'], outputs=['usb']
     )

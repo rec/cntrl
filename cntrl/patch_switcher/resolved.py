@@ -7,6 +7,7 @@ from zlib import crc32
 import tomlkit
 
 from . import (
+    arpeggiator,
     counters,
     inputs,
     layout,
@@ -96,6 +97,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     cursor = midi_processing.section_end(data, cursor)
     cursor = pickup.section_end(data, cursor)
     cursor = looper.section_end(data, cursor)
+    cursor = arpeggiator.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -224,6 +226,10 @@ def export(data: bytes) -> str:
     )
     if settings := looper.unpack(data, looper_offset, names):
         pages['looper'] = settings
+    if settings := arpeggiator.unpack(
+        data, looper.section_end(data, looper_offset), names
+    ):
+        pages['arpeggiator'] = settings
     if definitions := counters.unpack(data, counter_offset):
         result['counters'] = {
             k: v.model_dump(exclude_none=True) for k, v in definitions.items()

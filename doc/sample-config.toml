@@ -81,6 +81,25 @@ background_color = "0xFFF085"
 digits = 3
 decimals = 1
 
+[page_settings.arpeggiator]
+
+inputs = ["usb"]
+outputs = ["usb"]
+channels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+events = 128
+mode = "poly"
+gate = "4/5"
+seed = 42
+
+[page_settings.arpeggiator.selection]
+
+kind = "ascending"
+
+[page_settings.arpeggiator.rhythm]
+
+kind = "grid"
+step = "1/4 beat"
+
 [page_settings.looper]
 
 inputs = ["usb"]

@@ -9,11 +9,17 @@ namespace cntrl::midi {
 // self-contained writes. Notes and ordinary CC7 messages need no decoder slot.
 class LoopCapture {
 public:
+    struct Emit {
+        void *context;
+        bool (*send)(void *, const Packet *, unsigned, uint64_t);
+        bool operator()(const Packet *packets,unsigned count,uint64_t tick) const { return send(context,packets,count,tick); }
+    };
     static constexpr unsigned slots = 32, storage_bytes = slots * 56;
     unsigned discarded = 0;
     bool reserve() { return storage_.resize(storage_bytes); }
     void release() { storage_.clear(); count_ = 0; }
     void reset(unsigned pairing_ticks) { count_ = 0; pairing_ = std::max(1u,pairing_ticks); }
+    void pairing(unsigned ticks) { pairing_ = std::max(1u,ticks); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(loop_capture_forget_input)
 #endif
@@ -23,7 +29,6 @@ public:
             at(i) = at(--count_);
         }
     }
-    template<class Emit>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(loop_capture_receive)
 #endif
@@ -69,6 +74,7 @@ public:
         }
         if (cc > 32 && s.fine == int(cc - 32) && tick - s.fine_time <= pairing_) {
             Packet packets[2] = {{11,{uint8_t(0xb0 | channel),uint8_t(s.fine),uint8_t(s.fine_value)}},packet};
+            packets[0].source = uint16_t(source);
             s.fine = -1; return emit(packets,2,tick);
         }
         if (cc < 32) {
@@ -77,7 +83,6 @@ public:
         }
         ++discarded; return true; // An LSB without its captured MSB is incomplete.
     }
-    template<class Emit>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(loop_capture_flush)
 #endif
@@ -107,13 +112,13 @@ private:
     static void selection(const State &s, Packet *packets) {
         unsigned cc = s.family == 1 ? 99 : 101;
         packets[0] = {11,{uint8_t(0xb0 | s.channel),uint8_t(cc),uint8_t(s.high)}};
+        packets[0].source = uint16_t(s.source);
         packets[1] = {11,{uint8_t(0xb0 | s.channel),uint8_t(cc - 1),uint8_t(s.low)}};
     }
     static void nulls(unsigned channel, Packet *packets) {
         packets[0] = {11,{uint8_t(0xb0 | channel),101,127}};
         packets[1] = {11,{uint8_t(0xb0 | channel),100,127}};
     }
-    template<class Emit>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(loop_capture_data)
 #endif
@@ -124,13 +129,13 @@ private:
         if (!emit(packets,5,s.data_time)) return false;
         s.data = -1; s.selection_pending = false; return true;
     }
-    template<class Emit>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(loop_capture_fine)
 #endif
     static bool fine(State &s, Emit emit) {
         if (s.fine < 0) return true;
         Packet packet{11,{uint8_t(0xb0 | s.channel),uint8_t(s.fine),uint8_t(s.fine_value)}};
+        packet.source = uint16_t(s.source);
         if (!emit(&packet,1,s.fine_time)) return false;
         s.fine = -1; return true;
     }

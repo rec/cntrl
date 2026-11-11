@@ -1,4 +1,5 @@
 [tests]
+"test/test_arpeggiator.cpp" = []
 "test/test_text_messages.cpp" = []
 "test/test_midi_pickup.cpp" = []
 "test/test_midi_monitor.cpp" = []

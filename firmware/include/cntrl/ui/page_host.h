@@ -18,6 +18,7 @@ public:
         : pages_(fonts, display.viewport(display.count() - 1)), platform_(platform),
           application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) { pages_.controls(controls); pages_.monitor = &platform_.midi_monitor(); }
     void looper_files(midi::MidiFiles &files, midi::Sink &sink) { looper_files_ = &files; looper_sink_ = &sink; pages_.looper = &files.looper; }
+    void arpeggiator(midi::MidiArpeggiator &engine) { pages_.arpeggiator = &engine; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_action)
 #endif
@@ -41,6 +42,17 @@ public:
     CNTRL_FLASH_ROUTINE(looper_button)
 #endif
     bool looper_button(unsigned input, bool pressed) {
+        if (pages_.page() == Pages::Page::arpeggiator && pages_.arpeggiator) {
+            if (input != controls_.next && (input != controls_.previous || !pages_.arpeggiator->mono())) return false;
+            if (!pressed) return true;
+            auto &arp = *pages_.arpeggiator;
+            uint32_t now = platform_.microseconds();
+            if (!arp.mono() && arp.state() == midi::MidiArpeggiator::State::stopped && !pages_.external_clock() && !pages_.generator.running())
+                pages_.generator.start(now,pages_.clock_outputs() & platform_.clock_available(),false);
+            if (input == controls_.previous) arp.record(pages_.arpeggiator_beat_position(now));
+            else arp.toggle(pages_.arpeggiator_beat_position(now));
+            pages_.revisit(); return true;
+        }
         if (pages_.page() != Pages::Page::midi_looper || !looper_files_) return false;
         auto &files = *looper_files_; auto &loop = files.looper;
         if (input == controls_.back) {
@@ -134,6 +146,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_configure_pages)
 #endif
     void configure_pages(const cntrl::Document &document) {
+        if (pages_.arpeggiator) pages_.arpeggiator->configure(document.valid() ? document.arpeggiator_settings() : nullptr);
         pages_.outputs(platform_.midi_outputs());
         configure_ports();
         pages_.layout(document.valid() ? document.page_layout() : cntrl::PageLayout{});

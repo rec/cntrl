@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "midi_packet.h"
 #include <new>
+#include <cstring>
 
 namespace cntrl::midi {
 // Physical retriggers and logical claims are separate. Ordinary MIDI retains
@@ -13,17 +14,23 @@ public:
 #endif
     bool reserve(unsigned capacity) {
         if (capacity == capacity_) return true;
-        if (cleaning()) return false;
+        if (!capacity) {
+            for (unsigned i = 0; i < claim_count_; ++i) if (claim_at(i).source >= loop_source) return false;
+            keys_.clear(); claims_.clear(); capacity_ = key_count_ = claim_count_ = 0; return true;
+        }
+        if (capacity < key_count_ || capacity * 2 < claim_count_) return false;
         MemoryBuffer keys, claims;
         if (!keys.resize(capacity * sizeof(Key)) || !claims.resize(capacity * 2 * sizeof(Claim))) return false;
+        if (key_count_) std::memcpy(keys.data,keys_.data,key_count_ * sizeof(Key));
+        if (claim_count_) std::memcpy(claims.data,claims_.data,claim_count_ * sizeof(Claim));
         keys_.swap(keys); claims_.swap(claims);
-        capacity_ = capacity; key_count_ = claim_count_ = 0; return true;
+        capacity_ = capacity; return true;
     }
     template<class Send>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_ownership_submit)
 #endif
-    bool submit(unsigned output, const Packet &packet, bool loop, Send send) {
+    bool submit(unsigned output, const Packet &packet, bool loop, Send send, unsigned owner = loop_source) {
         if (!capacity_) return !loop && send(output, packet);
         unsigned kind = packet.bytes[0] >> 4, channel = packet.bytes[0] & 15;
         bool note = kind == 8 || kind == 9;
@@ -41,7 +48,7 @@ public:
             return true;
         }
         unsigned id = (output << 13) | (channel << 9) | (packet.bytes[1] + (hold ? 128 : 0));
-        unsigned source = loop ? loop_source : packet.source;
+        unsigned source = loop ? owner : packet.source;
         bool on = note ? kind == 9 && packet.bytes[2] : packet.bytes[2] >= 64;
         unsigned k = 0; while (k < key_count_ && key_at(k).id != id) ++k;
         if (k == key_count_) {
