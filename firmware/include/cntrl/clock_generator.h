@@ -19,6 +19,7 @@ public:
         quarter_us_ = quarter_us;
     }
     unsigned bpm() const { return (60000000u + quarter_us_ / 2) / quarter_us_; }
+    unsigned period_us() const { return quarter_us_; }
     bool running() const { return running_; }
     midi::BeatPosition beat_position(uint32_t now) {
         advance_beats(now);

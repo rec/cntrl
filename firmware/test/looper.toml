@@ -1,0 +1,44 @@
+fill_in_styles = false
+
+[pages.clock]
+type = 'clock-transport'
+
+[pages.loop]
+type = 'midi-looper'
+
+[pages.patches]
+type = 'patch-switcher'
+
+[page_settings.looper]
+inputs = ['din']
+outputs = ['din']
+channels = [1, 2]
+events = 512
+
+[patches.record]
+operation = 'midi-looper'
+action = 'record'
+
+[patches.play]
+operation = 'midi-looper'
+action = 'play-stop'
+
+[patches.undo]
+operation = 'midi-looper'
+action = 'undo'
+
+[patches.clear]
+operation = 'midi-looper'
+action = 'clear'
+
+[patches.save]
+operation = 'midi-looper'
+action = 'save'
+
+[patches.load]
+operation = 'midi-looper'
+action = 'load'
+filename = '42-1.mid'
+
+[patch_cycles]
+loop = ['record', 'play', 'undo', 'clear', 'save', 'load']

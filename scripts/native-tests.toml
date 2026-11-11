@@ -36,3 +36,5 @@
 "test/animation/test_splash.cpp" = []
 "test/animation/test_runtime.cpp" = ["test/show.golden"]
 "test/test_midi_runtime.cpp" = []
+"test/test_midi_looper.cpp" = []
+"test/test_looper_document.cpp" = ["test/looper.golden"]

@@ -45,6 +45,9 @@ public:
             uint64_t generation = endpoint_generation(s, endpoint.route, 0);
             if (!present || generation != generations_[endpoint.route] || !bridge.usb_enabled(endpoint.route)) text_messages.forget(endpoint.route);
             if (!present || generation != generations_[endpoint.route]) s.forget_pickup_source(endpoint.route);
+            if (!present || generation != generations_[endpoint.route]) {
+                files.looper.connection(endpoint.route); files.forget_input(endpoint.route); s.forget_output(endpoint.route);
+            }
             if (monitor_.active()) monitor_.connection(endpoint.route, present, identity, generation, s.microseconds());
             if (generation != generations_[endpoint.route]) {
                 streams_.connection(endpoint.route, false, identity, stream_time);
@@ -56,7 +59,16 @@ public:
         }
         if (!s.midi_document_valid()) streams_.stop_all();
         if (!s.midi_document_valid()) pages.generator.stop();
+        if (!s.midi_document_valid()) files.looper.clear();
         unsigned available = s.clock_available();
+        bool reserved = false;
+#if CNTRL_PANIC
+        reserved = s.panic_owns_midi;
+#endif
+#if CNTRL_CABLE_TEST
+        reserved = reserved || s.cable_test.enabled();
+#endif
+        if (reserved) files.looper.stop();
         pages.clock_connections(available);
         unsigned stream_clocks = streams_.clock_outputs();
         streams_.clock_owner(files.player.clock_outputs() | (pages.clock_owner() & ~stream_clocks));
@@ -81,11 +93,13 @@ public:
                     for (unsigned b = 0; b < event.packet.size(); ++b)
                         text_messages.byte(event.input, event.cable, event.packet.bytes[b], now);
                 } else text_messages.byte(event.input, event.cable, event.byte, now);
-                if (event.packetized) files.receive(event.input, event.packet, timestamp);
-                else files.receive(event.input, event.byte, timestamp);
                 uint8_t status = event.packetized ? event.packet.bytes[0] : event.byte;
                 if (status == 0xf8 || (status >= 0xfa && status <= 0xfc))
                     pages.clock_message(event.clock_source, status, timestamp);
+                auto position = pages.beat_position(timestamp);
+                if (!reserved) files.looper.poll(position,pages.clock_ready(),available,s,pages.clock_period());
+                if (event.packetized) files.receive(event.input,event.packet,timestamp,reserved ? BeatPosition{} : position);
+                else files.receive(event.input,event.byte,timestamp,reserved ? BeatPosition{} : position);
 #if CNTRL_CABLE_TEST
                 if (s.cable_test.enabled()) {
                     if (!event.packetized && event.cable_input != InputEvent::absent)
@@ -111,17 +125,18 @@ public:
             }
         }
         source_cursor_ = count ? (source_cursor_ + 1) % count : 0;
+        files.looper.poll(pages.beat_position(s.microseconds()),pages.clock_ready(),available,s,pages.clock_period());
 #if CNTRL_SWITCHES
         s.midi_switch_tick(now);
 #endif
 #if CNTRL_PANIC
         if (s.panic_owns_midi) {
-            s.panic.tick(now, bridge.handoff(s));
+            if (!s.loop_cleaning()) s.panic.tick(now, bridge.handoff(s));
             if (!s.panic.active()) { bridge.configure(s.runtime.interface); s.panic_owns_midi = false; }
         } else
 #endif
 #if CNTRL_CABLE_TEST
-        if (s.cable_test.enabled()) { if (bridge.handoff(s)) s.cable_test.tick(now); }
+        if (s.cable_test.enabled()) { if (!s.loop_cleaning() && bridge.handoff(s)) s.cable_test.tick(now); }
         else
 #endif
         bridge.service(s, now, files.player.sysex_outputs() | streams_.sysex_outputs());
@@ -145,7 +160,8 @@ public:
         files.recorder.poll(s.microseconds());
         if (files.recorder.failed() && !recording_failed_) s.error("MIDI recording write failed");
         recording_failed_ = files.recorder.failed();
-        if (bridge.sysex_ready(files.player.sysex_outputs())) files.player.poll(s.microseconds(), s.clock_available(), s);
+        if (!files.looper.owned() && bridge.sysex_ready(files.player.sysex_outputs())) files.player.poll(s.microseconds(), s.clock_available(), s);
+        files.loop_storage_poll();
         s.midi_flush();
         uint32_t elapsed = s.microseconds() - begin;
         if (elapsed > max_midi_us_) max_midi_us_ = elapsed;

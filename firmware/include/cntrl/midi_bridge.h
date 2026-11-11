@@ -2,6 +2,7 @@
 #include "midi_state.h"
 #include "midi_packet.h"
 #include "midi_pickup.h"
+#include "midi_ownership.h"
 #include <cstdint>
 #include <vector>
 #include "midi_outputs.h"
@@ -122,6 +123,24 @@ struct Sink {
         pickup_.observe(state_);
         return true;
     }
+    bool reserve_loop_ownership(unsigned keys) { return ownership_.reserve(keys); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_submit_loop)
+#endif
+    bool submit_loop(unsigned destination, const Packet &packet) {
+        if (destination >= 16) return false;
+        if (!pickup_.flush(destination, now_, state_, Writer{*this}, true)) return false;
+        if (!ownership_.submit(destination, packet, true, RawWriter{*this})) return false;
+        pickup_.observe(state_); return true;
+    }
+    bool loop_cleaning(unsigned outputs = 0xffff) const { return ownership_.cleaning(outputs); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_release_loop)
+#endif
+    void release_loop(unsigned available) {
+        ownership_.release(available, RawWriter{*this});
+        pickup_.observe(state_);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(sink_submit_live)
 #endif
@@ -175,10 +194,34 @@ struct Sink {
         }
         transaction = {};
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_loop_group)
+#endif
+    bool submit_loop_group(unsigned output, const Packet &packet, const Parameter &parameter, uint64_t token, bool first, bool last) {
+        if (output >= 16 || !token || packet.bytes[0] >> 4 != 11) return false;
+        auto &lock = parameter_locks_[output];
+        if (lock.token && lock.token != token) return false;
+        if (first && !pickup_.flush(output,now_,state_,Writer{*this},true)) return false;
+        if (first && observer_ && !observer_->parameter_write(output,packet.bytes,packet.size(),&parameter,0)) return false;
+        if (!write_packet(output,packet)) return false;
+        state_.record(output,packet.bytes,packet.size()); packet_sent(output,packet);
+        lock = {parameter,last ? 0 : token,0};
+        if (last) pickup_.observe(state_);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_abandon_loop_group)
+#endif
+    void abandon_loop_group(unsigned output, uint64_t token) {
+        if (output >= 16 || parameter_locks_[output].token != token) return;
+        ParameterTransaction transaction{parameter_locks_[output].parameter,token};
+        abandon_parameter(output,transaction);
+    }
     void forget_output(unsigned output) {
         if (output < 16) parameter_locks_[output] = {};
         state_.forget(output);
         pickup_.forget(output);
+        ownership_.forget(output);
     }
 protected:
     virtual void packet_sent(unsigned, const Packet &) {}
@@ -188,7 +231,12 @@ private:
         Sink &sink;
         bool operator()(unsigned destination, const Packet &packet) const { return sink.write(destination, packet); }
     };
+    struct RawWriter {
+        Sink &sink;
+        bool operator()(unsigned destination, const Packet &packet) const { return sink.write_raw(destination, packet); }
+    };
     Pickup pickup_;
+    Ownership ownership_;
     uint32_t now_ = 0;
     MidiState state_;
     ParameterTransaction parameter_locks_[16] = {};
@@ -197,6 +245,12 @@ private:
     CNTRL_FLASH_ROUTINE(sink_write)
 #endif
     bool write(unsigned destination, const Packet &packet) {
+        return ownership_.submit(destination, packet, false, RawWriter{*this});
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(sink_write_raw)
+#endif
+    bool write_raw(unsigned destination, const Packet &packet) {
         if (destination >= 16) return false;
         bool live_selection = packet.source != 65535 && packet.bytes[0] >> 4 == 11 && packet.bytes[1] >= 98 && packet.bytes[1] <= 101;
         if (observer_ && !live_selection && !observer_->parameter_write(destination, packet.bytes, packet.size(), nullptr, 0)) return false;

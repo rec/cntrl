@@ -49,12 +49,12 @@ public:
         clocks_ = clocks; window_ = clocks * beats; timeout_ = timeout;
         source_ = -1; count_ = 0; stale_ = true;
         beat_value_ = 0; beat_remainder_ = 0; ++restart_;
-        playing_ = true; first_tick_ = true;
+        playing_ = true; first_tick_ = true; waiting_ = false;
     }
     void clock(unsigned source, uint32_t now) {
         if (!clocks_) return;
         if (source_ < 0 || stale_ || uint32_t(now - last_) > timeout_) {
-            source_ = int(source); last_ = now; count_ = 0; elapsed_ = 0; stale_ = false; first_tick_ = false; return;
+            source_ = int(source); last_ = now; count_ = 0; elapsed_ = 0; stale_ = false; first_tick_ = false; waiting_ = false; return;
         }
         if (source_ != int(source)) return;
         if (playing_) {
@@ -79,6 +79,7 @@ public:
         if (status == 0xfc) beat_value_ = beat_position(now).value;
         source_ = int(source);
         playing_ = status != 0xfc;
+        waiting_ = playing_;
         if (status == 0xfa) { beat_value_ = 0; beat_remainder_ = 0; ++restart_; }
         if (playing_) { first_tick_ = true; last_ = now; stale_ = true; }
     }
@@ -91,16 +92,18 @@ public:
         return {value, restart_, playing_ && active()};
     }
     void poll(uint32_t now) {
+        if (waiting_ && uint32_t(now - last_) > timeout_) waiting_ = false;
         if (!stale_ && source_ >= 0 && uint32_t(now - last_) > timeout_) {
             beat_value_ = beat_position(now).value; stale_ = true; first_tick_ = true;
         }
     }
     bool active() const { return source_ >= 0 && !stale_; }
+    bool available() const { return active() || waiting_ || (!playing_ && source_ >= 0); }
 private:
     uint64_t beat_value_ = 0;
     uint32_t restart_ = 0;
     unsigned beat_remainder_ = 0;
-    bool playing_ = true, first_tick_ = true;
+    bool playing_ = true, first_tick_ = true, waiting_ = false;
     unsigned clocks_ = 0, window_ = 0, count_ = 0;
     int source_ = -1;
     uint32_t timeout_ = 0, last_ = 0;

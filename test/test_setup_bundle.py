@@ -29,12 +29,12 @@ def test_static_table_is_sorted_and_offsets_address_every_setup() -> None:
 
 
 def test_prefill_maximizes_bytes_when_largest_first_would_waste_space() -> None:
-    # Metadata/save workspace occupy 765 bytes. Leave a ten-byte cache.
+    # Metadata/save workspace occupy 777 bytes. Leave a ten-byte cache.
     bundle = setup_bundle.SetupBundle(
         setups={'a': b'a' * 8, 'b': b'b' * 6, 'c': b'c' * 4},
         page_ram2=[0, 0, 0],
         memory=models.TargetMemory(capacity=400000, runtime=0),
-        memory_margin=400000 - 765 - 10,
+        memory_margin=400000 - 777 - 10,
     )
     assert bundle.total_free_ram2() == 10
     assert bundle.prefill == [1, 2]
@@ -49,7 +49,7 @@ def test_active_setup_accounting_does_not_sum_inactive_setups() -> None:
         },
         memory=MEMORY,
     )
-    assert bundle.total_ram2_needs() == MEMORY.runtime + 520 + 100
+    assert bundle.total_ram2_needs() == MEMORY.runtime + 528 + 100
     assert (
         bundle.total_free_ram2() == MEMORY.capacity - 16192 - bundle.total_ram2_needs()
     )
@@ -71,7 +71,7 @@ def test_native_table_and_lru_preserve_pinned_views(all_resident: bool) -> None:
     setups = {n: compiler.compile_show(s, {}, [], target) for n, s in sources.items()}
     size = len(setups['a'])
     margin = (
-        16192 if all_resident else MEMORY.capacity - MEMORY.runtime - 765 - size * 2
+        16192 if all_resident else MEMORY.capacity - MEMORY.runtime - 777 - size * 2
     )
     bundle = setup_bundle.build(setups, sources, MEMORY, margin)
     with TemporaryDirectory(prefix='cntrl-setup-table-test-') as directory:

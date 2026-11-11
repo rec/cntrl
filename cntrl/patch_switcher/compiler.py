@@ -15,6 +15,7 @@ from . import (
     display,
     inputs,
     layout,
+    looper,
     midi_endpoints,
     midi_messages,
     midi_processing,
@@ -562,6 +563,7 @@ def compile_show(
         clock = page_settings.pack_clock(show, target)
         expression = page_settings.pack_expression(show, target, jacks)
         keyboard = page_settings.pack_keyboard(show, target)
+        looper_settings = looper.pack(show, target)
         page_layout = layout.pack(show.pages, [d.id for d in target.displays])
         relay_settings = relay_outputs.pack(show, target)
         counter_settings = counters.pack(compiler.counters, show, target)
@@ -656,7 +658,8 @@ def compile_show(
             if show.auxiliary_switches.get(j) == 'combined'
         ),
         sum(p.ram2_bytes for p in show.pages.values())
-        + midi_processing.estimate_ram(stream_settings),
+        + midi_processing.estimate_ram(stream_settings)
+        + looper.estimate_ram(looper_settings),
         crc32(setup_name_bytes),
     )
     body = b''.join(screen_records + instrument_records + patch_cycles + records)
@@ -699,6 +702,7 @@ def compile_show(
             show.pickup_pairing_ms,
             [compiler.presentation(i)[1].pickup for i in range(len(compiler.values))],
         )
+        + looper_settings
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)
@@ -872,6 +876,7 @@ class PatchCompiler:
                 models.StockFirmware,
                 models.PlayMidiFile,
                 models.RecordMidiFile,
+                models.MidiLooperAction,
                 models.MidiStream,
                 models.Relay,
                 models.ScrollCounter,
@@ -979,6 +984,19 @@ class PatchCompiler:
                 value.speed,
                 value.reverse,
                 value.transpose,
+            )
+        elif isinstance(value, models.MidiLooperAction):
+            if self.show.page_settings.looper is None and not any(
+                p.type == 'midi-looper' for p in self.show.pages.values()
+            ):
+                self.errors.append(f'{path}: MIDI looper requires shared configuration')
+            kind, payload = (
+                15,
+                struct.pack(
+                    '<B96s',
+                    LOOPER_ACTIONS.index(value.action),
+                    value.filename.encode('ascii'),
+                ),
             )
         elif isinstance(value, models.RecordMidiFile):
             kind = 9
@@ -2252,6 +2270,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 36
+DOCUMENT_VERSION = 37
+LOOPER_ACTIONS = ('record', 'play-stop', 'undo', 'clear', 'save', 'load')
 SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

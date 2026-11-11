@@ -62,6 +62,7 @@ struct Actions {
     bool midi_reserved() const { return false; }
     bool keyboard(unsigned, bool) { return false; }
     bool monitor(unsigned, bool) { return false; }
+    bool looper(unsigned, bool) { return false; }
     bool expression(unsigned) { return false; }
     bool port(unsigned) { return false; }
     bool clock(unsigned, bool) { return false; }

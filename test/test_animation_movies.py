@@ -118,7 +118,7 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     assert len(movie) > 524288
     assert bundle.total_setup_ram < 4096
     assert bundle.prefill == [0]
-    assert bundle.total_ram2_needs() == bundle.memory.runtime + 275
+    assert bundle.total_ram2_needs() == bundle.memory.runtime + 279
     exported = resolved.export(bundle.setups['setup'])
     settings = tomlkit.parse(exported).unwrap()
     assert (

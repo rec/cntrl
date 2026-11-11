@@ -8,7 +8,14 @@ if TYPE_CHECKING:
 pytest_plugins = ['reccy.pytest_plugin']
 
 
+class ExamplePageSettings(models.PageSettings, frozen=True):
+    looper: models.LooperSettings | None = models.LooperSettings(
+        inputs=['usb'], outputs=['usb']
+    )
+
+
 class ExampleSetup(models.Setup, frozen=True):
+    page_settings: models.PageSettings = ExamplePageSettings()
     pages: dict[str, models.Page] = {
         n: p.model_copy(update={'windows': 3 if p.type == 'patch-switcher' else 1})
         for n, p in models.Setup().pages.items()

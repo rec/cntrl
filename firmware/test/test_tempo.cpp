@@ -57,4 +57,14 @@ int main() {
     clock.configure(96, 1, 1000000);
     for (unsigned i = 0; i <= 96; ++i) clock.clock(3, 2000000 + i * 500000 / 96);
     assert(clock.period_us() == 500000); // Configurable clocks per quarter.
+    clock.transport(3,0xfc,2500000);
+    clock.poll(5000000);
+    assert(!clock.beat_position(5000000).running && clock.available());
+    clock.transport(3,0xfb,5000000);
+    assert(clock.available() && !clock.beat_position(5000000).running);
+    clock.clock(3,5000100);
+    assert(clock.beat_position(5000100).running);
+    clock.transport(3,0xfb,5000200);
+    clock.poll(6000201);
+    assert(!clock.available()); // Continue without subsequent clock is loss.
 }

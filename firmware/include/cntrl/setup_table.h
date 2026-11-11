@@ -9,7 +9,7 @@
 namespace cntrl {
 constexpr unsigned setup_table_ram_overhead(unsigned count) {
     // Resident names/views plus the manifest and size arrays used during saves.
-    return count ? count * (156 + 85) + 2 + 4 * (count - 1) + 32 : 0;
+    return count ? count * (160 + 85) + 2 + 4 * (count - 1) + 32 : 0;
 }
 struct SetupBundleFile {
     virtual ~SetupBundleFile() = default;
@@ -169,7 +169,7 @@ private:
         uint32_t revision = 0;
         bool prefill = false;
     };
-    static_assert(sizeof(void *) != 4 || sizeof(Entry) <= 88, "Update the RAM2 entry estimate");
+    static_assert(sizeof(void *) != 4 || sizeof(Entry) <= 92, "Update the RAM2 entry estimate");
     SetupBundleFile *file_ = nullptr;
     const Hardware *hardware_ = nullptr;
     std::vector<Entry> entries_;

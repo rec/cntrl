@@ -78,6 +78,7 @@ struct Hardware : RelayDriver {
     virtual bool supports_keyboard() const { return false; }
     virtual bool supports_trs_mode(unsigned, midi::TrsMode mode) const { return mode == midi::TrsMode::off; }
     virtual bool output_idle() const { return true; }
+    virtual bool configuration_handoff() { return output_idle(); }
     virtual unsigned switch_capacity() const { return 0; }
     virtual bool configuration_locked() const { return false; }
     virtual bool supports(const char *output) const = 0;

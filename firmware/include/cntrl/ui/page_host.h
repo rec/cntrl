@@ -3,6 +3,7 @@
 #include "pages.h"
 #include "renderer.h"
 #include "pixel_throb.h"
+#include <cntrl/midi_files.h>
 #include <algorithm>
 #include <vector>
 
@@ -16,6 +17,63 @@ public:
              Display &display, const Fonts &fonts, Renderer &renderer, Controls controls)
         : pages_(fonts, display.viewport(display.count() - 1)), platform_(platform),
           application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) { pages_.controls(controls); pages_.monitor = &platform_.midi_monitor(); }
+    void looper_files(midi::MidiFiles &files, midi::Sink &sink) { looper_files_ = &files; looper_sink_ = &sink; pages_.looper = &files.looper; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(looper_action)
+#endif
+    bool looper_action(unsigned action, const char *filename) {
+        if (!looper_files_ || (looper_files_->storage_busy() && action != 1 && action != 3)) return false;
+        if ((action == 4 || action == 5) && !platform_.looper_storage_ready()) return false;
+        auto &files = *looper_files_; auto &loop = files.looper;
+        if (action == 0) return loop.record(pages_.beat_position(platform_.microseconds()),pages_.clock_period());
+        if (action == 1) return loop.play_stop(pages_.beat_position(platform_.microseconds()));
+        if (action == 2) return loop.undo(pages_.beat_position(platform_.microseconds()));
+        if (action == 3) return loop.clear();
+        if (action == 4) {
+            auto status = platform_.status();
+            return files.save_loop(pages_.clock_period(),status.starts,status.starts_status == StartsStatus::ready);
+        }
+        return action == 5 && files.load_loop(filename);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(looper_button)
+#endif
+    bool looper_button(unsigned input, bool pressed) {
+        if (pages_.page() != Pages::Page::midi_looper || !looper_files_) return false;
+        auto &files = *looper_files_; auto &loop = files.looper;
+        if (input == controls_.back) {
+            if (looper_menu_ == LooperMenu::none) return false;
+            files.cancel_browse(); looper_menu_ = LooperMenu::none; pages_.looper_prompt[0] = 0; pages_.revisit(); return true;
+        }
+        if (!pressed) return true;
+        bool ok = true;
+        if (looper_menu_ == LooperMenu::clear) {
+            if (input == controls_.confirm) { ok = loop.clear(); looper_menu_ = LooperMenu::none; }
+        } else if (looper_menu_ == LooperMenu::replace) {
+            if (input == controls_.confirm) { ok = platform_.looper_storage_ready() && files.load_loop(looper_load_file_); if (ok) looper_menu_ = LooperMenu::none; }
+        } else if (looper_menu_ == LooperMenu::files) {
+            if (input == controls_.previous || input == controls_.next) ok = files.browse_loop(input == controls_.previous);
+            else if (input == controls_.confirm && !files.browsing() && files.loop_filename()[0]) {
+                if (loop.unsaved()) { std::strcpy(looper_load_file_,files.loop_filename()); looper_menu_ = LooperMenu::replace; }
+                else { ok = platform_.looper_storage_ready() && files.load_loop(files.loop_filename()); if (ok) looper_menu_ = LooperMenu::none; }
+            }
+        } else if (looper_menu_ == LooperMenu::save_load) {
+            if (input == controls_.previous || input == controls_.next) looper_load_ = !looper_load_;
+            else if (input == controls_.confirm) {
+                if (looper_load_) { ok = platform_.looper_storage_ready() && files.browse_loop(false,true); if (ok) looper_menu_ = LooperMenu::files; }
+                else {
+                    ok = looper_action(4,"");
+                    if (ok) looper_menu_ = LooperMenu::none;
+                }
+            }
+        } else if (input == controls_.previous) ok = looper_action(0,"");
+        else if (input == controls_.next) ok = looper_action(1,"");
+        else if (input == controls_.confirm) ok = looper_action(2,"");
+        else if (input == controls_.previous_section) looper_menu_ = LooperMenu::clear;
+        else if (input == controls_.next_section) { looper_load_ = false; looper_menu_ = LooperMenu::save_load; }
+        if (!ok) error("MIDI looper command rejected");
+        refresh_looper_prompt(); pages_.revisit(); return true;
+    }
     bool monitor_button(unsigned input, bool pressed) {
         if (pages_.page() != Pages::Page::midi_monitor) return false;
         if (!pressed) return true;
@@ -77,6 +135,15 @@ public:
         pages_.outputs(platform_.midi_outputs());
         configure_ports();
         pages_.layout(document.valid() ? document.page_layout() : cntrl::PageLayout{});
+        if (looper_files_) {
+            looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none;
+            if (looper_files_->looper.clear()) {
+                if (const auto *p = document.valid() ? document.looper_settings() : nullptr) {
+                    midi::LooperSettings settings{u16(p + 8),u16(p + 6),u16(p + 10),u16(p + 12)};
+                    if (!looper_files_->looper.configure(settings,*looper_sink_)) error("MIDI looper memory unavailable");
+                } else looper_files_->looper.disable();
+            }
+        }
         application_.configure(document, platform_);
         performance_visible_ = true;
         if (document.valid()) enter_page();
@@ -113,6 +180,9 @@ public:
         }
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_enter_page)
+#endif
     void enter_page() {
         if (pages_.page() == Pages::Page::midi_monitor) {
             application_.controller().cancel_gesture();
@@ -134,7 +204,11 @@ public:
         if (pages_.page() == Pages::Page::panic) platform_.panic.enter(platform_.runtime.brightness);
 #endif
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_leave_page)
+#endif
     void leave_page() {
+        if (pages_.page() == Pages::Page::midi_looper && looper_files_) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; }
         if (pages_.page() == Pages::Page::midi_monitor) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
         keyboard_.clear(); pages_.keyboard_held(false);
         if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();
@@ -145,9 +219,17 @@ public:
         if (pages_.page() == Pages::Page::panic) platform_.leave_panic();
 #endif
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_stop_clock)
+#endif
     bool stop_clock() {
         pages_.generator.stop();
         pages_.generator.poll(platform_.microseconds(), platform_.clock_available(), platform_);
+        if (looper_files_) {
+            looper_files_->looper.stop();
+            looper_files_->looper.poll(pages_.beat_position(platform_.microseconds()),pages_.clock_ready(),platform_.clock_available(),*looper_sink_);
+            if (looper_sink_->loop_cleaning() || looper_files_->storage_busy()) return false;
+        }
         return !pages_.generator.stopping();
     }
     bool clock_control(unsigned button, bool pressed) {
@@ -281,6 +363,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
+        if (pages_.page() == Pages::Page::midi_looper && looper_files_) refresh_looper_prompt();
         const auto &message = platform_.text_messages();
         if (message.active(now)) platform_.animation_session().stop();
         renderer_.message(message, now);
@@ -360,6 +443,23 @@ public:
     Pages pages_;
     Keyboard keyboard_;
 private:
+    enum class LooperMenu { none, save_load, files, clear, replace };
+    LooperMenu looper_menu_ = LooperMenu::none;
+    bool looper_load_ = false;
+    char looper_load_file_[96] = {};
+    midi::MidiFiles *looper_files_ = nullptr;
+    midi::Sink *looper_sink_ = nullptr;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(looper_prompt)
+#endif
+    void refresh_looper_prompt() {
+        const char *text = looper_menu_ == LooperMenu::save_load ? (looper_load_ ? "Load: Confirm" : "Save: Confirm")
+            : looper_menu_ == LooperMenu::clear ? "Confirm clear?"
+            : looper_menu_ == LooperMenu::replace ? "Replace unsaved loop?"
+            : looper_menu_ == LooperMenu::files ? (looper_files_->browsing() ? "Scanning..." : looper_files_->loop_filename()[0] ? looper_files_->loop_filename() : "No MIDI files")
+            : looper_files_->storage_busy() ? "Storage busy" : "";
+        std::snprintf(pages_.looper_prompt,sizeof(pages_.looper_prompt),"%s",text);
+    }
     void focus_controller() {
         if (pages_.page() != Pages::Page::patch_switcher) return;
         application_.controller().cancel_gesture();

@@ -6,6 +6,7 @@
 namespace cntrl {
 class BundleTransfer {
 public:
+    bool busy() const { return active_; }
     BundleTransfer(BundledStorage &storage, Documents &documents, Hardware &hardware, Replies &replies)
         : storage_(storage), documents_(documents), hardware_(hardware), replies_(replies) {}
 #ifdef CNTRL_FLASH_ROUTINE

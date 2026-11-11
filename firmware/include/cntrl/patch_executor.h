@@ -29,6 +29,7 @@ struct PatchOutputs {
     virtual midi::Bridge::Delivery midi_file_delivery(unsigned) const { return midi::Bridge::Delivery::cancelled; }
     virtual void cancel_midi_file(unsigned) {}
     virtual bool record_midi_file(const midi::RecordMidiFilePatch &) { return false; }
+    virtual bool looper_action(unsigned, const char *) { return false; }
     virtual bool select_midi_streams(const Document &, unsigned) { return true; }
     virtual bool gate_midi_stream(const char *, bool) { return false; }
     virtual void validation(bool) {}
@@ -225,6 +226,9 @@ public:
         }
         case 9:
             if (!outputs_.record_midi_file({u16(p), u16(p + 2)})) { fail("MIDI recording failed"); return; }
+            started_ = true; complete_leaf(); return;
+        case 15:
+            if (!outputs_.looper_action(p[0],reinterpret_cast<const char *>(p + 1))) { fail("MIDI looper command rejected"); return; }
             started_ = true; complete_leaf(); return;
         case 7:
             delay_started_ = now; delay_duration_ = u32(p);

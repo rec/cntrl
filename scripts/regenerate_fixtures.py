@@ -93,6 +93,7 @@ def regenerate_fixtures() -> None:
             ('display', 'toml'),
             ('pages', 'toml'),
             ('counters', 'toml'),
+            ('looper', 'toml'),
         ]
     }
     fixtures['actions'] = compile_switches(fixture_assignments())

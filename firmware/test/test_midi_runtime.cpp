@@ -27,11 +27,20 @@ struct Player {
     template<class Sink> void poll(uint32_t, unsigned, Sink &) { log->push_back("play"); }
 };
 struct Files {
+    struct Looper {
+        void connection(unsigned) {}
+        void clear() {}
+        void stop() {}
+        bool owned() const { return false; }
+        template<class Sink> void poll(cntrl::midi::BeatPosition,bool,unsigned,Sink &,unsigned) {}
+    } looper;
     Recorder recorder;
     Player player;
     explicit Files(std::vector<std::string> &log) : recorder{&log}, player{&log} {}
-    void receive(unsigned, const cntrl::midi::Packet &, uint32_t) { recorder.log->push_back("input"); }
-    void receive(unsigned, uint8_t, uint32_t) { recorder.log->push_back("input"); }
+    void receive(unsigned, const cntrl::midi::Packet &, uint32_t, cntrl::midi::BeatPosition) { recorder.log->push_back("input"); }
+    void receive(unsigned, uint8_t, uint32_t, cntrl::midi::BeatPosition) { recorder.log->push_back("input"); }
+    void forget_input(unsigned) {}
+    void loop_storage_poll() {}
 };
 struct Generator {
     std::vector<std::string> *log;
@@ -44,6 +53,8 @@ struct Pages {
     unsigned clock_owner() const { return 0; }
     void clock_message(unsigned, uint8_t, uint32_t) {}
     cntrl::midi::BeatPosition beat_position(uint32_t) { return {}; }
+    bool clock_ready() const { return true; }
+    unsigned clock_period() const { return 500000; }
 };
 struct Cable {
     bool running = false;

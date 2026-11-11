@@ -12,7 +12,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 36;
+constexpr unsigned document_version = 37;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -165,7 +165,7 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!p[0] || !text_valid(p, 32) || p[32] > PageLayout::midi_monitor
+            if (!p[0] || !text_valid(p, 32) || p[32] > PageLayout::midi_looper
                 || p[33] > windows || (p[32] == 10 && p[33])
                 || (p[32] == PageLayout::midi_monitor && (p[33] < 1 || p[33] > 3))) return false;
             bool seen[256] = {};
@@ -277,6 +277,27 @@ public:
             for (unsigned i = 0; i < count; ++i) if (bytes[names + 9 + i] > 2) return false;
             pickup = names; names += 9 + count;
         }
+        unsigned looper = 0;
+        if (names + 4 <= length && !std::memcmp(bytes + names, "CLOP", 4)) {
+            if (length - names < 14 || u16(bytes + names + 4) != 1 || !u16(bytes + names + 6)
+                || !u16(bytes + names + 8) || (u16(bytes + names + 8) & ~input_routes)
+                || !u16(bytes + names + 10) || (u16(bytes + names + 10) & ~output_routes)
+                || !u16(bytes + names + 12) || u16(bytes + names + 12) > 4096) return false;
+            unsigned mask = u16(bytes + names + 10);
+            if (!output_mask_valid(mask,bytes + meta + trs_modes_offset,bytes[19],hardware)
+                || u32(bytes + meta + scrolling_offset + 6) < 156u * u16(bytes + names + 12) + 33472u
+                || hardware.memory_capacity() < hardware.memory_runtime()
+                || u32(bytes + meta + scrolling_offset + 6) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
+            for (const auto &connection : hardware.midi_outputs()) if (connection.port != midi::no_port
+                && (mask & (1u << connection.route)) && !midi::midi_output(midi::TrsMode(bytes[meta + trs_modes_offset + connection.port]))) return false;
+            for (const auto &connection : hardware.midi_outputs()) if (u16(bytes + names + 8) & (1u << connection.route)) {
+                if ((connection.transport == midi::OutputTransport::usb_device && !(bytes[19] & 8))
+                    || (connection.transport == midi::OutputTransport::usb_host && !(bytes[19] & 16))) return false;
+            }
+            looper = names; names += 14;
+        }
+        for (unsigned i = 0; i < page_count; ++i)
+            if (arrangement.page(i)[0] == PageLayout::midi_looper && !looper) return false;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -287,7 +308,7 @@ public:
             end += size;
         }
         unsigned graph = end;
-        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count)) return false;
+        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count,looper != 0)) return false;
         if (pickup && u16(bytes + pickup + 4) != u16(bytes + graph + 8)) return false;
         if (streams) {
             std::vector<midi::OutputConnection> configured;
@@ -425,13 +446,14 @@ public:
         if (next != np) return false;
         data_ = bytes; length_ = length; instruments_ = ni; patch_cycles_ = nc; patches_ = np;
         styles_ = styles; pages_ = page_start; texts_ = texts;
-        graph_ = graph; streams_ = streams; pickup_ = pickup;
+        graph_ = graph; streams_ = streams; pickup_ = pickup; looper_ = looper;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
     unsigned switches() const { return u16(data_ + graph_ + 10); }
     const uint8_t *midi_streams() const { return streams_ ? data_ + streams_ : nullptr; }
     unsigned midi_streams_size() const { return streams_ ? u32(data_ + streams_ + 4) : 0; }
+    const uint8_t *looper_settings() const { return looper_ ? data_ + looper_ : nullptr; }
     bool pickup(unsigned root = 65535) const {
         unsigned policy = pickup_ ? data_[pickup_ + 6] : 0;
         if (pickup_ && root < nodes() && data_[pickup_ + 9 + root]) policy = data_[pickup_ + 9 + root];
@@ -546,6 +568,7 @@ public:
         const uint8_t *end = counter_section() + (counters() ? 6 + counters() * 104 : 0);
         if (!std::memcmp(end, "CSTR", 4)) end += u32(end + 4);
         if (!std::memcmp(end, "CPUP", 4)) end += 9 + u16(end + 4);
+        if (!std::memcmp(end, "CLOP", 4)) end += 14;
         return unsigned(end - bank(patches()));
     }
     const uint8_t *movie_section() const {
@@ -635,7 +658,7 @@ private:
     static bool graph_valid(const uint8_t *bytes, unsigned document_length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,
                             unsigned mappings, const Hardware &hardware, unsigned output_routes, unsigned input_routes, unsigned input_count,
-                            const uint8_t *relay_records, unsigned relay_count, unsigned counter_count) {
+                            const uint8_t *relay_records, unsigned relay_count, unsigned counter_count, bool looper) {
         if (start > document_length || document_length - start < 16 || std::memcmp(bytes + start, "CPAT", 4)) return false;
         const uint8_t *g = bytes + start;
         unsigned size = u32(g + 4), count = u16(g + 8), switches = u16(g + 10), named = u16(g + 14);
@@ -723,6 +746,13 @@ private:
             }
             case 9:
                 if (n[1] || length != 4 || !u16(p) || !u16(p + 2) || (u16(p + 2) & ~input_routes)) return false;
+                break;
+            case 15:
+                if (!looper || n[1] || length != 97 || p[0] > 5) return false;
+                if (p[0] == 5) {
+                    if (!text_valid(p + 1,96) || !std::strcmp(reinterpret_cast<const char *>(p + 1),".") || !std::strcmp(reinterpret_cast<const char *>(p + 1),"..")) return false;
+                    for (unsigned j = 1; j < 97 && p[j]; ++j) if (p[j] == '/' || p[j] == '\\') return false;
+                } else for (unsigned j = 1; j < 97; ++j) if (p[j]) return false;
                 break;
             case 10: {
                 if (!hardware.switch_capacity() || n[1] || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
@@ -878,6 +908,6 @@ private:
     const uint8_t *data_ = nullptr;
     unsigned length_ = 0, instruments_ = 0, patch_cycles_ = 0, patches_ = 0;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
-    unsigned graph_ = 0, streams_ = 0, pickup_ = 0;
+    unsigned graph_ = 0, streams_ = 0, pickup_ = 0, looper_ = 0;
 };
 } // namespace cntrl

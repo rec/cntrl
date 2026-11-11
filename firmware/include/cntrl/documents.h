@@ -48,6 +48,7 @@ public:
         if (busy() || dirty_ || hardware_.configuration_locked() || !hardware_.output_idle() || !setup_name(name) || !load(name)) return false;
         Document candidate;
         if (!candidate.load(staging_.data, length_, hardware_) || !candidate.prepare_fonts(hardware_)) return false;
+        if (!hardware_.configuration_handoff()) { hardware_.finish_fonts(false); return false; }
         char canonical[64]; std::snprintf(canonical, sizeof(canonical), "%s", record_name_);
         if (std::strcmp(selected_, canonical) && !persist_selection(canonical)) { hardware_.finish_fonts(false); return false; }
         hardware_.finish_fonts(true);
@@ -194,6 +195,7 @@ public:
         if (n && !storage_.write(staging_.data + written_, n)) { storage_.finish(); writing_ = false; error("storage-write"); return; }
         written_ += n; if (written_ != expected_) return;
         if (!hardware_.output_idle() || hardware_.configuration_locked()) return;
+        if (!name_compare(record_name_,selected_) && !hardware_.configuration_handoff()) return;
         bool done = storage_.write(reinterpret_cast<const uint8_t *>("DONE"), 4);
         done = storage_.finish() && done; writing_ = false;
         char name[64]; std::snprintf(name, sizeof(name), "%s", record_name_);
@@ -328,6 +330,7 @@ private:
         case BrowsePhase::activate: {
             Document candidate;
             if (!hardware_.output_idle() || !candidate.load(staging_.data, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { browse_fail(); return; }
+            if (!hardware_.configuration_handoff()) { hardware_.finish_fonts(false); return; }
             if (std::strcmp(selected_, record_name_) && !persist_selection(record_name_)) {
                 hardware_.finish_fonts(false); browse_fail(); return;
             }

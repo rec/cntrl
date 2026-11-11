@@ -341,7 +341,9 @@ public:
             unsigned bit = 1u << cleanup->output;
             if (!(available & bit) || (busy & bit) || !outputs_[cleanup->output].present) { ++cleanup; continue; }
             ++used;
-            if (!sink.submit(cleanup->output, cleanup->packet)) { ++cleanup; continue; }
+            Packet packet = cleanup->packet;
+            if (packet.cin == 8 || packet.cin == 9 || is_hold(packet)) packet.source = 65533;
+            if (!sink.submit(cleanup->output, packet)) { ++cleanup; continue; }
             ++diagnostics_.transmitted;
             if (cleanup->packet.bytes[0] == 0xf7) sysex_outputs_ &= ~(1u << cleanup->output);
             cleanup = cleanup_.erase(cleanup);
@@ -432,7 +434,11 @@ public:
                         && (claim.owner != event->owner || claim.input != event->input)) write = false;
             }
             bool live = event->input < max_routes && event->packet.source != 65535;
-            if (write && !(live ? sink.submit_live(event->output, event->packet, &diagnostics_.transmitted) : sink.submit(event->output, event->packet))) { attempted |= bit; ++event; continue; }
+            Packet delivered_packet = event->packet;
+            // Streams already merges its logical owners. The physical ledger
+            // sees that aggregate, including a last release from another route.
+            if (onset || release || hold) delivered_packet.source = 65533;
+            if (write && !(live ? sink.submit_live(event->output, delivered_packet, &diagnostics_.transmitted) : sink.submit(event->output, delivered_packet))) { attempted |= bit; ++event; continue; }
             if (write) { if (!live) ++diagnostics_.transmitted; delivered |= bit; }
             if (write && clock) { clock_claimed_[event->output] = true; clock_sources_[event->output] = event->input; clock_owners_[event->output] = event->owner; }
             if (voice && onset) voice->sounding = true;

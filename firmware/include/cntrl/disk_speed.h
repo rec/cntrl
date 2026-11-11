@@ -10,6 +10,7 @@ namespace cntrl {
 // A single reserved scratch file, never a setup or user-selected path.
 class DiskSpeedTransfer {
 public:
+    bool busy() const { return state_ != State::idle; }
     DiskSpeedTransfer(files::FileSystem &filesystem, files::File &file, Replies &replies)
         : filesystem_(filesystem), file_(file), replies_(replies) {}
     ~DiskSpeedTransfer() { cancel(); }

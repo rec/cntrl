@@ -10,6 +10,7 @@ from . import (
     counters,
     inputs,
     layout,
+    looper,
     midi_endpoints,
     midi_messages,
     midi_processing,
@@ -25,6 +26,7 @@ from .compiler import (
     GESTURES_FLAG,
     GRAPH,
     HEADER,
+    LOOPER_ACTIONS,
     METADATA,
     NAMED,
     SCROLL_DIRECTIONS,
@@ -93,6 +95,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     cursor = counters.section_end(data, cursor)
     cursor = midi_processing.section_end(data, cursor)
     cursor = pickup.section_end(data, cursor)
+    cursor = looper.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise ValueError('missing name metadata')
     cursor += 4
@@ -215,6 +218,12 @@ def export(data: bytes) -> str:
     if relays := relay_outputs.unpack(data, relay_offset):
         result['relays'] = relays
     counter_offset = relay_outputs.section_end(data, relay_offset)
+    looper_offset = pickup.section_end(
+        data,
+        midi_processing.section_end(data, counters.section_end(data, counter_offset)),
+    )
+    if settings := looper.unpack(data, looper_offset, names):
+        pages['looper'] = settings
     if definitions := counters.unpack(data, counter_offset):
         result['counters'] = {
             k: v.model_dump(exclude_none=True) for k, v in definitions.items()
@@ -545,6 +554,11 @@ def _patch(
             reverse=bool(reverse),
             transpose=transpose,
         )
+    elif kind == 15:
+        action, filename = struct.unpack_from('<B96s', data, cursor)
+        value.update(operation='midi-looper', action=LOOPER_ACTIONS[action])
+        if filename[0]:
+            value['filename'] = filename.split(b'\0')[0].decode('ascii')
     elif kind == 9:
         channels, input_mask = struct.unpack_from('<HH', data, cursor)
         value.update(

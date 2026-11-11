@@ -1,5 +1,8 @@
 # MIDI file patches
 
+For beat-synchronized live capture, overdub and Undo, use the
+[live MIDI looper](midi-looper.md).
+
 Store MIDI files in `/cntrl/midi/` on the SD card. Playback accepts Standard MIDI
 Files types 0 and 1, merges simultaneous tracks, and follows tempo changes.
 Both ticks-per-quarter-note and SMPTE timing divisions are supported.

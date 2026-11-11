@@ -4,6 +4,7 @@
 #include <cntrl/clock_generator.h>
 #include <cntrl/midi_outputs.h>
 #include <cntrl/midi_monitor.h>
+#include <cntrl/midi_looper.h>
 #include <cntrl/cable_test.h>
 #include <cntrl/panic.h>
 #include "fonts.h"
@@ -58,8 +59,10 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, confirm_firmware };
     midi::Monitor *monitor = nullptr;
+    midi::MidiLooper *looper = nullptr;
+    char looper_prompt[96] = {};
     void layout(cntrl::PageLayout layout) {
         layout_ = layout;
         index_ = 0;
@@ -170,6 +173,8 @@ public:
     }
     void clock(unsigned source, uint32_t now_us) { clock_.clock(source, now_us); }
     void clock_message(unsigned source, uint8_t status, uint32_t now_us) { clock_.transport(source, status, now_us); }
+    bool clock_ready() const { return !external_ || clock_.available(); }
+    unsigned clock_period() const { return external_ ? unsigned(clock_.period_us()) : generator.period_us(); }
     cntrl::midi::BeatPosition beat_position(uint32_t now_us) {
         if (external_) clock_.poll(now_us);
         auto position = external_ ? clock_.beat_position(now_us) : generator.beat_position(now_us);
@@ -196,6 +201,7 @@ public:
         using R = cntrl::PageSettings;
         if (dirty_) return true;
         if (page_ == Page::midi_monitor) return uint32_t(now - refreshed_) >= midi::Monitor::refresh_ms;
+        if (page_ == Page::midi_looper) return uint32_t(now - refreshed_) >= 50;
         if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
@@ -209,6 +215,7 @@ public:
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
         if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
+        if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
         if (page_ == Page::confirm_firmware) {
             const unsigned height = title * 3 / 2;
@@ -404,6 +411,28 @@ public:
         return pane;
     }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(looper_view)
+#endif
+    void looper_view(Pane &pane, midi::BeatPosition clock) {
+        using R = cntrl::PageSettings;
+        line(pane,0,"MIDI Looper",2,18,settings_[R::title_font],true);
+        const char *states[] = {"Empty","Armed","Recording","Closing","Playing","Overdub armed","Overdubbing","Preparing","Stopped","Launch armed","Undo pending","Loading"};
+        const char *errors[] = {"","Busy","Clock unavailable","Capacity exceeded","Memory unavailable","Late boundary","Output retired","File error","Input changed"};
+        char text[96];
+        std::snprintf(text,sizeof(text),"%s%s%s",looper ? states[unsigned(looper->state())] : "Unavailable",
+            looper && looper->error() != midi::MidiLooper::Error::none ? ": " : "",looper ? errors[unsigned(looper->error())] : "");
+        line(pane,1,text,24,14,settings_[R::status_font],true);
+        uint64_t length = looper ? looper->length() : 0;
+        uint64_t position = looper ? looper->position(clock) : 0;
+        std::snprintf(text,sizeof(text),"%llu.%02u / %llu.%02u beats",(unsigned long long)(position >> 32),unsigned((position & 0xffffffffu) * 100 >> 32),(unsigned long long)(length >> 32),unsigned((length & 0xffffffffu) * 100 >> 32));
+        line(pane,2,text,42,12,settings_[R::status_font],true);
+        std::snprintf(text,sizeof(text),"%u/%u events%s",looper ? looper->events() : 0,looper ? looper->capacity() : 0,!clock.running ? " Clock waiting" : looper && looper->unsaved() ? " Unsaved" : "");
+        line(pane,3,text,58,12,settings_[R::status_font],true);
+        line(pane,4,looper_prompt,74,12,settings_[R::status_font],true);
+        line(pane,5,prompt("%s Rec %s Play %s Undo",controls_.previous,controls_.next,controls_.confirm),90,12,settings_[R::status_font],true);
+        line(pane,6,prompt("%s Clear %s Files",controls_.previous_section,controls_.next_section),106,12,settings_[R::status_font],true);
+    }
     void monitor_view(Pane &pane, unsigned window, unsigned count) {
         using Direction = midi::Monitor::Direction;
         using R = cntrl::PageSettings;

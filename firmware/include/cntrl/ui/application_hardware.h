@@ -43,6 +43,7 @@ public:
     }
     bool keyboard_button(unsigned input, bool pressed) { return presentation().keyboard_button(input, pressed); }
     bool monitor_button(unsigned input, bool pressed) { return presentation().monitor_button(input, pressed); }
+    bool looper_button(unsigned input, bool pressed) { return presentation().looper_button(input, pressed); }
     void poll_keyboard() { presentation().poll_keyboard(); }
     void blank_performance() { presentation().blank_performance(); }
     void select_trs_jack() { presentation().select_trs_jack(); }

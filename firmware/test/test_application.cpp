@@ -77,9 +77,13 @@ struct VisitFile : cntrl::files::File {
     bool sync() override { return true; }
 };
 struct PagePlatform : Hardware {
+    uint32_t now = 0;
+    uint32_t microseconds() const { return now; }
+    unsigned clock_available() const { return 1; }
+    bool looper_storage_ready() const { return true; }
+    cntrl::ui::PerformanceStatus status() const { return {}; }
     cntrl::midi::Monitor monitor;
     cntrl::midi::Monitor &midi_monitor() { return monitor; }
-    uint32_t microseconds() const { return 0; }
     bool switch_firmware() { return false; }
     struct Expression {
         unsigned index = 0;
@@ -172,6 +176,58 @@ static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents 
     host.enter_page(); assert(!platform.monitor.active());
     assert(host.monitor_button(2, true) && !platform.monitor.frozen());
     cntrl::memory_budget = budget;
+}
+static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately(cntrl::Documents &documents, cntrl::ui::Application &app) {
+    struct FileSystem : cntrl::files::FileSystem {
+        bool exists(const char *) override { return false; }
+        bool make_directory(const char *) override { return true; }
+        bool rename(const char *, const char *) override { return false; }
+    } filesystem;
+    struct Directory : cntrl::files::Directory {
+        bool open(const char *) override { return true; }
+        bool next(char *, unsigned, bool &) override { return false; }
+        void close() override {}
+    } directory;
+    struct Sink : cntrl::midi::Sink {
+        bool write_packet(unsigned, const cntrl::midi::Packet &) override { return true; }
+    } sink;
+    VisitFile source, index, recording;
+    cntrl::midi::MidiFiles files(filesystem,source,index,recording,directory,1,"/midi","/index");
+    PagePlatform platform; PageFonts fonts; PageDisplay display;
+    uint16_t work[4096] = {}, cache[4096] = {}, previous[4096] = {};
+    cntrl::ui::Renderer renderer(display,fonts,work,4096,cache,previous,4096);
+    constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"},{3,"D"},{4,"E"},{5,"F"}};
+    cntrl::ui::PageHost<PagePlatform> host(platform,app,documents,display,fonts,renderer,{0,1,2,3,4,5,4,3,2,bindings,6});
+    host.looper_files(files,sink);
+    assert(files.looper.configure({},sink));
+    cntrl::PageSettings settings; host.pages_.configure(settings);
+    uint8_t layout[8 + 32 + 35] = {'C','P','A','G',1,1,1,0};
+    layout[8 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_looper); layout[8 + 32 + 33] = 1;
+    host.pages_.layout({layout});
+    using Loop = cntrl::midi::MidiLooper;
+    auto take = [&]() {
+        assert(files.looper.record({0,1,true},500000));
+        files.looper.poll({Loop::beat,1,true},true,1,sink);
+        assert(files.looper.record({Loop::beat,1,true},500000));
+        files.looper.poll({Loop::beat * 2,1,true},true,1,sink);
+        assert(files.looper.unsaved());
+    };
+    take();
+    assert(host.looper_button(3,true));
+    assert(files.looper.unsaved() && std::strcmp(host.pages_.looper_prompt,"Confirm clear?") == 0);
+    assert(host.looper_button(5,true) && files.looper.unsaved());
+    assert(host.looper_button(3,true) && host.looper_button(2,true));
+    files.looper.poll({Loop::beat * 2,1,true},true,1,sink);
+    assert(files.looper.state() == Loop::State::empty && !files.looper.unsaved());
+    take();
+    assert(host.looper_action(3,""));
+    files.looper.poll({Loop::beat * 2,1,true},true,1,sink);
+    assert(files.looper.state() == Loop::State::empty);
+    take();
+    source.bytes = {0};
+    assert(host.looper_action(5,"selected.mid"));
+    assert(files.looper.state() == Loop::State::loading);
+    assert(!host.pages_.looper_prompt[0]);
 }
 static void selecting_pages_preserves_state_and_background_work(const char *path) {
     struct Context : Hardware {
@@ -304,6 +360,7 @@ int main(int argc, char **argv) {
         firmware_handoff_is_durable_and_corrupt_return_is_rejected(hardware, documents, app, songs, source);
         page_ports_follow_declared_sparse_ids_and_supported_modes(documents, app);
         monitor_page_controls_and_capture_follow_lifecycle(documents, app);
+        looper_page_confirms_clear_but_explicit_bindings_execute_immediately(documents, app);
         assert(app.state(1, 91, hardware) && hardware.brightness == 91);
         assert(app.state(9, 0, hardware) && app.pending_operation == 9);
         assert(!app.state(11, 0, hardware)); hardware.editor = true; assert(app.state(11, 0, hardware)); hardware.editor = false;

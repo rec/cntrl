@@ -8,9 +8,10 @@ The graphical configuration editor remains tracked separately in
 
 ## MIDI looper
 
-Implement the dedicated live MIDI looper page and its performance controls.
-The existing [MIDI file support](../doc/midi-files.md) provides recording,
-playback and repeated file playback; the live-looper interface remains unfinished.
+Implemented the [live MIDI looper](../doc/midi-looper.md), including overdub,
+Undo, page controls, patch actions and Save/Load. Independently timestamped
+physical timing and receiver qualification remain outstanding in
+[the looper plan](looper.md).
 
 ## Arpeggiator
 

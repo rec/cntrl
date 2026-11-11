@@ -7,12 +7,47 @@ Add a live MIDI looper page, building on the existing
 phrase, hears it repeat, adds an overdub, undoes the last overdub, stops or
 clears the loop, and saves or loads a MIDI file.
 
-This is a proposed implementation plan, not authorization to implement or flash
-firmware. The initial scope is one shared loop, one-level overdub undo and
-beat-synchronized operation. Multiple looper pages show the same session.
+The user authorized implementation, shared recorder/player and ownership changes,
+and the RAM2 revision below. Flashing firmware and physical qualification remain
+separate. The scope is one shared loop, one-level overdub undo and beat-synchronized
+operation. Multiple looper pages show the same session.
 Multitrack arrangements, independent loop lengths, audio looping, an event
 editor, time stretching and additional playback effects are outside this plan.
 Existing file recording and playback keep their documented behavior.
+
+## Approved implementation revision
+
+The SD prototype could cache the first prepared records, but synchronous SD
+writes and sync still prevented a bounded first wrap during finalization. The
+user approved bounded RAM2 generations instead, for notes and pedals over up to
+64 quarter-note beats, with 512 events per generation by default. The shared
+prepared-index format and SMF reader/writer remain in use. SD is used for explicit
+Save/Load, whose physical latency still needs qualification.
+
+The implemented limits are 32 simultaneous notes/holds, 32 controller decoder
+contexts and 16 tracks for SMF import. The default shared RAM2 allowance is
+113,344 bytes, including working generations, scratch/index/order buffers,
+ownership, recorder/import allowances and allocation overhead. Setup compilation
+and native validation account for this once, independently of the number of views.
+
+The user also specified that explicitly bound Clear and Load actions execute
+immediately. Page controls retain their confirmation prompts. See the
+[user documentation](../doc/midi-looper.md) for configuration and behavior.
+
+## Implementation and qualification status
+
+The software implementation is complete. Host regressions cover a full
+512-event take, multiple overdub passes, one-level Undo, 4,000 irregularly polled
+cycles without accumulated drift, output backpressure, ownership cleanup,
+controller transactions, transport changes, raw running status, USB cables,
+storage failures and page confirmations. Cross-platform qualification uses the
+existing manually dispatched workflow, including installed and relocated builds.
+
+The target build leaves 10,944 bytes in RAM1 for stack/local variables and
+405,376 bytes of RAM2 for dynamic allocation before setup-specific reservations.
+The default looper's 113,344-byte allocation is included in that setup budget.
+Physical qualification in step 7 remains outstanding. No firmware was flashed
+as part of implementation.
 
 ## Reuse and required changes
 
@@ -25,11 +60,11 @@ Existing file recording and playback keep their documented behavior.
 | Shared clock beat position | Use the selected internal/external clock and its transport/restart generation. |
 | Named pages and control bindings | Add a looper view and actions through the existing page lifecycle and gesture recognizer. |
 
-The current recorder writes millisecond timestamps as 1000 PPQN at 60 BPM.
-Its `finish()` drains the whole queue and synchronizes the file synchronously.
-The player indexes a completed file before playing, waits for delivery and note
-cleanup at each pass end, then resets its elapsed timer. Those are concrete
-gaps for live, tempo-following looping.
+Before implementation, the recorder wrote millisecond timestamps as 1000 PPQN
+at 60 BPM. Its `finish()` drained the whole queue and synchronized the file
+synchronously. The player indexed a completed file before playing, waited for
+delivery and note cleanup at each pass end, then reset its elapsed timer. Those
+were the concrete gaps for live, tempo-following looping.
 
 Extend these shared implementations with bounded finalization, a reusable
 prepared-index handoff and a beat-driven playback cursor. Preserve the ordinary
@@ -119,24 +154,21 @@ Play after clock recovery. Never replay missed cycles or emit a catch-up burst.
 
 ### First-wrap handoff
 
-Prepare file handles, buffers and index capacity before arming. Build the
-candidate index incrementally as recording drains, sharing the existing index
-writer and event representation. Freezing the take must leave a prepared
-playback cursor with a known boundary and ownership state, rather than starting
-a whole-file indexing pass at that boundary.
+Reserve RAM2 buffers and index capacity before arming. Capture maintains an
+ordered candidate index using the shared writer and event representation.
+Pending controller writes are inserted while capturing, so the first wrap does
+not sort or index the entire take. Boundary releases complete the prepared
+cursor, and playback begins before the common writer flattens the generation
+to its RAM2 SMF. Playback does not read that unfinished SMF; Save remains unavailable
+until finalization completes. No SD operation is required by this handoff.
 
-Prototype and measure the close-to-play handoff before building the page. A
-bounded handoff buffer may bridge recorder finalization only if measurements
-justify it and its memory is included in the setup budget. Specify exactly
-which prepared events are readable while finalization is pending; never pass
-an unfinished file to ordinary completed-file playback or mark it saved early.
-
-The acceptance target is uninterrupted first-wrap playback within a stated,
-measured scheduling tolerance. If the shared file path cannot meet that target
-without unbounded buffering or blocking storage calls, stop and revise this
-design for approval. Do not ship a silent preparation gap as a completed live
-looper. On a missed preparation deadline, report the failed launch, clean up
-and retain any previous committed loop; do not start halfway through a cycle.
+The initial launch policy rejects a request observed more than one millisecond
+past its requested boundary. Host tests verify the RAM-only handoff, rejection
+of missed first wraps and 4,000 irregularly polled cycles without cumulative
+phase drift. They do not establish physical first-wrap latency or CPU/storage
+jitter on the pedal. Those acceptance measurements remain in step 7. A missed
+launch reports an error and retains a previous committed loop instead of
+starting halfway through a cycle.
 
 ## Captured events and output ownership
 
@@ -182,10 +214,11 @@ fresh Play to rejoin a recovered destination, without replaying a backlog.
 ## Storage, save/load and resource ownership
 
 Use ordinary SMF files and the existing MIDI directory, filesystem interface
-and exclusive naming rules. Do not introduce a proprietary loop file format.
-Flatten a committed overdub into the next working SMF generation while keeping
-the active generation immutable. Keep only the active version, one previous
-version for Undo and one candidate; do not retain an unbounded layer chain.
+and exclusive naming rules for Save/Load. Live SMFs and prepared indexes reside
+in bounded RAM2 buffers, with no proprietary disk format or SD scratch files.
+Flatten an overdub into the next RAM2 SMF while keeping the active generation
+immutable. Keep only the active version, one previous version for Undo and one
+candidate, plus a bounded scratch index and merge order.
 
 Save publishes a completed, synchronized SMF with tempo/tick metadata and an
 end-of-track time that preserves the full loop length. A live tempo change must
@@ -208,7 +241,7 @@ playback continues. Failed writes, removal of storage
 and power loss must not overwrite a saved file or promote a partial candidate.
 After reboot, discover only completed saved files; do not automatically play or
 promise crash recovery of an unsaved performance. Reclaim only files identified
-as this session's scratch data through the existing filesystem API.
+as a newly created failed save through the existing filesystem API.
 
 Reserve the existing primary recorder/player resources before arming, including
 the upcoming record-to-play transition. Ordinary file patches must report Busy

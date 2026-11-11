@@ -414,6 +414,22 @@ class PlayMidiFile(Presentation, frozen=True):
         return value
 
 
+class MidiLooperAction(Presentation, frozen=True):
+    operation: Literal['midi-looper']
+    action: Literal['record', 'play-stop', 'undo', 'clear', 'save', 'load']
+    filename: Annotated[
+        str, Field(max_length=95), AfterValidator(PlayMidiFile.basename)
+    ] = ''
+
+    @model_validator(mode='after')
+    def load_filename(self) -> 'MidiLooperAction':
+        if bool(self.filename) != (self.action == 'load'):
+            raise ValueError(
+                'filename is required for load and forbidden for other looper actions'
+            )
+        return self
+
+
 class RecordMidiFile(Presentation, frozen=True):
     operation: Literal['record-midi-file']
     channels: Annotated[
@@ -492,6 +508,7 @@ ConcretePatch = (
         | StockFirmware
         | PlayMidiFile
         | RecordMidiFile
+        | MidiLooperAction
         | MidiStream
         | Relay
         | ScrollCounter,
@@ -783,7 +800,26 @@ class KeyboardShortcut(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class LooperSettings(BaseModel, frozen=True):
+    inputs: Annotated[list[str], Field(min_length=1)] | None = None
+    outputs: Annotated[list[str], Field(min_length=1)] | None = None
+    channels: Annotated[
+        list[Annotated[int, Field(strict=True, ge=1, le=16)]], Field(min_length=1)
+    ] = Field(default_factory=lambda: list(range(1, 17)))
+    events: Annotated[int, Field(strict=True, ge=1, le=4096)] = 512
+
+    @model_validator(mode='after')
+    def unique_filters(self) -> 'LooperSettings':
+        for v in (self.inputs, self.outputs, self.channels):
+            if v is not None and len(v) != len(set(v)):
+                raise ValueError('duplicate MIDI looper filter')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class PageSettings(BaseModel, frozen=True):
+    looper: LooperSettings | None = None
     keyboard: list[KeyboardShortcut] = Field(default_factory=list)
     expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)
     clock_outputs: list[str] = Field(default_factory=list)
@@ -906,6 +942,7 @@ class Page(BaseModel, frozen=True):
         'clock-tempo',
         'keyboard',
         'midi-monitor',
+        'midi-looper',
         'None',
     ] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)

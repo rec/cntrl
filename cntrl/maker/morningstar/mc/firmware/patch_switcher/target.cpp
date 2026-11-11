@@ -105,6 +105,7 @@ extern cntrl::StoredPatchSources patch_sources;
 using UiOperation = cntrl::ui::Operation;
 extern cntrl::ui::Application application;
 PerformanceStatus performance_status();
+bool midi_storage_idle();
 void capture_disk_space();
 cntrl::StartupCounter startup_counter;
 MidiFileStorage midi_storage;
@@ -253,6 +254,7 @@ public:
     unsigned switch_capacity() const override { return cntrl::target::max_switches; }
 #endif
     bool configuration_locked() const override { return history_import.busy() || application.patch_pending()
+        || midi_files.storage_busy()
 #if CNTRL_SWITCHES
         || switches.open()
 #endif
@@ -268,11 +270,13 @@ public:
         return midi_files.play(owner, settings);
     }
     cntrl::midi::Bridge::Delivery midi_file_delivery(unsigned owner) const override { return midi_files.player.delivery(owner); }
-    void cancel_midi_file(unsigned owner) override { if (owner == midi_files.player.owner()) midi_files.player.cancel(); }
+    void cancel_midi_file(unsigned owner) override { if (!midi_files.looper.owned() && owner == midi_files.player.owner()) midi_files.player.cancel(); }
     bool record_midi_file(const cntrl::midi::RecordMidiFilePatch &settings) override {
         return midi_files.record(settings, startup_counter.count,
             startup_counter.status == cntrl::StartupCounter::Status::ready, micros());
     }
+    bool looper_action(unsigned action, const char *filename) override { return ui_.looper_action(action,filename); }
+    bool looper_storage_ready() const { return midi_storage_idle(); }
     FLASHMEM bool state(unsigned operation, uint32_t value) override { return application.state(operation, value, *this); }
     cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &document, unsigned node, cntrl::PatchExecutor &invocation) override {
 #if CNTRL_SWITCHES
@@ -360,8 +364,11 @@ public:
         for (const auto &endpoint : midi_outputs()) {
             const auto binding = cntrl::device::midi_binding(endpoint);
             if (binding.driver == cntrl::device::MidiDriver::configurable &&
-                uint8_t(trs_ports.mode(binding.index)) != modes[binding.index])
+                uint8_t(trs_ports.mode(binding.index)) != modes[binding.index]) {
                 bridge_.disconnect_output(endpoint.route);
+                forget_output(endpoint.route);
+                midi_files.forget_input(endpoint.route);
+            }
         }
         trs_ports.configure(modes);
     }
@@ -403,6 +410,12 @@ public:
         font_assets::cache.finish(commit);
     }
     bool output_idle() const override { return bridge_.idle() && trs_ports.idle(); }
+    CNTRL_FLASH_ROUTINE(board_configuration_handoff)
+    bool configuration_handoff() override {
+        midi_files.looper.stop();
+        midi_files.looper.poll(ui_.pages_.beat_position(micros()),ui_.pages_.clock_ready(),clock_available(),*this);
+        return !loop_cleaning() && output_idle() && !midi_files.storage_busy();
+    }
     void set_usb_midi(bool device, bool host) override {
         bridge_.configure_usb(device, host, millis());
     }
@@ -791,6 +804,7 @@ PerformanceStatus performance_status() {
 void midi_status(unsigned route) { board.midi_status(route); }
 void midi_reset() { board.midi_reset(); }
 bool native_asset_command(const char *line) {
+    if (!std::strcmp(line,"CNTRL MIDI LOOPER")) { midi_files.looper.status(board); return true; }
     if (!std::strcmp(line, "CNTRL MIDI STREAMS")) {
         board.midi_stream_status(); return true;
     }
@@ -827,9 +841,16 @@ struct AssetServices {
     history_import, bundle_transfer, storage_listing, disk_speed_transfer, application.song_ui, songs_transfer,
     font_files, native_asset_command};
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
-bool asset_command(const char *line) { return asset_commands.command(line, millis()); }
+FLASHMEM bool asset_command(const char *line) {
+    if (midi_files.storage_busy()) { board.reply("CNTRL ERROR midi-storage-busy"); return true; }
+    return asset_commands.command(line, millis());
+}
 bool asset_data(cntrl::UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) { return asset_commands.data(kind, bytes, length, now); }
 DMAMEM cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset, asset_data, &board.text_messages());
+FLASHMEM bool midi_storage_idle() {
+    return !documents.busy() && !history_import.busy() && !bundle_transfer.busy() && !disk_speed_transfer.busy()
+        && !songs_transfer.busy() && !font_files.busy() && !splash_assets.busy() && !usb_session.active();
+}
 cntrl::ButtonState buttons[cntrl::target::button_count];
 cntrl::CooperativeRuntime cooperative_runtime(cntrl::target::scan_interval_ms);
 
@@ -839,6 +860,7 @@ bool switch_scan_due() { return cooperative_runtime.scan_due(millis()); }
 
 FLASHMEM void initialize_target() {
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
+    board.page_host().looper_files(midi_files,board);
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session.reset();
     usb_session.text_messages(board.text_messages());
@@ -905,6 +927,7 @@ public:
     }
     bool keyboard(unsigned i, bool pressed) { return board.keyboard_button(i, pressed); }
     bool monitor(unsigned i, bool pressed) { return board.monitor_button(i, pressed); }
+    bool looper(unsigned i, bool pressed) { return board.looper_button(i, pressed); }
     bool expression(unsigned i) { return board.expression_button(i); }
     bool port(unsigned i) { return board.trs_button(i); }
     bool clock(unsigned i, bool pressed) { return board.clock_control(i, pressed); }
@@ -1016,6 +1039,7 @@ public:
     bool reply_ready() const { return board.reply_ready(); }
     void cancel_listing() { storage_listing.cancel(); }
     bool commands_allowed() const {
+        if (midi_files.storage_busy()) return false;
 #if CNTRL_ORIGINAL_FIRMWARE
         return !firmware_visit.busy();
 #else

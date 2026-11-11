@@ -55,6 +55,7 @@ struct Actions {
     bool midi_reserved() const { return reserved; }
     bool keyboard(unsigned, bool) { return false; }
     bool monitor(unsigned, bool pressed) { if (monitoring) actions.push_back(pressed ? 91 : 92); return monitoring; }
+    bool looper(unsigned, bool) { return false; }
     bool expression(unsigned) { return false; }
     bool port(unsigned) { return false; }
     bool clock(unsigned, bool) { return false; }

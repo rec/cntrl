@@ -6,17 +6,20 @@ using Bytes = std::vector<uint8_t>;
 struct File : cntrl::midi::MidiFile {
     Bytes data;
     bool writable = true;
+    unsigned writes = 0, syncs = 0, reads = 0;
     uint32_t size() const override { return unsigned(data.size()); }
     bool read(uint32_t offset, uint8_t *out, unsigned length) override {
+        ++reads;
         if (offset > data.size() || length > data.size() - offset) return false;
         std::memcpy(out, data.data() + offset, length); return true;
     }
     bool write(uint32_t offset, const uint8_t *in, unsigned length) override {
+        ++writes;
         if (!writable) return false;
         if (offset + length > data.size()) data.resize(offset + length);
         std::memcpy(data.data() + offset, in, length); return true;
     }
-    bool sync() override { return writable; }
+    bool sync() override { ++syncs; return writable; }
 };
 struct Sink : cntrl::midi::Sink {
     Bytes sent[9];
@@ -241,6 +244,9 @@ void test_a_new_invocation_keeps_the_previous_delivery_result() {
     assert(player.start({},5));
     for (unsigned i = 0; i < 50; ++i) player.poll(0,1,sink);
     assert(player.delivery(5) == cntrl::midi::Bridge::Delivery::complete);
+    assert(player.play_prepared({},1,uint64_t(1) << 32));
+    assert(player.delivery(5) == cntrl::midi::Bridge::Delivery::complete);
+    player.cancel();
     assert(player.start({},0));
     assert(player.delivery(5) == cntrl::midi::Bridge::Delivery::complete);
     assert(player.delivery(0) == cntrl::midi::Bridge::Delivery::pending);
@@ -249,7 +255,86 @@ void test_a_new_invocation_keeps_the_previous_delivery_result() {
     assert(player.delivery(5) == cntrl::midi::Bridge::Delivery::complete);
 }
 
+void test_recording_close_is_bounded_and_freezes_its_end_time() {
+    File source; cntrl::midi::MidiFileRecorder recorder(source);
+    assert(recorder.start({}, 0));
+    for (unsigned i = 0; i < 40; ++i) recorder.receive(0, {12,{0xc0,uint8_t(i),0}}, i * 1000);
+    unsigned initial = source.writes;
+    assert(recorder.request_finish(50000));
+    assert(recorder.request_finish(100000));
+    assert(source.writes == initial && source.syncs == 0 && recorder.finishing());
+    recorder.receive(0, {12,{0xc0,99,0}}, 100000);
+    unsigned polls = 0;
+    while (recorder.active() && polls++ < 16) {
+        unsigned before = source.writes;
+        recorder.poll(200000);
+        assert(source.writes - before <= 16);
+    }
+    assert(recorder.complete() && !recorder.failed() && !recorder.finishing());
+    assert(source.syncs == 1 && polls <= 8);
+    assert((Bytes(source.data.end() - 4, source.data.end()) == Bytes{11,0xff,0x2f,0}));
+    File index; Sink sink; cntrl::midi::MidiFilePlayer player(source,index);
+    prepare(player,sink); pump(player,sink,0);
+    for (unsigned i = 0; i < 60; ++i) pump(player,sink,50000);
+    assert(sink.sent[0].size() == 80 && sink.sent[0].back() == 39);
+    assert(player.status() == cntrl::midi::MidiFilePlayer::Status::complete);
+}
+
+void test_loop_cleanup_preserves_live_notes_and_releases_joined_retriggers() {
+    Sink sink;
+    cntrl::memory_budget = 65536;
+    assert(sink.reserve_loop_ownership(128));
+    cntrl::midi::Packet on{9,{0x90,60,100},1}, off{8,{0x80,60,0},1};
+    assert(sink.submit(0,on));
+    assert(sink.submit_loop(0,on));
+    assert(sink.sent[0].size() == 3);
+    sink.release_loop(1);
+    assert(!sink.loop_cleaning() && sink.sent[0].size() == 3);
+    assert(sink.submit(0,off) && sink.sent[0].size() == 6);
+    assert(sink.submit(0,on) && sink.submit(0,on));
+    assert(sink.submit_loop(0,on));
+    assert(sink.submit(0,off) && sink.submit(0,off));
+    unsigned before = unsigned(sink.sent[0].size());
+    sink.blocked[0] = true; sink.release_loop(1);
+    assert(sink.loop_cleaning() && sink.sent[0].size() == before);
+    sink.blocked[0] = false; sink.release_loop(1);
+    assert(sink.loop_cleaning() && sink.sent[0].size() == before + 3);
+    sink.release_loop(1);
+    assert(!sink.loop_cleaning() && sink.sent[0].size() == before + 6);
+    assert(sink.submit_loop(0,on));
+    assert(sink.submit(0,{11,{0xb0,122,0}}));
+    assert(sink.loop_cleaning()); // Local Control does not release notes.
+    sink.release_loop(1);
+    assert(!sink.loop_cleaning());
+}
+
+void test_prepared_recording_plays_before_file_finalization_without_reading_source() {
+    File source, index; Sink sink;
+    cntrl::memory_budget = 65536;
+    assert(sink.reserve_loop_ownership(128));
+    cntrl::midi::MidiFileRecorder recorder(source);
+    assert(recorder.start_prepared({}, index, 3840, 500000));
+    recorder.receive_tick(0,{9,{0x90,60,100}},0); recorder.poll(0);
+    recorder.receive_tick(0,{8,{0x80,60,0}},1920); recorder.poll(0);
+    assert(recorder.prepared_count() == 2 && recorder.request_finish_tick(3840));
+    assert(recorder.finishing() && source.syncs == 0);
+    cntrl::midi::MidiFilePlayer player(source,index);
+    assert(player.play_prepared({},recorder.prepared_count(), uint64_t(1) << 32));
+    player.poll_prepared(0,1,sink);
+    assert((sink.sent[0] == Bytes{0x90,60,100}));
+    player.poll_prepared(uint64_t(1) << 31,1,sink);
+    assert((sink.sent[0] == Bytes{0x90,60,100,0x80,60,0}));
+    assert(source.reads == 0 && source.syncs == 0 && player.prepared_done(0));
+    for (unsigned i = 0; i < 8; ++i) recorder.poll(1000000);
+    assert(recorder.complete() && source.syncs == 1 && index.syncs == 1);
+    player.rewind_prepared(); player.poll_prepared(0,1,sink);
+    assert(sink.sent[0].size() == 9);
+}
+
 int main() {
+    test_prepared_recording_plays_before_file_finalization_without_reading_source();
+    test_loop_cleanup_preserves_live_notes_and_releases_joined_retriggers();
+    test_recording_close_is_bounded_and_freezes_its_end_time();
     test_reverse_pedal_pairs_preserve_their_intervals();
     test_reverse_pedals_restore_previous_values_per_channel_across_tracks();
     test_reverse_pedals_held_at_file_end_and_cancellation();

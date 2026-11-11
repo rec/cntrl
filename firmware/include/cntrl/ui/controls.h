@@ -54,6 +54,7 @@ public:
                     else if (i == controls_.back) services.invoke(Operation::setup_back);
                 }
             } else {
+                if (!services.midi_reserved() && (press || release) && services.looper(i, press)) continue;
                 if (i == controls_.next_page) {
                     if (press) services.browse(false);
                     continue;

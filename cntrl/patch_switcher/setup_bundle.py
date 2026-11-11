@@ -46,7 +46,7 @@ class SetupBundle(BaseModel, frozen=True):
         # movies stay on SD; there is no size-dependent RAM2 allocation.
         # Names/pointers, validated views/cache entries, and packed-table prefix.
         metadata = (
-            len(self.names) * (64 + 4 + 88 + 85) + 2 + 4 * (len(self.names) - 1) + 32
+            len(self.names) * (64 + 4 + 92 + 85) + 2 + 4 * (len(self.names) - 1) + 32
         )
         active = max(self.page_ram2)
         return self.memory.runtime + metadata + active

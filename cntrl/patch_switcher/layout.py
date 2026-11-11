@@ -91,4 +91,5 @@ PAGE_TYPES = (
     'None',
     'patch-switcher',
     'midi-monitor',
+    'midi-looper',
 )

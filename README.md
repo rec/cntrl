@@ -59,7 +59,7 @@ reliability, and speed of response.
 * Plug-in architecture with many types of active pages
   * Patch switcher
   * MIDI recorder/playback
-  * MIDI looper(*)
+  * [MIDI looper](doc/midi-looper.md)
   * Arpeggiator for polyphonic or monophonic instruments(*)
   * Drone controller(*)
   * MIDI cable tester
