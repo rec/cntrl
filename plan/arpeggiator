@@ -1,0 +1,129 @@
+# Tap-synced MIDI arpeggiator
+
+A keyboard player toggles the arpeggiator on, holds a chord, and hears one
+selected note on each grid step. A monophonic player records a phrase with
+the looper gestures, then hears its complete note gestures in the selected
+order. Choose `poly` or `mono` in setup configuration. Opening the page
+shows the current state and leaves playback phase intact.
+
+## Profile and timing
+
+Use arpeg's terms *bank*, *selection*, *rank*, *grid*, *step* and *gate*.
+The bank supplies entries, selection chooses a zero-based rank, and rhythm
+determines when to play it. Proposed pedal configuration for a keyboard:
+
+```toml
+[pages.arp]
+type = "arpeggiator"
+
+[page_settings.arpeggiator]
+mode = "poly"
+inputs = ["din"]
+outputs = ["usb-device"]
+selection = { kind = "alternating", repeat_begin = false, repeat_end = true }
+rhythm = { kind = "grid", step = "1/4 beat" }
+gate = "4/5"
+```
+
+Use the routing and channel conventions of [the MIDI looper](../doc/midi-looper.md).
+The configuration mode determines the bank: poly uses a held bank, mono a
+committed phrase bank. In arpeg notation the latter corresponds to
+`bank = { kind = "phrase", publish = "step" }` with
+`expression = { source = "recorded", timing = "fit" }`. The pedal needs
+only one way to configure that choice. Use arpeg's exact rational notation:
+at 120 BPM, a beat is 500 ms, a `"1/4 beat"` step is 125 ms, and a
+`"4/5"` gate gives 100 ms of sounding time.
+
+Schedule against the shared beat position from [MIDI Clock](../doc/midi-clock.md).
+Tapping a new tempo changes the working BPM while preserving grid phase.
+Start on a grid boundary, derive deadlines from absolute beat positions, and
+service due releases before another attack. Use the selected external clock
+when configured. Transport stop or clock loss releases sounding notes.
+Proposed poly behavior when the internal transport is stopped: the On press
+starts the internal beat so enabling the effect still takes one press. Off
+stops the arpeggiator only. External mode waits for a running external clock.
+
+## Building the bank
+
+- **Poly.** One switch toggles On/Off. While on, collect held Note Ons by
+  input, cable, channel and pitch. Match releases including velocity-zero Note
+  On. Rank by ascending pitch with a stable tie-break for equal pitches. On
+  each step use the current bank and the selected entry's velocity and channel.
+  An empty bank rests. On edit, retain the current entry if it survives and
+  recompute its rank. If it disappears, restart selection on the next step.
+  On the configured performance route, replace held-note thru with generated
+  notes while enabled. Account for keys already sounding at either toggle so
+  every forwarded or generated attack receives its release.
+- **Mono.** Use the looper's Record/Finish and Play/Stop gestures and beat
+  timestamps. Record into a bounded take, then publish complete entries in
+  played order. Each attack opens a segment, its matching release closes it.
+  A new attack before release closes the preceding segment at that attack
+  and starts the next, preserving legato articulation. Ignore a subsequent
+  release belonging to the closed occurrence. Pair repeated pitches in onset
+  order. At Finish, append a matching Note Off at the finish beat timestamp
+  to an unfinished last note and include the completed segment in the phrase.
+  Silence between notes creates no entry. Keep the last committed phrase usable if a new take
+  overflows or is cancelled.
+
+For mono, capture pitch bend, pressure and continuous CC with their relative
+beat offsets. Store the known expression at onset so a reordered segment
+can start with the right sound. Fit its expression timeline into the grid
+step's sounding time and end with exactly one release. For example, recording
+C-on, bend, C-off, E-on, E-off yields two entries. Reverse plays E-on/off
+then C-on, bend, C-off. Reverse changes entry order only. Preserve release
+velocity and original order for simultaneous events inside each entry.
+
+## Selection
+
+Forward and reverse refer to pitch order in the held bank and played order in
+the phrase bank. Use arpeg's `ascending` / `descending` in poly and
+`played` / `played` with `direction = "reverse"` in mono. Other selectors
+operate on those banks' forward ranks. The following examples start at rank 0
+unless the selector specifies another opening.
+
+| Selection | Behavior |
+| --- | --- |
+| Forward | Visit every entry in order and restart at the beginning. |
+| Reverse | Start at the last entry, visit each preceding entry, then repeat. |
+| Back and forth (`alternating`) | Reverse direction at either end. With three entries and neither repeat, play 0,1,2,1,0,1. With both repeats, play 0,1,2,2,1,0,0,1. `repeat_begin` duplicates only the low turnaround and `repeat_end` only the high turnaround. These independent flags extend arpeg's single `repeat_endpoints` setting. |
+| Random (`choice`) | Draw uniformly from the whole bank on each hit. Consecutive draws may select the same entry. |
+| Random walk (`walk`) | Open at 0. Choose a movement of +1, −1 or 0 using `prob_up`, `prob_down` and the remaining probability. Accept nonnegative rational probabilities whose sum is at most one. With `cycle = true`, stepping down from 0 wraps to the last rank. With `cycle = false`, it reflects to 1. Apply the symmetric rule at the high end. These fields express the requested pedal variant of arpeg's weighted moves. |
+| Mod (`mod`) | For each residue from 0 through modulus−1, visit that residue's ranks in increasing order. Skip empty residues and repeat after every rank has played once. Require integer `modulus >= 2`. Six entries with modulus 2 give 0,2,4,1,3,5. Nine with modulus 3 give 0,3,6,1,4,7,2,5,8. A modulus larger than the bank produces forward order. |
+
+All selectors rest with zero entries and select 0 once per hit with one entry.
+Use a local seeded generator for reproducible random tests. Two additional
+ideas from arpeg are `shuffle`, which visits every rank once before drawing
+a fresh permutation, and `outside_in`, which alternates the lowest and highest
+remaining ranks. Treat these as optional selections after the requested six.
+
+## Implementation and acceptance
+
+1. Extend the existing utility-page model, compiler, document validation and
+   editable export. Validate mode, selector-specific settings, positive grid
+   duration and gate. Round-trip both example banks through setup compilation.
+2. Reuse the looper's input observation, beat timestamps, bounded storage
+   conventions and output sink. Keep the captured phrase independent of the
+   looper's take. Track generated notes and pending releases per destination.
+   Stop, setup changes, disconnects and blocked output must never orphan a
+   note or replay a backlog of stale attacks.
+3. Display mode, selection, running/recording state and bank size. Exercise
+   the logical switch roles with a held chord and with a recorded single-note
+   instrument. Verify page navigation during playback.
+4. Test exact rank traces, all four alternating flag combinations, uneven mod
+   groups, walk reflection versus wrapping, stay probability, and edits down
+   to a singleton or empty bank. Test a captured legato phrase with expression,
+   equal pitches, velocity-zero releases and Finish completing an unfinished
+   tail with a matching Note Off at the finish beat timestamp.
+5. Drive the normal runtime with a fake beat clock. Change tap tempo mid-step,
+   stop while a note sounds, and block one output during a release. Assert
+   emitted MIDI bytes, ordering and beat positions. On hardware, compare the
+   generated attacks with the tapped beat and listen for stuck or doubled notes.
+
+Use the local arpeg conformance examples `alternating.toml`, `weighted-walk.toml`,
+`phrase-wind.toml` and `choice.toml` as notation references. Implement and
+test the pedal behavior in cntrl. Builds and tests must work without an arpeg
+checkout, package or runtime.
+
+## Additional work beyond the prompt
+
+None.
