@@ -1,23 +1,13 @@
 # Remaining features
 
-Unfinished features from the [README](../README.md). This backlog is not
-authorization to implement every item immediately.
+## Explicate how we deal with layout between the let and right pages
 
-The graphical configuration editor remains tracked separately in
-[GitHub issue #4](https://github.com/rec/cntrl/issues/4).
 
-## MIDI looper
+## Really fix up songs and sets
 
-Implemented the [live MIDI looper](../doc/midi-looper.md), including overdub,
-Undo, page controls, patch actions and Save/Load. Independently timestamped
-physical timing and receiver qualification remain outstanding in
-[the looper plan](looper.md).
+These have never been examined by a human
 
-## Arpeggiator
-
-Implemented the [arpeggiator](../doc/arpeggiator.md) for held polyphonic notes
-and captured monophonic gestures, synchronized to the shared beat clock.
-Hardware timing and receiver qualification remain outstanding.
+## Clarify how the interaction between tap tempo and received tempo works
 
 ## Drone controller
 
@@ -25,20 +15,6 @@ Implement the dedicated drone controller page and controls for starting,
 holding and releasing drone notes. Existing note patches and
 [momentary/latched controls](../doc/momentary-latched.md) provide basic note
 handling.
-
-## Incoming text messages
-
-Implemented [text messages](../doc/text-messages.md) over MIDI SysEx and USB
-serial, including cues and warnings from a computer. Physical display and
-transport qualification remain outstanding.
-
-## Additional feature ideas
-
-Ideas for discussion, grouped by topic. These are not implementation commitments
-or a priority order. Implemented parts are omitted; partially completed ideas
-describe the remaining work.
-
-### Performance organization
 
 #### Song sections
 
