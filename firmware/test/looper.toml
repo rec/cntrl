@@ -41,4 +41,12 @@ action = 'load'
 filename = '42-1.mid'
 
 [patch_cycles]
-loop = ['record', 'play', 'undo', 'clear', 'save', 'load']
+loop = ['record', 'play', 'undo', 'clear', 'save', 'load', 'reverse', 'direction']
+
+[patches.reverse]
+operation = 'midi-looper'
+action = 'reverse'
+
+[patches.direction]
+operation = 'midi-looper'
+action = 'direction'

@@ -1,7 +1,8 @@
 # Live MIDI looper
 
 The live looper records a beat-synchronized phrase, repeats it, adds overdubs
-and offers one-level overdub Undo. All looper pages control the same session.
+and offers one-level Undo for overdubs and Reverse edits. All looper pages
+control the same session.
 Ordinary [MIDI file patches](midi-files.md) remain separate operations.
 
 ```toml
@@ -37,9 +38,9 @@ The page uses the target's logical control roles:
 | --- | --- |
 | Previous | Record the first take, finish it, arm an overdub or finish an overdub. |
 | Next | Play or Stop. |
-| Confirm | Undo the last committed overdub. |
+| Confirm | Undo the last committed overdub or Reverse edit. |
 | Previous section | Open the Clear confirmation. Confirm clears; Back cancels. |
-| Next section | Open Save/Load. Previous/Next choose; Confirm accepts. |
+| Next section | Open More: Save, Load, Reverse phrase or Toggle direction. Previous/Next choose; Confirm accepts. |
 | Back | Cancel a menu, or use normal page navigation. |
 
 The first Record starts on the next quarter-note beat. Record again to finish
@@ -51,8 +52,28 @@ The first take fixes the length. Record while playing arms an overdub for the
 next complete loop boundary. It may run across several passes; Record again
 closes it at a loop boundary. The old loop keeps playing during preparation.
 Publication and Undo switch at a subsequent boundary, preserving the absolute
-phase. Undo is available only for the last completed overdub, without redo.
+phase. Undo is available only for the last completed overdub or Reverse edit,
+without redo.
 Undo while stopped takes effect immediately.
+
+Reverse phrase mirrors the stored phrase in time. Note durations and onset
+velocities are preserved, sustain/hold transitions run backward, and fine-CC
+and NRPN/RPN transactions retain their internal byte order. Other continuous
+values and Program Changes retain their values at mirrored times. Save writes
+the edited phrase, and Undo restores its previous version. Reversing a silent
+phrase preserves its duration. Preparation uses the existing RAM2 generations.
+
+Toggle direction switches forward/backward playback without editing the phrase,
+consuming Undo or marking it unsaved. Save ignores playback direction. The page
+shows Forward or Backward and any pending direction change. Overdubbing is
+unavailable during backward playback; switch back to Forward first. Undo and
+Reverse edits remain available, and direction applies independently to the
+current phrase. Stop retains direction; Clear and a successful Load reset it.
+
+Both operations switch at a subsequent whole loop boundary during playback,
+after the current cycle's note/hold cleanup. While stopped they need no clock
+or boundary; a Reverse edit completes its bounded RAM preparation before the
+phrase becomes available. Conflicting capture/edit commands are rejected.
 
 Stop discards unfinished capture and releases only the loop's notes and pedal
 holds. A stopped committed loop remains available. Page navigation leaves it
@@ -82,7 +103,8 @@ action = 'load'
 filename = '42-1.mid'
 ```
 
-Actions are `record`, `play-stop`, `undo`, `clear`, `save` and `load`. Only Load
+Actions are `record`, `play-stop`, `undo`, `clear`, `save`, `load`, `reverse` and
+`direction`. `reverse` edits the phrase; `direction` toggles playback. Only Load
 takes a filename, which must be a basename. Explicitly bound Clear and Load
 execute immediately, including replacement of unsaved work. Assign them to an
 appropriate gesture. The page's Clear and replacement Load controls ask for
@@ -169,7 +191,8 @@ length, with no cumulative delay from previous delivery.
 `CNTRL MIDI LOOPER` reports state, error, capacity, high-water counts, length,
 late boundaries, maximum observed boundary lateness, retired outputs and
 discarded groups. Use `CNTRL MIDI STATUS <route>` for the existing maximum MIDI
-service and input-scan gaps.
+service and input-scan gaps. The status also reports `backward` and
+`direction_pending` flags.
 
 Host tests cover phase, ownership, capacity, storage failures and transport
 behavior. Physical first-wrap latency, jitter and receiver behavior still need

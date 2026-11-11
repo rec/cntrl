@@ -416,7 +416,9 @@ class PlayMidiFile(Presentation, frozen=True):
 
 class MidiLooperAction(Presentation, frozen=True):
     operation: Literal['midi-looper']
-    action: Literal['record', 'play-stop', 'undo', 'clear', 'save', 'load']
+    action: Literal[
+        'record', 'play-stop', 'undo', 'clear', 'save', 'load', 'reverse', 'direction'
+    ]
     filename: Annotated[
         str, Field(max_length=95), AfterValidator(PlayMidiFile.basename)
     ] = ''

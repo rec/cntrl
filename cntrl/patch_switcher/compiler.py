@@ -2270,7 +2270,16 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 37
-LOOPER_ACTIONS = ('record', 'play-stop', 'undo', 'clear', 'save', 'load')
+DOCUMENT_VERSION = 38
+LOOPER_ACTIONS = (
+    'record',
+    'play-stop',
+    'undo',
+    'clear',
+    'save',
+    'load',
+    'reverse',
+    'direction',
+)
 SCROLL_DIRECTIONS = ('right', 'left', 'up', 'down')
 TRS_MODES = ('off', 'midi-a', 'midi-b', 'expression', 'aux')

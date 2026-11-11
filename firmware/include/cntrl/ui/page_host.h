@@ -22,12 +22,14 @@ public:
     CNTRL_FLASH_ROUTINE(looper_action)
 #endif
     bool looper_action(unsigned action, const char *filename) {
-        if (!looper_files_ || (looper_files_->storage_busy() && action != 1 && action != 3)) return false;
+        if (!looper_files_ || (looper_files_->storage_busy() && action != 1 && action != 3 && action != 7)) return false;
         if ((action == 4 || action == 5) && !platform_.looper_storage_ready()) return false;
         auto &files = *looper_files_; auto &loop = files.looper;
         if (action == 0) return loop.record(pages_.beat_position(platform_.microseconds()),pages_.clock_period());
         if (action == 1) return loop.play_stop(pages_.beat_position(platform_.microseconds()));
         if (action == 2) return loop.undo(pages_.beat_position(platform_.microseconds()));
+        if (action == 6) return loop.reverse(pages_.beat_position(platform_.microseconds()));
+        if (action == 7) return loop.direction(pages_.beat_position(platform_.microseconds()));
         if (action == 3) return loop.clear();
         if (action == 4) {
             auto status = platform_.status();
@@ -57,12 +59,12 @@ public:
                 if (loop.unsaved()) { std::strcpy(looper_load_file_,files.loop_filename()); looper_menu_ = LooperMenu::replace; }
                 else { ok = platform_.looper_storage_ready() && files.load_loop(files.loop_filename()); if (ok) looper_menu_ = LooperMenu::none; }
             }
-        } else if (looper_menu_ == LooperMenu::save_load) {
-            if (input == controls_.previous || input == controls_.next) looper_load_ = !looper_load_;
+        } else if (looper_menu_ == LooperMenu::more) {
+            if (input == controls_.previous || input == controls_.next) looper_choice_ = (looper_choice_ + (input == controls_.previous ? 3 : 1)) % 4;
             else if (input == controls_.confirm) {
-                if (looper_load_) { ok = platform_.looper_storage_ready() && files.browse_loop(false,true); if (ok) looper_menu_ = LooperMenu::files; }
+                if (looper_choice_ == 1) { ok = platform_.looper_storage_ready() && files.browse_loop(false,true); if (ok) looper_menu_ = LooperMenu::files; }
                 else {
-                    ok = looper_action(4,"");
+                    ok = looper_action(looper_choice_ == 0 ? 4 : looper_choice_ + 4,"");
                     if (ok) looper_menu_ = LooperMenu::none;
                 }
             }
@@ -70,7 +72,7 @@ public:
         else if (input == controls_.next) ok = looper_action(1,"");
         else if (input == controls_.confirm) ok = looper_action(2,"");
         else if (input == controls_.previous_section) looper_menu_ = LooperMenu::clear;
-        else if (input == controls_.next_section) { looper_load_ = false; looper_menu_ = LooperMenu::save_load; }
+        else if (input == controls_.next_section) { looper_choice_ = 0; looper_menu_ = LooperMenu::more; }
         if (!ok) error("MIDI looper command rejected");
         refresh_looper_prompt(); pages_.revisit(); return true;
     }
@@ -443,9 +445,9 @@ public:
     Pages pages_;
     Keyboard keyboard_;
 private:
-    enum class LooperMenu { none, save_load, files, clear, replace };
+    enum class LooperMenu { none, more, files, clear, replace };
     LooperMenu looper_menu_ = LooperMenu::none;
-    bool looper_load_ = false;
+    unsigned looper_choice_ = 0;
     char looper_load_file_[96] = {};
     midi::MidiFiles *looper_files_ = nullptr;
     midi::Sink *looper_sink_ = nullptr;
@@ -453,7 +455,8 @@ private:
     CNTRL_FLASH_ROUTINE(looper_prompt)
 #endif
     void refresh_looper_prompt() {
-        const char *text = looper_menu_ == LooperMenu::save_load ? (looper_load_ ? "Load: Confirm" : "Save: Confirm")
+        const char *choices[] = {"Save: Confirm","Load: Confirm","Reverse phrase: Confirm","Toggle direction: Confirm"};
+        const char *text = looper_menu_ == LooperMenu::more ? choices[looper_choice_]
             : looper_menu_ == LooperMenu::clear ? "Confirm clear?"
             : looper_menu_ == LooperMenu::replace ? "Replace unsaved loop?"
             : looper_menu_ == LooperMenu::files ? (looper_files_->browsing() ? "Scanning..." : looper_files_->loop_filename()[0] ? looper_files_->loop_filename() : "No MIDI files")

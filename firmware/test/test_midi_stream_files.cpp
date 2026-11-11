@@ -158,11 +158,12 @@ void loop_save_is_exclusive_bounded_and_load_never_autoplays() {
     recording.syncable = true;
     files.looper.stop(); files.looper.poll({beat * 2 + beat / 2,1,true},true,1,sink);
     unsigned sent = unsigned(sink.bytes.size());
+    assert(files.looper.direction({0,1,false}) && files.looper.backward());
     assert(files.load_loop("42-2.mid"));
     for (unsigned i = 0; i < 64 && files.storage_busy(); ++i) {
         files.looper.poll({0,1,false},true,1,sink); files.loop_storage_poll();
     }
-    assert(!files.storage_busy() && files.looper.state() == cntrl::midi::MidiLooper::State::stopped);
+    assert(!files.storage_busy() && files.looper.state() == cntrl::midi::MidiLooper::State::stopped && !files.looper.backward());
     assert(files.looper.length() == beat && sink.bytes.size() == sent);
     storage.files["/midi/42-4.mid"] = Bytes(saved.begin(),saved.begin() + 22);
     assert(files.browse_loop(false,true));

@@ -427,11 +427,11 @@ private:
         uint64_t position = looper ? looper->position(clock) : 0;
         std::snprintf(text,sizeof(text),"%llu.%02u / %llu.%02u beats",(unsigned long long)(position >> 32),unsigned((position & 0xffffffffu) * 100 >> 32),(unsigned long long)(length >> 32),unsigned((length & 0xffffffffu) * 100 >> 32));
         line(pane,2,text,42,12,settings_[R::status_font],true);
-        std::snprintf(text,sizeof(text),"%u/%u events%s",looper ? looper->events() : 0,looper ? looper->capacity() : 0,!clock.running ? " Clock waiting" : looper && looper->unsaved() ? " Unsaved" : "");
+        std::snprintf(text,sizeof(text),"%u/%u events%s%s",looper ? looper->events() : 0,looper ? looper->capacity() : 0,!clock.running ? " Clock waiting" : looper && looper->unsaved() ? " Unsaved" : "",looper && looper->backward() ? " Backward" : " Forward");
         line(pane,3,text,58,12,settings_[R::status_font],true);
-        line(pane,4,looper_prompt,74,12,settings_[R::status_font],true);
+        line(pane,4,looper_prompt[0] ? looper_prompt : looper && looper->direction_pending() ? "Direction change pending" : "",74,12,settings_[R::status_font],true);
         line(pane,5,prompt("%s Rec %s Play %s Undo",controls_.previous,controls_.next,controls_.confirm),90,12,settings_[R::status_font],true);
-        line(pane,6,prompt("%s Clear %s Files",controls_.previous_section,controls_.next_section),106,12,settings_[R::status_font],true);
+        line(pane,6,prompt("%s Clear %s More",controls_.previous_section,controls_.next_section),106,12,settings_[R::status_font],true);
     }
     void monitor_view(Pane &pane, unsigned window, unsigned count) {
         using Direction = midi::Monitor::Direction;

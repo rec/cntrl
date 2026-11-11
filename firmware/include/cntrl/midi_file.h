@@ -72,7 +72,7 @@ public:
         if (output >= max_routes) return false;
         for (unsigned row = prepared_positions_[output]; row < events_; ++row) {
             Event event;
-            if (!read_event(*index_,row,event) || event.time > duration) return false;
+            if (!prepared_event(row,event) || event.time > duration) return false;
             unsigned kind = event.status >> 4;
             if (event.time < duration && kind != 8 && !(kind == 9 && !event.second)
                 && !(kind == 11 && event.first >= 64 && event.first <= 69 && event.second < 64)) return false;
@@ -94,7 +94,7 @@ public:
             if (cursor >= events_) { blocked |= bit; continue; }
             ++work;
             Event event;
-            if (!read_event(*index_, cursor, event) || event.status < 0x80 || event.status >= 0xf0) { fail(); return; }
+            if (!prepared_event(cursor, event) || event.status < 0x80 || event.status >= 0xf0) { fail(); return; }
             if (event.time > position) { blocked |= bit; continue; }
             Packet packet{uint8_t(event.status >> 4), {event.status,event.first,event.second}};
             if (!event.previous) {
@@ -104,7 +104,7 @@ public:
             unsigned first = event.previous - 1, end = event.next - 1;
             if (first > cursor || end <= cursor || end > events_ || (end - first != 2 && end - first != 5 && end - first != 6)) { fail(); return; }
             Event a, b;
-            if (!read_event(*index_,first,a) || !read_event(*index_,first + 1,b)) { fail(); return; }
+            if (!prepared_event(first,a) || !prepared_event(first + 1,b)) { fail(); return; }
             Parameter parameter;
             parameter.channel = a.status & 15;
             parameter.kind = end - first == 2 ? Parameter::cc14 : a.first == 99 ? (end - first == 5 ? Parameter::nrpn7 : Parameter::nrpn14) : Parameter::rpn14;
@@ -494,7 +494,35 @@ public:
         event.status = record[16]; event.first = record[17]; event.second = record[18]; event.reverse_value = record[19]; event.complete_sysex = record[20];
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_file_reverse_event)
+#endif
+    static bool reverse_event(MidiFile &index, unsigned count, uint64_t duration, unsigned position, Event &event) {
+        if (position >= count || !read_event(index,count - position - 1,event)) return false;
+        if (event.previous) {
+            unsigned first = event.previous - 1, end = event.next - 1;
+            if (end > count || first >= end || count - position - 1 < first || count - position - 1 >= end) return false;
+            unsigned part = position - (count - end);
+            if (!read_event(index,first + part,event)) return false;
+            event.previous = count - end + 1; event.next = count - first + 1;
+        }
+        if (event.time > duration) return false;
+        event.time = duration - event.time;
+        Packet packet{uint8_t(event.status >> 4),{event.status,event.first,event.second}};
+        if (!reverse_note(packet,event.reverse_value)) return false;
+        event.status = packet.bytes[0]; event.second = packet.bytes[2];
+        if (packet.cin == 11 && event.first >= 64 && event.first <= 69) std::swap(event.second,event.reverse_value);
+        bool release = packet.cin == 8 || (packet.cin == 11 && event.first >= 64 && event.first <= 69 && event.second < 64);
+        event.offset = release && event.time == duration;
+        return true;
+    }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_file_prepared_event)
+#endif
+    bool prepared_event(unsigned position, Event &event) {
+        return settings_.reverse ? reverse_event(*index_,events_,time_,position,event) : read_event(*index_,position,event);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_stream)
 #endif

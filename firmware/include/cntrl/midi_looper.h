@@ -43,7 +43,9 @@ public:
     uint64_t position(BeatPosition clock) const {
         if (clock.value < origin_) return 0;
         if (state_ == State::recording) return clock.value - capture_origin_;
-        return playing() && length() ? (clock.value - origin_) % length() : 0;
+        if (!playing() || !length()) return 0;
+        uint64_t phase = (clock.value - origin_) % length();
+        return backward_ ? length() - phase : phase;
     }
     unsigned events() const { return active_ < 3 ? generations_[active_].count : candidate_ < 3 ? generations_[candidate_].count : 0; }
     unsigned capacity() const { return settings_.events; }
@@ -53,24 +55,26 @@ public:
     unsigned maximum_boundary_late_us() const { return maximum_late_us_; }
     bool undo_available() const { return previous_ < 3 && candidate_ == absent; }
     bool owned() const { return active_ < 3 || candidate_ < 3 || state_ != State::empty || cleanup_pending_; }
-    bool playing() const { return state_ == State::playing || state_ == State::overdub_armed || state_ == State::overdubbing || state_ == State::preparing || state_ == State::undo_pending || (state_ == State::closing && active_ < 3); }
+    bool playing() const { return state_ == State::playing || state_ == State::overdub_armed || state_ == State::overdubbing || (state_ == State::preparing && !edit_stopped_) || state_ == State::undo_pending || (state_ == State::closing && active_ < 3); }
     bool unsaved() const { return dirty_; }
+    bool backward() const { return backward_; }
+    bool direction_pending() const { return direction_pending_; }
     template<class Replies>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_status)
 #endif
     void status(Replies &replies) const {
-        char text[256];
-        std::snprintf(text,sizeof(text),"CNTRL MIDI LOOPER configured=%u state=%u error=%u events=%u capacity=%u peak_events=%u peak_held=%u length=%llu late=%u max_late_us=%u failed=%x discarded=%u",
+        char text[288];
+        std::snprintf(text,sizeof(text),"CNTRL MIDI LOOPER configured=%u state=%u error=%u events=%u capacity=%u peak_events=%u peak_held=%u length=%llu late=%u max_late_us=%u failed=%x discarded=%u backward=%u direction_pending=%u",
             unsigned(configured_),unsigned(state_),unsigned(error_),events(),capacity(),peak_events_,peak_held_,
-            (unsigned long long)length(),late_,maximum_late_us_,failed_outputs_,capture_.discarded);
+            (unsigned long long)length(),late_,maximum_late_us_,failed_outputs_,capture_.discarded,unsigned(backward_),unsigned(direction_pending_));
         replies.reply(text);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_record)
 #endif
     bool record(BeatPosition clock, unsigned tempo) {
-        if (saving_) return fail(Error::busy);
+        if (saving_ || backward_ || direction_pending_) return fail(Error::busy);
         if (!tempo) return fail(Error::clock);
         if (!ready(clock)) return false;
         if (state_ == State::armed || state_ == State::overdub_armed || state_ == State::closing) return true;
@@ -108,6 +112,31 @@ public:
         boundary_ = next_boundary(clock.value); state_ = State::undo_pending; return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(looper_reverse)
+#endif
+    bool reverse(BeatPosition clock) {
+        if (saving_ || direction_pending_ || active_ == absent || (state_ != State::playing && state_ != State::stopped)) return fail(Error::busy);
+        if (state_ == State::playing && !ready(clock)) return false;
+        bool stopped = state_ == State::stopped;
+        if (!prepare(500000)) return false;
+        auto &g = generations_[candidate_]; g.length = length(); g.count = generations_[active_].count;
+        merge_count_ = g.count; merge_cursor_ = 0;
+        reversing_ = true; edit_stopped_ = stopped; state_ = State::preparing; error_ = Error::none;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(looper_direction)
+#endif
+    bool direction(BeatPosition clock) {
+        if (active_ == absent || (state_ != State::playing && state_ != State::stopped)) return fail(Error::busy);
+        if (state_ == State::stopped) backward_ = !backward_;
+        else {
+            if (!ready(clock)) return false;
+            direction_pending_ = !direction_pending_;
+        }
+        error_ = Error::none; return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_stop)
 #endif
     void stop() {
@@ -117,6 +146,7 @@ public:
         cleanup_pending_ = true;
         candidate_ = absent; held_count_ = 0; close_ = 0; first_pending_ = import_pending_ = false;
         transport_armed_ = launch_with_record_ = publishing_ = false;
+        reversing_ = edit_stopped_ = direction_pending_ = false;
         state_ = active_ < 3 ? State::stopped : State::empty;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -124,7 +154,7 @@ public:
 #endif
     bool clear() {
         if (saving_) return fail(Error::busy);
-        stop(); active_ = previous_ = absent; state_ = State::empty; dirty_ = false; length_ = 0; error_ = Error::none; return true;
+        stop(); active_ = previous_ = absent; state_ = State::empty; dirty_ = backward_ = false; length_ = 0; error_ = Error::none; return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_save_begin)
@@ -159,7 +189,8 @@ public:
 #endif
     void input_connection(unsigned input) {
         if (!configured_) return;
-        for (unsigned i = 0; i < held_count_; ++i) if (held_[i].source / 16 == input) { abort_candidate(Error::input); break; }
+        if (state_ == State::recording || state_ == State::overdubbing)
+            for (unsigned i = 0; i < held_count_; ++i) if (held_[i].source / 16 == input) { abort_candidate(Error::input); break; }
         capture_.forget_input(input);
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -203,6 +234,7 @@ public:
         }
         if (clock.running && transport_armed_ && (clock.restart != restart_ || state_ == State::stopped)) {
             recorder_.cancel(); candidate_ = absent; held_count_ = 0;
+            reversing_ = edit_stopped_ = direction_pending_ = false;
             player_.cancel(); player_.release_prepared(sink); restart_ = clock.restart;
             if (active_ < 3) {
                 if (clock.restart != last_restart_) origin_ = 0;
@@ -212,6 +244,7 @@ public:
         last_restart_ = clock.restart;
         cleanup(sink,!playing() ? 0xffff : failed_outputs_,available);
         if (!sink.loop_cleaning()) cleanup_pending_ = false;
+        if (edit_stopped_ && state_ == State::preparing) { prepare_step(0); return; }
         if (!clock.running) return;
         if (state_ == State::armed && clock.value >= boundary_) {
             if (late_us(clock.value - boundary_) > 1000 || sink.loop_cleaning()) { abort_candidate(Error::late); return; }
@@ -241,7 +274,7 @@ public:
                 first_played = true;
             }
         }
-        if (state_ == State::preparing && !publishing_) merge_step((clock.value - origin_) / length());
+        if (state_ == State::preparing && !publishing_) prepare_step((clock.value - origin_) / length());
         if (!playing()) return;
         uint64_t current_cycle = (clock.value - origin_) / length();
         if (current_cycle != cycle_) {
@@ -258,6 +291,7 @@ public:
                 failed_outputs_ |= 1u << output; outputs_ &= ~(1u << output); error_ = Error::output;
             }
             cycle_ = current_cycle;
+            if (direction_pending_) { backward_ = !backward_; direction_pending_ = false; rebind(); }
             if (state_ == State::undo_pending) { active_ = previous_; previous_ = absent; dirty_ = true; state_ = State::playing; rebind(); }
             if (publishing_ && current_cycle >= publication_cycle_) { previous_ = active_; active_ = candidate_; candidate_ = absent; publishing_ = false; dirty_ = true; state_ = State::playing; rebind(); }
             player_.rewind_prepared();
@@ -312,6 +346,8 @@ private:
     State state_ = State::empty;
     Error error_ = Error::none;
     bool configured_ = false, transport_armed_ = false, launch_with_record_ = false, publishing_ = false, dirty_ = false, saving_ = false, shutdown_ = false, first_pending_ = false, import_pending_ = false, merging_ = false, cleanup_pending_ = false;
+    bool backward_ = false, direction_pending_ = false, reversing_ = false, edit_stopped_ = false;
+    uint8_t reverse_holds_[16][6] = {};
     unsigned cleanup_cursor_ = 0;
     unsigned quarter_us_ = 500000, maximum_late_us_ = 0;
     unsigned peak_events_ = 0, peak_held_ = 0;
@@ -360,6 +396,7 @@ private:
 #endif
     bool prepare(unsigned tempo) {
         if (candidate_ < 3 || recorder_.active() || (active_ == absent && (player_.active() || player_.cleaning()))) return fail(Error::busy);
+        reversing_ = edit_stopped_ = false;
         candidate_ = 0; while (candidate_ == active_ || candidate_ == previous_) ++candidate_;
         auto &g = generations_[candidate_]; g.source.reset(); g.index.reset(); g.count = 0; g.length = g.last_time = 0;
         held_count_ = 0; capture_cycle_ = 0; close_ = 0;
@@ -413,6 +450,7 @@ private:
         recorder_.cancel(); candidate_ = absent; held_count_ = 0; publishing_ = false;
         state_ = active_ < 3 ? (was_playing ? State::playing : State::stopped) : State::empty; error_ = error;
         first_pending_ = import_pending_ = false;
+        reversing_ = edit_stopped_ = false;
         if (active_ == absent) transport_armed_ = false;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -473,7 +511,7 @@ private:
 #endif
     bool play_generation(unsigned generation) {
         player_.cancel(); auto &g = generations_[generation];
-        PlayMidiFilePatch settings; settings.outputs = settings_.outputs;
+        PlayMidiFilePatch settings; settings.outputs = settings_.outputs; settings.reverse = backward_;
         return player_.bind(g.source,g.index) && player_.play_prepared(settings,g.count,g.length);
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -546,22 +584,71 @@ private:
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(looper_prepare_step)
+#endif
+    void prepare_step(uint64_t current_cycle) {
+        if (reversing_) {
+            for (unsigned i = 0; i < 16 && merge_cursor_ < merge_count_; ++i) {
+                MidiFilePlayer::Event event;
+                auto &g = generations_[active_];
+                if (!MidiFilePlayer::reverse_event(g.index,g.count,g.length,merge_cursor_,event)
+                    || !MidiFilePlayer::write_event(generations_[candidate_].index,merge_cursor_,event)) { abort_candidate(Error::file); return; }
+                ++merge_cursor_;
+            }
+            if (merge_cursor_ == merge_count_) { reversing_ = false; merge_cursor_ = 0; begin_file(); }
+            return;
+        }
+        merge_step(current_cycle);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(looper_reverse_values)
+#endif
+    bool reverse_values(MidiFilePlayer::Event &event) {
+        // Capture has closed. Reuse its bounded held slots as a FIFO of
+        // onsets, with count holding the onset velocity during preparation.
+        unsigned kind = event.status >> 4, channel = event.status & 15;
+        event.reverse_value = 0;
+        if (kind == 9 && event.second) {
+            if (held_count_ == maximum_held) return false;
+            held_[held_count_++] = {0,channel,event.first,event.second};
+        } else if (kind == 8 || (kind == 9 && !event.second)) {
+            unsigned i = 0;
+            while (i < held_count_ && (held_[i].channel != channel || held_[i].key != unsigned(event.first))) ++i;
+            if (i == held_count_) return false;
+            event.reverse_value = uint8_t(held_[i].count);
+            for (unsigned j = i + 1; j < held_count_; ++j) held_[j - 1] = held_[j];
+            --held_count_;
+        } else if (kind == 11 && event.first >= 64 && event.first <= 69) {
+            auto &value = reverse_holds_[channel][event.first - 64];
+            event.reverse_value = value; value = event.second;
+        }
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_merge_step)
 #endif
     void merge_step(uint64_t current_cycle = 0) {
+        if (!merge_cursor_) { held_count_ = 0; std::memset(reverse_holds_,0,sizeof(reverse_holds_)); }
         for (unsigned i = 0; i < 16 && merge_cursor_ < merge_count_; ++i) {
             MidiFilePlayer::Event event;
-            if (!MidiFilePlayer::read_event(generations_[candidate_].index,merge_cursor_++,event)) { abort_candidate(Error::file); return; }
+            auto &index = generations_[candidate_].index;
+            if (!MidiFilePlayer::read_event(index,merge_cursor_,event) || !reverse_values(event)
+                || !MidiFilePlayer::write_event(index,merge_cursor_,event)) { abort_candidate(Error::file); return; }
+            ++merge_cursor_;
             recorder_.receive_tick(0,{uint8_t(event.status >> 4),{event.status,event.first,event.second}},indexed_ticks(event.time)); recorder_.poll(0);
         }
         if (merge_cursor_ == merge_count_ && !recorder_.finishing() && !recorder_.complete()) recorder_.request_finish_tick(indexed_ticks(generations_[candidate_].length));
         if (merge_cursor_ == merge_count_) for (unsigned i = 0; i < 8 && recorder_.active(); ++i) recorder_.poll(0);
         if (recorder_.failed()) { abort_candidate(Error::file); return; }
         if (recorder_.complete()) {
-            if (first_pending_ || import_pending_) {
+            held_count_ = 0;
+            if (edit_stopped_) {
+                previous_ = active_; active_ = candidate_; candidate_ = absent;
+                edit_stopped_ = false; dirty_ = true; state_ = State::stopped;
+            } else if (first_pending_ || import_pending_) {
                 active_ = candidate_; candidate_ = absent; previous_ = absent;
                 state_ = import_pending_ ? State::stopped : State::playing;
-                dirty_ = !import_pending_; first_pending_ = import_pending_ = false;
+                dirty_ = !import_pending_; if (import_pending_) backward_ = false; first_pending_ = import_pending_ = false;
             } else { publishing_ = true; publication_cycle_ = current_cycle + 1; }
         }
     }

@@ -34,6 +34,12 @@ The user also specified that explicitly bound Clear and Load actions execute
 immediately. Page controls retain their confirmation prompts. See the
 [user documentation](../doc/midi-looper.md) for configuration and behavior.
 
+The user subsequently requested both an undoable Reverse phrase edit and an
+independent playback direction toggle. Both use the shared prepared-event
+reader and existing RAM2 buffers. Reverse edits publish at a loop boundary;
+stopped edits prepare without waiting for a clock. Direction changes preserve
+the stored phrase and Undo, and disable overdubbing while playing backward.
+
 ## Implementation and qualification status
 
 The software implementation is complete. Host regressions cover a full
@@ -43,7 +49,7 @@ controller transactions, transport changes, raw running status, USB cables,
 storage failures and page confirmations. Cross-platform qualification uses the
 existing manually dispatched workflow, including installed and relocated builds.
 
-The target build leaves 10,944 bytes in RAM1 for stack/local variables and
+The target build leaves 10,848 bytes in RAM1 for stack/local variables and
 405,376 bytes of RAM2 for dynamic allocation before setup-specific reservations.
 The default looper's 113,344-byte allocation is included in that setup budget.
 Physical qualification in step 7 remains outstanding. No firmware was flashed

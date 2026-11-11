@@ -213,6 +213,17 @@ static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately
         assert(files.looper.unsaved());
     };
     take();
+    files.looper.stop(); files.looper.poll({Loop::beat * 2,1,true},true,1,sink);
+    assert(host.looper_button(4,true) && host.looper_button(0,true));
+    assert(!std::strcmp(host.pages_.looper_prompt,"Toggle direction: Confirm"));
+    assert(host.looper_button(2,true) && files.looper.backward());
+    assert(host.looper_button(4,true) && host.looper_button(1,true) && host.looper_button(1,true));
+    assert(!std::strcmp(host.pages_.looper_prompt,"Reverse phrase: Confirm"));
+    assert(host.looper_button(2,true));
+    for (unsigned i = 0; i < 16; ++i) files.looper.poll({Loop::beat * 2,1,false},true,1,sink);
+    assert(files.looper.state() == Loop::State::stopped && files.looper.undo_available());
+    assert(host.looper_action(7,"") && !files.looper.backward());
+    assert(host.looper_action(2,"") && !files.looper.undo_available());
     assert(host.looper_button(3,true));
     assert(files.looper.unsaved() && std::strcmp(host.pages_.looper_prompt,"Confirm clear?") == 0);
     assert(host.looper_button(5,true) && files.looper.unsaved());

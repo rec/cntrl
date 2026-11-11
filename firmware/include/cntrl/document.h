@@ -12,7 +12,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 37;
+constexpr unsigned document_version = 38;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -748,7 +748,7 @@ private:
                 if (n[1] || length != 4 || !u16(p) || !u16(p + 2) || (u16(p + 2) & ~input_routes)) return false;
                 break;
             case 15:
-                if (!looper || n[1] || length != 97 || p[0] > 5) return false;
+                if (!looper || n[1] || length != 97 || p[0] > 7) return false;
                 if (p[0] == 5) {
                     if (!text_valid(p + 1,96) || !std::strcmp(reinterpret_cast<const char *>(p + 1),".") || !std::strcmp(reinterpret_cast<const char *>(p + 1),"..")) return false;
                     for (unsigned j = 1; j < 97 && p[j]; ++j) if (p[j] == '/' || p[j] == '\\') return false;
