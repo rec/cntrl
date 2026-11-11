@@ -281,6 +281,9 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
+        const auto &message = platform_.text_messages();
+        if (message.active(now)) platform_.animation_session().stop();
+        renderer_.message(message, now);
         if (application_.pending_page < application_.layout.pages()) {
             select_page(application_.pending_page); application_.pending_page = PageLayout::max_pages;
         }

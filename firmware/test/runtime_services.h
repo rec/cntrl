@@ -5,7 +5,7 @@ struct Session {
     cntrl::UsbKind kind = cntrl::UsbKind::command;
     bool blocked = false, reset = false;
     bool output_pending() const { return blocked; }
-    void receive(int) { ++received; }
+    void receive(int, uint32_t) { ++received; }
     bool resetting() const { return reset; }
     void reset_done() { reset = false; }
     unsigned input_size() const { return received - consumed_count; }

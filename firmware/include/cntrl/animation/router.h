@@ -2,6 +2,7 @@
 #include <cntrl/usb_config.h>
 #include "session.h"
 #include <cntrl/documents.h>
+#include <cntrl/text_messages.h>
 
 namespace cntrl::animation {
 // Decide command ownership before handing a line to either binary receiver.
@@ -10,9 +11,10 @@ public:
     Router(cntrl::Documents &documents, Receiver &assets, Session &session, cntrl::Replies &replies,
            void (*storage_info)(bool), void (*midi_status)(unsigned) = nullptr,
            bool (*asset_command)(const char *) = nullptr, void (*midi_reset)() = nullptr,
-           bool (*asset_data)(UsbKind, const uint8_t *, unsigned, uint32_t) = nullptr)
+           bool (*asset_data)(UsbKind, const uint8_t *, unsigned, uint32_t) = nullptr,
+           TextMessages *text_messages = nullptr)
         : documents_(documents), assets_(assets), session_(session), replies_(replies),
-          storage_info_(storage_info), midi_status_(midi_status), asset_command_(asset_command), midi_reset_(midi_reset), asset_data_(asset_data) {}
+          storage_info_(storage_info), midi_status_(midi_status), asset_command_(asset_command), midi_reset_(midi_reset), asset_data_(asset_data), text_messages_(text_messages) {}
     void receive_data(UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) {
         last_ = now;
         if (kind == UsbKind::setup) documents_.receive_data(bytes, length, now);
@@ -35,6 +37,11 @@ public:
         if (overflow_) replies_.reply("CNTRL ERROR command-too-long");
         else {
             line_[used_] = 0;
+            if (text_messages_) {
+                if (const char *response = text_messages_->command(line_, used_, now)) {
+                    replies_.reply(response); used_ = 0; overflow_ = false; return;
+                }
+            }
             if (asset_command_ && asset_command_(line_)) {
                 session_.stop(); used_ = 0; overflow_ = false; return;
             }
@@ -89,6 +96,7 @@ private:
     bool (*asset_command_)(const char *);
     void (*midi_reset_)();
     bool (*asset_data_)(UsbKind, const uint8_t *, unsigned, uint32_t);
+    TextMessages *text_messages_;
     char line_[usb_text_size];
     unsigned used_ = 0;
     uint32_t last_ = 0;

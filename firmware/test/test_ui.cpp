@@ -200,7 +200,28 @@ static void title_text_is_drawn_over_its_indicator() {
     assert(display.pixels[2 * 24 + 4] == 0xffff && display.pixels[2 * 24 + 6] == 0xffff);
     assert(display.pixels[2 * 24 + 5] == 0x07e0);
 }
+void messages_restore_the_latest_page_after_replacement_and_expiry() {
+    Fonts fonts; Display display;
+    uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18, cache, previous, 24 * 18);
+    cntrl::Pane pane; pane.graphics.pad = 0; pane.graphics.background = 0x1234;
+    renderer.show(0, pane);
+    cntrl::TextMessages messages;
+    assert(messages.publish(cntrl::TextMessages::Kind::cue, "Go", 2, 0));
+    renderer.message(messages, 0);
+    for (unsigned i = 0; i < 500; ++i) { renderer.draw(); display.complete(); }
+    assert(display.pixels[8 * 24 + 8] != 0x1234);
+    pane.graphics.background = 0x5678; renderer.show(0, pane);
+    assert(messages.publish(cntrl::TextMessages::Kind::warning, "Wait", 4, 4999));
+    renderer.message(messages, 5000);
+    for (unsigned i = 0; i < 500; ++i) { renderer.draw(); display.complete(); }
+    assert(display.pixels[8 * 24 + 8] != 0x5678);
+    renderer.message(messages, 9999);
+    for (unsigned i = 0; i < 500; ++i) { renderer.draw(); display.complete(); }
+    assert(std::all_of(display.pixels.begin(), display.pixels.end(), [](uint16_t p) { return p == 0x5678; }));
+}
 int main() {
+    messages_restore_the_latest_page_after_replacement_and_expiry();
     cntrl::memory_budget = 192 * 1024;
     automatic_text_survives_background_and_stipple_passes();
     title_text_is_drawn_over_its_indicator();

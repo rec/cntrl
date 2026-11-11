@@ -1,5 +1,6 @@
 #pragma once
 #include "raster.h"
+#include <cntrl/text_messages.h>
 #include <optional>
 #include <vector>
 #include <cstdio>
@@ -21,6 +22,45 @@ public:
         usable_ = maximum <= work_capacity && offset <= storage_capacity && !screens_.empty();
     }
     void target_brightness(uint8_t value) { requested_brightness_ = std::min(value, uint8_t(128)); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_message)
+#endif
+    void message(const TextMessages &message, uint32_t now) {
+        if (!message.active(now)) {
+            if (message_) { message_.reset(); invalidate(); }
+            return;
+        }
+        if (message_ && message_revision_ == message.revision()) return;
+        Pane pane;
+        pane.graphics.size = 8; pane.graphics.line_height = 10;
+        const auto viewport = display_.viewport(0);
+        const int width = std::max(0, int(viewport.width) - 2 * pane.graphics.pad);
+        const unsigned rows = std::min(max_lines, viewport.height > 8 ? (viewport.height - 8) / 10 : 0);
+        const char *text = message.text();
+        for (unsigned row = 0; row < rows; ++row) {
+            auto &line = pane.lines[row]; line.graphics = pane.graphics;
+            if (!row) std::snprintf(line.text, sizeof(line.text), "%s", message.kind() == TextMessages::Kind::cue ? "Cue" : "Warning");
+            else {
+                unsigned used = 0;
+                while (*text && used + 1 < sizeof(line.text)) {
+                    line.text[used] = *text; line.text[used + 1] = 0;
+                    if (fonts_.bounds(0, 8, 0, line.text).width > width) { line.text[used] = 0; break; }
+                    ++used; ++text;
+                }
+                if (row + 1 == rows && *text) {
+                    used = std::min(used, unsigned(sizeof(line.text) - 4));
+                    do {
+                        std::memcpy(line.text + used, "...", 4);
+                        if (fonts_.bounds(0, 8, 0, line.text).width <= width || !used) break;
+                        --used;
+                    } while (true);
+                }
+            }
+            line.y = int16_t(4 + row * 10 - fonts_.bounds(0, 8, 0, line.text).top);
+        }
+        message_revision_ = message.revision();
+        message_ = pane; invalidate();
+    }
     bool ready() const {
         if (!usable_ || !display_.ready() || preparing_ || animating_ || drawing_ >= 0) return false;
         for (const auto &screen : screens_) if (screen.dirty) return false;
@@ -46,6 +86,7 @@ public:
         std::snprintf(pane.lines[0].text, sizeof(pane.lines[0].text), "%s", message); show(screen, pane);
     }
     void transition(bool undo, std::optional<unsigned> duration, int pane = -1, unsigned reserved = 0, bool vertical = false, bool panorama = true) {
+        if (message_) return;
         if (!usable_ || preparing_ || animating_ || !display_.ready()) return;
         for (const auto &screen : screens_) if (!screen.valid) return;
         for (const auto &screen : screens_) std::copy(cache_ + screen.offset, cache_ + screen.offset + screen.viewport.width * screen.viewport.height, previous_ + screen.offset);
@@ -63,7 +104,7 @@ public:
         if (drawing_ < 0) {
             for (unsigned i = 0; i < screens_.size(); ++i) if (screens_[i].dirty) {
                 drawing_ = int(i); auto &screen = screens_[i]; screen.dirty = false;
-                painting_ = screen.requested; column_ = field_ = letter_ = 0;
+                painting_ = i == 0 && message_ ? *message_ : screen.requested; column_ = field_ = letter_ = 0;
                 raster_.configure(screen.viewport, painting_.graphics); backgrounds();
                 for (const auto &c : painting_.circles) raster_.circle(c);
                 raster_.toggle(painting_.toggle); rendering_ = true; break;
@@ -101,6 +142,8 @@ private:
     std::vector<Screen> screens_;
     std::vector<uint8_t> transfer_;
     Pane painting_;
+    std::optional<Pane> message_;
+    uint32_t message_revision_ = 0;
     bool usable_ = false, preparing_ = false, animating_ = false, rendering_ = false, undo_ = false, vertical_ = false, panorama_ = true;
     bool reset_scroll_ = true, ring_scroll_ = false, ring_step_ = false, reveal_ = false, settling_ = false, settle_anchor_ = false;
     unsigned reveal_screen_ = 0;

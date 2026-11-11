@@ -144,10 +144,17 @@ int main(int argc, char **argv) {
     cntrl::animation::Receiver assets(asset_card, device);
     cntrl::animation::Player player(assets, panels);
     cntrl::animation::Session session(assets, player); session.movies(movie_keys, 1, movie_keys, 1);
-    cntrl::animation::Router router(documents, assets, session, device, storage_info, nullptr, diagnostic_command);
+    cntrl::TextMessages messages;
+    cntrl::animation::Router router(documents, assets, session, device, storage_info, nullptr, diagnostic_command, nullptr, nullptr, &messages);
     device.session = &session;
     assets.boot();
     while (!router.accepts_input()) router.poll(0);
+    command(router, "CNTRL TEXT CUE Ready\r");
+    assert(!std::strcmp(messages.text(), "Ready") && device.replies.back() == "CNTRL OK");
+    command(router, "CNTRL TEXT WARNING Watch out");
+    assert(messages.kind() == cntrl::TextMessages::Kind::warning && !std::strcmp(messages.text(), "Watch out"));
+    command(router, "CNTRL TEXT CUE ");
+    assert(device.replies.back() == "CNTRL ERROR text-message" && !std::strcmp(messages.text(), "Watch out"));
     command(router, "CNTRL STATUS");
     assert(device.replies.back() == "CNTRL READY " + std::to_string(cntrl::document_version) + " 0 00000000");
     command(router, "CNTRL STARTS SIZE"); command(router, "CNTRL STARTS READ 512");

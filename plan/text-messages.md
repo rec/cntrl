@@ -1,11 +1,15 @@
 # Incoming text messages
 
+Implemented in the shared MIDI runtime, USB serial input and display renderer.
+See [the sender guide](../doc/text-messages.md) for the accepted wire formats.
+Physical display and transport qualification remain outstanding.
+
 A computer should be able to send the pedal a cue such as “Chorus next” or
 a warning such as “Backing track stopped”. The performer should see it on the
 active display without opening the [MIDI monitor](../doc/midi-monitor.md).
 This plan covers [Incoming text messages](feature-set.md#incoming-text-messages).
 
-## Proposed sender and display behavior
+## Accepted sender and display behavior
 
 - Use the same MIDI System Exclusive (SysEx) message on a physical MIDI input
   and on a USB MIDI cable. This lets a sequencer send either message directly.
@@ -14,15 +18,15 @@ This plan covers [Incoming text messages](feature-set.md#incoming-text-messages)
   `CNTRL TEXT WARNING Backing track stopped`. The text is everything after
   the space following the kind. Accept LF and CRLF using the existing serial
   command framing. Both inputs feed the same cue and warning display handling.
-- Before implementation, agree on the SysEx identifier and command bytes with
-  the sender. Define two message kinds, cue and warning. Start with printable
+- Use the approved SysEx frame
+  `F0 7D 43 4E 54 52 4C 01 <kind> <ASCII text> F7`, with kind 01 for cue
+  and 02 for warning. Accept printable
   ASCII and a maximum of 80 characters for both transports. Document the
   complete byte sequence for one example of each kind so a sender can reproduce it.
 - Show a temporary banner on one visible display, with a “Cue” or “Warning”
   label readable in monochrome. Use the available width to wrap text and an
   ellipsis if the last line overflows. Use the first display on multi-display
-  pedals. Confirm that placement and the proposed five-second reading time
-  with the performer.
+  pedals, for the approved five-second reading time.
 - The newest complete message replaces the current banner and restarts its
   timer. Footswitches keep their usual assignments. When the timer expires,
   redraw the current page, including any patch or page change made while
@@ -48,6 +52,9 @@ This plan covers [Incoming text messages](feature-set.md#incoming-text-messages)
    lines bounded and use the existing overflow and timeout handling. Respect
    ownership of active binary transfers so their payload cannot be interpreted
    as text commands. Serial text works independently of MIDI enable settings.
+   The USB input stage also accepts plain lines outside framed sessions, using
+   the shared text command parser. Active framed sessions retain ownership of
+   all serial bytes. Discard incomplete plain lines on disconnect or timeout.
 4. Hand completed messages from either transport to the UI through the existing
    runtime-to-display path. Keep only the visible message, kind and expiry. Render on the normal
    display refresh cycle and check expiry without blocking MIDI service.

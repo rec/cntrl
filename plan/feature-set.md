@@ -26,9 +26,9 @@ handling.
 
 ## Incoming text messages
 
-Display text messages received over MIDI or USB, including cues and warnings
-from a computer. The existing [MIDI monitor](../doc/midi-monitor.md) displays
-traffic; the user-message display feature remains unfinished.
+Implemented [text messages](../doc/text-messages.md) over MIDI SysEx and USB
+serial, including cues and warnings from a computer. Physical display and
+transport qualification remain outstanding.
 
 ## Additional work beyond the prompt
 

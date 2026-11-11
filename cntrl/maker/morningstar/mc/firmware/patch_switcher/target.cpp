@@ -458,6 +458,7 @@ public:
             connection->transport == cntrl::midi::OutputTransport::physical ? 0 : binding.index, packet, micros(), diagnostic_traffic);
     }
     cntrl::midi::Monitor &midi_monitor() { return midi_runtime_.monitor(); }
+    cntrl::TextMessages &text_messages() { return midi_runtime_.text_messages; }
     void midi_reset() { midi_runtime_.reset(*this); }
     void midi_status(unsigned route) { midi_runtime_.status(bridge_, route, documents.document(), *this); }
     void midi_stream_status() { midi_runtime_.stream_status(*this); }
@@ -828,7 +829,7 @@ struct AssetServices {
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
 bool asset_command(const char *line) { return asset_commands.command(line, millis()); }
 bool asset_data(cntrl::UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) { return asset_commands.data(kind, bytes, length, now); }
-DMAMEM cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset, asset_data);
+DMAMEM cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset, asset_data, &board.text_messages());
 cntrl::ButtonState buttons[cntrl::target::button_count];
 cntrl::CooperativeRuntime cooperative_runtime(cntrl::target::scan_interval_ms);
 
@@ -840,6 +841,7 @@ FLASHMEM void initialize_target() {
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session.reset();
+    usb_session.text_messages(board.text_messages());
     std::memset(render_work, 0, sizeof(render_work));
     for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i)
         new (extra_controllers[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::Switches::capacity + i);
@@ -1006,7 +1008,10 @@ public:
     auto &song_sources() { return ::song_sources; }
     auto &songs() { return ::songs; }
     auto &replies() { return board; }
-    bool serial_available() const { return Serial.available(); }
+    bool serial_available() const {
+        usb_session.text_connection(bool(Serial), millis());
+        return Serial.available();
+    }
     int serial_read() { return Serial.read(); }
     bool reply_ready() const { return board.reply_ready(); }
     void cancel_listing() { storage_listing.cancel(); }

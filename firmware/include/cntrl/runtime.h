@@ -22,7 +22,7 @@ public:
         // Deliver button actions before storage and display work.
         s.midi();
         auto &session = s.session(); auto &commands = s.commands();
-        for (unsigned i = 0; i < serial_budget && !session.output_pending() && s.serial_available(); ++i) session.receive(s.serial_read());
+        for (unsigned i = 0; i < serial_budget && !session.output_pending() && s.serial_available(); ++i) session.receive(s.serial_read(), now);
         if (session.resetting() && commands.accepts_input() && !s.song_transfer().processing()) {
             commands.cancel_transfer(); s.song_transfer().cancel_transfer(); s.bundle_transfer().cancel(); s.history_transfer().cancel(); s.fonts().cancel_transfer(); s.cancel_listing(); s.disk_transfer().cancel(); session.reset_done();
         }

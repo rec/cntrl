@@ -1,5 +1,6 @@
 #pragma once
 #include "usb_config.h"
+#include "text_messages.h"
 #include <algorithm>
 #include <cassert>
 
@@ -8,10 +9,18 @@ namespace cntrl {
 // acknowledgement; duplicate requests never reach the application twice.
 class UsbSession {
 public:
+    void text_messages(TextMessages &messages) { text_messages_ = &messages; }
+    void text_connection(bool connected, uint32_t now) {
+        if (!connected || uint32_t(now - text_received_) > 10000) {
+            text_used_ = 0; text_overflow_ = false;
+        }
+    }
     void reset() {
         session_ = sequence_ = 0; reply_id_ = 1;
         used_ = size_ = offset_ = sent_ = output_size_ = reply_size_ = 0;
         reset_ = closed_ = false;
+        text_used_ = 0; text_overflow_ = false;
+        text_messages_ = nullptr; text_received_ = 0; direct_reply_ = false;
         input_kind_ = UsbKind::command; reply_kind_ = UsbKind::text;
     }
     bool active() const { return session_ != 0 && !closed_; }
@@ -21,6 +30,10 @@ public:
     void reply(const char *text) {
         unsigned n = unsigned(std::strlen(text));
         assert(n + 1 <= sizeof(reply_));
+        if (direct_reply_) {
+            std::memcpy(output_, text, n); output_[n] = '\n';
+            sent_ = 0; output_size_ = n + 1; return;
+        }
         if (!active() || reset_) return;
         std::memcpy(reply_, text, n); reply_[n] = '\n'; reply_size_ = n + 1; reply_kind_ = UsbKind::text;
     }
@@ -38,7 +51,14 @@ public:
     unsigned output_size() const { return output_size_ - sent_; }
     void sent(unsigned n) { sent_ += n; assert(sent_ <= output_size_); }
     bool output_pending() const { return sent_ < output_size_; }
-    void receive(uint8_t byte) {
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(usb_receive)
+#endif
+    void receive(uint8_t byte, uint32_t now = 0) {
+        if (text_messages_ && !active() && !reset_ && !used_) {
+            if (byte != usb_magic[0]) { receive_text(byte, now); return; }
+            text_used_ = 0; text_overflow_ = false;
+        }
         assert(used_ < sizeof(incoming_)); incoming_[used_++] = byte;
         while (used_) {
             unsigned prefix = std::min(used_, unsigned(sizeof(usb_magic)));
@@ -55,6 +75,27 @@ public:
         }
     }
 private:
+    TextMessages *text_messages_ = nullptr;
+    char text_line_[100] = {};
+    unsigned text_used_ = 0;
+    uint32_t text_received_ = 0;
+    bool text_overflow_ = false, direct_reply_ = false;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(usb_receive_text)
+#endif
+    void receive_text(uint8_t byte, uint32_t now) {
+        text_received_ = now;
+        if (byte == '\r') return;
+        if (byte != '\n') {
+            if (text_used_ < sizeof(text_line_)) text_line_[text_used_++] = char(byte);
+            else text_overflow_ = true;
+            return;
+        }
+        direct_reply_ = true;
+        if (text_overflow_) reply("CNTRL ERROR command-too-long");
+        else if (const char *response = text_messages_->command(text_line_, text_used_, now)) reply(response);
+        direct_reply_ = false; text_used_ = 0; text_overflow_ = false;
+    }
     uint32_t session_ = 0, sequence_ = 0, reply_id_ = 1;
     unsigned used_ = 0, size_ = 0, offset_ = 0, sent_ = 0, output_size_ = 0, reply_size_ = 0;
     bool reset_ = false, closed_ = false;

@@ -232,7 +232,39 @@ void test_monitor_observes_inputs_before_gates_and_actual_transformed_outputs() 
     assert(runtime.monitor().tail() == 4);
     assert(runtime.monitor().entry(3)->bytes[0] == 0x80 && runtime.monitor().entry(3)->bytes[1] == 72);
 }
+void test_text_arrives_without_forwarding_and_usb_enable_is_respected() {
+    cntrl::memory_budget = 128 * 1024;
+    Services services(1); services.sources[0].clear(); services.timer_step = 0;
+    cntrl::midi::Runtime runtime;
+    assert(runtime.monitor().open(0));
+    const uint8_t bytes[] = {0xf0, 0x7d, 0x43, 0x4e, 0x54, 0x52, 0x4c, 1, 1, 'G', 'o', 0xf7};
+    for (auto byte : bytes) {
+        cntrl::midi::InputEvent event; event.byte = byte;
+        services.sources[0].push_back(event);
+    }
+    runtime.poll(services);
+    assert(runtime.text_messages.active(0) && !std::strcmp(runtime.text_messages.text(), "Go"));
+    assert(services.writes.empty());
+    assert(runtime.monitor().tail() > 0);
+    services.bridge.configure_usb(false, true, 0);
+    for (unsigned i = 0; i < sizeof(bytes); i += 3) {
+        cntrl::midi::InputEvent event; event.input = 1; event.packetized = true;
+        event.packet = {4, {bytes[i], bytes[i + 1], bytes[i + 2]}};
+        if (i + 3 == sizeof(bytes)) event.packet.cin = 7;
+        services.sources[0].push_back(event);
+    }
+    services.time = 6000000;
+    runtime.poll(services); assert(!runtime.text_messages.active(6000));
+    services.bridge.configure_usb(true, true, 6000);
+    for (unsigned i = 0; i < sizeof(bytes); i += 3) {
+        cntrl::midi::InputEvent event; event.input = 1; event.packetized = true;
+        event.packet = {uint8_t(i + 3 == sizeof(bytes) ? 7 : 4), {bytes[i], bytes[i + 1], bytes[i + 2]}};
+        services.sources[0].push_back(event);
+    }
+    runtime.poll(services); assert(runtime.text_messages.active(6000));
+}
 int main() {
+    test_text_arrives_without_forwarding_and_usb_enable_is_respected();
     test_monitor_observes_inputs_before_gates_and_actual_transformed_outputs();
     test_rotating_sources_and_delivery_precede_file_work();
     test_time_budget_zero_sources_and_failure_edges();

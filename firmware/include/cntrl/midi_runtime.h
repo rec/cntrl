@@ -2,6 +2,7 @@
 #include "document.h"
 #include "midi_bridge.h"
 #include "midi_monitor.h"
+#include "text_messages.h"
 #include <cstdio>
 #include <limits>
 
@@ -19,6 +20,7 @@ struct InputEvent {
 // This class owns fairness, musical service order and diagnostics policy.
 class Runtime {
 public:
+    TextMessages text_messages;
     Monitor &monitor() { return monitor_; }
     Streams &streams() { return streams_; }
     uint64_t stream_time(uint32_t now) { return extend(now); }
@@ -32,6 +34,7 @@ public:
         auto &pages = s.runtime_pages();
         bridge.host_connected(s.midi_host_connected());
         uint32_t begin = s.microseconds(), now = s.milliseconds();
+        text_messages.poll(now);
         s.pickup_time(begin);
         bridge.connected(s.midi_device_connected(), now);
         uint64_t stream_time = extend(s.microseconds());
@@ -40,6 +43,7 @@ public:
                 || (endpoint.transport == OutputTransport::usb_host ? s.midi_host_connected() : s.midi_device_connected());
             uint64_t identity = endpoint_identity(s, endpoint.route, 0);
             uint64_t generation = endpoint_generation(s, endpoint.route, 0);
+            if (!present || generation != generations_[endpoint.route] || !bridge.usb_enabled(endpoint.route)) text_messages.forget(endpoint.route);
             if (!present || generation != generations_[endpoint.route]) s.forget_pickup_source(endpoint.route);
             if (monitor_.active()) monitor_.connection(endpoint.route, present, identity, generation, s.microseconds());
             if (generation != generations_[endpoint.route]) {
@@ -73,6 +77,10 @@ public:
                 if (event.packetized) monitor_.packet(Monitor::Direction::incoming, event.input, event.cable, event.packet, timestamp, diagnostic_traffic);
                 else monitor_.byte(Monitor::Direction::incoming, event.input, event.cable, event.byte, timestamp, diagnostic_traffic);
                 if (!bridge.usb_enabled(event.input)) continue;
+                if (event.packetized) {
+                    for (unsigned b = 0; b < event.packet.size(); ++b)
+                        text_messages.byte(event.input, event.cable, event.packet.bytes[b], now);
+                } else text_messages.byte(event.input, event.cable, event.byte, now);
                 if (event.packetized) files.receive(event.input, event.packet, timestamp);
                 else files.receive(event.input, event.byte, timestamp);
                 uint8_t status = event.packetized ? event.packet.bytes[0] : event.byte;
