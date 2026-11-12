@@ -2,8 +2,11 @@
 
 from copy import deepcopy
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import BaseModel
+import tyro
+from pydantic import BaseModel, ConfigDict, Field
+from reccy.configuration import units
 
 from .compiler import CompilationError, read_document
 
@@ -11,6 +14,34 @@ from .compiler import CompilationError, read_document
 class DataFile(BaseModel, frozen=True):
     name: str
     paths: list[Path]
+
+
+class Sources(BaseModel, frozen=True):
+    document: Annotated[list[str], tyro.conf.Positional]
+    target: list[str]
+    definitions: list[str] = Field(default_factory=list)
+    table: Annotated[list[list[str]], tyro.conf.UseAppendAction] = Field(
+        default_factory=list
+    )
+    avoid_confict: bool = True
+    memory_margin: units.Bytes = Field(default=16192, ge=0)
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class Location(BaseModel, frozen=True):
+    file: Path
+    path: list[str | int]
+
+
+class Trace(BaseModel, frozen=True):
+    """Source bytes and effective authoring paths mapped to original file paths."""
+
+    files: dict[Path, bytes] = Field(default_factory=dict)
+    locations: dict[str, dict[tuple[str | int, ...], Location]] = Field(
+        default_factory=dict
+    )
+    consumers: dict[Path, list[str]] = Field(default_factory=dict)
 
 
 def validate_name(name: str) -> str:
@@ -87,13 +118,19 @@ def expressions(
 
 
 def load(
-    expression: DataFile, avoid_confict: bool, errors: list[str]
+    expression: DataFile,
+    avoid_confict: bool,
+    errors: list[str],
+    *,
+    trace: Trace | None = None,
+    overrides: dict[Path, bytes] | None = None,
 ) -> dict[str, object]:
     result: dict[str, object] = {}
     origins: dict[str, str] = {}
     for p in expression.paths:
         try:
-            value = read_document(p)
+            reads: dict[Path, bytes] = {}
+            value = read_document(p, snapshots=reads, overrides=overrides)
         except (OSError, ValueError) as error:
             errors.append(f'{p}: {error}')
             continue
@@ -101,18 +138,64 @@ def load(
             errors.append(f'{p}: expected a dictionary')
             continue
         _merge(result, value, origins, str(p), '', avoid_confict, errors)
+        if trace is not None:
+            trace.files.update(reads)
+            for f in reads:
+                names = trace.consumers.setdefault(f, [])
+                if expression.name not in names:
+                    names.append(expression.name)
+            locations = trace.locations.setdefault(expression.name, {})
+            record_locations(
+                value, result, p.resolve(), [], [], locations, avoid_confict
+            )
     return result
 
 
+def record_locations(
+    value: object,
+    merged: object,
+    file: Path,
+    path: list[str | int],
+    source: list[str | int],
+    locations: dict[tuple[str | int, ...], Location],
+    append: bool,
+) -> None:
+    locations.setdefault(tuple(path), Location(file=file, path=source))
+    if isinstance(value, dict) and isinstance(merged, dict):
+        for k, v in value.items():
+            if k in merged:
+                record_locations(
+                    v, merged[k], file, [*path, k], [*source, k], locations, append
+                )
+    elif isinstance(value, list) and isinstance(merged, list):
+        start = len(merged) - len(value) if append else 0
+        locations[tuple(path)] = Location(file=file, path=source)
+        for i, v in enumerate(value):
+            record_locations(
+                v, v, file, [*path, i + start], [*source, i], locations, append
+            )
+    else:
+        locations[tuple(path)] = Location(file=file, path=source)
+
+
 def load_target(
-    expression: DataFile, avoid_confict: bool, errors: list[str]
+    expression: DataFile,
+    avoid_confict: bool,
+    errors: list[str],
+    *,
+    trace: Trace | None = None,
+    overrides: dict[Path, bytes] | None = None,
 ) -> dict[str, object]:
     """Resolve resource references at their source file before combining targets."""
     result: dict[str, object] = {}
     origins: dict[str, str] = {}
     for p in expression.paths:
         incoming = load(
-            DataFile(name=expression.name, paths=[p]), avoid_confict, errors
+            DataFile(name=expression.name, paths=[p]),
+            avoid_confict,
+            errors,
+            trace=trace,
+            overrides=overrides,
         )
         if isinstance(resources := incoming.get('font_sources'), dict):
             incoming['font_sources'] = {

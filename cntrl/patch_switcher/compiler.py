@@ -35,11 +35,24 @@ class CompilationError(ValueError):
         )
 
 
-def read_document(path: Path, *, _ancestors: tuple[Path, ...] = ()) -> object:
+def read_document(
+    path: Path,
+    *,
+    _ancestors: tuple[Path, ...] = (),
+    snapshots: dict[Path, bytes] | None = None,
+    overrides: dict[Path, bytes] | None = None,
+) -> object:
     resolved = path.resolve()
     if resolved in _ancestors:
         raise ValueError(f'{path}: catalogue reference cycle')
-    source = path.read_bytes().decode()
+    content = (
+        overrides[resolved]
+        if overrides is not None and resolved in overrides
+        else path.read_bytes()
+    )
+    if snapshots is not None:
+        snapshots[resolved] = content
+    source = content.decode()
     if path.suffix == '.json':
         document = json.loads(source)
     elif path.suffix == '.toml':
@@ -75,7 +88,11 @@ def read_document(path: Path, *, _ancestors: tuple[Path, ...] = ()) -> object:
                     f'instruments.{alias}: specify catalogues or programs, not both'
                 )
             instrument['programs'] = _shared_programs(
-                instrument.pop('catalogues'), path, _ancestors + (resolved,)
+                instrument.pop('catalogues'),
+                path,
+                _ancestors + (resolved,),
+                snapshots,
+                overrides,
             )
     return document
 
@@ -2140,7 +2157,11 @@ def _instrument(alias: str, raw: object) -> models.Instrument:
 
 
 def _shared_programs(
-    references: object, source: Path, ancestors: tuple[Path, ...]
+    references: object,
+    source: Path,
+    ancestors: tuple[Path, ...],
+    snapshots: dict[Path, bytes] | None = None,
+    overrides: dict[Path, bytes] | None = None,
 ) -> list[object]:
     if (
         not isinstance(references, list)
@@ -2151,7 +2172,9 @@ def _shared_programs(
     catalogues: dict[str, list[object]] = {}
     for reference in references:
         path = source.parent / reference
-        document = read_document(path, _ancestors=ancestors)
+        document = read_document(
+            path, _ancestors=ancestors, snapshots=snapshots, overrides=overrides
+        )
         if (
             not isinstance(document, dict)
             or not isinstance(instruments := document.get('instruments'), dict)

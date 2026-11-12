@@ -9,6 +9,9 @@ struct Peer : TestPatchHardware, cntrl::Replies {
     bool reply_ready() const override { return usb.reply_ready(); }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *) const override { return true; }
+    bool supports_trs_mode(unsigned jack, cntrl::midi::TrsMode mode) const override {
+        return jack < 4 && mode <= cntrl::midi::TrsMode::aux;
+    }
     bool supports_font(unsigned, unsigned) const override { return true; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }

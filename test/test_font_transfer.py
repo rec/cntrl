@@ -155,7 +155,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     (tmp_path / 'custom.ttf').write_bytes(outline.read_bytes())
     document = tmp_path / 'show.toml'
     document.write_text(tomlkit.dumps(source))
-    command = cli.Sources(
+    command = data_files.Sources(
         document=[str(document)],
         target=[str(ROOT / 'firmware/test/target.json')],
         definitions=[str(ROOT / 'firmware/test/definitions.json')],
@@ -384,7 +384,7 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
         cli.save_asset(tmp_path / 'fonts' / f'{key:08x}.cfont', bitmap)
     path = tmp_path / 'exported.toml'
     path.write_text(resolved.export(data))
-    command = cli.Sources(
+    command = data_files.Sources(
         document=[str(path)], target=[str(ROOT / 'test/data/font-target.toml')]
     )
     assert (

@@ -6,11 +6,11 @@ An edit saved on the pedal must survive backup and be reincorporated into the
 user's original host documents without losing independent host edits. Compiling
 and uploading the reconciled documents must preserve the accepted result.
 
-This is a proposed implementation contract, not authorization to implement it.
-Confirm the source-ownership policy and host storage layout below before adding
-automatic writes. Reuse the existing setup models, TOML loader, compiler, USB
-transfer, backup, export and comparison paths. Expose the workflow through the
-existing `cntrl` CLI; settle its exact arguments during implementation.
+The host workflow is implemented. Baselines and recovery snapshots live in the
+project-local `setup-sync/` directory; explicit Apply may update reviewed shared
+files. See [the workflow](../doc/setup-sync.md). Physical edit/save/reboot
+qualification remains pending. The workflow reuses the existing setup models,
+TOML loader, compiler, USB transfer, backup and exporter through `cntrl setup sync`.
 
 ## Existing foundation
 
@@ -113,10 +113,10 @@ must be harmless, including after a subsequent host edit or intentional revert.
    snapshot and report the unresolved change for manual placement. Matching by
    display name or by the nearest list position is insufficient.
 
-Before implementation, confirm whether reviewed shared-source edits may be
-applied automatically after approval, and where host baselines and recovery
-snapshots belong. They must remain accessible with the project and must not be
-treated as disposable caches. Do not add another configuration format or a
+Reviewed shared-source edits may be applied after explicit acceptance. Baselines
+and recovery snapshots belong in project-local `setup-sync/`. They must remain
+accessible with the project and must not be treated as disposable caches.
+Do not add another configuration format or a
 second compiler to solve source ownership.
 
 ## Backup, apply and recovery

@@ -7,7 +7,14 @@ from tempfile import TemporaryDirectory
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import cli, compiler, models, resolved, setup_bundle
+from cntrl.patch_switcher import (
+    cli,
+    compiler,
+    data_files,
+    models,
+    resolved,
+    setup_bundle,
+)
 from scripts import native_tests
 
 
@@ -172,7 +179,7 @@ def test_build_collects_dependencies_in_sorted_index_order() -> None:
             'channel = 1\ncontroller = 7\nvalue = 1\n'
         )
         result = cli.compile_inputs(
-            cli.Sources(
+            data_files.Sources(
                 document=[str(folder / 'z.toml')],
                 target=[str(root / 'firmware/test/target.json')],
                 memory_margin=20000,

@@ -11,8 +11,7 @@ from typing import Annotated
 
 import tomlkit
 import tyro
-from pydantic import BaseModel, ConfigDict, Field
-from reccy.configuration import units
+from pydantic import BaseModel
 
 from .. import build, flash, upload
 from . import (
@@ -25,31 +24,19 @@ from . import (
     models,
     resolved,
     setup_bundle,
+    setup_sync,
     songs,
     transport,
 )
 
 
-class Sources(BaseModel, frozen=True):
-    document: Annotated[list[str], tyro.conf.Positional]
-    target: list[str]
-    definitions: list[str] = Field(default_factory=list)
-    table: Annotated[list[list[str]], tyro.conf.UseAppendAction] = Field(
-        default_factory=list
-    )
-    avoid_confict: bool = True
-    memory_margin: units.Bytes = Field(default=16192, ge=0)
-
-    model_config = ConfigDict(extra='forbid')
-
-
-class Compile(Sources, frozen=True):
+class Compile(data_files.Sources, frozen=True):
     """Compile one data-file expression without accessing a device."""
 
     output: Path
 
 
-class Copy(Sources, frozen=True):
+class Copy(data_files.Sources, frozen=True):
     """Compile, copy and verify named setups on the pedal's SD card."""
 
     port: Path
@@ -95,7 +82,8 @@ class Download(BaseModel, frozen=True):
 
 class SetupCLI(BaseModel, frozen=True):
     command: (
-        Annotated[history.History, tyro.conf.subcommand(name='history')]
+        Annotated[setup_sync.Sync, tyro.conf.subcommand(name='sync')]
+        | Annotated[history.History, tyro.conf.subcommand(name='history')]
         | Annotated[Copy, tyro.conf.subcommand(name='copy')]
         | Annotated[Set, tyro.conf.subcommand(name='set')]
         | Annotated[List, tyro.conf.subcommand(name='list')]
@@ -139,9 +127,12 @@ class Status(BaseModel, frozen=True):
 
 
 def compile_inputs(
-    command: Sources,
+    command: data_files.Sources,
     assets: dict[str, dict[int, bytes]] | None = None,
     movies: dict[int, bytes] | None = None,
+    *,
+    trace: data_files.Trace | None = None,
+    overrides: dict[Path, bytes] | None = None,
 ) -> setup_bundle.SetupBundle:
     errors: list[str] = []
 
@@ -150,13 +141,22 @@ def compile_inputs(
     definitions = data_files.expressions(command.definitions, errors)
     tables = [e for t in command.table for e in data_files.expressions(t, errors)]
     target_data = [
-        data_files.load_target(e, command.avoid_confict, errors) for e in targets
+        data_files.load_target(
+            e, command.avoid_confict, errors, trace=trace, overrides=overrides
+        )
+        for e in targets
     ]
     definition_data = [
-        data_files.load(e, command.avoid_confict, errors) for e in definitions
+        data_files.load(
+            e, command.avoid_confict, errors, trace=trace, overrides=overrides
+        )
+        for e in definitions
     ]
     table_data: list[object] = [
-        data_files.load(e, command.avoid_confict, errors) for e in tables
+        data_files.load(
+            e, command.avoid_confict, errors, trace=trace, overrides=overrides
+        )
+        for e in tables
     ]
     if len(target_data) != 1:
         errors.append('expected one target expression; use + to combine target files')
@@ -178,7 +178,9 @@ def compile_inputs(
     # Companion documents use the same logical names on the host and SD card.
     # Load the whole dependency graph before compiling or opening a transport.
     for e in documents:
-        sources[e.name] = data_files.load(e, command.avoid_confict, errors)
+        sources[e.name] = data_files.load(
+            e, command.avoid_confict, errors, trace=trace, overrides=overrides
+        )
     index = 0
     while index < len(documents):
         expression = documents[index]
@@ -194,7 +196,13 @@ def compile_inputs(
             companion = data_files.DataFile(
                 name=name, paths=[expression.paths[0].parent / f'{name}.toml']
             )
-            sources[name] = data_files.load(companion, command.avoid_confict, errors)
+            sources[name] = data_files.load(
+                companion,
+                command.avoid_confict,
+                errors,
+                trace=trace,
+                overrides=overrides,
+            )
             documents.append(companion)
     for e in documents:
         document = sources[e.name]
@@ -221,6 +229,16 @@ def compile_inputs(
                     assets[e.name] = fonts
             except compiler.CompilationError as error:
                 errors.extend(f'{e.paths[0]} ({e.name}): {x}' for x in error.errors)
+    if trace is not None:
+        global_names = {e.name for e in [*targets, *definitions, *tables]}
+        for consumers in trace.consumers.values():
+            if any(n in global_names for n in consumers):
+                consumers[:] = list(
+                    dict.fromkeys(
+                        [n for n in consumers if n not in global_names]
+                        + [e.name for e in documents]
+                    )
+                )
     if errors:
         raise compiler.CompilationError(errors)
     try:
@@ -255,8 +273,12 @@ def run_setup(
     | history.History
     | backups.Backup
     | backups.Restore
-    | backups.Verify,
+    | backups.Verify
+    | setup_sync.Sync,
 ) -> None:
+    if isinstance(command, setup_sync.Sync):
+        setup_sync.run(command)
+        return
     if isinstance(command, backups.Backup):
         backups.backup_pedal(command.directory, command.port)
         return
@@ -271,8 +293,11 @@ def run_setup(
         return
     assets: dict[str, dict[int, bytes]] = {}
     movies: dict[int, bytes] = {}
+    trace = data_files.Trace()
     bundle = (
-        compile_inputs(command, assets, movies) if isinstance(command, Copy) else None
+        compile_inputs(command, assets, movies, trace=trace)
+        if isinstance(command, Copy)
+        else None
     )
     with transport.SerialConnection(command.port) as connection:
         client = transport.SetupClient(connection)
@@ -309,15 +334,20 @@ def run_setup(
             ]
             if errors:
                 raise compiler.CompilationError(errors)
+            uploaded_names = bundle.names
+            bundle, upload_snapshot = setup_sync.prepare_upload(
+                command, bundle, trace, client
+            )
             client.ok(f'CNTRL TIME {int(time.time())}')
             failures: list[str] = []
             try:
                 for name in bundle.names:
-                    for key, font in assets[name].items():
+                    for key, font in assets.get(name, {}).items():
                         client.copy_font(key, font)
                 for data in movies.values():
                     client.copy_movie(data)
-                client.copy_bundle(bundle.pack(), command.overwrite)
+                setup_sync.check_upload(client, upload_snapshot.parent)
+                client.copy_bundle(bundle.pack(), command.overwrite or bool(existing))
                 report_bundle(bundle)
             except (OSError, ValueError) as error:
                 failures.append(str(error))
@@ -327,6 +357,12 @@ def run_setup(
                 failures.append(f'batch completion: {error}')
             if failures:
                 raise compiler.CompilationError(failures)
+            setup_sync.capture_assets(
+                client, {n: bundle.setups[n] for n in uploaded_names}, upload_snapshot
+            )
+            setup_sync.advance(
+                setup_sync.store(command), upload_snapshot, uploaded_names
+            )
         else:
             entries = {e.name.lower(): e.name for e in client.catalogue()}
             errors: list[str] = []

@@ -9,7 +9,7 @@ import tomlkit
 from PIL import Image
 
 from cntrl.animation import asset
-from cntrl.patch_switcher import cli, compiler, models, resolved
+from cntrl.patch_switcher import cli, compiler, data_files, models, resolved
 from scripts import native_tests
 
 
@@ -111,7 +111,8 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     target_expression = [str(target), '+', str(geometry)]
     assets: dict[int, bytes] = {}
     bundle = cli.compile_inputs(
-        cli.Sources(document=[str(source)], target=target_expression), movies=assets
+        data_files.Sources(document=[str(source)], target=target_expression),
+        movies=assets,
     )
     key = crc32(movie)
     assert assets == {key: movie}
@@ -121,7 +122,7 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     plain = tmp_path / 'plain.toml'
     plain.write_text('')
     baseline = cli.compile_inputs(
-        cli.Sources(document=[str(plain)], target=target_expression)
+        data_files.Sources(document=[str(plain)], target=target_expression)
     )
     assert bundle.total_ram2_needs() == baseline.total_ram2_needs()
     exported = resolved.export(bundle.setups['setup'])
@@ -132,7 +133,7 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     cli.save_asset(tmp_path / f'movies/{key:08x}.cnsa', movie)
     source.write_text(exported)
     rebuilt = cli.compile_inputs(
-        cli.Sources(document=[str(source)], target=target_expression)
+        data_files.Sources(document=[str(source)], target=target_expression)
     )
     assert rebuilt.setups == bundle.setups
     image = tmp_path / 'setup.bin'

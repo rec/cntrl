@@ -481,9 +481,11 @@ references still resolve their source setup at playback time.
 `compile` and `setup copy` collect every requested setup and all transitive
 companions into one bundle, sorted by case-insensitive logical name. Authoring
 and UI retain the original names; executable cross-setup references use uint16
-indices. A rebuild replaces the complete bundle. Use `--overwrite` when copying
-over an existing collection. Backup restore merges saved setups with the current
-collection and relinks their indices.
+indices. `setup copy` preserves unrelated pedal setups, relinks the combined
+bundle, and rejects unreconciled pedal edits in replaced setups. Use
+`--overwrite` when replacing existing names. Verified copies establish the
+project-local baseline for [source synchronization](setup-sync.md). Backup
+restore also merges saved setups with the current collection and relinks indices.
 
 The build reports each setup's compiled RAM size and `total_setup_ram`.
 Each app and page declares `ram2_bytes`, defaulting to zero. The planner reserves
@@ -512,9 +514,9 @@ next host rebuild. Captured song sources with runtime references carry a table
 signature: rebuild/copy them again if the table's names change. A stale capture
 fails before sending MIDI rather than addressing a different setup by accident.
 Live song selections continue resolving their authored setup names at activation.
-No simultaneous hand/computer editing is assumed, and no
-conflict detection or merge protocol is used. Compiled setups now use format 33;
-recompile older configurations before deploying the matching firmware.
+Saved pedal and host edits are reconciled explicitly with `cntrl setup sync`;
+review and apply are separate from upload. Use the matching compiler and firmware
+when deploying compiled setups.
 
 Song libraries have optional `instruments`, `definitions`, `patches`, `fonts` and
 `tags` context using the same authoring models. Each song's `patches` list
