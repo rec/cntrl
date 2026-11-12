@@ -6,6 +6,7 @@
 #include <new>
 #include <cstring>
 #include <algorithm>
+#include <atomic>
 
 namespace cntrl {
 // The target initializes this from its linker's remaining heap size before use.
@@ -14,9 +15,9 @@ inline unsigned memory_used = 0;
 inline unsigned memory_peak = 0, memory_allocations = 0, memory_failures = 0;
 // Tests may fail the next allocation with zero, or allow N calls first.
 inline int memory_fail_after = -1;
-// The linker wraps malloc/free. Volatile keeps the tag visible to those
-// wrappers even when the compiler treats malloc as an allocation builtin.
-inline volatile unsigned memory_checked_operations = 0;
+// Compiler fences keep the tag visible to linker-wrapped malloc/free even
+// when the compiler treats those calls as allocation builtins.
+inline unsigned memory_checked_operations = 0;
 inline unsigned (*memory_actual_charge)(const void *) = nullptr;
 // The pinned Cortex-M7 newlib nano allocator aligns chunks to 8 bytes. Its
 // chunk header/alignment allowance costs 8 more. Native tests use this target
@@ -50,30 +51,40 @@ public:
         if (memory_fail_after > 0) --memory_fail_after;
         ++memory_allocations;
         ++memory_checked_operations;
+        std::atomic_signal_fence(std::memory_order_seq_cst);
         void *memory = std::malloc(length);
+        std::atomic_signal_fence(std::memory_order_seq_cst);
         --memory_checked_operations;
         if (!memory) { ++memory_failures; return false; }
         const uint64_t actual = memory_allocation_charge(memory, length);
         if (!actual || actual > available) {
-            ++memory_checked_operations; std::free(memory); --memory_checked_operations;
+            ++memory_checked_operations; std::atomic_signal_fence(std::memory_order_seq_cst);
+            std::free(memory);
+            std::atomic_signal_fence(std::memory_order_seq_cst); --memory_checked_operations;
             ++memory_failures; return false;
         }
         const uint64_t previous = memory_allocation_charge(data, size);
         if (size && !previous) {
-            ++memory_checked_operations; std::free(memory); --memory_checked_operations;
+            ++memory_checked_operations; std::atomic_signal_fence(std::memory_order_seq_cst);
+            std::free(memory);
+            std::atomic_signal_fence(std::memory_order_seq_cst); --memory_checked_operations;
             ++memory_failures; return false;
         }
         memory_used += unsigned(actual);
         if (memory_used > memory_peak) memory_peak = memory_used;
         if (size) std::memcpy(memory, data, std::min(size, length));
-        ++memory_checked_operations; std::free(data); --memory_checked_operations;
+        ++memory_checked_operations; std::atomic_signal_fence(std::memory_order_seq_cst);
+        std::free(data);
+        std::atomic_signal_fence(std::memory_order_seq_cst); --memory_checked_operations;
         memory_used -= unsigned(previous);
         data = static_cast<uint8_t *>(memory); size = length;
         return true;
     }
     void clear() {
         const unsigned charge = unsigned(memory_allocation_charge(data, size));
-        ++memory_checked_operations; std::free(data); --memory_checked_operations; data = nullptr;
+        ++memory_checked_operations; std::atomic_signal_fence(std::memory_order_seq_cst);
+        std::free(data);
+        std::atomic_signal_fence(std::memory_order_seq_cst); --memory_checked_operations; data = nullptr;
         memory_used -= charge; size = 0;
     }
     void swap(MemoryBuffer &other) {

@@ -376,17 +376,17 @@ public:
         if (has_hooks) {
             for (unsigned b = 0; b < 5; ++b) {
                 const uint8_t *p = bytes + hooks + 4 + b * 5;
-                bool assigned = b < switch_count;
+                bool switch_assigned = b < switch_count;
                 for (unsigned j = 0; j < 2; ++j)
-                    if (u16(p + j * 2) != 65535 && (!assigned || u16(p + j * 2) >= u16(bytes + graph + 8))) return false;
+                    if (u16(p + j * 2) != 65535 && (!switch_assigned || u16(p + j * 2) >= u16(bytes + graph + 8))) return false;
                 if (p[4] > 1 || (p[4] && u16(p) == 65535)) return false;
             }
         }
         if (bytes[19] & 0x40) {
             for (unsigned b = 0; b < 5; ++b) {
                 const uint8_t *p = bytes + gestures + b * gesture_record_size;
-                bool assigned = b < switch_count && bytes[switch_start + b * 72 + 1] == 0;
-                if (!gestures_valid(p, u16(bytes + graph + 8), assigned)) return false;
+                bool gesture_assigned = b < switch_count && bytes[switch_start + b * 72 + 1] == 0;
+                if (!gestures_valid(p, u16(bytes + graph + 8), gesture_assigned)) return false;
             }
         }
         if (has_shifted) {

@@ -3,6 +3,7 @@
 #include <cntrl/midi_bridge.h>
 #include <cntrl/midi_outputs.h>
 #include <cassert>
+#include <deque>
 #include <vector>
 #include <iostream>
 
@@ -91,6 +92,78 @@ void test_sysex_streaming_and_pedal_ownership() {
     assert(out.bytes[0].back() == 0xf7);
 }
 
+void test_sysex_continuations_refresh_idle_timeout_in_both_directions() {
+    std::vector<uint8_t> payload{0xf0, 0x7d};
+    for (unsigned i = 0; i < 4096; ++i) payload.push_back(uint8_t(i % 128));
+    payload.push_back(0xf7);
+    for (bool packetized : {true, false}) {
+        cntrl::midi::Bridge bridge{test_midi_outputs}; Output out;
+        bridge.configure(true); bridge.connected(true, 0);
+        const unsigned route = packetized ? 0 : 6;
+        uint32_t now = 0;
+        for (unsigned chunk = 0; chunk < payload.size(); chunk += 60, now += 25) {
+            const unsigned end = std::min(chunk + 60, unsigned(payload.size()));
+            if (packetized) {
+                for (unsigned offset = chunk; offset < end; offset += 3) {
+                    const unsigned length = std::min(3u, end - offset);
+                    const bool final = offset + length == payload.size();
+                    cntrl::midi::Packet packet{uint8_t(final ? 4 + length : 4), {0, 0, 0}};
+                    for (unsigned i = 0; i < length; ++i) packet.bytes[i] = payload[offset + i];
+                    bridge.forward_packet(route, packet, now); bridge.service(out, now);
+                }
+            } else for (unsigned offset = chunk; offset < end; ++offset) {
+                bridge.receive(route, payload[offset], now, 0); bridge.service(out, now);
+            }
+            bridge.service(out, now + 24);
+            assert(!bridge.counters(route).aborted);
+        }
+        assert(now > 1000 && out.bytes[route] == payload);
+        assert(!bridge.counters(route).dropped);
+    }
+}
+void test_paced_sysex_round_trip_survives_din_backpressure() {
+    struct SerialLoop : Output {
+        std::deque<uint8_t> fifo;
+        uint64_t now = 0, next_byte = 0;
+        unsigned backpressure = 0;
+        bool write_packet(unsigned route, const cntrl::midi::Packet &packet) override {
+            if (route != 0) return Output::write_packet(route, packet);
+            // A finite UART buffer drains at 31250 baud, ten bits per byte.
+            if (fifo.size() + packet.size() > 32) { ++backpressure; return false; }
+            if (fifo.empty()) next_byte = now + 320;
+            for (unsigned i = 0; i < packet.size(); ++i) fifo.push_back(packet.bytes[i]);
+            return Output::write_packet(route, packet);
+        }
+        void advance(uint64_t time, cntrl::midi::Bridge &bridge) {
+            now = time;
+            while (!fifo.empty() && next_byte <= now) {
+                bridge.receive(6, fifo.front(), uint32_t(next_byte / 1000), 0);
+                fifo.pop_front(); next_byte += 320;
+            }
+        }
+    } out;
+    cntrl::midi::Bridge bridge{test_midi_outputs}; bridge.configure(true); bridge.connected(true, 0);
+    std::vector<uint8_t> payload{0xf0, 0x7d};
+    for (unsigned i = 0; i < 4096; ++i) payload.push_back(uint8_t(i % 128));
+    payload.push_back(0xf7);
+    unsigned offset = 0;
+    for (uint64_t now = 0; now <= 1800000; now += 100) {
+        out.advance(now, bridge);
+        if (now % 25000 == 0 && offset < payload.size()) {
+            const unsigned end = std::min(offset + 60, unsigned(payload.size()));
+            for (; offset < end; offset += 3) {
+                const unsigned length = std::min(3u, end - offset);
+                cntrl::midi::Packet packet{uint8_t(offset + length == payload.size() ? 4 + length : 4), {0, 0, 0}};
+                for (unsigned i = 0; i < length; ++i) packet.bytes[i] = payload[offset + i];
+                bridge.forward_packet(0, packet, uint32_t(now / 1000));
+            }
+        }
+        bridge.service(out, uint32_t(now / 1000));
+    }
+    assert(out.backpressure && out.fifo.empty() && out.bytes[0] == payload && out.bytes[6] == payload);
+    assert(!bridge.counters(0).aborted && !bridge.counters(0).dropped);
+    assert(!bridge.counters(6).aborted && !bridge.counters(6).dropped);
+}
 void test_sysex_timeout_overflow_and_disconnect() {
     cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0);
@@ -490,6 +563,8 @@ int main() {
     test_independent_outputs_and_pedal_reservation();
     test_sysex_streaming_and_pedal_ownership();
     test_sysex_timeout_overflow_and_disconnect();
+    test_sysex_continuations_refresh_idle_timeout_in_both_directions();
+    test_paced_sysex_round_trip_survives_din_backpressure();
     test_default_off_and_disabled_explicit_usb();
     test_usb_sysex_resynchronizes_after_overflow();
     std::cout << "MIDI bridge tests passed\n";
