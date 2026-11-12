@@ -132,7 +132,8 @@ FLASHMEM HeapSnapshot heap_snapshot() {
     result.sdk_growth = result.sdk_used > boot_sdk ? result.sdk_used - boot_sdk : 0;
     const auto first = reinterpret_cast<uintptr_t>(&_heap_start), end = reinterpret_cast<uintptr_t>(__brkval);
     const auto limit = reinterpret_cast<uintptr_t>(&_heap_end);
-    if (end < first || end > limit || trace.live != info.uordblks) result.valid = false;
+    if (end < first || end > limit || trace.live != info.uordblks
+        || trace.checked > trace.live || trace.checked != memory_used) result.valid = false;
     result.unallocated = end <= limit ? unsigned(limit - end) : 0;
     unsigned traversed = 0;
     for (auto *chunk = __malloc_free_list; chunk; chunk = chunk->next) {

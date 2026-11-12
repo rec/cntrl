@@ -22,6 +22,25 @@ class Artifacts(BaseModel, frozen=True):
     target: str
 
 
+def read_artifacts(output: Path) -> Artifacts:
+    """Validate an existing export and its files inside the output directory."""
+    output = output.resolve()
+    artifacts = Artifacts.model_validate(
+        tomlkit.parse((output / 'build.toml').read_bytes().decode()).unwrap()
+    )
+    for name in (artifacts.image, artifacts.target):
+        path = (output / name).resolve()
+        if (
+            Path(name).is_absolute()
+            or not path.is_relative_to(output)
+            or not path.is_file()
+        ):
+            raise ValueError(
+                f'{name}: build artifact must be a file inside the output directory'
+            )
+    return artifacts
+
+
 def run(command: Build) -> Artifacts:
     output = command.output.resolve()
     temporary = output / 'tmp'
@@ -51,17 +70,4 @@ def run(command: Build) -> Artifacts:
         check=True,
         env=environment,
     )
-    artifacts = Artifacts.model_validate(
-        tomlkit.parse((output / 'build.toml').read_bytes().decode()).unwrap()
-    )
-    for name in (artifacts.image, artifacts.target):
-        path = (output / name).resolve()
-        if (
-            Path(name).is_absolute()
-            or not path.is_relative_to(output)
-            or not path.is_file()
-        ):
-            raise ValueError(
-                f'{name}: build artifact must be a file inside the output directory'
-            )
-    return artifacts
+    return read_artifacts(output)

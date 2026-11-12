@@ -289,10 +289,11 @@ service, but are not physical button/visible-rendering qualification.
 The explicit macOS qualification tool is:
 
 ```bash
-uv run --frozen -m cntrl.maker.morningstar.mc.qualify_usb_midi
+uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc
 ```
 
-It lists actual CoreMIDI endpoints. `--run --destination NAME --source NAME`
+It lists actual CoreMIDI endpoints. Pass target options after `--`.
+`--run --destination NAME --source NAME`
 opens exactly those endpoints, checks short messages and a paced 4,099-byte
 non-commercial SysEx, and prints per-route diagnostics. `--expect-enabled`
 expects forwarding; without it the same messages must not arrive. Optional

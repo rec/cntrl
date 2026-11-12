@@ -7,6 +7,7 @@
 #include "checked_array.h"
 #include "checked_list.h"
 #include <cstdio>
+#include <charconv>
 #include <limits>
 
 namespace cntrl::midi {
@@ -247,12 +248,14 @@ public:
         const auto &counts = streams_.diagnostics();
         const auto lfos = streams_.lfo_status();
         char response[512];
-        std::snprintf(response, sizeof(response), "CNTRL MIDI STREAMS %u %u %u %u %lu %lu %lu %lu lfos=%u pending=%u stopping=%u waiting=%u missing=%u failed=%llx failed_count=%u coalesced=%lu skipped=%lu bytes=%lu heap_used=%u heap_peak=%u heap_budget=%u allocations=%u allocation_failures=%u",
+        char failed[17];
+        *std::to_chars(failed,failed + sizeof(failed) - 1,lfos.failed,16).ptr = 0;
+        std::snprintf(response, sizeof(response), "CNTRL MIDI STREAMS %u %u %u %u %lu %lu %lu %lu lfos=%u pending=%u stopping=%u waiting=%u missing=%u failed=%s failed_count=%u coalesced=%lu skipped=%lu bytes=%lu heap_used=%u heap_peak=%u heap_budget=%u allocations=%u allocation_failures=%u",
             streams_.selected(), streams_.pending(), streams_.voices(), streams_.recovery(),
             (unsigned long)counts.transmitted, (unsigned long)counts.dropped,
             (unsigned long)counts.overloaded, (unsigned long)counts.failed,
             lfos.running, lfos.pending, lfos.stopping, lfos.waiting, lfos.missing,
-            (unsigned long long)lfos.failed, lfos.failed_count, (unsigned long)counts.coalesced, (unsigned long)counts.skipped,
+            failed, lfos.failed_count, (unsigned long)counts.coalesced, (unsigned long)counts.skipped,
             (unsigned long)streams_.retained_bytes(), memory_used, memory_peak, memory_budget, memory_allocations, memory_failures);
         replies.reply(response);
     }

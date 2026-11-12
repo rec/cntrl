@@ -13,7 +13,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel
 
-from .. import build, flash, upload
+from .. import build, flash, qualify, upload
 from . import (
     backups,
     compiler,
@@ -283,10 +283,18 @@ def run_setup(
         backups.backup_pedal(command.directory, command.port)
         return
     if isinstance(command, backups.Restore):
-        backups.restore_setups(command.directory, command.port)
+        backups.restore_setups(
+            command.directory,
+            command.port,
+            models.Target.model_validate(compiler.read_document(command.target)),
+        )
         return
     if isinstance(command, backups.Verify):
-        backups.verify_after_flashing(command.directory, command.port)
+        backups.verify_after_flashing(
+            command.directory,
+            command.port,
+            models.Target.model_validate(compiler.read_document(command.target)),
+        )
         return
     if isinstance(command, history.History):
         history.run(command)
@@ -519,11 +527,14 @@ def main() -> None:
         | Annotated[Songs, tyro.conf.subcommand(name='songs')]
         | Annotated[build.Build, tyro.conf.subcommand(name='build')]
         | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
-        | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')],
+        | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
+        | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
-        if isinstance(command, upload.Helper):
+        if isinstance(command, qualify.Qualify):
+            qualify.run(command)
+        elif isinstance(command, upload.Helper):
             upload.run(command)
         elif isinstance(command, flash.Flash):
             flash.run(command)

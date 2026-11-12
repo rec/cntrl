@@ -1,4 +1,5 @@
 #include <cntrl/history_import.h>
+#include <cntrl/asset_commands.h>
 #include "patch_hardware.h"
 #include "storage.h"
 #include <cassert>
@@ -9,6 +10,8 @@
 
 struct Board : TestPatchHardware, cntrl::Replies {
     std::string last;
+    cntrl::HistoryImport *history = nullptr;
+    bool configuration_locked() const override { return history && history->busy(); }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned, unsigned) const override { return true; }
@@ -21,14 +24,32 @@ struct Board : TestPatchHardware, cntrl::Replies {
     void reply(const char *text) override { last = text; }
     void data(const uint8_t *, unsigned) override { assert(false); }
 };
+struct OtherAsset {
+    bool data(const uint8_t *, unsigned, uint32_t) { assert(false); return false; }
+};
+struct FontAsset {
+    bool data(const uint8_t *, unsigned, Board &, uint32_t) { assert(false); return false; }
+};
+struct HistoryAssets {
+    Board &hardware, &replies;
+    cntrl::HistoryImport &history;
+    OtherAsset bundle{}, disk{}, songs{};
+    FontAsset fonts{};
+};
 void upload(cntrl::HistoryImport &transfer, Board &board, uint64_t number, const std::vector<uint8_t> &record) {
+    board.history = &transfer;
+    HistoryAssets services{board, board, transfer};
+    cntrl::AssetCommands<HistoryAssets> assets(services);
     char revision[21], command[320]; cntrl::revision_text(number, revision);
     std::snprintf(command, sizeof(command), "CNTRL HISTORY IMPORT 4576656e696e67 %s %u %08lx", revision,
         unsigned(record.size()), (unsigned long)cntrl::checksum(record.data(), unsigned(record.size())));
     assert(transfer.command(command, 0) && board.last == "CNTRL SEND");
+    assert(board.configuration_locked());
+    assert(assets.data(cntrl::UsbKind::bundle, record.data(), 1, 0));
+    assert(board.last == "CNTRL ERROR close-switches-first" && transfer.busy());
     for (unsigned offset = 0; offset < record.size();) {
         unsigned n = std::min(128u, unsigned(record.size()) - offset);
-        assert(transfer.data(record.data() + offset, n, 0) && board.last == "CNTRL OK"); offset += n;
+        assert(assets.data(cntrl::UsbKind::history, record.data() + offset, n, 0) && board.last == "CNTRL OK"); offset += n;
     }
     assert(transfer.command("CNTRL HISTORY END", 0));
     for (unsigned now = 0; transfer.busy() && now < 10000; ++now) transfer.tick(now);

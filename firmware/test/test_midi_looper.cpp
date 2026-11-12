@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdio>
 #include <vector>
+#include <string>
 
 using namespace cntrl::midi;
 struct RecordingSink : cntrl::midi::Sink {
@@ -43,6 +44,15 @@ struct Session {
         assert(loop.state() == MidiLooper::State::playing);
     }
 };
+void status_preserves_long_duration_and_following_fields() {
+    Session s; s.take();
+    struct Replies {
+        std::string text;
+        void reply(const char *value) { text = value; }
+    } replies;
+    s.loop.status(replies);
+    assert(replies.text.find("length=4294967296 late=0 max_late_us=0 failed=0 discarded=0 backward=0 direction_pending=0") != std::string::npos);
+}
 void first_wrap_and_thousands_of_irregular_cycles_keep_absolute_phase() {
     Session s; s.take();
     assert(s.loop.length() == MidiLooper::beat && s.sink.sent[0].size() == 1);
@@ -409,6 +419,7 @@ void armed_capacity_survives_exhaustion_through_the_first_wrap() {
 }
 int main() {
     cntrl::memory_budget = 524288;
+    status_preserves_long_duration_and_following_fields();
     idle_configuration_and_failed_arm_preserve_available_memory();
     failed_reverse_preparation_preserves_the_take_and_undo();
     armed_capacity_survives_exhaustion_through_the_first_wrap();

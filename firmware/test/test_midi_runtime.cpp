@@ -286,6 +286,34 @@ void input_metadata_failure_keeps_service_running_and_reports_once() {
     cntrl::memory_fail_after = -1;
     runtime.poll(services); assert(services.errors == 1);
 }
+void stream_status_preserves_all_failure_bits_and_following_fields() {
+    Services services(0); cntrl::midi::Runtime runtime;
+    std::vector<uint8_t> graph(12,0);
+    std::memcpy(graph.data(),"CSTR",4); graph[8] = 64; graph[10] = 1;
+    for (unsigned i = 0; i < 64; ++i) {
+        std::array<uint8_t,121> route{};
+        route[0] = route[1] = 255; route[4] = route[6] = 1;
+        std::snprintf(reinterpret_cast<char *>(route.data() + 8),64,"lfo%u",i);
+        route[72] = 10; route[73] = 1; route[74] = 45;
+        auto *config = route.data() + 76;
+        config[0] = cntrl::midi::Parameter::cc7; config[1] = uint8_t(i / 4);
+        config[2] = uint8_t(74 + i % 4); config[12] = 127;
+        cntrl::put32(config + 16,1000000); config[24] = 1;
+        cntrl::put32(config + 32,10000); config[40] = 2; // Restore without a known value fails activation.
+        graph.insert(graph.end(),route.begin(),route.end());
+    }
+    cntrl::put32(graph.data() + 4,unsigned(graph.size()));
+    const bool loaded = runtime.streams().load(graph.data(),unsigned(graph.size()),services.midi_outputs(),0);
+    if (!loaded) std::fprintf(stderr,"LFO diagnostic graph refused: ledger=%u budget=%u failures=%u\n",cntrl::memory_used,cntrl::memory_budget,cntrl::memory_failures);
+    assert(loaded);
+    runtime.streams().service(services,0);
+    assert(runtime.streams().lfo_status().failed == UINT64_MAX);
+    runtime.stream_status(services);
+    const auto &text = services.replies.back();
+    assert(text.find("failed=ffffffffffffffff failed_count=64 coalesced=0 skipped=0 bytes=") != std::string::npos);
+    assert(text.find(" heap_budget=524288 allocations=") != std::string::npos);
+    assert(text.find(" allocation_failures=") != std::string::npos);
+}
 void configured_raw_inputs_use_admitted_parser_storage() {
     Services services(1); services.sources[0].clear(); cntrl::midi::Runtime runtime;
     std::array<uint8_t,50> settings{};
@@ -335,6 +363,7 @@ void service_gap_reports_external_stalls_and_resets_across_timer_wrap() {
 }
 int main() {
     cntrl::memory_budget = 524288;
+    stream_status_preserves_all_failure_bits_and_following_fields();
     service_gap_reports_external_stalls_and_resets_across_timer_wrap();
     input_metadata_failure_keeps_service_running_and_reports_once();
     configured_raw_inputs_use_admitted_parser_storage();

@@ -1,5 +1,8 @@
-"""Back up, restore and verify pedal data without recompiling saved setups."""
+"""Back up pedal data and upgrade supported setup formats without recompiling."""
 
+from __future__ import annotations
+
+import shutil
 import struct
 import sys
 from pathlib import Path
@@ -34,6 +37,8 @@ class Restore(BaseModel, frozen=True):
 
     directory: Annotated[Path, tyro.conf.Positional]
     port: Path
+    target: Path
+    """Current target description, used to refresh RAM estimates."""
 
 
 class Verify(BaseModel, frozen=True):
@@ -41,6 +46,7 @@ class Verify(BaseModel, frozen=True):
 
     directory: Annotated[Path, tyro.conf.Positional]
     port: Path
+    target: Path
 
 
 def backup_pedal(
@@ -94,7 +100,7 @@ def backup_pedal(
                 (directory / 'history.toml').write_bytes(
                     tomlkit.dumps({'revisions': snapshots}).encode()
                 )
-                if version == compiler.DOCUMENT_VERSION:
+                if version in (36, 38, 39, 40, compiler.DOCUMENT_VERSION):
                     (folder / f'{revision.number}.toml').write_bytes(
                         resolved.export(data).encode()
                     )
@@ -189,19 +195,36 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
         )
 
 
-def restore_setups(directory: Path, port: Path) -> None:
+def restore_setups(directory: Path, port: Path, target: models.Target) -> None:
     folder = directory / 'setups'
     selected = (directory / 'selected.txt').read_bytes().decode()
-    setups = read_setup_binaries(directory)
-    snapshots = read_history_binaries(directory)
-    library = (directory / 'songs.bin').read_bytes()
-    songs.decode(library)
-    if selected and selected not in setups:
-        raise ValueError(f'{selected}: saved selection is absent from the backup')
     fonts = {
         int(f.stem, 16): f.read_bytes()
         for f in sorted((folder / 'fonts').glob('*.cfont'))
     }
+    setups = {
+        n: resolved.refresh_memory(
+            resolved.upgrade(d), fonts, switches=bool(target.max_switches)
+        )
+        for n, d in read_setup_binaries(directory).items()
+    }
+    snapshots = [
+        (
+            n,
+            r,
+            resolved.refresh_memory(
+                resolved.upgrade(d), fonts, switches=bool(target.max_switches)
+            ),
+        )
+        for n, r, d in read_history_binaries(directory)
+    ]
+    library = songs.upgrade(
+        (directory / 'songs.bin').read_bytes(),
+        fonts,
+        switches=bool(target.max_switches),
+    )
+    if selected and selected not in setups:
+        raise ValueError(f'{selected}: saved selection is absent from the backup')
     with transport.SerialConnection(port) as connection:
         client = transport.SetupClient(connection)
         for key, data in fonts.items():
@@ -255,15 +278,24 @@ def restore_setups(directory: Path, port: Path) -> None:
             print(f'Selected: {selected}', flush=True)
 
 
-def verify_after_flashing(directory: Path, port: Path) -> None:
-    setups = read_setup_binaries(directory)
+def verify_after_flashing(directory: Path, port: Path, target: models.Target) -> None:
     selected = (directory / 'selected.txt').read_bytes().decode()
     catalogue = (directory / 'catalogue.txt').read_bytes().decode()
-    library = (directory / 'songs.bin').read_bytes()
     fonts = {
         int(f.stem, 16): f.read_bytes()
         for f in sorted((directory / 'setups/fonts').glob('*.cfont'))
     }
+    setups = {
+        n: resolved.refresh_memory(
+            resolved.upgrade(d), fonts, switches=bool(target.max_switches)
+        )
+        for n, d in read_setup_binaries(directory).items()
+    }
+    library = songs.upgrade(
+        (directory / 'songs.bin').read_bytes(),
+        fonts,
+        switches=bool(target.max_switches),
+    )
     with transport.SerialConnection(port) as connection:
         client = transport.SetupClient(connection)
         status = client.request('CNTRL STATUS')
@@ -299,7 +331,12 @@ def verify_after_flashing(directory: Path, port: Path) -> None:
                 raise ValueError(f'{p.name}: movie differs from the backup')
         listed: dict[str, list[history.Revision]] = {}
         for name, revision, data in read_history_binaries(directory):
-            _, expected = history.normalize_revision(name, data)
+            _, expected = history.normalize_revision(
+                name,
+                resolved.refresh_memory(
+                    resolved.upgrade(data), fonts, switches=bool(target.max_switches)
+                ),
+            )
             if name not in listed:
                 listed[name] = history.revisions(client, name)
             actual_revision = next(
@@ -330,6 +367,65 @@ def read_setup_binaries(directory: Path) -> dict[str, bytes]:
     for data in setups.values():
         resolved.graph_offset(data)
     return setups
+
+
+def prepare_restore(directory: Path, destination: Path, target: models.Target) -> Path:
+    """Validate a backup and prepare current-format copies, retaining originals."""
+    setups = read_setup_binaries(directory)
+    snapshots = read_history_binaries(directory)
+    fonts = {
+        int(f.stem, 16): f.read_bytes()
+        for f in sorted((directory / 'setups/fonts').glob('*.cfont'))
+    }
+    library = songs.upgrade(
+        (directory / 'songs.bin').read_bytes(),
+        fonts,
+        switches=bool(target.max_switches),
+    )
+    selected = (directory / 'selected.txt').read_bytes().decode()
+    if selected and selected not in setups:
+        raise ValueError(f'{selected}: saved selection is absent from the backup')
+    upgraded = {
+        n: resolved.refresh_memory(
+            resolved.upgrade(d), fonts, switches=bool(target.max_switches)
+        )
+        for n, d in setups.items()
+    }
+    revisions = [
+        (
+            n,
+            r,
+            resolved.refresh_memory(
+                resolved.upgrade(d), fonts, switches=bool(target.max_switches)
+            ),
+        )
+        for n, r, d in snapshots
+    ]
+    shutil.copytree(directory, destination)
+    (destination / 'songs.bin').write_bytes(library)
+    for name, data in upgraded.items():
+        (destination / 'setups' / f'{name}.bin').write_bytes(data)
+        (destination / 'setups' / f'{name}.toml').write_bytes(
+            resolved.export(data).encode()
+        )
+    manifest: list[dict[str, object]] = []
+    for name, revision, data in revisions:
+        folder = destination / 'history' / name
+        (folder / f'{revision.number}.bin').write_bytes(data)
+        (folder / f'{revision.number}.toml').write_bytes(resolved.export(data).encode())
+        manifest.append(
+            revision.model_dump()
+            | {
+                'name': name,
+                'number': str(revision.number),
+                'length': len(data),
+                'version': compiler.DOCUMENT_VERSION,
+            }
+        )
+    (destination / 'history.toml').write_bytes(
+        tomlkit.dumps({'revisions': manifest}).encode()
+    )
+    return destination
 
 
 def read_history_binaries(directory: Path) -> list[tuple[str, history.Revision, bytes]]:

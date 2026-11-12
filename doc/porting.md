@@ -28,12 +28,22 @@ same as for the build. The target owns backup, bootloader entry, upload and
 post-upload verification. `--legacy-usb` is forwarded explicitly for upgrading a
 device still using the earlier text-framed cntrl protocol; binary USB remains
 the default. A target without a flash entry is rejected before building.
+Use `--skip-build` to install an existing export with the selected target's
+current flash entry. Its `build.toml` and both declared artifacts must exist
+inside the export directory; the image is not rebuilt.
 
 For independent helper operations, supply `upload_helper_entry.py`.
 `cntrl upload-helper --target-dir path/to/implementation` executes that entry
 with `serve`, `bootloader`, or `upload --image PATH --sha256 DIGEST` arguments.
 The target owns the helper and device access. The common command passes through
 its output and exit status. See [Firmware upload helper](upload_helper.md).
+
+Targets with hardware qualification supply `qualify_entry.py`.
+`cntrl qualify --target-dir path/to/implementation -- ARGUMENTS` runs that entry
+with the current interpreter, forwarding the arguments after `--` unchanged.
+Without trailing arguments, the target selects its default qualification action.
+The target owns qualification options and device access; the common command
+passes through its output and exit status without importing hardware code.
 
 `cntrl.build.run` executes the implementation's `build_entry.py` using the current Python interpreter, with
 `--source-root` and `--output` arguments. `--source-root` identifies the shared

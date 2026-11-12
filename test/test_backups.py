@@ -5,7 +5,22 @@ from pathlib import Path
 import pytest
 import tyro
 
-from cntrl.patch_switcher import backups, cli, compiler
+from cntrl.patch_switcher import (
+    backups,
+    cli,
+    compiler,
+    history,
+    models,
+    resolved,
+    songs,
+)
+
+
+@pytest.fixture
+def target() -> models.Target:
+    return models.Target.model_validate(
+        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+    )
 
 
 def test_backup_reader_preserves_exact_setup_bytes(tmp_path: Path) -> None:
@@ -23,7 +38,7 @@ def test_backup_reader_rejects_an_old_document_format(tmp_path: Path) -> None:
     data = bytearray.fromhex(
         (Path(__file__).parents[1] / 'firmware/test/show.golden').read_text()
     )
-    data[4:6] = (compiler.DOCUMENT_VERSION - 1).to_bytes(2, 'little')
+    data[4:6] = (35).to_bytes(2, 'little')
     folder = tmp_path / 'setups'
     folder.mkdir()
     (folder / 'Evening.bin').write_bytes(data)
@@ -49,6 +64,77 @@ def test_backup_refuses_to_overwrite_an_existing_directory(tmp_path: Path) -> No
         backups.backup_pedal(tmp_path, Path('/unused'))
     assert saved.read_text() == 'Evening'
     assert not (tmp_path / 'setups').exists()
+
+
+def test_restore_preparation_upgrades_setups_and_history_without_changing_backup(
+    tmp_path: Path,
+    target: models.Target,
+) -> None:
+    import tomlkit
+
+    original = tmp_path / 'before'
+    (original / 'setups/fonts').mkdir(parents=True)
+    (original / 'history/Evening').mkdir(parents=True)
+    data = bytes.fromhex(
+        (Path(__file__).parents[1] / 'firmware/test/setup36.golden').read_text()
+    )
+    (original / 'setups/Evening.bin').write_bytes(data)
+    (original / 'setups/fonts/12345678.cfont').write_bytes(b'font')
+    (original / 'history/Evening/3.bin').write_bytes(data)
+    revision = history.Revision(
+        number=3, modified=12345, length=len(data), label='Take'
+    )
+    (original / 'history.toml').write_text(
+        tomlkit.dumps(
+            {
+                'revisions': [
+                    revision.model_dump()
+                    | {'name': 'Evening', 'number': '3', 'version': 36}
+                ]
+            }
+        )
+    )
+    (original / 'selected.txt').write_text('Evening')
+    (original / 'songs.bin').write_bytes(songs.encode(songs.Library()))
+    saved = {
+        p.relative_to(original): p.read_bytes()
+        for p in original.rglob('*')
+        if p.is_file()
+    }
+    prepared = backups.prepare_restore(original, tmp_path / 'restore', target)
+    assert {
+        p.relative_to(original): p.read_bytes()
+        for p in original.rglob('*')
+        if p.is_file()
+    } == saved
+    expected = resolved.refresh_memory(
+        resolved.upgrade(data), {}, switches=bool(target.max_switches)
+    )
+    assert backups.read_setup_binaries(prepared) == {'Evening': expected}
+    assert backups.read_history_binaries(prepared) == [
+        (
+            'Evening',
+            revision.model_copy(update={'length': len(expected)}),
+            expected,
+        )
+    ]
+    assert (prepared / 'setups/fonts/12345678.cfont').read_bytes() == b'font'
+    assert (prepared / 'songs.bin').read_bytes() == saved[Path('songs.bin')]
+    with pytest.raises(FileExistsError):
+        backups.prepare_restore(original, prepared, target)
+
+
+def test_restore_preparation_rejects_incomplete_backup_before_creating_output(
+    tmp_path: Path,
+    target: models.Target,
+) -> None:
+    original = tmp_path / 'before'
+    (original / 'setups').mkdir(parents=True)
+    (original / 'songs.bin').write_bytes(songs.encode(songs.Library()))
+    (original / 'selected.txt').write_text('Missing')
+    with pytest.raises(ValueError, match='saved selection is absent'):
+        backups.prepare_restore(original, tmp_path / 'restore', target)
+    assert not (tmp_path / 'restore').exists()
 
 
 def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
@@ -221,5 +307,5 @@ def test_restore_uploads_saved_song_library_before_restoring_selection(
         transport, 'SerialConnection', lambda *a, **k: nullcontext(None)
     )
     monkeypatch.setattr(transport, 'SetupClient', lambda connection: client)
-    backups.restore_setups(tmp_path, Path('/unused'))
+    backups.restore_setups(tmp_path, Path('/unused'), target)
     assert client.saved == library and client.selected == 'Evening'

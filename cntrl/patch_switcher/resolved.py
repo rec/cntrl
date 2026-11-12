@@ -9,6 +9,8 @@ import tomlkit
 from . import (
     arpeggiator,
     counters,
+    display,
+    graphics,
     inputs,
     layout,
     looper,
@@ -41,17 +43,117 @@ from .compiler import (
     TRS_MODES,
 )
 from .display import read_source
-from .models import MidiEndpoint
+from .models import MidiEndpoint, Setup
 
 
-def _sections(data: bytes) -> tuple[int, int, int]:
-    """Locate the graph following variable name metadata."""
+def refresh_memory(data: bytes, fonts: dict[int, bytes], *, switches: bool) -> bytes:
+    """Refresh current setup memory accounting directly from its wire records."""
+    graph = graph_offset(data)
+    if struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
+        raise ValueError('upgrade setup before refreshing its memory estimate')
+    _, _, _, _, instruments, cycles, patches, *_ = HEADER.unpack_from(data)
+    metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
+    page = _page_offsets(data)[0]
+    settings = Setup.model_validate(tomlkit.parse(export(data)).unwrap())
+    windows = [
+        data[i : i + graphics.SCREEN.size] for i in range(28, 76, graphics.SCREEN.size)
+    ]
+    display_start = graph + GRAPH.unpack_from(data, graph)[1]
+    endpoints = endpoint_records(data)
+    cursor = (
+        _sections(data)[2]
+        + inputs.HEADER.size
+        + len(input_labels(data)) * inputs.RECORD.size
+    )
+    cursor = counters.section_end(data, relay_outputs.section_end(data, cursor))
+    end = midi_processing.section_end(data, cursor)
+    streams = data[cursor:end]
+    cursor = pickup.section_end(data, end)
+    end = looper.section_end(data, cursor)
+    loop = data[cursor:end]
+    cursor = end
+    end = arpeggiator.section_end(data, cursor)
+    arp = data[cursor:end]
+    needed = (
+        sum(p.ram2_bytes for p in settings.pages.values())
+        + display.estimate_font_ram(windows, data[display_start:], fonts)
+        + layout.estimate_ram(
+            settings.pages,
+            instruments,
+            cycles,
+            switches=switches,
+            regions=data[page + 7],
+        )
+        + midi_processing.estimate_ram(streams, endpoint_count=len(endpoints))
+        + looper.estimate_ram(loop)
+        + arpeggiator.estimate_ram(arp)
+    )
+    address = metadata + METADATA.size - 8
+    if struct.unpack_from('<I', data, address)[0] == needed:
+        return data
+    refreshed = bytearray(data)
+    struct.pack_into('<I', refreshed, address, needed)
+    struct.pack_into('<I', refreshed, 20, crc32(refreshed[28:]))
+    return bytes(refreshed)
+
+
+def upgrade(data: bytes) -> bytes:
+    """Decode a supported setup and upgrade its format without recompilation.
+
+    Preserve graph node IDs and all existing records. Extend only legacy page
+    layout and gesture records, then update section offsets, lengths and CRC.
+    """
+    graph = graph_offset(data)
+    version = struct.unpack_from('<H', data, 4)[0]
+    if version == DOCUMENT_VERSION:
+        export(data)
+        return data
+    page, gestures, shifted = _page_offsets(data)
+    gesture_size = _gesture_size(version)
+    shifted_size = gesture_size + 4
+    edits = [(page, layout.section_end(data, page), layout.upgrade(data, page))]
+    if gestures is not None:
+        edits.append(
+            (
+                gestures,
+                gestures + 5 * gesture_size,
+                b''.join(
+                    _extend_gestures(data[i : i + gesture_size])
+                    for i in range(gestures, gestures + 5 * gesture_size, gesture_size)
+                ),
+            )
+        )
+    if shifted is not None:
+        edits.append(
+            (
+                shifted,
+                shifted + 5 * shifted_size,
+                b''.join(
+                    _extend_gestures(data[i : i + shifted_size], 4)
+                    for i in range(shifted, shifted + 5 * shifted_size, shifted_size)
+                ),
+            )
+        )
+    size = GRAPH.unpack_from(data, graph)[1]
+    edits.append((graph, graph + size, _upgrade_graph(data, graph, gesture_size)))
+    converted = bytearray(data)
+    for start, end, replacement in sorted(edits, reverse=True):
+        converted[start:end] = replacement
+    struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
+    struct.pack_into('<I', converted, 8, len(converted))
+    struct.pack_into('<I', converted, 20, crc32(converted[28:]))
+    result = bytes(converted)
+    export(result)
+    return result
+
+
+def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
     if len(data) < 76:
         raise ValueError('truncated setup')
     magic, version, _, length, ni, nc, np, flags, crc, _ = HEADER.unpack_from(data)
     if (
         magic != b'CSW1'
-        or version != DOCUMENT_VERSION
+        or version not in (36, 38, 39, 40, DOCUMENT_VERSION)
         or flags
         & ~(
             0x1FFF
@@ -78,12 +180,25 @@ def _sections(data: bytes) -> tuple[int, int, int]:
             + struct.unpack_from('<H', data, cursor + 4)[0]
             * page_settings.KEYBOARD.size
         )
+    gestures = None
+    shifted = None
     if flags & GESTURES_FLAG:
-        cursor += 5 * GESTURES.size
+        gestures = cursor
+        cursor += 5 * _gesture_size(version)
     if data[cursor : cursor + 4] == b'CHOK':
         cursor += 4 + 5 * SWITCH_HOOKS.size
     if data[cursor : cursor + 4] == b'CSHF':
-        cursor += 4 + 5 * SHIFTED_ACTIONS.size
+        shifted = cursor + 4
+        cursor += 4 + 5 * (_gesture_size(version) + 4)
+    if cursor + 8 > len(data) or data[cursor + 6] != (1 if version < 39 else 2):
+        raise ValueError('invalid page layout version')
+    return cursor, gestures, shifted
+
+
+def _sections(data: bytes) -> tuple[int, int, int]:
+    """Locate sections in the original bytes, including supported old formats."""
+    cursor = _page_offsets(data)[0]
+    np = HEADER.unpack_from(data)[6]
     cursor = layout.section_end(data, cursor)
     if cursor + 8 > len(data) or data[cursor : cursor + 4] != b'CMOV':
         raise ValueError('missing movie metadata')
@@ -112,6 +227,61 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     if cursor + GRAPH.size > len(data) or data[cursor : cursor + 4] != b'CPAT':
         raise ValueError('missing Patch graph')
     return cursor, endpoint_offset, input_offset
+
+
+def _gesture_size(version: int) -> int:
+    return 20 if version < 40 else 24 if version == 40 else GESTURES.size
+
+
+def _extend_gestures(record: bytes, prefix: int = 0) -> bytes:
+    if len(record) not in (prefix + 20, prefix + 24):
+        raise ValueError('truncated legacy gestures')
+    events = (len(record) - prefix - 8) // 2
+    return record[:-8] + b'\xff\xff' * (len(GESTURE_EVENTS) - events) + record[-8:]
+
+
+def _upgrade_graph(data: bytes, offset: int, gesture_size: int) -> bytes:
+    magic, size, nodes, switches, roots, named = GRAPH.unpack_from(data, offset)
+    prefix = (
+        GRAPH.size + nodes * 4 + roots * 2 + switches * SWITCH.size + named * NAMED.size
+    )
+    cursor = prefix
+    result = bytearray(data[offset : offset + prefix])
+    if magic != b'CPAT' or prefix > size or offset + size > len(data):
+        raise ValueError('invalid legacy Patch graph')
+    for index in range(nodes):
+        if (
+            struct.unpack_from('<I', data, offset + GRAPH.size + index * 4)[0] != cursor
+            or cursor + 4 > size
+        ):
+            raise ValueError('invalid legacy Patch node offset')
+        kind, flags, length = struct.unpack_from('<BBH', data, offset + cursor)
+        payload = data[offset + cursor + 4 : offset + cursor + 4 + length]
+        if cursor + 4 + length > size:
+            raise ValueError('truncated legacy Patch node')
+        cursor += 4 + length
+        if kind == 10:
+            hooks = SWITCH.size + gesture_size
+            shifted = hooks + SWITCH_HOOKS.size
+            record_size = shifted + gesture_size + 4
+            if length < 220 or length != 220 + payload[66] * record_size:
+                raise ValueError('invalid legacy control bindings')
+            records = []
+            for position in range(220, length, record_size):
+                record = payload[position : position + record_size]
+                records.append(
+                    record[: SWITCH.size]
+                    + _extend_gestures(record[SWITCH.size : hooks])
+                    + record[hooks:shifted]
+                    + _extend_gestures(record[shifted:], 4)
+                )
+            payload = payload[:220] + b''.join(records)
+        struct.pack_into('<I', result, GRAPH.size + index * 4, len(result))
+        result.extend(struct.pack('<BBH', kind, flags, len(payload)) + payload)
+    if cursor != size:
+        raise ValueError('invalid legacy Patch graph length')
+    struct.pack_into('<I', result, 4, len(result))
+    return bytes(result)
 
 
 def graph_offset(data: bytes) -> int:
@@ -162,6 +332,8 @@ def arm_memory(data: bytes) -> dict[str, int]:
 
 def patch(data: bytes, node: int) -> dict[str, object]:
     """Decode any graph node into the common tagged Patch authoring table."""
+    if len(data) >= 6 and struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
+        data = upgrade(data)
     offset = graph_offset(data)
     source = read_source(data, offset)
     labels = input_labels(data)
@@ -170,6 +342,8 @@ def patch(data: bytes, node: int) -> dict[str, object]:
 
 
 def export(data: bytes) -> str:
+    if len(data) >= 6 and struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
+        data = upgrade(data)
     offset = graph_offset(data)
     endpoints = endpoint_records(data)
     names = {e.route: e.name for e in endpoints}
@@ -236,6 +410,38 @@ def export(data: bytes) -> str:
     if data[cursor : cursor + 4] == b'CSHF':
         cursor += 4 + 5 * SHIFTED_ACTIONS.size
     result.update(layout.unpack(data, cursor))
+    # Retained source metadata predates the wire upgrade. Reuse its concise
+    # page authoring only when compiling it describes these exact page bytes.
+    # Other source metadata remains untouched, including node IDs and assets.
+    if 'pages' in source:
+        windows = [
+            _text(data, cursor + 12 + i * 32, 32) for i in range(data[cursor + 5])
+        ]
+        try:
+            authored = Setup.model_validate(
+                {k: source[k] for k in ('pages', 'regions', 'layout') if k in source}
+            )
+            same_pages = (
+                layout.pack(authored, windows)
+                == data[cursor : layout.section_end(data, cursor)]
+            )
+        except ValueError:
+            same_pages = False
+        if not same_pages:
+            # Geometry comes from the upgraded wire, but explicit per-page
+            # memory allowances exist only in retained authoring metadata.
+            authored_pages = source.get('pages')
+            actual_pages = cast(dict[str, dict[str, object]], result['pages'])
+            if isinstance(authored_pages, dict):
+                for name, raw in authored_pages.items():
+                    if (
+                        name in actual_pages
+                        and isinstance(raw, dict)
+                        and 'ram2_bytes' in raw
+                    ):
+                        actual_pages[name]['ram2_bytes'] = raw['ram2_bytes']
+            for key in ('pages', 'regions', 'layout'):
+                source.pop(key, None)
     modes = data[meta + METADATA.size - 18 : meta + METADATA.size - 14]
     if any(m >= len(TRS_MODES) for m in modes):
         raise ValueError('invalid TRS port role')

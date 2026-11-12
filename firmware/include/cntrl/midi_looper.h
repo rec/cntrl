@@ -4,6 +4,7 @@
 #include "midi_loop_capture.h"
 #include <array>
 #include <cstdio>
+#include <charconv>
 
 namespace cntrl::midi {
 struct LooperSettings {
@@ -65,9 +66,11 @@ public:
 #endif
     void status(Replies &replies) const {
         char text[288];
-        std::snprintf(text,sizeof(text),"CNTRL MIDI LOOPER configured=%u state=%u error=%u events=%u capacity=%u peak_events=%u peak_held=%u length=%llu late=%u max_late_us=%u failed=%x discarded=%u backward=%u direction_pending=%u",
+        char duration[21];
+        *std::to_chars(duration,duration + sizeof(duration) - 1,length()).ptr = 0;
+        std::snprintf(text,sizeof(text),"CNTRL MIDI LOOPER configured=%u state=%u error=%u events=%u capacity=%u peak_events=%u peak_held=%u length=%s late=%u max_late_us=%u failed=%x discarded=%u backward=%u direction_pending=%u",
             unsigned(configured_),unsigned(state_),unsigned(error_),events(),capacity(),peak_events_,peak_held_,
-            (unsigned long long)length(),late_,maximum_late_us_,failed_outputs_,capture_.discarded,unsigned(backward_),unsigned(direction_pending_));
+            duration,late_,maximum_late_us_,failed_outputs_,capture_.discarded,unsigned(backward_),unsigned(direction_pending_));
         replies.reply(text);
     }
 #ifdef CNTRL_FLASH_ROUTINE

@@ -87,3 +87,26 @@ Builds do not flash anything. The helper uploads the
 image only from a registered project worktree. Keep an existing helper
 running between uploads; restart it when its source or IPC changes. An
 address-in-use error can mean it is already serving, not that its socket is stale.
+
+`cntrl flash` retains the original pedal backup in the export's `before/`
+directory and prepares a separate `restore/` copy before entering the bootloader.
+Setups, history snapshots and song sources from versions 36, 38, 39 and 40 are
+upgraded without recompiling their patches. Old page window
+counts become minimums under the current page allocator, and newly introduced
+gesture actions remain inactive. Original binaries, history metadata, assets
+and songs remain in `before/`; restoration and read-back verification use `restore/`.
+An unsupported or corrupt setup stops the operation before uploading firmware.
+The restore copy receives current RAM estimates from the target description and
+saved font assets. Standalone `cntrl setup restore` and `cntrl setup verify`
+require `--target PATH`, pointing to the current build's `target.toml`.
+
+List the connected MIDI endpoints with the selected target's qualification tool:
+
+```bash
+uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc
+uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --help
+```
+
+Arguments after `--` belong to the target. Running with `--run` explicitly sends
+MIDI traffic; `--report PATH` saves before/after diagnostics and byte checks as
+TOML. Receiver bytes and firmware counters do not measure wire timing or jitter.

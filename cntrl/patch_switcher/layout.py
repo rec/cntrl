@@ -81,6 +81,16 @@ def encoded_name(name: str) -> bytes:
 
 
 def section_end(data: bytes, offset: int) -> int:
+    if (
+        offset + 8 <= len(data)
+        and data[offset : offset + 4] == b'CPAG'
+        and data[offset + 6] == 1
+    ):
+        count, windows, _, reserved = data[offset + 4 : offset + 8]
+        end = offset + 8 + windows * 32 + count * (34 + windows)
+        if reserved or not windows or end > len(data):
+            raise ValueError('invalid legacy page layout')
+        return end
     if offset + 12 > len(data) or data[offset : offset + 4] != b'CPAG':
         raise ValueError('missing or truncated page layout')
     count, windows, version, regions, left_wins, focus, first, second = data[
@@ -101,6 +111,26 @@ def section_end(data: bytes, offset: int) -> int:
     ):
         raise ValueError('invalid page layout')
     return end
+
+
+def upgrade(data: bytes, offset: int) -> bytes:
+    """Preserve legacy page order in one region with the new allocation rules."""
+    end = section_end(data, offset)
+    if data[offset + 6] == 2:
+        return data[offset:end]
+    count, windows = data[offset + 4 : offset + 6]
+    converted = (
+        b'CPAG'
+        + bytes((count, windows, 2, bool(count), 0, 0, 0, 0))
+        + data[offset + 8 : end]
+        + (
+            encoded_name('main') + bytes((0, count)) + bytes(range(count))
+            if count
+            else b''
+        )
+    )
+    unpack(converted, 0)
+    return converted
 
 
 def estimate_ram(
@@ -129,6 +159,8 @@ def estimate_ram(
 
 def unpack(data: bytes, offset: int) -> dict[str, object]:
     end = section_end(data, offset)
+    if data[offset + 6] == 1:
+        return unpack(upgrade(data, offset), 0)
     count, window_count = data[offset + 4 : offset + 6]
     region_count, left_wins, focus = data[offset + 7 : offset + 10]
     cursor = offset + 12

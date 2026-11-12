@@ -17,9 +17,9 @@ public:
 #endif
     bool data(UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) {
         auto &s = services_;
+        if (kind == UsbKind::history) return s.history.data(bytes, length, now);
         if (s.hardware.configuration_locked()) { s.replies.reply("CNTRL ERROR close-switches-first"); return true; }
         switch (kind) {
-        case UsbKind::history: return s.history.data(bytes, length, now);
         case UsbKind::bundle: return s.bundle.data(bytes, length, now);
         case UsbKind::disk: return s.disk.data(bytes, length, now);
         case UsbKind::songs: return s.songs.data(bytes, length, now);

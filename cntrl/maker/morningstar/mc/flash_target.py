@@ -7,7 +7,7 @@ import tyro
 from pydantic import BaseModel
 
 from ....firmware.intel_hex import read_hex
-from ....patch_switcher import backups, devices, songs
+from ....patch_switcher import backups, compiler, devices, models
 from ....upload import Upload
 from . import legacy_usb, upload_helper
 
@@ -38,9 +38,10 @@ def run(command: Flash) -> None:
         command.port,
         legacy_usb.Connection(command.port, timeout=5) if command.legacy_usb else None,
     )
-    backups.read_setup_binaries(before)
-    backups.read_history_binaries(before)
-    songs.decode((before / 'songs.bin').read_bytes())
+    target = models.Target.model_validate(
+        compiler.read_document(directory / 'target.toml')
+    )
+    restore = backups.prepare_restore(before, directory / 'restore', target)
     print(f'Backup validated. Uploading SHA-256 {image.sha256}', flush=True)
     upload_helper.request_bootloader()
     deadline = time.monotonic() + 10
@@ -62,8 +63,8 @@ def run(command: Flash) -> None:
                 f'backup retained at {before}'
             )
         time.sleep(0.1)
-    backups.restore_setups(before, command.port)
-    backups.verify_after_flashing(before, command.port)
+    backups.restore_setups(restore, command.port, target)
+    backups.verify_after_flashing(restore, command.port, target)
     if result.returncode:
         raise ValueError(
             f'device data restored and verified, but uploader returned '

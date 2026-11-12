@@ -1,0 +1,13 @@
+# Temporary physical USB-to-DIN byte and note-release qualification.
+is_midi_interface = true
+usb_device_midi = true
+usb_host_midi = false
+forward_device_to_host = false
+fill_in_styles = false
+pickup = false
+pages = {}
+
+[page_settings]
+tempo_font = 'classic'
+status_font = 'classic'
+title_font = 'classic'

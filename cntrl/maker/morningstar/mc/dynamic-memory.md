@@ -104,6 +104,43 @@ These results do not establish pedal timing. The CPU defer/reject policy and
 the general allocator's worst-case latency remain open pending target stress
 measurements. No bounded allocator or completed physical qualification is claimed.
 
+## Physical qualification procedure
+
+Use `uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc`
+to discover the MIDI endpoints. Target options follow `--`. The DIN output must
+connect to the DIN input for the forwarding checks below.
+
+The tracked `qualification/dynamic-memory-thru.toml` setup enables the ordinary
+interface. Copy it with `cntrl setup copy`, using the built `target.toml`, then
+select `dynamic-memory-thru` with `cntrl setup set`. Run:
+
+```bash
+uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --run --expect-enabled --destination 'cntrl experimental DIN' --source 'cntrl experimental DIN' --report build/dynamic-memory-thru-physical.toml
+```
+
+This checks exact Program Change, modulation, 64 paired note strikes, sustain
+and streamed SysEx bytes. It does not measure wire timestamps or clock jitter.
+
+The separate `qualification/dynamic-memory-dense.toml` setup has 24 parallel
+USB-to-DIN routes with 16 identity transforms each, plus a DIN-to-USB return
+route. Copy and select it with the same setup commands, then run:
+
+```bash
+uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --run --expect-enabled --destination 'cntrl experimental DIN' --source 'cntrl experimental DIN' --stress-only --stress-seconds '30 seconds' --report build/dynamic-memory-dense-physical.toml
+```
+
+The dense graph changes output multiplicity. Stress-only reports explicitly skip
+byte verification and capture CPU/service-gap, heap and refusal counters instead.
+The flood sends Program Change and modulation messages without holding notes.
+Save the original setup selection before testing and restore it afterwards;
+temporary probe setups can then be removed with `cntrl setup del`.
+
+Managed flashing retains original binaries and history in `before/`, and validates
+a separate current-format `restore/` tree before entering the bootloader. Wire
+upgrades preserve existing patch node IDs and inactive new gesture actions;
+current RAM estimates are refreshed from the saved fonts and target description.
+Standalone restore/verify commands require that current `--target` description.
+
 The retained fixed storage has specific roles: physical display pixel caches
 and DMA transfers; byte/mask/record format domains; three looper generation roles;
 USB framing and retry units; redundant flash journals; and explicit text/history

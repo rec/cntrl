@@ -11,14 +11,19 @@ from . import build
 class Flash(build.Build, frozen=True):
     port: Path
     legacy_usb: bool = False
+    skip_build: bool = False
 
 
 def run(command: Flash) -> None:
     entry = command.target_dir.resolve() / 'flash_entry.py'
     if not entry.is_file():
         raise ValueError(f'{entry}: target does not provide a flash entry point')
-    build.run(command)
     output = command.output.resolve()
+    if command.skip_build:
+        build.read_artifacts(output)
+    else:
+        build.run(command)
+    (output / 'tmp').mkdir(exist_ok=True)
     arguments = [
         sys.executable,
         str(entry),

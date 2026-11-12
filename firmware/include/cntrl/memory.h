@@ -14,7 +14,9 @@ inline unsigned memory_used = 0;
 inline unsigned memory_peak = 0, memory_allocations = 0, memory_failures = 0;
 // Tests may fail the next allocation with zero, or allow N calls first.
 inline int memory_fail_after = -1;
-inline unsigned memory_checked_operations = 0;
+// The linker wraps malloc/free. Volatile keeps the tag visible to those
+// wrappers even when the compiler treats malloc as an allocation builtin.
+inline volatile unsigned memory_checked_operations = 0;
 inline unsigned (*memory_actual_charge)(const void *) = nullptr;
 // The pinned Cortex-M7 newlib nano allocator aligns chunks to 8 bytes. Its
 // chunk header/alignment allowance costs 8 more. Native tests use this target

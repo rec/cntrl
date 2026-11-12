@@ -232,63 +232,22 @@ def encode(
     return payload
 
 
-def decode(data: bytes) -> Library:
-    if len(data) < 12:
-        raise ValueError('invalid song library size')
-    ns, nl = struct.unpack_from('<II', data)
-    if ns > (len(data) - 12) // (SONG.size + SELECTION.size):
-        raise ValueError('invalid song library counts')
-    offset = 8
-    positions = []
-    song_headers = []
-    for _ in range(ns):
-        if offset + SELECTION.size + SONG.size > len(data):
-            raise ValueError('truncated song')
-        first = SELECTION.unpack_from(data, offset)
-        offset += SELECTION.size
-        name, count = SONG.unpack_from(data, offset)
-        offset += SONG.size
-        if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
-            raise ValueError('invalid song patch count')
-        values = [first]
-        for _ in range(count - 1):
-            values.append(SELECTION.unpack_from(data, offset))
-            offset += SELECTION.size
-        positions.append(values)
-        song_headers.append(_string(name))
-    sets = []
-    for _ in range(nl):
-        if offset + SET.size > len(data):
-            raise ValueError('truncated setlist')
-        name, count = SET.unpack_from(data, offset)
-        offset += SET.size
-        if count > (len(data) - offset) // 64:
-            raise ValueError('invalid setlist count')
-        entries = [
-            _string(data[offset + j * 64 : offset + (j + 1) * 64]) for j in range(count)
-        ]
-        offset += count * 64
-        sets.append(
-            Setlist(
-                name=_string(name),
-                songs=entries,
-            )
+def upgrade(data: bytes, fonts: dict[int, bytes], *, switches: bool) -> bytes:
+    """Upgrade embedded setups while preserving song and node selections."""
+    prefix, _, _, _, sources = _parse(data)
+    result = bytearray(data[:prefix])
+    for source in sources:
+        value = resolved.refresh_memory(
+            resolved.upgrade(source), fonts, switches=switches
         )
-    if data[offset : offset + 4] != b'CSP5':
-        raise ValueError('missing song Patch sources')
-    offset += 4
-    sources = []
-    while offset < len(data):
-        if offset + 4 > len(data):
-            raise ValueError('truncated song Patch source')
-        length = struct.unpack_from('<I', data, offset)[0]
-        offset += 4
-        if length > len(data) - offset:
-            raise ValueError('truncated song Patch source')
-        value = data[offset : offset + length]
-        resolved.graph_offset(value)
-        sources.append(value)
-        offset += length
+        result += struct.pack('<I', len(value)) + value
+    upgraded = bytes(result)
+    decode(upgraded)
+    return upgraded
+
+
+def decode(data: bytes) -> Library:
+    _, song_headers, positions, sets, sources = _parse(data)
     context: dict[str, object] = {'instruments': {}, 'patches': {}}
     instruments: dict[str, object] = {}
     definitions: dict[str, object] = {}
@@ -364,6 +323,68 @@ def decode(data: bytes) -> Library:
         songs.append(Song(name=name, patches=patches))
     result = Library.model_validate(context | {'songs': songs, 'setlists': sets})
     return result
+
+
+def _parse(
+    data: bytes,
+) -> tuple[
+    int,
+    list[str],
+    list[list[tuple[bytes, bytes, bytes, int, int]]],
+    list[Setlist],
+    list[bytes],
+]:
+    if len(data) < 12:
+        raise ValueError('invalid song library size')
+    ns, nl = struct.unpack_from('<II', data)
+    if ns > (len(data) - 12) // (SONG.size + SELECTION.size):
+        raise ValueError('invalid song library counts')
+    offset = 8
+    positions = []
+    song_headers = []
+    for _ in range(ns):
+        if offset + SELECTION.size + SONG.size > len(data):
+            raise ValueError('truncated song')
+        first = SELECTION.unpack_from(data, offset)
+        offset += SELECTION.size
+        name, count = SONG.unpack_from(data, offset)
+        offset += SONG.size
+        if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
+            raise ValueError('invalid song patch count')
+        values = [first]
+        for _ in range(count - 1):
+            values.append(SELECTION.unpack_from(data, offset))
+            offset += SELECTION.size
+        positions.append(values)
+        song_headers.append(_string(name))
+    sets = []
+    for _ in range(nl):
+        if offset + SET.size > len(data):
+            raise ValueError('truncated setlist')
+        name, count = SET.unpack_from(data, offset)
+        offset += SET.size
+        if count > (len(data) - offset) // 64:
+            raise ValueError('invalid setlist count')
+        entries = [
+            _string(data[offset + j * 64 : offset + (j + 1) * 64]) for j in range(count)
+        ]
+        offset += count * 64
+        sets.append(Setlist(name=_string(name), songs=entries))
+    if data[offset : offset + 4] != b'CSP5':
+        raise ValueError('missing song Patch sources')
+    offset += 4
+    prefix = offset
+    sources = []
+    while offset < len(data):
+        if offset + 4 > len(data):
+            raise ValueError('truncated song Patch source')
+        length = struct.unpack_from('<I', data, offset)[0]
+        offset += 4
+        if length > len(data) - offset:
+            raise ValueError('truncated song Patch source')
+        sources.append(data[offset : offset + length])
+        offset += length
+    return prefix, song_headers, positions, sets, sources
 
 
 def _string(value: bytes) -> str:
