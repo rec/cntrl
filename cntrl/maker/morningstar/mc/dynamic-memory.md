@@ -37,6 +37,14 @@ The source export, build logs, binaries and memory reports under `build/` are
 disposable generated artifacts. The original sources and build procedure remain
 tracked.
 
+The next change replaces the twelve invocation-navigation reservations with
+checked nodes held only by live executors. The target linker reports 94176
+bytes of static RAM2 and 430112 bytes available for allocation. RAM1 variables
+are 319968 bytes, with 7712 bytes left for local variables. This recovers another
+18560 bytes of static RAM2 relative to the controller-only build, including
+section alignment. Each live snapshot's actual node bytes are charged to the
+shared memory ledger. Cancellation and completion reclaim the node.
+
 ## Product target reservations
 
 | Location | Present storage or constraint | Required treatment |

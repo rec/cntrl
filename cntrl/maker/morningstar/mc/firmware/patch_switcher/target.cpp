@@ -112,7 +112,7 @@ MidiFileStorage midi_storage;
 cntrl::midi::MidiFiles midi_files(midi_storage.filesystem, midi_storage.source,
     midi_storage.index, midi_storage.recording, midi_storage.entries, cntrl::target::midi_connections.count,
     "/cntrl/midi", "/cntrl/midi/.playback-index");
-DMAMEM cntrl::Controller::NavigationState invocation_navigation[cntrl::midi::Bridge::owners];
+cntrl::NavigationSnapshots invocation_navigation;
 bool restoring_invocation = false;
 cntrl::PatchExecutor *visiting_invocation = nullptr;
 
@@ -298,10 +298,13 @@ public:
     }
     void validation(bool begin) override { application.controller().validation(begin); }
     void validation_context(cntrl::PatchExecutor &invocation, bool begin) override {
-        if (begin && !restoring_invocation && !invocation.reconstructing())
-            invocation_navigation[invocation.owner()] = application.controller().navigation();
+        (void)invocation;
         application.controller().validation(begin);
     }
+    bool prepare_invocation(cntrl::PatchExecutor &invocation) override {
+        return invocation_navigation.put(invocation, application.controller().navigation());
+    }
+    void release_invocation(cntrl::PatchExecutor &invocation) override { invocation_navigation.erase(invocation); }
     bool preview_state(unsigned operation, uint32_t value) override {
 #if CNTRL_SWITCHES
         if (operation == 11 || operation == 12) return switches.open();

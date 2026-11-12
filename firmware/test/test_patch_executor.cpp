@@ -146,6 +146,20 @@ int main(int argc, char **argv) {
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex;
     Bytes base; for (unsigned i = 0; i < hex.size(); i += 2) base.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     test_file_operations(base);
+    {
+        struct RejectBoard : PatchBoard {
+            unsigned released = 0;
+            bool prepare_invocation(cntrl::PatchExecutor &) override { return false; }
+            void release_invocation(cntrl::PatchExecutor &) override { ++released; }
+        } rejected;
+        cntrl::Document document;
+        assert(document.load(base.data(), unsigned(base.size()), rejected));
+        cntrl::PatchExecutor executor(rejected, rejected, rejected, 8);
+        assert(!executor.start(document, 0));
+        executor.tick(0); rejected.bridge.service(rejected, 0); executor.cancel();
+        assert(rejected.wire[0].empty() && rejected.wire[1].empty());
+        assert(!rejected.pins && !rejected.released && rejected.last_error == "Patch memory unavailable");
+    }
     // An accepted switch press reaches the wire in one tick and one service.
     {
         PatchBoard direct;

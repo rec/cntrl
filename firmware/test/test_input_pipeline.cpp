@@ -1,5 +1,6 @@
 #include <cntrl/ui/input.h>
 #include <cntrl/runtime.h>
+#include <cntrl/navigation_snapshots.h>
 #include "patch_hardware.h"
 #include "storage.h"
 #include "runtime_services.h"
@@ -178,6 +179,28 @@ static void controller_storage_preserves_active_pages_on_failure() {
     cntrl::memory_budget = previous_budget;
 }
 int main(int argc, char **argv) {
+    {
+        const unsigned initial = cntrl::memory_used, budget = cntrl::memory_budget;
+        cntrl::memory_budget = initial + 16384;
+        Hardware hardware;
+        cntrl::PatchExecutor a(hardware, hardware, hardware, 8), b(hardware, hardware, hardware, 8);
+        cntrl::NavigationSnapshots snapshots;
+        cntrl::Controller::NavigationState state; state.center = 17;
+        assert(snapshots.put(a, state));
+        const auto *first = snapshots.find(a);
+        const unsigned used = cntrl::memory_used;
+        assert(first && first->center == 17);
+        cntrl::memory_budget = used;
+        assert(!snapshots.put(b, state) && snapshots.find(a) == first);
+        state.center = 18; assert(snapshots.put(a, state));
+        assert(first->center == 18 && cntrl::memory_used == used);
+        cntrl::memory_budget = initial + 16384;
+        assert(snapshots.put(b, state));
+        assert(snapshots.find(a) == first && snapshots.find(b) != first);
+        snapshots.erase(b);
+        snapshots.erase(a); assert(!snapshots.find(a) && cntrl::memory_used == initial);
+        cntrl::memory_budget = budget;
+    }
     controller_storage_preserves_active_pages_on_failure();
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex; std::vector<uint8_t> bytes;
     for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));

@@ -329,7 +329,9 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
 static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware &hardware, cntrl::Documents &documents,
         cntrl::ui::Application &app, cntrl::Songs &songs, cntrl::ui::SongSources &sources) {
     VisitFile file; cntrl::ui::FirmwareVisitRecord record; cntrl::ui::RuntimeState runtime;
-    cntrl::Controller::NavigationState navigation[9]; cntrl::PatchExecutor *execution = &app.controller().executor(); bool restoring = false;
+    cntrl::NavigationSnapshots navigation;
+    assert(navigation.put(app.controller().executor(), {}));
+    cntrl::PatchExecutor *execution = &app.controller().executor(); bool restoring = false;
     cntrl::ui::FirmwareVisit visit(record, file, hardware, hardware, documents, app, songs, sources, runtime, navigation, execution, restoring);
     assert(!visit.request(12, nullptr)); hardware.idle = false; assert(!visit.request(33, nullptr)); hardware.idle = true;
     const cntrl::SongContinuation continuation{};

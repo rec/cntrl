@@ -18,6 +18,13 @@ build reduces static RAM2 from 118912 to 112736 bytes, freeing 6176 bytes for
 the one-controller case. RAM1 variables grow by 32 bytes. Physical qualification
 remains pending, along with subsequent milestones.
 
+Invocation navigation snapshots now use checked nodes for live executors,
+identified by executor address. Patch preparation acquires a snapshot before
+validation or output, and completion/cancellation releases it. Tests cover
+failure, reuse, stable addresses and executors sharing an output owner number.
+The fixed owner/output masks and value-encoded firmware-return record remain
+scheduled for migration.
+
 ## Objective and scope
 
 Allocate storage for the setup, features and work actually in use. Remove

@@ -1,4 +1,5 @@
 #pragma once
+#include <cntrl/navigation_snapshots.h>
 #include "song_sources.h"
 #include <cntrl/filesystem.h>
 #include <algorithm>
@@ -34,7 +35,7 @@ class FirmwareVisit {
 public:
     FirmwareVisit(FirmwareVisitRecord &record, files::File &file, FirmwareVisitServices &services,
                   Hardware &hardware, Documents &documents, Application &application, Songs &songs,
-                  SongSources &sources, RuntimeState &runtime, Controller::NavigationState *navigation, PatchExecutor *&active_invocation, bool &restoring_invocation)
+                  SongSources &sources, RuntimeState &runtime, NavigationSnapshots &navigation, PatchExecutor *&active_invocation, bool &restoring_invocation)
         : invocation(active_invocation), restoring(restoring_invocation), record_(record), file_(file), services_(services), hardware_(hardware), documents_(documents),
           application_(application), songs_(songs), sources_(sources), runtime_(runtime), navigation_(navigation) {}
     bool busy() const { return stage_ != Stage::idle; }
@@ -55,12 +56,14 @@ public:
         if (busy() || !services_.valid_exit(pair) || documents_.busy() || documents_.dirty() || services_.song_transfer_busy() || !services_.output_idle()) return false;
         for (unsigned i = 0; i < application_.layout.controllers(); ++i)
             if (i != application_.rendering() && application_.at(i).busy()) return false;
+        const auto *initial = continuation && invocation ? navigation_.find(*invocation) : nullptr;
+        if (continuation && !initial) return false;
         const auto state = services_.firmware_selection();
         if (!state.can_enter || (continuation && !services_.storage_available()) || !services_.stop_clock()) return false;
         record_ = FirmwareVisitRecord(); exit_pair_ = pair; offset_ = 0;
         if (continuation) {
             record_.token = state.next; record_.continuation = *continuation;
-            record_.initial_navigation = navigation_[invocation->owner()];
+            record_.initial_navigation = *initial;
             record_.return_navigation = application_.controller().navigation(); record_.runtime = runtime_;
             record_.ui_operation = application_.pending_operation; record_.controller = application_.rendering();
             std::snprintf(record_.setup, sizeof(record_.setup), "%s", documents_.selected());
@@ -141,7 +144,7 @@ private:
     Songs &songs_;
     SongSources &sources_;
     RuntimeState &runtime_;
-    Controller::NavigationState *navigation_;
+    NavigationSnapshots &navigation_;
     Stage stage_ = Stage::idle;
     uint32_t offset_ = 0, token_ = 0;
     uint8_t exit_pair_ = 0;
@@ -171,7 +174,11 @@ private:
         if (!resumed || !application_.controller().navigation(record_.return_navigation)) {
             application_.controller().executor().cancel(); sources_.executor.cancel(); hardware_.error("Patch return unavailable"); return;
         }
-        navigation_[application_.controller().executor().owner()] = record_.initial_navigation;
+        const auto &execution = continuation.caller == 1 ? sources_.executor : application_.controller().executor();
+        if (!navigation_.put(execution, record_.initial_navigation)) {
+            application_.controller().executor().cancel(); sources_.executor.cancel();
+            hardware_.error("Patch return memory unavailable"); return;
+        }
         hardware_.set_brightness(record_.runtime.brightness); hardware_.set_midi_interface(record_.runtime.interface);
         application_.pending_operation = record_.ui_operation;
         if (continuation.caller == 1) application_.song_ui.perform(); else application_.return_to_switches = continuation.caller == 2;

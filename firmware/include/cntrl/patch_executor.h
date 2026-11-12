@@ -34,6 +34,8 @@ struct PatchOutputs {
     virtual bool gate_midi_stream(const char *, bool) { return false; }
     virtual void validation(bool) {}
     virtual void validation_context(PatchExecutor &, bool enabled) { validation(enabled); }
+    virtual bool prepare_invocation(PatchExecutor &) { return true; }
+    virtual void release_invocation(PatchExecutor &) {}
     virtual bool preview_state(unsigned, uint32_t) { return true; }
     virtual bool selection(unsigned, const Document *&, unsigned &) { return false; }
     virtual void selection_complete(unsigned) {}
@@ -95,6 +97,8 @@ public:
         if (busy()) return false;
         Document source = document;
         reset(); document_ = source; root_ = node; persistent_ = persistent;
+        if (!outputs_.prepare_invocation(*this)) return fail("Patch memory unavailable");
+        invocation_prepared_ = true;
         sources_.begin(); pinned_ = true;
         outputs_.validation_context(*this, true); validating_ = true;
         fingerprint_ = 2166136261u;
@@ -270,6 +274,7 @@ private:
     const char *waiting_output_ = nullptr;
     bool file_waiting_ = false;
     bool waiting_ = false, pinned_ = false, persistent_ = false, validating_ = false, reconstructing_ = false, started_ = false;
+    bool invocation_prepared_ = false;
     bool state_complete_ = true;
 
     void reset() {
@@ -280,6 +285,9 @@ private:
         if (validating_) { validating_ = false; outputs_.validation_context(*this, false); }
         if (status != Status::pending && status != Status::suspended) { document_ = Document(); depth_ = 0; }
         if (pinned_) { pinned_ = false; sources_.end(); }
+        if (status != Status::pending && status != Status::suspended && invocation_prepared_) {
+            invocation_prepared_ = false; outputs_.release_invocation(*this);
+        }
     }
     bool fail(const char *message) {
         if (file_waiting_) outputs_.cancel_midi_file(owner_);
