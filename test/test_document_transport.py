@@ -605,6 +605,62 @@ def test_sync_without_baseline_requires_explicit_two_way_choices(
         cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port), overwrite=True))
 
 
+def test_setup_copy_transfers_playback_and_looper_dependencies(
+    bundle_peer: Path, tmp_path: Path
+) -> None:
+    device = tmp_path / 'device'
+    device.mkdir()
+    host = tmp_path / 'host'
+    host.mkdir()
+    source = host / 'show.toml'
+    source.write_text(
+        '[pages.loop]\ntype="midi-looper"\n'
+        '[patches.play]\noperation="play-midi-file"\nfilename="intro.mid"\n'
+        '[patches.load]\noperation="midi-looper"\naction="load"\nfilename="loop.mid"\n'
+        '[patch_cycles]\nmain=["play","load"]\n'
+    )
+    # An SMF with a long SysEx crosses USB blocks and exercises exact byte transfer.
+    track = b'\0\xf0\xc0\0' + b'\x01' * 8191 + b'\xf7\0\xff\x2f\0'
+    intro = (
+        b'MThd\0\0\0\x06\0\0\0\x01\x03\xe8MTrk' + len(track).to_bytes(4, 'big') + track
+    )
+    loop = bytes.fromhex(
+        '4d546864000000060000000103e84d54726b0000000d00903c7f8768803c0000ff2f00'
+    )
+    (host / 'intro.mid').write_bytes(intro)
+    (host / 'loop.mid').write_bytes(loop)
+    (host / 'unused.mid').write_bytes(b'not referenced')
+    target = [str(ROOT / 'firmware/test/target.json')]
+    with NativePeer([str(bundle_peer), str(device)]) as port:
+        command = cli.Copy(document=[str(source)], target=target, port=Path(port))
+        cli.run_setup(command)
+        assert (device / 'cntrl/midi/intro.mid').read_bytes() == intro
+        assert (device / 'cntrl/midi/loop.mid').read_bytes() == loop
+        assert not (device / 'cntrl/midi/unused.mid').exists()
+        root = host / 'setup-sync'
+        uploaded = next(root.glob('upload-*/uploaded'))
+        assert (uploaded / 'midi/intro.mid').read_bytes() == intro
+        assert (uploaded / 'midi/loop.mid').read_bytes() == loop
+        replacement = intro[:30] + b'\x02' + intro[31:]
+        (host / 'intro.mid').write_bytes(replacement)
+        # A newly added setup cannot replace an independently different asset
+        # unless the same overwrite flag has been explicitly provided.
+        another = command.model_copy(update={'document': [f'Another={source}']})
+        with pytest.raises(
+            compiler.CompilationError, match='MIDI file exists with different contents'
+        ):
+            cli.run_setup(another)
+        assert (device / 'cntrl/midi/intro.mid').read_bytes() == intro
+        cli.run_setup(another.model_copy(update={'overwrite': True}))
+        assert (device / 'cntrl/midi/intro.mid').read_bytes() == replacement
+        with transport.SerialConnection(Path(port)) as connection:
+            client = transport.SetupClient(connection)
+            assert sorted(e.name for e in client.catalogue()) == ['Another', 'show']
+            assert client.download_midi('loop.mid') == loop
+        # Repeating the upload with identical assets succeeds without replacing them.
+        cli.run_setup(command.model_copy(update={'overwrite': True}))
+
+
 def test_progress_reply_is_not_returned_as_the_command_result() -> None:
     connection = transport.SerialConnection(Path('/unused'))
     connection.received.extend(

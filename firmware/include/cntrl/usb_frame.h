@@ -8,7 +8,7 @@ inline constexpr uint8_t usb_magic[] = {0x89, 'C', 'N', 'T', 'R', 'L', '\r', '\n
 inline constexpr unsigned usb_header_size = 40;
 enum class UsbKind : uint8_t {
     open = 1, close = 2, command = 3, poll = 4,
-    setup = 16, bundle = 17, songs = 18, font = 19, history = 20, movie = 21, disk = 22,
+    setup = 16, bundle = 17, songs = 18, font = 19, history = 20, movie = 21, disk = 22, midi_file = 23,
     text = 128, data = 129, error = 255
 };
 enum class UsbStatus : uint16_t { ok = 0, lost = 1, invalid = 2, version = 3 };

@@ -84,6 +84,10 @@ public:
         return mask;
     }
     void file_provider(StreamFileProvider *provider) { file_provider_ = provider; }
+    bool file_sources_open() const {
+        for (const auto &route : routes_) if (route.file) return true;
+        return false;
+    }
     void beat_position(BeatPosition position) { beat_ = position; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(lfo_status)

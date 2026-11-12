@@ -1,8 +1,10 @@
 #include "patch_hardware.h"
 #include "storage.h"
 #include "usb_peer.h"
+#include "filesystem.h"
 #include <cntrl/bundle_transfer.h>
 #include <cntrl/history_import.h>
+#include <cntrl/midi_file_transfer.h>
 
 struct Peer : TestPatchHardware, cntrl::Replies {
     cntrl::UsbSession usb;
@@ -27,12 +29,15 @@ struct Peer : TestPatchHardware, cntrl::Replies {
     void data(const uint8_t *bytes, unsigned n) override { usb.data(bytes, n); }
 };
 
-int main() {
+int main(int argc, char **argv) {
     Peer peer; TestStorage disk; cntrl::BundledStorage storage(disk, peer);
     assert(storage.boot()); TestController controller(peer);
     cntrl::Documents documents(storage, peer, controller, peer); documents.boot();
     cntrl::BundleTransfer transfer(storage, documents, peer, peer);
     cntrl::HistoryImport history(disk, documents, peer, peer);
+    TestFileSystem filesystem(argc > 1 ? argv[1] : ".");
+    TestFile reader(filesystem), writer(filesystem);
+    cntrl::MidiFileTransfer midi(filesystem, reader, writer, peer);
     char line[cntrl::usb_text_size] = {}; unsigned used = 0;
     return usb_peer(peer.usb, [&](uint8_t byte) {
         if (documents.busy()) { documents.receive(byte, 0); return; }
@@ -41,18 +46,19 @@ int main() {
             if (!std::strcmp(line, "CNTRL MEMORY")) {
                 char response[64]; std::snprintf(response, sizeof(response), "CNTRL MEMORY %u %u", peer.memory_capacity(), peer.memory_runtime());
                 peer.reply(response);
-            } else if (!history.command(line, 0) && !transfer.command(line, 0)) {
+            } else if (!midi.command(line, 0) && !history.command(line, 0) && !transfer.command(line, 0)) {
                 for (unsigned i = 0; i < used; ++i) documents.receive(uint8_t(line[i]), 0);
                 documents.receive('\n', 0);
             }
             used = 0;
         } else if (used + 1 < sizeof(line)) line[used++] = char(byte);
-    }, [&]() { documents.tick(0); transfer.poll(0); history.tick(0); },
+    }, [&]() { documents.tick(0); transfer.poll(0); history.tick(0); midi.poll(0); },
        [&]() { return documents.accepts_input(); },
-       [&]() { documents.cancel_transfer(); transfer.cancel(); history.cancel(); },
+       [&]() { documents.cancel_transfer(); transfer.cancel(); history.cancel(); midi.cancel(); },
        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) {
            if (kind == cntrl::UsbKind::bundle) transfer.data(bytes, n, 0);
            else if (kind == cntrl::UsbKind::history) history.data(bytes, n, 0);
+           else if (kind == cntrl::UsbKind::midi_file) midi.data(bytes, n, 0);
            else { assert(kind == cntrl::UsbKind::setup); documents.receive_data(bytes, n, 0); }
        });
 }

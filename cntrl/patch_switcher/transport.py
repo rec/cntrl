@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from serial import Serial, SerialTimeoutException
 
 from .data_files import validate_name
-from .models import TargetMemory
+from .models import PlayMidiFile, TargetMemory
 from .usb_frames import HEADER, MAGIC, Frame, Kind, Status
 
 
@@ -448,6 +448,63 @@ class SetupClient:
         self.connection.write(payload, Kind.setup)
         if (response := self.connection.line()) != 'CNTRL OK':
             raise ValueError(response)
+
+    def copy_midi(self, name: str, data: bytes, overwrite: bool) -> None:
+        PlayMidiFile.basename(name)
+        if (
+            not 1 <= len(name) <= 95
+            or name.lower().startswith('.cntrl-')
+            or not 0 < len(data) <= 0xFFFFFFFF
+        ):
+            raise ValueError('invalid MIDI file name or size')
+        try:
+            existing = self.download_midi(name)
+        except FileNotFoundError:
+            existing = None
+        if existing == data:
+            return
+        if existing is not None and not overwrite:
+            raise ValueError(
+                f'{name}: MIDI file exists with different contents; use --overwrite/-o'
+            )
+        encoded = name.encode('ascii').hex()
+        response = self.request(
+            f'CNTRL MIDI_FILE BEGIN {encoded} {len(data)} '
+            f'{crc32(data):08x} {int(overwrite)}'
+        )
+        if response != 'CNTRL SEND':
+            raise ValueError(response)
+        for i in range(0, len(data), self.connection.usb_block_size):
+            self.send_data(Kind.midi_file, data[i : i + self.connection.usb_block_size])
+        self.ok('CNTRL MIDI_FILE END')
+        if self.download_midi(name) != data:
+            raise ValueError(f'{name}: MIDI file read-back mismatch')
+
+    def download_midi(self, name: str) -> bytes:
+        PlayMidiFile.basename(name)
+        if not 1 <= len(name) <= 95 or name.lower().startswith('.cntrl-'):
+            raise ValueError('invalid MIDI file name')
+        encoded = name.encode('ascii').hex()
+        response = self.request(f'CNTRL MIDI_FILE SIZE {encoded}')
+        if response == 'CNTRL MIDI_FILE MISSING':
+            raise FileNotFoundError(f'{name}: MIDI file is missing on the pedal')
+        parts = response.split()
+        if len(parts) != 3 or parts[:2] != ['CNTRL', 'MIDI_FILE']:
+            raise ValueError(f'invalid MIDI file response: {response}')
+        length = int(parts[2])
+        if not 0 < length <= 0xFFFFFFFF:
+            raise ValueError('invalid MIDI file length')
+        result = bytearray()
+        while len(result) < length:
+            chunk = self.request_data(f'CNTRL MIDI_FILE READ {encoded} {len(result)}')
+            if (
+                not 0
+                < len(chunk)
+                <= min(self.connection.usb_block_size, length - len(result))
+            ):
+                raise ValueError('invalid MIDI file chunk')
+            result.extend(chunk)
+        return bytes(result)
 
     def copy_font(self, key: int, data: bytes) -> None:
         if not 8 <= len(data) <= 262144 or not key or crc32(data) != key:

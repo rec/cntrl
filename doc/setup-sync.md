@@ -5,7 +5,7 @@ upload or accepted import (Base), the current saved Pedal setup, and the current
 compiled Host documents. It writes a review and recovery snapshot to a visible
 `setup-sync/` directory beside the first root setup document. Keep this directory
 with the project and include it in backups. It contains source before-images,
-compiled setups, editable exports, required fonts/movies, and TOML records.
+compiled setups, editable exports, required fonts/movies/MIDI files, and TOML records.
 
 Use the same document expressions, target, definitions and tables as for copying:
 

@@ -7,6 +7,25 @@ Store MIDI files in `/cntrl/midi/` on the SD card. Playback accepts Standard MID
 Files types 0 and 1, merges simultaneous tracks, and follows tempo changes.
 Both ticks-per-quarter-note and SMPTE timing divisions are supported.
 
+`cntrl setup copy` uploads explicitly referenced playback and looper-load files
+to that directory, including file sources in MIDI streams and referenced
+companion setups. Put each file beside the source document that declares its
+`filename`. Composed documents retain their own source directories. Files with
+the same pedal filename must have identical bytes; filenames differing only in
+case are rejected so the collection behaves consistently across filesystems.
+
+The host checks all referenced source files before opening USB. Files already
+on the pedal with identical contents are reused. Replacing different contents
+requires the existing `--overwrite`/`-o` flag. File uploads are staged, checked
+and read back before the setup bundle is sent. A failed transfer does not
+establish a synchronization baseline. Setup snapshots and backups retain these
+MIDI files too; backup restore uploads them before restoring setups.
+
+This requires firmware with the named MIDI-file transfer handler. A CLI update
+alone cannot add that handler to an already flashed pedal. Active MIDI file
+playback, recording or stream readers must stop before transferring these files.
+The `.cntrl-` filename prefix is reserved for transfer staging and recovery.
+
 ```toml
 [patches.play]
 operation = 'play-midi-file'
@@ -29,6 +48,7 @@ inputs = ['din', 'trs', 'usb-device', 'usb-host']
 recording. It is a basename within the fixed directory. `outputs` defaults to
 `['din']` and accepts the target's enabled MIDI output names. All selected
 outputs receive the same events. One file can play at a time.
+An empty filename is a runtime selection and does not cause a host file upload.
 
 `loops` defaults to 1; 0 repeats indefinitely. `pre_delay` and `post_delay` are
 nonnegative integer seconds, applied before and after each pass. Unit strings

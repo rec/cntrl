@@ -33,7 +33,7 @@ struct FontAsset {
 struct HistoryAssets {
     Board &hardware, &replies;
     cntrl::HistoryImport &history;
-    OtherAsset bundle{}, disk{}, songs{};
+    OtherAsset bundle{}, disk{}, songs{}, midi_assets{};
     FontAsset fonts{};
 };
 void upload(cntrl::HistoryImport &transfer, Board &board, uint64_t number, const std::vector<uint8_t> &record) {

@@ -24,7 +24,7 @@ public:
         auto &session = s.session(); auto &commands = s.commands();
         for (unsigned i = 0; i < serial_budget && !session.output_pending() && s.serial_available(); ++i) session.receive(s.serial_read(), now);
         if (session.resetting() && commands.accepts_input() && !s.song_transfer().processing()) {
-            commands.cancel_transfer(); s.song_transfer().cancel_transfer(); s.bundle_transfer().cancel(); s.history_transfer().cancel(); s.fonts().cancel_transfer(); s.cancel_listing(); s.disk_transfer().cancel(); session.reset_done();
+            commands.cancel_transfer(); s.song_transfer().cancel_transfer(); s.bundle_transfer().cancel(); s.history_transfer().cancel(); s.fonts().cancel_transfer(); s.cancel_listing(); s.disk_transfer().cancel(); s.midi_transfer().cancel(); session.reset_done();
         }
         if (session.input_size() && session.input_kind() != UsbKind::command && s.reply_ready()
             && s.commands_allowed() && commands.accepts_input()) {
@@ -35,12 +35,13 @@ public:
         }
         // A resumable session retains unfinished transfers while disconnected.
         if (session.active()) {
-            commands.keepalive(now); s.song_transfer().keepalive(now); s.fonts().keepalive(now); s.bundle_transfer().keepalive(now); s.history_transfer().keepalive(now); s.disk_transfer().keepalive(now);
+            commands.keepalive(now); s.song_transfer().keepalive(now); s.fonts().keepalive(now); s.bundle_transfer().keepalive(now); s.history_transfer().keepalive(now); s.disk_transfer().keepalive(now); s.midi_transfer().keepalive(now);
         }
         if (s.reply_ready()) commands.poll(now);
         if (s.reply_ready()) s.song_transfer().poll(now);
         if (s.reply_ready()) s.bundle_transfer().poll(now);
         if (s.reply_ready()) s.disk_transfer().poll(now);
+        if (s.reply_ready()) s.midi_transfer().poll(now);
         if (s.reply_ready()) s.history_transfer().tick(now);
         s.song_sources().tick(now); s.songs().tick();
         if (s.reply_ready()) s.fonts().poll(now, s.replies());

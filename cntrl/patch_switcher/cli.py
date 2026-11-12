@@ -21,6 +21,7 @@ from . import (
     devices,
     disk_speed,
     history,
+    midi_assets,
     models,
     resolved,
     setup_bundle,
@@ -307,6 +308,7 @@ def run_setup(
         if isinstance(command, Copy)
         else None
     )
+    midi = midi_assets.collect(bundle.setups, trace.files) if bundle is not None else {}
     with transport.SerialConnection(command.port) as connection:
         client = transport.SetupClient(connection)
         if isinstance(command, Set):
@@ -354,6 +356,8 @@ def run_setup(
                         client.copy_font(key, font)
                 for data in movies.values():
                     client.copy_movie(data)
+                for name, data in midi.items():
+                    client.copy_midi(name, data, command.overwrite)
                 setup_sync.check_upload(client, upload_snapshot.parent)
                 client.copy_bundle(bundle.pack(), command.overwrite or bool(existing))
                 report_bundle(bundle)

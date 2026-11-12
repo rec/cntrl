@@ -99,6 +99,7 @@ struct Services {
     Session &session() { return usb; }
     Job &commands() { return job; }
     Job &disk_transfer() { return job; }
+    Job &midi_transfer() { return job; }
     Job &song_transfer() { return job; }
     Job &bundle_transfer() { return job; }
     Job &history_transfer() { return job; }

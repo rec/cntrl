@@ -121,7 +121,7 @@ private:
         else if (frame.acknowledged >= reply_id_) { respond(UsbStatus::invalid, frame.session, frame.sequence); return; }
         if (frame.sequence == sequence_) { respond(); return; }
         bool control = frame.kind == UsbKind::open || frame.kind == UsbKind::poll;
-        bool data = unsigned(frame.kind) >= unsigned(UsbKind::setup) && unsigned(frame.kind) <= unsigned(UsbKind::disk);
+        bool data = unsigned(frame.kind) >= unsigned(UsbKind::setup) && unsigned(frame.kind) <= unsigned(UsbKind::midi_file);
         if (frame.sequence != uint64_t(sequence_) + 1 || (control && frame.length) || (data && !frame.length)
             || (!control && frame.kind != UsbKind::command && !data)) { respond(UsbStatus::invalid, frame.session, frame.sequence); return; }
         if (size_ != offset_) return;

@@ -50,7 +50,7 @@ struct Services {
     CounterFile counter_file;
     Recorder recorder;
     History history;
-    Transfer bundle, disk;
+    Transfer bundle, disk, midi_assets;
     Listing listing;
     Editor song_editor;
     Transfer songs;
@@ -91,6 +91,8 @@ int main() {
     assert(!services.counter_file.opened());
 
     services.hardware.locked = false;
+    assert(commands.command("CNTRL MIDI_FILE SIZE 612e6d6964", 9));
+    assert(services.midi_assets.calls == 1 && services.midi_assets.last == 9);
     assert(commands.command("CNTRL NATIVE", 10));
     assert(native_calls == 1 && services.fonts.calls == 0);
     services.song_editor.visible = true;

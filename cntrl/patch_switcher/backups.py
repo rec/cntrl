@@ -16,6 +16,7 @@ from . import (
     compiler,
     data_files,
     history,
+    midi_assets,
     models,
     resolved,
     setup_bundle,
@@ -139,6 +140,8 @@ def backup_assets(
         if key not in movies:
             save_asset(folder / value, client.download_movie(key))
             movies.add(key)
+    for name in midi_assets.referenced({'setup': data}):
+        save_asset(folder / 'midi' / name, client.download_midi(name))
 
 
 def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None:
@@ -231,6 +234,8 @@ def restore_setups(directory: Path, port: Path, target: models.Target) -> None:
             client.copy_font(key, data)
         for p in sorted((folder / 'movies').glob('*.cnsa')):
             client.copy_movie(p.read_bytes())
+        for p in sorted((folder / 'midi').glob('*')):
+            client.copy_midi(p.name, p.read_bytes(), overwrite=True)
         current_bundle = client.download_bundle()
         existing = setup_bundle.unpack(current_bundle) if current_bundle else {}
         combined = setup_bundle.reindex(existing | setups)
@@ -329,6 +334,9 @@ def verify_after_flashing(directory: Path, port: Path, target: models.Target) ->
         for p in sorted((directory / 'setups/movies').glob('*.cnsa')):
             if client.download_movie(int(p.stem, 16)) != p.read_bytes():
                 raise ValueError(f'{p.name}: movie differs from the backup')
+        for p in sorted((directory / 'setups/midi').glob('*')):
+            if client.download_midi(p.name) != p.read_bytes():
+                raise ValueError(f'{p.name}: MIDI file differs from the backup')
         listed: dict[str, list[history.Revision]] = {}
         for name, revision, data in read_history_binaries(directory):
             _, expected = history.normalize_revision(

@@ -19,6 +19,7 @@ class Kind(IntEnum):
     history = 20
     movie = 21
     disk = 22
+    midi_file = 23
     text = 128
     data = 129
     error = 255
