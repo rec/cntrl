@@ -126,7 +126,10 @@ def apply_patch(directory: Path, patch: Path) -> None:
         subprocess.run([*command, str(patch.resolve())], check=True, timeout=30)
 
 
-def build(root: Path, source_root: Path, work: Path, linker: Path) -> None:
+def compile_command(
+    root: Path, source_root: Path, work: Path, linker: Path
+) -> list[str]:
+    """Use the production compiler invocation for builds and footprint experiments."""
     root, source_root, work, linker = (
         root.resolve(),
         source_root.resolve(),
@@ -174,8 +177,18 @@ def build(root: Path, source_root: Path, work: Path, linker: Path) -> None:
     ]
     for name, value in properties.items():
         command.extend(['--build-property', f'{name}={value}'])
+    return [*command, str(root / 'patch_switcher')]
+
+
+def build(root: Path, source_root: Path, work: Path, linker: Path) -> None:
+    root, source_root, work, linker = (
+        root.resolve(),
+        source_root.resolve(),
+        work.resolve(),
+        linker.resolve(),
+    )
     subprocess.run(
-        [*command, str(root / 'patch_switcher')],
+        compile_command(root, source_root, work, linker),
         env=environment(root),
         check=True,
         timeout=900,
