@@ -19,10 +19,15 @@ class ExamplePageSettings(models.PageSettings, frozen=True):
 
 class ExampleSetup(models.Setup, frozen=True):
     page_settings: models.PageSettings = ExamplePageSettings()
-    pages: dict[str, models.Page] = {
-        n: p.model_copy(update={'windows': 3 if p.type == 'patch-switcher' else 1})
-        for n, p in models.Setup().pages.items()
+    regions: dict[str, models.PageRegion] = {
+        'performance': models.PageRegion(pages=['patch-switcher']),
+        'tools': models.PageRegion(
+            pages=[n for n in models.Setup().pages if n != 'patch-switcher']
+        ),
     }
+    layout: models.PageLayout | None = models.PageLayout(
+        order=['performance', 'tools'], focus='performance'
+    )
     style: models.Style | None = models.Style(horizontal_scale=1.0)
     windows: models.Windows = models.Windows(
         next=models.Window(style=models.Style(horizontal_scale=1.0)),

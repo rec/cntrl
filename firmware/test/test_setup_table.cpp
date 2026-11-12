@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
         const unsigned metadata = cntrl::memory_used - table.resident_bytes();
         const unsigned validation_slack = cntrl::memory_peak - cntrl::memory_used;
         table.clear();
-        cntrl::memory_budget = 2 * setup_length + metadata + validation_slack;
+        cntrl::memory_budget = 2 * unsigned(cntrl::memory_charge(setup_length)) + metadata + validation_slack;
     }
     assert(table.open(file, board));
     assert(cntrl::memory_used >= table.resident_bytes());

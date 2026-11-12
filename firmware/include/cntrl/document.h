@@ -12,7 +12,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 38;
+constexpr unsigned document_version = 39;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -147,9 +147,12 @@ public:
         bool has_shifted = names + 4 <= length && !std::memcmp(bytes + names, "CSHF", 4);
         if (has_shifted) names += 124;
         const unsigned layout = names;
-        if (names + 8 > length || std::memcmp(bytes + names, "CPAG", 4)
+        if (names + 12 > length || std::memcmp(bytes + names, "CPAG", 4)
             || bytes[names + 4] > PageLayout::max_pages || !bytes[names + 5]
-            || bytes[names + 6] != 1 || bytes[names + 7]) return false;
+            || bytes[names + 6] != 2 || bytes[names + 7] > bytes[names + 4]
+            || bool(bytes[names + 7]) != bool(bytes[names + 4]) || bytes[names + 8] > 1
+            || (bytes[names + 7] ? bytes[names + 9] >= bytes[names + 7] : bytes[names + 9] != 0)
+            || bytes[names + 10] || bytes[names + 11]) return false;
         const PageLayout arrangement{bytes + layout};
         unsigned page_count = arrangement.pages(), windows = arrangement.windows();
         names += arrangement.length();
@@ -157,7 +160,7 @@ public:
         if (hardware.display_count() && hardware.display_count() != windows) return false;
         for (unsigned i = 0; i < windows; ++i) {
             const auto *name = reinterpret_cast<const uint8_t *>(arrangement.window_name(i));
-            if (!name[0] || !text_valid(name, 32)) return false;
+            if (!PageLayout::valid_name(name)) return false;
             if (const char *id = hardware.display_id(i))
                 if (std::strcmp(id, arrangement.window_name(i))) return false;
             for (unsigned j = 0; j < i; ++j)
@@ -165,9 +168,8 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!p[0] || !text_valid(p, 32) || p[32] > PageLayout::arpeggiator
-                || p[33] > windows || (p[32] == 10 && p[33])
-                || (p[32] == PageLayout::midi_monitor && (p[33] < 1 || p[33] > 3))) return false;
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::arpeggiator
+                || p[33] > PageLayout::maximum_windows(p[32],windows)) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < windows; ++j) {
                 if (p[34 + j] >= windows || seen[p[34 + j]]) return false;
@@ -176,6 +178,21 @@ public:
             for (unsigned j = 0; j < i; ++j)
                 if (!std::strcmp(arrangement.name(i), arrangement.name(j))) return false;
         }
+        unsigned assigned = 0, minimum = 0;
+        bool assigned_pages[PageLayout::max_pages] = {};
+        for (unsigned r = 0; r < arrangement.regions(); ++r) {
+            const auto *p = arrangement.region(r);
+            if (!PageLayout::valid_name(p) || p[32] != assigned || !p[33] || p[33] > page_count - assigned) return false;
+            unsigned largest = 0;
+            for (unsigned i = 0; i < p[33]; ++i) {
+                unsigned page = arrangement.region_page(r,i);
+                if (page >= page_count || assigned_pages[page]) return false;
+                assigned_pages[page] = true; largest = std::max(largest,unsigned(arrangement.page(page)[1]));
+            }
+            assigned += p[33]; minimum += largest;
+            for (unsigned i = 0; i < r; ++i) if (!std::strcmp(arrangement.region_name(r),arrangement.region_name(i))) return false;
+        }
+        if (assigned != page_count || minimum > windows) return false;
         if (names + 8 > length || std::memcmp(bytes + names, "CMOV", 4)) return false;
         unsigned movie_count = unsigned(u16(bytes + names + 4)) + u16(bytes + names + 6);
         if (movie_count > (length - names - 8) / 4) return false;

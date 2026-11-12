@@ -1,5 +1,9 @@
 # Page layout independent of left and right
 
+Implemented in setup format 39 with CPAG version 2. Automated validation covers
+authoring, firmware allocation and UI navigation. Physical pedal verification
+remains to be performed.
+
 Allow any page type to occupy either side of the pedal. A per-setup allocation
 strategy determines which side receives spare windows first. Status can occupy
 a single window beside a Patch Switcher that expands into the remaining space.
@@ -16,6 +20,7 @@ a single window beside a Patch Switcher that expands into the remaining space.
   describes the renderer and is independent of authored setup preferences.
   Status has a maximum of one. Patch Switcher can use every available target
   window. MIDI Monitor can use up to three.
+- The other utility pages remain expandable up to the target window count.
 - Use per-setup `layout.left_wins: bool = False` to distribute spare windows.
   False gives the rightmost region first claim. True gives the leftmost region
   first claim. Priority follows region placement in the selected direction.
@@ -69,6 +74,11 @@ Require this list to contain every region exactly once. `layout.left_wins`
 chooses the direction of priority across that order and defaults to `false`.
 `layout.focus` names the initially focused region. The first page in each region is selected
 initially. Region and page names use the existing printable-name conventions.
+When focus is omitted, use the first physical region. When order is omitted or
+empty, use region declaration order. Omitted or empty regions default to performance and tools
+on multi-display targets, omitting empty groups, or one main region on a
+single-display target. Performance contains Patch Switchers; tools contains
+the remaining catalogue.
 
 With three displays, the example starts with Live across the left two displays
 and Status on the right. Selecting Monitor gives it two displays and leaves

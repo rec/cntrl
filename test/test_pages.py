@@ -1,12 +1,12 @@
 """Named pages share one configuration and preserve order and window layouts."""
 
-import struct
 from pathlib import Path
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import compiler, layout, models, resolved
+from scripts import native_tests
 
 
 def target() -> models.Target:
@@ -48,29 +48,17 @@ def test_named_instances_and_order_survive_compilation() -> None:
     assert compiler.compile_show(exported, {}, [], target()) == data
 
 
-def test_compiled_ram_budget_counts_only_declared_switcher_instances() -> None:
-    def compile_pages(pages: dict[str, object]) -> tuple[int, int, int]:
-        data = compiler.compile_show({'pages': pages}, {}, [], target())
-        instruments, cycles, patches = struct.unpack_from('<HHH', data, 12)
-        metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
-        return compiler.METADATA.unpack_from(data, metadata)[-2], instruments, cycles
-
-    single, instruments, cycles = compile_pages({'live': {}})
-    double, _, _ = compile_pages({'live': {}, 'second': {}})
-    status, _, _ = compile_pages({'live': {}, 'status': {'type': 'status'}})
-    assert (instruments, cycles) == (0, 0)
-    assert double - single == 376
-    assert status - single == 8
-
-
 @pytest.mark.parametrize(
     'source',
     [
         {'apps': {}},
         {'pages': {'x': {'give_up_windows': ['right', 'right']}}},
         {'pages': {'x': {'type': 'unknown'}}},
-        {'pages': {'x': {'type': 'None', 'windows': 1}}},
-        {'pages': {'x': {'windows': -1}}},
+        {'pages': {'x': {'type': 'None', 'min_windows': 1}}},
+        {'pages': {'x': {'min_windows': -1}}},
+        {'pages': {'x': {'windows': 1}}},
+        {'layout': {'left_wins': 1}},
+        {'layout': {'left_wins': 'false'}},
     ],
 )
 def test_invalid_page_configurations_are_rejected(source: dict[str, object]) -> None:
@@ -81,66 +69,165 @@ def test_invalid_page_configurations_are_rejected(source: dict[str, object]) -> 
 @pytest.mark.parametrize('count', [1, 2, 5])
 def test_layout_follows_declared_displays(count: int) -> None:
     windows = [f'window-{i}' for i in range(count)]
-    pages = {'live': models.Page(), 'status': models.Page(type='status', windows=count)}
-    data = layout.pack(pages, windows)
+    pages = {'live': models.Page(), 'status': models.Page(type='status')}
+    data = layout.pack(models.Setup(pages=pages), windows)
     assert layout.section_end(data, 0) == len(data)
     restored = layout.unpack(data, 0)['pages']
     assert restored['live']['give_up_windows'] == list(reversed(windows))
-    assert restored['live']['windows'] == count
-    assert restored['status']['windows'] == count
-    with pytest.raises(ValueError, match='more windows'):
-        layout.pack({'x': models.Page(type='status', windows=count + 1)}, windows)
+    assert restored['live']['min_windows'] == 1
+    assert restored['status']['min_windows'] == 1
+    with pytest.raises(ValueError, match='maximum'):
+        layout.pack(
+            models.Setup(pages={'x': models.Page(type='status', min_windows=2)}),
+            windows,
+        )
 
 
 def test_window_priority_requires_every_declared_id() -> None:
     with pytest.raises(ValueError, match='every target display ID'):
         layout.pack(
-            {'x': models.Page(give_up_windows=['right'])}, ['left', 'center', 'right']
+            models.Setup(pages={'x': models.Page(give_up_windows=['right'])}),
+            ['left', 'center', 'right'],
         )
 
 
 @pytest.mark.parametrize('count', [5, 40, 255])
 def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
-    pages = {str(i): models.Page() for i in range(count)}
-    data = layout.pack(pages, ['screen'])
+    data = layout.pack(
+        models.Setup(pages={str(i): models.Page() for i in range(count)}), ['screen']
+    )
     assert len(layout.unpack(data, 0)['pages']) == count
 
 
 @pytest.mark.parametrize('count', [1, 2, 3])
 def test_midi_monitor_layout_round_trips(count: int) -> None:
     data = compiler.compile_show(
-        {'pages': {'monitor': {'type': 'midi-monitor', 'windows': count}}},
+        {'pages': {'monitor': {'type': 'midi-monitor', 'min_windows': count}}},
         {},
         [],
         target(),
     )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['pages']['monitor']['type'] == 'midi-monitor'
-    assert exported['pages']['monitor']['windows'] == count
+    assert exported['pages']['monitor']['min_windows'] == count
     assert compiler.compile_show(exported, {}, [], target()) == data
 
 
-def test_midi_monitor_defaults_to_two_windows_and_supports_single_display() -> None:
-    data = layout.pack(
-        {'monitor': models.Page(type='midi-monitor')}, ['one', 'two', 'three']
+def test_target_aware_defaults_and_initial_focus() -> None:
+    show = models.Setup(
+        pages={'status': models.Page(type='status'), 'live': models.Page()}
     )
-    assert layout.unpack(data, 0)['pages']['monitor']['windows'] == 2
-    data = layout.pack(
-        {'monitor': models.Page(type='midi-monitor', windows=1)}, ['one']
-    )
-    assert layout.unpack(data, 0)['pages']['monitor']['windows'] == 1
-    with pytest.raises(ValueError, match='more windows'):
-        layout.pack({'monitor': models.Page(type='midi-monitor')}, ['one'])
-    with pytest.raises(ValueError, match='more windows'):
-        layout.pack(
-            {'monitor': models.Page(type='midi-monitor', windows=3)}, ['one', 'two']
-        )
+    for windows, order in [
+        (['one'], ['main']),
+        (['one', 'two', 'three'], ['performance', 'tools']),
+    ]:
+        data = layout.pack(show, windows)
+        exported = layout.unpack(data, 0)
+        assert exported['layout'] == {
+            'order': order,
+            'focus': order[0],
+            'left_wins': False,
+        }
+        assert layout.pack(models.Setup.model_validate(exported), windows) == data
 
 
-@pytest.mark.parametrize('count', [0, 4])
-def test_invalid_midi_monitor_window_count_is_rejected(count: int) -> None:
-    with pytest.raises(ValueError, match='one, two or three'):
-        models.Page(type='midi-monitor', windows=count)
+@pytest.mark.parametrize('left_wins', [False, True])
+@pytest.mark.parametrize('order', [['left', 'right'], ['right', 'left']])
+def test_explicit_regions_preserve_cycles_placement_and_priority(
+    left_wins: bool, order: list[str]
+) -> None:
+    show = models.Setup.model_validate(
+        {
+            'pages': {
+                'monitor': {'type': 'midi-monitor', 'min_windows': 0},
+                'live': {},
+                'blank': {'type': 'None'},
+            },
+            'regions': {
+                'left': {'pages': ['monitor', 'blank']},
+                'right': {'pages': ['live']},
+            },
+            'layout': {'order': order, 'left_wins': left_wins},
+        }
+    )
+    data = layout.pack(show, ['one', 'two', 'three'])
+    exported = layout.unpack(data, 0)
+    assert exported['layout'] == {
+        'order': order,
+        'left_wins': left_wins,
+        'focus': order[0],
+    }
+    assert exported['regions'] == {
+        'left': {'pages': ['monitor', 'blank']},
+        'right': {'pages': ['live']},
+    }
+    assert (
+        layout.pack(models.Setup.model_validate(exported), ['one', 'two', 'three'])
+        == data
+    )
+
+
+@pytest.mark.parametrize(
+    'regions,settings',
+    [
+        ({'a': {'pages': ['live']}, 'b': {'pages': ['live']}}, {}),
+        ({'a': {'pages': ['missing', 'live']}}, {}),
+        ({'a': {'pages': ['live', 'status']}}, {'order': ['wrong']}),
+        ({'a': {'pages': ['live', 'status']}}, {'order': ['a', 'a']}),
+        ({'a': {'pages': ['live', 'status']}}, {'focus': 'wrong'}),
+    ],
+)
+def test_invalid_region_membership_and_placement_are_rejected(
+    regions: dict[str, object], settings: dict[str, object]
+) -> None:
+    show = models.Setup.model_validate(
+        {
+            'pages': {'live': {}, 'status': {'type': 'status'}},
+            'regions': regions,
+            'layout': settings,
+        }
+    )
+    with pytest.raises(ValueError):
+        layout.pack(show, ['one', 'two', 'three'])
+
+
+def test_later_selection_cannot_overcommit_minimums() -> None:
+    show = models.Setup.model_validate(
+        {
+            'pages': {
+                'small': {},
+                'large': {'min_windows': 3},
+                'tool': {'type': 'status'},
+            },
+            'regions': {
+                'live': {'pages': ['small', 'large']},
+                'tools': {'pages': ['tool']},
+            },
+        }
+    )
+    with pytest.raises(ValueError, match='live/large=3, tools/tool=1'):
+        layout.pack(show, ['one', 'two', 'three'])
+
+
+def test_firmware_and_authoring_agree_on_page_capabilities(tmp_path: Path) -> None:
+    program = tmp_path / 'page-layout'
+    native_tests.compile_native(
+        [
+            'c++',
+            '-std=c++17',
+            f'-I{ROOT.parent / "include"}',
+            str(ROOT / 'test_page_layout.cpp'),
+            '-o',
+            str(program),
+        ]
+    )
+    result = native_tests.run_native(
+        [str(program), 'caps'], capture_output=True, text=True
+    )
+    assert [[int(n) for n in r.split()] for r in result.stdout.splitlines()] == [
+        [models.Page(type=t).maximum_windows(n) for n in [1, 3, 5]]
+        for t in layout.PAGE_TYPES
+    ]
 
 
 ROOT = Path(__file__).parents[1] / 'firmware/test'

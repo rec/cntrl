@@ -1055,23 +1055,48 @@ class Page(BaseModel, frozen=True):
         'None',
     ] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
-    windows: Annotated[int | None, Field(strict=True, ge=0, le=255)] = None
+    min_windows: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
     give_up_windows: list[str] = Field(default_factory=list, max_length=255)
 
     @model_validator(mode='after')
     def window_allocation(self) -> 'Page':
         if len(set(self.give_up_windows)) != len(self.give_up_windows):
             raise ValueError('give_up_windows must contain each window once')
-        if self.type == 'None' and self.windows not in (None, 0):
-            raise ValueError('None must have zero windows')
-        if self.type == 'midi-monitor' and self.windows not in (None, 1, 2, 3):
-            raise ValueError('midi-monitor requires one, two or three windows')
+        if self.type == 'None':
+            if 'min_windows' in self.model_fields_set and self.min_windows:
+                raise ValueError('None must have zero minimum windows')
+            object.__setattr__(self, 'min_windows', 0)
         return self
+
+    def maximum_windows(self, available: int) -> int:
+        if self.type == 'None':
+            return 0
+        if self.type == 'status':
+            return min(1, available)
+        if self.type == 'midi-monitor':
+            return min(3, available)
+        return available
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class PageRegion(BaseModel, frozen=True):
+    pages: list[str] = Field(min_length=1, max_length=255)
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class PageLayout(BaseModel, frozen=True):
+    order: list[str] = Field(default_factory=list, max_length=255)
+    left_wins: Annotated[bool, Field(strict=True)] = False
+    focus: str | None = None
 
     model_config = ConfigDict(extra='forbid')
 
 
 class Setup(BaseModel, frozen=True):
+    regions: dict[str, PageRegion] = Field(default_factory=dict, max_length=255)
+    layout: PageLayout | None = None
     pickup: Annotated[
         Annotated[bool, Field(strict=True)] | None, BeforeValidator(parse_pickup)
     ] = None

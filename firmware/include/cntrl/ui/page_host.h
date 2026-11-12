@@ -92,7 +92,6 @@ public:
         if (pages_.page() != Pages::Page::midi_monitor) return false;
         if (!pressed) return true;
         if (input == controls_.back) {
-            leave_page();
             application_.operation_ui(Operation::menu_open, platform_); return true;
         }
         if (!platform_.midi_monitor().active()) return true;
@@ -126,19 +125,18 @@ public:
     void show(unsigned pane, const cntrl::Pane &content) {
         if (content.performance) {
             if (!application_.visible() || application_.feature_open(platform_)) return;
-            const auto layout = documents_.document().page_layout();
-            const int destination = layout.controller_window(application_.rendering(), pane, pages_.windows());
+            const int destination = application_.allocation.controller_window(application_.rendering(),pane);
             if (destination < 0) return;
-            if (!performance_visible_) { pages_.revisit(); enter_page(); }
-            performance_visible_ = true;
-            if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds()); }
-            renderer_.show(unsigned(destination), content);
+            Pane view = content;
+            unsigned region = application_.layout.page_region(application_.layout.controller_page(application_.rendering()));
+            view.focused = region == application_.allocation.focus();
+            if (view.focused && unsigned(destination) == application_.allocation.region(region).first) { pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds()); }
+            renderer_.show(unsigned(destination),view);
             return;
         }
-        if (pane == 0) { pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds()); }
-        if (pane + 1 == display_.count()) {
-            if (performance_visible_) leave_page();
-            performance_visible_ = false;
+        if (pane == 0) {
+            cancel_focus(); save_view(); management_visible_ = true;
+            pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds());
         }
         renderer_.show(pane, content);
     }
@@ -146,6 +144,8 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_configure_pages)
 #endif
     void configure_pages(const cntrl::Document &document) {
+        keyboard_.clear(); platform_.midi_monitor().close(); monitor_unavailable_ = false;
+        port_save_pending_ = management_visible_ = false;
         if (pages_.arpeggiator) pages_.arpeggiator->configure(document.valid() ? document.arpeggiator_settings() : nullptr);
         pages_.outputs(platform_.midi_outputs());
         if (!configure_ports()) { error("Port memory unavailable"); return; }
@@ -160,8 +160,12 @@ public:
             }
         }
         application_.configure(document, platform_);
-        performance_visible_ = true;
-        if (document.valid()) enter_page();
+        for (unsigned i = 0; i < application_.views.size(); ++i) { application_.views[i] = {}; application_.views[i].index = i; application_.views[i].page = Pages::Page(document.page_layout().page(i)[0]); }
+        for (unsigned r = 0; r < application_.layout.regions(); ++r) {
+            load_view(application_.allocation.region(r).selected); enter_page(); save_view();
+        }
+        if (application_.layout.regions()) load_view(application_.allocation.selected());
+        focus_controller(); application_.refresh(platform_);
     }
     bool refresh_pages() { application_.refresh(platform_); return true; }
     void blank_performance() {
@@ -169,8 +173,8 @@ public:
         empty.graphics.background = 0;
         for (unsigned i = 0; i < display_.count(); ++i) renderer_.show(i, empty);
         pending_patch_ = -1;
-        performance_visible_ = true;
         pages_.revisit();
+        for (auto &view : application_.views) view.dirty = true;
     }
     void select_trs_jack() {
         auto &page = pages_;
@@ -200,7 +204,6 @@ public:
 #endif
     void enter_page() {
         if (pages_.page() == Pages::Page::midi_monitor) {
-            application_.controller().cancel_gesture();
             if (!platform_.midi_monitor().active()) {
                 monitor_unavailable_ = !platform_.midi_monitor().open(platform_.microseconds());
                 if (monitor_unavailable_) error("MIDI monitor memory unavailable");
@@ -213,10 +216,10 @@ public:
                 platform_.expression_controls().select(expression_ports_[0]);
         }
 #if CNTRL_CABLE_TEST
-        if (pages_.page() == Pages::Page::cable) platform_.cable_test.enter();
+        if (pages_.page() == Pages::Page::cable && pages_.index() == application_.allocation.selected()) platform_.cable_test.enter();
 #endif
 #if CNTRL_PANIC
-        if (pages_.page() == Pages::Page::panic) platform_.panic.enter(platform_.runtime.brightness);
+        if (pages_.page() == Pages::Page::panic && pages_.index() == application_.allocation.selected()) platform_.panic.enter(platform_.runtime.brightness);
 #endif
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -224,14 +227,14 @@ public:
 #endif
     void leave_page() {
         if (pages_.page() == Pages::Page::midi_looper && looper_files_) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; }
-        if (pages_.page() == Pages::Page::midi_monitor) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
+        if (pages_.page() == Pages::Page::midi_monitor && !other_selected(Pages::Page::midi_monitor)) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
         keyboard_.clear(); pages_.keyboard_held(false);
         if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();
 #if CNTRL_CABLE_TEST
-        if (pages_.page() == Pages::Page::cable) platform_.leave_cable_test();
+        if (pages_.page() == Pages::Page::cable && pages_.index() == application_.allocation.selected()) platform_.leave_cable_test();
 #endif
 #if CNTRL_PANIC
-        if (pages_.page() == Pages::Page::panic) platform_.leave_panic();
+        if (pages_.page() == Pages::Page::panic && pages_.index() == application_.allocation.selected()) platform_.leave_panic();
 #endif
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -270,25 +273,44 @@ public:
         if (!documents_.document().valid()) return;
         if (pages_.page() == Pages::Page::confirm_firmware
             && controls_.confirm < 64 && (application_.held & (uint64_t(1) << controls_.confirm))) return;
-        const unsigned previous_windows = pages_.windows();
-        const unsigned previous_controller = application_.visible_index;
-        leave_page();
+        auto previous = pages_.save_view();
         if (pages_.browse(reverse)) {
             if (!platform_.switch_firmware()) error("Firmware switch failed");
         } else {
-            focus_controller();
-            const unsigned windows = std::max(previous_windows, pages_.windows());
-            const bool utility_only = previous_controller == application_.visible_index && windows == 1;
-            renderer_.transition(reverse, documents_.document().scroll_ms(), utility_only ? int(display_.count() - 1) : -1);
-            application_.refresh(platform_);
+            unsigned selected = pages_.index();
+            pages_.restore_view(previous);
+            const auto &span = application_.allocation.region(application_.allocation.focus());
+            if (span.count) renderer_.transition(reverse,documents_.document().scroll_ms(),int(span.first),0,false,true,span.count);
+            select_page(selected);
         }
-        if (pages_.clock_page()) application_.controller().cancel_gesture();
-        enter_page();
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_select_page)
+#endif
     void select_page(unsigned index) {
-        leave_page(); pages_.select(index);
-        focus_controller();
-        application_.refresh(platform_); enter_page();
+        unsigned region = application_.layout.page_region(index);
+        if (region == application_.layout.regions()) return;
+        cancel_focus(); save_view();
+        load_view(application_.allocation.region(region).selected); leave_page(); save_view();
+        application_.allocation.select(index); load_view(index);
+        focus_controller(); enter_page(); save_view();
+        application_.update_menu(); application_.refresh(platform_);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_focus_region)
+#endif
+    void focus_region(unsigned region) {
+        if (region >= application_.layout.regions()) return;
+        cancel_focus(); save_view(); application_.allocation.focus(region);
+        load_view(application_.allocation.selected()); focus_controller();
+#if CNTRL_CABLE_TEST
+        if (pages_.page() == Pages::Page::cable) platform_.cable_test.enter();
+#endif
+#if CNTRL_PANIC
+        if (pages_.page() == Pages::Page::panic) platform_.panic.enter(platform_.runtime.brightness);
+#endif
+        application_.controls_locked = true;
+        application_.update_menu(); application_.refresh(platform_);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_tap)
@@ -302,7 +324,7 @@ public:
             if (!platform_.output_idle() || platform_.configuration_locked() || documents_.busy() || documents_.dirty()) page.port_status(active, "Busy");
             else if (active == page.candidate && documents_.document().trs_modes()[page.jack] == uint8_t(active)) page.port_status(active, "Already set");
             else if (!documents_.save_trs_mode(page.jack, page.candidate, now)) page.port_status(active, "Cannot apply");
-            else { port_save_pending_ = true; page.port_status(active, "Saving"); }
+            else { port_save_pending_ = true; port_save_page_ = pages_.index(); page.port_status(active, "Saving"); }
             return;
         }
 #if CNTRL_CABLE_TEST
@@ -338,13 +360,16 @@ public:
     }
     void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false, bool panorama = true) {
         if (!application_.visible() || application_.feature_open(platform_)) return;
-        const unsigned occupied = pages_.windows();
-        if (occupied == display_.count()) return;
+        unsigned region_index = application_.layout.page_region(application_.layout.controller_page(application_.rendering()));
+        if (region_index == application_.layout.regions()) return;
+        const auto &region = application_.allocation.region(region_index);
+        if (!region.count) return;
         if (pane >= 0) {
-            pane = documents_.document().page_layout().controller_window(application_.rendering(), unsigned(pane), occupied);
+            pane = application_.allocation.controller_window(application_.rendering(),unsigned(pane));
             if (pane < 0) return;
-        } else if (occupied + 1 == display_.count()) pane = 0;
-        renderer_.transition(undo, duration_ms, pane, occupied, vertical, panorama);
+        } else if (region.count == 1) pane = int(region.first);
+        if (pane >= 0) renderer_.transition(undo,duration_ms,pane,0,vertical,panorama);
+        else renderer_.transition(undo,duration_ms,int(region.first),0,vertical,panorama,region.count);
     }
     void set_brightness(uint8_t value, bool temporary = false) {
         brightness_feedback_ = temporary;
@@ -378,23 +403,19 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
-        if (pages_.page() == Pages::Page::midi_looper && looper_files_) refresh_looper_prompt();
         const auto &message = platform_.text_messages();
         if (message.active(now)) platform_.animation_session().stop();
         renderer_.message(message, now);
         if (application_.pending_page < application_.layout.pages()) {
             select_page(application_.pending_page); application_.pending_page = PageLayout::max_pages;
         }
-        if (platform_.display_priority_due()) return;
-        if (pages_.page() == Pages::Page::expression && expression_ports_.empty()) pages_.expression_status("No configurable ports", "", "");
-        if (pages_.page() == Pages::Page::expression && !expression_ports_.empty() && uint32_t(now - expression_refresh_) >= 80) {
-            expression_refresh_ = now;
-            const unsigned selected = platform_.expression_controls().selected();
-            const auto port = std::find_if(ports_.begin(), ports_.end(), [&](const Port &p) { return p.index == selected; });
-            char title[40], position[40], prompt[40];
-            platform_.expression_controls().status(port->label, platform_.expression_available(selected), title, position, prompt);
-            pages_.expression_status(title, position, prompt);
+        if (application_.pending_region < application_.layout.regions()) {
+            focus_region(application_.pending_region); application_.pending_region = PageLayout::max_pages;
         }
+        if (management_visible_ && !application_.feature_open(platform_)) {
+            management_visible_ = false; enter_page(); pages_.revisit(); save_view();
+        }
+        if (platform_.display_priority_due()) return;
 #if CNTRL_CABLE_TEST
         transfer_busy = transfer_busy || platform_.cable_test.enabled();
 #endif
@@ -405,7 +426,9 @@ public:
             port_save_pending_ = false;
             if (documents_.dirty()) {
                 documents_.edit_cancel();
+                save_view(); const unsigned focused = pages_.index(); load_view(port_save_page_);
                 pages_.port_status(platform_.port_mode(pages_.jack), "Save failed");
+                save_view(); load_view(focused);
             }
         }
         pages_.time(now, platform_.microseconds(), controls_.confirm < 64 && (application_.held & (uint64_t(1) << controls_.confirm)));
@@ -420,15 +443,31 @@ public:
         if (pages_.page() == Pages::Page::panic && platform_.panic.take_redraw())
             pages_.revisit();
 #endif
-        if (!splash_visible_ && !application_.feature_open(platform_) && documents_.document().valid()
-            && pages_.windows() && pages_.due(now)) {
+        save_view();
+        if (!splash_visible_ && !application_.feature_open(platform_) && documents_.document().valid()) {
+          for (unsigned r = 0; r < application_.layout.regions(); ++r) {
+            const auto &region = application_.allocation.region(r);
+            if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_switcher) continue;
+            load_view(region.selected);
+            if (!pages_.due(now)) continue;
+            if (pages_.page() == Pages::Page::midi_looper && looper_files_) refresh_looper_prompt();
+            if (pages_.page() == Pages::Page::expression) {
+                if (expression_ports_.empty()) pages_.expression_status("No configurable ports", "", "");
+                else {
+                    const unsigned selected = platform_.expression_controls().selected();
+                    const auto port = std::find_if(ports_.begin(), ports_.end(), [&](const Port &p) { return p.index == selected; });
+                    char title[40], position[40], prompt[40];
+                    platform_.expression_controls().status(port->label, platform_.expression_available(selected), title, position, prompt);
+                    pages_.expression_status(title, position, prompt);
+                }
+            }
             if (pages_.page() == Pages::Page::midi_monitor && !platform_.midi_monitor().active() && !monitor_unavailable_) enter_page();
             // Prepare the incoming card during the renderer's bounded transition preparation.
             PerformanceStatus status = pages_.page() == Pages::Page::status ? platform_.status() : PerformanceStatus{};
-            for (unsigned i = 0; i < pages_.windows(); ++i) {
-                const unsigned screen = display_.count() - pages_.windows() + i;
+            for (unsigned i = 0; i < region.count; ++i) {
+                const unsigned screen = region.first + i;
                 pages_.viewport(display_.viewport(screen));
-                const cntrl::Pane content = pages_.view(now, platform_.microseconds(), status
+                cntrl::Pane content = pages_.view(now, platform_.microseconds(), status
 #if CNTRL_CABLE_TEST
                 , platform_.cable_test.status()
 #else
@@ -439,16 +478,22 @@ public:
 #else
                 , cntrl::Panic::Status::ready
 #endif
-                , i, pages_.windows()
+                , i, region.count
             );
-                renderer_.show(screen, pages_.page() == Pages::Page::midi_monitor ? content : Pages::window_view(content, i, pages_.windows()));
+                if (pages_.page() != Pages::Page::midi_monitor) content = Pages::window_view(content,i,region.count);
+                content.focused = r == application_.allocation.focus(); renderer_.show(screen,content);
             }
+            save_view();
+          }
         }
+        if (application_.layout.regions()) load_view(application_.allocation.selected());
         if (!splash_visible_) draw();
     }
     void apply_brightness(uint32_t now) {
+        bool focused_patch = application_.focused_controller() && application_.allocation.region(application_.allocation.focus()).count;
+        unsigned screen = focused_patch ? application_.allocation.region(application_.allocation.focus()).first : 0;
         renderer_.target_brightness(throb_.brightness(
-            !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128, application_.held));
+            focused_patch && !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128, application_.held),screen);
         uint8_t brightness = brightness_feedback_ ? feedback_brightness_ : platform_.animation_session().brightness(platform_.runtime.brightness, now);
         if (brightness != applied_brightness_) {
             platform_.display_brightness(brightness); applied_brightness_ = brightness;
@@ -458,6 +503,29 @@ public:
     Pages pages_;
     Keyboard keyboard_;
 private:
+    void save_view() { if (pages_.index() < application_.views.size()) application_.views[pages_.index()] = pages_.save_view(); }
+    void load_view(unsigned page) { if (page < application_.views.size()) pages_.restore_view(application_.views[page]); }
+    bool other_selected(Pages::Page type) const {
+        if (!documents_.document().valid() || application_.layout.records != documents_.document().page_layout().records) return false;
+        for (unsigned r = 0; r < application_.layout.regions(); ++r) {
+            unsigned selected = application_.allocation.region(r).selected;
+            if (selected != pages_.index() && application_.layout.page(selected)[0] == unsigned(type)) return true;
+        }
+        return false;
+    }
+    void cancel_focus() {
+        keyboard_.clear(); pages_.keyboard_held(false);
+        application_.controller().cancel_gesture();
+        if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();
+        if (looper_files_ && pages_.page() == Pages::Page::midi_looper) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; pages_.looper_prompt[0] = 0; }
+#if CNTRL_CABLE_TEST
+        if (pages_.page() == Pages::Page::cable) platform_.leave_cable_test();
+#endif
+#if CNTRL_PANIC
+        if (pages_.page() == Pages::Page::panic) platform_.leave_panic();
+#endif
+        auto view = pages_.save_view(); view.held = false; pages_.restore_view(view);
+    }
     enum class LooperMenu { none, more, files, clear, replace };
     LooperMenu looper_menu_ = LooperMenu::none;
     unsigned looper_choice_ = 0;
@@ -526,9 +594,9 @@ private:
     Display &display_;
     Renderer &renderer_;
     Controls controls_;
-    uint32_t expression_refresh_ = 0;
+    unsigned port_save_page_ = PageLayout::max_pages;
     PixelThrob throb_;
-    bool port_save_pending_ = false, performance_visible_ = false, splash_visible_ = false;
+    bool port_save_pending_ = false, splash_visible_ = false, management_visible_ = false;
     int pending_patch_ = -1;
     bool brightness_feedback_ = false;
     bool monitor_unavailable_ = false;

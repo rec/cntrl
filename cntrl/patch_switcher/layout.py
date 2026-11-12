@@ -1,61 +1,137 @@
-"""Compile named pages and their window allocation."""
+"""Compile independently cycling regions and their display allocation."""
 
 from . import models
 
 
-def pack(pages: dict[str, models.Page], windows: list[str]) -> bytes:
+def pack(show: models.Setup, windows: list[str]) -> bytes:
+    pages = show.pages
+    regions = show.regions
+    if not regions and pages:
+        if len(windows) == 1:
+            regions = {'main': models.PageRegion(pages=list(pages))}
+        else:
+            performance = [n for n, p in pages.items() if p.type == 'patch-switcher']
+            tools = [n for n, p in pages.items() if p.type != 'patch-switcher']
+            regions = {
+                n: models.PageRegion(pages=p)
+                for n, p in [('performance', performance), ('tools', tools)]
+                if p
+            }
+    settings = show.layout or models.PageLayout()
+    order = settings.order or list(regions)
+    if len(order) != len(regions) or set(order) != set(regions):
+        raise ValueError('layout.order must contain each region exactly once')
+    if settings.focus is not None and settings.focus not in regions:
+        raise ValueError('layout.focus must name a configured region')
+    assignments = [p for n in order for p in regions[n].pages]
+    if len(assignments) != len(pages) or set(assignments) != set(pages):
+        raise ValueError('regions must assign every page exactly once')
     records = bytearray()
     for name, page in pages.items():
-        encoded = name.encode('ascii')
-        if not encoded or len(encoded) > 31 or any(c < 32 or c > 126 for c in encoded):
+        if page.min_windows > page.maximum_windows(len(windows)):
             raise ValueError(
-                'page names must contain 1 to 31 printable ASCII characters'
+                f'pages.{name}.min_windows exceeds the page type maximum '
+                'or target display count'
             )
-        count = page.windows
-        if count is None:
-            count = (
-                len(windows)
-                if page.type == 'patch-switcher'
-                else 0
-                if page.type == 'None'
-                else 2
-                if page.type == 'midi-monitor'
-                else 1
-            )
-        if count > len(windows):
-            raise ValueError('page requests more windows than the target provides')
         priority = page.give_up_windows or list(reversed(windows))
         if len(priority) != len(windows) or set(priority) != set(windows):
             raise ValueError(
                 f'pages.{name}.give_up_windows must list every target display ID once'
             )
-        records.extend(encoded.ljust(32, b'\0'))
-        records.extend((PAGE_TYPES.index(page.type), count))
+        records.extend(encoded_name(name))
+        records.extend((PAGE_TYPES.index(page.type), page.min_windows))
         records.extend(windows.index(n) for n in priority)
+    largest = [max(regions[n].pages, key=lambda p: pages[p].min_windows) for n in order]
+    if sum(pages[p].min_windows for p in largest) > len(windows):
+        claims = ', '.join(
+            f'{n}/{p}={pages[p].min_windows}'
+            for n, p in zip(order, largest, strict=True)
+        )
+        raise ValueError(
+            f'region minimum windows exceed the target display count: {claims}'
+        )
+    region_records = bytearray()
+    cycles = bytearray()
+    names = list(pages)
+    for name in order:
+        region_records.extend(encoded_name(name))
+        region_records.extend((len(cycles), len(regions[name].pages)))
+        cycles.extend(names.index(p) for p in regions[name].pages)
+    focus = order.index(settings.focus) if settings.focus is not None else 0
     return (
         b'CPAG'
-        + bytes((len(pages), len(windows), 1, 0))
-        + b''.join(n.encode('ascii').ljust(32, b'\0') for n in windows)
+        + bytes(
+            (len(pages), len(windows), 2, len(order), settings.left_wins, focus, 0, 0)
+        )
+        + b''.join(encoded_name(n) for n in windows)
         + records
+        + region_records
+        + cycles
     )
 
 
+def encoded_name(name: str) -> bytes:
+    encoded = name.encode('ascii')
+    if not encoded or len(encoded) > 31 or any(c < 32 or c > 126 for c in encoded):
+        raise ValueError(
+            'page, region and display names must contain '
+            '1 to 31 printable ASCII characters'
+        )
+    return encoded.ljust(32, b'\0')
+
+
 def section_end(data: bytes, offset: int) -> int:
-    if data[offset : offset + 4] != b'CPAG':
-        raise ValueError('missing page layout')
-    if offset + 8 > len(data):
-        raise ValueError('truncated page layout')
-    count, windows, version, reserved = data[offset + 4 : offset + 8]
-    end = offset + 8 + windows * 32 + count * (34 + windows)
-    if version != 1 or reserved or not windows or end > len(data):
+    if offset + 12 > len(data) or data[offset : offset + 4] != b'CPAG':
+        raise ValueError('missing or truncated page layout')
+    count, windows, version, regions, left_wins, focus, first, second = data[
+        offset + 4 : offset + 12
+    ]
+    end = offset + 12 + windows * 32 + count * (35 + windows) + regions * 34
+    if (
+        version != 2
+        or first
+        or second
+        or not windows
+        or regions > count
+        or bool(count) != bool(regions)
+        or left_wins > 1
+        or (regions and focus >= regions)
+        or (not regions and focus)
+        or end > len(data)
+    ):
         raise ValueError('invalid page layout')
     return end
 
 
+def estimate_ram(
+    pages: dict[str, models.Page],
+    instruments: int,
+    cycles: int,
+    *,
+    switches: bool,
+    regions: int,
+) -> int:
+    # Cortex-M7 ABI. Include checked storage and allocator overhead for each array.
+    def charge(size: int) -> int:
+        return (size + 7) // 8 * 8 + 8 if size else 0
+
+    controllers = max(1, sum(p.type == 'patch-switcher' for p in pages.values()))
+    labels = len(pages) + regions
+    return (
+        controllers * charge(instruments * 8 + cycles * 4)
+        + charge((controllers - 1) * 360)
+        + charge((labels + (3 if switches else 2)) * 4 if pages else 0)
+        + charge(labels * 96)
+        + charge(len(pages) * 272)
+        + charge(regions * 12)
+    )
+
+
 def unpack(data: bytes, offset: int) -> dict[str, object]:
-    section_end(data, offset)
+    end = section_end(data, offset)
     count, window_count = data[offset + 4 : offset + 6]
-    cursor = offset + 8
+    region_count, left_wins, focus = data[offset + 7 : offset + 10]
+    cursor = offset + 12
     windows = [
         data[cursor + i * 32 : cursor + (i + 1) * 32].split(b'\0')[0].decode('ascii')
         for i in range(window_count)
@@ -64,33 +140,50 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     pages = {}
     for _ in range(count):
         name = data[cursor : cursor + 32].split(b'\0')[0].decode('ascii')
+        if name in pages or data[cursor + 32] >= len(PAGE_TYPES):
+            raise ValueError('invalid page record')
+        priority = data[cursor + 34 : cursor + 34 + window_count]
+        if sorted(priority) != list(range(window_count)):
+            raise ValueError('invalid logical window priority')
         pages[name] = {
             'type': PAGE_TYPES[data[cursor + 32]],
-            'windows': data[cursor + 33],
-            'give_up_windows': [
-                windows[i] for i in data[cursor + 34 : cursor + 34 + window_count]
-            ],
+            'min_windows': data[cursor + 33],
+            'give_up_windows': [windows[i] for i in priority],
         }
         cursor += 34 + window_count
-    return {'pages': pages}
-
-
-def estimate_ram(
-    pages: dict[str, models.Page], instruments: int, cycles: int, *, switches: bool
-) -> int:
-    # Cortex-M7 ABI: Controller is 360 bytes, pointers/int are 4, cursors are 2.
-    # The primary Controller object is linked into RAM1, but its counted state
-    # and every additional Controller object are checked RAM2 allocations.
-    def charge(size: int) -> int:
-        return (size + 7) // 8 * 8 + 8 if size else 0
-
-    controllers = max(1, sum(p.type == 'patch-switcher' for p in pages.values()))
-    names = (len(pages) + (3 if switches else 2)) * 4 if pages else 0
-    return (
-        controllers * charge(instruments * 8 + cycles * 4)
-        + charge((controllers - 1) * 360)
-        + charge(names)
-    )
+    cycles = cursor + region_count * 34
+    names = list(pages)
+    regions = {}
+    assigned = 0
+    for i in range(region_count):
+        record = cursor + i * 34
+        name = data[record : record + 32].split(b'\0')[0].decode('ascii')
+        start, length = data[record + 32 : record + 34]
+        references = data[cycles + start : cycles + start + length]
+        if (
+            name in regions
+            or start != assigned
+            or not length
+            or start + length > count
+            or any(p >= count for p in references)
+        ):
+            raise ValueError('invalid region cycle')
+        assigned += length
+        regions[name] = {'pages': [names[p] for p in references]}
+    result: dict[str, object] = {'pages': pages}
+    if regions:
+        order = list(regions)
+        result.update(
+            regions=regions,
+            layout={
+                'order': order,
+                'left_wins': bool(left_wins),
+                'focus': order[focus],
+            },
+        )
+    if pack(models.Setup.model_validate(result), windows) != data[offset:end]:
+        raise ValueError('invalid page layout records')
+    return result
 
 
 PAGE_TYPES = (

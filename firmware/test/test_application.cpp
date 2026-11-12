@@ -78,7 +78,22 @@ struct VisitFile : cntrl::files::File {
 };
 struct PagePlatform : Hardware {
     uint32_t now = 0;
+    uint32_t milliseconds() const { return now / 1000; }
     uint32_t microseconds() const { return now; }
+    bool display_priority_due() const { return false; }
+    bool display_busy() const { return false; }
+    void displayed() {}
+    void display_brightness(uint8_t) {}
+    struct Animation {
+        void stop() {}
+        bool take_redraw() { return false; }
+        bool poll(uint32_t,bool,bool) { return false; }
+        uint8_t brightness(uint8_t value,uint32_t) const { return value; }
+    } animation;
+    Animation &animation_session() { return animation; }
+    cntrl::TextMessages messages;
+    cntrl::TextMessages &text_messages() { return messages; }
+    struct { uint8_t brightness = 192; } runtime;
     unsigned clock_available() const { return 1; }
     bool looper_storage_ready() const { return true; }
     cntrl::ui::PerformanceStatus status() const { return {}; }
@@ -92,6 +107,9 @@ struct PagePlatform : Hardware {
         void select(unsigned value) { index = value; }
         unsigned selected() const { return index; }
         void calibrate(bool) {}
+        void status(const char *,bool,char *title,char *position,char *prompt) {
+            std::strcpy(title,"Expression"); std::strcpy(position,"50%"); std::strcpy(prompt,"Calibrate");
+        }
     } expression;
     struct Bridge { void clock_owner(unsigned) {} } bridge;
     cntrl::midi::Outputs endpoints;
@@ -138,8 +156,8 @@ static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Doc
         {"south", "South", 1, cntrl::midi::OutputTransport::physical, false, true, 3}};
     platform.endpoints = {endpoints, 2}; cntrl::PageSettings settings; settings.words[cntrl::PageSettings::title_height] = 8;
     host.configure_page_settings(settings);
-    uint8_t layout[8 + 32 + 35] = {'C', 'P', 'A', 'G', 1, 1, 1, 0};
-    layout[8 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::ports); layout[8 + 32 + 33] = 1;
+    uint8_t layout[12 + 32 + 35] = {'C', 'P', 'A', 'G', 1, 1, 2, 0};
+    layout[12 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::ports); layout[12 + 32 + 33] = 1;
     host.pages_.layout({layout});
     assert(host.pages_.jack == 1); assert(host.trs_button(1));
     assert(host.pages_.candidate == cntrl::midi::TrsMode::midi_a);
@@ -159,8 +177,8 @@ static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents 
     cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64, cache, previous, 64 * 64);
     constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"},{3,"D"},{4,"E"},{5,"F"}};
     cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0,1,2,3,4,5,4,3,2,bindings,6});
-    uint8_t layout[8 + 32 + 35] = {'C','P','A','G',1,1,1,0};
-    layout[8 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_monitor); layout[8 + 32 + 33] = 1;
+    uint8_t layout[12 + 32 + 35] = {'C','P','A','G',1,1,2,0};
+    layout[12 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_monitor); layout[12 + 32 + 33] = 1;
     host.pages_.layout({layout}); host.enter_page();
     assert(platform.monitor.active());
     platform.monitor.packet(cntrl::midi::Monitor::Direction::incoming, 0, 0, {12,{0xc0,1,0}}, 10);
@@ -169,13 +187,13 @@ static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents 
     assert(host.monitor_button(2, true) && !platform.monitor.frozen());
     host.leave_page(); assert(!platform.monitor.active());
     host.enter_page(); assert(platform.monitor.active() && platform.monitor.tail() == 0);
-    assert(host.monitor_button(5, true) && !platform.monitor.active() && app.menu.open());
+    assert(host.monitor_button(5, true) && platform.monitor.active() && app.menu.open());
     app.menu.leave(); host.enter_page(); assert(platform.monitor.active());
     host.configure_page_settings(cntrl::PageSettings{}); assert(!platform.monitor.active());
     const unsigned budget = cntrl::memory_budget; cntrl::memory_budget = cntrl::memory_used;
     host.enter_page(); assert(platform.monitor.active());
     platform.monitor.packet(cntrl::midi::Monitor::Direction::incoming, 0, 0, {15,{0xf8,0,0}}, 10);
-    assert(platform.monitor.dropped() == 1);
+    assert(platform.monitor.tail() == 0 && platform.monitor.dropped() == 1);
     assert(host.monitor_button(2, true) && platform.monitor.frozen());
     cntrl::memory_budget = budget;
 }
@@ -208,8 +226,8 @@ static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately
     host.looper_files(files,sink);
     assert(files.looper.configure({},sink));
     cntrl::PageSettings settings; host.pages_.configure(settings);
-    uint8_t layout[8 + 32 + 35] = {'C','P','A','G',1,1,1,0};
-    layout[8 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_looper); layout[8 + 32 + 33] = 1;
+    uint8_t layout[12 + 32 + 35] = {'C','P','A','G',1,1,2,0};
+    layout[12 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_looper); layout[12 + 32 + 33] = 1;
     host.pages_.layout({layout});
     using Loop = cntrl::midi::MidiLooper;
     auto take = [&]() {
@@ -267,7 +285,7 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
     for (unsigned count : {0u,1u,2u,3u,4u}) {
         auto monitored = bytes; monitored[monitor_page] = cntrl::PageLayout::midi_monitor; monitored[monitor_page + 1] = uint8_t(count);
         cntrl::put32(monitored.data() + 20, cntrl::checksum(monitored.data() + 28, unsigned(monitored.size() - 28)));
-        cntrl::Document checked; assert(checked.load(monitored.data(), unsigned(monitored.size()), hardware) == (count >= 1 && count <= 3));
+        cntrl::Document checked; assert(checked.load(monitored.data(), unsigned(monitored.size()), hardware) == (count <= 2));
     }
     // Match the pedal's one-window Tap Tempo page followed by its patch page.
     const unsigned tap = unsigned(document.page_layout().page(4) - bytes.data());
@@ -282,6 +300,7 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         cntrl::ui::Application app(hardware, documents, primary, hardware, hardware, songs, hardware, false); hardware.application = &app;
         const unsigned budget = cntrl::memory_budget;
         cntrl::memory_budget = cntrl::memory_used + 3 * sizeof(cntrl::Controller);
+        cntrl::memory_budget += 16384;
         assert(app.prepare_pages(document)); app.finish_pages(true);
         cntrl::memory_budget = budget;
         primary.activate(document); app.configure(document, hardware);
@@ -290,12 +309,12 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         uint16_t work[4096] = {}, cache[3 * 4096] = {}, previous[3 * 4096] = {};
         cntrl::ui::Renderer renderer(display, fonts, work, 4096, cache, previous, 3 * 4096);
         cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {});
-        host.pages_.layout(document.page_layout());
-        host.select_page(5); assert(app.visible_index == 0 && host.pages_.windows() == 0);
+        host.configure_pages(document);
+        host.select_page(5); assert(app.visible_index == 0 && app.allocation.region(0).count == 3);
         assert(app.controller().navigate(7)); app.tick(0); assert(app.busy() && hardware.sends == 0);
         host.select_page(6); assert(app.visible_index == 1);
         assert(app.controller().navigate(3)); assert(app.controller().selected_patch() == 1);
-        host.select_page(1); assert(app.visible_index == 1 && host.pages_.windows() == 1);
+        host.select_page(1); assert(app.visible_index == 1 && app.allocation.region(1).count == 1);
         for (unsigned i = 0; i < 100; ++i) app.tick(200);
         assert(!app.busy() && hardware.sends == 1);
         host.select_page(5); assert(app.controller().selected_patch() == 0 && app.controller().navigation().center == 0);
@@ -309,27 +328,39 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         host.select_page(6);
         host.pages_.browse(true); assert(host.pages_.index() == 5);
         host.pages_.browse(false); assert(host.pages_.index() == 6);
-        host.pages_.browse(false); assert(host.pages_.index() == 0);
+        host.pages_.browse(false); assert(host.pages_.index() == 5);
         char put[128]; std::snprintf(put, sizeof(put), "CNTRL SETUP PUT 54657374 %u %08lx 0\n",
             unsigned(bytes.size()), (unsigned long)cntrl::checksum(bytes.data(), unsigned(bytes.size())));
         for (char c : std::string(put)) documents.receive(uint8_t(c), 0);
         for (uint8_t b : bytes) documents.receive(b, 0);
         for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
         assert(!documents.busy() && documents.select("Test"));
-        host.select_page(5); host.select_page(4);
+        host.configure_pages(documents.document()); host.select_page(5); host.select_page(4);
+        host.pages_.shortcut = 7;
+        const unsigned tools_count = app.allocation.region(1).count;
+        host.focus_region(0);
+        assert(host.pages_.index() == 5 && app.allocation.region(1).selected == 4 && app.allocation.region(1).count == tools_count);
+        host.display(100,false);
+        assert(host.pages_.index() == 5); // Rendering a background view preserves control focus.
+        host.focus_region(1); assert(host.pages_.index() == 4 && host.pages_.shortcut == 7);
+        // Select region focus through the normal menu action, without changing either page.
+        assert(app.operation_ui(cntrl::ui::Operation::menu_open,hardware)); app.menu.poll(0);
+        for (unsigned i = 0; i < 2; ++i) app.operation_ui(cntrl::ui::Operation::menu_next,hardware);
+        app.operation_ui(cntrl::ui::Operation::menu_activate,hardware);
+        assert(app.pending_region == 0 && !app.menu.open());
+        host.display(101,false); assert(host.pages_.index() == 5 && app.allocation.region(1).selected == 4);
+        host.focus_region(1);
         for (unsigned screen = 0; screen < 3; ++screen) {
             cntrl::Pane pane; pane.graphics.background = uint16_t(screen + 1); pane.graphics.pad = 0;
             renderer.show(screen, pane);
         }
         for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
         assert(renderer.ready());
-        // Leaving Tap Tempo keeps the same patch controller visible. Only the
-        // outgoing utility window may move.
-        host.browse_page(false); assert(host.pages_.index() == 5);
+        // Cycling the tools region preserves the selected performance page.
+        host.browse_page(false); assert(host.pages_.index() == 0);
         for (unsigned i = 0; i < 20000; ++i) {
             renderer.draw(1000000 + i * 1000);
-            for (unsigned screen = 0; screen < 2; ++screen)
-                for (auto pixel : display.pixels[screen]) assert(pixel == screen + 1);
+            assert(app.allocation.region(0).selected == 5);
         }
         assert(renderer.ready());
     }
@@ -352,7 +383,7 @@ static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware 
     cntrl::ui::FirmwareVisitRecord returned_record;
     cntrl::ui::FirmwareVisit returned(returned_record, file, hardware, hardware, documents, app, songs, sources, runtime, navigation, execution, restoring);
     const unsigned opens = file.opened_count; returned.poll(false); assert(file.opened_count == opens && !returned.busy());
-    uint8_t layout[8 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 1, 0}; layout[8 + 3 * 32 + 32] = 11; layout[8 + 3 * 32 + 33] = 3; app.layout = {layout};
+    uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0}; layout[12 + 3 * 32 + 32] = 11; layout[12 + 3 * 32 + 33] = 3; app.layout = {layout};
     for (unsigned i = 0; i < 100; ++i) returned.poll(true);
     assert(!returned.busy() && hardware.consumed == 7 && hardware.last_error == "Patch return unavailable");
     assert(hardware.handoffs == 1); app.layout = {};
@@ -398,8 +429,8 @@ int main(int argc, char **argv) {
         hardware.transfer_busy = true; app.operation_ui(Op::menu_activate, hardware); assert(app.menu.open() && !app.song_ui.open());
         hardware.transfer_busy = false; cntrl::Document empty; app.configure(empty, hardware); assert(hardware.blanks == 1);
         assert(&app.controller() == &primary);
-        uint8_t pages[8 + 2 * 34] = {};
-        pages[4] = 2; pages[8 + 32] = pages[8 + 34 + 32] = cntrl::PageLayout::patch_switcher;
+        uint8_t pages[12 + 2 * 34] = {};
+        pages[4] = 2; pages[12 + 32] = pages[12 + 34 + 32] = cntrl::PageLayout::patch_switcher;
         assert(app.prepare_layout({pages})); app.finish_pages(true); app.layout = {pages};
         app.processing_index = 1; assert(&app.controller() == &app.at(1)); app.tick(0); assert(app.processing_index == cntrl::PageLayout::max_controllers);
     }

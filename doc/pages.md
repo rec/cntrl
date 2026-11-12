@@ -1,58 +1,100 @@
 # Pages
 
-A setup has one ordered collection of named pages. Page types include
+A setup has a catalogue of named pages, arranged in independently cycling
+regions. Page types include
 `patch-switcher`, `status`, `tap-tempo`, `firmware`, `cable-test`, `panic`,
 `trs-ports`, `expression`, `clock-transport`, `clock-tempo`, `keyboard`,
-`midi-monitor`, and `None`.
-Select a page in the Pages and tools menu or cycle through them with F and the
-existing reverse-page control. Page names contain 1 to 31 printable ASCII characters.
+`midi-monitor`, `midi-looper`, `arpeggiator`, and `None`.
+Select a region or a page in the Pages and tools menu. F and the existing
+reverse-page control cycle only the focused region. Page and region names
+contain 1 to 31 printable ASCII characters.
 
 Each patch-switcher page keeps its own navigation, sent-state and undo history.
 All configured patch-switchers continue executing queued patches and delays while
 hidden. They share the setup's patch library, cycles and display templates.
 Shared hardware services, including the MIDI clock, remain shared across pages.
 
-## Split-screen allocation
+## Regions and focus
 
-Each page has a `windows` count. A patch-switcher defaults to all target displays;
-a utility page defaults to one, except `midi-monitor`, which defaults to two.
-`None` defaults to zero. Explicit zero-window
-pages retain their controls and background behavior. Unused displays are black.
-The monitor requires one, two or three windows; see [MIDI monitor](midi-monitor.md).
+Each region contains at least one page, and every page belongs to exactly one
+region. Its first page is initially selected. `layout.order` lists every region
+once, in physical display order. When omitted or empty, it follows region declaration
+order. Any page type can occupy any region.
 
-A utility page takes its requested windows from the right. The last selected
-patch-switcher remains visible in the windows to its left, limited by that
-patch-switcher's own window count. Its `give_up_windows` names the logical windows
-to surrender first. By default this is the reverse of the target display order.
-Surviving logical windows retain their order and pack from the left.
+`layout.focus` names the region receiving page-specific controls. It defaults
+to the first physical region. A thin border marks its visible windows, and the
+menu marks its region with `*`. Changing focus preserves all page selections.
+Selecting a page also focuses its region. Held gestures are cancelled when
+focus changes. Management and emergency controls remain global.
 
-Selecting another patch-switcher restores that instance's state and gives it its
-requested windows. Selecting a utility page keeps that patch-switcher alongside
-it. Utility pages spanning multiple windows repeat their heading and distribute
-body rows in reading order, except the monitor, which has separate Incoming,
-Combined and Outgoing views according to its window count. The tempo flasher
-occupies the first utility window.
+When regions are omitted or empty, multi-display targets put Patch Switchers in a
+`performance` region and other pages in a `tools` region, omitting empty groups.
+A single-display target uses one `main` region containing the entire catalogue.
+Omitting `pages` uses the built-in catalogue. These defaults focus the first
+physical region, usually the Patch Switcher on a multi-display target.
 
 ```toml
+[layout]
+order = ['performance', 'tools']
+left_wins = false
+focus = 'performance'
+
+[regions.performance]
+pages = ['live', 'alternate']
+
+[regions.tools]
+pages = ['status', 'monitor']
+
 [pages.status]
 type = 'status'
-windows = 1
+min_windows = 1
+
+[pages.monitor]
+type = 'midi-monitor'
+min_windows = 1
 
 [pages.live]
 type = 'patch-switcher'
-windows = 3
+min_windows = 1
 give_up_windows = ['right', 'center', 'left']
 
 [pages.alternate]
 type = 'patch-switcher'
-windows = 2
+min_windows = 1
 give_up_windows = ['left', 'right', 'center']
 ```
 
-The first configured page is initially selected. The first patch-switcher is
-available alongside it. Omitting `pages` starts with Status beside a default
-patch-switcher and includes the other built-in pages in the normal cycle.
-The firmware supports up to four patch-switchers and 36 named pages in total.
+## Window allocation
+
+`min_windows` replaces the former page setting `windows`. It defaults to one.
+An explicit zero lets the page receive no windows while its controls and
+background work remain available. The `None` page always has minimum and
+maximum zero. A zero minimum can still receive spare windows.
+
+Each page type supplies its maximum in code: Status uses at most one window,
+MIDI Monitor at most three, and Patch Switcher and the remaining utility pages
+can use all available target windows. Utility pages distribute their body rows
+across the allocated span, repeating the heading. MIDI Monitor has dedicated
+one-, two- and three-window layouts; see [MIDI monitor](midi-monitor.md).
+
+Every selected page receives its minimum first. `layout.left_wins = false`,
+the default, awards remaining windows from the rightmost region toward the
+left, up to each page type's maximum. Set it to `true` to award them from the
+left instead. Each region occupies a contiguous span. Any surplus beyond all
+maxima stays black. Compilation rejects a setup if any selectable combination
+cannot meet its minimums, or a minimum exceeds its type's maximum.
+
+On a three-display pedal, the example gives Live two windows and Status one.
+Selecting Monitor gives Live one and Monitor two. Reverse `layout.order` to
+move tools to the left. Set `left_wins = true` if those tools should retain
+first claim on spare windows after moving.
+
+Patch Switcher's `give_up_windows` lists logical content slots to surrender
+first, defaulting to the reverse target display order. Surviving slots keep
+their logical order and map into the region's physical span. These names do
+not anchor content to a physical side.
+
+The encoded layout supports up to 255 named pages, subject to available memory.
 Display IDs and window counts follow the target's declared displays.
 
 Page preferences, expression assignments and keyboard shortcuts remain under
@@ -67,7 +109,7 @@ remain available for selecting another setup.
 
 ## Compiled format
 
-Setup format 36 uses a `CPAG` section containing target display IDs and one
-ordered sequence of named page records. The old `apps` collection is removed;
-recompile authored setups with named `[pages.NAME]` tables. The existing offline
-historical setup converter now emits the same unified page records.
+Setup format 39 uses `CPAG` version 2, containing target display IDs, named
+page records with minimums, ordered region cycles, allocation direction and
+initial focus. Recompile authored setups after changing page `windows` to
+`min_windows`. Editable export preserves the compiled region layout.

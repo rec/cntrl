@@ -698,13 +698,14 @@ static void test_pages_run_independently(const std::string &path) {
     const auto layout = document.page_layout();
     assert(layout.controllers() == 2 && layout.pages() == 7);
     assert(!std::strcmp(layout.name(layout.controller_page(0)), "lead") && !std::strcmp(layout.name(layout.controller_page(1)), "rhythm"));
-    assert(layout.controller_window(0, 0, 1) == 0 && layout.controller_window(0, 1, 1) == 1 && layout.controller_window(0, 2, 1) == -1);
-    assert(layout.controller_window(1, 0, 1) == -1 && layout.controller_window(1, 1, 1) == 0 && layout.controller_window(1, 2, 1) == 1);
-    assert(layout.controller_window(1, 1, 2) == 0 && layout.controller_window(1, 2, 2) == -1);
-    for (unsigned i = 0; i < 3; ++i) {
-        assert(layout.controller_window(0, i, 0) == int(i));
-        assert(layout.controller_window(0, i, 3) == -1);
-    }
+    cntrl::PageAllocation allocation; assert(allocation.prepare(layout)); allocation.finish(true); allocation.configure(layout);
+    for (unsigned i = 0; i < 3; ++i) assert(allocation.controller_window(0,i) == int(i));
+    allocation.select(1);
+    assert(allocation.controller_window(0,0) == 0 && allocation.controller_window(0,1) == 1 && allocation.controller_window(0,2) == -1);
+    allocation.select(6);
+    assert(allocation.controller_window(1,0) == -1 && allocation.controller_window(1,1) == 0 && allocation.controller_window(1,2) == 1);
+    allocation.select(2);
+    assert(allocation.controller_window(1,1) == 0 && allocation.controller_window(1,2) == -1);
     assert(layout.page(0)[0] == 10 && layout.page(0)[1] == 0);
     cntrl::Controller first(hw, hw, hw, 5), second(hw, hw, hw, 6);
     hw.controller = hw.visible = &first; first.activate(document);
@@ -727,16 +728,23 @@ static void test_pages_run_independently(const std::string &path) {
     const unsigned offset = unsigned(layout.records - bytes.data());
     const unsigned app_offset = unsigned(reinterpret_cast<const uint8_t *>(layout.name(layout.controller_page(0))) - layout.records);
     const unsigned page_offset = unsigned(layout.page(0) - layout.records);
+    const unsigned regions_offset = unsigned(layout.region(0) - layout.records);
+    const unsigned cycles_offset = unsigned(layout.region(layout.regions()) - layout.records);
     for (const auto &bad : std::vector<std::pair<unsigned, uint8_t>>{
             {4u, uint8_t(37)}, {5u, uint8_t(0)}, {6u, uint8_t(0)}, {7u, uint8_t(1)}, {app_offset + 34, uint8_t(3)}, {app_offset + 35, uint8_t(2)},
-            {page_offset, uint8_t(12)}, {page_offset + 1, uint8_t(1)}, {page_offset + 38, uint8_t(4)}}) {
+            {8u, uint8_t(2)}, {9u, uint8_t(2)}, {10u, uint8_t(1)},
+            {12u, uint8_t(10)}, {app_offset, uint8_t(128)}, {regions_offset, uint8_t(128)},
+            {page_offset + 1, uint8_t(1)}, {page_offset + 38, uint8_t(4)},
+            {regions_offset, uint8_t(0)}, {regions_offset + 32, uint8_t(1)}, {regions_offset + 33, uint8_t(0)},
+            {cycles_offset, uint8_t(36)}, {cycles_offset + 1, uint8_t(5)},
+            {app_offset + 33, uint8_t(2)}}) {
         auto corrupt = bytes; corrupt[offset + bad.first] = bad.second;
         cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
         cntrl::Document rejected; assert(!rejected.load(corrupt.data(), unsigned(corrupt.size()), hw));
     }
     auto empty = bytes;
-    empty.erase(empty.begin() + offset + 8 + layout.windows() * 32, empty.begin() + offset + layout.length());
-    empty[offset + 4] = 0;
+    empty.erase(empty.begin() + offset + 12 + layout.windows() * 32, empty.begin() + offset + layout.length());
+    empty[offset + 4] = empty[offset + 7] = empty[offset + 9] = 0;
     empty[19] &= ~1u;
     cntrl::put32(empty.data() + 8, unsigned(empty.size()));
     cntrl::put32(empty.data() + 20, cntrl::checksum(empty.data() + 28, unsigned(empty.size()) - 28));

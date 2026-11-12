@@ -23,6 +23,20 @@ pad = 4
 contrast = 0.6
 tags = []
 
+[regions.performance]
+
+pages = ["patch-switcher"]
+
+[regions.tools]
+
+pages = ["status", "firmware", "cable-test", "panic", "trs-ports", "expression", "clock-transport", "clock-tempo", "keyboard", "tap-tempo"]
+
+[layout]
+
+order = ["performance", "tools"]
+left_wins = false
+focus = "performance"
+
 [midi]
 
 # Validate entries independently so one malformed patch cannot hide others.
@@ -113,77 +127,77 @@ events = 512
 
 type = "status"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.firmware]
 
 type = "firmware"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.cable-test]
 
 type = "cable-test"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.panic]
 
 type = "panic"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.trs-ports]
 
 type = "trs-ports"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.expression]
 
 type = "expression"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.clock-transport]
 
 type = "clock-transport"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.clock-tempo]
 
 type = "clock-tempo"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.keyboard]
 
 type = "keyboard"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.tap-tempo]
 
 type = "tap-tempo"
 ram2_bytes = 0
-windows = 1
+min_windows = 1
 give_up_windows = []
 
 [pages.patch-switcher]
 
 type = "patch-switcher"
 ram2_bytes = 0
-windows = 3
+min_windows = 1
 give_up_windows = []
 
 [scrolling]

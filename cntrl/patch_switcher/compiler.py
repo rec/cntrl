@@ -566,7 +566,7 @@ def compile_show(
         keyboard = page_settings.pack_keyboard(show, target)
         looper_settings = looper.pack(show, target)
         arpeggiator_settings = arpeggiator.pack(show, target)
-        page_layout = layout.pack(show.pages, [d.id for d in target.displays])
+        page_layout = layout.pack(show, [d.id for d in target.displays])
         relay_settings = relay_outputs.pack(show, target)
         counter_settings = counters.pack(compiler.counters, show, target)
         stream_settings = midi_processing.compile_routes(
@@ -662,6 +662,7 @@ def compile_show(
             len(instruments),
             len(patch_cycles),
             switches=bool(target.max_switches),
+            regions=page_layout[7],
         )
         + midi_processing.estimate_ram(
             stream_settings, endpoint_count=len(target.midi_endpoints)
@@ -2279,7 +2280,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 38
+DOCUMENT_VERSION = 39
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

@@ -161,9 +161,9 @@ void test_window_layouts_history_and_bounded_refresh() {
     cntrl::PageSettings settings; settings.words[cntrl::PageSettings::title_height] = 8; pages.configure(settings);
     pages.outputs({endpoints, 1}); pages.monitor = &monitor;
     for (unsigned count = 1; count <= 3; ++count) {
-        uint8_t layout[8 + 3 * 32 + 37] = {'C','P','A','G',1,3,1,0};
-        layout[8 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_monitor);
-        layout[8 + 3 * 32 + 33] = uint8_t(count); pages.layout({layout});
+        uint8_t layout[12 + 3 * 32 + 37] = {'C','P','A','G',1,3,2,0};
+        layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_monitor);
+        layout[12 + 3 * 32 + 33] = uint8_t(count); pages.layout({layout});
         for (unsigned window = 0; window < count; ++window) {
             auto pane = pages.view(100, 100000, {}, {}, cntrl::Panic::Status::ready, window, count);
             const bool combined = count == 1 || (count == 3 && window == 1);

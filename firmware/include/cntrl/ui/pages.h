@@ -61,6 +61,33 @@ public:
         return result;
     }
     enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, confirm_firmware };
+    struct ViewState {
+        unsigned index = 0, jack = 0, shortcut = 0;
+        Page page = Page::none;
+        midi::TrsMode candidate = midi::TrsMode::off, active_port = midi::TrsMode::off;
+        const char *port_message = nullptr, *port_name = "No configurable ports";
+        bool port_available = false, shortcut_held = false, dirty = true, flashing = false, held = false;
+        uint32_t refreshed = 0;
+        char expression[3][40] = {}, looper_prompt[96] = {};
+    };
+    ViewState save_view() const {
+        ViewState view;
+        view.index = index_; view.page = page_; view.jack = jack; view.candidate = candidate;
+        view.shortcut = shortcut; view.shortcut_held = shortcut_held; view.active_port = active_port_;
+        view.port_message = port_message_; view.port_name = port_name_; view.port_available = port_available_;
+        view.dirty = dirty_; view.flashing = flashing_; view.held = held_; view.refreshed = refreshed_;
+        std::memcpy(view.expression,expression_lines_,sizeof(expression_lines_));
+        std::memcpy(view.looper_prompt,looper_prompt,sizeof(looper_prompt));
+        return view;
+    }
+    void restore_view(const ViewState &view) {
+        index_ = view.index; page_ = view.page; jack = view.jack; candidate = view.candidate;
+        shortcut = view.shortcut; shortcut_held = view.shortcut_held; active_port_ = view.active_port;
+        port_message_ = view.port_message; port_name_ = view.port_name; port_available_ = view.port_available;
+        dirty_ = view.dirty; flashing_ = view.flashing; held_ = view.held; refreshed_ = view.refreshed;
+        std::memcpy(expression_lines_,view.expression,sizeof(expression_lines_));
+        std::memcpy(looper_prompt,view.looper_prompt,sizeof(looper_prompt));
+    }
     midi::MidiArpeggiator *arpeggiator = nullptr;
     midi::Monitor *monitor = nullptr;
     midi::MidiLooper *looper = nullptr;
@@ -70,9 +97,6 @@ public:
         index_ = 0;
         page_ = layout.pages() ? Page(layout.page(0)[0]) : Page::none;
         dirty_ = true;
-    }
-    unsigned windows() const {
-        return layout_.pages() && page_ != Page::patch_switcher ? layout_.page(index_)[1] : 0;
     }
     unsigned index() const { return index_; }
     void select(unsigned index) {
@@ -94,9 +118,14 @@ public:
     bool browse(bool reverse) {
         if (page_ == Page::confirm_firmware) return !reverse;
         if (!layout_.pages()) return false;
-        for (unsigned i = 0; i < layout_.pages();) {
+        unsigned region = layout_.page_region(index_);
+        if (region == layout_.regions()) return false;
+        unsigned count = layout_.region_size(region), position = 0;
+        while (position < count && layout_.region_page(region,position) != index_) ++position;
+        for (unsigned i = 0; i < count;) {
             ++i;
-            index_ = (index_ + layout_.pages() + (reverse ? -1 : 1)) % layout_.pages();
+            position = (position + count + (reverse ? -1 : 1)) % count;
+            index_ = layout_.region_page(region,position);
             page_ = Page(layout_.page(index_)[0]);
 #if defined(CNTRL_CABLE_TEST) && !CNTRL_CABLE_TEST
             if (page_ == Page::cable) continue;
@@ -216,6 +245,7 @@ public:
         if (page_ == Page::midi_monitor) return uint32_t(now - refreshed_) >= midi::Monitor::refresh_ms;
         if (page_ == Page::midi_looper) return uint32_t(now - refreshed_) >= 50;
         if (page_ == Page::arpeggiator) return uint32_t(now - refreshed_) >= 50;
+        if (page_ == Page::expression || page_ == Page::cable || page_ == Page::panic) return uint32_t(now - refreshed_) >= 80;
         if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }

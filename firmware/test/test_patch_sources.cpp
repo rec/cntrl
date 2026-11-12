@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     table.clear();
     cntrl::CheckedList<uint16_t> pins; assert(pins.reserve(2));
     const unsigned pin_bytes = pins.memory_bytes(); pins.release();
-    cntrl::memory_budget = 2 * length + metadata + validation + pin_bytes;
+    cntrl::memory_budget = 2 * unsigned(cntrl::memory_charge(length)) + metadata + validation + pin_bytes;
     assert(table.open(file, board));
     cntrl::StoredPatchSources sources(table); sources.begin(); sources.begin();
     const cntrl::Document *a = nullptr, *b = nullptr; uint32_t revision;

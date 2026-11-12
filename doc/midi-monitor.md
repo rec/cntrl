@@ -6,10 +6,10 @@ written to its local output drivers. Add it to the setup's named pages:
 ```toml
 [pages.monitor]
 type = 'midi-monitor'
-windows = 2
+min_windows = 1
 ```
 
-Choose the layout with `windows`:
+The region allocator chooses the layout from the number of windows received:
 
 | Windows | Layout, left to right |
 | --- | --- |
@@ -17,11 +17,11 @@ Choose the layout with `windows`:
 | 2 | Incoming, Outgoing |
 | 3 | Incoming, Combined, Outgoing |
 
-The default is 2. A request must fit the target's displays, so a single-display
-target requires an explicit `windows = 1`. Zero and counts above 3 are rejected.
-The monitor uses the rightmost displays; the active patch-switcher remains in
-any available displays to its left. Background patches continue when all
-displays belong to the monitor.
+The minimum defaults to one and may be zero. The monitor can use up to three
+windows. Raise `min_windows` to reserve more, provided every selectable region
+combination still fits. Its region can appear on either side; setup allocation
+priority determines spare windows. See [Pages](pages.md). Background patches
+continue when all displays belong to the monitor.
 
 Select the page through the usual Pages and tools menu or page-cycle control.
 The monitor observes all enabled endpoints and USB cables exposed by the
@@ -74,9 +74,11 @@ history, independently of actual MIDI delivery or routing drop counters.
 Capture continues while frozen; if the frozen position is overwritten, the
 cursor moves to the oldest retained entry and `advanced` appears in the status.
 
-Capture starts with empty history on entering the page. Leaving it, opening a
-menu or loading a setup releases the capture storage. Returning starts a fresh
-history. When an adapter reports a disconnected or replaced endpoint, it is
+Capture starts with empty history when a monitor page is first selected.
+Capture continues under menus, without focus and with zero allocated windows.
+Selecting away from the last monitor view or loading a setup releases capture
+storage. Returning starts a fresh history. Multiple selected monitor views
+share history and the observation cursor. When an adapter reports a disconnected or replaced endpoint, it is
 marked and its partial messages and running status are reset before observing
 the new connection. Passive DIN and TRS cables cannot report unplugging.
 

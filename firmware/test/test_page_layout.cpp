@@ -1,25 +1,50 @@
-#include <cntrl/page_layout.h>
+#include "page_fixture.h"
 #include <cassert>
 #include <cstring>
 #include <cstdio>
 #include <vector>
 
-int main() {
-    for (unsigned windows : {1u, 2u, 5u, 17u, 255u}) {
-        std::vector<uint8_t> bytes(8 + windows * 32 + 2 * (34 + windows));
-        std::memcpy(bytes.data(), "CPAG", 4); bytes[4] = 2; bytes[5] = uint8_t(windows); bytes[6] = 1; bytes[7] = 0;
-        for (unsigned i = 0; i < windows; ++i) std::snprintf(reinterpret_cast<char *>(bytes.data() + 8 + i * 32), 32, "viewport-%u", i);
-        uint8_t *app = bytes.data() + 8 + windows * 32;
-        std::strcpy(reinterpret_cast<char *>(app), "Main");
-        for (unsigned i = 0; i < windows; ++i) app[34 + i] = uint8_t(windows - i - 1);
-        app[32] = 11; app[33] = uint8_t(windows);
-        uint8_t *pages = app + 34 + windows; pages[32] = 1; pages[33] = uint8_t(windows);
-        cntrl::PageLayout layout{bytes.data()};
-        assert(layout.windows() == windows && layout.controllers() == 1 && layout.pages() == 2 && layout.length() == bytes.size());
-        assert(std::strcmp(layout.name(0), "Main") == 0 && layout.page(0)[1] == windows);
-        assert(std::strcmp(layout.window_name(0), "viewport-0") == 0);
-        for (unsigned occupied = 0; occupied <= windows; ++occupied) for (unsigned logical = 0; logical < windows; ++logical)
-            assert(layout.controller_window(0, logical, occupied) == (logical < windows - occupied ? int(logical) : -1));
-        assert(layout.controller_window(1, 0, 0) == -1); assert(layout.controller_window(0, windows, 0) == -1);
+int main(int argc,char **argv) {
+    cntrl::memory_budget = 1024 * 1024;
+    if (argc == 2 && !std::strcmp(argv[1],"caps")) {
+        for (unsigned type = 0; type <= cntrl::PageLayout::arpeggiator; ++type) {
+            for (unsigned windows : {1u,3u,5u}) std::printf("%u ",cntrl::PageLayout::maximum_windows(type,windows));
+            std::puts("");
+        }
+        return 0;
     }
+    for (unsigned windows : {1u,2u,5u,17u,255u}) {
+        auto bytes = page_fixture(windows,{11,1},{{0,1}});
+        cntrl::PageLayout layout{bytes.data()}; cntrl::PageAllocation allocation;
+        assert(allocation.prepare(layout)); allocation.finish(true); allocation.configure(layout);
+        assert(layout.windows() == windows && layout.pages() == 2 && layout.length() == bytes.size());
+        for (unsigned logical = 0; logical < windows; ++logical) assert(allocation.controller_window(0,logical) == int(logical));
+        allocation.select(1); assert(allocation.region(0).count == 1 && !allocation.controller_visible(0));
+    }
+    for (bool left : {false,true}) {
+        auto bytes = page_fixture(3,{11,12,1,10,11},{{0,2},{1,3,4}},left);
+        cntrl::PageLayout layout{bytes.data()}; cntrl::PageAllocation allocation;
+        assert(allocation.prepare(layout)); allocation.finish(true); allocation.configure(layout);
+        assert(allocation.focus() == 0 && allocation.selected() == 0);
+        assert(allocation.region(0).count == (left ? 2u : 1u));
+        assert(allocation.region(1).count == (left ? 1u : 2u));
+        assert(allocation.controller_window(0,0) == 0);
+        assert(allocation.controller_window(0,2) == -1);
+        allocation.select(3);
+        assert(allocation.selected() == 3 && allocation.region(1).count == 0);
+        assert(allocation.region(0).selected == 0 && allocation.region(0).count == 3);
+        allocation.select(4); assert(allocation.controller_visible(0) && allocation.controller_visible(1));
+        assert(allocation.controller_window(1,0) == int(allocation.region(1).first));
+        allocation.select(2); assert(allocation.region(0).count == 1 && allocation.region(1).count == 2);
+        allocation.select(3); assert(allocation.selected() == 3);
+        assert(allocation.region(0).count == 1);
+    }
+    auto left = page_fixture(3,{11,12},{{0},{1}},true);
+    auto right = page_fixture(3,{11,12},{{1},{0}},false);
+    cntrl::PageAllocation a,b;
+    assert(a.prepare({left.data()}) && b.prepare({right.data()})); a.finish(true); b.finish(true);
+    a.configure({left.data()}); b.configure({right.data()});
+    assert(a.region(0).count == b.region(1).count && a.region(1).count == b.region(0).count);
+    for (unsigned type = 0; type <= cntrl::PageLayout::arpeggiator; ++type)
+        assert(cntrl::PageLayout::maximum_windows(type,5) == (type == 1 ? 1u : type == 10 ? 0u : type == 12 ? 3u : 5u));
 }

@@ -6,6 +6,7 @@
 #include <cntrl/songs_ui.h>
 #include <cntrl/switches.h>
 #include "controls.h"
+#include "pages.h"
 #include <array>
 #include <new>
 
@@ -24,6 +25,9 @@ struct ApplicationServices {
 // storage placement and the platform's physical controls.
 class Application {
 public:
+#if UINTPTR_MAX == UINT32_MAX
+    static_assert(sizeof(Pages::ViewState) <= 272, "Update layout.estimate_ram for larger page state");
+#endif
     Application(Hardware &hardware, Documents &documents, Controller &primary, PatchOutputs &outputs, PatchSources &sources,
                 Songs &songs, SongCapture &capture, bool switches)
         : menu(hardware, tool_names_.data(), switches ? 3 : 2), setups(documents, hardware),
@@ -34,11 +38,13 @@ public:
         prepared_ = false;
         destroy_controllers(pending_controllers_);
         pending_names_.clear();
+        pending_labels_.release(); pending_views_.release();
+        if (!pending_views_.resize(candidate.pages()) || !pending_labels_.resize(candidate.regions() + candidate.pages()) || !allocation.prepare(candidate)) return false;
         if (candidate.pages()) {
-            if (!pending_names_.resize((page_offset() + candidate.pages()) * sizeof(const char *))) return false;
+            if (!pending_names_.resize((page_offset() + candidate.pages() + candidate.regions()) * sizeof(const char *))) return false;
             auto **names = reinterpret_cast<const char **>(pending_names_.data);
             for (unsigned i = 0; i < page_offset(); ++i) names[i] = tool_names_[i];
-            for (unsigned i = 0; i < candidate.pages(); ++i) names[page_offset() + i] = candidate.name(i);
+            for (unsigned i = 0; i < candidate.regions() + candidate.pages(); ++i) names[page_offset() + i] = pending_labels_[i].data();
         }
         const unsigned count = candidate.controllers();
         const unsigned extras = count ? count - 1 : 0;
@@ -68,16 +74,19 @@ public:
         } else destroy_controllers(pending_controllers_);
         if (commit) {
             names_.swap(pending_names_);
+            labels_.swap(pending_labels_); views.swap(pending_views_);
             menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(),
                 names_.data ? names_.size / sizeof(const char *) : page_offset());
         }
         pending_names_.clear();
+        pending_labels_.release(); pending_views_.release(); allocation.finish(commit);
         prepared_ = false;
     }
     Controller &at(unsigned index) { return index ? *std::launder(reinterpret_cast<Controller *>(controllers_.data + (index - 1) * sizeof(Controller))) : primary_; }
     unsigned rendering() const { return processing_index < PageLayout::max_controllers ? processing_index : visible_index; }
     Controller &controller() { return at(rendering()); }
-    bool visible() const { return layout.controllers() && rendering() == visible_index; }
+    bool visible() const { return allocation.controller_visible(rendering()); }
+    bool focused_controller() const { return allocation.selected() < layout.pages() && layout.page(allocation.selected())[0] == PageLayout::patch_switcher; }
     bool busy() {
         for (unsigned i = 0; i < layout.controllers(); ++i) if (at(i).busy()) return true;
         return primary_.busy();
@@ -95,21 +104,37 @@ public:
 #endif
     void configure(const Document &document, ApplicationServices &services) {
         layout = document.valid() ? document.page_layout() : PageLayout{}; visible_index = 0; pending_page = PageLayout::max_pages;
+        allocation.configure(layout); pending_region = PageLayout::max_pages;
         for (unsigned i = 1; i <= controllers_.size / sizeof(Controller); ++i) {
             processing_index = i;
             if (i < layout.controllers()) at(i).activate(document, false); else at(i).deactivate();
         }
         if (layout.controllers() <= 1) destroy_controllers(controllers_);
-        if (!layout.pages()) names_.clear();
+        if (!layout.pages()) { names_.clear(); labels_.release(); views.release(); }
         processing_index = PageLayout::max_controllers; services.blank_performance();
-        menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(), page_offset() + layout.pages());
+        update_menu();
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_refresh)
 #endif
     void refresh(ApplicationServices &services) {
-        const unsigned previous = processing_index; processing_index = visible_index;
-        services.blank_performance(); if (layout.controllers()) at(visible_index).refresh(); processing_index = previous;
+        const unsigned previous = processing_index;
+        services.blank_performance();
+        for (unsigned i = 0; i < layout.controllers(); ++i) if (allocation.controller_visible(i)) { processing_index = i; at(i).refresh(); }
+        processing_index = previous;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_update_menu)
+#endif
+    void update_menu() {
+        for (unsigned r = 0; r < layout.regions(); ++r) {
+            std::snprintf(labels_[r].data(),labels_[r].size(),"%s%s: %s",r == allocation.focus() ? "* " : "",layout.region_name(r),layout.name(allocation.region(r).selected));
+        }
+        for (unsigned p = 0; p < layout.pages(); ++p) {
+            unsigned r = layout.page_region(p);
+            std::snprintf(labels_[layout.regions() + p].data(),labels_[0].size(),"%s / %s",layout.region_name(r),layout.name(p));
+        }
+        menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(), page_offset() + layout.regions() + layout.pages());
     }
     void tick(uint32_t now) {
         if (!hardware_.relays.tick(now)) hardware_.error("Relay pulse restore failed");
@@ -163,8 +188,11 @@ public:
             if (!menu.open()) return false;
             const int selected = menu.button(2, true);
             if (selected == -1) return true;
-            if (selected >= int(page_offset()) && unsigned(selected) - page_offset() < layout.pages()) {
-                at(visible_index).cancel_gesture(); pending_page = unsigned(selected) - page_offset(); controls_locked = true; return true;
+            if (selected >= int(page_offset()) && unsigned(selected) - page_offset() < layout.regions()) {
+                at(visible_index).cancel_gesture(); pending_region = unsigned(selected) - page_offset(); controls_locked = true; return true;
+            }
+            if (selected >= int(page_offset() + layout.regions()) && unsigned(selected) - page_offset() - layout.regions() < layout.pages()) {
+                at(visible_index).cancel_gesture(); pending_page = unsigned(selected) - page_offset() - layout.regions(); controls_locked = true; return true;
             }
             if (selected == 1) {
                 if (!documents_.busy() && !services.song_transfer_busy() && services.output_idle()) { song_ui.enter(); controls_locked = true; }
@@ -203,8 +231,10 @@ public:
         }
     }
     PageLayout layout;
+    PageAllocation allocation;
     unsigned visible_index = 0, processing_index = PageLayout::max_controllers;
     unsigned pending_page = PageLayout::max_pages;
+    unsigned pending_region = PageLayout::max_pages;
     unsigned pending_operation = 0;
     bool return_to_switches = false, controls_locked = false;
     bool binding_return_songs = false;
@@ -212,7 +242,10 @@ public:
 private:
     std::array<const char *, 3> tool_names_{"Setups", "Songs and setlists", "Switches"};
     MemoryBuffer names_, pending_names_;
+    CheckedArray<std::array<char,96>> labels_, pending_labels_;
+    CheckedArray<Pages::ViewState> pending_views_;
 public:
+    CheckedArray<Pages::ViewState> views;
     ModuleMenu menu;
     SetupUi setups;
     SongsUi song_ui;

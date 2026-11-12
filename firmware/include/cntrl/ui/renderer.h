@@ -22,7 +22,14 @@ public:
         transfer_.resize(transfer);
         usable_ = maximum <= work_capacity && offset <= storage_capacity && !screens_.empty();
     }
-    void target_brightness(uint8_t value) { requested_brightness_ = std::min(value, uint8_t(128)); }
+    void target_brightness(uint8_t value,unsigned screen = 0) {
+        requested_brightness_ = std::min(value,uint8_t(128));
+        if (screen < screens_.size() && screen != brightness_screen_) {
+            screens_[brightness_screen_].dirty = true; screens_[brightness_screen_].valid = false;
+            brightness_screen_ = screen; dim_column_ = 0;
+            screens_[screen].dirty = true; screens_[screen].valid = false;
+        }
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_message)
 #endif
@@ -89,12 +96,13 @@ public:
         pane.lines[0].graphics = pane.graphics;
         std::snprintf(pane.lines[0].text, sizeof(pane.lines[0].text), "%s", message); show(screen, pane);
     }
-    void transition(bool undo, std::optional<unsigned> duration, int pane = -1, unsigned reserved = 0, bool vertical = false, bool panorama = true) {
+    void transition(bool undo, std::optional<unsigned> duration, int pane = -1, unsigned reserved = 0, bool vertical = false, bool panorama = true, unsigned pane_count = 1) {
         if (message_) return;
         if (!usable_ || preparing_ || animating_ || !display_.ready()) return;
         for (const auto &screen : screens_) if (!screen.valid) return;
         for (const auto &screen : screens_) std::copy(cache_ + screen.offset, cache_ + screen.offset + screen.viewport.width * screen.viewport.height, previous_ + screen.offset);
         drawing_ = -1; undo_ = undo; selected_ = pane; reserved_ = std::min(reserved, unsigned(screens_.size())); vertical_ = vertical; panorama_ = panorama;
+        selected_count_ = pane_count;
         duration_ = duration.value_or(vertical ? 200 : 75); preparing_ = true;
         for (auto &screen : screens_) screen.dirty = true;
     }
@@ -125,7 +133,17 @@ public:
         if (rendering_) {
             const auto &line = painting_.lines[field_];
             if (raster_.letter(line, letter_, text_y(field_))) ++letter_;
-            else { letter_ = 0; if (++field_ == max_lines) { backgrounds(true); raster_.corners(); rendering_ = false; } }
+            else { letter_ = 0; if (++field_ == max_lines) {
+                backgrounds(true);
+                if (painting_.focused) {
+                    const auto viewport = screen.viewport;
+                    raster_.rectangle(0,0,viewport.width,1,painting_.graphics.foreground);
+                    raster_.rectangle(0,int(viewport.height) - 1,viewport.width,1,painting_.graphics.foreground);
+                    raster_.rectangle(0,0,1,viewport.height,painting_.graphics.foreground);
+                    raster_.rectangle(int(viewport.width) - 1,0,1,viewport.height,painting_.graphics.foreground);
+                }
+                raster_.corners(); rendering_ = false;
+            } }
             return;
         }
         const auto v = screen.viewport; bool changed = !screen.valid;
@@ -153,21 +171,22 @@ private:
     unsigned reveal_screen_ = 0;
     uint32_t settled_ = 0;
     unsigned reserved_ = 0;
+    unsigned selected_count_ = 1, brightness_screen_ = 0;
     int drawing_ = -1, selected_ = -1;
     unsigned column_ = 0, field_ = 0, letter_ = 0, progress_ = 0, duration_ = 0, animation_screen_ = 0, animation_column_ = 0, dim_column_ = 0;
     uint32_t started_ = 0;
     uint8_t brightness_ = 128, requested_brightness_ = 128;
     void encode(unsigned index, uint16_t pixel) { transfer_[2 * index] = uint8_t(pixel >> 8); transfer_[2 * index + 1] = uint8_t(pixel); }
     uint16_t dim_pixel(unsigned screen, uint16_t pixel) const {
-        if (screen || brightness_ == 128) return pixel;
+        if (screen != brightness_screen_ || brightness_ == 128) return pixel;
         return uint16_t((((pixel >> 11) * brightness_ + 64) / 128) << 11 |
             (((((pixel >> 5) & 63) * brightness_ + 64) / 128) << 5) | (((pixel & 31) * brightness_ + 64) / 128));
     }
     void dim() {
-        auto &screen = screens_[0]; if (!screen.valid) return;
+        auto &screen = screens_[brightness_screen_]; if (!screen.valid) return;
         if (!dim_column_) { if (brightness_ == requested_brightness_) return; brightness_ = requested_brightness_; }
-        for (unsigned y = 0; y < screen.viewport.height; ++y) encode(y, dim_pixel(0, cache_[screen.offset + y * screen.viewport.width + dim_column_]));
-        if (submit_column(0, dim_column_, screen.viewport.height)) dim_column_ = (dim_column_ + 1) % screen.viewport.width;
+        for (unsigned y = 0; y < screen.viewport.height; ++y) encode(y, dim_pixel(brightness_screen_, cache_[screen.offset + y * screen.viewport.width + dim_column_]));
+        if (submit_column(brightness_screen_, dim_column_, screen.viewport.height)) dim_column_ = (dim_column_ + 1) % screen.viewport.width;
     }
     int text_y(unsigned field) const {
         const auto &line = painting_.lines[field];
@@ -217,30 +236,33 @@ private:
             start = end;
         }
     }
-    bool moving(unsigned screen) const { return selected_ >= 0 ? screen == unsigned(selected_) : screen + reserved_ < screens_.size(); }
+    bool moving(unsigned screen) const { return selected_ >= 0 ? screen >= unsigned(selected_) && screen - unsigned(selected_) < selected_count_ : screen + reserved_ < screens_.size(); }
+    bool panoramic() const { return panorama_ && (selected_ < 0 || selected_count_ > 1); }
     unsigned distance() const {
         unsigned result = 1;
-        for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i)) result = std::max(result, vertical_ ? screens_[i].viewport.height : screens_[i].viewport.width + (panorama_ && selected_ < 0 ? screens_[i].viewport.gap : 0));
+        for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i)) result = std::max(result, vertical_ ? screens_[i].viewport.height : screens_[i].viewport.width + (panoramic() ? screens_[i].viewport.gap : 0));
         return result;
     }
     uint16_t sample(unsigned screen, unsigned x, unsigned y) const {
         const auto &s = screens_[screen]; const auto v = s.viewport;
-        const unsigned shift = progress_ * (vertical_ ? v.height : v.width + (panorama_ && selected_ < 0 ? v.gap : 0)) / distance();
+        const unsigned shift = progress_ * (vertical_ ? v.height : v.width + (panoramic() ? v.gap : 0)) / distance();
         if (vertical_) {
             int source = int(y) + (undo_ ? -int(shift) : int(shift)); const bool incoming = source < 0 || source >= int(v.height);
             source = (source + int(v.height)) % int(v.height);
             return (incoming ? cache_ : previous_)[s.offset + unsigned(source) * v.width + x];
         }
         int source = int(x) + (undo_ ? int(shift) : -int(shift));
-        if (selected_ >= 0 || !panorama_) {
+        if (!panoramic()) {
             const bool incoming = source < 0 || source >= int(v.width); source = (source + int(v.width)) % int(v.width);
             return (incoming ? cache_ : previous_)[s.offset + y * v.width + unsigned(source)];
         }
         int pane = int(screen);
-        while (source < 0 && pane > 0) { --pane; source += int(screens_[unsigned(pane)].viewport.width + screens_[unsigned(pane)].viewport.gap); }
-        while (pane + 1 < int(screens_.size()) && source >= int(screens_[unsigned(pane)].viewport.width + screens_[unsigned(pane)].viewport.gap)) { source -= int(screens_[unsigned(pane)].viewport.width + screens_[unsigned(pane)].viewport.gap); ++pane; }
+        int first = selected_ >= 0 ? selected_ : 0;
+        int end = selected_ >= 0 ? std::min(int(screens_.size()),selected_ + int(selected_count_)) : int(screens_.size());
+        while (source < 0 && pane > first) { --pane; source += int(screens_[unsigned(pane)].viewport.width + screens_[unsigned(pane)].viewport.gap); }
+        while (pane + 1 < end && source >= int(screens_[unsigned(pane)].viewport.width + screens_[unsigned(pane)].viewport.gap)) { source -= int(screens_[unsigned(pane)].viewport.width + screens_[unsigned(pane)].viewport.gap); ++pane; }
         const auto &p = screens_[unsigned(pane)];
-        if (source < 0 || (pane + 1 == int(screens_.size()) && source >= int(p.viewport.width + p.viewport.gap))) {
+        if (source < 0 || (pane + 1 == end && source >= int(p.viewport.width + p.viewport.gap))) {
             source += source < 0 ? int(p.viewport.width + p.viewport.gap) : -int(p.viewport.width + p.viewport.gap);
             if (source < 0 || source >= int(p.viewport.width)) return 0;
             return cache_[p.offset + std::min(y, p.viewport.height - 1) * p.viewport.width + unsigned(source)];

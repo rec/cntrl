@@ -5,27 +5,27 @@ type = 'None'
 
 [pages.status]
 type = 'status'
-windows = 1
+min_windows = 1
 
 [pages.wide]
-type = 'status'
-windows = 2
+type = 'clock-tempo'
+min_windows = 2
 
 [pages.all]
-type = 'status'
-windows = 3
+type = 'clock-transport'
+min_windows = 2
 
 [pages.tap]
 type = 'tap-tempo'
-windows = 0
+min_windows = 0
 
 [pages.lead]
 type = 'patch-switcher'
-windows = 3
+min_windows = 1
 
 [pages.rhythm]
 type = 'patch-switcher'
-windows = 3
+min_windows = 1
 give_up_windows = ['left', 'right', 'center']
 
 [patches.lead]
