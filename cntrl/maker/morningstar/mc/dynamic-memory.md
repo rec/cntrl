@@ -96,6 +96,10 @@ a request even when a larger physical block exists; `allocatable` gives a
 conservative request that fits without list searching. `boot_checked` captures
 checked allocations immediately before setup storage loads; it is separate from
 setup-dependent allocations and does not establish the final runtime allowance.
+The SDK high-water locator reports `sdk_peak`, `sdk_request`, `sdk_caller` and
+`sdk_phase`. Resolve the caller using the image's exported ELF; a forwarding
+libc helper may be the recorded caller. Phases identify startup (0), setup
+storage (1), document activation (2), songs (3) and normal service (4).
 Linked
 allocation fault injection is available to qualification code through
 `heap_fault_after`; normal firmware leaves it disabled.
@@ -146,6 +150,13 @@ connected, allow the warm restart, and use `--inspect` before another run clears
 the retained record. A watchdog reset gives breadcrumbs rather than a fault PC.
 Instrumentation changes timing, so use a normal image for final performance
 measurements.
+
+The diagnostic checkpoint before continuations uses the shared headers exported by
+`git archive 72a949a firmware/include` into a generated source-root directory,
+and the target SDK locator sources. Pass that directory as `--source-root` with
+`--diagnostics` to reproduce the checkpoint without including unfinished shared
+changes. Keep the resulting image and ELF together; generated source exports and
+reports under `build/` are disposable and derive from the tracked Git sources.
 
 The tracked `qualification/dynamic-memory-thru.toml` setup enables the ordinary
 interface. Copy it with `cntrl setup copy`, using the built `target.toml`, then

@@ -909,13 +909,14 @@ bool native_asset_command(const char *line) {
     if (!std::strcmp(line, "CNTRL HEAP")) {
         if (!board.heap_diagnostic_ready()) { board.reply("CNTRL ERROR busy"); return true; }
         const auto heap = cntrl::device::heap_snapshot(true);
-        char response[512];
+        char response[640];
         std::snprintf(response, sizeof(response),
-            "CNTRL HEAP actual=%u checked=%u sdk=%u sdk_growth=%u largest=%u free_blocks=%u unallocated=%u peak=%u allocations=%u frees=%u failures=%u max_alloc_cycles=%u max_free_cycles=%u interrupt_allocations=%u valid=%u allocatable=%u boot_checked=%u",
+            "CNTRL HEAP actual=%u checked=%u sdk=%u sdk_growth=%u largest=%u free_blocks=%u unallocated=%u peak=%u allocations=%u frees=%u failures=%u max_alloc_cycles=%u max_free_cycles=%u interrupt_allocations=%u valid=%u allocatable=%u boot_checked=%u sdk_peak=%u sdk_caller=%lx sdk_request=%u sdk_phase=%u",
             heap.actual_used, heap.checked_actual, heap.sdk_used, heap.sdk_growth, heap.largest_free,
             heap.free_blocks, heap.unallocated, heap.trace.peak, heap.trace.allocations, heap.trace.frees,
             heap.trace.failures, heap.trace.max_allocation_cycles, heap.trace.max_free_cycles,
-            heap.trace.interrupt_allocations, heap.valid, heap.allocatable, heap.boot_checked);
+            heap.trace.interrupt_allocations, heap.valid, heap.allocatable, heap.boot_checked,
+            heap.trace.sdk_peak, (unsigned long)heap.trace.sdk_caller, heap.trace.sdk_request, heap.trace.sdk_phase);
         board.reply(response); return true;
     }
     if (!std::strcmp(line,"CNTRL MIDI LOOPER")) { midi_files.looper.status(board); return true; }
@@ -1013,9 +1014,13 @@ FLASHMEM void initialize_target() {
     splash_assets.boot();
     cntrl::device::initialize_heap_accounting(unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget)));
     randomSeed(Teensy3Clock.get() ^ ARM_DWT_CYCCNT);
+    cntrl::device::heap_phase(cntrl::device::HeapPhase::setups);
     if (card.ready && !setup_storage.boot()) board.error("Setup bundle invalid");
+    cntrl::device::heap_phase(cntrl::device::HeapPhase::documents);
     documents.boot();
+    cntrl::device::heap_phase(cntrl::device::HeapPhase::songs);
     if (card.ready && !songs.boot()) board.error("Song storage invalid");
+    cntrl::device::heap_phase(cntrl::device::HeapPhase::runtime);
 }
 
 namespace {

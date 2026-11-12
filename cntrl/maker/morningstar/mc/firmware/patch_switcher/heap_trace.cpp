@@ -15,6 +15,7 @@ cntrl::device::BoundedHeap heap;
 cntrl::device::HeapTrace trace;
 unsigned depth = 0, boot_sdk = 0, boot_checked = 0;
 unsigned active_context = 0;
+unsigned phase = 0;
 bool timing = false;
 int fault_after = -1;
 // Only bounded allocator metadata is protected. Large copies and calloc's
@@ -67,7 +68,7 @@ FLASHMEM bool begin(_reent *context, size_t request) {
     if (fault_after > 0 && request) --fault_after;
     return true;
 }
-FLASHMEM void complete(void *result, uint32_t started) {
+FLASHMEM void complete(void *result, uint32_t started, size_t request, uintptr_t caller) {
     if (timing) trace.max_allocation_cycles = std::max<unsigned>(trace.max_allocation_cycles, uint32_t(ARM_DWT_CYCCNT - started));
     if (!result) { ++trace.failures; return; }
     const unsigned current = chunk_bytes(result);
@@ -75,6 +76,13 @@ FLASHMEM void complete(void *result, uint32_t started) {
     trace.peak = std::max(trace.peak, trace.live + current);
     trace.live += current;
     if (heap.checked(result)) trace.checked += current;
+    else {
+        const unsigned sdk = trace.live - trace.checked;
+        if (sdk > trace.sdk_peak) {
+            trace.sdk_peak = sdk; trace.sdk_request = unsigned(request);
+            trace.sdk_caller = caller; trace.sdk_phase = phase;
+        }
+    }
 }
 }
 
@@ -86,7 +94,7 @@ extern "C" FLASHMEM void *__wrap__malloc_r(_reent *context, size_t size) {
     const bool admitted = begin(context, size);
     void *result = admitted ? heap.allocate(size, 8, !active_context && cntrl::memory_checked_operations) : nullptr;
     if (!result) context->_errno = ENOMEM;
-    if (admitted) complete(result, started);
+    if (admitted) complete(result, started, size, reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
     return result;
 }
 extern "C" FLASHMEM void *__wrap__calloc_r(_reent *context, size_t count, size_t size) {
@@ -115,7 +123,7 @@ extern "C" FLASHMEM void *__wrap__realloc_r(_reent *context, void *memory, size_
         result = admitted ? heap.allocate(size, 8, memory ? heap.checked(memory)
             : !active_context && cntrl::memory_checked_operations) : nullptr;
         if (!result) context->_errno = ENOMEM;
-        if (admitted) complete(result, started);
+        if (admitted) complete(result, started, size, reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
     }
     if (result && memory) {
         std::memcpy(result, memory, heap.usable(memory));
@@ -131,7 +139,7 @@ extern "C" FLASHMEM void *__wrap__memalign_r(_reent *context, size_t alignment, 
     const bool admitted = begin(context, size);
     void *result = admitted ? heap.allocate(size, alignment, !active_context && cntrl::memory_checked_operations) : nullptr;
     if (!result) context->_errno = alignment && !(alignment & (alignment - 1)) ? ENOMEM : EINVAL;
-    if (admitted) complete(result, started);
+    if (admitted) complete(result, started, size, reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
     return result;
 }
 extern "C" FLASHMEM void __wrap__free_r(_reent *context, void *memory) {
@@ -175,8 +183,10 @@ FLASHMEM void initialize_heap_accounting(unsigned linked_capacity) {
     timing = true;
     boot_sdk = trace.live >= trace.checked ? trace.live - trace.checked : 0;
     boot_checked = trace.checked;
+    trace.sdk_peak = boot_sdk; trace.sdk_caller = 0; trace.sdk_request = 0; trace.sdk_phase = 0;
     const auto snapshot = heap_snapshot();
     memory_budget = snapshot.valid && snapshot.sdk_used < linked_capacity ? linked_capacity - snapshot.sdk_used : 0;
 }
 FLASHMEM void heap_fault_after(int successful_calls) { fault_after = successful_calls; }
+FLASHMEM void heap_phase(HeapPhase value) { InterruptLock lock; phase = unsigned(value); }
 }
