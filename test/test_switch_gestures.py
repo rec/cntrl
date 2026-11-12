@@ -9,10 +9,32 @@ from cntrl.patch_switcher import compiler, models, resolved
 from scripts import native_tests
 
 
+@pytest.fixture
+def gesture_runner(tmp_path: Path) -> Path:
+    root = Path(__file__).parents[1]
+    executable = tmp_path / 'gestures'
+    native_tests.compile_native(
+        [
+            'c++',
+            '-std=c++17',
+            '-Wall',
+            '-Wextra',
+            '-Werror',
+            '-fsanitize=address,undefined',
+            f'-I{root / "firmware/include"}',
+            str(root / 'firmware/test/test_switch_gestures.cpp'),
+            '-o',
+            str(executable),
+        ],
+        check=True,
+    )
+    return executable
+
+
 @pytest.mark.parametrize('fast_switches', [True, False])
 @pytest.mark.parametrize('long_double', [True, False])
 def test_gesture_patches_round_trip_and_execute(
-    tmp_path: Path, fast_switches: bool, long_double: bool
+    tmp_path: Path, gesture_runner: Path, fast_switches: bool, long_double: bool
 ) -> None:
     assert models.Setup().fast_switches is True
     root = Path(__file__).parents[1]
@@ -47,26 +69,51 @@ def test_gesture_patches_round_trip_and_execute(
     assert compiler.compile_show(exported, {}, [], target) == data
     fixture = tmp_path / 'gestures.bin'
     fixture.write_bytes(data)
-    executable = tmp_path / 'gestures'
-    native_tests.compile_native(
+    native_tests.run_native(
         [
-            'c++',
-            '-std=c++17',
-            '-Wall',
-            '-Wextra',
-            '-Werror',
-            '-fsanitize=address,undefined',
-            f'-I{root / "firmware/include"}',
-            str(root / 'firmware/test/test_switch_gestures.cpp'),
-            '-o',
-            str(executable),
+            str(gesture_runner),
+            str(fixture),
+            str(int(fast_switches)),
+            str(int(long_double)),
         ],
         check=True,
     )
-    native_tests.run_native(
-        [str(executable), str(fixture), str(int(fast_switches)), str(int(long_double))],
-        check=True,
+
+
+@pytest.mark.parametrize('long_triple', [False, True])
+def test_triple_actions_round_trip_and_execute(
+    tmp_path: Path, gesture_runner: Path, long_triple: bool
+) -> None:
+    target = models.Target.model_validate(
+        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
     )
+    patches = [
+        dict(type='control-change', output='din', channel=1, controller=7, value=i)
+        for i in range(13)
+    ]
+    source = {
+        'switches': {
+            'test': {
+                'button': 'A',
+                'on': patches[0],
+                'gestures': {
+                    e: patches[i + 1]
+                    for i, e in enumerate(compiler.GESTURE_EVENTS)
+                    if long_triple or not e.startswith('long_triple')
+                },
+            }
+        }
+    }
+    data = compiler.compile_show(source, {}, [], target)
+    assert (
+        compiler.compile_show(
+            tomlkit.parse(resolved.export(data)).unwrap(), {}, [], target
+        )
+        == data
+    )
+    fixture = tmp_path / 'triple.bin'
+    fixture.write_bytes(data)
+    native_tests.run_native([str(gesture_runner), str(fixture), 'triple'], check=True)
 
 
 @pytest.mark.parametrize(
@@ -77,6 +124,10 @@ def test_gesture_patches_round_trip_and_execute(
         {'gestures': {'double_release': {'operation': 'brightness', 'value': 3}}},
         {'gestures': {'long_double_release': {'operation': 'brightness', 'value': 3}}},
         {'gestures': {'long_double_tap': {'patch': 'missing'}}},
+        {'gestures': {'triple_release': {'operation': 'brightness', 'value': 3}}},
+        {'gestures': {'long_triple_release': {'operation': 'brightness', 'value': 3}}},
+        {'gestures': {'triple_tap': {'patch': 'missing'}}},
+        {'gestures': {'long_triple_tap': {'patch': 'missing'}}},
         {'gestures': {'debounce': '50 ms', 'double_delay': '10 ms'}},
         {'gestures': {'repeat_interval': 0}},
         {'gestures': {'repeat': {'patch': 'missing'}}},

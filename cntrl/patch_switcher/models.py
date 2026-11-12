@@ -650,6 +650,10 @@ class SwitchGestures(BaseModel, frozen=True):
     repeat: Patch | None = None
     long_double_tap: Patch | None = None
     long_double_release: Patch | None = None
+    triple_tap: Patch | None = None
+    triple_release: Patch | None = None
+    long_triple_tap: Patch | None = None
+    long_triple_release: Patch | None = None
     debounce: Annotated[
         float,
         Field(strict=True, ge=0.001, le=1),
@@ -687,6 +691,10 @@ class SwitchGestures(BaseModel, frozen=True):
             raise ValueError('double_release requires double_tap')
         if self.long_double_release is not None and self.long_double_tap is None:
             raise ValueError('long_double_release requires long_double_tap')
+        if self.triple_release is not None and self.triple_tap is None:
+            raise ValueError('triple_release requires triple_tap')
+        if self.long_triple_release is not None and self.long_triple_tap is None:
+            raise ValueError('long_triple_release requires long_triple_tap')
         if (
             min(self.long_delay, self.double_delay, self.repeat_interval)
             < self.debounce

@@ -418,7 +418,8 @@ requests On at press, Off at release. `latched` requires both and alternates on
 successive presses. On and Off may use different Patch types, outputs and channels.
 
 Press assignments also accept a `gestures` table for release, long press,
-double taps, held second taps and repetition, with matching release actions.
+double and triple taps, held second or third taps, and repetition, with matching
+release actions.
 See [switch controls](momentary-latched.md#programmable-gestures) for timing,
 exclusivity and cancellation rules.
 

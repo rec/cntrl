@@ -30,14 +30,80 @@ struct Board : TestPatchHardware {
     void error(const char *) override { ++errors; }
 };
 
+void test_triples(Board &board, const cntrl::Document &document) {
+    cntrl::Switches switches(board, board, board);
+    switches.enter(document, 0);
+    const bool held = cntrl::u16(document.switch_gestures(0) + 20) != 65535;
+    auto tick = [&](uint32_t now) { for (unsigned i = 0; i < 10; ++i) switches.tick(now); };
+    auto edge = [&](bool down, uint32_t now) { switches.button(0, down, now); tick(now); };
+    auto first_two = [&](uint32_t base) {
+        board.sent.clear(); edge(true, base); edge(false, base + 10);
+        edge(true, base + 100); edge(false, base + 110);
+        assert(board.sent.empty());
+    };
+    first_two(100); edge(true, 300);
+    assert(board.sent == (held ? std::vector<unsigned>{} : std::vector<unsigned>{9}));
+    edge(false, 350); tick(1000); assert((board.sent == std::vector<unsigned>{9, 10}));
+    first_two(1100); tick(1509); assert(board.sent.empty());
+    tick(1510); assert((board.sent == std::vector<unsigned>{4, 5}));
+    board.sent.clear(); edge(true, 1600); edge(false, 1610); tick(1909);
+    assert(board.sent.empty()); tick(1910); assert((board.sent == std::vector<unsigned>{0, 1}));
+    // At the third-tap deadline, finish the double and start a fresh sequence.
+    first_two(2100); edge(true, 2510); assert((board.sent == std::vector<unsigned>{4, 5}));
+    edge(false, 2520); tick(2820); assert((board.sent == std::vector<unsigned>{4, 5, 0, 1}));
+    first_two(3000); edge(true, 3200);
+    switches.button(0, false, 3699); tick(4000);
+    assert((board.sent == std::vector<unsigned>{9, 10}));
+    first_two(4100); edge(true, 4300); tick(4799);
+    assert(board.sent == (held ? std::vector<unsigned>{} : std::vector<unsigned>{9}));
+    tick(4800); tick(4850);
+    assert(board.sent == (held ? std::vector<unsigned>{11} : std::vector<unsigned>{9}));
+    edge(false, 4900);
+    assert(board.sent == (held ? std::vector<unsigned>{11, 12} : std::vector<unsigned>{9, 10}));
+    // Holding the second press still selects the long double, excluding triples.
+    board.sent.clear(); edge(true, 5000); edge(false, 5010); edge(true, 5100);
+    tick(5600); edge(false, 5610); tick(6000);
+    assert((board.sent == std::vector<unsigned>{7, 8}));
+    first_two(6100); switches.close(); tick(6300); assert(board.sent.empty());
+    switches.enter(document, 0);
+    first_two(7100); edge(true, 7300); switches.close(); tick(7350);
+    assert(board.sent == (held ? std::vector<unsigned>{} : std::vector<unsigned>{9, 10}));
+    switches.enter(document, 0);
+    first_two(8100); edge(true, 8300); tick(8800); switches.close(); tick(8900);
+    assert(board.sent == (held ? std::vector<unsigned>{11, 12} : std::vector<unsigned>{9, 10}));
+
+    uint8_t settings[cntrl::gesture_record_size];
+    std::memcpy(settings, document.switch_gestures(0), sizeof(settings));
+    cntrl::SwitchGestures gesture; std::vector<unsigned> events;
+    auto recognize = [&](uint32_t now) { gesture.tick(now, true, [&](unsigned event) { events.push_back(event); }); };
+    auto triple_press = [&]() {
+        gesture.reset(settings); events.clear();
+        for (unsigned i = 0; i < 3; ++i) {
+            uint32_t now = 0xffffff00u + i * 100;
+            gesture.input(true, now); recognize(now);
+            if (i < 2) { gesture.input(false, now + 10); recognize(now + 10); }
+        }
+    };
+    triple_press(); recognize(443);
+    assert(events == (held ? std::vector<unsigned>{} : std::vector<unsigned>{9}));
+    gesture.input(false, 444); recognize(444);
+    assert(events == (held ? std::vector<unsigned>{11, 12} : std::vector<unsigned>{9, 10}));
+    if (held) {
+        settings[16] = settings[17] = settings[18] = settings[19] = 255;
+        triple_press(); recognize(444); gesture.input(false, 445); recognize(445);
+        assert((events == std::vector<unsigned>{11, 12}));
+    }
+}
+
 int main(int argc, char **argv) {
     cntrl::memory_budget = 192 * 1024;
-    assert(argc == 4);
-    const bool long_double = argv[3][0] == '1';
+    assert(argc == 3 || argc == 4);
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
     Board board; cntrl::Document document;
     assert(document.load(bytes.data(), unsigned(bytes.size()), board));
+    if (argc == 3) { test_triples(board, document); return 0; }
+    const bool long_double = argv[3][0] == '1';
     assert(document.fast_switches() == (argv[2][0] == '1'));
     cntrl::Switches switches(board, board, board);
     auto tick = [&](unsigned now) { for (unsigned i = 0; i < 10; ++i) switches.tick(now); };

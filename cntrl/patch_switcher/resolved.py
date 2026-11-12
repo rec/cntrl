@@ -384,9 +384,10 @@ def export(data: bytes) -> str:
                     shifted['off'] = _patch(
                         data, offset, fields[1], metadata, set(), labels
                     )
-                if fields[10]:
+                if fields[2 + len(GESTURE_EVENTS)]:
                     shifted['gestures'] = {
-                        t: fields[10 + j] / 1000 for j, t in enumerate(GESTURE_TIMINGS)
+                        t: fields[2 + len(GESTURE_EVENTS) + j] / 1000
+                        for j, t in enumerate(GESTURE_TIMINGS)
                     } | {
                         e: _patch(data, offset, fields[2 + j], metadata, set(), labels)
                         for j, e in enumerate(GESTURE_EVENTS)
@@ -406,9 +407,10 @@ def export(data: bytes) -> str:
                     * page_settings.KEYBOARD.size
                 )
             fields = GESTURES.unpack_from(data, address + i * GESTURES.size)
-            if fields[8]:
+            if fields[len(GESTURE_EVENTS)]:
                 gesture: dict[str, object] = {
-                    t: fields[8 + j] / 1000 for j, t in enumerate(GESTURE_TIMINGS)
+                    t: fields[len(GESTURE_EVENTS) + j] / 1000
+                    for j, t in enumerate(GESTURE_TIMINGS)
                 }
                 for j, event in enumerate(GESTURE_EVENTS):
                     if fields[j] != 65535:
@@ -634,7 +636,8 @@ def _patch(
             def gestures(address: int) -> dict[str, object]:
                 fields = GESTURES.unpack_from(data, address)
                 return {
-                    t: fields[8 + j] / 1000 for j, t in enumerate(GESTURE_TIMINGS)
+                    t: fields[len(GESTURE_EVENTS) + j] / 1000
+                    for j, t in enumerate(GESTURE_TIMINGS)
                 } | {
                     e: patch(fields[j])
                     for j, e in enumerate(GESTURE_EVENTS)
@@ -661,7 +664,9 @@ def _patch(
                 action.update(
                     mode=('press', 'momentary', 'latched')[mode], off=patch(off)
                 )
-            if struct.unpack_from('<H', data, record + SWITCH.size + 16)[0]:
+            if struct.unpack_from(
+                '<H', data, record + SWITCH.size + len(GESTURE_EVENTS) * 2
+            )[0]:
                 action['gestures'] = gestures(record + 72)
             enter, exit, override = SWITCH_HOOKS.unpack_from(
                 data, record + BINDING_HOOKS_OFFSET
@@ -677,9 +682,11 @@ def _patch(
                 shifted: dict[str, object] = {'on': patch(shifted_on)}
                 if shifted_off != 65535:
                     shifted['off'] = patch(shifted_off)
-                if struct.unpack_from('<H', data, record + BINDING_SHIFTED_OFFSET + 20)[
-                    0
-                ]:
+                if struct.unpack_from(
+                    '<H',
+                    data,
+                    record + BINDING_SHIFTED_OFFSET + 4 + len(GESTURE_EVENTS) * 2,
+                )[0]:
                     shifted['gestures'] = gestures(record + BINDING_SHIFTED_OFFSET + 4)
                 action['shifted'] = shifted
             bindings[key] = (

@@ -203,7 +203,14 @@ def test_long_double_actions_round_trip_in_each_control_layer(
 ) -> None:
     action = {
         'on': cc(7, 10),
-        'gestures': {'long_double_tap': cc(7, 100), 'long_double_release': cc(7, 0)},
+        'gestures': {
+            'long_double_tap': cc(7, 100),
+            'long_double_release': cc(7, 0),
+            'triple_tap': cc(7, 90),
+            'triple_release': cc(7, 0),
+            'long_triple_tap': cc(7, 110),
+            'long_triple_release': cc(7, 0),
+        },
     }
     if shifted:
         action = {'on': cc(7, 10), 'shifted': action}

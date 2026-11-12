@@ -178,7 +178,7 @@ it is never persisted across navigation, setup changes or restart.
 ## Programmable gestures
 
 A `press` assignment can include a `gestures` table. `on` is its single-press
-patch. The eight optional gesture patches accept the same Patch representation.
+patch. Optional gesture patches accept the same Patch representation.
 
 ```toml
 [switches.lead]
@@ -193,6 +193,10 @@ double_tap = 'boost'
 double_release = 'boost-release'
 long_double_tap = 'sustain-boost'
 long_double_release = 'sustain-boost-release'
+triple_tap = 'alternate'
+triple_release = 'alternate-release'
+long_triple_tap = 'sustain-alternate'
+long_triple_release = 'sustain-alternate-release'
 repeat = 'step'
 debounce = '20 ms'
 long_delay = '500 ms'
@@ -211,8 +215,9 @@ handling. With long press or repeat, a short press runs `on` followed by
 `repeat` if configured, and repeats at `repeat_interval` until release, when
 `long_release` runs. The long gesture excludes `on` and `release`.
 
-With `double_tap`, a short first release starts the double-tap window. A second
-debounced press strictly before `double_delay` runs `double_tap`, and its release
+With `double_tap`, a short first release starts the double-tap window. By
+default, a second debounced press strictly before `double_delay` runs
+`double_tap`, and its release
 runs `double_release`. That pair excludes the single and long gesture patches.
 Otherwise, when the window expires, `on` and `release` run in order. This adds
 up to `double_delay` after the first release to single-tap latency, plus input
@@ -221,17 +226,31 @@ starts a new tap. `long_release` requires `long_press` or `repeat`, and
 `double_release` requires `double_tap`. Omit any unneeded patch.
 
 With `long_double_tap`, the second press waits for the same `long_delay` used
-by a first-press hold. Releasing it before that threshold runs `double_tap`
-followed by `double_release`. Holding through the threshold runs
+by a first-press hold. Without triple gestures, releasing before that threshold
+runs `double_tap` followed by `double_release`. Holding through the threshold runs
 `long_double_tap`, and releasing afterward runs `long_double_release`.
 The held second press excludes ordinary double actions, first-press long
-actions and repeats. An ordinary double tap therefore runs on its second
-release when this hold gesture is configured. `long_double_release` requires
+actions and repeats. Without triple gestures, an ordinary double tap runs on
+its second release when this hold gesture is configured. `long_double_release` requires
 `long_double_tap`, which can also be used without an ordinary `double_tap`.
 Cancelling an undecided second press emits nothing. Cancelling a recognized
 hold runs its matching release action.
 
-These gesture slots use compiled setup format 40. Rebuild older compiled
+With `triple_tap` or `long_triple_tap`, a short second release starts another
+`double_delay` window. Double actions wait until that window expires.
+A third press strictly before its deadline selects the triple gesture instead.
+Without `long_triple_tap`, `triple_tap` fires on the third press and
+`triple_release` on its release. With `long_triple_tap`, a short third release
+runs that ordinary triple pair, while holding through `long_delay` fires
+`long_triple_tap` and lifting runs `long_triple_release`. A held second press
+still selects `long_double_tap` when configured, completing that sequence.
+The triple gestures exclude single and double actions and do not repeat.
+`triple_release` requires `triple_tap`. `long_triple_release` requires
+`long_triple_tap`. The long variant can be used without the ordinary triple.
+Cancellation pairs recognized triple actions with their releases and discards
+undecided sequences.
+
+These gesture slots use compiled setup format 41. Rebuild older compiled
 setups from their TOML sources before using them with this firmware.
 
 The gestures table is available only in `press` mode. Gesture patches stay in

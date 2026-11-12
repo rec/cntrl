@@ -12,8 +12,8 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 40;
-constexpr unsigned gesture_event_count = 8;
+constexpr unsigned document_version = 41;
+constexpr unsigned gesture_event_count = 12;
 constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
 constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
 constexpr unsigned shifted_action_size = 4 + gesture_record_size;
@@ -722,7 +722,9 @@ private:
             || u16(p + gesture_debounce_offset + 4) < debounce || u16(p + gesture_debounce_offset + 6) < debounce
             || (u16(p + 4) != 65535 && u16(p + 2) == 65535 && u16(p + 10) == 65535)
             || (u16(p + 8) != 65535 && u16(p + 6) == 65535)
-            || (u16(p + 14) != 65535 && u16(p + 12) == 65535))) return false;
+            || (u16(p + 14) != 65535 && u16(p + 12) == 65535)
+            || (u16(p + 18) != 65535 && u16(p + 16) == 65535)
+            || (u16(p + 22) != 65535 && u16(p + 20) == 65535))) return false;
         for (unsigned j = 0; j < gesture_event_count; ++j)
             if (u16(p + j * 2) != 65535 && (!debounce || u16(p + j * 2) >= count)) return false;
         return true;
