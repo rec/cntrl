@@ -1,5 +1,7 @@
 """Footprint experiments preserve production flags and read section byte counts."""
 
+from pathlib import Path
+
 import pytest
 
 from cntrl.maker.morningstar.mc.code_footprint import size_sections, variant_command
@@ -43,14 +45,17 @@ def test_variants_keep_linker_and_feature_flags(optimization: str, lto: bool) ->
     assert ('-fno-fat-lto-objects' in flags) == lto
 
 
-def test_diagnostic_link_is_explicit_and_keeps_its_map_beside_the_build() -> None:
+def test_diagnostic_link_is_explicit_and_keeps_its_map_beside_the_build(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / 'measurements' / 'Os-lto'
     command = [
         'arduino-cli',
         'compile',
         '--fqbn',
         'teensy:avr:teensy41:opt=osstd',
         '--build-path',
-        '/measurements/Os-lto/cntrl',
+        str(directory / 'cntrl'),
         '--build-property',
         'build.flags.ld=-Tcustom.ld',
         '/source/sketch',
@@ -60,5 +65,5 @@ def test_diagnostic_link_is_explicit_and_keeps_its_map_beside_the_build() -> Non
     diagnostic = variant_command(command, '-Os', True, diagnostic=True)
     assert (
         'build.flags.ld=-Tcustom.ld -Wl,--noinhibit-exec '
-        '"-Wl,-Map=/measurements/Os-lto/link.map"' in diagnostic
+        f'"-Wl,-Map={directory / "link.map"}"' in diagnostic
     )
