@@ -4,29 +4,26 @@
 #include <cntrl/memory.h>
 #include "heap_trace.h"
 #include "qualification.h"
+#include "bounded_heap.h"
 
 extern "C" {
 extern char _heap_start, _heap_end;
-extern char *__brkval;
-void *__real__malloc_r(_reent *, size_t);
-void *__real__calloc_r(_reent *, size_t, size_t);
-void *__real__realloc_r(_reent *, void *, size_t);
-void *__real__memalign_r(_reent *, size_t, size_t);
-void __real__free_r(_reent *, void *);
 }
 
-// Teensy 1.62.0 with teensy-compile 15.2.1, opt=osstd links newlib nano.
-// Its chunk stores size at 0 and next at 4; pointers have a size or negative
-// alignment displacement at ptr-4. This matches _malloc_usable_size_r.
-struct Chunk { uint32_t size; Chunk *next; };
-static_assert(sizeof(void *) == 4 && sizeof(Chunk) == 8);
-extern "C" Chunk *__malloc_free_list;
 namespace {
+cntrl::device::BoundedHeap heap;
 cntrl::device::HeapTrace trace;
-unsigned depth = 0, boot_sdk = 0;
+unsigned depth = 0, boot_sdk = 0, boot_checked = 0;
 unsigned active_context = 0;
 bool timing = false;
 int fault_after = -1;
+// Only bounded allocator metadata is protected. Large copies and calloc's
+// clearing happen after this guard restores the previous interrupt mask.
+struct InterruptLock {
+    uint32_t previous;
+    InterruptLock() { __asm__ volatile("mrs %0, primask" : "=r"(previous)); __disable_irq(); }
+    ~InterruptLock() { if (!previous) __enable_irq(); }
+};
 struct HeapCall {
     unsigned previous_context;
     bool nested;
@@ -55,120 +52,129 @@ struct QualificationHeap {
 #define CNTRL_HEAP_QUALIFY(freeing, pointer, size) ((void)0)
 #endif
 FLASHMEM unsigned chunk_bytes(const void *memory) {
-    if (!memory) return 0;
-    const auto address = reinterpret_cast<uintptr_t>(memory);
-    const auto first = reinterpret_cast<uintptr_t>(&_heap_start), end = reinterpret_cast<uintptr_t>(__brkval);
-    if (address < first + 4 || address >= end || (address & 7)) { trace.valid = false; return 0; }
-    const int32_t marker = reinterpret_cast<const int32_t *>(memory)[-1];
-    const auto header = marker < 0 ? address - uint32_t(-int64_t(marker)) - 4 : address - 4;
-    if (header < first || header + 4 > end || (header & 3)) { trace.valid = false; return 0; }
-    const unsigned size = *reinterpret_cast<const uint32_t *>(header);
-    if (size < 12 || (size & 3) || size > end - header) { trace.valid = false; return 0; }
+    const unsigned size = heap.charge(memory);
+    if (memory && !size) trace.valid = false;
     return size;
 }
-FLASHMEM bool begin(_reent *context, size_t request, bool reallocating) {
-    ++trace.allocations; trace.reallocations += reallocating;
+FLASHMEM bool begin(_reent *context, size_t request) {
+    if (!heap.capacity() && !heap.initialize(&_heap_start,
+        uintptr_t(&_heap_end) - uintptr_t(&_heap_start))) {
+        ++trace.failures; context->_errno = ENOMEM; return false;
+    }
+    ++trace.allocations;
     trace.largest_request = std::max(trace.largest_request, unsigned(std::min<size_t>(request, UINT32_MAX)));
     if (fault_after == 0 && request) { ++trace.failures; context->_errno = ENOMEM; return false; }
     if (fault_after > 0 && request) --fault_after;
     return true;
 }
-FLASHMEM void complete(void *result, unsigned previous, bool released, uint32_t started) {
+FLASHMEM void complete(void *result, uint32_t started) {
     if (timing) trace.max_allocation_cycles = std::max<unsigned>(trace.max_allocation_cycles, uint32_t(ARM_DWT_CYCCNT - started));
-    if (!result && !released) { ++trace.failures; return; }
+    if (!result) { ++trace.failures; return; }
     const unsigned current = chunk_bytes(result);
-    // Conservative peak for realloc: it may allocate the complete replacement
-    // before freeing the original even when a particular call grows in place.
+    // Realloc growth retains the complete original until copying finishes.
     trace.peak = std::max(trace.peak, trace.live + current);
-    trace.live = trace.live - previous + current;
-    if (cntrl::memory_checked_operations) trace.checked = trace.checked - previous + current;
+    trace.live += current;
+    if (heap.checked(result)) trace.checked += current;
 }
 }
 
 extern "C" FLASHMEM void *__wrap__malloc_r(_reent *context, size_t size) {
+    InterruptLock lock;
     HeapCall call(true);
-    if (call.nested) return __real__malloc_r(context, size);
     CNTRL_HEAP_QUALIFY(false, nullptr, size);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
-    const bool admitted = begin(context, size, false);
-    void *result = admitted ? __real__malloc_r(context, size) : nullptr;
-    if (admitted) complete(result, 0, false, started);
+    const bool admitted = begin(context, size);
+    void *result = admitted ? heap.allocate(size, 8, !active_context && cntrl::memory_checked_operations) : nullptr;
+    if (!result) context->_errno = ENOMEM;
+    if (admitted) complete(result, started);
     return result;
 }
 extern "C" FLASHMEM void *__wrap__calloc_r(_reent *context, size_t count, size_t size) {
-    HeapCall call(true);
-    if (call.nested) return __real__calloc_r(context, count, size);
-    const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
-    const size_t request = count && size > SIZE_MAX / count ? SIZE_MAX : count * size;
-    CNTRL_HEAP_QUALIFY(false, nullptr, request);
-    const bool admitted = begin(context, request, false);
-    void *result = admitted ? __real__calloc_r(context, count, size) : nullptr;
-    if (admitted) complete(result, 0, false, started);
+    if (count && size > SIZE_MAX / count) {
+        InterruptLock lock;
+        ++trace.allocations; ++trace.failures; trace.largest_request = UINT32_MAX;
+        context->_errno = ENOMEM; return nullptr;
+    }
+    const size_t request = count * size;
+    void *result = __wrap__malloc_r(context, request);
+    if (result) std::memset(result, 0, request);
     return result;
 }
+extern "C" void __wrap__free_r(_reent *context, void *memory);
 extern "C" FLASHMEM void *__wrap__realloc_r(_reent *context, void *memory, size_t size) {
-    HeapCall call(true);
-    if (call.nested) return __real__realloc_r(context, memory, size);
-    CNTRL_HEAP_QUALIFY(false, memory, size);
-    const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
-    const unsigned previous = chunk_bytes(memory);
-    const bool admitted = begin(context, size, true);
-    void *result = admitted ? __real__realloc_r(context, memory, size) : nullptr;
-    if (admitted) complete(result, previous, !size, started);
+    { InterruptLock lock; ++trace.reallocations; }
+    if (!size && memory) { __wrap__free_r(context, memory); return nullptr; }
+    if (memory && size <= heap.usable(memory)) return memory;
+    void *result;
+    {
+        InterruptLock lock;
+        HeapCall call(true);
+        CNTRL_HEAP_QUALIFY(false, memory, size);
+        const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
+        const bool admitted = begin(context, size);
+        result = admitted ? heap.allocate(size, 8, memory ? heap.checked(memory)
+            : !active_context && cntrl::memory_checked_operations) : nullptr;
+        if (!result) context->_errno = ENOMEM;
+        if (admitted) complete(result, started);
+    }
+    if (result && memory) {
+        std::memcpy(result, memory, heap.usable(memory));
+        __wrap__free_r(context, memory);
+    }
     return result;
 }
 extern "C" FLASHMEM void *__wrap__memalign_r(_reent *context, size_t alignment, size_t size) {
+    InterruptLock lock;
     HeapCall call(true);
-    if (call.nested) return __real__memalign_r(context, alignment, size);
     CNTRL_HEAP_QUALIFY(false, nullptr, size);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
-    const bool admitted = begin(context, size, false);
-    void *result = admitted ? __real__memalign_r(context, alignment, size) : nullptr;
-    if (admitted) complete(result, 0, false, started);
+    const bool admitted = begin(context, size);
+    void *result = admitted ? heap.allocate(size, alignment, !active_context && cntrl::memory_checked_operations) : nullptr;
+    if (!result) context->_errno = alignment && !(alignment & (alignment - 1)) ? ENOMEM : EINVAL;
+    if (admitted) complete(result, started);
     return result;
 }
 extern "C" FLASHMEM void __wrap__free_r(_reent *context, void *memory) {
+    (void)context;
+    InterruptLock lock;
     HeapCall call(false);
-    if (call.nested) { __real__free_r(context, memory); return; }
     CNTRL_HEAP_QUALIFY(true, memory, 0);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
     const unsigned previous = chunk_bytes(memory);
-    __real__free_r(context, memory);
+    const bool checked = heap.checked(memory);
+    heap.release(memory);
     trace.live -= previous;
-    if (cntrl::memory_checked_operations) trace.checked -= previous;
+    if (checked) trace.checked -= previous;
     trace.frees += bool(memory);
     if (timing) trace.max_free_cycles = std::max<unsigned>(trace.max_free_cycles, uint32_t(ARM_DWT_CYCCNT - started));
 }
+extern "C" FLASHMEM size_t __wrap__malloc_usable_size_r(_reent *, void *memory) {
+    InterruptLock lock;
+    return heap.usable(memory);
+}
 
 namespace cntrl::device {
-FLASHMEM HeapSnapshot heap_snapshot() {
+FLASHMEM HeapSnapshot heap_snapshot(bool inspect_blocks) {
+    InterruptLock lock;
     HeapSnapshot result; result.trace = trace; result.valid = trace.valid;
-    const auto info = mallinfo(); result.actual_used = info.uordblks;
+    result.actual_used = heap.used();
     result.checked_actual = trace.checked;
     result.sdk_used = trace.live >= trace.checked ? trace.live - trace.checked : 0;
     result.sdk_growth = result.sdk_used > boot_sdk ? result.sdk_used - boot_sdk : 0;
-    const auto first = reinterpret_cast<uintptr_t>(&_heap_start), end = reinterpret_cast<uintptr_t>(__brkval);
-    const auto limit = reinterpret_cast<uintptr_t>(&_heap_end);
-    if (end < first || end > limit || trace.live != info.uordblks
+    result.boot_checked = boot_checked;
+    if (trace.live != heap.used()
         || trace.checked > trace.live || trace.checked != memory_used) result.valid = false;
-    result.unallocated = end <= limit ? unsigned(limit - end) : 0;
-    unsigned traversed = 0;
-    for (auto *chunk = __malloc_free_list; chunk; chunk = chunk->next) {
-        const auto address = reinterpret_cast<uintptr_t>(chunk);
-        if (address < first || address + sizeof(Chunk) > end || (address & 3)
-            || chunk->size < 12 || (chunk->size & 3) || chunk->size > end - address
-            || ++traversed > (end - first) / 12) { result.valid = false; break; }
-        result.largest_free = std::max<unsigned>(result.largest_free, (chunk->size - 8) & ~3u);
-        ++result.free_blocks;
-    }
-    // A fresh nano allocation needs round_up(request,4)+8 bytes.
-    if (result.unallocated >= 12) result.largest_free = std::max(result.largest_free, (result.unallocated - 8) & ~3u);
+    result.unallocated = heap.capacity() - heap.used();
+    result.allocatable = heap.largest_free(); result.free_blocks = heap.free_blocks();
+    if (inspect_blocks && !heap.inspect(result.largest_free)) result.valid = false;
     return result;
 }
 FLASHMEM void initialize_heap_accounting(unsigned linked_capacity) {
+    InterruptLock lock;
     memory_actual_charge = chunk_bytes;
     timing = true;
     boot_sdk = trace.live >= trace.checked ? trace.live - trace.checked : 0;
+    boot_checked = trace.checked;
     const auto snapshot = heap_snapshot();
     memory_budget = snapshot.valid && snapshot.sdk_used < linked_capacity ? linked_capacity - snapshot.sdk_used : 0;
 }

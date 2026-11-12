@@ -169,7 +169,7 @@ def compile_command(
     if (root / 'patch_switcher/heap_trace.cpp').is_file():
         properties['build.flags.ld'] += (
             ' -Wl,--wrap=_malloc_r,--wrap=_calloc_r,--wrap=_realloc_r,'
-            '--wrap=_free_r,--wrap=_memalign_r'
+            '--wrap=_free_r,--wrap=_memalign_r,--wrap=_malloc_usable_size_r'
         )
     command = [
         str(cli),

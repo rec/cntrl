@@ -41,8 +41,16 @@ The tracked `firmware/test/test_dynamic_memory_stress.cpp` exercises dense graph
 limited RAM and deterministic allocation faults. It exposed an unsent onset
 blocking older releases; that path now refuses the new onset without retiring
 the older voices. Host timings are comparative measurements, not pedal deadlines.
-The user has left the defer-versus-reject CPU policy open until stress results
-are available. Physical timing, the live allocator's worst-case latency, linked
+Physical stress measured an ingress call of 9.30 ms with about 2700 queued events.
+The user chose preparation across cycles, preserving MIDI order and prioritizing
+the causal preparation through a release over later work. Earlier accepted
+changes can delay a release under overload; already-prepared playback and cleanup
+run first. That continuation implementation is in progress.
+
+One bounded shared RAM2 allocator now replaces the SDK and checked application's
+newlib allocation path. Metadata lookup/coalescing has bounded work; payload
+zeroing/copying remains proportional to size. Independent sanitizer tests cover
+fragmentation and failed replacement. Physical timing, payload-copy latency, linked
 SDK allocation coverage and final stack/heap qualification remain completion
 gates. Do not describe these checked collections alone as a bounded allocator.
 

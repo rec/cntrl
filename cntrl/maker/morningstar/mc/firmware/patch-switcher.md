@@ -387,7 +387,7 @@ is sized to its contents; staging and scratch are released when idle. Reusing an
 active font retains its allocation and counts it once. During a setup change,
 both old and newly loaded data count until the change commits or is cancelled.
 Allocation failure preserves the active setup and fonts and reports an error.
-The target charges each checked allocation's actual pinned newlib-nano chunk,
+The target's bounded shared RAM2 allocator charges each checked allocation's actual chunk,
 including alignment and allocator overhead. Native tests use the ARM admission
 model `round_up(payload, 8) + 8`; host estimates also include allocation costs.
 Replacing a buffer requires room for both complete allocations before copying.
@@ -397,18 +397,24 @@ still prevent an allocation even when sufficient total free bytes remain.
 
 With playback, clocks and held notes/pedals stopped and MIDI inputs quiet,
 `CNTRL HEAP` reports actual checked and SDK heap bytes, SDK growth since boot,
-largest ordinary-malloc request available, free-block count, allocation/failure
+exact largest free block, conservative allocatable request, free-block count, allocation/failure
 counts and maximum allocation/free cycle counts. It refuses active performance.
-This explicit diagnostic walks the pinned allocator's free list; it is not run
-by normal MIDI service. `valid=1` confirms that traced chunks match `mallinfo`
-and the free-list representation passes validation. A reported peak is a
+This explicit diagnostic validates the allocator's physical block chain; it is not run
+by normal MIDI service. Ordinary status reads bounded counters and size-class
+bitmaps. `valid=1` confirms the chunk chain and checked/SDK accounting agree.
+`boot_checked` records checked memory immediately before loading setup storage.
+A reported peak is a
 conservative peak for reallocations, which may temporarily require both blocks.
 Linked allocator faults are disabled normally and can be enabled only by the
 qualification harness through `device::heap_fault_after`.
 
-These counters do not establish a MIDI timing bound for newlib's linear free-list
-search. Physical fragmentation and timing qualification remain necessary before
-claiming that live allocation meets the scan deadline.
+One arena serves SDK and application allocations. Bitmap lookup and adjacent
+coalescing bound allocator metadata work; calloc clearing and realloc copying
+remain proportional to payload size and happen outside the interrupt guard.
+Class rounding can conservatively refuse a request below the exact largest free
+block, so `allocatable` reports a guaranteed class-bound request separately.
+Physical timing qualification remains necessary before claiming that complete
+live operations meet the scan deadline.
 
 The target supports 32 routed instruments, 128 categories and 128 Undo entries.
 Record sizes impose an upper bound that depends on instrument/category tables,

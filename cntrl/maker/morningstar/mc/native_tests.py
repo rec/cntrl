@@ -48,6 +48,7 @@ def run(options: Tests) -> None:
 
 
 TESTS = [
+    ('bounded-heap', ['test_bounded_heap.cpp', 'patch_switcher/bounded_heap.cpp'], []),
     ('switch-gesture', ['test_switch_gesture.cpp'], []),
     ('boot-selection', ['test_boot_selection.cpp'], []),
     ('pair-timing', ['test_pair_timing.cpp'], []),

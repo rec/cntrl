@@ -19,8 +19,8 @@ inline int memory_fail_after = -1;
 // when the compiler treats those calls as allocation builtins.
 inline unsigned memory_checked_operations = 0;
 inline unsigned (*memory_actual_charge)(const void *) = nullptr;
-// The pinned Cortex-M7 newlib nano allocator aligns chunks to 8 bytes. Its
-// chunk header/alignment allowance costs 8 more. Native tests use this target
+// The target's bounded RAM2 allocator aligns chunks to 8 bytes and uses an
+// 8-byte header (minimum block: 16 bytes). Native tests use this target
 // admission model, independently of their operating system's malloc overhead.
 constexpr uint64_t memory_charge(unsigned length) {
     return length ? ((uint64_t(length) + 7) & ~uint64_t(7)) + 8 : 0;

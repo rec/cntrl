@@ -7,7 +7,7 @@ from typing import Annotated
 
 import tomlkit
 import tyro
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from reccy.configuration.tyro import unit_spec
 from reccy.configuration.units import Seconds
 
@@ -26,6 +26,11 @@ class Options(BaseModel, frozen=True):
     port: Path = Path('/dev/cu.usbmodem144682801')
     expect_enabled: bool = False
     stress_seconds: Annotated[Seconds, unit_spec(Seconds, 'DURATION')] = 0
+    stress_bursts: Annotated[int, Field(strict=True, gt=0)] | None = None
+    """For recovery checks, cap sends then observe until the stress duration ends.
+
+    Uncapped runs continuously load the CPU and can leave an OS/USB backlog.
+    """
     stress_only: bool = False
     """Skip exact byte checks for transforming graphs; send only PC/modulation load."""
     report: Path | None = None
@@ -37,6 +42,12 @@ class Options(BaseModel, frozen=True):
             raise ValueError('inspect and run are separate modes; select only one')
         if self.stress_only and (not self.run or self.stress_seconds <= 0):
             raise ValueError('stress-only requires --run and positive --stress-seconds')
+        if self.stress_bursts is not None and (
+            not self.run or self.stress_seconds <= 0
+        ):
+            raise ValueError(
+                'stress-bursts requires --run and positive --stress-seconds'
+            )
         return self
 
     model_config = ConfigDict(extra='forbid')
@@ -243,13 +254,20 @@ def run(options: Options) -> None:
                     midi.data.clear()
                     begin = time.monotonic()
                     deadline = begin + options.stress_seconds
+                    sending_finished = begin
                     calls = 0
                     while time.monotonic() < deadline:
-                        for p in peers:
-                            midi.send(p, messages)
-                        calls += 1
+                        if (
+                            options.stress_bursts is None
+                            or calls < options.stress_bursts
+                        ):
+                            for p in peers:
+                                midi.send(p, messages)
+                            calls += 1
+                            sending_finished = time.monotonic()
                         time.sleep(0.001)
                     time.sleep(0.5)
+                    finished = time.monotonic()
                     print(
                         f'Overload: {calls} bursts to {len(peers)} outputs', flush=True
                     )
@@ -258,7 +276,9 @@ def run(options: Options) -> None:
                         'outputs': len(peers),
                         'sent_bytes': calls * len(peers) * len(messages),
                         'received_bytes': len(midi.data),
-                        'elapsed_seconds': time.monotonic() - begin,
+                        'sending_seconds': sending_finished - begin,
+                        'observation_seconds': finished - sending_finished,
+                        'elapsed_seconds': finished - begin,
                     }
                     report['stress_timing'] = client.request('CNTRL MIDI STATUS 0')
             finally:

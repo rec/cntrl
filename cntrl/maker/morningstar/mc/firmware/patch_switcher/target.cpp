@@ -33,10 +33,9 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/disk_speed.h>
 #include <cntrl/midi_file_transfer.h>
 #include <USBHost_t36.h>
-#include <malloc.h>
 #include <charconv>
 #include <new>
-extern "C" { extern char _ebss, _heap_end; extern char *__brkval; }
+extern "C" char _ebss;
 extern "C" char cntrl_memory_budget;
 #include <cntrl/documents.h>
 #include <cntrl/patch_sources.h>
@@ -885,8 +884,8 @@ PerformanceStatus performance_status() {
     uintptr_t end = reinterpret_cast<uintptr_t>(&_ebss);
     result.ram_free[0] = stack > end ? uint32_t(stack - end) : 0;
     result.ram_used[0] = 512 * 1024 - result.ram_free[0];
-    const auto heap = mallinfo();
-    result.ram_free[1] = uint32_t(reinterpret_cast<uintptr_t>(&_heap_end) - reinterpret_cast<uintptr_t>(__brkval)) + heap.fordblks;
+    const auto heap = cntrl::device::heap_snapshot();
+    result.ram_free[1] = heap.unallocated;
     result.ram_used[1] = 512 * 1024 - result.ram_free[1];
     result.cycles = documents.document().patch_cycles(); result.patches = documents.document().patches();
     return result;
@@ -909,14 +908,14 @@ bool native_asset_command(const char *line) {
 #endif
     if (!std::strcmp(line, "CNTRL HEAP")) {
         if (!board.heap_diagnostic_ready()) { board.reply("CNTRL ERROR busy"); return true; }
-        const auto heap = cntrl::device::heap_snapshot();
-        char response[384];
+        const auto heap = cntrl::device::heap_snapshot(true);
+        char response[512];
         std::snprintf(response, sizeof(response),
-            "CNTRL HEAP actual=%u checked=%u sdk=%u sdk_growth=%u largest=%u free_blocks=%u unallocated=%u peak=%u allocations=%u frees=%u failures=%u max_alloc_cycles=%u max_free_cycles=%u interrupt_allocations=%u valid=%u",
+            "CNTRL HEAP actual=%u checked=%u sdk=%u sdk_growth=%u largest=%u free_blocks=%u unallocated=%u peak=%u allocations=%u frees=%u failures=%u max_alloc_cycles=%u max_free_cycles=%u interrupt_allocations=%u valid=%u allocatable=%u boot_checked=%u",
             heap.actual_used, heap.checked_actual, heap.sdk_used, heap.sdk_growth, heap.largest_free,
             heap.free_blocks, heap.unallocated, heap.trace.peak, heap.trace.allocations, heap.trace.frees,
             heap.trace.failures, heap.trace.max_allocation_cycles, heap.trace.max_free_cycles,
-            heap.trace.interrupt_allocations, heap.valid);
+            heap.trace.interrupt_allocations, heap.valid, heap.allocatable, heap.boot_checked);
         board.reply(response); return true;
     }
     if (!std::strcmp(line,"CNTRL MIDI LOOPER")) { midi_files.looper.status(board); return true; }

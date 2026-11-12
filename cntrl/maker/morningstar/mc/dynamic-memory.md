@@ -68,19 +68,35 @@ arpeggiator resources are prepared before publication. Active/undo/candidate
 looper roles remain separate, but disabled/empty generations reserve no event
 buffers. Explicit arm estimates are reported separately from idle allocations.
 
-The linked allocator is traced through the reentrant newlib allocation APIs.
-`MemoryBuffer` charges actual nano chunks on this target and retains the old
+The target routes the reentrant SDK allocation APIs and checked application
+allocations into one bounded RAM2 arena. Two-level bitmaps find a fitting size
+class without scanning its list; adjacent free blocks coalesce immediately.
+The bitmap dimensions follow the 32-bit size domain, rather than feature counts.
+Allocator metadata operations have a fixed bound; clearing and copying remain
+proportional to byte count and happen outside the interrupt-protected metadata
+section. The first allocation initializes the arena, including global constructors.
+There is no separate SDK heap or fallback to newlib's allocator.
+
+`MemoryBuffer` charges actual arena chunks on this target and retains the old
 allocation until a complete replacement is admitted. Native tests and host
 estimates use the documented alignment/header model, independently of the native
 operating system's allocator. SDK bootstrap use is subtracted from the available
 budget; later SDK growth is reported separately. The tracked
-`firmware/patch_switcher/heap_trace.cpp` depends on the pinned toolchain's nano
-chunk layout. Its totals and validity must be checked on the physical target.
+`firmware/patch_switcher/heap_trace.cpp` tracks checked ownership in each chunk,
+including reallocations and frees from a different execution context. Its totals
+and validity must be checked on the physical target.
 
 `CNTRL HEAP` is an explicit idle-only diagnostic. It reports actual checked/SDK
-bytes, SDK growth, largest free block, free block count, conservative peak,
+bytes, SDK growth, exact largest free block (`largest`), the size-class request
+bound (`allocatable`), free block count, conservative peak,
 allocation failures, allocator cycle maxima and interrupt allocation count.
-It walks the free list only when requested, outside MIDI service. Linked
+It validates the physical block chain only when requested, outside MIDI service.
+Ordinary status uses bounded counters and bitmaps. Size-class rounding can refuse
+a request even when a larger physical block exists; `allocatable` gives a
+conservative request that fits without list searching. `boot_checked` captures
+checked allocations immediately before setup storage loads; it is separate from
+setup-dependent allocations and does not establish the final runtime allowance.
+Linked
 allocation fault injection is available to qualification code through
 `heap_fault_after`; normal firmware leaves it disabled.
 
@@ -100,9 +116,13 @@ recovery work. Rebuild with the usual native test flags for sanitizers, or
 `-O2` without sanitizers for comparative timings. Logs and binaries in `build/`
 are disposable outputs; the complete harness and native suite entry are tracked.
 
-These results do not establish pedal timing. The CPU defer/reject policy and
-the general allocator's worst-case latency remain open pending target stress
-measurements. No bounded allocator or completed physical qualification is claimed.
+The original native results do not establish pedal timing. The bounded allocator
+has independent sanitizer coverage for fragmentation, contents, alignment,
+coalescing, failed realloc and metadata-operation counts. Its physical timing,
+payload-copy costs and the final stack/heap allowance remain qualification gates.
+The user chose preparation across service cycles while preserving MIDI order;
+earlier preparation through a release may delay it under overload. Physical
+qualification remains in progress.
 
 ## Physical qualification procedure
 
@@ -149,6 +169,10 @@ uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --run -
 The dense graph changes output multiplicity. Stress-only reports explicitly skip
 byte verification and capture CPU/service-gap, heap and refusal counters instead.
 The flood sends Program Change and modulation messages without holding notes.
+For recovery measurement, add `--stress-bursts 1` to send one bounded burst to
+each endpoint, then observe until the configured duration ends. Reports separate
+sending and observation time. An uncapped flood can leave substantial queued
+traffic in the host USB stack after sending stops, obscuring target recovery.
 Save the original setup selection before testing and restore it afterwards;
 temporary probe setups can then be removed with `cntrl setup del`.
 
@@ -217,9 +241,11 @@ storage changes which region bears its cost, and may introduce DMA/cache alignme
 requirements. Record actual linker placement rather than assuming every dynamic
 or fixed buffer lives in the same region.
 
-The status code in `target.cpp` currently estimates RAM2 free space from the
-unextended heap plus `mallinfo().fordblks`. It does not report the largest free
-block or distinguish the shared `MemoryBuffer` ledger from raw/STL allocations.
+At the original audit, the status code in `target.cpp` estimated RAM2 free space
+from the unextended heap plus `mallinfo().fordblks`. It did not report the largest
+free block or distinguish the `MemoryBuffer` ledger from raw/STL allocations.
+The current status uses bounded arena counters, while the explicit idle heap
+diagnostic validates the physical chunks and reports checked and SDK usage.
 RAM1 free space uses the current stack pointer relative to static data, which is
 not a worst-case stack high-water mark. A large navigation or pane copy can matter
 even if a later status query looks healthy.

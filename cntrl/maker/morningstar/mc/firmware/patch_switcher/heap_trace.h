@@ -14,13 +14,14 @@ struct HeapTrace {
 };
 struct HeapSnapshot {
     HeapTrace trace;
-    unsigned actual_used = 0, checked_actual = 0, sdk_used = 0, sdk_growth = 0;
-    unsigned largest_free = 0, free_blocks = 0, unallocated = 0;
+    unsigned actual_used = 0, checked_actual = 0, sdk_used = 0, sdk_growth = 0, boot_checked = 0;
+    unsigned largest_free = 0, allocatable = 0, free_blocks = 0, unallocated = 0;
     bool valid = false;
 };
-// Snapshot walks the pinned allocator's free list. Call only outside MIDI
-// service; it is a diagnostic and has no bounded execution-time guarantee.
-HeapSnapshot heap_snapshot();
+// Default snapshots read bounded counters/bitmaps. Inspecting the physical
+// block chain supplies exact largest_free and validates accounting; request
+// this only from the explicit idle diagnostic, never from performance service.
+HeapSnapshot heap_snapshot(bool inspect_blocks = false);
 void initialize_heap_accounting(unsigned linked_capacity);
 // Enables linked-allocator faults only when explicitly requested by a
 // qualification harness. Negative disables faults; zero fails the next call.

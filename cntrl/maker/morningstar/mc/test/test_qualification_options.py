@@ -37,6 +37,23 @@ def test_inspection_is_a_separate_mode_without_midi_run_options() -> None:
         Options(inspect=True, run=True)
 
 
+def test_burst_cap_requires_a_positive_count_and_a_timed_run() -> None:
+    options = tyro.cli(
+        Options,
+        args=['--run', '--stress-seconds', '30 seconds', '--stress-bursts', '1'],
+    )
+    assert options.stress_bursts == 1 and options.stress_seconds == 30
+    assert Options(run=True, stress_seconds=30).stress_bursts is None
+    for values in (
+        {'stress_bursts': 1, 'stress_seconds': 30},
+        {'run': True, 'stress_bursts': 1},
+        {'run': True, 'stress_bursts': 0, 'stress_seconds': 30},
+        {'run': True, 'stress_bursts': -1, 'stress_seconds': 30},
+    ):
+        with pytest.raises(ValueError):
+            Options.model_validate(values)
+
+
 def test_report_option_preserves_diagnostics_as_toml(tmp_path: Path) -> None:
     path = tmp_path / 'run' / 'report.toml'
     options = tyro.cli(Options, args=['--report', str(path)])
