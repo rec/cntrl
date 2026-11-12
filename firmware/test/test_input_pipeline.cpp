@@ -123,10 +123,9 @@ static void raw_press_reaches_midi(std::vector<uint8_t> bytes, bool fast, uint32
     assert(configuration.load(bytes.data(), unsigned(bytes.size()), hardware)); assert(configuration.fast_switches() == fast);
     cntrl::Controller primary(hardware, hardware, hardware); hardware.controller = &primary;
     cntrl::Documents documents(setups, hardware, primary, hardware); cntrl::Songs songs(song_storage, hardware);
-    alignas(cntrl::Controller) unsigned char extra[(cntrl::PageLayout::max_controllers - 1) * sizeof(cntrl::Controller)];
-    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i) new (extra + (i - 1) * sizeof(cntrl::Controller)) cntrl::Controller(hardware, hardware, hardware, 5 + i);
     {
-        cntrl::ui::Application application(hardware, documents, primary, extra, songs, hardware, true);
+        cntrl::ui::Application application(hardware, documents, primary, hardware, hardware, songs, hardware, true);
+        assert(application.prepare_pages(configuration.page_layout())); application.finish_pages(true);
         application.layout = configuration.page_layout(); primary.activate(configuration, false);
         constexpr cntrl::ui::ControlBinding bindings[] = {{2, "A"}, {1, "B"}, {0, "C"}, {5, "D"}, {4, "E"}, {3, "F"}};
         cntrl::ButtonState states[6];
@@ -142,9 +141,44 @@ static void raw_press_reaches_midi(std::vector<uint8_t> bytes, bool fast, uint32
         assert((hardware.packets == std::vector<std::vector<uint8_t>>{{0xb0, 0, 1}, {0xb0, 32, 2}, {0xc0, 0}, {0xb0, 7, 100}, {0xb0, 10, 0}}));
         assert(services.displays == 41);
     }
-    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i) std::launder(reinterpret_cast<cntrl::Controller *>(extra + (i - 1) * sizeof(cntrl::Controller)))->~Controller();
+}
+static void controller_storage_preserves_active_pages_on_failure() {
+    Hardware hardware; TestStorage setups, song_storage;
+    cntrl::Controller primary(hardware, hardware, hardware);
+    cntrl::Documents documents(setups, hardware, primary, hardware);
+    cntrl::Songs songs(song_storage, hardware);
+    const unsigned previous_budget = cntrl::memory_budget, initial = cntrl::memory_used;
+    cntrl::memory_budget = initial + 8 * sizeof(cntrl::Controller);
+    {
+        cntrl::ui::Application application(hardware, documents, primary, hardware, hardware, songs, hardware, true);
+        uint8_t records[8 + 4 * 34] = {};
+        records[4] = 1;
+        records[8 + 32] = cntrl::PageLayout::patch_switcher;
+        assert(application.prepare_pages({records})); application.finish_pages(true);
+        assert(cntrl::memory_used == initial);
+        records[4] = 4;
+        for (unsigned i = 1; i < 4; ++i) records[8 + i * 34 + 32] = cntrl::PageLayout::patch_switcher;
+        cntrl::memory_budget = initial;
+        assert(!application.prepare_pages({records})); application.finish_pages(false);
+        assert(&application.at(0) == &primary && cntrl::memory_used == initial);
+        cntrl::memory_budget = initial + 8 * sizeof(cntrl::Controller);
+        assert(application.prepare_pages({records})); application.finish_pages(false);
+        assert(cntrl::memory_used == initial);
+        assert(application.prepare_pages({records})); application.finish_pages(true);
+        assert(cntrl::memory_used == initial + 3 * sizeof(cntrl::Controller));
+        auto *fourth = &application.at(3);
+        records[4] = 2; cntrl::memory_budget = cntrl::memory_used;
+        assert(!application.prepare_pages({records})); application.finish_pages(false);
+        assert(&application.at(3) == fourth);
+        records[4] = 1;
+        assert(application.prepare_pages({records})); application.finish_pages(true);
+        assert(cntrl::memory_used == initial);
+    }
+    assert(cntrl::memory_used == initial);
+    cntrl::memory_budget = previous_budget;
 }
 int main(int argc, char **argv) {
+    controller_storage_preserves_active_pages_on_failure();
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex; std::vector<uint8_t> bytes;
     for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     raw_press_reaches_midi(bytes, true, 0, false);

@@ -5,6 +5,38 @@ Supporting hardware-specific audit for
 Source baseline: `a32af63`, 2026-11-12. This is a plan, not an implementation or
 hardware qualification result. Paths below are relative to this directory.
 
+## Controller allocation implementation
+
+The initial controller change removes the three statically reserved extra
+controllers and acquires exactly the extra instances required by the candidate
+layout. Allocation and construction precede setup handoff. A failed preparation
+keeps the active controllers. Cancelling preparation releases candidate storage.
+
+An isolated source export of baseline commit `e33722d`, built with the same
+installed toolchain, produces the following linker totals.
+
+| Region | Baseline | Demand-sized extra controllers |
+| --- | ---: | ---: |
+| RAM1 variables | 319904 bytes | 319936 bytes |
+| RAM1 available for local variables | 7776 bytes | 7744 bytes |
+| RAM2 static variables | 118912 bytes | 112736 bytes |
+| RAM2 available for allocation | 405376 bytes | 411552 bytes |
+
+A one-controller setup acquires no extra controller heap storage, recovering
+6176 bytes of RAM2 with a 32-byte increase in RAM1 variables. Multiple controllers
+charge their actual allocation to `memory_used`. Replacement can temporarily
+hold both old and candidate allocations. Runtime allocator overhead and stack
+high-water still require device measurement.
+
+Reproduce the baseline by exporting `git archive e33722d` into a generated
+directory, using the installed pinned SDK and stock image, and invoking
+`python -m cntrl.maker.morningstar.mc.build_target` from that exported tree with
+its own source root and output directory. Run the same build command from the
+working tree for the candidate and compare their exported `memory.txt` files.
+The source export, build logs, binaries and memory reports under `build/` are
+disposable generated artifacts. The original sources and build procedure remain
+tracked.
+
 ## Product target reservations
 
 | Location | Present storage or constraint | Required treatment |

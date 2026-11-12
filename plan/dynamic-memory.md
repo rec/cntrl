@@ -3,6 +3,21 @@
 Status: source audit and implementation plan, 2026-11-12, based on `a32af63`.
 No firmware behavior is changed by this document.
 
+## Implementation decisions
+
+The upgrade may discard temporary saved setup-return records when their format
+changes. Finish implementation and automated tests before requesting approval
+to flash and run physical qualification. Keep persistent setups, histories, songs and assets protected by
+the existing backup and verified restore flow.
+
+The first implementation stages an exact-count allocation for extra controllers
+before setup selection commits. The primary controller continues to provide the
+fallback used by management pages. Native tests cover one/four controllers,
+failed replacement, cancelled preparation and reclamation. An exact baseline
+build reduces static RAM2 from 118912 to 112736 bytes, freeing 6176 bytes for
+the one-controller case. RAM1 variables grow by 32 bytes. Physical qualification
+remains pending, along with subsequent milestones.
+
 ## Objective and scope
 
 Allocate storage for the setup, features and work actually in use. Remove

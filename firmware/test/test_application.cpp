@@ -270,10 +270,12 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
     cntrl::Controller primary(hardware, hardware, hardware);
     cntrl::Documents documents(storage, hardware, primary, hardware);
     cntrl::Songs songs(library, hardware);
-    alignas(cntrl::Controller) unsigned char extra[(cntrl::PageLayout::max_controllers - 1) * sizeof(cntrl::Controller)];
-    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i) new (extra + (i - 1) * sizeof(cntrl::Controller)) cntrl::Controller(hardware, hardware, hardware, 5 + i);
     {
-        cntrl::ui::Application app(hardware, documents, primary, extra, songs, hardware, false); hardware.application = &app;
+        cntrl::ui::Application app(hardware, documents, primary, hardware, hardware, songs, hardware, false); hardware.application = &app;
+        const unsigned budget = cntrl::memory_budget;
+        cntrl::memory_budget = cntrl::memory_used + 3 * sizeof(cntrl::Controller);
+        assert(app.prepare_pages(document.page_layout())); app.finish_pages(true);
+        cntrl::memory_budget = budget;
         primary.activate(document); app.configure(document, hardware);
         PagePlatform platform; PageFonts fonts; PageDisplay display;
         display.windows = 3;
@@ -323,7 +325,6 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         }
         assert(renderer.ready());
     }
-    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i) std::launder(reinterpret_cast<cntrl::Controller *>(extra + (i - 1) * sizeof(cntrl::Controller)))->~Controller();
 }
 static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware &hardware, cntrl::Documents &documents,
         cntrl::ui::Application &app, cntrl::Songs &songs, cntrl::ui::SongSources &sources) {
@@ -355,11 +356,9 @@ int main(int argc, char **argv) {
     Hardware hardware; TestStorage setup_storage, song_storage;
     cntrl::Controller primary(hardware, hardware, hardware);
     cntrl::Documents documents(setup_storage, hardware, primary, hardware);
-    alignas(cntrl::Controller) unsigned char extra[(cntrl::PageLayout::max_controllers - 1) * sizeof(cntrl::Controller)];
-    for (unsigned i = 0; i + 1 < cntrl::PageLayout::max_controllers; ++i) new (extra + i * sizeof(cntrl::Controller)) cntrl::Controller(hardware, hardware, hardware, i + 6);
     {
         cntrl::Songs songs(song_storage, hardware);
-        cntrl::ui::Application app(hardware, documents, primary, extra, songs, hardware, true);
+        cntrl::ui::Application app(hardware, documents, primary, hardware, hardware, songs, hardware, true);
         assert(&app.controller() == &primary && !app.feature_open(hardware));
         cntrl::SetupTable setups;
         cntrl::ui::SongSources source(hardware, hardware, hardware, setups, documents, app, songs);
@@ -387,7 +386,10 @@ int main(int argc, char **argv) {
         assert(app.operation_ui(Op::menu_open, hardware)); app.menu.poll(0); app.operation_ui(Op::menu_next, hardware);
         hardware.transfer_busy = true; app.operation_ui(Op::menu_activate, hardware); assert(app.menu.open() && !app.song_ui.open());
         hardware.transfer_busy = false; cntrl::Document empty; app.configure(empty, hardware); assert(hardware.blanks == 1);
+        assert(&app.controller() == &primary);
+        uint8_t pages[8 + 2 * 34] = {};
+        pages[4] = 2; pages[8 + 32] = pages[8 + 34 + 32] = cntrl::PageLayout::patch_switcher;
+        assert(app.prepare_pages({pages})); app.finish_pages(true); app.layout = {pages};
         app.processing_index = 1; assert(&app.controller() == &app.at(1)); app.tick(0); assert(app.processing_index == cntrl::PageLayout::max_controllers);
     }
-    for (unsigned i = 0; i + 1 < cntrl::PageLayout::max_controllers; ++i) std::launder(reinterpret_cast<cntrl::Controller *>(extra + i * sizeof(cntrl::Controller)))->~Controller();
 }

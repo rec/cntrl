@@ -47,11 +47,11 @@ public:
     bool select(const char *name) {
         if (busy() || dirty_ || hardware_.configuration_locked() || !hardware_.output_idle() || !setup_name(name) || !load(name)) return false;
         Document candidate;
-        if (!candidate.load(staging_.data, length_, hardware_) || !candidate.prepare_fonts(hardware_)) return false;
-        if (!hardware_.configuration_handoff()) { hardware_.finish_fonts(false); return false; }
+        if (!candidate.load(staging_.data, length_, hardware_) || !prepare_resources(candidate)) return false;
+        if (!hardware_.configuration_handoff()) { finish_resources(false); return false; }
         char canonical[64]; std::snprintf(canonical, sizeof(canonical), "%s", record_name_);
-        if (std::strcmp(selected_, canonical) && !persist_selection(canonical)) { hardware_.finish_fonts(false); return false; }
-        hardware_.finish_fonts(true);
+        if (std::strcmp(selected_, canonical) && !persist_selection(canonical)) { finish_resources(false); return false; }
+        finish_resources(true);
         std::snprintf(selected_, sizeof(selected_), "%s", canonical);
         activate(); return true;
     }
@@ -208,8 +208,8 @@ public:
         }
         if (!name_compare(name, selected_)) {
             Document candidate;
-            if (!candidate.load(staging_.data, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { error("font-load"); return; }
-            hardware_.finish_fonts(true); activate();
+            if (!candidate.load(staging_.data, length_, hardware_) || !prepare_resources(candidate)) { error("setup-resources"); return; }
+            finish_resources(true); activate();
         }
         if (!quiet_) replies_.reply("CNTRL OK");
         quiet_ = false; dirty_ = false;
@@ -329,12 +329,12 @@ private:
         }
         case BrowsePhase::activate: {
             Document candidate;
-            if (!hardware_.output_idle() || !candidate.load(staging_.data, length_, hardware_) || !candidate.prepare_fonts(hardware_)) { browse_fail(); return; }
-            if (!hardware_.configuration_handoff()) { hardware_.finish_fonts(false); return; }
+            if (!hardware_.output_idle() || !candidate.load(staging_.data, length_, hardware_) || !prepare_resources(candidate)) { browse_fail(); return; }
+            if (!hardware_.configuration_handoff()) { finish_resources(false); return; }
             if (std::strcmp(selected_, record_name_) && !persist_selection(record_name_)) {
-                hardware_.finish_fonts(false); browse_fail(); return;
+                finish_resources(false); browse_fail(); return;
             }
-            hardware_.finish_fonts(true); std::snprintf(selected_, 64, "%s", record_name_);
+            finish_resources(true); std::snprintf(selected_, 64, "%s", record_name_);
             activate(); browse_phase_ = BrowsePhase::idle; replies_.reply("CNTRL OK"); quiet_ = false; return;
         }
         }
@@ -569,6 +569,15 @@ private:
         active_.swap(staging_);
         document_.load(active_.data, length_, hardware_); controller_.activate(document_);
         staging_.clear();
+    }
+    bool prepare_resources(const Document &document) {
+        if (!document.prepare_fonts(hardware_)) return false;
+        if (hardware_.prepare_pages(document)) return true;
+        finish_resources(false); return false;
+    }
+    void finish_resources(bool commit) {
+        hardware_.finish_pages(commit);
+        hardware_.finish_fonts(commit);
     }
     bool header_valid(const uint8_t *h) const {
         return !std::memcmp(h, "CNST", 4) && checksum(h, 92) == u32(h + 92)

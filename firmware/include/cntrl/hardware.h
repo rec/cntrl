@@ -97,6 +97,8 @@ struct Hardware : RelayDriver {
     virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) { (void)undo; (void)duration_ms; (void)pane; (void)vertical; (void)panorama; }
     virtual void configure_page_settings(const PageSettings &) {}
     virtual void configure_pages(const Document &) {}
+    virtual bool prepare_pages(const Document &) { return true; }
+    virtual void finish_pages(bool) {}
     virtual void configure_midi_streams(const Document &) {}
     virtual bool refresh_pages() { return false; }
     virtual void browse_page(bool) {}

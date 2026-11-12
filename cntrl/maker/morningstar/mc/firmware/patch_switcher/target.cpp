@@ -404,6 +404,8 @@ public:
     }
     bool supports_font_asset(uint32_t key, unsigned size) const override { return font_files.supports(key, size); }
     void begin_fonts() override { font_assets::cache.begin(); }
+    bool prepare_pages(const cntrl::Document &document) override { return application.prepare_pages(document.valid() ? document.page_layout() : cntrl::PageLayout{}); }
+    void finish_pages(bool commit) override { application.finish_pages(commit); }
     bool stage_font(uint32_t key, unsigned size) override { return font_files.stage(key, size); }
     void finish_fonts(bool commit) override {
         if (commit) renderer_.invalidate();
@@ -691,7 +693,6 @@ DMAMEM cntrl::Documents documents(setup_storage, board, primary_controller, boar
 cntrl::StoredPatchSources patch_sources(setup_storage.setups());
 cntrl::BundleTransfer bundle_transfer(setup_storage, documents, board, board);
 cntrl::HistoryImport history_import(card, documents, board, board);
-alignas(cntrl::Controller) DMAMEM unsigned char extra_controllers[cntrl::PageLayout::max_controllers - 1][sizeof(cntrl::Controller)];
 extern cntrl::Songs songs;
 
 cntrl::device::SdFile song_writer, song_readers[4];
@@ -700,7 +701,7 @@ cntrl::SlotStorage song_files(setup_filesystem, song_writer, song_reader_handles
 cntrl::ui::SongSources song_sources(board, board, patch_sources, setup_storage.setups(), documents, application, songs, cntrl::Switches::capacity);
 DMAMEM cntrl::Songs songs(song_files, song_sources);
 DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
-cntrl::ui::Application application(board, documents, primary_controller, extra_controllers, songs, song_sources, CNTRL_SWITCHES);
+cntrl::ui::Application application(board, documents, primary_controller, board, patch_sources, songs, song_sources, CNTRL_SWITCHES);
 #if CNTRL_ORIGINAL_FIRMWARE
 DMAMEM cntrl::ui::FirmwareVisitRecord firmware_visit_record;
 cntrl::device::SdFile firmware_visit_file;
@@ -867,8 +868,6 @@ FLASHMEM void initialize_target() {
     usb_session.reset();
     usb_session.text_messages(board.text_messages());
     std::memset(render_work, 0, sizeof(render_work));
-    for (unsigned i = 1; i < cntrl::PageLayout::max_controllers; ++i)
-        new (extra_controllers[i - 1]) cntrl::Controller(board, board, patch_sources, cntrl::Switches::capacity + i);
     initialize_switches();
     initialize_displays(false);
     board.begin();

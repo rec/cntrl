@@ -4,6 +4,7 @@
 #include <cntrl/module_menu.h>
 #include <cntrl/setup_ui.h>
 #include <cntrl/songs_ui.h>
+#include <cntrl/switches.h>
 #include "controls.h"
 #include <array>
 #include <new>
@@ -23,15 +24,35 @@ struct ApplicationServices {
 // storage placement and the platform's physical controls.
 class Application {
 public:
-    Application(Hardware &hardware, Documents &documents, Controller &primary, void *extra,
+    Application(Hardware &hardware, Documents &documents, Controller &primary, PatchOutputs &outputs, PatchSources &sources,
                 Songs &songs, SongCapture &capture, bool switches)
         : menu(hardware, names_.data(), switches ? 3 : 2), setups(documents, hardware),
           song_ui(songs, hardware, capture), hardware_(hardware), documents_(documents), primary_(primary),
-          extra_(static_cast<unsigned char *>(extra)), songs_(songs), has_switches_(switches) {
+          outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) {
         names_[0] = "Setups"; names_[1] = "Songs and setlists";
         if (switches) names_[2] = "Switches";
     }
-    Controller &at(unsigned index) { return index ? *std::launder(reinterpret_cast<Controller *>(extra_ + (index - 1) * sizeof(Controller))) : primary_; }
+    ~Application() { destroy_controllers(pending_controllers_); destroy_controllers(controllers_); }
+    bool prepare_pages(PageLayout candidate) {
+        prepared_ = false;
+        destroy_controllers(pending_controllers_);
+        const unsigned count = candidate.controllers();
+        const unsigned extras = count ? count - 1 : 0;
+        if (extras == controllers_.size / sizeof(Controller)) return true;
+        if (!pending_controllers_.resize(extras * sizeof(Controller))) return false;
+        for (unsigned i = 0; i < extras; ++i)
+            new (pending_controllers_.data + i * sizeof(Controller)) Controller(hardware_, outputs_, sources_, Switches::capacity + i + 1);
+        prepared_ = true;
+        return true;
+    }
+    void finish_pages(bool commit) {
+        if (commit) { visible_index = 0; processing_index = PageLayout::max_controllers; }
+        if (commit && prepared_) {
+            destroy_controllers(controllers_); controllers_.swap(pending_controllers_);
+        } else destroy_controllers(pending_controllers_);
+        prepared_ = false;
+    }
+    Controller &at(unsigned index) { return index ? *std::launder(reinterpret_cast<Controller *>(controllers_.data + (index - 1) * sizeof(Controller))) : primary_; }
     unsigned rendering() const { return processing_index < PageLayout::max_controllers ? processing_index : visible_index; }
     Controller &controller() { return at(rendering()); }
     bool visible() const { return layout.controllers() && rendering() == visible_index; }
@@ -52,10 +73,11 @@ public:
 #endif
     void configure(const Document &document, ApplicationServices &services) {
         layout = document.valid() ? document.page_layout() : PageLayout{}; visible_index = 0; pending_page = PageLayout::max_pages;
-        for (unsigned i = 1; i < PageLayout::max_controllers; ++i) {
+        for (unsigned i = 1; i <= controllers_.size / sizeof(Controller); ++i) {
             processing_index = i;
             if (i < layout.controllers()) at(i).activate(document, false); else at(i).deactivate();
         }
+        if (layout.controllers() <= 1) destroy_controllers(controllers_);
         processing_index = PageLayout::max_controllers; services.blank_performance();
         for (unsigned i = 0; i < layout.pages(); ++i) names_[page_offset() + i] = layout.name(i);
         menu.configure(page_offset() + layout.pages());
@@ -175,7 +197,15 @@ private:
     Hardware &hardware_;
     Documents &documents_;
     Controller &primary_;
-    unsigned char *extra_;
+    PatchOutputs &outputs_;
+    PatchSources &sources_;
+    MemoryBuffer controllers_, pending_controllers_;
+    bool prepared_ = false;
+    static void destroy_controllers(MemoryBuffer &storage) {
+        for (unsigned i = storage.size / sizeof(Controller); i--;)
+            std::launder(reinterpret_cast<Controller *>(storage.data + i * sizeof(Controller)))->~Controller();
+        storage.clear();
+    }
     Songs &songs_;
     bool has_switches_;
     bool next_song_patch_ = false;
