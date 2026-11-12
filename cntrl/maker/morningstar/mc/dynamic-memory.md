@@ -169,6 +169,30 @@ uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --run -
 This checks exact Program Change, modulation, 64 paired note strikes, sustain
 and streamed SysEx bytes. It does not measure wire timestamps or clock jitter.
 
+For intermittent short-message failures, add `--probe-short-messages` to the
+same `--run` command and use a separate report filename. This mode checks a
+Mac-only virtual-source loopback, then compares paced and burst deliveries of
+the short-message sequence. It preserves unsolicited idle bytes, exact sent and
+received bytes, and serial counters before and after each trial. Each received
+trace is saved before requesting the post-trial diagnostics, so a subsequent
+USB timeout does not lose that evidence. This probe does not arm the watchdog.
+
+The November 12 investigation found exact short-message delivery in repeated
+paced and burst trials, but also reproduced USB disappearance during a later
+paced trial. The installed shared-heap image had no reported allocation failures
+and a valid heap before that failure. Earlier diagnostics using newlib had
+already lost bytes from a long SysEx test, so MIDI loss is not established as a
+regression introduced by the bounded heap.
+
+There is a concrete UART overflow risk: Serial1 uses the SDK's 64-byte RX ring
+with 63 usable slots, whereas measured MIDI service gaps reach roughly 32.8 ms.
+At 31,250 baud that interval spans about 102 bytes. The SDK silently discards
+bytes when the ring fills. This can explain intermittent DIN return loss, but
+the tests have not yet correlated a specific overflow with a captured mismatch.
+It does not explain the USB disappearance. The leading empty SysEx observed on
+some first deliveries also remains unlocalized; do not filter it from expected
+results or treat it as confirmed host behavior.
+
 The separate `qualification/dynamic-memory-dense.toml` setup has 24 parallel
 USB-to-DIN routes with 16 identity transforms each, plus a DIN-to-USB return
 route. Copy and select it with the same setup commands, then run:

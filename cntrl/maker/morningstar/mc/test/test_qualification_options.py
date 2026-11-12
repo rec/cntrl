@@ -54,6 +54,18 @@ def test_burst_cap_requires_a_positive_count_and_a_timed_run() -> None:
             Options.model_validate(values)
 
 
+def test_short_message_probe_requires_an_explicit_separate_run() -> None:
+    assert Options(run=True, probe_short_messages=True).probe_short_messages
+    for values in (
+        {'probe_short_messages': True},
+        {'run': True, 'probe_short_messages': True, 'inspect': True},
+        {'run': True, 'probe_short_messages': True, 'stress_seconds': 1},
+        {'run': True, 'probe_short_messages': True, 'stress_only': True},
+    ):
+        with pytest.raises(ValueError, match='probe-short-messages requires'):
+            Options.model_validate(values)
+
+
 def test_report_option_preserves_diagnostics_as_toml(tmp_path: Path) -> None:
     path = tmp_path / 'run' / 'report.toml'
     options = tyro.cli(Options, args=['--report', str(path)])

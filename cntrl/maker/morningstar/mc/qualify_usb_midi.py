@@ -1,5 +1,6 @@
 """Explicit, macOS-only qualification of the MC USB-to-DIN MIDI path."""
 
+import ctypes
 import sys
 import time
 from pathlib import Path
@@ -33,11 +34,17 @@ class Options(BaseModel, frozen=True):
     """
     stress_only: bool = False
     """Skip exact byte checks for transforming graphs; send only PC/modulation load."""
+    probe_short_messages: bool = False
+    """Compare burst and paced program changes, retaining raw bytes and counters."""
     report: Path | None = None
     """Save serial inspection or before/after run diagnostics as TOML."""
 
     @model_validator(mode='after')
     def stress_run(self) -> 'Options':
+        if self.probe_short_messages and (
+            not self.run or self.inspect or self.stress_only or self.stress_seconds
+        ):
+            raise ValueError('probe-short-messages requires --run without other modes')
         if self.inspect and self.run:
             raise ValueError('inspect and run are separate modes; select only one')
         if self.stress_only and (not self.run or self.stress_seconds <= 0):
@@ -105,6 +112,102 @@ def save_report(path: Path | None, result: dict[str, object]) -> None:
         path.write_text(tomlkit.dumps(result))
 
 
+def probe_virtual_source(midi: Midi) -> dict[str, object]:
+    """Check first-delivery framing without USB, firmware or the DIN cable."""
+    midi.core.MIDISourceCreate.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    midi.core.MIDIReceived.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+    endpoint = ctypes.c_uint32()
+    name = midi.string('cntrl qualification host loopback')
+    try:
+        midi.check(
+            midi.core.MIDISourceCreate(midi.client, name, ctypes.byref(endpoint))
+        )
+    finally:
+        midi.cf.CFRelease(name)
+    try:
+        midi.check(midi.core.MIDIPortConnectSource(midi.input, endpoint, None))
+        time.sleep(0.1)
+        idle = bytes(midi.data)
+        midi.data.clear()
+        messages = b'\xc0\x01\xc1\x02'
+        buffer = ctypes.create_string_buffer(64)
+        payload = ctypes.create_string_buffer(messages)
+        packet = midi.core.MIDIPacketListInit(buffer)
+        if not midi.core.MIDIPacketListAdd(
+            buffer, len(buffer), packet, 0, len(messages), payload
+        ):
+            raise ValueError('Host loopback packet allocation failed')
+        midi.check(midi.core.MIDIReceived(endpoint, buffer))
+        time.sleep(0.1)
+        received = bytes(midi.data)
+        return {
+            'sent_hex': messages.hex(),
+            'received_hex': received.hex(),
+            'idle_hex': idle.hex(),
+            'matches': received == messages,
+        }
+    finally:
+        midi.core.MIDIPortDisconnectSource(midi.input, endpoint)
+        midi.core.MIDIEndpointDispose(endpoint)
+        midi.data.clear()
+
+
+def probe_short_messages(
+    midi: Midi,
+    destination: int,
+    client: SetupClient,
+    report: dict[str, object],
+    path: Path | None,
+) -> list[dict[str, object]]:
+    """Retain unsolicited traffic separately from each controlled PC trial."""
+    messages = [bytes((0xC0 | i % 16, i)) for i in range(128)]
+    messages.extend(bytes((0xB0 | i, 1, 0)) for i in range(16))
+    payload = b''.join(messages)
+    trials: list[dict[str, object]] = []
+    report['trials'] = trials
+    for name, interval in [
+        ('paced-first', 0.002),
+        ('burst-1', 0),
+        ('burst-2', 0),
+        ('burst-3', 0),
+        ('burst-4', 0),
+        ('paced', 0.002),
+    ]:
+        before = diagnostics(client)
+        time.sleep(0.2)
+        idle = bytes(midi.data)
+        midi.data.clear()
+        for message in messages if interval else [payload]:
+            midi.send(destination, message)
+            if interval:
+                time.sleep(interval)
+        time.sleep(0.5)
+        received = bytes(midi.data)
+        trial: dict[str, object] = {
+            'name': name,
+            'sent_hex': payload.hex(),
+            'received_hex': received.hex(),
+            'idle_hex': idle.hex(),
+            'matches': received == payload,
+            'before': before,
+        }
+        trials.append(trial)
+        save_report(path, report)
+        trial['after'] = diagnostics(client)
+        save_report(path, report)
+        midi.data.clear()
+        print(
+            f'{name}: sent {len(payload)}, received {len(received)}, '
+            f'matches={trial["matches"]}',
+            flush=True,
+        )
+    return trials
+
+
 def run(options: Options) -> None:
     if options.inspect:
         inspection: dict[str, object] = {
@@ -156,6 +259,20 @@ def run(options: Options) -> None:
                 ),
             }
             save_report(options.report, report)
+            if options.probe_short_messages:
+                report['host_loopback'] = probe_virtual_source(midi)
+                report['trials'] = trials = probe_short_messages(
+                    midi, destination, client, report, options.report
+                )
+                report['success'] = report['host_loopback']['matches'] and all(
+                    t['matches'] for t in trials
+                )
+                save_report(options.report, report)
+                if not report['success']:
+                    raise ValueError(
+                        'Program-change probe mismatch; see trial bytes and counters'
+                    )
+                return
             armed = False
             try:
                 if 'enabled=1' in before_diagnostics['qualification'].split():
