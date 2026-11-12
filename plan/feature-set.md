@@ -88,10 +88,6 @@ controller values.
 - enveLFO (from engeLFO): identify the remaining envelope functionality beyond
   the existing [MIDI LFO generators](../doc/lfos.md).
 
-Basic note and chord triggers already use MIDI patches with
-[momentary or latched controls](../doc/momentary-latched.md). The dedicated
-Drone controller and Arpeggiator work is tracked above.
-
 ### Feedback and performance safety
 
 #### Feedback from connected devices
