@@ -70,6 +70,22 @@ void test_reverse_preserves_velocity_and_transposes() {
     pump(player,sink,500000);
     assert((sink.sent[0] == Bytes{0x90,72,103,0x80,72,0}));
 }
+void test_fractional_speed_keeps_microsecond_precision_after_an_hour() {
+    cntrl::memory_budget = 65536;
+    // 3,600,000 ticks at 1 ms, followed by one tick at 1 us.
+    auto source = smf({{0,0xff,0x51,3,15,0x42,0x40,
+                       0x81,0xdb,0xdd,0,0xff,0x51,3,0,3,0xe8,
+                       1,0xc0,12,0,0xff,0x2f,0}},1000);
+    File index; Sink sink; cntrl::midi::MidiFilePlayer player(source,index);
+    cntrl::midi::PlayMidiFilePatch settings; settings.speed = 1.5;
+    prepare(player,sink,settings);
+    uint32_t start = 0xffff0000;
+    pump(player,sink,start);
+    pump(player,sink,start + 2400000000u); assert(sink.sent[0].empty());
+    pump(player,sink,start + 2400000001u);
+    assert((sink.sent[0] == Bytes{0xc0,12}));
+    assert(player.status() == cntrl::midi::MidiFilePlayer::Status::complete);
+}
 void test_loop_delays_rollover_and_independent_outputs() {
     auto source = smf({{0,0xc0,12, 0,0xff,0x2f,0}});
     File index; Sink sink; cntrl::midi::MidiFilePlayer player(source,index);
@@ -332,6 +348,7 @@ void test_prepared_recording_plays_before_file_finalization_without_reading_sour
 }
 
 int main() {
+    test_fractional_speed_keeps_microsecond_precision_after_an_hour();
     test_prepared_recording_plays_before_file_finalization_without_reading_source();
     test_loop_cleanup_preserves_live_notes_and_releases_joined_retriggers();
     test_recording_close_is_bounded_and_freezes_its_end_time();

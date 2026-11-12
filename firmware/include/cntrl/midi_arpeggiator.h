@@ -4,6 +4,7 @@
 #include "clock_generator.h"
 #include "midi_loop_capture.h"
 #include "checked_list.h"
+#include "numeric.h"
 #include <array>
 
 namespace cntrl::midi {
@@ -333,7 +334,7 @@ public:
                 const auto &segment = *voice.segment;
                 const auto &group = *voice.group;
                 uint64_t duration = std::max(uint64_t(1),segment.end - segment.begin);
-                uint64_t due = voice.begin + uint64_t((static_cast<long double>(group.time) / duration) * gate_);
+                uint64_t due = voice.begin + multiply_divide(group.time,gate_,duration);
                 if (clock.value < due || clock.value >= voice.end) break;
                 Packet packet = group.packets[voice.packet]; packet.source = 65535;
                 bool accepted;

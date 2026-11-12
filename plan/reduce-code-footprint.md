@@ -123,6 +123,79 @@ No firmware was uploaded or exercised on a pedal. These experiments establish
 build and section-size results, not USB, MIDI timing, startup or hardware
 correctness for an LTO build. SD formatting removal remains a separate change.
 
+## Remove runtime double arithmetic
+
+Measured on 2026-11-12 against parent revision
+`9301f36632c82d1185ff138f19d6a06893c3672a`, using the same pinned toolchain,
+features and production `-Os` configuration described above. Both builds succeed
+without LTO or linker overrides.
+
+| Section/accounting | Before | After | Saving |
+| --- | ---: | ---: | ---: |
+| Flash code, `.text.code` | 171,752 | 171,520 | 232 |
+| Instruction RAM code, `.text.itcm` | 196,240 | 194,128 | 2,112 |
+| `.fini` | 4 | 4 | 0 |
+| Executable bytes | 367,996 | 365,652 | 2,344 |
+| Font/constant flash, `.text.progmem` | 859,860 | 859,860 | 0 |
+| RAM1 initialized data, `.data` | 37,568 | 30,400 | 7,168 |
+| RAM1 uninitialized data, `.bss` | 276,960 | 275,936 | 1,024 |
+| RAM1 data total | 314,528 | 306,336 | 8,192 |
+| Static RAM2, `.bss.dma` | 90,752 | 90,752 | 0 |
+
+The executable saving is **2,344 bytes (2.29 KiB, 0.64%)**. The different
+baseline from the compiler experiment reflects the later source revision.
+Section totals include alignment and compiler layout effects; they are the net
+change, rather than a sum of sizes attributed to individual arithmetic helpers.
+
+Implementation:
+
+- MIDI field mappings use integer ratios with the existing nearest-integer,
+  half-toward-positive-infinity rule, including descending and negative ranges.
+- Clock generators decode the existing binary64 BPM field directly to integer
+  thousandths of BPM, rounded to nearest with positive halves rounded up.
+- Echo feedback stays in its existing binary32 precision and uses float power
+  and rounding operations. Its velocity still rounds positive halves up. Float
+  evaluation can differ from double evaluation by one velocity unit near a
+  rounding boundary; this change does not promise bit-identical double results.
+- File playback applies the exact encoded binary64 speed to integer elapsed
+  microseconds. It floors the exact product, without first rounding the product
+  to binary64, and saturates values beyond the timestamp range. This avoids
+  losing timestamp precision over long files. A boundary can move by a
+  microsecond where the old floating-point product rounded across an integer.
+- Arpeggiator expression timing uses a full-width integer product and division,
+  avoiding both floating-point timestamp loss and intermediate 64-bit overflow.
+
+The compiled document remains version **41**. File speeds and clock tempos
+retain their eight-byte IEEE binary64 representation; feedback retains its
+four-byte representation. No Python serializer, schema, golden binary fixture
+or migration changes are needed. All finite positive encoded speeds, including
+subnormals, remain valid. The C++ `double speed` member is retained solely as
+binary64 storage for existing callers, and is copied to integer bits before
+validation or scheduling. There is no remaining double arithmetic in the
+firmware sources. The linked symbol table has no double arithmetic/conversion
+helpers or double `pow`, `floor` or `llround`; float `powf` remains in use.
+
+Verification covers the shared native suite, with address/undefined-behavior
+sanitizers, and focused regressions for exact wide integer scaling, signed MIDI
+mapping, binary64 validation and limits, echo velocity/release behavior, and
+microsecond playback boundaries after an hour of file time across timer
+rollover. The normal firmware build succeeds. No firmware was uploaded or
+tested on a pedal.
+
+Build the parent and this change with the same normal command, selecting a
+different output directory for each:
+
+```sh
+uv run python -m cntrl.patch_switcher.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output build/no-double-comparison
+```
+
+Compare `.text.code + .text.itcm + .fini` in their `memory.txt` reports. The
+measured outputs are in `/private/tmp/cntrl-no-double-main-before` and
+`/private/tmp/cntrl-no-double-main-after`; build logs are beside those directories.
+Both directories also contain the linked ELF and symbol table. These generated
+artifacts are disposable; the implementation, tests and reproduction commands
+are versioned.
+
 ## Reproduction
 
 The versioned experiment runner reuses the production compiler command, performs

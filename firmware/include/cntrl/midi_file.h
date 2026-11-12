@@ -2,8 +2,8 @@
 #include "checked_array.h"
 #include "midi_bridge.h"
 #include "midi_stream_timeline.h"
+#include "numeric.h"
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 
 namespace cntrl::midi {
@@ -18,7 +18,7 @@ struct PlayMidiFilePatch {
     char filename[96] = {};
     uint16_t outputs = 1;
     uint32_t loops = 1, pre_delay = 0, post_delay = 0;
-    double speed = 1;
+    double speed = 1; // Binary64 storage only; scheduling uses its integer representation.
     bool reverse = false;
     int8_t transpose = 0;
 };
@@ -170,7 +170,7 @@ public:
         if (!source_->read(0, header, sizeof(header)) || std::memcmp(header, "MThd", 4)
             || big(header + 4, 4) < 6 || big(header + 8, 2) > 1 || !big(header + 10, 2)
             || (big(header + 8, 2) == 0 && big(header + 10, 2) != 1)
-            || !settings.outputs || !std::isfinite(settings.speed) || settings.speed <= 0) return fail();
+            || !settings.outputs || !positive_finite_binary64(binary64_bits(settings.speed))) return fail();
         division_ = big(header + 12, 2);
         if (!division_) return fail();
         if (musical_ && (division_ & 0x8000)) return fail();
@@ -220,7 +220,7 @@ public:
         if (!clock_known_) { previous_ = now; clock_known_ = true; }
         elapsed_ += uint32_t(now - previous_); previous_ = now;
         if (elapsed_ < uint64_t(settings_.pre_delay) * 1000000) return;
-        double progress = double(elapsed_ - uint64_t(settings_.pre_delay) * 1000000) * settings_.speed;
+        uint64_t progress = scale_binary64(elapsed_ - uint64_t(settings_.pre_delay) * 1000000,binary64_bits(settings_.speed));
         // One packet per poll, retried independently on each destination.
         if (packet_pending_) {
             bool owned = packet_.cin == 8 || packet_.cin == 9
@@ -240,7 +240,7 @@ public:
             Event event;
             if (!read_event(*index_, settings_.reverse ? events_ - position_ - 1 : position_, event)) { fail(); return; }
             uint64_t due = settings_.reverse ? time_ - event.time : event.time;
-            if (progress < double(due)) return;
+            if (progress < due) return;
             ++position_;
             if (event.status == 0xf0 || event.status == 0xf7) {
                 if (settings_.reverse && event.next) return;
@@ -267,7 +267,7 @@ public:
             pending_outputs_ = settings_.outputs; packet_pending_ = true;
             return;
         }
-        if (progress < double(time_)) return;
+        if (progress < time_) return;
         if (!release_one(available, sink)) return;
         if (!post_waiting_) { post_start_ = elapsed_; post_waiting_ = true; }
         if (elapsed_ - post_start_ < uint64_t(settings_.post_delay) * 1000000) return;

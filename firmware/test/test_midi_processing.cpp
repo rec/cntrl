@@ -125,6 +125,22 @@ void malformed_sections_are_rejected() {
     assert(!Streams::valid(data.data(), unsigned(data.size()), outputs, 1));
     data[8] = 65; assert(!Streams::valid(data.data(), unsigned(data.size()), outputs, 1));
 }
+void echo_decay_rounds_half_velocities_up_and_releases_each_note() {
+    Route route; route.count = 1; route.steps = {6,0,14,0};
+    integer(route.steps,100000,8); integer(route.steps,4,2);
+    float feedback = 0.5f; uint32_t bits; std::memcpy(&bits,&feedback,4); integer(route.steps,bits,4);
+    auto data = compiled({route}); Streams streams; Output output;
+    assert(streams.load(data.data(),unsigned(data.size()),outputs,1));
+    note(streams,0x90,60,127); note(streams,0x80,60,0,50000);
+    for (unsigned i = 1; i <= 4; ++i) {
+        poll(streams,output,i * 100000);
+        assert(output.packets[1].size() == i * 2 - 1);
+        assert(output.packets[1].back().bytes[2] == (1u << (7 - i)));
+        poll(streams,output,i * 100000 + 50000);
+        assert(output.packets[1].size() == i * 2);
+        assert(output.packets[1].back().bytes[0] == 0x80);
+    }
+}
 void sustain_cleanup_and_shared_inputs() {
     Route a, b; b.input = 1; auto data = compiled({a, b}); Streams streams; Output output;
     assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
@@ -419,6 +435,7 @@ void pickup_uses_mapped_destination_and_separate_live_sources() {
 }
 int main() {
     cntrl::memory_budget = 1024 * 1024;
+    echo_decay_rounds_half_velocities_up_and_releases_each_note();
     replacement_graph_prepares_without_interrupting_active_notes();
     transforms_and_release(); patch_scope_and_cleanup(); reconnect_and_independent_outputs();
     delay_duration_and_no_stale_onsets(); malformed_sections_are_rejected();

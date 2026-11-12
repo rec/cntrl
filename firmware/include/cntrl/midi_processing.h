@@ -6,6 +6,7 @@
 #include "checked_array.h"
 #include "checked_list.h"
 #include "input_notes.h"
+#include "numeric.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -45,7 +46,8 @@ public:
         int32_t value = 0, input_low = 0, input_high = 127, output_low = 0, output_high = 127;
         uint64_t time = 0;
         unsigned repeats = 1;
-        double feedback = 1, bpm = 120;
+        float feedback = 1;
+        unsigned bpm_milli = 120000;
         CheckedArray<uint8_t> parameters;
         std::unique_ptr<Processor> processor;
     };
@@ -434,7 +436,7 @@ public:
         }
         for (unsigned i = 0; i < routes_.size(); ++i) if (active(i) && !routes_[i].steps.empty() && routes_[i].steps[0].kind == 8) {
             auto &route = routes_[i];
-            if (!route.started) { route.clock.start(now, unsigned(std::llround(route.steps[0].bpm * 1000))); route.started = true; }
+            if (!route.started) { route.clock.start(now, route.steps[0].bpm_milli); route.started = true; }
             if (route.clock.poll(now) && used < work_budget) {
                 Work work{{15, {0xf8, 0, 0}}, now, 0, system_scope, 0};
                 process(i, 1, work); ++used;
@@ -450,7 +452,7 @@ public:
                 Reader reader{bytes.data() + 96, bytes.data() + bytes.size()};
                 settings.loops = uint32_t(reader.integer(4));
                 settings.pre_delay = uint32_t(reader.integer(8) / 1000000); settings.post_delay = uint32_t(reader.integer(8) / 1000000);
-                uint64_t speed = reader.integer(8); double value; std::memcpy(&value, &speed, 8); settings.speed = value;
+                uint64_t speed = reader.integer(8); std::memcpy(&settings.speed, &speed, 8);
                 settings.reverse = reader.byte() != 0; settings.transpose = int8_t(reader.byte()); settings.outputs = 1;
                 if (file_provider_) route.file = file_provider_->open_stream(settings, i);
                 if (!route.file) { route.failed = true; ++diagnostics_.failed; continue; }
@@ -1269,8 +1271,7 @@ private:
                 if (original == Parameter::unknown) return true;
                 int low = step.input_low, high = step.input_high;
                 if (low == -1 && high == -1) { low = work.parameter.minimum(); high = work.parameter.maximum(); }
-                double fraction = double(std::clamp(original, low, high) - low) / (high - low);
-                return work.parameter.set(step.field, int(std::floor(step.output_low + fraction * (step.output_high - step.output_low) + 0.5)));
+                return work.parameter.set(step.field, scale_integer(std::clamp(original,low,high),low,high,step.output_low,step.output_high));
             }
             if (step.kind == 5) {
                 Parameter original = work.parameter;
@@ -1299,8 +1300,7 @@ private:
             int maximum = step.field == 1 ? 16 : step.field == 6 ? 128 : step.field == 5 && (work.packet.bytes[0] >> 4 == 14 || work.packet.bytes[0] == 0xf2) ? 16383 : 127;
             int low = step.input_low, high = step.input_high;
             if (low == -1 && high == -1) { low = minimum; high = maximum; }
-            double fraction = double(std::clamp(original, low, high) - low) / (high - low);
-            int value = int(std::floor(step.output_low + fraction * (step.output_high - step.output_low) + 0.5));
+            int value = scale_integer(std::clamp(original,low,high),low,high,step.output_low,step.output_high);
             return set(work.packet, step.field, std::clamp(value, minimum, maximum));
         }
         if (step.kind == 5) {
@@ -1386,7 +1386,7 @@ private:
                 for (unsigned copy = 1; copy <= step.repeats; ++copy) {
                     Work echo = work; echo.due += step.time * copy;
                     if (echo.packet.bytes[0] >> 4 == 9) {
-                        int velocity = int(std::floor(echo.packet.bytes[2] * std::pow(step.feedback, copy) + 0.5));
+                        int velocity = int(std::lround(echo.packet.bytes[2] * std::pow(step.feedback, float(copy))));
                         if (velocity <= 0) continue;
                         echo.packet.bytes[2] = uint8_t(std::min(127, velocity));
                     }
@@ -1673,8 +1673,9 @@ private:
                     if (!step.time || step.time > 3600000000ull || !step.repeats || step.repeats > 64 || !std::isfinite(feedback) || feedback < 0 || feedback > 1) return false;
                 } else if (step.kind == 7) { step.time = payload.integer(8); if (step.time > 3600000000ull) return false; }
                 else if (step.kind == 8) {
-                    uint64_t bits = payload.integer(8); std::memcpy(&step.bpm, &bits, 8);
-                    if (!std::isfinite(step.bpm) || step.bpm <= 0 || step.bpm > 1000 || j || inputs) return false;
+                    uint64_t bits = payload.integer(8);
+                    if (!positive_finite_binary64(bits) || bits > 0x408f400000000000ull /* 1000 BPM */ || j || inputs) return false;
+                    step.bpm_milli = unsigned(scale_binary64(1000,bits,true));
                 } else if (step.kind == 10) {
                     if (j || inputs) return false;
                     if (!route.lfo.create()) return false;
@@ -1694,8 +1695,7 @@ private:
                     Reader settings{step.parameters.data() + 96, step.parameters.data() + step.parameters.size()};
                     settings.integer(4);
                     uint64_t pre = settings.integer(8), post = settings.integer(8), bits = settings.integer(8);
-                    double speed; std::memcpy(&speed, &bits, 8);
-                    if (pre % 1000000 || post % 1000000 || pre / 1000000 > UINT32_MAX || post / 1000000 > UINT32_MAX || !std::isfinite(speed) || speed <= 0 || settings.byte() > 1) return false;
+                    if (pre % 1000000 || post % 1000000 || pre / 1000000 > UINT32_MAX || post / 1000000 > UINT32_MAX || !positive_finite_binary64(bits) || settings.byte() > 1) return false;
                     int transpose = int8_t(settings.byte()); if (transpose == -128) return false;
                 }
                 if (!payload.ok || payload.cursor != payload.end) return false;

@@ -2,9 +2,9 @@
 #include "hardware.h"
 #include "midi_bridge.h"
 #include "midi_processing.h"
+#include "numeric.h"
 #include <cstring>
 #include <cstdio>
-#include <cmath>
 
 namespace cntrl {
 constexpr unsigned pages_offset = 16;
@@ -814,14 +814,14 @@ private:
                 for (unsigned j = 0; j < u16(p); ++j) if (u16(p + 2 + j * 2) >= count) return false;
                 break;
             case 8: {
-                double speed = 0;
+                uint64_t speed = 0;
                 if (n[1] || length != 120 || (p[0] && !text_valid(p, 96)) || !u16(p + 96)
                     || p[118] > 1 || int8_t(p[119]) == -128
                     || (u16(p + 96) & ~output_routes)
                     || !output_mask_valid(u16(p + 96), bytes + metadata + trs_modes_offset, bytes[19], hardware)) return false;
                 for (unsigned j = 0; j < 96 && p[j]; ++j) if (p[j] == '/' || p[j] == '\\') return false;
                 std::memcpy(&speed, p + 110, 8);
-                if (!std::isfinite(speed) || speed <= 0) return false;
+                if (!positive_finite_binary64(speed)) return false;
                 break;
             }
             case 9:
