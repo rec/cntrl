@@ -151,7 +151,7 @@ This is a requirement to verify, not a guarantee the current implementation make
 | Operation that runs out of memory | Required result |
 | --- | --- |
 | New setup/page/graph/font set | Keep the active setup, its navigation and pins. Report that the replacement could not be prepared. |
-| Patch or input action not yet admitted | Refuse before changing state or emitting its first byte. Preserve a matched release for every action previously accepted. |
+| Patch start or subsequent patch step | Refuse the failed unit before its first effect. Follow the patch-step rules below for earlier effects and cleanup. |
 | Additional routed note or parameter transaction | Reject the new unit before output. Existing voices/holds/transactions continue, including complete release/terminal messages. Never send half an NRPN because bookkeeping failed. |
 | Looper candidate, overdub or destructive edit | Abandon only the unsuccessful candidate. Retain the published take and existing undo generation; release candidate-owned notes without releasing other sources' notes. |
 | First recording with no published take | End the unsuccessful take cleanly and show the capacity error. Keep unrelated MIDI operation running. Do not silently save a truncated take as successful. |
@@ -166,6 +166,29 @@ when resources are released, without automatic partial re-execution of a failed
 gesture. Do not trigger a broad MIDI panic merely to obtain free memory.
 
 ## Allocation and ownership design
+
+### Pair repeated MIDI notes under pressure
+
+Pair note-offs FIFO by input, cable, channel and pitch, including note-on with
+velocity zero. MIDI supplies no strike ID for repeated notes. Once an onset for
+a key is refused, close admission for that key until its accepted strikes and
+refused strikes have drained. In its existing key record, count subsequent refused
+onsets. Each off releases the oldest accepted strike first, then consumes one
+refused count silently. Keep this record until both counts reach zero. Queue
+accepted releases using their reserved delivery slots even if the output is busy.
+
+If the first onset for a previously unseen key cannot even acquire a key record,
+use an allocation-free flag on that input/cable to refuse further onsets until
+an explicit source reset or reconnect establishes a new input session. Continue
+servicing every accepted note, pedal release and clock. Use the same fallback on
+counter saturation without wrapping the count. Show which input needs a reset.
+This replaces the note-limit branch that retires the whole source on overload.
+
+Test A accepted, B refused at the same pitch, output blocked, then two offs.
+The first off queues exactly A's release and the second emits nothing. Try a
+third strike between the offs, drain its off, unblock output and check the wire
+trace and subsequent retrigger. Repeat with an independent source on that pitch
+and with allocation forced to fail for a previously unseen key.
 
 ### 1. Establish one checked allocation boundary
 
@@ -265,10 +288,22 @@ requirement of no new general heap allocation.
 
 ### 3. Admit work before effects
 
-Prepare the complete operation, including output bookkeeping, undo information,
+Prepare each atomic operation, including output bookkeeping, undo information,
 source pins and eventual release/retirement capacity. Commit through non-failing
 state changes at a safe point. On failure, destroy only the staged candidate.
 Never clear the active state first in order to attempt a replacement.
+
+Patch start admits the executor, its initial frames, required source pins and
+cleanup state. Each later effect is a separate admission point. A delay consumes
+its existing timer state. A multi-message parameter write reserves the complete
+group and its retry bookkeeping before sending. File start and stream selection
+prepare their player or graph before publishing it. Failure stops the patch at
+that step, skips later steps, reports the failing step and retires patch-owned
+temporary work through reserved cleanup. Already delivered program changes and
+completed steps stand. Keep the previous player or graph if its replacement fails.
+Test program change, delay, failed stream selection, then a final send. Expect
+only the program change on the wire, the original stream still playing and a
+visible partial-patch error. Retrying requires another explicit invocation.
 
 Every accepted note/hold/transaction must own enough cleanup capacity for all
 outputs it can reach. Those resources remain unavailable to unrelated new work
@@ -310,54 +345,86 @@ available growth and platform-specific memory regions. Include allocator overhea
 and temporary copies rather than subtracting the old fixed reservations twice.
 
 Remove item caps only when their binary fields, masks, loops and owner mappings
-support the new counts. Existing looper/arpeggiator event settings must acquire a
-single clear meaning, such as an explicitly requested upper recording limit;
-they must no longer force full eager reservation. Resolve any necessary schema
-change in that implementation step, without adding alternative ways to express
-the same limit. Valid configurations can still be refused for insufficient
-available memory or service time, with an accurate reason.
+support the new counts. Keep the existing event setting and counting rules.
+Successful arm guarantees capacity for the configured number of candidate events.
+Acquire usable blocks for those events and their required indexes, publication
+scratch, capture decoder/ownership state and terminal records before acknowledging
+arm. Candidate population can then be lazy within those private blocks. For
+overdub, count retained events toward the combined candidate limit. Apply this at capture
+start for the arpeggiator and at record/overdub arm for the looper. Charge only
+the incremental requirement where storage is already owned. Release unused
+blocks when capture ends. A setup with an idle looper pays no reservation for a
+future take. Report idle cost, incremental arm requirement and active/undo bytes
+separately in the host estimate. At 512 events, test opening the monitor after
+arm under memory pressure. The monitor can be refused and the 512th event must
+still fit. Test event 513 using the candidate-failure policy, and test refusal
+at arm with the published take and undo intact.
 
 ## Implementation sequence
 
 Each step should be independently reviewable and preserve existing behavior
 except for the intended removal of limits and documented failure responses.
 
-1. **Measure and establish failure tests.** Instrument the linked allocator,
+1. **Deliver the one-switcher saving.** Measure a one-switcher setup on the
+   baseline. Stage exactly the configured controllers with checked allocation,
+   keeping owner numbers, four-controller validation and visit serialization
+   for this milestone. Test one and four switchers, navigation and a failed
+   replacement. Report before/after RAM1 and RAM2 totals, including heap use
+   and the replacement peak. Require a net steady-state saving for one switcher.
+   This milestone can ship independently of stream cleanup and allocator redesign.
+2. **Remove invocation reservations.** Replace the twelve snapshots with actual
+   invocation state, migrate owner references and persisted navigation, then lift
+   the controller ceiling together with host validation and budgeting. Exercise
+   save/return and more than four switchers before removing the old mapping.
+3. **Measure and establish failure tests.** Instrument the linked allocator,
    aligned allocations and stack/region measurements. Record boot, one-controller
    setup, maximum practical setup, file playback, loop/overdub/reverse, arpeggiator,
    monitor, transfers and setup/song return peaks. Add deterministic allocation
    failure injection through the same checked boundary used by the target.
-2. **Make memory failure transactional.** Implement checked storage and ownership
+4. **Make memory failure transactional.** Implement checked storage and ownership
    admission. Fix post-write bookkeeping and cleanup allocations first (A8-A11,
    A14). Define bounded allocation/reclamation timing and prove protected cleanup
    works when ordinary allocation always fails. Select segmented/list storage for
    growing performance records using the table above, and record justified retained
    reallocations. Keep old feature limits until safe.
-3. **Remove controller and invocation reservations.** Migrate F1-F4 together with
-   stable owners, exact document-sized state, lazy navigation snapshots and
-   explicit persisted navigation encoding. Update host layout/validation and
-   budgeting in the same change. One configured controller must consume one.
-4. **Make topology and optional tools demand-sized.** Address F5-F7 and F12-F19,
+5. **Make topology and optional tools demand-sized.** Finish F1-F4 with exact
+   document-sized cursors, history and switch states. Address F5-F7 and F12-F19,
    actual-output/cable parsers, font metadata, reader handles, USB workspace
    lifetimes and reusable rendering scratch. Count configuration data before
    allocating final-size vectors or owning arrays, including nested collections.
    Preserve hardware/protocol bounds called out in the appendix and F20. Remove
    masks before removing their caps.
-5. **Make musical buffers demand-sized.** Migrate F8-F11 using admitted event and
+6. **Make musical buffers demand-sized.** Migrate F8-F11 using admitted event and
    ownership storage. Prefer segmented capture/queues and stable records; prepare
    exact-size playback/shuffle/reversal indexes before use. Keep wrap/grid paths
    allocation-free or demonstrably bounded and release paths free of new general
-   heap allocation. Build candidates and undo lazily; preserve existing playback
+   heap allocation. Reserve candidate capacity at arm and retain undo on publication.
+   Preserve existing playback
    during failed capture, reverse, load and configuration.
-6. **Close remaining runtime paths.** Work through A1-A28, nested STL objects,
+7. **Close remaining runtime paths.** Work through A1-A28, nested STL objects,
    file/driver boundaries and destruction. Remove remaining unchecked growth and
    arbitrary caps, revise compiler estimates, and reconcile instrumentation with
    the source inventory. Document each fixed allocation intentionally retained.
-7. **Qualify exhaustion and timing.** Run the tests below and targeted physical
+8. **Qualify exhaustion and timing.** Run the tests below and targeted physical
    measurements before claiming live safety. Update this plan with evidence and
    remaining physical checks; do not mark source changes as hardware qualification.
 
 ## Verification and completion criteria
+
+Use the same target, setup and input trace for the baseline and each proposed
+container. Run a 16-bar loop at 120 BPM with MIDI Clock at 24 PPQN, repeated
+same-pitch notes, sustain, delayed routing and monitor redraws. Repeat capture
+and first wrap 32 times, crossing block boundaries and forcing a failed growth.
+Use the receiver to timestamp clock and first-wrap events and instrument the
+firmware's longest MIDI service gap. Measure peak bytes alongside timing.
+
+Proposed initial pass limits are a 1 ms maximum service gap, 1 ms maximum
+absolute clock interval error relative to the configured period, and 1 ms
+maximum first-wrap lateness relative to its scheduled boundary. Require zero
+missed ticks or accepted releases. Exercise deliberate output backpressure in
+a separate run, measuring service gap during blockage and delivery order after
+unblocking. Record baseline maxima first. If the baseline misses a proposed
+limit, report that separately and settle the target before choosing a container.
 
 - Fail each allocation in turn during every A1-A28 path, including nested
   construction, growth, aligned allocation and optional library workspace. Verify
