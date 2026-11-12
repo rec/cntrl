@@ -1,0 +1,93 @@
+# Morningstar dynamic-memory inventory
+
+Supporting hardware-specific audit for
+[the shared plan](../../../../plan/dynamic-memory.md).
+Source baseline: `a32af63`, 2026-11-12. This is a plan, not an implementation or
+hardware qualification result. Paths below are relative to this directory.
+
+## Product target reservations
+
+| Location | Present storage or constraint | Required treatment |
+| --- | --- | --- |
+| `firmware/patch_switcher/target.cpp` | Primary controller plus `DMAMEM extra_controllers[max_controllers - 1][sizeof(Controller)]`; placement constructs all three extras. | Allocate only the configured controller count. Placement `new` here does not allocate storage; removing only the constructor loop would leave the reservation in place. |
+| `firmware/patch_switcher/target.cpp` | `DMAMEM invocation_navigation[Bridge::owners]`: twelve complete navigation snapshots. Owner numbering reserves eight switch owners followed by controller owners. | Allocate actual active invocation snapshots using the shared stable-owner design. Update switch/controller delivery and return logic together. |
+| `firmware/patch_switcher/target.cpp` | Firmware visit record embeds two navigation states and fixed setup/song references; document/song/transfer objects also have static storage. | Stage dynamic return state before leaving a setup. Persist explicit values and counts, with no raw dynamic object serialization. Review optional module state by lifetime. |
+| `firmware/patch_switcher/target.cpp` | `RenderPixels` has current and previous full-display caches in RAM1: 61,440 pixels each, two bytes per pixel, 245,760 bytes together. `DMAMEM render_work` holds the largest display: 20,480 pixels, 40,960 bytes. | These sizes derive from the three physical 160-by-128 displays. Measure the need and lifetime of each copy, especially previous pixels for transitions. Any lazy buffer must be prepared before use; do not remove rendering buffers without preserving fades and transfer timing. |
+| `firmware/patch_switcher/displays.cpp` and `firmware/usb_probe/displays.h` | Two `DMAMEM DisplayBand` objects support display transfer and preparation. | Keep simultaneous producer/DMA lifetimes and required alignment/cache maintenance. A dynamic buffer must remain at a stable address until completion. No allocation or freeing in the completion interrupt. |
+| `firmware/patch_switcher/target.cpp` | Global USB session and splash receiver/router embed the shared 4096-byte transfer and text/frame workspaces. | Establish which transfers can coexist and acquire only the required workspaces. Preserve any in-flight serial/USB data before reusing or freeing storage. |
+| `firmware/patch_switcher/target.cpp` | Four `song_readers` and a four-pointer handle array are supplied to `SlotStorage`. | Map actual simultaneous reader roles, then allocate handles when needed. Do not replace a concurrency requirement with one shared mutable reader. File open/close may allocate inside the storage library. |
+| `firmware/patch_switcher/target.cpp` | Stream identities are indexed by the shared sixteen-route ceiling. Physical button/port arrays and four expression assignments follow the actual hardware. | Replace route-indexed state with actual endpoint counts. Keep geometry/capability-sized physical input state unless the target configuration makes a device optional. |
+| `firmware/patch_switcher/target.cpp` | SD identity formatting uses nine fixed text values; names, paths and replies use small bounded scratch. | Keep justified bounded formatting and allocation-free diagnostics. Do not heap-allocate every temporary string during an error report. |
+| `firmware/patch_switcher/usb_forward_device.cpp` | High/full-speed descriptor scratch is 512 bytes each; product scratch is 128 bytes. USB identity code also contains immutable descriptors. | Separate descriptor format/endpoint constraints from optional scratch. If made dynamic, construct before enumeration and keep storage alive for the USB driver's full access period. |
+| `firmware/patch_switcher/target_capabilities.h` and host target data | RAM capacity is 524,288 bytes and the host runtime allowance is 294,912 bytes. Target capabilities specify six buttons, four ports, three displays, ten endpoints and switch-count restrictions. | Keep physical capabilities separate from configurable collection limits. Replace the coarse runtime allowance with evidence-based fixed/core, configured and transient costs as the shared plan removes reservations. |
+
+## Runtime allocation and dependency boundaries
+
+The target's `filesystem.h` creates file and directory implementations through
+owning pointers. Stream playback opens independent source/index handles and
+constructs its player. Browsing recursively creates directory levels; cancellation
+closes and destroys them. These paths are reached from pedal controls and host
+commands while MIDI may be active, so storage allocation failure must propagate
+without retiring the active source.
+
+TRS mode reconfiguration constructs/destroys optional `FlexSerial` instances.
+USB host enumeration/disconnection, display transfer/DMA setup, SD/SdFat file
+operations and driver callbacks are transitive allocation boundaries. Instrument
+their actual linked allocation behavior, including first use, rather than assuming
+an absence of allocation from the target's explicit `new` sites. Do not move
+enumeration or DMA lifetime management to an unchecked shared allocator.
+
+The toolchain builds C++ with `-fno-exceptions`. In the inspected Teensy 1.62.0
+core, ordinary `operator new` and `new[]` return `malloc` results; deletion uses
+`free`, and aligned forms use aligned allocation. Consequently an ordinary
+container growth failure is not a recoverable `bad_alloc` contract on this target.
+The shared plan must cover both explicit allocation and library/container growth.
+This audit does not propose changing toolchain or dependency versions.
+
+`std::stable_sort` in the shared stream/timeline code can request temporary
+storage. Target/native tests must cover the real nonthrowing checked path, not
+rely on differences in the host standard library's allocation failure behavior.
+
+## RAM1, RAM2 and measurement
+
+`firmware/memory.ld` derives the budget from the linked heap
+boundaries. Static `DMAMEM` objects consume RAM2 before the ordinary heap can use
+it; ordinary static data and stack usage affect RAM1. Moving an object to dynamic
+storage changes which region bears its cost, and may introduce DMA/cache alignment
+requirements. Record actual linker placement rather than assuming every dynamic
+or fixed buffer lives in the same region.
+
+The status code in `target.cpp` currently estimates RAM2 free space from the
+unextended heap plus `mallinfo().fordblks`. It does not report the largest free
+block or distinguish the shared `MemoryBuffer` ledger from raw/STL allocations.
+RAM1 free space uses the current stack pointer relative to static data, which is
+not a worst-case stack high-water mark. A large navigation or pane copy can matter
+even if a later status query looks healthy.
+
+Qualification needs linked static totals, allocator capacity/metadata, current
+and peak live bytes, largest allocatable block, failure counts, stack high-water
+and transient old/new peaks. Report region and alignment restrictions explicitly.
+Do not add the full .cnsa movie size to RAM2: the player streams movies from SD;
+charge resident pixel/colour/transfer state and any retained indexes instead.
+
+Measure repeated setup changes, source retirement, display fades, monitor open/
+close, loop and arpeggiator replacement, SD browsing and USB attach/detach under
+pressure. Verify the audio/MIDI service loop's worst-case delay, not only absence
+of a crash. Physical execution requires separate authorization and remains a
+completion gate for the implementation.
+
+## Other authored firmware and justified fixed data
+
+| Area | Finding and scope decision |
+| --- | --- |
+| `firmware/boot_switch/` | Gesture history reserves 128 entries. Review the required boot gesture window, but keep boot/recovery independent of an exhausted application heap. Flash selection records and the 128-word NOR configuration are persisted/ROM layouts, not unused feature instances. |
+| `firmware/usb_probe/` | Display/button arrays follow the physical device; small line/row scratch is bounded diagnostic working state. Shared display bands must retain DMA lifetime semantics. |
+| `firmware/scroll_probe/` | The diagnostic image has dimensions 1280 by 256, occupying 327,680 bytes, plus physical buttons and small text/status buffers. It is a measurement fixture, not the product's live musical state. Preserve the reproducible experiment unless a separately requested change needs different image allocation. |
+| `firmware/button_timing/` | Button-specific timing state follows the diagnostic's selected physical inputs. It is not an application collection limit. |
+| Splash firmware/board and shared animation components | Panel dimensions and stream counts reflect the display layout. Full movie data stays on SD; shared colour state can still allocate at playback start and is included in the shared runtime inventory. |
+| Compiled fonts, USB identity and flash journal layouts | Immutable ROM/flash data and required redundant records remain fixed. They must not become heap objects just to eliminate constants. |
+| `archive/` and native test fixtures | Historical snapshots and test-only arrays do not reserve memory in the product binary. Exclude them from product totals, while retaining their role as test/reference material. |
+
+## Additional work beyond the prompt
+
+None.
