@@ -4,8 +4,8 @@
 #include "renderer.h"
 #include "pixel_throb.h"
 #include <cntrl/midi_files.h>
+#include <cntrl/checked_array.h>
 #include <algorithm>
-#include <vector>
 
 namespace cntrl::ui {
 // Platform supplies time, physical I/O, display arbitration and optional
@@ -148,7 +148,7 @@ public:
     void configure_pages(const cntrl::Document &document) {
         if (pages_.arpeggiator) pages_.arpeggiator->configure(document.valid() ? document.arpeggiator_settings() : nullptr);
         pages_.outputs(platform_.midi_outputs());
-        configure_ports();
+        if (!configure_ports()) { error("Port memory unavailable"); return; }
         pages_.layout(document.valid() ? document.page_layout() : cntrl::PageLayout{});
         if (looper_files_) {
             looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none;
@@ -257,7 +257,7 @@ public:
 #endif
     void configure_page_settings(const cntrl::PageSettings &settings) {
         pages_.outputs(platform_.midi_outputs());
-        configure_ports();
+        if (!configure_ports()) { error("Port memory unavailable"); return; }
         leave_page();
         platform_.expression_controls().configure(settings.expression);
         pages_.configure(settings);
@@ -482,17 +482,35 @@ private:
         application_.visible_index = application_.layout.controller_slot(pages_.index());
     }
     struct Port { unsigned index; const char *label; };
-    std::vector<Port> ports_;
-    std::vector<unsigned> expression_ports_;
-    void configure_ports() {
-        ports_.clear(); expression_ports_.clear();
-        for (const auto &endpoint : platform_.midi_outputs()) {
-            if (endpoint.port == midi::no_port) continue;
-            if (std::any_of(ports_.begin(), ports_.end(), [&](const Port &p) { return p.index == endpoint.port; })) continue;
-            ports_.push_back({endpoint.port, endpoint.label});
-            if (platform_.supports_trs_mode(endpoint.port, midi::TrsMode::expression)) expression_ports_.push_back(endpoint.port);
+    CheckedArray<Port> ports_;
+    CheckedArray<unsigned> expression_ports_;
+    bool configure_ports() {
+        const auto outputs = platform_.midi_outputs();
+        unsigned count = 0, expressions = 0;
+        auto first = [&](const midi::OutputConnection &endpoint) {
+            if (endpoint.port == midi::no_port) return false;
+            for (const auto &previous : outputs) {
+                if (&previous == &endpoint) break;
+                if (previous.port == endpoint.port) return false;
+            }
+            return true;
+        };
+        for (const auto &endpoint : outputs) if (first(endpoint)) {
+            ++count;
+            expressions += platform_.supports_trs_mode(endpoint.port, midi::TrsMode::expression);
         }
+        CheckedArray<Port> ports;
+        CheckedArray<unsigned> expression_ports;
+        if (!ports.reserve(count) || !expression_ports.reserve(expressions)) return false;
+        for (const auto &endpoint : outputs) {
+            if (endpoint.port == midi::no_port) continue;
+            if (!first(endpoint)) continue;
+            (void)ports.append({endpoint.port, endpoint.label});
+            if (platform_.supports_trs_mode(endpoint.port, midi::TrsMode::expression)) (void)expression_ports.append(endpoint.port);
+        }
+        ports_.swap(ports); expression_ports_.swap(expression_ports);
         select_trs_jack();
+        return true;
     }
     unsigned next_port(unsigned current, bool expression) const {
         if (expression) {

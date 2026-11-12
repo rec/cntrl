@@ -40,6 +40,7 @@ struct Board : TestPatchHardware, cntrl::midi::Sink, cntrl::Replies {
 };
 
 int main(int argc, char **argv) {
+    cntrl::memory_budget = 524288;
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex;
     std::vector<uint8_t> bytes;
     for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
@@ -66,8 +67,10 @@ int main(int argc, char **argv) {
     actions.close(); assert(!actions.open() && actions.abandoned()); board.writable = true; tick(); board.bridge.service(board, 0); assert(board.sent.size() == before + 2);
     actions.enter(doc, 0); actions.button(0, true); tick(); actions.close(); tick(); assert(!actions.open());
     // Ordinary queue saturation cannot consume the action's cleanup slot.
-    uint8_t cc[] = {0xb0, 3, 1}; for (unsigned i = 0; i < cntrl::midi::Bridge::pedal_capacity; ++i) assert(board.bridge.pedal(0, cc, 3));
+    uint8_t cc[] = {0xb0, 3, 1}; for (unsigned i = 0; i < 16; ++i) assert(board.bridge.pedal(0, cc, 3));
+    cntrl::memory_fail_after = 0;
     assert(!board.bridge.pedal(0, cc, 3)); assert(board.bridge.owned_send(0, 0, cc, 3)); board.bridge.cancel_owner(0);
+    cntrl::memory_fail_after = -1;
     // Decoder rejects malformed assignment commands before activation.
     auto invalid = bytes; unsigned offset = unsigned(doc.switch_assignment(0) - bytes.data()); invalid[offset + 1] = 3;
     cntrl::put32(invalid.data() + 20, cntrl::checksum(invalid.data() + 28, unsigned(invalid.size()) - 28));
@@ -91,6 +94,7 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < 8; ++i) { channel.tick(); patches.bridge.service(patches, 0); }
     assert(patches.sent.back().bytes[0] == 0xb0);
     TestStorage storage; Board transfer; TestController controller(transfer);
+    const unsigned baseline_memory = cntrl::memory_used;
     cntrl::Documents documents(storage, transfer, controller, transfer); documents.boot(); transfer.locked = true;
     for (char c : std::string("CNTRL SETUP GET 706d616e\n")) documents.receive(uint8_t(c), 0);
     assert(transfer.response == "CNTRL ERROR configuration-locked" && !documents.busy());
@@ -104,20 +108,22 @@ int main(int argc, char **argv) {
     for (uint8_t b : bytes) documents.receive(b, 0);
     for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
     assert(!documents.busy() && transfer.response == "CNTRL OK");
-    documents.tick(0); assert(cntrl::memory_used == 0);
+    documents.tick(0); assert(cntrl::memory_used == baseline_memory);
     assert(documents.select("Test"));
-    documents.tick(0); assert(cntrl::memory_used == bytes.size());
+    documents.tick(0);
+    const unsigned selected_memory = cntrl::memory_used;
+    assert(selected_memory >= baseline_memory + cntrl::memory_charge(unsigned(bytes.size())));
     assert(documents.edit_begin() && documents.edit_adjust(0, 5, 1));
-    assert(cntrl::memory_used == 3 * bytes.size());
-    documents.edit_cancel(); assert(cntrl::memory_used == bytes.size());
+    assert(cntrl::memory_used >= selected_memory + 2 * cntrl::memory_charge(unsigned(bytes.size())));
+    documents.edit_cancel(); assert(cntrl::memory_used == selected_memory);
     cntrl::MemoryBuffer occupied;
-    assert(occupied.resize(cntrl::memory_budget - unsigned(bytes.size())));
+    assert(occupied.resize(cntrl::memory_budget - cntrl::memory_used - 16));
     command(put); assert(transfer.response == "CNTRL ERROR document-memory");
     assert(documents.document().length() == bytes.size());
     assert(!std::memcmp(documents.document().data(), bytes.data(), bytes.size()));
     command("CNTRL STATUS"); assert(transfer.response.find("CNTRL READY ") == 0);
     occupied.clear();
     assert(documents.select("Test"));
-    documents.tick(0); assert(cntrl::memory_used == bytes.size());
+    documents.tick(0); assert(cntrl::memory_used == selected_memory);
     return 0;
 }

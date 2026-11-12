@@ -69,6 +69,35 @@ def combine(
     return bytes(result)
 
 
+def linker_script(original: str) -> str:
+    region = 'FLASH (rx): ORIGIN = 0x60000000, LENGTH = 7936K'
+    flash = '*(.flashmem*)'
+    if original.count(region) != 1 or original.count(flash) != 1:
+        raise ValueError('unexpected Teensy linker script')
+    # Allocator preparation/reclamation and finite reversal are cold. Keep
+    # insertion, erasure and iteration in ITCM. Template COMDAT sections cannot
+    # safely share an explicit section attribute across local and public types.
+    cold = '\n\t\t'.join(
+        (
+            flash,
+            '*(.text._ZN5cntrl11CheckedListI*7reserveEj*)',
+            '*(.text._ZN5cntrl11CheckedListI*4trimEj*)',
+            '*(.text._ZN5cntrl11CheckedListI*7releaseEv*)',
+            '*(.text._ZN5cntrl12CheckedArrayI*7reserveEj*)',
+            '*(.text._ZN5cntrl4midi16reverse_sequenceI*)',
+            '*(.text._ZN5cntrl4midi7StreamsC[12]E*)',
+            '*(.text._ZN5cntrl4midi7StreamsD[12]Ev*)',
+            '*(.text._ZN5cntrl4midi7RuntimeC[12]E*)',
+            '*(.text._ZN5cntrl5SongsC[12]E*)',
+            # target.cpp's static Board/runtime construction runs only at boot.
+            '*(.text.startup._GLOBAL__sub_I__Z15switch_scan_duev)',
+        )
+    )
+    return original.replace(
+        region, 'FLASH (rx): ORIGIN = 0x60100000, LENGTH = 6912K'
+    ).replace(flash, cold)
+
+
 def build(command: Build, *, source_root: Path | None = None) -> None:
     root = Path(__file__).parent / 'firmware'
     work = root / 'build/boot-switch'
@@ -91,13 +120,8 @@ def build(command: Build, *, source_root: Path | None = None) -> None:
     core = root / '.tools/data/packages/teensy/hardware/avr/1.62.0'
     toolchain.ensure(root)
     original = (core / 'cores/teensy4/imxrt1062_t41.ld').read_text()
-    region = 'FLASH (rx): ORIGIN = 0x60000000, LENGTH = 7936K'
-    if original.count(region) != 1:
-        raise ValueError('unexpected Teensy linker script')
     linker = work / 'cntrl.ld'
-    linker.write_text(
-        original.replace(region, 'FLASH (rx): ORIGIN = 0x60100000, LENGTH = 6912K')
-    )
+    linker.write_text(linker_script(original))
     toolchain.build(
         root, source_root or Path(__file__).resolve().parents[4], work, linker
     )

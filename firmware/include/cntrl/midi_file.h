@@ -1,10 +1,10 @@
 #pragma once
+#include "checked_array.h"
 #include "midi_bridge.h"
 #include "midi_stream_timeline.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <vector>
 
 namespace cntrl::midi {
 struct MidiFile {
@@ -41,6 +41,16 @@ public:
         source_ = &source; index_ = &index; return true;
     }
     uint64_t duration() const { return time_; }
+    bool reserve_prepared() { return deliveries_.reserve(deliveries_.size() + 1); }
+    unsigned trim_prepared_storage(unsigned budget = 1) {
+        if (active() || cleaning()) return 0;
+        unsigned retired = deliveries_.trim(budget);
+        if (retired < budget) retired += notes_.trim(budget - retired);
+        if (retired < budget) retired += sounding_.trim(budget - retired);
+        if (retired < budget) retired += pedals_.trim(budget - retired);
+        if (retired < budget && tracks_.capacity()) { tracks_.release(); ++retired; }
+        return retired;
+    }
     unsigned event_count() const { return events_; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_play_prepared)
@@ -48,7 +58,7 @@ public:
     bool play_prepared(const PlayMidiFilePatch &settings, unsigned count, uint64_t duration) {
         if (active() || cleaning() || !settings.outputs || !duration || count > index_->size() / 32) return false;
         for (auto token : prepared_tokens_) if (token) return false;
-        deliveries_[owner_] = delivery(owner_);
+        if (!remember_delivery()) return false;
         cancel(); settings_ = settings; events_ = count; time_ = duration;
         musical_ = prepared_ = true; has_clock_ = false; status_ = Status::playing;
         std::fill(std::begin(prepared_positions_), std::end(prepared_positions_), 0);
@@ -129,9 +139,10 @@ public:
     CNTRL_FLASH_ROUTINE(midi_file_delivery)
 #endif
     Bridge::Delivery delivery(unsigned owner) const {
-        if (owner >= Bridge::owners) return Bridge::Delivery::cancelled;
-        if (musical_) return deliveries_[owner];
-        if (owner != owner_) return deliveries_[owner];
+        if (musical_ || owner != owner_) {
+            for (const auto &entry : deliveries_) if (entry.owner == owner) return entry.delivery;
+            return Bridge::Delivery::idle;
+        }
         if (active() || cleaning()) return Bridge::Delivery::pending;
         return status_ == Status::complete ? Bridge::Delivery::complete : Bridge::Delivery::cancelled;
     }
@@ -149,9 +160,12 @@ public:
     CNTRL_FLASH_ROUTINE(midi_file_start)
 #endif
     bool start(const PlayMidiFilePatch &settings, unsigned owner = 0, bool musical = false) {
-        if (owner >= Bridge::owners || active() || cleaning()) return false;
-        deliveries_[owner_] = delivery(owner_); owner_ = owner;
+        if (active() || cleaning() || !remember_delivery()) return false;
+        auto existing = std::find_if(deliveries_.begin(), deliveries_.end(), [owner](const auto &entry) { return entry.owner == owner; });
+        if (existing == deliveries_.end() && !deliveries_.append({owner, Bridge::Delivery::idle})) return false;
+        owner_ = owner;
         cancel(); settings_ = settings; has_clock_ = false; musical_ = musical; prepared_ = false;
+        peak_notes_ = pedal_count_ = 0; std::memset(pedal_seen_, 0, sizeof(pedal_seen_));
         uint8_t header[14];
         if (!source_->read(0, header, sizeof(header)) || std::memcmp(header, "MThd", 4)
             || big(header + 4, 4) < 6 || big(header + 8, 2) > 1 || !big(header + 10, 2)
@@ -160,7 +174,6 @@ public:
         division_ = big(header + 12, 2);
         if (!division_) return fail();
         if (musical_ && (division_ & 0x8000)) return fail();
-        if (musical_ && big(header + 10,2) > 16) return fail();
         if (division_ & 0x8000) {
             int fps = -int(int8_t(division_ >> 8));
             if (!(division_ & 255) || (fps != 24 && fps != 25 && fps != 29 && fps != 30)) return fail();
@@ -169,13 +182,15 @@ public:
         } else { numerator_ = musical_ ? uint64_t(1) << 32 : 500000; denominator_ = division_; }
         if (big(header + 4, 4) > source_->size() - 8) return fail();
         uint32_t offset = 8 + big(header + 4, 4);
+        if (!tracks_.reserve(big(header + 10, 2))) return fail();
         for (unsigned i = 0; i < big(header + 10, 2); ++i) {
             uint8_t chunk[8];
             if (!source_->read(offset, chunk, 8) || std::memcmp(chunk, "MTrk", 4)) return fail();
             uint32_t length = big(chunk + 4, 4);
             if (offset > source_->size() - 8 || length > source_->size() - offset - 8) return fail();
             Track track; track.cursor = offset + 8; track.end = track.cursor + length;
-            tracks_.push_back(track); offset = track.end;
+            if (!tracks_.append(std::move(track))) return fail();
+            offset = track.end;
         }
         events_ = loop_ = position_ = group_last_ = 0; time_ = tick_ = remainder_ = elapsed_ = 0;
         packet_pending_ = event_pending_ = clock_known_ = post_waiting_ = false;
@@ -194,6 +209,7 @@ public:
                 return;
             }
             release_one(available, sink);
+            trim_prepared_storage(4);
             return;
         }
         if ((available & settings_.outputs) != settings_.outputs && (!musical_ || status_ != Status::indexing)) { fail(); return; }
@@ -211,7 +227,7 @@ public:
                 || (packet_.cin == 11 && packet_.bytes[1] >= 64 && packet_.bytes[1] <= 69);
             packet_.source = owned ? uint16_t(0xe000 + owner_) : 65535;
             for (unsigned route = 0; route < max_routes; ++route)
-                if ((pending_outputs_ & (1u << route)) && sink.submit(route, packet_)) {
+                if ((pending_outputs_ & (1u << route)) && prepare_packet(route) && sink.submit(route, packet_)) {
                     pending_outputs_ &= ~(1u << route);
                     remember_packet(route);
                 }
@@ -267,17 +283,25 @@ private:
     struct Track { uint32_t cursor = 0, end = 0; uint64_t tick = 0; uint8_t running = 0; Event head; bool ready = false, ended = false; };
     struct Held { uint8_t channel, note, velocity; };
     struct Sounding { unsigned output; uint8_t channel, note; };
-    std::vector<Sounding> sounding_;
+    CheckedList<Sounding> sounding_;
     struct Pedal { unsigned output; uint8_t channel, controller; };
-    std::vector<Pedal> pedals_;
+    CheckedList<Pedal> pedals_;
     MidiFile *source_, *index_;
     PlayMidiFilePatch settings_;
-    std::vector<Track> tracks_;
-    std::vector<Held> notes_;
+    CheckedArray<Track> tracks_;
+    CheckedList<Held> notes_;
+    unsigned peak_notes_ = 0, pedal_count_ = 0;
+    uint8_t pedal_seen_[16] = {};
     uint8_t controls_[16][6] = {};
     Status status_ = Status::idle;
     unsigned owner_ = 0;
-    std::array<Bridge::Delivery, Bridge::owners> deliveries_{};
+    struct OwnerDelivery { unsigned owner; Bridge::Delivery delivery; };
+    CheckedList<OwnerDelivery> deliveries_;
+    bool remember_delivery() {
+        auto previous = delivery(owner_);
+        for (auto &entry : deliveries_) if (entry.owner == owner_) { entry.delivery = previous; return true; }
+        return previous == Bridge::Delivery::idle || deliveries_.append({owner_, previous});
+    }
     unsigned division_ = 0, denominator_ = 1;
     uint64_t numerator_ = 500000, remainder_ = 0, tick_ = 0, time_ = 0, elapsed_ = 0;
     uint32_t events_ = 0, position_ = 0, loop_ = 0, previous_ = 0, stream_offset_ = 0;
@@ -298,7 +322,7 @@ private:
     void remember_packet(unsigned route) {
         unsigned kind = packet_.bytes[0] >> 4;
         uint8_t channel = packet_.bytes[0] & 15;
-        if (kind == 9 && packet_.bytes[2]) sounding_.push_back({route, channel, packet_.bytes[1]});
+        if (kind == 9 && packet_.bytes[2]) (void)sounding_.append({route, channel, packet_.bytes[1]});
         if (kind == 8 || (kind == 9 && !packet_.bytes[2])) {
             auto n = std::find_if(sounding_.begin(), sounding_.end(), [&](const auto &v) { return v.output == route && v.channel == channel && v.note == packet_.bytes[1]; });
             if (n != sounding_.end()) sounding_.erase(n);
@@ -306,9 +330,19 @@ private:
         if (kind == 11 && packet_.bytes[1] >= 64 && packet_.bytes[1] <= 69) {
             auto p = std::find_if(pedals_.begin(), pedals_.end(), [&](const auto &v) { return v.output == route && v.channel == channel && v.controller == packet_.bytes[1]; });
             if (packet_.bytes[2] >= 64) {
-                if (p == pedals_.end()) pedals_.push_back({route, channel, packet_.bytes[1]});
+                if (p == pedals_.end()) (void)pedals_.append({route, channel, packet_.bytes[1]});
             } else if (p != pedals_.end()) pedals_.erase(p);
         }
+    }
+    bool prepare_packet(unsigned route) {
+        const unsigned kind = packet_.bytes[0] >> 4;
+        if (kind == 9 && packet_.bytes[2]) return sounding_.reserve(sounding_.size() + 1);
+        if (kind == 11 && packet_.bytes[1] >= 64 && packet_.bytes[1] <= 69 && packet_.bytes[2] >= 64) {
+            for (const auto &entry : pedals_)
+                if (entry.output == route && entry.channel == (packet_.bytes[0] & 15) && entry.controller == packet_.bytes[1]) return true;
+            return pedals_.reserve(pedals_.size() + 1);
+        }
+        return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_release)
@@ -418,7 +452,11 @@ private:
                     append_event(release); return;
                 }
             if (!index_->sync()) { fail(); return; }
-            notes_.clear(); tracks_.clear(); status_ = Status::playing; return;
+            unsigned outputs = 0;
+            for (unsigned mask = settings_.outputs; mask; mask >>= 1) outputs += mask & 1;
+            if (peak_notes_ > UINT32_MAX / outputs || pedal_count_ > UINT32_MAX / outputs
+                || !sounding_.reserve(peak_notes_ * outputs) || !pedals_.reserve(pedal_count_ * outputs)) { fail(); return; }
+            notes_.clear(); tracks_.release(); status_ = Status::playing; return;
         }
         uint64_t delta = chosen->tick - tick_;
         if (delta > (UINT64_MAX - remainder_) / numerator_) { fail(); return; }
@@ -438,14 +476,18 @@ private:
         if (event.status == 0xf8) has_clock_ = true;
         unsigned kind = event.status >> 4;
         if (kind == 9 && event.second) {
-            if (musical_ && notes_.size() == 32) { fail(); return; }
-            notes_.push_back({uint8_t(event.status & 15), event.first, event.second});
+            if (!notes_.append({uint8_t(event.status & 15), event.first, event.second})) { fail(); return; }
+            peak_notes_ = std::max(peak_notes_, notes_.size());
         }
         if (kind == 8 || (kind == 9 && !event.second)) {
-            auto note = std::find_if(notes_.rbegin(), notes_.rend(), [&](const auto &n) { return n.channel == (event.status & 15) && n.note == event.first; });
-            if (note != notes_.rend()) { event.reverse_value = note->velocity; notes_.erase(std::next(note).base()); }
+            auto note = notes_.end();
+            for (auto i = notes_.begin(); i != notes_.end(); ++i)
+                if (i->channel == (event.status & 15) && i->note == event.first) note = i;
+            if (note != notes_.end()) { event.reverse_value = note->velocity; notes_.erase(note); }
         }
         if (kind == 11 && event.first >= 64 && event.first <= 69) {
+            const unsigned channel = event.status & 15, bit = 1u << (event.first - 64);
+            if (!(pedal_seen_[channel] & bit)) { pedal_seen_[channel] |= uint8_t(bit); ++pedal_count_; }
             auto &value = controls_[event.status & 15][event.first - 64];
             event.reverse_value = value; value = event.second;
         }
@@ -559,12 +601,17 @@ public:
     bool finishing() const { return active_ && finishing_; }
     bool complete() const { return complete_; }
     void cancel() { active_ = finishing_ = complete_ = false; queue_.clear(); }
+    bool release_storage() {
+        if (active_ || finishing_) return false;
+        queue_.release(); queue_limit_ = 0; return true;
+    }
+    bool reserve_prepared(unsigned capacity) { return !active_ && queue_.reserve(capacity); }
     bool start(RecordMidiFilePatch filters, uint32_t now) {
         return begin(filters, now, 1000, 1000000, nullptr);
     }
-    bool start_prepared(RecordMidiFilePatch filters, MidiFile &index, unsigned ppqn, unsigned tempo) {
-        if (!ppqn || ppqn > 32767 || !tempo || tempo > 0xffffff) return false;
-        return begin(filters, 0, ppqn, tempo, &index);
+    bool start_prepared(RecordMidiFilePatch filters, MidiFile &index, unsigned ppqn, unsigned tempo, unsigned capacity) {
+        if (!capacity || !ppqn || ppqn > 32767 || !tempo || tempo > 0xffffff) return false;
+        return begin(filters, 0, ppqn, tempo, &index, capacity);
     }
     unsigned prepared_count() const { return prepared_count_; }
     bool queued() const { return !queue_.empty(); }
@@ -582,10 +629,11 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_record_begin)
 #endif
-    bool begin(RecordMidiFilePatch filters, uint32_t now, unsigned ppqn, unsigned tempo, MidiFile *index) {
+    bool begin(RecordMidiFilePatch filters, uint32_t now, unsigned ppqn, unsigned tempo, MidiFile *index, unsigned capacity = 0) {
         if (active_) return false;
-        queue_.reserve(256);
+        if (!queue_.reserve(capacity)) return false;
         queue_.clear();
+        queue_limit_ = capacity;
         index_ = index; ppqn_ = ppqn; prepared_count_ = 0;
         filters_ = filters; previous_ = now; elapsed_ = last_ = 0; length_ = 29;
         failed_ = sysex_ = finishing_ = complete_ = false; finish_stage_ = 0;
@@ -600,8 +648,7 @@ private:
     void enqueue(unsigned input, const Packet &packet, uint64_t time) {
         if (!active_ || finishing_ || !(filters_.inputs & (1u << input))) return;
         if (packet.bytes[0] >= 0x80 && packet.bytes[0] < 0xf0 && !(filters_.channels & (1u << (packet.bytes[0] & 15)))) return;
-        if (queue_.size() == 256) { failed_ = true; active_ = false; return; }
-        queue_.push_back({time, packet, input});
+        if ((queue_limit_ && queue_.size() == queue_limit_) || !queue_.append({time, packet, input})) { failed_ = true; active_ = false; return; }
     }
     uint64_t record_time() const { return index_ ? elapsed_ : elapsed_ / 1000; }
 public:
@@ -672,10 +719,14 @@ public:
     }
 private:
     struct Pending { uint64_t time; Packet packet; unsigned input; };
+#if UINTPTR_MAX == UINT32_MAX
+    static_assert(CheckedList<Pending>::node_size() == 56);
+#endif
     MidiFile *file_, *index_ = nullptr;
     unsigned ppqn_ = 1000, prepared_count_ = 0;
     RecordMidiFilePatch filters_;
-    std::vector<Pending> queue_;
+    CheckedList<Pending> queue_;
+    unsigned queue_limit_ = 0;
     uint32_t previous_ = 0, length_ = 0;
     uint64_t elapsed_ = 0, last_ = 0;
     bool active_ = false, failed_ = false, sysex_ = false, finishing_ = false, complete_ = false;

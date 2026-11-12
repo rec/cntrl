@@ -1,7 +1,7 @@
 #pragma once
 #include "midi_outputs.h"
 #include <cstring>
-#include <vector>
+#include "checked_list.h"
 
 namespace cntrl {
 class TextMessages {
@@ -52,7 +52,11 @@ public:
         auto state = inputs_.begin();
         while (state != inputs_.end() && state->source != source) ++state;
         if (byte == 0xf0) {
-            if (state == inputs_.end()) { inputs_.push_back({}); state = inputs_.end() - 1; }
+            if (state == inputs_.end()) {
+                auto *created = inputs_.append({});
+                if (created) created->source = source;
+                return;
+            }
             *state = {}; state->source = source;
             return;
         }
@@ -74,7 +78,7 @@ public:
     }
 private:
     struct Input { unsigned source = 0, used = 0; uint8_t kind = 0; char text[maximum] = {}; };
-    std::vector<Input> inputs_;
+    CheckedList<Input> inputs_;
     char text_[maximum + 1] = {};
     Kind kind_ = Kind::cue;
     uint32_t received_ = 0;

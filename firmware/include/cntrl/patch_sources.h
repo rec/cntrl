@@ -1,7 +1,7 @@
 #pragma once
 #include "patch_executor.h"
 #include "setup_table.h"
-#include <vector>
+#include "checked_list.h"
 
 namespace cntrl {
 // In-flight invocations share cached views. Release their pins after the last
@@ -18,17 +18,18 @@ public:
         document = setups_.get(index);
         if (!document) return false;
         if (std::find(pinned_.begin(), pinned_.end(), index) == pinned_.end()) {
-            setups_.pin(index); pinned_.push_back(index);
+            if (!pinned_.append(index)) return false;
+            setups_.pin(index);
         }
         revision = setups_.revision(index); return true;
     }
     void release_all() {
         for (uint16_t index : pinned_) setups_.unpin(index);
-        pinned_.clear();
+        pinned_.release();
     }
 private:
     SetupTable &setups_;
-    std::vector<uint16_t> pinned_;
+    CheckedList<uint16_t> pinned_;
     unsigned users_ = 0;
 };
 } // namespace cntrl

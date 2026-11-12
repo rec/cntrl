@@ -1,4 +1,5 @@
 #pragma once
+#include <vector>
 #include <cstdio>
 #include <charconv>
 #include <cntrl/filesystem.h>
@@ -8,8 +9,11 @@ namespace cntrl::midi {
 class CachedMidiFile : public cntrl::midi::MidiFile {
 public:
     explicit CachedMidiFile(files::File &file) : file_(file) {}
-    void close() { file_.close(); invalidate(); }
-    bool open(const char *path, files::Mode mode) { invalidate(); return file_.open(path, mode); }
+    void close() { file_.close(); invalidate(); cache_.clear(); }
+    bool open(const char *path, files::Mode mode) {
+        invalidate();
+        return cache_.resize(512) && file_.open(path, mode);
+    }
     bool opened() const { return file_.opened(); }
     void invalidate() { cached_ = false; }
     uint32_t size() const override { return file_.size(); }
@@ -17,17 +21,16 @@ public:
     CNTRL_FLASH_ROUTINE(cached_midi_read)
 #endif
     bool read(uint32_t offset, uint8_t *data, unsigned length) override {
-        if (!file_.opened() || offset > size() || length > size() - offset) return false;
+        if (!file_.opened() || cache_.size != 512 || offset > size() || length > size() - offset) return false;
         for (unsigned i = 0; i < length; ++i) {
             uint32_t address = offset + i, block = address & ~511u;
             if (!cached_ || block != cached_offset_) {
-                if (cache_.empty()) cache_.resize(512);
                 cached_offset_ = block;
                 unsigned n = std::min(uint32_t(512), size() - block);
-                if (!file_.read(block, cache_.data(), n)) return false;
+                if (!file_.read(block, cache_.data, n)) return false;
                 cached_ = true;
             }
-            data[i] = cache_[address - cached_offset_];
+            data[i] = cache_.data[address - cached_offset_];
         }
         return true;
     }
@@ -38,12 +41,12 @@ public:
     bool sync() override { return file_.sync(); }
 private:
     files::File &file_;
-    std::vector<uint8_t> cache_;
+    MemoryBuffer cache_;
     uint32_t cached_offset_ = 0;
     bool cached_ = false;
 };
 
-class StreamFilePlayer : public StreamFileSource {
+class StreamFilePlayer : public StreamFileSource, public CheckedHeapAllocation {
 public:
     StreamFilePlayer(files::FileSystem &filesystem, std::unique_ptr<files::File> source,
                      std::unique_ptr<files::File> index, const char *index_path)
@@ -165,7 +168,8 @@ public:
         int index_size = std::snprintf(index_path, sizeof(index_path), "%s.stream-%u", index_path_, route);
         if (source_size < 0 || unsigned(source_size) >= sizeof(path)
             || index_size < 0 || unsigned(index_size) >= sizeof(index_path)) return {};
-        auto stream = std::make_unique<StreamFilePlayer>(filesystem_, std::move(source), std::move(index), index_path);
+        std::unique_ptr<StreamFilePlayer> stream(new (std::nothrow) StreamFilePlayer(filesystem_, std::move(source), std::move(index), index_path));
+        if (!stream) return {};
         if (!stream->start(path, settings)) return {};
         return stream;
     }
@@ -173,7 +177,7 @@ public:
     CNTRL_FLASH_ROUTINE(files_play)
 #endif
     bool play(unsigned invocation, const cntrl::midi::PlayMidiFilePatch &settings) {
-        if (looper.owned() || storage_busy() || invocation >= cntrl::midi::Bridge::owners || player.active() || player.cleaning()) return false;
+        if (looper.owned() || storage_busy() || player.active() || player.cleaning()) return false;
         const char *filename = settings.filename[0] ? settings.filename : latest_;
         if (!filename[0] || (recorder.active() && !std::strcmp(filename, recording_name_))) return false;
         char path[128]; std::snprintf(path, sizeof(path), "%s/%s", directory_, filename);

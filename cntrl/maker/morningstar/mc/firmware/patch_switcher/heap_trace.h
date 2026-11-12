@@ -1,0 +1,28 @@
+#pragma once
+#include <cstdint>
+
+namespace cntrl::device {
+struct HeapTrace {
+    unsigned allocations = 0, reallocations = 0, frees = 0, failures = 0;
+    unsigned live = 0, checked = 0, peak = 0, largest_request = 0;
+    unsigned max_allocation_cycles = 0, max_free_cycles = 0;
+    // Counts outer allocation calls per observed interrupt context. When a
+    // handler interrupts another allocator call, valid becomes false and this
+    // is only a conservative minimum, not an exact nested-allocation count.
+    unsigned interrupt_allocations = 0;
+    bool valid = true;
+};
+struct HeapSnapshot {
+    HeapTrace trace;
+    unsigned actual_used = 0, checked_actual = 0, sdk_used = 0, sdk_growth = 0;
+    unsigned largest_free = 0, free_blocks = 0, unallocated = 0;
+    bool valid = false;
+};
+// Snapshot walks the pinned allocator's free list. Call only outside MIDI
+// service; it is a diagnostic and has no bounded execution-time guarantee.
+HeapSnapshot heap_snapshot();
+void initialize_heap_accounting(unsigned linked_capacity);
+// Enables linked-allocator faults only when explicitly requested by a
+// qualification harness. Negative disables faults; zero fails the next call.
+void heap_fault_after(int successful_calls);
+}

@@ -7,6 +7,30 @@ from cntrl.firmware.intel_hex import AddressRange, FirmwareImage, encode_hex, re
 from cntrl.maker.morningstar.mc import boot_switch
 
 
+def test_linker_places_only_cold_container_methods_in_flash() -> None:
+    original = (
+        'FLASH (rx): ORIGIN = 0x60000000, LENGTH = 7936K\n'
+        '.text.code : { *(.flashmem*) } > FLASH\n'
+        '.text.itcm : { *(.text*) } > ITCM\n'
+    )
+    linked = boot_switch.linker_script(original)
+    assert 'FLASH (rx): ORIGIN = 0x60100000, LENGTH = 6912K' in linked
+    flash, itcm = linked.split('.text.itcm')
+    for section in (
+        '_ZN5cntrl11CheckedListI*7reserveEj*',
+        '_ZN5cntrl11CheckedListI*4trimEj*',
+        '_ZN5cntrl11CheckedListI*7releaseEv*',
+        '_ZN5cntrl12CheckedArrayI*7reserveEj*',
+        '_ZN5cntrl4midi16reverse_sequenceI*',
+    ):
+        assert f'*(.text.{section})' in flash
+    assert 'append' not in flash and 'erase' not in flash
+    assert '*(.text.startup._GLOBAL__sub_I__Z15switch_scan_duev)' in flash
+    assert '*(.text*)' in itcm
+    with pytest.raises(ValueError, match='linker script'):
+        boot_switch.linker_script(original.replace('*(.flashmem*)', ''))
+
+
 def test_switch_window_configuration() -> None:
     assert (
         boot_switch.Build.model_validate(

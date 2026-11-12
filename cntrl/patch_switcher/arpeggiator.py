@@ -92,7 +92,7 @@ def section_end(data: bytes, offset: int) -> int:
         or not channels
         or not inputs
         or not outputs
-        or not 1 <= events <= 4096
+        or not 1 <= events <= 65535
         or modulus < 2
         or not 0 < gate <= step <= 64 << 32
         or not denominator
@@ -151,7 +151,41 @@ def unpack(data: bytes, offset: int, names: dict[int, str]) -> dict[str, object]
 
 
 def estimate_ram(data: bytes) -> int:
-    return 0 if not data else CONFIG.unpack(data)[8] * 1536 + 32768
+    if not data:
+        return 0
+    _, _, mono, _, _, channels, _, outputs, events, *_ = CONFIG.unpack(data)
+    count = outputs.bit_count()
+    if mono:
+        return 104 * count
+    return (
+        64 * events
+        + 56 * events * count
+        + 496 * count
+        + 412 * count * channels.bit_count()
+        + 16
+    )
+
+
+def estimate_arm_ram(data: bytes, *, capture_contexts: int | None = None) -> int:
+    if not data:
+        return 0
+    _, _, mono, _, _, channels, inputs, outputs, events, *_ = CONFIG.unpack(data)
+    if not mono:
+        return 0
+    count = outputs.bit_count()
+    if capture_contexts is None:
+        capture_contexts = inputs.bit_count() * 16 * channels.bit_count()
+    # ARM32 checked-node sizes are asserted alongside the firmware record types.
+    # Include 16 bytes per allocation for allocator metadata and alignment.
+    return (
+        224 * events
+        + 140 * (events // 2)
+        + 144 * events * count
+        + 56 * capture_contexts
+        + 412 * count * channels.bit_count()
+        + 248 * count
+        + 32
+    )
 
 
 KINDS = (

@@ -27,6 +27,8 @@ struct Board : TestPatchHardware, cntrl::midi::Sink {
     }
     cntrl::midi::Bridge::Delivery patch_delivery(unsigned owner) const override { return bridge.delivery(owner); }
     void cancel_patch(unsigned owner) override { bridge.cancel_owner(owner); }
+    bool retain_owner(cntrl::PatchExecutor &executor) override { return bridge.retain_owner(executor.owner()); }
+    void release_retained_owner(cntrl::PatchExecutor &executor) override { bridge.release_owner(executor.owner()); }
     bool write_packet(unsigned output, const cntrl::midi::Packet &packet) override {
         if (!writable) return false;
         wire[output].insert(wire[output].end(), packet.bytes, packet.bytes + packet.size()); return true;
@@ -113,7 +115,49 @@ void test_switches_share_displayed_value_and_setup_reload_resets(const cntrl::Do
     assert(board.wire[0].back() == 95);
 }
 
+void test_prepared_counter_survives_memory_pressure_and_setup_reset(const cntrl::Document &document) {
+    Board board;
+    const unsigned budget = cntrl::memory_budget, setup = cntrl::u32(document.data() + 20);
+    cntrl::Counters::State *replacement = nullptr;
+    {
+        cntrl::PatchExecutor executor(board, board, board, 0);
+        executor.retain_counter_reservations();
+        assert(executor.start(document, unsigned(document.named_patch("up"))));
+        executor.cancel();
+        assert(board.counters.state(setup, 0));
+        cntrl::memory_budget = cntrl::memory_used;
+        assert(executor.start(document, unsigned(document.named_patch("up"))));
+        executor.cancel();
+        cntrl::memory_budget = budget;
+        board.counters.reset();
+        replacement = board.counters.acquire(setup, 0, 95);
+        assert(replacement);
+    }
+    // A stale executor lease must not release a state from the new setup epoch.
+    assert(board.counters.state(setup, 0) == replacement);
+    board.counters.release(replacement);
+    assert(!board.counters.state(setup, 0));
+}
+
 int main(int argc, char **argv) {
+    {
+        const unsigned budget = cntrl::memory_budget, before = cntrl::memory_used;
+        cntrl::memory_budget = before + 4096;
+        cntrl::Counters counters;
+        auto *first = counters.acquire(1, 0, 3);
+        assert(first && counters.acquire(1, 0, 3) == first);
+        counters.release(first);
+        cntrl::memory_budget = cntrl::memory_used;
+        assert(!counters.acquire(2, 0, 9) && counters.value(1, 0, 0) == 3);
+        counters.release(first);
+        assert(!counters.state(1, 0) && cntrl::memory_used == before);
+        cntrl::memory_budget = before + 4096;
+        first = counters.acquire(1, 0, 3); assert(first);
+        counters.accepted(*first, {8, false}); counters.release(first);
+        assert(counters.value(1, 0, 0) == 8);
+        counters.reset(); assert(cntrl::memory_used == before);
+        cntrl::memory_budget = budget;
+    }
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex;
     Bytes bytes; for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     Board board; cntrl::Document document; assert(document.load(bytes.data(), unsigned(bytes.size()), board));
@@ -121,6 +165,7 @@ int main(int argc, char **argv) {
     test_bounce_reaches_endpoints_with_negative_and_large_steps(document);
     test_rejected_blocked_cancelled_and_disconnected_sends(document);
     test_switches_share_displayed_value_and_setup_reload_resets(document);
+    test_prepared_counter_survives_memory_pressure_and_setup_reset(document);
     // Invalid references and definitions are rejected before execution.
     Bytes invalid = bytes;
     unsigned offset = unsigned(document.counter(0) - bytes.data()); invalid[offset + 98] = 127;

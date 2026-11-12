@@ -88,7 +88,7 @@ def entries(data: bytes) -> dict[int, tuple[list[int], bytes, bytes]]:
     if not 8 <= len(data) <= MAX_ASSET:
         raise ValueError('font asset exceeds 256 KiB or is truncated')
     magic, count = HEADER.unpack_from(data)
-    if magic != b'CFN2' or not 1 <= count <= 32:
+    if magic != b'CFN2' or not 1 <= count <= 255:
         raise ValueError('invalid font asset header')
     result = {}
     offset = HEADER.size
@@ -349,16 +349,6 @@ class Preparation:
             assets[key] = data
             paths[name] = f'fonts/{key:08x}.cfont'
         return self.show.model_copy(update={'fonts': paths}), keys, assets
-
-
-def validate_font_count(windows: list[bytes], display: bytes) -> None:
-    count = struct.unpack_from('<H', display, 4)[0]
-    records = windows + [display[16 + i * 16 : 32 + i * 16] for i in range(count)]
-    selected = {
-        (struct.unpack_from('<I', r, 12)[0], r[1]) for r in records if r[0] == 255
-    }
-    if len(selected) > 32:
-        raise ValueError('selected font sizes exceed the 32-font limit')
 
 
 HEADER = struct.Struct('<4sI')

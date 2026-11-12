@@ -6,10 +6,12 @@
 #include <iostream>
 
 int main(int argc, char **argv) {
+    cntrl::memory_budget = 128 * 1024;
     assert(argc == 2); TestFileSystem filesystem(argv[1]);
-    TestFile writer(filesystem), a(filesystem), b(filesystem), c(filesystem), d(filesystem);
-    cntrl::files::File *readers[] = {&a, &b, &c, &d}; bool ready = false;
-    cntrl::SlotStorage slots(filesystem, writer, readers, 4, "/cntrl/songs", ready);
+    TestFile writer(filesystem); bool ready = false;
+    const unsigned unused = cntrl::memory_used;
+    cntrl::SlotStorage slots(filesystem, writer, 4, "/cntrl/songs", ready);
+    assert(cntrl::memory_used == unused);
     const uint8_t first[] = {1, 2, 3}; uint8_t copied[3] = {};
     assert(!slots.begin(0) && slots.size(0) == 0);
     ready = true; assert(slots.begin(0) && slots.write(first, sizeof(first)) && slots.finish());
@@ -18,6 +20,13 @@ int main(int argc, char **argv) {
     assert(slots.begin(0) && slots.write(second, 2) && slots.finish());
     assert(slots.size(0) == 2 && slots.read(0, 0, copied, 2) && !std::memcmp(second, copied, 2));
     assert(!slots.begin(4) && !slots.read(4, 0, copied, 1));
+    assert(slots.begin(1) && slots.write(first, sizeof(first)) && slots.finish());
+    const unsigned reader_budget = cntrl::memory_budget;
+    cntrl::memory_budget = cntrl::memory_used;
+    assert(!slots.read(1, 0, copied, 3));
+    assert(slots.read(0, 0, copied, 2) && !std::memcmp(second, copied, 2));
+    cntrl::memory_budget = reader_budget;
+    assert(slots.read(1, 0, copied, 3) && !std::memcmp(first, copied, 3));
     TestFile movie_reader(filesystem), movie_writer(filesystem);
     cntrl::AssetStorage assets(filesystem, movie_reader, movie_writer);
     uint8_t movie[24] = {}; std::memcpy(movie + 20, "DONE", 4);
@@ -34,6 +43,8 @@ int main(int argc, char **argv) {
     cntrl::StorageListing listing(filesystem);
     const cntrl::StorageListing::Detail details[] = {{"filesystem", "LittleFS"}, {"product", "Internal flash"}};
     assert(listing.begin(details, 2));
+    const unsigned budget = cntrl::memory_budget; cntrl::memory_budget = cntrl::memory_used;
+    assert(!listing.begin()); cntrl::memory_budget = budget;
     char response[600]; unsigned records = 0;
     listing.next(response, sizeof(response));
     assert(!std::strcmp(response, "CNTRL DETAIL 66696c6573797374656d 4c6974746c654653"));

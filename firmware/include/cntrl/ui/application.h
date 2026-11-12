@@ -26,16 +26,20 @@ class Application {
 public:
     Application(Hardware &hardware, Documents &documents, Controller &primary, PatchOutputs &outputs, PatchSources &sources,
                 Songs &songs, SongCapture &capture, bool switches)
-        : menu(hardware, names_.data(), switches ? 3 : 2), setups(documents, hardware),
+        : menu(hardware, tool_names_.data(), switches ? 3 : 2), setups(documents, hardware),
           song_ui(songs, hardware, capture), hardware_(hardware), documents_(documents), primary_(primary),
-          outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) {
-        names_[0] = "Setups"; names_[1] = "Songs and setlists";
-        if (switches) names_[2] = "Switches";
-    }
+          outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) {}
     ~Application() { destroy_controllers(pending_controllers_); destroy_controllers(controllers_); }
-    bool prepare_pages(PageLayout candidate) {
+    bool prepare_layout(PageLayout candidate) {
         prepared_ = false;
         destroy_controllers(pending_controllers_);
+        pending_names_.clear();
+        if (candidate.pages()) {
+            if (!pending_names_.resize((page_offset() + candidate.pages()) * sizeof(const char *))) return false;
+            auto **names = reinterpret_cast<const char **>(pending_names_.data);
+            for (unsigned i = 0; i < page_offset(); ++i) names[i] = tool_names_[i];
+            for (unsigned i = 0; i < candidate.pages(); ++i) names[page_offset() + i] = candidate.name(i);
+        }
         const unsigned count = candidate.controllers();
         const unsigned extras = count ? count - 1 : 0;
         if (extras == controllers_.size / sizeof(Controller)) return true;
@@ -45,11 +49,29 @@ public:
         prepared_ = true;
         return true;
     }
+    bool prepare_pages(const Document &document) {
+        if (!prepare_layout(document.valid() ? document.page_layout() : PageLayout{})) return false;
+        if (!primary_.prepare(document)) return false;
+        auto &extra = prepared_ ? pending_controllers_ : controllers_;
+        for (unsigned i = 0; i < extra.size / sizeof(Controller); ++i)
+            if (!std::launder(reinterpret_cast<Controller *>(extra.data + i * sizeof(Controller)))->prepare(document)) return false;
+        return true;
+    }
     void finish_pages(bool commit) {
         if (commit) { visible_index = 0; processing_index = PageLayout::max_controllers; }
+        else {
+            primary_.cancel_preparation();
+            for (unsigned i = 0; i < controllers_.size / sizeof(Controller); ++i) at(i + 1).cancel_preparation();
+        }
         if (commit && prepared_) {
             destroy_controllers(controllers_); controllers_.swap(pending_controllers_);
         } else destroy_controllers(pending_controllers_);
+        if (commit) {
+            names_.swap(pending_names_);
+            menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(),
+                names_.data ? names_.size / sizeof(const char *) : page_offset());
+        }
+        pending_names_.clear();
         prepared_ = false;
     }
     Controller &at(unsigned index) { return index ? *std::launder(reinterpret_cast<Controller *>(controllers_.data + (index - 1) * sizeof(Controller))) : primary_; }
@@ -78,9 +100,9 @@ public:
             if (i < layout.controllers()) at(i).activate(document, false); else at(i).deactivate();
         }
         if (layout.controllers() <= 1) destroy_controllers(controllers_);
+        if (!layout.pages()) names_.clear();
         processing_index = PageLayout::max_controllers; services.blank_performance();
-        for (unsigned i = 0; i < layout.pages(); ++i) names_[page_offset() + i] = layout.name(i);
-        menu.configure(page_offset() + layout.pages());
+        menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(), page_offset() + layout.pages());
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_refresh)
@@ -188,7 +210,8 @@ public:
     bool binding_return_songs = false;
     uint64_t held = 0;
 private:
-    std::array<const char *, 3 + PageLayout::max_pages> names_{};
+    std::array<const char *, 3> tool_names_{"Setups", "Songs and setlists", "Switches"};
+    MemoryBuffer names_, pending_names_;
 public:
     ModuleMenu menu;
     SetupUi setups;

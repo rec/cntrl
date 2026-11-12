@@ -14,10 +14,16 @@ public:
         bool (*send)(void *, const Packet *, unsigned, uint64_t);
         bool operator()(const Packet *packets,unsigned count,uint64_t tick) const { return send(context,packets,count,tick); }
     };
-    static constexpr unsigned slots = 32, storage_bytes = slots * 56;
+    static constexpr unsigned state_bytes = 56;
     unsigned discarded = 0;
-    bool reserve() { return storage_.resize(storage_bytes); }
+    bool reserve(unsigned contexts) {
+        return contexts >= count_ && contexts <= UINT32_MAX / state_bytes && storage_.resize(contexts * state_bytes);
+    }
     void release() { storage_.clear(); count_ = 0; }
+    void swap(LoopCapture &other) {
+        storage_.swap(other.storage_); std::swap(count_,other.count_);
+        std::swap(pairing_,other.pairing_); std::swap(discarded,other.discarded);
+    }
     void reset(unsigned pairing_ticks) { count_ = 0; pairing_ = std::max(1u,pairing_ticks); }
     void pairing(unsigned ticks) { pairing_ = std::max(1u,ticks); }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -40,7 +46,7 @@ public:
         State *state = nullptr;
         for (unsigned i = 0; i < count_; ++i) if (at(i).source == source && at(i).channel == channel) state = &at(i);
         if (!state) {
-            if (count_ == slots) return false;
+            if (count_ == storage_.size / sizeof(State) && !reserve(count_ + 1)) return false;
             state = new (storage_.data + count_++ * sizeof(State)) State;
             state->source = source; state->channel = channel;
         }

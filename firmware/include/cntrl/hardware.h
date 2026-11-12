@@ -10,9 +10,8 @@
 #include "counters.h"
 
 namespace cntrl {
-constexpr unsigned max_instruments = 32;
-constexpr unsigned max_patch_cycles = 128;
-constexpr unsigned history_capacity = 128;
+constexpr unsigned max_instruments = UINT16_MAX;
+constexpr unsigned max_patch_cycles = UINT16_MAX;
 constexpr unsigned max_lines = 16;
 
 struct ScreenGraphics {
@@ -84,7 +83,7 @@ struct Hardware : RelayDriver {
     virtual bool supports(const char *output) const = 0;
     virtual bool supports_font(unsigned font, unsigned size) const = 0;
     virtual bool supports_font_asset(uint32_t, unsigned) const { return false; }
-    virtual void begin_fonts() {}
+    virtual bool begin_fonts(unsigned) { return true; }
     virtual bool stage_font(uint32_t, unsigned) { return false; }
     virtual void finish_fonts(bool) {}
     virtual unsigned display_width() const = 0;

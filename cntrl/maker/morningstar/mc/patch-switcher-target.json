@@ -166,8 +166,8 @@
       "aux"
     ]
   },
-  "max_instruments": 32,
-  "max_patch_cycles": 128,
+  "max_instruments": 65535,
+  "max_patch_cycles": 65535,
   "max_patches": 796,
   "history_depth": 128,
   "characters": " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",

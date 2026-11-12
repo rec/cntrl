@@ -1,5 +1,6 @@
 #include "cntrl/midi_stream_timeline.h"
 #include <cassert>
+#include <vector>
 
 using namespace cntrl::midi;
 
@@ -63,6 +64,7 @@ void clock_skips_overdue_ticks_without_drifting() {
     assert(!clock.poll(2000000));
 }
 int main() {
+    cntrl::memory_budget = 1024 * 1024;
     reverses_note_intervals_with_original_velocity();
     pairs_repeated_notes_fifo_and_orders_zero_duration_notes();
     sysex_frames_keep_byte_order_and_completion_placement();

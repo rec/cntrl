@@ -959,12 +959,13 @@ int main(int argc, char **argv) {
     hw.connected = false; app.action(5); assert(app.depth() == 2);
     hw.connected = true;
     app.activate(doc);
-    for (unsigned i = 0; i < cntrl::history_capacity + 20; ++i) {
+    constexpr unsigned sends = 148;
+    for (unsigned i = 0; i < sends; ++i) {
         app.action(2); app.action(i % 2 ? 0 : 1); // Alternate Flute and Sax.
     }
-    assert(app.depth() == cntrl::history_capacity);
-    for (unsigned i = 0; i < cntrl::history_capacity; ++i) app.action(5);
-    assert(app.depth() == 0);
+    assert(app.depth() == sends);
+    for (unsigned i = 0; i < sends; ++i) app.action(5);
+    assert(app.depth() == 1);
     assert(hw.panes[1].lines[1].text[0] && !hw.panes[0].circles[0].diameter);
     test_four_button_navigation(doc);
     // Persistent upload, status, reboot, and interrupted inactive-slot writes.

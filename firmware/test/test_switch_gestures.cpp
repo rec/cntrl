@@ -31,6 +31,7 @@ struct Board : TestPatchHardware {
 };
 
 int main(int argc, char **argv) {
+    cntrl::memory_budget = 192 * 1024;
     assert(argc == 3);
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});

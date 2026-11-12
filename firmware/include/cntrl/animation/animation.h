@@ -43,12 +43,11 @@ public:
         width_ = u16(header + 6); height_ = u16(header + 8); streams_ = u16(header + 10);
         count_ = u16(header + 12); frame_bytes_ = uint32_t(payload_frame_bytes(header));
         frame_ = row_ = x_ = 0; started_ = now;
-        active_ = output_.begin(width_, height_, streams_) && duration();
-        if (active_) colors_.begin(streams_);
+        active_ = duration() && colors_.begin(streams_) && output_.begin(width_, height_, streams_);
         frame_tint_ready_ = false;
         return active_;
     }
-    void set_color_cycle(bool enabled) { colors_.enable(enabled); }
+    bool set_color_cycle(bool enabled) { return colors_.enable(enabled); }
     void stop() { active_ = false; }
     bool frame_ready() const { return row_ == height_ * streams_ && output_.ready(); }
     Step poll(uint32_t now, bool pressed) {

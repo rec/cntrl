@@ -63,7 +63,7 @@ def section_end(data: bytes, offset: int) -> int:
         or not channels
         or not inputs
         or not outputs
-        or not 1 <= events <= 4096
+        or not 1 <= events <= 65535
     ):
         raise ValueError('invalid MIDI looper configuration')
     return offset + CONFIG.size
@@ -82,20 +82,35 @@ def unpack(data: bytes, offset: int, names: dict[int, str]) -> dict[str, object]
 
 
 def estimate_ram(data: bytes) -> int:
+    # Configuring an idle looper does not acquire capture or generation buffers.
+    return 0
+
+
+def estimate_arm_ram(data: bytes, *, capture_contexts: int | None = None) -> int:
     if not data:
         return 0
-    _, _, _, _, _, events = CONFIG.unpack(data)
-    # Three bounded SMFs, four prepared indexes (including merge scratch),
-    # merge order and shared delivery ownership keys/claims.
+    _, _, channels, inputs, outputs, events = CONFIG.unpack(data)
+    count = outputs.bit_count()
+    contexts = count * channels.bit_count()
+    if capture_contexts is None:
+        capture_contexts = inputs.bit_count() * 16 * channels.bit_count()
+    # One candidate SMF and index, merge scratch and order, held-note records,
+    # parameter decoder contexts and shared delivery ownership credits.
+    # Published and undo generations are accounted separately at runtime.
     return (
-        3 * (events * 8 + 64)
-        + 4 * events * 32
+        events * 8
+        + 64
+        + 2 * events * 32
         + events * 4
-        + 36 * (128 + 32 * 16)
-        + 1792
-        + 6144
-        + 2048
-        + 256
+        + (events // 2) * 16
+        + capture_contexts * 56
+        + 172 * (events // 2) * count
+        + 72 * events
+        + 144 * events * count
+        + 412 * contexts
+        + 76 * count
+        + 6 * 16
+        + 52
     )
 
 

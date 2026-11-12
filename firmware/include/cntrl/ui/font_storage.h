@@ -106,7 +106,7 @@ private:
     static bool header(cntrl::files::File &file, unsigned &count) {
         uint8_t bytes[8];
         if (file.size() < 8 || file.size() > max_file || !file.read(0, bytes, 8) || std::memcmp(bytes, "CFN2", 4)) return false;
-        count = cntrl::u32(bytes + 4); return count && count <= 32;
+        count = cntrl::u32(bytes + 4); return count && count <= UINT8_MAX;
     }
     static bool find(cntrl::files::File &file, unsigned size, Entry &result, unsigned &offset) {
         unsigned count; if (!header(file, count)) return false;

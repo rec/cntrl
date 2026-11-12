@@ -5,17 +5,15 @@
 #include "switch_gestures.h"
 #include "control_bindings.h"
 #include "memory.h"
+#include "checked_list.h"
 
 namespace cntrl {
-class Switches {
+class Switches : public CheckedHeapAllocation {
 public:
     static constexpr unsigned capacity = 8;
     Switches(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources)
-        : hardware_(hardware), outputs_(outputs), sources_(sources), states_{{hardware, outputs, sources, 0},
-          {hardware, outputs, sources, 1}, {hardware, outputs, sources, 2},
-          {hardware, outputs, sources, 3}, {hardware, outputs, sources, 4},
-          {hardware, outputs, sources, 5}, {hardware, outputs, sources, 6}, {hardware, outputs, sources, 7}} {}
-    ~Switches() { unpin(); if (pending_invocation_) sources_.end(); }
+        : hardware_(hardware), outputs_(outputs), sources_(sources) {}
+    ~Switches() { destroy_states(); unpin(); if (pending_invocation_) sources_.end(); }
     bool open() const { return open_ || pending_invocation_; }
     bool performance() const { return bool(bindings_); }
     unsigned revision() const { return revision_; }
@@ -26,9 +24,14 @@ public:
     midi::Bridge::Delivery bind_controls(const Document &document, unsigned node, PatchExecutor &invocation) {
         if (pending_invocation_ && pending_invocation_ != &invocation) return midi::Bridge::Delivery::pending;
         if (!pending_invocation_ || pending_node_ != node || pending_source_ != document.data()) {
+            prepared_controls_.reset();
             if (!pending_.resize(document.length())) return midi::Bridge::Delivery::cancelled;
             std::memcpy(pending_.data, document.data(), document.length());
             if (!pending_document_.load(pending_.data, pending_.size, hardware_)) { pending_.clear(); return midi::Bridge::Delivery::cancelled; }
+            prepared_controls_.reset(new (std::nothrow) Switches(hardware_, outputs_, sources_));
+            if (!prepared_controls_) { pending_.clear(); return midi::Bridge::Delivery::cancelled; }
+            prepared_controls_->initialize(pending_document_, held_, ControlBindings{pending_document_.node(node) + 4});
+            if (!prepared_controls_->open_) { prepared_controls_.reset(); pending_.clear(); return midi::Bridge::Delivery::cancelled; }
             if (!pending_invocation_) sources_.begin();
             pending_invocation_ = &invocation; pending_node_ = node; pending_source_ = document.data();
         }
@@ -62,7 +65,7 @@ public:
     }
     bool abandoned() const { return abandoned_; }
     bool owns(const PatchExecutor &executor) const {
-        for (const auto &s : states_) if (&s.executor == &executor) return true;
+        for (unsigned i = 0; i < count_; ++i) if (&states_[i].executor == &executor) return true;
         return false;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -72,7 +75,7 @@ public:
         if (!open_) return midi::Bridge::Delivery::complete;
         const bool first = !closing_;
         closing_ = dirty_ = true; shifted_ = false;
-        event_count_ = transition_ = 0;
+        clear_events(); transition_ = 0;
         bool done = true;
         for (unsigned i = 0; i < count_; ++i) {
             auto &s = states_[i];
@@ -89,16 +92,41 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_enter)
 #endif
-    void enter(const Document &document, uint32_t held, ControlBindings bindings = {}) {
-        for (auto &s : states_) s.executor.cancel();
+    bool enter(const Document &document, uint32_t held, ControlBindings bindings = {}) {
+        Switches candidate(hardware_, outputs_, sources_);
+        candidate.initialize(document, held, bindings);
+        if (!candidate.open_) return false;
+        adopt(candidate); return true;
+    }
+private:
+    void adopt(Switches &candidate) {
+        destroy_states(); unpin();
+        state_storage_.swap(candidate.state_storage_); states_ = candidate.states_; candidate.states_ = nullptr;
+        count_ = candidate.count_; candidate.count_ = 0;
+        document_ = candidate.document_; bindings_ = candidate.bindings_; ++revision_;
+        pinned_ = candidate.pinned_; candidate.pinned_ = false;
+        held_ = disarmed_ = candidate.held_; open_ = dirty_ = true; closing_ = abandoned_ = shifted_ = false;
+        selected_ = -1; clear_events(); transition_ = 0; hooks_enabled_ = candidate.hooks_enabled_; exit_started_ = false;
+        render();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_initialize)
+#endif
+    void initialize(const Document &document, uint32_t held, ControlBindings bindings) {
+        const unsigned count = bindings ? bindings.count() : document.switches();
+        if (!state_storage_.resize(count * sizeof(State))) { hardware_.error("Switch state memory exhausted"); return; }
+        states_ = reinterpret_cast<State *>(state_storage_.data);
+        for (unsigned i = 0; i < count; ++i) new (states_ + i) State(hardware_, outputs_, sources_, i);
+        count_ = count;
         unpin(); sources_.begin(); pinned_ = true;
         document_ = document; bindings_ = bindings; ++revision_;
         count_ = bindings_ ? bindings_.count() : document.switches(); held_ = disarmed_ = held;
         open_ = dirty_ = true; closing_ = abandoned_ = false;
         shifted_ = false;
-        selected_ = -1; event_count_ = transition_ = 0; hooks_enabled_ = false; exit_started_ = false;
+        selected_ = -1; clear_events(); transition_ = 0; hooks_enabled_ = false; exit_started_ = false;
         for (unsigned i = 0; i < count_; ++i) {
             State &s = states_[i]; s.executor.cancel();
+            if (!s.executor.retain_owner()) { hardware_.error("Switch delivery memory unavailable"); open_ = false; unpin(); return; }
             s.record = bindings_ ? bindings_.record(i) : document_.switch_assignment(i);
             s.actions = s.record + 2; s.shifted = bindings_ ? (u16(s.record + 97) != 65535 ? s.record + 97 : nullptr) : document_.switch_shifted(s.record[0]);
             s.layer = s.input_layer = false;
@@ -110,7 +138,7 @@ public:
                 s.on[layer].count = s.off[layer].count = 0;
                 s.on[layer].complete = s.off[layer].complete = false;
             }
-            s.gesture.reset(s.settings); s.queued = 0;
+            s.gesture.reset(s.settings); clear_queue(s);
             s.requested = s.active = s.unknown = s.failed = s.owned = false; s.presses = 0;
             s.resource_count = 0;
             for (unsigned branch = 0; branch < 18; ++branch) {
@@ -125,20 +153,18 @@ public:
                 if (!s.executor.start(document_, node, s.record[1] != 0 || s.settings || s.hooks || s.shifted)) {
                     s.executor.cancel(); open_ = false; unpin(); return;
                 }
-                unsigned count = s.executor.resource_count();
+                unsigned resources_count = s.executor.resource_count();
                 if (branch < 16 && part < 2) {
                     Pattern &pattern = part ? s.off[layer] : s.on[layer];
                     if (!capture(pattern, s.executor)) {
                         s.executor.cancel(); hardware_.error("Switch state memory exhausted"); open_ = false; unpin(); return;
                     }
                 }
-                void *memory = std::realloc(s.resources, (s.resource_count + count) * sizeof(PatchExecutor::Resource));
-                if (count && !memory) {
+                if (!s.resources.resize(s.resource_count + resources_count)) {
                     s.executor.cancel(); hardware_.error("Switch ownership memory exhausted"); open_ = false; unpin(); return;
                 }
-                s.resources = static_cast<PatchExecutor::Resource *>(memory);
-                if (count) std::memcpy(s.resources + s.resource_count, s.executor.resources(), count * sizeof(PatchExecutor::Resource));
-                s.resource_count += count; s.executor.cancel();
+                if (resources_count) std::memcpy(s.resources.data() + s.resource_count, s.executor.resources(), resources_count * sizeof(PatchExecutor::Resource));
+                s.resource_count += resources_count; s.executor.cancel();
             }
             for (unsigned j = 0; j < i; ++j)
                 for (unsigned a = 0; a < s.resource_count; ++a)
@@ -150,8 +176,8 @@ public:
             s.baseline_resources = s.resource_count;
             synchronize(s);
         }
-        render();
     }
+public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_button)
 #endif
@@ -159,6 +185,19 @@ public:
         if (!open_ || button >= document_.inputs() || button >= 32) return;
         unsigned bit = 1u << button;
         if (bool(held_ & bit) == down) return;
+        if (down) {
+            for (unsigned i = 0; i < count_; ++i) {
+                auto &state = states_[i];
+                if (state.record[0] == button && (!state.record[1] || (!state.requested && !state.active))
+                    && !outputs_.prepare_owner_cycle(state.executor)) { hardware_.error("Switch delivery memory unavailable"); return; }
+            }
+            // A tick can recognize three gesture actions. Reserve its release
+            // bookkeeping before accepting the edge.
+            if (hooks_enabled_ && !events_.reserve(event_count_ + 3)) { hardware_.error("Switch event memory unavailable"); return; }
+            for (unsigned i = 0; i < count_; ++i) if (states_[i].record[0] == button
+                && (hooks_enabled_ || states_[i].settings || states_[i].hooks || states_[i].shifted))
+                    if (!states_[i].queue.reserve(states_[i].queued + 3)) { hardware_.error("Switch action memory unavailable"); return; }
+        }
         held_ = down ? held_ | bit : held_ & ~bit;
         if (!down) disarmed_ &= ~bit;
         if (!bindings_ && button == hardware_.control_input(ControlRole::back) && down) { close(); return; }
@@ -196,8 +235,9 @@ public:
         else if (transition_ == 2 && event_count_)
             selected_ = states_[events_[0].index].queued ? -1 : int(events_[0].index);
         closing_ = dirty_ = true; shifted_ = false;
-        event_count_ = transition_ = 0;
-        for (auto &s : states_) {
+        clear_events(); transition_ = 0;
+        for (unsigned i = 0; i < count_; ++i) {
+            auto &s = states_[i];
             s.requested = false;
             if (!s.owned) s.active = false;
             cancel_gestures(s);
@@ -222,11 +262,11 @@ public:
                 const uint8_t *actions = s.input_layer ? s.shifted : s.record + 2;
                 unsigned node = event ? u16(s.settings + (event - 1) * 2) : u16(actions);
                 if (node == 65535) return;
-                if (s.queued == 16 || event_count_ == 16) { overflow = true; return; }
+                if (hooks_enabled_ ? event_count_ == events_.capacity() : s.queued == s.queue.capacity()) { overflow = true; return; }
                 action(i, node, 0); dirty_ = true;
             });
             if (overflow) {
-                s.gesture.reset(); s.queued = 0; s.failed = true; dirty_ = true;
+                s.gesture.reset(); clear_queue(s); s.failed = true; dirty_ = true;
                 disarmed_ |= held_ & (1u << s.record[0]);
                 hardware_.error("Switch gesture queue full");
             }
@@ -235,11 +275,11 @@ public:
                 for (unsigned r = 0; r < s.resource_count; ++r)
                     if (!outputs_.available(s.resources[r].output)) unavailable = true;
             if (unavailable) {
-                if (event_count_) { event_count_ = transition_ = 0; selected_ = -1; }
+                if (event_count_) { clear_events(); transition_ = 0; selected_ = -1; }
                 s.executor.cancel(); s.unknown = true; s.failed = false;
                 s.active = s.requested = s.owned = false; s.presses = 0;
                 disarmed_ |= held_ & (1u << s.record[0]); dirty_ = true;
-                s.gesture.reset(); s.queued = 0;
+                s.gesture.reset(); clear_queue(s);
             }
             bool hook = s.hooks && (s.executor.root() == u16(s.hooks) || s.executor.root() == u16(s.hooks + 2));
             if (!hook && s.executor.delaying() && s.record[1] && s.active && !s.requested)
@@ -252,7 +292,7 @@ public:
                 s.executor.cancel(); s.unknown = true; s.active = s.requested = s.owned = false; s.presses = 0;
                 s.failed = status == PatchExecutor::Status::failed;
                 disarmed_ |= held_ & (1u << s.record[0]); dirty_ = true;
-                s.gesture.reset(); s.queued = 0;
+                s.gesture.reset(); clear_queue(s);
             }
             if (!s.executor.busy()) {
                 bool press = s.record[1] == 0;
@@ -265,13 +305,13 @@ public:
                         if (node == u16(s.actions + 2)) captured = capture(s.off[s.layer], s.executor) && captured;
                         if (!captured) hardware_.error("Switch state memory exhausted");
                         if (!captured || !reserve(i)) {
-                            s.executor.cancel(); s.failed = s.unknown = true;
-                            s.active = s.requested = s.owned = false; s.presses = 0;
-                            s.gesture.reset(); s.queued = 0;
+                            s.executor.cancel(); s.failed = true;
+                            s.requested = s.active; s.presses = 0;
+                            s.gesture.reset(); clear_queue(s);
                         } else {
                             if (s.queued) {
                                 --s.queued;
-                                for (unsigned q = 0; q < s.queued; ++q) s.queue[q] = s.queue[q + 1];
+                                s.queue.erase(s.queue.begin());
                             } else if (press) --s.presses;
                             else s.owned = s.active = !baseline && s.requested;
                             s.unknown = s.failed = false;
@@ -288,7 +328,7 @@ public:
                 exit_started_ = true;
                 auto &s = states_[selected_];
                 if (s.hooks && u16(s.hooks + 2) != 65535) {
-                    s.queue[s.queued++] = u16(s.hooks + 2); dirty_ = true; return;
+                    queue_node(s, u16(s.hooks + 2)); dirty_ = true; return;
                 }
             }
             for (unsigned i = 0; i < count_; ++i) if (states_[i].unknown) abandoned_ = true;
@@ -301,17 +341,15 @@ public:
     }
 private:
     struct Pattern {
-        PatchExecutor::Resource *values = nullptr;
+        CheckedArray<PatchExecutor::Resource> values;
         unsigned count = 0;
         bool complete = false;
-        ~Pattern() { std::free(values); }
     };
     struct State {
         State(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner)
-            : executor(hardware, outputs, sources, owner) {}
-        ~State() { std::free(resources); }
+            : executor(hardware, outputs, sources, owner) { executor.retain_counter_reservations(); }
         PatchExecutor executor;
-        PatchExecutor::Resource *resources = nullptr;
+        CheckedArray<PatchExecutor::Resource> resources;
         unsigned resource_count = 0, baseline_resources = 0;
         const uint8_t *record = nullptr;
         const uint8_t *actions = nullptr, *shifted = nullptr;
@@ -321,31 +359,45 @@ private:
         const uint8_t *hooks = nullptr;
         SwitchGestures gesture;
         const uint8_t *settings = nullptr;
-        uint16_t queue[16] = {};
+        CheckedList<uint16_t> queue;
         unsigned queued = 0;
         bool requested = false, active = false, unknown = false, failed = false, owned = false;
     };
     Hardware &hardware_; PatchOutputs &outputs_; PatchSources &sources_; Document document_;
-    State states_[capacity];
+    MemoryBuffer state_storage_;
+    State *states_ = nullptr;
+    void destroy_states() {
+        for (unsigned i = count_; i--;) states_[i].~State();
+        count_ = 0; states_ = nullptr; state_storage_.clear();
+    }
     ControlBindings bindings_;
     MemoryBuffer bound_, pending_;
+    std::unique_ptr<Switches> prepared_controls_;
     Document pending_document_;
     PatchExecutor *pending_invocation_ = nullptr;
     const uint8_t *pending_source_ = nullptr;
     unsigned pending_node_ = 0, revision_ = 0, counter_revision_ = 0;
     struct Event { unsigned index, node, kind; bool layer; };
-    Event events_[16];
+    CheckedList<Event> events_;
     unsigned event_count_ = 0, transition_ = 0, state_revision_ = 0;
     int selected_ = -1;
     bool hooks_enabled_ = false, exit_started_ = false;
     unsigned count_ = 0, held_ = 0, disarmed_ = 0;
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
     bool shifted_ = false;
+    void clear_events() { events_.clear(); event_count_ = 0; }
+    static void clear_queue(State &state) { state.queue.clear(); state.queued = 0; }
+    bool queue_node(State &state, unsigned node) {
+        if (state.queue.size() == state.queue.capacity() || !state.queue.append(uint16_t(node))) {
+            state.failed = true; hardware_.error("Switch action queue full"); return false;
+        }
+        ++state.queued; return true;
+    }
     void cancel_gestures(State &s) {
-        s.queued = s.presses = 0;
+        clear_queue(s); s.presses = 0;
         s.gesture.cancel([&](unsigned event) {
             unsigned node = u16(s.settings + (event - 1) * 2);
-            if (node != 65535) s.queue[s.queued++] = uint16_t(node);
+            if (node != 65535) queue_node(s, node);
         });
     }
     const uint8_t *gestures(unsigned input) const {
@@ -363,29 +415,25 @@ private:
         pending_invocation_ = nullptr;
         if (completed) {
             // The invoking executor has returned, so replacing its state is safe.
+            if (prepared_controls_) adopt(*prepared_controls_);
             bound_.swap(pending_);
-            const auto *p = bound_.data + (pending_document_.node(pending_node_) - pending_document_.data()) + 4;
-            Document document;
-            if (document.load(bound_.data, bound_.size, hardware_)) enter(document, held_, ControlBindings{p});
             if (!open_) { bindings_ = {}; ++revision_; }
         }
+        prepared_controls_.reset();
         pending_document_ = Document(); pending_.clear(); sources_.end();
         if (!open_) bound_.clear();
     }
     void unpin() { if (pinned_) { pinned_ = false; sources_.end(); } }
     bool capture(Pattern &pattern, const PatchExecutor &executor) {
         unsigned count = executor.resource_count();
-        void *memory = std::realloc(pattern.values, count * sizeof(PatchExecutor::Resource));
-        if (count && !memory) return false;
-        pattern.values = static_cast<PatchExecutor::Resource *>(memory);
-        if (count) std::memcpy(pattern.values, executor.resources(), count * sizeof(PatchExecutor::Resource));
+        if (!pattern.values.resize(count)) return false;
+        if (count) std::memcpy(pattern.values.data(), executor.resources(), count * sizeof(PatchExecutor::Resource));
         pattern.count = count; pattern.complete = executor.state_complete(); return true;
     }
     void perform(const Event &event) {
         auto &s = states_[event.index]; synchronize(s);
         if (event.kind == 0) {
-            if (s.queued == 16) { s.failed = true; hardware_.error("Switch action queue full"); return; }
-            s.queue[s.queued++] = uint16_t(event.node);
+            if (!queue_node(s, event.node)) return;
         } else if (event.kind == 3) s.requested = !s.requested;
         else s.requested = event.kind == 1;
         dirty_ = true;
@@ -398,10 +446,11 @@ private:
             else perform(event);
             return;
         }
-        if (event_count_ == 16) {
+        if (event_count_ == events_.capacity()) {
             hardware_.error("Switch selection queue full"); states_[index].failed = true; return;
         }
-        events_[event_count_++] = event; dirty_ = true;
+        if (!events_.append(event)) { hardware_.error("Switch event memory unavailable"); return; }
+        ++event_count_; dirty_ = true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_select)
@@ -426,30 +475,30 @@ private:
                 auto &previous = states_[selected_];
                 if (previous.hooks && u16(previous.hooks + 2) != 65535) {
                     previous.failed = previous.unknown = false;
-                    previous.queue[previous.queued++] = u16(previous.hooks + 2); return;
+                    queue_node(previous, u16(previous.hooks + 2)); return;
                 }
             }
         }
         if (changed && transition_ == 1) {
             if (selected_ >= 0 && states_[selected_].hooks && u16(states_[selected_].hooks + 2) != 65535
                 && (states_[selected_].failed || states_[selected_].unknown)) {
-                event_count_ = transition_ = 0; selected_ = -1; dirty_ = true; return;
+                clear_events(); transition_ = 0; selected_ = -1; dirty_ = true; return;
             }
             transition_ = 2;
             if (next.hooks && u16(next.hooks) != 65535) {
                 next.failed = next.unknown = false;
-                next.queue[next.queued++] = u16(next.hooks); return;
+                queue_node(next, u16(next.hooks)); return;
             }
         }
         if (changed && next.hooks && u16(next.hooks) != 65535 && (next.failed || next.unknown)) {
-            event_count_ = transition_ = 0; selected_ = -1; dirty_ = true; return;
+            clear_events(); transition_ = 0; selected_ = -1; dirty_ = true; return;
         }
         if (event.kind != 2) selected_ = int(event.index);
         transition_ = 0;
         bool override = changed && next.hooks && next.hooks[4];
         if (!override) perform(event);
         --event_count_;
-        for (unsigned i = 0; i < event_count_; ++i) events_[i] = events_[i + 1];
+        events_.erase(events_.begin());
         dirty_ = true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -502,9 +551,7 @@ private:
                 if (resource.channel == state.resources[j].channel && resource.control == state.resources[j].control
                     && !std::strcmp(resource.output, state.resources[j].output)) known = true;
             if (known) continue;
-            void *memory = std::realloc(state.resources, (state.resource_count + 1) * sizeof(PatchExecutor::Resource));
-            if (!memory) { hardware_.error("Switch ownership memory exhausted"); return false; }
-            state.resources = static_cast<PatchExecutor::Resource *>(memory);
+            if (!state.resources.resize(state.resource_count + 1)) { hardware_.error("Switch ownership memory exhausted"); return false; }
             state.resources[state.resource_count++] = resource;
         }
         return true;

@@ -2,18 +2,25 @@
 #include "midi_packet.h"
 #include "midi_state.h"
 #include <algorithm>
-#include <vector>
+#include "checked_list.h"
 
 namespace cntrl::midi {
 // Only live submissions enter this stage.
 class Pickup {
 public:
+    unsigned reclaim(unsigned budget) {
+        const unsigned retired = entries_.trim(budget);
+        return retired + selectors_.trim(budget - retired);
+    }
+    template<class Finish> void release_output(unsigned output, Finish finish) {
+        for (auto &e : entries_) if (e.output == output) finish(&e);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pickup_configure)
 #endif
     void configure(bool enabled, unsigned pairing_ms) {
         enabled_ = enabled; pairing_us_ = pairing_ms * 1000u;
-        entries_.erase(std::remove_if(entries_.begin(), entries_.end(), [](const Entry &e) { return !e.progress && !e.selection; }), entries_.end());
+        entries_.erase_if([](const Entry &e) { return !e.progress && !e.selection; });
         for (auto &e : entries_) { e.acquired = false; e.previous = -1; e.rearm = true; }
         selectors_.clear();
     }
@@ -21,19 +28,19 @@ public:
     CNTRL_FLASH_ROUTINE(pickup_forget)
 #endif
     void forget(unsigned output) {
-        entries_.erase(std::remove_if(entries_.begin(), entries_.end(), [output](const Entry &e) { return e.output == output; }), entries_.end());
-        selectors_.erase(std::remove_if(selectors_.begin(), selectors_.end(), [output](const Selector &s) { return s.output == output; }), selectors_.end());
+        entries_.erase_if([output](const Entry &e) { return e.output == output; });
+        selectors_.erase_if([output](const Selector &s) { return s.output == output; });
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pickup_forget_source)
 #endif
     void forget_source(unsigned input) {
         auto matches = [input](unsigned source) { return source < 256 && source / 16 == input; };
-        entries_.erase(std::remove_if(entries_.begin(), entries_.end(), [&](const Entry &e) {
+        entries_.erase_if([&](const Entry &e) {
             return matches(e.source) && !e.progress && !e.selection;
-        }), entries_.end());
+        });
         for (auto &e : entries_) if (matches(e.source)) e.rearm = true;
-        selectors_.erase(std::remove_if(selectors_.begin(), selectors_.end(), [&](const Selector &s) { return matches(s.source); }), selectors_.end());
+        selectors_.erase_if([&](const Selector &s) { return matches(s.source); });
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pickup_observe)
@@ -77,6 +84,7 @@ public:
             if (cc == 98 || cc == 99 || cc == 100 || cc == 101) {
                 if (!flush(output, now, state, send, true)) return false;
                 auto *s = selector(output, packet.source, channel);
+                if (!s) return false;
                 bool nrpn = cc >= 98 && cc <= 99;
                 if (s->nrpn != nrpn) { s->high = s->low = -1; s->nrpn = nrpn; }
                 if (cc == 99 || cc == 101) s->high = packet.bytes[2]; else s->low = packet.bytes[2];
@@ -95,6 +103,7 @@ public:
             control = pair ? 144 + (cc & 31) : cc;
             if (cc == 6 || cc == 38) {
                 auto *s = selector(output, packet.source, channel);
+                if (!s) return false;
                 if (s->high >= 0 && s->low >= 0 && (s->high != 127 || s->low != 127))
                     control = (s->nrpn ? 256 : 33024) + unsigned(s->high * 128 + s->low);
             }
@@ -110,6 +119,7 @@ public:
             observe(state); return true;
         }
         auto *e = entry(output, packet.source, channel, control);
+        if (!e) return false;
         if (e->count && (e->progress || e->selection || !pair || e->low == low || uint32_t(now - e->since) > pairing_us_))
             if (!deliver(*e, state, send)) return false;
         if (!e->count) { e->since = now; e->low = low; }
@@ -138,8 +148,8 @@ private:
         bool acquired = false, pair = false, low = false, full = false, previous_low = false, rearm = false;
     };
     struct Selector { unsigned output, source, channel; int high = -1, low = -1; bool nrpn = true; };
-    std::vector<Entry> entries_;
-    std::vector<Selector> selectors_;
+    CheckedList<Entry> entries_;
+    CheckedList<Selector> selectors_;
     bool enabled_ = true;
     unsigned pairing_us_ = 2000;
 #ifdef CNTRL_FLASH_ROUTINE
@@ -171,14 +181,14 @@ private:
     Entry *entry(unsigned output, unsigned source, unsigned channel, unsigned control) {
         for (auto &e : entries_) if (e.output == output && e.source == source && e.channel == channel && e.control == control) return &e;
         Entry created{}; created.output = output; created.source = source; created.channel = channel; created.control = control;
-        entries_.push_back(created); return &entries_.back();
+        return entries_.append(std::move(created));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pickup_selector)
 #endif
     Selector *selector(unsigned output, unsigned source, unsigned channel) {
         for (auto &s : selectors_) if (s.output == output && s.source == source && s.channel == channel) return &s;
-        selectors_.push_back({output, source, channel}); return &selectors_.back();
+        return selectors_.append({output, source, channel});
     }
     template<class Send>
 #ifdef CNTRL_FLASH_ROUTINE
@@ -196,6 +206,18 @@ private:
             if (!e.acquired && target >= 0 && e.sample != target && !crossed) {
                 e.previous = e.sample; e.count = 0; return true;
             }
+        }
+        send.context(&e);
+        if (!e.progress && !e.selection) {
+            uint8_t bytes[12] = {}; unsigned size = 0;
+            if (e.control >= 256 && e.control < 65536) {
+                const bool nrpn = e.control < 33024;
+                const unsigned address = e.control - (nrpn ? 256 : 33024);
+                bytes[size++] = uint8_t(0xb0 | e.channel); bytes[size++] = nrpn ? 99 : 101; bytes[size++] = uint8_t(address >> 7);
+                bytes[size++] = uint8_t(0xb0 | e.channel); bytes[size++] = nrpn ? 98 : 100; bytes[size++] = uint8_t(address & 127);
+            }
+            for (unsigned i = 0; i < e.count; ++i) for (unsigned j = 0; j < e.packets[i].size(); ++j) bytes[size++] = e.packets[i].bytes[j];
+            if (!send.prepare(e.output, bytes, size)) return false;
         }
         if (e.control >= 256 && e.control < 65536) {
             bool nrpn = e.control < 33024;
@@ -217,6 +239,7 @@ private:
             observe(state, &e);
         }
         e.previous = e.sample; e.acquired = true; e.count = e.progress = e.selection = 0;
+        send.finish();
         if (e.rearm) { e.previous = -1; e.acquired = false; e.rearm = false; }
         return true;
     }

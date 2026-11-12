@@ -1,8 +1,8 @@
 #pragma once
 #include <algorithm>
 #include <cstdint>
-#include <numeric>
-#include <vector>
+#include <new>
+#include "memory.h"
 
 namespace cntrl::midi {
 struct ArpeggiatorSelection {
@@ -12,9 +12,10 @@ struct ArpeggiatorSelection {
 
 class ArpeggiatorOrder {
 public:
+    bool reserve(unsigned count) { return count <= UINT32_MAX / sizeof(unsigned) && shuffle_.resize(count * sizeof(unsigned)); }
     void reset(ArpeggiatorSelection settings) {
         settings_ = settings; random_ = settings.seed; started_ = false;
-        index_ = residue_ = phase_ = 0; direction_ = 1; shuffle_.clear();
+        index_ = residue_ = phase_ = size_ = 0; direction_ = 1;
     }
     void retain(unsigned rank) { index_ = rank; }
     unsigned next(unsigned size) {
@@ -23,12 +24,15 @@ public:
         const auto &s = settings_;
         if (s.kind == 4) return draw(size);
         if (s.kind == 7) {
-            if (shuffle_.size() != size || phase_ == size) {
-                shuffle_.resize(size); std::iota(shuffle_.begin(),shuffle_.end(),0);
-                for (unsigned i = size; i > 1; --i) std::swap(shuffle_[i - 1],shuffle_[draw(i)]);
+            if (size > shuffle_.size / sizeof(unsigned)) return 0;
+            auto *shuffle = reinterpret_cast<unsigned *>(shuffle_.data);
+            if (size_ != size || phase_ == size) {
+                size_ = size;
+                for (unsigned i = 0; i < size; ++i) new (shuffle + i) unsigned(i);
+                for (unsigned i = size; i > 1; --i) std::swap(shuffle[i - 1],shuffle[draw(i)]);
                 phase_ = 0;
             }
-            return shuffle_[phase_++];
+            return shuffle[phase_++];
         }
         if (s.kind == 8) { unsigned p = phase_++ % size; return p % 2 ? size - 1 - p / 2 : p / 2; }
         bool reverse = s.kind == 1 || (s.kind == 2 && (s.flags & 8));
@@ -58,12 +62,12 @@ public:
 private:
     ArpeggiatorSelection settings_;
     uint32_t random_ = 42;
-    unsigned index_ = 0, residue_ = 0, phase_ = 0;
+    unsigned index_ = 0, residue_ = 0, phase_ = 0, size_ = 0;
     int direction_ = 1;
     bool started_ = false;
-    std::vector<unsigned> shuffle_;
+    MemoryBuffer shuffle_;
     unsigned draw(unsigned bound) {
-        uint32_t value, threshold = uint32_t(-bound) % bound;
+        uint32_t value, threshold = (uint32_t(0) - uint32_t(bound)) % bound;
         do { random_ ^= random_ << 13; random_ ^= random_ >> 17; random_ ^= random_ << 5; value = random_; } while (value < threshold);
         return value % bound;
     }

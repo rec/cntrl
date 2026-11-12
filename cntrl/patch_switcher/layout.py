@@ -5,8 +5,6 @@ from . import models
 
 def pack(pages: dict[str, models.Page], windows: list[str]) -> bytes:
     records = bytearray()
-    if sum(p.type == 'patch-switcher' for p in pages.values()) > 4:
-        raise ValueError('at most four patch-switcher pages are supported')
     for name, page in pages.items():
         encoded = name.encode('ascii')
         if not encoded or len(encoded) > 31 or any(c < 32 or c > 126 for c in encoded):
@@ -49,7 +47,7 @@ def section_end(data: bytes, offset: int) -> int:
         raise ValueError('truncated page layout')
     count, windows, version, reserved = data[offset + 4 : offset + 8]
     end = offset + 8 + windows * 32 + count * (34 + windows)
-    if version != 1 or reserved or not windows or count > 36 or end > len(data):
+    if version != 1 or reserved or not windows or end > len(data):
         raise ValueError('invalid page layout')
     return end
 
@@ -75,6 +73,24 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         }
         cursor += 34 + window_count
     return {'pages': pages}
+
+
+def estimate_ram(
+    pages: dict[str, models.Page], instruments: int, cycles: int, *, switches: bool
+) -> int:
+    # Cortex-M7 ABI: Controller is 360 bytes, pointers/int are 4, cursors are 2.
+    # The primary Controller object is linked into RAM1, but its counted state
+    # and every additional Controller object are checked RAM2 allocations.
+    def charge(size: int) -> int:
+        return (size + 7) // 8 * 8 + 8 if size else 0
+
+    controllers = max(1, sum(p.type == 'patch-switcher' for p in pages.values()))
+    names = (len(pages) + (3 if switches else 2)) * 4 if pages else 0
+    return (
+        controllers * charge(instruments * 8 + cycles * 4)
+        + charge((controllers - 1) * 360)
+        + charge(names)
+    )
 
 
 PAGE_TYPES = (

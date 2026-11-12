@@ -466,6 +466,9 @@ private:
         line(pane,5,prompt("%s Rec %s Play %s Undo",controls_.previous,controls_.next,controls_.confirm),90,12,settings_[R::status_font],true);
         line(pane,6,prompt("%s Clear %s More",controls_.previous_section,controls_.next_section),106,12,settings_[R::status_font],true);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(monitor_view)
+#endif
     void monitor_view(Pane &pane, unsigned window, unsigned count) {
         using Direction = midi::Monitor::Direction;
         using R = cntrl::PageSettings;
@@ -481,7 +484,7 @@ private:
         const unsigned rows = std::min(4u, bottom > body_top ? (bottom - body_top) / (3 * row_height) : 0u);
         char text[64];
         if (!monitor || !monitor->active()) std::snprintf(text, sizeof(text), "Unavailable: memory");
-        else std::snprintf(text, sizeof(text), "%s%s Hist-%llu", monitor->frozen() ? "Frozen" : "Live", monitor->advanced() ? " advanced" : "", (unsigned long long)monitor->overwritten());
+        else std::snprintf(text, sizeof(text), "%s%s Hist-%llu Drop-%u", monitor->frozen() ? "Frozen" : "Live", monitor->advanced() ? " advanced" : "", (unsigned long long)monitor->overwritten(), monitor->dropped());
         line(pane, 1, text, body_top - row_height, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
         const midi::Monitor::Entry *entries[4] = {}; unsigned used = 0;
         if (monitor && monitor->active()) for (uint64_t position = monitor->cursor(); position > monitor->oldest() && used < rows;) {

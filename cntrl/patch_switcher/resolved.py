@@ -124,6 +124,39 @@ def input_labels(data: bytes) -> list[str]:
     return inputs.unpack(data, _sections(data)[2])
 
 
+def arm_memory(data: bytes) -> dict[str, int]:
+    """Additional arm admission estimates, excluding retained active/undo takes.
+
+    Physical inputs have one cable. USB inputs conservatively allow sixteen
+    cables because the setup does not encode the connected USB descriptor.
+    """
+    input_offset = _sections(data)[2]
+    cursor = (
+        input_offset + inputs.HEADER.size + len(input_labels(data)) * inputs.RECORD.size
+    )
+    cursor = counters.section_end(data, relay_outputs.section_end(data, cursor))
+    cursor = pickup.section_end(data, midi_processing.section_end(data, cursor))
+    result: dict[str, int] = {}
+    endpoints = endpoint_records(data)
+    for name, section, estimate in (
+        ('looper', looper, looper.estimate_arm_ram),
+        ('arpeggiator', arpeggiator, arpeggiator.estimate_arm_ram),
+    ):
+        end = section.section_end(data, cursor)
+        if end != cursor:
+            settings = data[cursor:end]
+            values = section.CONFIG.unpack(settings)
+            channels, selected_inputs = values[2:4] if name == 'looper' else values[5:7]
+            contexts = channels.bit_count() * sum(
+                1 if e.transport == 'physical' else 16
+                for e in endpoints
+                if e.input and selected_inputs & (1 << e.route)
+            )
+            result[name] = estimate(settings, capture_contexts=contexts)
+        cursor = end
+    return result
+
+
 def patch(data: bytes, node: int) -> dict[str, object]:
     """Decode any graph node into the common tagged Patch authoring table."""
     offset = graph_offset(data)

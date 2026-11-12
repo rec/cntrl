@@ -29,6 +29,22 @@ def test_sparse_font_contains_only_requested_sizes_and_runs(bitmap: bytes) -> No
     assert struct.unpack('<H', bytes(fields[7:9]))[0] < 24
 
 
+def test_font_asset_accepts_more_than_32_distinct_sizes(bitmap: bytes) -> None:
+    descriptor = bitmap[assets.HEADER.size : assets.HEADER.size + assets.ENTRY.size]
+    pixels = bitmap[assets.HEADER.size + assets.ENTRY.size :]
+    data = assets.HEADER.pack(b'CFN2', 33) + b''.join(
+        bytes([s]) + descriptor[1:] + pixels for s in range(1, 34)
+    )
+    assert set(assets.entries(data)) == set(range(1, 34))
+    record = bytearray(16)
+    record[1] = 24
+    struct.pack_into('<I', record, 12, 1)
+    block = display.HEADER.pack(b'CDSP', 0, 0, 0, 0, 0)
+    selected = display.estimate_font_ram([bytes(record)], block, {1: bitmap})
+    assert selected > len(bitmap)
+    assert display.estimate_font_ram([bytes(record)] * 3, block, {1: data}) == selected
+
+
 @pytest.mark.parametrize('kind', ['truncated', 'index', 'descriptor', 'extra'])
 def test_malformed_fonts_are_rejected(bitmap: bytes, kind: str) -> None:
     data = bytearray(bitmap)
@@ -47,7 +63,6 @@ def test_malformed_fonts_are_rejected(bitmap: bytes, kind: str) -> None:
 def test_selected_fonts_can_exceed_the_former_separate_budget(
     bitmap: bytes,
 ) -> None:
-    key = crc32(bitmap)
     # Font bytes share the linked firmware heap rather than a separate 96 KiB cap.
     fields, index, pixels = assets.entries(bitmap)[24]
     fields[-1] += 100000
@@ -58,14 +73,7 @@ def test_selected_fonts_can_exceed_the_former_separate_budget(
         + pixels
         + bytes(100000)
     )
-    records = [
-        bytes([255, 24]) + bytes(10) + struct.pack('<I', k) for k in (key, key + 1)
-    ]
     assert len(assets.entries(large)[24][2]) > 96 * 1024
-    assets.validate_font_count(records, bytes(16))
-    records = [bytes([255, 24]) + bytes(10) + struct.pack('<I', k) for k in range(33)]
-    with pytest.raises(ValueError, match='32-font limit'):
-        assets.validate_font_count(records, bytes(16))
 
 
 def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:

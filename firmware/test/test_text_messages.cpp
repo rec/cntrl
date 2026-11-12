@@ -113,6 +113,7 @@ void long_text_wraps_with_an_ellipsis_on_only_the_first_screen() {
     assert(cache[0] == 0x1234 && cache[64 * 40] == 0x1234);
 }
 int main() {
+    cntrl::memory_budget = 1024 * 1024;
     sysex_messages_are_complete_bounded_and_independent();
     direct_serial_shares_the_display_and_respects_session_ownership();
     long_text_wraps_with_an_ellipsis_on_only_the_first_screen();

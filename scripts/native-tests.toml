@@ -33,6 +33,7 @@
 "test/test_cable_test.cpp" = []
 "test/test_midi_bridge.cpp" = []
 "test/test_midi_processing.cpp" = []
+"test/test_dynamic_memory_stress.cpp" = []
 "test/test_switcher.cpp" = ["test/show.golden", "test/display.golden"]
 "test/animation/test_splash.cpp" = []
 "test/animation/test_runtime.cpp" = ["test/show.golden"]

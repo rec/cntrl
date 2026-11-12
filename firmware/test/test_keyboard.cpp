@@ -32,6 +32,7 @@ struct Hardware : TestInputHardware {
     void error(const char *) override {}
 };
 int main(int argc, char **argv) {
+    cntrl::memory_budget = 1024 * 1024;
     if (argc == 2) {
         std::ifstream f(argv[1], std::ios::binary);
         std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)), {});

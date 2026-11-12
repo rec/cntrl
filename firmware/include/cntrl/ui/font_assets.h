@@ -1,8 +1,10 @@
 #pragma once
 #include <cntrl/document.h>
+#include <limits>
+#include <new>
 
 namespace font_assets {
-constexpr unsigned max_file = 256 * 1024, max_fonts = 32;
+constexpr unsigned max_file = 256 * 1024;
 inline int signed16(const uint8_t *p) { return int16_t(cntrl::u16(p)); }
 struct Entry {
     uint8_t bytes[23] = {};
@@ -108,49 +110,75 @@ struct Loaded {
     Entry entry;
     cntrl::MemoryBuffer data;
 };
+static_assert(sizeof(void *) != 4 || sizeof(Loaded) == 36, "Update the font RAM estimate");
 class Cache {
 public:
-    void begin() { clear(pending_); count_ = 0; }
+    ~Cache() { clear(active_); clear(pending_); }
+    bool begin(unsigned count) {
+        clear(pending_); count_ = 0;
+        if (count > std::numeric_limits<unsigned>::max() / sizeof(Loaded)
+            || !pending_.resize(count * sizeof(Loaded))) return false;
+        for (unsigned i = 0; i < count; ++i) new (pending_.data + i * sizeof(Loaded)) Loaded;
+        return true;
+    }
     bool contains(uint32_t key, unsigned size) const {
-        for (const auto &f : pending_) if (f.key == key && f.entry.size() == size) return true;
+        for (unsigned i = 0; i < count_; ++i) {
+            const auto &f = at(pending_, i); if (f.key == key && f.entry.size() == size) return true;
+        }
         return false;
     }
     bool verified(uint32_t key) const {
-        for (const auto &f : pending_) if (f.key == key) return true;
+        for (unsigned i = 0; i < count_; ++i) if (at(pending_, i).key == key) return true;
         return false;
     }
-    bool fits() const { return count_ < max_fonts; }
+    bool fits() const { return count_ < pending_.size / sizeof(Loaded); }
     bool reuse(uint32_t key, unsigned size) {
-        for (const auto &f : active_) if (f.key == key && f.entry.size() == size && fits()) {
-            auto &p = pending_[count_++]; p.key = key; p.entry = f.entry;
-            return true;
+        for (unsigned i = 0; i < active_count_; ++i) {
+            const auto &f = at(active_, i);
+            if (f.key == key && f.entry.size() == size && fits()) {
+                auto &p = at(pending_, count_++); p.key = key; p.entry = f.entry;
+                return true;
+            }
         }
         return false;
     }
     bool add(uint32_t key, const Entry &entry, cntrl::MemoryBuffer data) {
         if (!fits() || data.size != entry.length() || !valid_pixels(entry, data.data)) return false;
-        auto &f = pending_[count_++]; f.key = key; f.entry = entry;
+        auto &f = at(pending_, count_++); f.key = key; f.entry = entry;
         f.data = std::move(data); return true;
     }
     void finish(bool commit) {
         if (commit) {
             // Borrowed pending faces acquire ownership before old faces are freed.
-            for (auto &p : pending_) if (p.key && !p.data.data)
-                for (auto &a : active_) if (a.key == p.key && a.entry.size() == p.entry.size()) {
-                    p.data = std::move(a.data); break;
+            for (unsigned i = 0; i < count_; ++i) {
+                auto &p = at(pending_, i);
+                if (p.data.data) continue;
+                for (unsigned j = 0; j < active_count_; ++j) {
+                    auto &a = at(active_, j);
+                    if (a.key == p.key && a.entry.size() == p.entry.size()) {
+                        p.data = std::move(a.data); break;
+                    }
                 }
-            for (unsigned i = 0; i < max_fonts; ++i) std::swap(active_[i], pending_[i]);
+            }
+            active_.swap(pending_); active_count_ = count_;
         }
-        begin();
+        clear(pending_); count_ = 0;
     }
     const Loaded *get(uint32_t key, unsigned size) const {
-        for (const auto &f : active_) if (f.key == key && f.entry.size() == size) return &f;
+        for (unsigned i = 0; i < active_count_; ++i) {
+            const auto &f = at(active_, i); if (f.key == key && f.entry.size() == size) return &f;
+        }
         return nullptr;
     }
 private:
-    Loaded active_[max_fonts], pending_[max_fonts];
-    unsigned count_ = 0;
-    static void clear(Loaded *fonts) { for (unsigned i = 0; i < max_fonts; ++i) fonts[i] = Loaded(); }
+    cntrl::MemoryBuffer active_, pending_;
+    unsigned count_ = 0, active_count_ = 0;
+    static Loaded &at(cntrl::MemoryBuffer &storage, unsigned i) { return *std::launder(reinterpret_cast<Loaded *>(storage.data + i * sizeof(Loaded))); }
+    static const Loaded &at(const cntrl::MemoryBuffer &storage, unsigned i) { return *std::launder(reinterpret_cast<const Loaded *>(storage.data + i * sizeof(Loaded))); }
+    static void clear(cntrl::MemoryBuffer &storage) {
+        for (unsigned i = storage.size / sizeof(Loaded); i--;) at(storage, i).~Loaded();
+        storage.clear();
+    }
 };
 inline Cache cache;
 } // namespace font_assets

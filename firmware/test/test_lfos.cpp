@@ -134,6 +134,7 @@ void beat_clocks() {
 }
 }
 int main(int argc, char **argv) {
+    cntrl::memory_budget = 524288;
     if (argc == 1) { shapes(); transactions(); beat_clocks(); return 0; }
     assert(argc == 3);
     std::ifstream file(argv[1], std::ios::binary);

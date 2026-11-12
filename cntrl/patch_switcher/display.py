@@ -342,6 +342,33 @@ def compile_display(
     return window_records, references, block
 
 
+def estimate_font_ram(
+    windows: list[bytes], block: bytes, fonts: dict[int, bytes]
+) -> int:
+    from ..fonts import assets
+
+    styles = HEADER.unpack_from(block)[1]
+    records = windows + [
+        block[
+            HEADER.size + i * graphics.SCREEN.size : HEADER.size
+            + (i + 1) * graphics.SCREEN.size
+        ]
+        for i in range(styles)
+    ]
+    selected = {(struct.unpack_from('<I', r, 12)[0], r[1]) for r in records}
+    selected = {(k, s) for k, s in selected if k}
+    if not selected:
+        return 0
+    # ARM Loaded is 36 bytes. Each exact allocation uses the same alignment
+    # and header admission model as MemoryBuffer; target tracing reports actuals.
+    total = ((len(selected) * 36 + 7) & ~7) + 8
+    decoded = {k: assets.entries(fonts[k]) for k in {k for k, _ in selected}}
+    for k, s in selected:
+        _, index, pixels = decoded[k][s]
+        total += ((len(index) + len(pixels) + 7) & ~7) + 8
+    return total
+
+
 def merge_style(*styles: models.Style | None) -> models.Style:
     values: dict[str, object] = {}
     for style in styles:

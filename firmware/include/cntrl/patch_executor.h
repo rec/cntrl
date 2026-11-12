@@ -1,7 +1,7 @@
 #pragma once
 #include "document.h"
 #include "midi_file.h"
-#include <cstdlib>
+#include "checked_array.h"
 
 namespace cntrl {
 class PatchExecutor;
@@ -36,6 +36,10 @@ struct PatchOutputs {
     virtual void validation_context(PatchExecutor &, bool enabled) { validation(enabled); }
     virtual bool prepare_invocation(PatchExecutor &) { return true; }
     virtual void release_invocation(PatchExecutor &) {}
+    virtual bool retain_owner(PatchExecutor &) { return true; }
+    virtual void release_retained_owner(PatchExecutor &) {}
+    virtual bool prepare_message(PatchExecutor &, const char *, const uint8_t *, unsigned) { return true; }
+    virtual bool prepare_owner_cycle(PatchExecutor &) { return true; }
     virtual bool preview_state(unsigned, uint32_t) { return true; }
     virtual bool selection(unsigned, const Document *&, unsigned &) { return false; }
     virtual void selection_complete(unsigned) {}
@@ -58,7 +62,7 @@ public:
     enum class Status { idle, pending, completed, failed, unknown, suspended };
     PatchExecutor(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner)
         : hardware_(hardware), outputs_(outputs), sources_(sources), owner_(owner) {}
-    ~PatchExecutor() { cancel(); std::free(frames_); std::free(resources_); std::free(bindings_); }
+    ~PatchExecutor() { retain_counters_ = false; cancel(); if (retained_owner_) outputs_.release_retained_owner(*this); }
     PatchExecutor(const PatchExecutor &) = delete;
     PatchExecutor &operator=(const PatchExecutor &) = delete;
 
@@ -71,9 +75,12 @@ public:
     const Document &document() const { return document_; }
     const char *error() const { return error_; }
     bool reconstructing() const { return reconstructing_; }
+    bool persistent() const { return persistent_; }
+    void retain_counter_reservations() { retain_counters_ = true; }
+    bool retain_owner() { return retained_owner_ || (retained_owner_ = outputs_.retain_owner(*this)); }
     bool started() const { return started_; }
     unsigned resource_count() const { return resource_count_; }
-    const Resource *resources() const { return resources_; }
+    const Resource *resources() const { return resources_.data(); }
     bool state_complete() const { return state_complete_; }
     bool invoke(const StatePatch &patch) {
         return outputs_.state(patch.operation, patch.value);
@@ -170,13 +177,14 @@ public:
             const uint8_t *definition = document.counter(u16(p));
             output = reinterpret_cast<const char *>(definition + 64);
             if (!outputs_.available(output)) { fail("MIDI output unavailable"); return; }
-            auto &state = hardware_.counters.state(u32(document.data() + 20), u16(p), definition[98]);
-            auto step = Counters::next(state, definition, p[2]);
+            auto *state = hardware_.counters.state(u32(document.data() + 20), u16(p));
+            if (!state) { fail("Counter memory unavailable"); return; }
+            auto step = Counters::next(*state, definition, p[2]);
             program_[0] = definition[96];
             length = definition[96] >> 4 == 12 ? 2 : 3;
             program_[1] = length == 2 ? step.value : definition[97]; program_[2] = step.value;
             if (outputs_.send_patch(owner_, output, program_, length)) {
-                hardware_.counters.accepted(state, step);
+                hardware_.counters.accepted(*state, step);
                 waiting_ = started_ = true; waiting_output_ = output;
             }
             return;
@@ -206,12 +214,7 @@ public:
         case 1: {
             const uint8_t *instrument = frames_[depth_ - 1].document->instrument(u16(p));
             output = reinterpret_cast<const char *>(instrument + 32);
-            auto cc = [&](uint8_t controller, uint8_t value) {
-                if (value != 255) { program_[length++] = 0xb0 | instrument[64]; program_[length++] = controller; program_[length++] = value; }
-            };
-            cc(0, p[3]); cc(32, p[4]);
-            program_[length++] = 0xc0 | instrument[64]; program_[length++] = p[2];
-            cc(7, p[5]); cc(10, p[6]); bytes = program_;
+            length = program_message(instrument, p); bytes = program_;
             break;
         }
         case 2: output = reinterpret_cast<const char *>(p); bytes = p + 32; length = u16(n + 2) - 32; break;
@@ -258,12 +261,14 @@ private:
     struct Binding { const Document *document; unsigned node, operation; };
     Hardware &hardware_; PatchOutputs &outputs_; PatchSources &sources_;
     unsigned owner_; Document document_;
-    Frame *frames_ = nullptr;
-    Binding *bindings_ = nullptr;
-    unsigned binding_capacity_ = 0, binding_count_ = 0, binding_cursor_ = 0;
-    Resource *resources_ = nullptr;
-    unsigned resource_capacity_ = 0, resource_count_ = 0;
-    unsigned capacity_ = 0, depth_ = 0, root_ = 0, completed_ = 0;
+    CheckedArray<Frame> frames_;
+    CheckedArray<Binding> bindings_;
+    unsigned binding_count_ = 0, binding_cursor_ = 0;
+    CheckedArray<Resource> resources_;
+    struct CounterPin { Counters::State *state = nullptr; uint64_t generation = 0; };
+    CheckedArray<CounterPin> counter_pins_;
+    unsigned resource_count_ = 0;
+    unsigned depth_ = 0, root_ = 0, completed_ = 0;
     uint32_t fingerprint_ = 0;
     uint32_t delay_started_ = 0, delay_duration_ = 0;
     bool delaying_ = false;
@@ -276,6 +281,8 @@ private:
     bool waiting_ = false, pinned_ = false, persistent_ = false, validating_ = false, reconstructing_ = false, started_ = false;
     bool invocation_prepared_ = false;
     bool state_complete_ = true;
+    bool retain_counters_ = false;
+    bool retained_owner_ = false;
 
     void reset() {
         cancel(); error_ = ""; root_ = completed_ = resource_count_ = binding_count_ = binding_cursor_ = 0; started_ = false; state_complete_ = true;
@@ -287,6 +294,10 @@ private:
         if (pinned_) { pinned_ = false; sources_.end(); }
         if (status != Status::pending && status != Status::suspended && invocation_prepared_) {
             invocation_prepared_ = false; outputs_.release_invocation(*this);
+        }
+        if (status != Status::pending && status != Status::suspended && !retain_counters_) {
+            for (auto pin : counter_pins_) if (pin.state && pin.generation == hardware_.counters.generation()) hardware_.counters.release(pin.state);
+            counter_pins_.clear();
         }
     }
     bool fail(const char *message) {
@@ -301,11 +312,9 @@ private:
         for (unsigned i = 0; i < depth_; ++i)
             if (frames_[i].document->data() == document->data() && frames_[i].node == node)
                 return fail("Patch reference cycle");
-        if (depth_ == capacity_) {
-            unsigned capacity = capacity_ ? capacity_ * 2 : 8;
-            void *memory = std::realloc(frames_, capacity * sizeof(Frame));
-            if (!memory) return fail("Patch traversal memory exhausted");
-            frames_ = static_cast<Frame *>(memory); capacity_ = capacity;
+        if (depth_ == frames_.size()) {
+            if (!validating_ && !reconstructing_) return fail("Patch traversal was not prepared");
+            if (!frames_.resize(depth_ + 1)) return fail("Patch traversal memory exhausted");
         }
         frames_[depth_++] = {document, node, 0};
         return true;
@@ -369,12 +378,7 @@ private:
             document = binding.document; node = binding.node; return true;
         }
         if (!outputs_.selection(operation, document, node)) return fail("No patch selected for activation");
-        if (binding_count_ == binding_capacity_) {
-            unsigned capacity = binding_capacity_ ? binding_capacity_ * 2 : 8;
-            void *memory = std::realloc(bindings_, capacity * sizeof(Binding));
-            if (!memory) return fail("Patch binding memory exhausted");
-            bindings_ = static_cast<Binding *>(memory); binding_capacity_ = capacity;
-        }
+        if (binding_count_ == bindings_.size() && !bindings_.resize(binding_count_ + 1)) return fail("Patch binding memory exhausted");
         bindings_[binding_count_++] = {document, node, operation};
         if (node != 65535) hash(checksum(document->data(), document->length()));
         return true;
@@ -392,19 +396,30 @@ private:
             if (resources_[i].channel == channel && resources_[i].control == control && !std::strcmp(resources_[i].output, output)) {
                 resources_[i].value = expected; return true;
             }
-        if (resource_count_ == resource_capacity_) {
-            unsigned capacity = resource_capacity_ ? resource_capacity_ * 2 : 8;
-            void *memory = std::realloc(resources_, capacity * sizeof(Resource));
-            if (!memory) return fail("Patch ownership memory exhausted");
-            resources_ = static_cast<Resource *>(memory); resource_capacity_ = capacity;
-        }
+        if (resource_count_ == resources_.size() && !resources_.resize(resource_count_ + 1)) return fail("Patch ownership memory exhausted");
         value.value = expected; resources_[resource_count_++] = value; return true;
     }
+    unsigned program_message(const uint8_t *instrument, const uint8_t *patch) {
+        unsigned length = 0;
+        auto cc = [&](uint8_t controller, uint8_t value) {
+            if (value != 255) { program_[length++] = 0xb0 | instrument[64]; program_[length++] = controller; program_[length++] = value; }
+        };
+        cc(0, patch[3]); cc(32, patch[4]);
+        program_[length++] = 0xc0 | instrument[64]; program_[length++] = patch[2];
+        cc(7, patch[5]); cc(10, patch[6]); return length;
+    }
+    bool prepare_message(const char *output, const uint8_t *bytes, unsigned length) {
+        return outputs_.prepare_message(*this, output, bytes, length) || fail("MIDI state memory unavailable");
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(patch_collect)
+#endif
     bool collect(const uint8_t *node, const Document &document) {
         const uint8_t *p = node + 4;
         if (node[0] == 1) {
             const uint8_t *instrument = document.instrument(u16(p));
             const char *output = reinterpret_cast<const char *>(instrument + 32);
+            if (!prepare_message(output, program_, program_message(instrument, p))) return false;
             unsigned channel = instrument[64];
             if (!resource(output, channel, 128, p[2])) return false;
             constexpr unsigned controllers[] = {0, 32, 7, 10};
@@ -414,6 +429,7 @@ private:
             if (p[4] != 255 && !resource(output, channel, 131, p[4])) return false;
         } else if (node[0] == 2) {
             const char *output = reinterpret_cast<const char *>(p);
+            if (!prepare_message(output, p + 32, u16(node + 2) - 32)) return false;
             if (node[1] & 1) {
                 if (u16(node + 2) == 34 && p[32] >> 4 == 12)
                     return resource(output, p[32] & 15, 128, p[33]);
@@ -444,6 +460,17 @@ private:
             }
         } else if (node[0] == 14) {
             const uint8_t *definition = document.counter(u16(p));
+            const uint8_t message[] = {definition[96], uint8_t(definition[96] >> 4 == 12 ? 0 : definition[97]), 0};
+            if (!prepare_message(reinterpret_cast<const char *>(definition + 64), message, definition[96] >> 4 == 12 ? 2 : 3)) return false;
+            const auto generation = hardware_.counters.generation();
+            if (!counter_pins_.empty() && counter_pins_[0].generation != generation) counter_pins_.clear();
+            auto *state = hardware_.counters.state(u32(document.data() + 20), u16(p));
+            if (!state || std::none_of(counter_pins_.begin(), counter_pins_.end(), [state](const CounterPin &pin) { return pin.state == state; })) {
+                if (!counter_pins_.resize(counter_pins_.size() + 1)) return fail("Counter reservation memory unavailable");
+                state = hardware_.counters.acquire(u32(document.data() + 20), u16(p), definition[98]);
+                if (!state) { counter_pins_.resize(counter_pins_.size() - 1); return fail("Counter memory unavailable"); }
+                counter_pins_.back() = {state, generation};
+            }
             state_complete_ = false;
             return resource(reinterpret_cast<const char *>(definition + 64), definition[96] & 15,
                 definition[96] >> 4 == 12 ? 128 : definition[97]);

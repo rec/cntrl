@@ -1,7 +1,8 @@
 # Demand-sized firmware memory
 
-Status: source audit and implementation plan, 2026-11-12, based on `a32af63`.
-No firmware behavior is changed by this document.
+Status: implementation and qualification in progress, 2026-11-12.
+The inventory below records the original audit; implementation results and
+outstanding qualification gates are tracked here and in the target appendix.
 
 ## Implementation decisions
 
@@ -22,8 +23,28 @@ Invocation navigation snapshots now use checked nodes for live executors,
 identified by executor address. Patch preparation acquires a snapshot before
 validation or output, and completion/cancellation releases it. Tests cover
 failure, reuse, stable addresses and executors sharing an output owner number.
-The fixed owner/output masks and value-encoded firmware-return record remain
-scheduled for migration.
+Delivery owners now register stable live identities, and temporary firmware-return
+records encode counted navigation data explicitly. Endpoint masks retain the
+existing encoded sixteen-endpoint domain.
+
+Font cache metadata is counted from distinct asset/size pairs before staging
+and allocated once at that count. The active cache survives failed preparation.
+The shared cache and compiler no longer impose the former 32-face limit.
+
+Configuration and live collections now use exact-count arrays and checked stable
+nodes. Setup graph and arpeggiator preparation stage resources before publication.
+Stream traversal uses a prepared explicit work list instead of recursive graph
+calls. Growing buffers admit the complete replacement while retaining the old
+allocation, including the target allocator's alignment/header charge.
+
+The tracked `firmware/test/test_dynamic_memory_stress.cpp` exercises dense graphs,
+limited RAM and deterministic allocation faults. It exposed an unsent onset
+blocking older releases; that path now refuses the new onset without retiring
+the older voices. Host timings are comparative measurements, not pedal deadlines.
+The user has left the defer-versus-reject CPU policy open until stress results
+are available. Physical timing, the live allocator's worst-case latency, linked
+SDK allocation coverage and final stack/heap qualification remain completion
+gates. Do not describe these checked collections alone as a bounded allocator.
 
 ## Objective and scope
 

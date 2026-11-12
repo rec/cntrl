@@ -3,6 +3,7 @@
 #define CNTRL_SWITCHES 1
 #include <cntrl/midi_runtime.h>
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <deque>
 #include <sstream>
@@ -275,7 +276,68 @@ void test_text_arrives_without_forwarding_and_usb_enable_is_respected() {
     }
     runtime.poll(services); assert(runtime.text_messages.active(6000));
 }
+void input_metadata_failure_keeps_service_running_and_reports_once() {
+    Services services(0); cntrl::midi::Runtime runtime;
+    cntrl::memory_fail_after = 0;
+    runtime.poll(services); runtime.poll(services);
+    assert(services.errors == 1 && runtime.parser_memory_failures() == 1);
+    assert(std::count(services.log.begin(),services.log.end(),"record") == 2);
+    assert(std::count(services.log.begin(),services.log.end(),"flush") >= 2);
+    cntrl::memory_fail_after = -1;
+    runtime.poll(services); assert(services.errors == 1);
+}
+void configured_raw_inputs_use_admitted_parser_storage() {
+    Services services(1); services.sources[0].clear(); cntrl::midi::Runtime runtime;
+    std::array<uint8_t,50> settings{};
+    std::memcpy(settings.data(),"CARP",4); settings[4] = 1;
+    settings[8] = settings[10] = settings[12] = settings[42] = settings[46] = 1;
+    settings[14] = 8; settings[16] = 2;
+    cntrl::put32(settings.data() + 18,1u << 30); cntrl::put32(settings.data() + 26,(1u << 30) / 2);
+    {
+        cntrl::midi::Runtime pending;
+        pending.arpeggiator.configure(settings.data());
+        cntrl::memory_fail_after = 0;
+        assert(!pending.prepare_arpeggiator_configuration(settings.data(),services,services.midi_outputs()));
+        pending.finish_arpeggiator_configuration(false);
+        cntrl::memory_fail_after = -1;
+        pending.poll(services);
+        assert(pending.arpeggiator.configured());
+    }
+    assert(runtime.prepare_arpeggiator_configuration(settings.data(),services,services.midi_outputs()));
+    runtime.finish_arpeggiator_configuration(false);
+    assert(!runtime.arpeggiator.configured());
+    assert(runtime.prepare_arpeggiator_configuration(settings.data(),services,services.midi_outputs()));
+    runtime.finish_arpeggiator_configuration(true);
+    runtime.poll(services);
+    const unsigned allocations = cntrl::memory_allocations;
+    cntrl::memory_fail_after = 0;
+    for (uint8_t byte : {uint8_t(0x90),uint8_t(60),uint8_t(100)}) {
+        cntrl::midi::InputEvent event; event.byte = byte; services.sources[0].push_back(event);
+    }
+    runtime.poll(services);
+    assert(runtime.arpeggiator.size() == 1 && runtime.parser_memory_failures() == 0);
+    assert(cntrl::memory_allocations == allocations);
+    cntrl::memory_fail_after = -1;
+}
+void service_gap_reports_external_stalls_and_resets_across_timer_wrap() {
+    Services services(0); services.timer_step = 0;
+    cntrl::midi::Runtime runtime;
+    cntrl::Document document;
+    services.time = UINT32_MAX - 100; runtime.poll(services);
+    services.time = 200; runtime.poll(services);
+    runtime.status(services.bridge,0,document,services);
+    assert(services.replies.back().find("service_gap_us=301") != std::string::npos);
+    runtime.reset(services);
+    services.time = 1000; runtime.poll(services);
+    services.time = 2000; runtime.poll(services);
+    runtime.status(services.bridge,0,document,services);
+    assert(services.replies.back().find("service_gap_us=1000") != std::string::npos);
+}
 int main() {
+    cntrl::memory_budget = 524288;
+    service_gap_reports_external_stalls_and_resets_across_timer_wrap();
+    input_metadata_failure_keeps_service_running_and_reports_once();
+    configured_raw_inputs_use_admitted_parser_storage();
     test_text_arrives_without_forwarding_and_usb_enable_is_respected();
     test_monitor_observes_inputs_before_gates_and_actual_transformed_outputs();
     test_rotating_sources_and_delivery_precede_file_work();

@@ -1,5 +1,5 @@
 #pragma once
-#include <vector>
+#include "checked_list.h"
 #include <cstring>
 #include <cstdint>
 
@@ -27,13 +27,13 @@ public:
         unsigned index = 0;
         while (index < held_.size() && held_[index].owner != owner) ++index;
         const bool added = index == held_.size();
-        if (added) held_.push_back({owner, {}});
+        if (added && !held_.append({owner, {}})) return false;
         auto previous = held_[index].report;
         held_[index].report.modifiers = shortcut.modifiers;
         std::memcpy(held_[index].report.keys, shortcut.keys, 6);
         KeyboardReport next;
         if (!report(next)) {
-            if (added) held_.pop_back();
+            if (added) held_.erase_if([owner](const Hold &hold) { return hold.owner == owner; });
             else held_[index].report = previous;
             return false;
         }
@@ -43,7 +43,7 @@ public:
         for (auto i = held_.begin(); i != held_.end(); ++i)
             if (i->owner == owner) { held_.erase(i); return; }
     }
-    void clear() { held_.clear(); }
+    void clear() { held_.release(); }
     void poll(bool connected, KeyboardSink &sink) {
         if (connected != connected_) {
             clear(); connected_ = connected; sent_valid_ = false;
@@ -57,7 +57,7 @@ public:
     }
 private:
     struct Hold { unsigned owner; KeyboardReport report; };
-    std::vector<Hold> held_;
+    CheckedList<Hold> held_;
     KeyboardReport sent_;
     bool connected_ = false, sent_valid_ = false;
     bool report(KeyboardReport &next) const {

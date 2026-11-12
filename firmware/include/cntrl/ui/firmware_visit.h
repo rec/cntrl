@@ -9,12 +9,49 @@
 namespace cntrl::ui {
 struct RuntimeState { uint8_t brightness = 192; bool interface = false; };
 struct FirmwareVisitRecord {
-    uint32_t magic = 0x46564933, token = 0, setup_crc = 0;
+    static constexpr uint32_t format = 0x46564934;
+    static constexpr unsigned header_size = 94 + sizeof(SongContinuation);
+    uint32_t token = 0, setup_crc = 0;
     char setup[64] = {};
     SongContinuation continuation;
     Controller::NavigationState initial_navigation, return_navigation;
     RuntimeState runtime;
-    uint32_t ui_operation = 0, controller = 0, crc = 0;
+    uint32_t ui_operation = 0, controller = 0;
+    bool encode(MemoryBuffer &destination) const {
+        if (!initial_navigation.valid || !return_navigation.valid) return false;
+        const unsigned initial = initial_navigation.encoded_size(), returned = return_navigation.encoded_size();
+        if (uint64_t(header_size) + initial + returned + 4 > UINT_MAX) return false;
+        MemoryBuffer bytes;
+        if (!bytes.resize(header_size + initial + returned + 4)) return false;
+        auto *p = bytes.data;
+        put32(p, format); put32(p + 4, token); put32(p + 8, setup_crc);
+        std::memcpy(p + 12, setup, 64); std::memcpy(p + 76, &continuation, sizeof(continuation));
+        unsigned offset = 76 + sizeof(continuation);
+        p[offset++] = runtime.brightness; p[offset++] = runtime.interface;
+        put32(p + offset, ui_operation); offset += 4; put32(p + offset, controller); offset += 4;
+        put32(p + offset, initial); offset += 4; put32(p + offset, returned); offset += 4;
+        if (!initial_navigation.encode(p + offset, initial) || !return_navigation.encode(p + offset + initial, returned)) return false;
+        put32(p + bytes.size - 4, checksum(p, bytes.size - 4)); destination.swap(bytes);
+        return true;
+    }
+    bool decode(const uint8_t *bytes, unsigned size) {
+        if (size < header_size + 44 || u32(bytes) != format || u32(bytes + size - 4) != checksum(bytes, size - 4)) return false;
+        const unsigned initial = u32(bytes + header_size - 8), returned = u32(bytes + header_size - 4);
+        if (initial < 20 || returned < 20 || uint64_t(header_size) + initial + returned + 4 != size
+            || !text_valid(bytes + 12, 64) || bytes[77 + sizeof(continuation)] > 1) return false;
+        FirmwareVisitRecord candidate;
+        candidate.token = u32(bytes + 4); candidate.setup_crc = u32(bytes + 8);
+        std::memcpy(candidate.setup, bytes + 12, 64); std::memcpy(&candidate.continuation, bytes + 76, sizeof(continuation));
+        if (!text_valid(reinterpret_cast<const uint8_t *>(candidate.continuation.document), 64)
+            || !text_valid(reinterpret_cast<const uint8_t *>(candidate.continuation.set), 64)
+            || !text_valid(reinterpret_cast<const uint8_t *>(candidate.continuation.song), 64)) return false;
+        unsigned offset = 76 + sizeof(continuation);
+        candidate.runtime.brightness = bytes[offset++]; candidate.runtime.interface = bytes[offset++];
+        candidate.ui_operation = u32(bytes + offset); offset += 4; candidate.controller = u32(bytes + offset);
+        if (!candidate.initial_navigation.decode(bytes + header_size, initial)
+            || !candidate.return_navigation.decode(bytes + header_size + initial, returned)) return false;
+        *this = candidate; return true;
+    }
 };
 struct FirmwareSelection { uint32_t next = 0, returned = 0; bool can_enter = false, returned_to_application = false; };
 struct FirmwareVisitServices {
@@ -59,7 +96,7 @@ public:
         const auto *initial = continuation && invocation ? navigation_.find(*invocation) : nullptr;
         if (continuation && !initial) return false;
         const auto state = services_.firmware_selection();
-        if (!state.can_enter || (continuation && !services_.storage_available()) || !services_.stop_clock()) return false;
+        if (!state.can_enter || (continuation && !services_.storage_available())) return false;
         record_ = FirmwareVisitRecord(); exit_pair_ = pair; offset_ = 0;
         if (continuation) {
             record_.token = state.next; record_.continuation = *continuation;
@@ -67,8 +104,11 @@ public:
             record_.return_navigation = application_.controller().navigation(); record_.runtime = runtime_;
             record_.ui_operation = application_.pending_operation; record_.controller = application_.rendering();
             std::snprintf(record_.setup, sizeof(record_.setup), "%s", documents_.selected());
-            record_.setup_crc = setup_crc(); record_.crc = record_crc(); stage_ = Stage::create;
+            record_.setup_crc = setup_crc();
+            if (!record_.encode(encoded_)) { record_ = FirmwareVisitRecord(); return false; }
+            stage_ = Stage::create;
         } else stage_ = Stage::configure;
+        if (!services_.stop_clock()) { stage_ = Stage::idle; encoded_.clear(); return false; }
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -88,17 +128,17 @@ public:
             stage_ = Stage::write; return;
         case Stage::write: {
             const unsigned count = chunk();
-            if (!file_.write(offset_, reinterpret_cast<const uint8_t *>(&record_) + offset_, count)) { fail(); return; }
-            offset_ += count; if (offset_ == sizeof(record_)) stage_ = Stage::sync; return;
+            if (!file_.write(offset_, encoded_.data + offset_, count)) { fail(); return; }
+            offset_ += count; if (offset_ == encoded_.size) stage_ = Stage::sync; return;
         }
         case Stage::sync:
             if (!file_.sync()) { fail(); return; }
             offset_ = 0; stage_ = Stage::verify; return;
         case Stage::verify: {
             uint8_t bytes[512]; const unsigned count = chunk();
-            if (!file_.read(offset_, bytes, count) || std::memcmp(bytes, reinterpret_cast<const uint8_t *>(&record_) + offset_, count)) { fail(); return; }
+            if (!file_.read(offset_, bytes, count) || std::memcmp(bytes, encoded_.data + offset_, count)) { fail(); return; }
             offset_ += count;
-            if (offset_ == sizeof(record_)) { file_.close(); stage_ = Stage::configure; } return;
+            if (offset_ == encoded_.size) { file_.close(); encoded_.clear(); stage_ = Stage::configure; } return;
         }
         case Stage::configure:
             if (!services_.configure_return(exit_pair_, record_.token)) { fail(); return; }
@@ -108,20 +148,25 @@ public:
             stage_ = Stage::handoff; return;
         case Stage::handoff:
             services_.handoff_firmware(); return;
-        case Stage::open:
+        case Stage::open: {
             token_ = record_.token; offset_ = 0;
-            valid_ = file_.open(path, files::Mode::read) && file_.size() == sizeof(record_);
+            uint8_t magic[4];
+            valid_ = file_.open(path, files::Mode::read) && file_.size() >= FirmwareVisitRecord::header_size + 44
+                && file_.size() <= UINT_MAX && file_.read(0, magic, 4) && u32(magic) == FirmwareVisitRecord::format
+                && encoded_.resize(unsigned(file_.size()));
             stage_ = Stage::read; return;
+        }
         case Stage::read: {
             const unsigned count = chunk();
-            valid_ = valid_ && file_.read(offset_, reinterpret_cast<uint8_t *>(&record_) + offset_, count);
+            valid_ = valid_ && file_.read(offset_, encoded_.data + offset_, count);
             offset_ += count;
-            if (valid_ && offset_ < sizeof(record_)) return;
+            if (valid_ && offset_ < encoded_.size) return;
             file_.close(); stage_ = Stage::validate; return;
         }
         case Stage::validate:
-            valid_ = valid_ && record_.magic == 0x46564933 && record_.token == token_ && record_.crc == record_crc()
+            valid_ = valid_ && record_.decode(encoded_.data, encoded_.size) && record_.token == token_
                 && !std::strncmp(record_.setup, documents_.selected(), sizeof(record_.setup)) && record_.setup_crc == setup_crc();
+            encoded_.clear();
             stage_ = Stage::consume; return;
         case Stage::consume:
             if (!services_.consume_return(token_)) { fail(); return; }
@@ -149,13 +194,13 @@ private:
     uint32_t offset_ = 0, token_ = 0;
     uint8_t exit_pair_ = 0;
     bool resume_checked_ = false, valid_ = false;
-    unsigned chunk() const { return std::min(unsigned(sizeof(record_) - offset_), 512u); }
-    uint32_t record_crc() const { return checksum(reinterpret_cast<const uint8_t *>(&record_), sizeof(record_) - 4); }
+    MemoryBuffer encoded_;
+    unsigned chunk() const { return std::min<unsigned>(encoded_.size - offset_, 512u); }
     uint32_t setup_crc() const {
         const auto &document = documents_.document(); return document.valid() ? checksum(document.data(), document.length()) : 0;
     }
     void fail() {
-        file_.close(); stage_ = Stage::idle; songs_.cancel_function();
+        file_.close(); encoded_.clear(); stage_ = Stage::idle; songs_.cancel_function();
         if (invocation) invocation->cancel();
         invocation = nullptr; hardware_.error("Firmware switch failed");
     }

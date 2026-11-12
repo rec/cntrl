@@ -22,7 +22,7 @@ int main() {
         assert(a.resize(cntrl::memory_budget * 2 / 3));
         a.data[0] = 42;
         assert(a.size > 65536);
-        assert(b.resize(cntrl::memory_budget - a.size));
+        assert(b.resize(cntrl::memory_budget - cntrl::memory_used - 8));
         assert(!c.resize(1) && !a.resize(a.size + 1));
         assert(a.data[0] == 42 && !c.data);
         a.swap(b);

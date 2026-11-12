@@ -173,11 +173,15 @@ static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents 
     app.menu.leave(); host.enter_page(); assert(platform.monitor.active());
     host.configure_page_settings(cntrl::PageSettings{}); assert(!platform.monitor.active());
     const unsigned budget = cntrl::memory_budget; cntrl::memory_budget = cntrl::memory_used;
-    host.enter_page(); assert(!platform.monitor.active());
-    assert(host.monitor_button(2, true) && !platform.monitor.frozen());
+    host.enter_page(); assert(platform.monitor.active());
+    platform.monitor.packet(cntrl::midi::Monitor::Direction::incoming, 0, 0, {15,{0xf8,0,0}}, 10);
+    assert(platform.monitor.dropped() == 1);
+    assert(host.monitor_button(2, true) && platform.monitor.frozen());
     cntrl::memory_budget = budget;
 }
 static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately(cntrl::Documents &documents, cntrl::ui::Application &app) {
+    const unsigned memory_budget = cntrl::memory_budget;
+    cntrl::memory_budget = 524288;
     struct FileSystem : cntrl::files::FileSystem {
         bool exists(const char *) override { return false; }
         bool make_directory(const char *) override { return true; }
@@ -190,6 +194,9 @@ static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately
     } directory;
     struct Sink : cntrl::midi::Sink {
         bool write_packet(unsigned, const cntrl::midi::Packet &) override { return true; }
+        unsigned capture_contexts(unsigned inputs, unsigned channels) const override {
+            return cntrl::midi::Sink::capture_contexts(inputs & 1u, channels) / 16;
+        }
     } sink;
     VisitFile source, index, recording;
     cntrl::midi::MidiFiles files(filesystem,source,index,recording,directory,1,"/midi","/index");
@@ -239,6 +246,7 @@ static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately
     assert(host.looper_action(5,"selected.mid"));
     assert(files.looper.state() == Loop::State::loading);
     assert(!host.pages_.looper_prompt[0]);
+    cntrl::memory_budget = memory_budget;
 }
 static void selecting_pages_preserves_state_and_background_work(const char *path) {
     struct Context : Hardware {
@@ -274,7 +282,7 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         cntrl::ui::Application app(hardware, documents, primary, hardware, hardware, songs, hardware, false); hardware.application = &app;
         const unsigned budget = cntrl::memory_budget;
         cntrl::memory_budget = cntrl::memory_used + 3 * sizeof(cntrl::Controller);
-        assert(app.prepare_pages(document.page_layout())); app.finish_pages(true);
+        assert(app.prepare_pages(document)); app.finish_pages(true);
         cntrl::memory_budget = budget;
         primary.activate(document); app.configure(document, hardware);
         PagePlatform platform; PageFonts fonts; PageDisplay display;
@@ -338,7 +346,8 @@ static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware 
     assert(visit.request(33, &continuation)); assert(visit.busy() && !visit.request(33, nullptr));
     for (unsigned i = 0; i < 100 && !hardware.handoffs; ++i) visit.poll(true);
     assert(hardware.handoffs == 1 && hardware.configurations == 1 && hardware.selections == 1);
-    assert(file.bytes.size() == sizeof(record) && file.maximum_io <= 512 && !file.opened());
+    assert(file.bytes.size() == cntrl::ui::FirmwareVisitRecord::header_size + record.initial_navigation.encoded_size() + record.return_navigation.encoded_size() + 4
+        && file.maximum_io <= 512 && !file.opened());
     file.bytes[0] ^= 1; hardware.selection.returned = 7; hardware.selection.returned_to_application = true;
     cntrl::ui::FirmwareVisitRecord returned_record;
     cntrl::ui::FirmwareVisit returned(returned_record, file, hardware, hardware, documents, app, songs, sources, runtime, navigation, execution, restoring);
@@ -391,7 +400,7 @@ int main(int argc, char **argv) {
         assert(&app.controller() == &primary);
         uint8_t pages[8 + 2 * 34] = {};
         pages[4] = 2; pages[8 + 32] = pages[8 + 34 + 32] = cntrl::PageLayout::patch_switcher;
-        assert(app.prepare_pages({pages})); app.finish_pages(true); app.layout = {pages};
+        assert(app.prepare_layout({pages})); app.finish_pages(true); app.layout = {pages};
         app.processing_index = 1; assert(&app.controller() == &app.at(1)); app.tick(0); assert(app.processing_index == cntrl::PageLayout::max_controllers);
     }
 }

@@ -4,6 +4,8 @@
 #include "midi_monitor.h"
 #include "text_messages.h"
 #include "midi_arpeggiator.h"
+#include "checked_array.h"
+#include "checked_list.h"
 #include <cstdio>
 #include <limits>
 
@@ -26,6 +28,46 @@ public:
     Monitor &monitor() { return monitor_; }
     Streams &streams() { return streams_; }
     uint64_t stream_time(uint32_t now) { return extend(now); }
+    bool prepare(Outputs outputs) {
+        const unsigned count = outputs.route_count();
+        if (generations_.size() == count) return true;
+        CheckedArray<uint64_t> candidate;
+        if (!candidate.resize(count)) return false;
+        for (unsigned i = 0; i < std::min(count,generations_.size()); ++i) candidate[i] = generations_[i];
+        generations_.swap(candidate); return true;
+    }
+    unsigned parser_memory_failures() const { return parser_memory_failures_; }
+    bool prepare_arpeggiator_configuration(const uint8_t *settings,Sink &sink,Outputs outputs) {
+        const unsigned capacity = arpeggiator_parsers_.capacity();
+        unsigned count = arpeggiator_parsers_.size();
+        const unsigned inputs = settings ? u16(settings + 10) : 0;
+        for (const auto &endpoint : outputs) {
+            if (!endpoint.input || endpoint.transport != OutputTransport::physical || !(inputs & (1u << endpoint.route))) continue;
+            bool present = false;
+            for (const auto &entry : arpeggiator_parsers_) if (entry.input == endpoint.route && !entry.cable) present = true;
+            if (!present) ++count;
+        }
+        if (!arpeggiator_parsers_.reserve(count)) return false;
+        if (arpeggiator.prepare_configuration(settings,sink)) {
+            prepared_parser_capacity_ = capacity; parser_configuration_prepared_ = true;
+            return true;
+        }
+        arpeggiator_parsers_.trim(arpeggiator_parsers_.capacity() - capacity);
+        return false;
+    }
+    void finish_arpeggiator_configuration(bool commit) {
+        if (!parser_configuration_prepared_) return;
+        if (commit) arpeggiator.finish_configuration();
+        else {
+            arpeggiator.discard_prepared_configuration();
+            if (parser_configuration_prepared_)
+                arpeggiator_parsers_.trim(arpeggiator_parsers_.capacity() - prepared_parser_capacity_);
+        }
+        parser_configuration_prepared_ = false;
+    }
+#ifdef CNTRL_NOINLINE
+    CNTRL_NOINLINE
+#endif
     Runtime(unsigned source_items = 64, unsigned input_budget_us = 180)
         : source_items_(source_items), input_budget_us_(input_budget_us) {}
     template<class Services>
@@ -33,10 +75,16 @@ public:
     CNTRL_FLASH_ROUTINE(midi_runtime_poll)
 #endif
     void poll(Services &s) {
+        const uint32_t poll_time = s.microseconds();
+        if (polled_) max_service_gap_us_ = std::max(max_service_gap_us_, uint32_t(poll_time - previous_poll_us_));
+        previous_poll_us_ = poll_time; polled_ = true;
         s.midi_transport_poll();
         auto &bridge = s.midi_bridge();
         auto &files = s.runtime_midi_files();
         auto &pages = s.runtime_pages();
+        const bool topology_ready = prepare(s.midi_outputs());
+        if (!topology_ready && !topology_memory_failed_) { ++parser_memory_failures_; s.error("MIDI input memory unavailable"); }
+        topology_memory_failed_ = !topology_ready;
         s.note_routing = &arpeggiator;
         bridge.host_connected(s.midi_host_connected());
         uint32_t begin = s.microseconds(), now = s.milliseconds();
@@ -45,6 +93,7 @@ public:
         bridge.connected(s.midi_device_connected(), now);
         uint64_t stream_time = extend(s.microseconds());
         for (const auto &endpoint : s.midi_outputs()) {
+            if (endpoint.route >= generations_.size()) continue;
             bool present = endpoint.transport == OutputTransport::physical
                 || (endpoint.transport == OutputTransport::usb_host ? s.midi_host_connected() : s.midi_device_connected());
             uint64_t identity = endpoint_identity(s, endpoint.route, 0);
@@ -54,7 +103,7 @@ public:
             if (!present || generation != generations_[endpoint.route]) s.forget_pickup_source(endpoint.route);
             if (!present || generation != generations_[endpoint.route]) {
                 arpeggiator.disconnect(endpoint.route);
-                for (unsigned cable = 0; cable < 16; ++cable) arpeggiator_parsers_[endpoint.route * 16 + cable].reset();
+                arpeggiator_parsers_.erase_if([&](const ArpeggiatorParser &entry) { return entry.input == endpoint.route; });
                 files.looper.connection(endpoint.route); files.forget_input(endpoint.route); s.forget_output(endpoint.route);
             }
             if (monitor_.active()) monitor_.connection(endpoint.route, present, identity, generation, s.microseconds());
@@ -107,14 +156,17 @@ public:
                 uint8_t status = event.packetized ? event.packet.bytes[0] : event.byte;
                 if (status == 0xf8 || (status >= 0xfa && status <= 0xfc))
                     pages.clock_message(event.clock_source, status, timestamp);
+                if (event.input >= generations_.size()) continue;
                 auto position = pages.beat_position(timestamp);
                 if (!reserved) {
                     auto arp_position = pages.arpeggiator_beat_position(timestamp);
                     arpeggiator.poll(arp_position,available,bridge.busy_outputs() | files.player.sysex_outputs() | streams_.sysex_outputs(),s,pages.clock_period());
+                    prepare_arpeggiator_inputs(s.midi_outputs());
                     if (event.packetized) arpeggiator.receive(event.input,event.cable,event.packet,arp_position);
-                    else if (event.input < 16 && event.cable < 16) {
+                    else if (arpeggiator.input_selected(event.input) && event.cable < 16) {
                         Packet packet;
-                        if (arpeggiator_parsers_[event.input * 16 + event.cable].receive(event.byte,packet)) arpeggiator.receive(event.input,event.cable,packet,arp_position);
+                        auto *parser = arpeggiator_parser(event.input,event.cable,event.byte);
+                        if (parser && parser->receive(event.byte,packet)) arpeggiator.receive(event.input,event.cable,packet,arp_position);
                     }
                 }
                 if (!reserved) files.looper.poll(position,pages.clock_ready(),available,s,pages.clock_period());
@@ -147,6 +199,7 @@ public:
         source_cursor_ = count ? (source_cursor_ + 1) % count : 0;
         files.looper.poll(pages.beat_position(s.microseconds()),pages.clock_ready(),available,s,pages.clock_period());
         arpeggiator.poll(pages.arpeggiator_beat_position(s.microseconds()),available,bridge.busy_outputs() | files.player.sysex_outputs() | streams_.sysex_outputs(),s,pages.clock_period());
+        prepare_arpeggiator_inputs(s.midi_outputs());
 #if CNTRL_SWITCHES
         s.midi_switch_tick(now);
 #endif
@@ -193,18 +246,18 @@ public:
     void stream_status(Replies &replies) const {
         const auto &counts = streams_.diagnostics();
         const auto lfos = streams_.lfo_status();
-        char response[400];
-        std::snprintf(response, sizeof(response), "CNTRL MIDI STREAMS %u %u %u %u %lu %lu %lu %lu lfos=%u pending=%u stopping=%u waiting=%u missing=%u failed=%llx coalesced=%lu skipped=%lu bytes=%lu",
+        char response[512];
+        std::snprintf(response, sizeof(response), "CNTRL MIDI STREAMS %u %u %u %u %lu %lu %lu %lu lfos=%u pending=%u stopping=%u waiting=%u missing=%u failed=%llx failed_count=%u coalesced=%lu skipped=%lu bytes=%lu heap_used=%u heap_peak=%u heap_budget=%u allocations=%u allocation_failures=%u",
             streams_.selected(), streams_.pending(), streams_.voices(), streams_.recovery(),
             (unsigned long)counts.transmitted, (unsigned long)counts.dropped,
             (unsigned long)counts.overloaded, (unsigned long)counts.failed,
             lfos.running, lfos.pending, lfos.stopping, lfos.waiting, lfos.missing,
-            (unsigned long long)lfos.failed, (unsigned long)counts.coalesced, (unsigned long)counts.skipped,
-            (unsigned long)streams_.retained_bytes());
+            (unsigned long long)lfos.failed, lfos.failed_count, (unsigned long)counts.coalesced, (unsigned long)counts.skipped,
+            (unsigned long)streams_.retained_bytes(), memory_used, memory_peak, memory_budget, memory_allocations, memory_failures);
         replies.reply(response);
     }
     template<class Replies>
-    void reset(Replies &replies) { max_midi_us_ = max_scan_gap_ = 0; replies.reply("CNTRL OK"); }
+    void reset(Replies &replies) { max_midi_us_ = max_scan_gap_ = max_service_gap_us_ = 0; polled_ = false; replies.reply("CNTRL OK"); }
     template<class Services>
     void status(const Bridge &bridge, unsigned route, const Document &document, Services &s) const {
         if (route >= bridge.destinations()) { s.reply("CNTRL ERROR midi-route"); return; }
@@ -213,19 +266,44 @@ public:
             if (endpoint.port != no_port && uint8_t(s.port_mode(endpoint.port)) != document.trs_modes()[endpoint.port])
                 errors |= 1u << endpoint.port;
         const auto &counts = bridge.counters(route);
+        unsigned quarantine = 0;
+        for (unsigned cable = 0; cable < 16; ++cable) if (bridge.input_quarantined(route, cable)) quarantine |= 1u << cable;
         char response[400];
-        std::snprintf(response, sizeof(response), "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u",
+        std::snprintf(response, sizeof(response), "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u bridge_quarantine=%x stream_quarantine=%x pedal_quarantine=%u service_gap_us=%lu",
             unsigned(bridge.enabled()), route, (unsigned long)counts.received,
             (unsigned long)counts.transmitted, (unsigned long)counts.dropped, (unsigned long)counts.aborted,
             counts.high_water, (unsigned long)max_midi_us_, (unsigned long)max_scan_gap_,
-            (unsigned long)scan_count_, (unsigned long)display_count_, errors);
+            (unsigned long)scan_count_, (unsigned long)display_count_, errors, quarantine,
+            streams_.input_quarantine(route), unsigned(bridge.pedal_quarantined(route)), (unsigned long)max_service_gap_us_);
         s.reply(response);
     }
 private:
     Monitor monitor_;
-    std::array<Parser,256> arpeggiator_parsers_{};
+    struct ArpeggiatorParser { unsigned input, cable; Parser parser; };
+    CheckedList<ArpeggiatorParser> arpeggiator_parsers_;
+    unsigned prepared_parser_capacity_ = 0;
+    bool parser_configuration_prepared_ = false;
     Streams streams_;
-    uint64_t generations_[max_routes] = {};
+    CheckedArray<uint64_t> generations_;
+    unsigned parser_memory_failures_ = 0;
+    bool topology_memory_failed_ = false;
+    void prepare_arpeggiator_inputs(Outputs outputs) {
+        if (!arpeggiator.configured()) { arpeggiator_parsers_.release(); arpeggiator.input_memory_ready(true); return; }
+        unsigned count = 0;
+        for (const auto &endpoint : outputs)
+            if (endpoint.input && endpoint.transport == OutputTransport::physical && arpeggiator.input_selected(endpoint.route)) ++count;
+        arpeggiator_parsers_.erase_if([&](const ArpeggiatorParser &entry) { return !arpeggiator.input_selected(entry.input); });
+        const bool ready = arpeggiator_parsers_.reserve(std::max(count,arpeggiator_parsers_.size()));
+        arpeggiator.input_memory_ready(ready);
+        if (!ready) ++parser_memory_failures_;
+    }
+    Parser *arpeggiator_parser(unsigned input, unsigned cable, uint8_t byte) {
+        for (auto &entry : arpeggiator_parsers_) if (entry.input == input && entry.cable == cable) return &entry.parser;
+        if (byte < 0x80 || byte >= 0xf0) return nullptr;
+        auto *entry = arpeggiator_parsers_.append({input,cable,{}});
+        if (!entry) { ++parser_memory_failures_; arpeggiator.input_memory_ready(false); return nullptr; }
+        return &entry->parser;
+    }
     uint64_t stream_time_ = 0;
     uint32_t previous_time_ = 0;
     uint64_t extend(uint32_t now) {
@@ -246,6 +324,8 @@ private:
     static uint64_t endpoint_generation(Services &, unsigned, long) { return 0; }
     unsigned source_items_, input_budget_us_, source_cursor_ = 0;
     uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
+    uint32_t previous_poll_us_ = 0, max_service_gap_us_ = 0;
+    bool polled_ = false;
     bool recording_failed_ = false;
 };
 } // namespace cntrl::midi

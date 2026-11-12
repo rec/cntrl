@@ -1,10 +1,10 @@
 #pragma once
 #include "document.h"
 #include "memory.h"
+#include "checked_array.h"
 #include "setup_names.h"
 #include <cassert>
 #include <cstdlib>
-#include <vector>
 
 namespace cntrl {
 constexpr unsigned setup_table_ram_overhead(unsigned count) {
@@ -29,6 +29,16 @@ public:
     CNTRL_FLASH_ROUTINE(setup_table_open)
 #endif
     bool open(SetupBundleFile &file, const Hardware &hardware) {
+        if (pinned()) return false;
+        SetupTable candidate;
+        if (!candidate.read(file, hardware)) return false;
+        swap(candidate); return true;
+    }
+private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_table_read)
+#endif
+    bool read(SetupBundleFile &file, const Hardware &hardware) {
         clear(); file_ = &file; hardware_ = &hardware;
         uint8_t header[40];
         if (!file.read(0, header, sizeof(header)) || std::memcmp(header, "CSTB", 4)
@@ -50,7 +60,7 @@ public:
             offset += n;
         }
         if (~crc != u32(header + 12)) return false;
-        entries_.resize(count_); names_.resize(count_ * 64); setup_names_.resize(count_);
+        if (!entries_.resize(count_) || !names_.resize(count_ * 64) || !setup_names_.resize(count_)) return false;
         unsigned table = 40 + count_ * 76;
         uint64_t position = uint64_t(table) + prefix;
         unsigned peak = 0;
@@ -77,15 +87,25 @@ public:
             for (unsigned b = 0; b < 8; ++b) signature = signature & 1 ? (signature >> 1) ^ 0xedb88320 : signature >> 1;
         }
         signature_ = ~signature;
+        bool validated = true;
         if (static_setups_.resize(prefix + total_setup_ram_)) {
             if (!file.read(table, static_setups_.data, prefix + total_setup_ram_)) return false;
             for (auto &entry : entries_) {
                 entry.bytes = static_setups_.data + entry.offset - table;
-                if (entry.length && !entry.document.load(entry.bytes, entry.length, hardware)) return false;
+                const unsigned failures = memory_failures;
+                if (entry.length && !entry.document.load(entry.bytes, entry.length, hardware)) {
+                    if (memory_failures == failures) return false;
+                    validated = false; break;
+                }
                 entry.revision = checksum(entry.bytes, entry.length);
             }
-            resident_ = total_setup_ram_;
-        } else {
+            if (validated) resident_ = total_setup_ram_;
+            else {
+                for (auto &entry : entries_) { entry.bytes = nullptr; entry.document = Document{}; }
+                static_setups_.clear();
+            }
+        }
+        if (!static_setups_.data) {
             for (unsigned i = 0; i < count_; ++i) {
                 if (!entries_[i].prefill) continue;
                 if (entries_[i].length > memory_budget - memory_used) break;
@@ -94,6 +114,7 @@ public:
         }
         return true;
     }
+public:
     const Document *get(uint16_t index) {
         assert(index < count_);
         auto &entry = entries_[index];
@@ -155,8 +176,7 @@ public:
 #endif
     void clear() {
         static_setups_.clear();
-        std::vector<Entry>().swap(entries_); std::vector<char>().swap(names_);
-        std::vector<const char *>().swap(setup_names_);
+        entries_.release(); names_.release(); setup_names_.release();
         count_ = resident_ = total_setup_ram_ = 0; head_ = tail_ = none;
     }
 private:
@@ -172,13 +192,22 @@ private:
     static_assert(sizeof(void *) != 4 || sizeof(Entry) <= 92, "Update the RAM2 entry estimate");
     SetupBundleFile *file_ = nullptr;
     const Hardware *hardware_ = nullptr;
-    std::vector<Entry> entries_;
-    std::vector<char> names_;
-    std::vector<const char *> setup_names_;
+    CheckedArray<Entry> entries_;
+    CheckedArray<char> names_;
+    CheckedArray<const char *> setup_names_;
     MemoryBuffer static_setups_;
     unsigned count_ = 0, resident_ = 0, total_setup_ram_ = 0;
     unsigned margin_ = 0, general_ = 0, active_ = 0, head_ = none, tail_ = none;
     uint32_t signature_ = 0;
+    void swap(SetupTable &other) {
+        std::swap(file_, other.file_); std::swap(hardware_, other.hardware_);
+        entries_.swap(other.entries_); names_.swap(other.names_); setup_names_.swap(other.setup_names_);
+        static_setups_.swap(other.static_setups_);
+        std::swap(count_, other.count_); std::swap(resident_, other.resident_);
+        std::swap(total_setup_ram_, other.total_setup_ram_);
+        std::swap(margin_, other.margin_); std::swap(general_, other.general_); std::swap(active_, other.active_);
+        std::swap(head_, other.head_); std::swap(tail_, other.tail_); std::swap(signature_, other.signature_);
+    }
     void unlink(unsigned index) {
         auto &entry = entries_[index];
         if (entry.previous != none) entries_[entry.previous].next = entry.next;

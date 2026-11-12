@@ -8,6 +8,9 @@ struct Sink : cntrl::midi::Sink {
     std::vector<cntrl::midi::Packet> sent;
     bool blocked = false;
     unsigned blocked_outputs = 0;
+    unsigned capture_contexts(unsigned inputs, unsigned channels) const override {
+        return cntrl::midi::Sink::capture_contexts(inputs & 1,channels) / 16;
+    }
     bool write_packet(unsigned output,const cntrl::midi::Packet &p) override { if (blocked || (blocked_outputs & (1u << output))) return false; sent.push_back(p); return true; }
 };
 std::array<uint8_t,50> settings(bool mono = false,unsigned kind = 0) {
@@ -22,6 +25,7 @@ void selectors_visit_the_requested_ranks() {
     using cntrl::midi::ArpeggiatorOrder;
     using cntrl::midi::ArpeggiatorSelection;
     ArpeggiatorOrder order;
+    assert(order.reserve(9));
     auto trace = [&](unsigned n,unsigned count) { std::vector<unsigned> result; for (unsigned i = 0; i < count; ++i) result.push_back(order.next(n)); return result; };
     order.reset({6,0,2}); assert((trace(6,6) == std::vector<unsigned>{0,2,4,1,3,5}));
     order.reset({6,0,3}); assert((trace(9,9) == std::vector<unsigned>{0,3,6,1,4,7,2,5,8}));
@@ -121,8 +125,110 @@ void one_blocked_output_does_not_stall_the_other_output() {
     arp.stop(); arp.poll({3 * beat / 4,1,true},3,0,sink);
     assert(sink.sent.size() == 6);
 }
+void capture_and_first_playback_use_only_admitted_storage() {
+    Sink sink; cntrl::midi::MidiArpeggiator arp;
+    auto p = settings(true,2); p[8] = 1; p[9] = 0; p[14] = 32;
+    arp.configure(p.data()); arp.poll({0,1,true},1,0,sink);
+    assert(arp.record({0,1,true}));
+    const unsigned allocations = cntrl::memory_allocations;
+    cntrl::memory_fail_after = 0;
+    arp.poll({beat,1,true},1,0,sink);
+    arp.receive(0,0,{9,{0x90,60,90}},{beat,1,true});
+    arp.receive(0,0,{14,{0xe0,0,64}},{beat + beat / 4,1,true});
+    arp.receive(0,0,{8,{0x80,60,33}},{beat + beat / 2,1,true});
+    assert(arp.record({beat + beat / 2,1,true}));
+    arp.poll({beat * 2,1,true},1,0,sink);
+    arp.poll({beat * 2 + beat / 4,1,true},1,0,sink);
+    assert(arp.size() == 1 && !sink.sent.empty());
+    assert(arp.error() == cntrl::midi::MidiArpeggiator::Error::none);
+    assert(cntrl::memory_allocations == allocations);
+    cntrl::memory_fail_after = -1;
+    const auto state = arp.state();
+    cntrl::memory_fail_after = 0;
+    assert(!arp.record({beat * 3,1,true}));
+    assert(arp.size() == 1 && arp.state() == state);
+    cntrl::memory_fail_after = -1;
+}
+void failed_configuration_keeps_the_playing_bank() {
+    Sink sink; cntrl::midi::MidiArpeggiator arp;
+    auto p = settings(); arp.configure(p.data()); arp.poll({0,1,true},1,0,sink);
+    arp.receive(0,0,{9,{0x90,60,90}},{0,1,true}); arp.toggle({0,1,true});
+    arp.poll({beat / 4,1,true},1,0,sink);
+    auto larger = p; larger[14] = larger[15] = 255;
+    cntrl::memory_fail_after = 0;
+    arp.configure(larger.data()); arp.poll({beat / 3,1,true},1,0,sink);
+    assert(arp.configured() && arp.size() == 1 && arp.state() == cntrl::midi::MidiArpeggiator::State::playing);
+    assert(arp.error() == cntrl::midi::MidiArpeggiator::Error::capacity);
+    cntrl::memory_fail_after = -1;
+}
+void configuration_is_admitted_before_publication() {
+    Sink sink; cntrl::midi::MidiArpeggiator arp;
+    auto p = settings();
+    assert(arp.prepare_configuration(p.data(),sink));
+    arp.poll({0,1,true},1,0,sink);
+    assert(!arp.configured());
+    arp.finish_configuration();
+    arp.configure(p.data()); // PageHost republishes the same admitted settings.
+    cntrl::memory_fail_after = 0;
+    arp.poll({0,1,true},1,0,sink);
+    assert(arp.configured());
+    cntrl::memory_fail_after = -1;
+    assert(arp.prepare_configuration(nullptr,sink));
+    arp.discard_prepared_configuration();
+    arp.poll({1,1,true},1,0,sink);
+    assert(arp.configured());
+}
+void live_batches_are_refused_before_their_first_note_exceeds_routing_capacity() {
+    Sink sink; cntrl::midi::MidiArpeggiator arp;
+    auto p = settings(); p[14] = 2;
+    arp.configure(p.data()); arp.poll({0,1,true},1,0,sink);
+    sink.note_routing = &arp;
+    const uint8_t notes[] = {0x90,60,100,0x90,64,100,0x90,67,100};
+    assert(!sink.reserve_owner_stream(&arp,1,0,notes,sizeof(notes),0));
+    assert(sink.sent.empty());
+    // Generated patch output and an unselected live input do not enter the
+    // held-note routing collection and must not consume its admission limit.
+    assert(arp.prepare_batch(0,notes,sizeof(notes)));
+    assert(arp.prepare_batch(0,notes,sizeof(notes),16));
+    assert(arp.prepare_batch(0,notes,6,0));
+}
+void pending_batches_keep_their_routing_slots_until_delivery_finishes() {
+    Sink sink; cntrl::midi::MidiArpeggiator arp;
+    auto p = settings(); p[14] = 3;
+    arp.configure(p.data()); arp.poll({0,1,true},1,0,sink);
+    sink.note_routing = &arp;
+    const uint8_t notes[] = {0x90,60,100,0x90,64,100};
+    int identity = 0;
+    assert(sink.retain_owner_state(&identity,17));
+    assert(sink.reserve_owner_stream(&identity,17,0,notes,sizeof(notes),0));
+    assert(sink.prepare_owner_cycle(&identity)); sink.activate_owner_state(&identity,17);
+    assert(sink.prepare_stream(17,0,notes,sizeof(notes),0));
+    assert(sink.submit(0,{9,{0x90,67,100},0}));
+    assert(!sink.submit(0,{9,{0x90,69,100},0}));
+    assert(!arp.begin_batch(18,0,notes,3,0));
+    assert(sink.sent.size() == 1);
+    auto replacement = settings(false,1); replacement[14] = 4;
+    assert(arp.prepare_configuration(replacement.data(),sink)); arp.finish_configuration();
+    arp.poll({1,1,true},1,0,sink);
+    assert(arp.selection() == 0);
+    cntrl::memory_fail_after = 0;
+    assert(sink.submit_owned(17,0,{9,{0x90,60,100},0}));
+    assert(sink.submit_owned(17,0,{9,{0x90,64,100},0}));
+    assert(sink.sent.size() == 3);
+    sink.finish_stream(17);
+    arp.poll({2,1,true},1,0,sink);
+    assert(arp.selection() == 1);
+    cntrl::memory_fail_after = -1;
+    sink.release_owner_state(&identity);
+}
 int main() {
+    cntrl::memory_budget = 524288;
     selectors_visit_the_requested_ranks();
+    capture_and_first_playback_use_only_admitted_storage();
+    failed_configuration_keeps_the_playing_bank();
+    configuration_is_admitted_before_publication();
+    live_batches_are_refused_before_their_first_note_exceeds_routing_capacity();
+    pending_batches_keep_their_routing_slots_until_delivery_finishes();
     held_notes_are_replaced_and_restored();
     mono_finish_closes_the_final_note_and_plays_it();
     mono_reorders_complete_gestures_and_pairs_repeated_pitches();

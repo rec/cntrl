@@ -450,6 +450,13 @@ def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
             f'{i}: {name}: {size} RAM bytes; {ni} instruments, '
             f'{nc} patch cycles, {np} patches'
         )
+        for category, needed in resolved.arm_memory(data).items():
+            if needed:
+                print(
+                    f'  {category}: {needed} additional arm RAM bytes estimated '
+                    '(USB input cable limit; retained takes and current '
+                    'playback excluded)'
+                )
         for j in range(ni):
             offset = 76 + j * 68
             alias = data[offset : offset + 32].split(b'\0')[0].decode('ascii')

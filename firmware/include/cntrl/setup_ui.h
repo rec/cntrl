@@ -136,6 +136,9 @@ private:
     void browse(bool backward) {
         if (docs_.browse(name_, backward)) browsing_ = true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render)
+#endif
     void render() {
         ui::Prompt prompt(hardware_);
         using Role = ControlRole;

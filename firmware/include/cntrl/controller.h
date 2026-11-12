@@ -1,6 +1,8 @@
 #pragma once
 #include "patch_executor.h"
+#include "checked_list.h"
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstdio>
 
@@ -10,21 +12,108 @@ class Controller {
 public:
     struct ProgramHistory { uint16_t patch; int previous; };
     struct NavigationState {
-        uint16_t selected = 0, cursors[max_patch_cycles] = {};
-        unsigned depth = 0;
-        ProgramHistory history[history_capacity] = {};
-        int current[max_instruments] = {}, last_sent[max_instruments] = {}, center = -1;
+        uint16_t selected = 0;
+        unsigned depth = 0, cycles = 0, instruments = 0;
+        int center = -1;
+        const uint16_t *cursors = nullptr;
+        const ProgramHistory *history = nullptr;
+        const int *current = nullptr, *last_sent = nullptr;
+        bool valid = true;
+        NavigationState() = default;
+        NavigationState(const NavigationState &other) { copy(other); }
+        NavigationState &operator=(const NavigationState &other) {
+            if (this != &other) { release(); copy(other); }
+            return *this;
+        }
+        ~NavigationState() { release(); }
+        unsigned encoded_size() const { return 20 + cycles * 2 + instruments * 8 + depth * 6; }
+        bool encode(uint8_t *bytes, unsigned size) const {
+            if (!valid || size != encoded_size() || (cycles && !cursors) || (depth && !history)
+                || (instruments && (!current || !last_sent))) return false;
+            put32(bytes, selected); put32(bytes + 4, cycles); put32(bytes + 8, instruments);
+            put32(bytes + 12, depth); put32(bytes + 16, uint32_t(center));
+            unsigned offset = 20;
+            for (unsigned i = 0; i < cycles; ++i, offset += 2) put16(bytes + offset, cursors[i]);
+            for (unsigned i = 0; i < instruments; ++i, offset += 8) {
+                put32(bytes + offset, uint32_t(current[i])); put32(bytes + offset + 4, uint32_t(last_sent[i]));
+            }
+            for (unsigned i = 0; i < depth; ++i, offset += 6) {
+                put16(bytes + offset, history[i].patch); put32(bytes + offset + 2, uint32_t(history[i].previous));
+            }
+            return true;
+        }
+        bool decode(const uint8_t *bytes, unsigned size) {
+            if (size < 20) return false;
+            const unsigned c = u32(bytes + 4), n = u32(bytes + 8), d = u32(bytes + 12);
+            if (c > UINT16_MAX || n > UINT16_MAX
+                || uint64_t(20) + uint64_t(c) * 2 + uint64_t(n) * 8 + uint64_t(d) * 6 != size
+                || u32(bytes) > UINT16_MAX) return false;
+            NavigationState candidate;
+            if (!candidate.allocate(c, n, d)) return false;
+            candidate.selected = uint16_t(u32(bytes)); candidate.center = int32_t(u32(bytes + 16));
+            unsigned offset = 20;
+            for (unsigned i = 0; i < c; ++i, offset += 2) candidate.writable_cursors()[i] = u16(bytes + offset);
+            for (unsigned i = 0; i < n; ++i, offset += 8) {
+                candidate.writable_current()[i] = int32_t(u32(bytes + offset));
+                candidate.writable_last_sent()[i] = int32_t(u32(bytes + offset + 4));
+            }
+            for (unsigned i = 0; i < d; ++i, offset += 6)
+                candidate.writable_history()[i] = {u16(bytes + offset), int32_t(u32(bytes + offset + 2))};
+            *this = candidate;
+            return true;
+        }
+    private:
+        friend class Controller;
+        static void put16(uint8_t *bytes, uint16_t value) { bytes[0] = uint8_t(value); bytes[1] = uint8_t(value >> 8); }
+        struct Allocation { MemoryBuffer block; unsigned references = 1; };
+        Allocation *allocation_ = nullptr;
+        bool allocate(unsigned c, unsigned n, unsigned d) {
+            cycles = c; instruments = n; depth = d;
+            const uint64_t required = uint64_t(c) * 2 + uint64_t(n) * 8 + uint64_t(d) * sizeof(ProgramHistory);
+            if (required > UINT_MAX - sizeof(Allocation)) { valid = false; return false; }
+            const unsigned bytes = unsigned(required);
+            if (!bytes) return true;
+            MemoryBuffer block;
+            if (!block.resize(sizeof(Allocation) + bytes)) { valid = false; return false; }
+            allocation_ = new (block.data) Allocation;
+            allocation_->block.swap(block);
+            history = reinterpret_cast<ProgramHistory *>(allocation_->block.data + sizeof(Allocation));
+            current = reinterpret_cast<const int *>(history + d); last_sent = current + n;
+            cursors = reinterpret_cast<const uint16_t *>(last_sent + n);
+            return true;
+        }
+        void copy(const NavigationState &other) {
+            selected = other.selected; depth = other.depth; cycles = other.cycles; instruments = other.instruments; center = other.center;
+            cursors = other.cursors; history = other.history; current = other.current; last_sent = other.last_sent;
+            valid = other.valid; allocation_ = other.allocation_; if (allocation_) ++allocation_->references;
+        }
+        void release() {
+            if (!allocation_ || --allocation_->references) return;
+            MemoryBuffer block; block.swap(allocation_->block); allocation_->~Allocation(); allocation_ = nullptr;
+        }
+        uint16_t *writable_cursors() { return const_cast<uint16_t *>(cursors); }
+        ProgramHistory *writable_history() { return const_cast<ProgramHistory *>(history); }
+        int *writable_current() { return const_cast<int *>(current); }
+        int *writable_last_sent() { return const_cast<int *>(last_sent); }
     };
     NavigationState navigation() const {
-        NavigationState state; state.selected = uint16_t(selected_); state.depth = depth_; state.center = center_;
-        std::memcpy(state.cursors, cursors_, sizeof(cursors_));
-        std::memcpy(state.history, history_, sizeof(history_));
-        std::memcpy(state.current, current_, sizeof(current_));
-        std::memcpy(state.last_sent, last_sent_, sizeof(last_sent_)); return state;
+        NavigationState state; state.selected = uint16_t(selected_); state.center = center_;
+        if (!state.allocate(document_.patch_cycles(), document_.instruments(), depth_)) return state;
+        if (document_.patch_cycles()) std::memcpy(state.writable_cursors(), cursors_, document_.patch_cycles() * sizeof(uint16_t));
+        unsigned history_index = 0;
+        for (const auto &entry : history_) state.writable_history()[history_index++] = entry;
+        if (document_.instruments()) {
+            std::memcpy(state.writable_current(), current_, document_.instruments() * sizeof(int));
+            std::memcpy(state.writable_last_sent(), last_sent_, document_.instruments() * sizeof(int));
+        }
+        return state;
     }
     bool navigation(const NavigationState &state) {
+        if (!state.valid || state.cycles != document_.patch_cycles() || state.instruments != document_.instruments()
+            || (state.cycles && !state.cursors) || (state.depth && !state.history)
+            || (state.instruments && (!state.current || !state.last_sent))) return false;
         if (state.selected >= document_.patch_cycles() && (document_.patch_cycles() || state.selected)) return false;
-        if (state.depth > history_capacity || state.center < -1 || (state.center >= 0 && unsigned(state.center) >= document_.patches())) return false;
+        if (state.center < -1 || (state.center >= 0 && unsigned(state.center) >= document_.patches())) return false;
         for (unsigned i = 0; i < document_.patch_cycles(); ++i)
             if (state.cursors[i] >= u16(document_.patch_cycle(i) + 66)) return false;
         for (unsigned i = 0; i < state.depth; ++i) {
@@ -37,15 +126,37 @@ public:
             for (int p : {state.current[i], state.last_sent[i]})
                 if (p < -1 || (p >= 0 && (unsigned(p) >= document_.patches() || u16(document_.patch(unsigned(p))) != i))) return false;
         }
+        if (!history_.reserve(state.depth)) return false;
         selected_ = state.selected; depth_ = state.depth; center_ = state.center;
-        std::memcpy(cursors_, state.cursors, sizeof(cursors_));
-        std::memcpy(history_, state.history, sizeof(history_));
-        std::memcpy(current_, state.current, sizeof(current_));
-        std::memcpy(last_sent_, state.last_sent, sizeof(last_sent_)); return true;
+        if (document_.patch_cycles()) std::memcpy(cursors_, state.cursors, document_.patch_cycles() * sizeof(uint16_t));
+        history_.clear();
+        for (unsigned i = 0; i < state.depth; ++i) (void)history_.append(state.history[i]);
+        if (document_.instruments()) {
+            std::memcpy(current_, state.current, document_.instruments() * sizeof(int));
+            std::memcpy(last_sent_, state.last_sent, document_.instruments() * sizeof(int));
+        }
+        return true;
     }
     Controller(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner = 8)
         : hardware_(hardware), executor_(hardware, outputs, sources, owner) {}
-    void deactivate() { executor_.cancel(); sending_ = -1; cancel_gesture(); document_ = Document(); }
+    ~Controller() { executor_.cancel(); }
+    bool prepare(const Document &document) {
+        cancel_preparation();
+        const unsigned instruments = document.valid() ? document.instruments() : 0;
+        const unsigned cycles = document.valid() ? document.patch_cycles() : 0;
+        if (instruments == state_instruments_ && cycles == state_cycles_) return true;
+        if (!pending_state_.resize(instruments * 2 * sizeof(int) + cycles * 2 * sizeof(uint16_t))) return false;
+        state_prepared_ = true;
+        return true;
+    }
+    void cancel_preparation() { pending_state_.clear(); state_prepared_ = false; }
+    void deactivate() {
+        executor_.cancel(); sending_ = -1; cancel_gesture(); document_ = Document();
+        state_.clear(); cancel_preparation(); state_instruments_ = state_cycles_ = 0;
+        history_.release();
+        selected_ = depth_ = preview_selected_ = preview_depth_ = 0; center_ = -1;
+        current_ = last_sent_ = nullptr; cursors_ = preview_cursors_ = nullptr;
+    }
     bool busy() const { return executor_.busy(); }
     void runtime_brightness(uint8_t value) { brightness_ = value; }
     PatchExecutor &executor() { return executor_; }
@@ -53,7 +164,7 @@ public:
         previewing_ = enabled;
         if (enabled) {
             preview_selected_ = selected_; preview_depth_ = depth_;
-            std::memcpy(preview_cursors_, cursors_, sizeof(cursors_));
+            if (state_cycles_) std::memcpy(preview_cursors_, cursors_, state_cycles_ * sizeof(uint16_t));
         }
     }
     bool preview_state(unsigned operation, uint32_t) {
@@ -88,6 +199,7 @@ public:
         selected_ = u16(document_.patch(a.patch) + 2);
         cursors_[selected_] = a.patch - u16(document_.patch_cycle(selected_) + 64);
         --depth_;
+        history_.pop_back();
         render();
     }
     void cancel_gesture() { release_c(); held_ = 0; reverse_ = false; }
@@ -95,10 +207,22 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(controller_activate)
 #endif
-    void activate(const Document &document, bool configure = true) {
+    bool activate(const Document &document, bool configure = true) {
+        if (!state_prepared_ && !prepare(document)) { hardware_.error("Controller memory unavailable"); return false; }
         executor_.cancel(); sending_ = -1;
         cancel_gesture();
+        if (state_prepared_) { state_.swap(pending_state_); cancel_preparation(); }
+        state_instruments_ = document.instruments(); state_cycles_ = document.patch_cycles();
+        if (state_.data) {
+            current_ = reinterpret_cast<int *>(state_.data); last_sent_ = current_ + state_instruments_;
+            cursors_ = reinterpret_cast<uint16_t *>(last_sent_ + state_instruments_);
+            preview_cursors_ = cursors_ + state_cycles_;
+        }
         document_ = document;
+        brightness_ = document.brightness(); selected_ = depth_ = 0;
+        history_.release();
+        for (unsigned i = 0; i < state_cycles_; ++i) cursors_[i] = 0;
+        clear_programs(); center_ = -1; held_ = 0; reverse_ = false;
         if (configure) {
             hardware_.counters.reset();
             hardware_.configure_midi_streams(document);
@@ -113,15 +237,9 @@ public:
             hardware_.set_movies(document.movie_keys(false), document.movies(false), document.movie_keys(true), document.movies(true));
             hardware_.set_splash(document.splash(), document.screensaver_timeout());
         }
-        brightness_ = document.brightness();
-        selected_ = depth_ = 0;
-        for (auto &c : cursors_) c = 0;
-        for (auto &p : current_) p = -1;
-        for (auto &p : last_sent_) p = -1;
-        center_ = -1;
-        held_ = 0; reverse_ = false;
         if (configure) hardware_.configure_pages(document);
         render();
+        return true;
     }
     // These six application actions are independent of physical inputs. Target
     // control bindings supply the action index for each declared input.
@@ -201,10 +319,11 @@ public:
             unsigned p = candidate();
             if (already_sent(p)) return true;
             NavigationState before = navigation();
+            if (!before.valid || depth_ == UINT_MAX || !history_.reserve(depth_ + 1)) { hardware_.error("Navigation memory unavailable"); return false; }
             if (u16(document_.patch(p)) == 65535) {
                 depth_ = 0;
-                for (auto &v : current_) v = -1;
-                for (auto &v : last_sent_) v = -1;
+                history_.clear();
+                clear_programs();
             }
             if (!executor_.start(document_, document_.browser_root(p), false, true)) { navigation(before); return false; }
             sending_ = int(p); undoing_ = false;
@@ -223,8 +342,8 @@ public:
     const Document &document() const { return document_; }
     void external_selection() {
         cancel_gesture(); depth_ = 0; center_ = -1;
-        for (auto &p : current_) p = -1;
-        for (auto &p : last_sent_) p = -1;
+        history_.clear();
+        clear_programs();
     }
 private:
     unsigned counter_revision_ = 0;
@@ -235,12 +354,14 @@ private:
     Hardware &hardware_;
     PatchExecutor executor_;
     Document document_;
-    ProgramHistory history_[history_capacity] = {};
-    uint16_t cursors_[max_patch_cycles] = {};
-    uint16_t preview_cursors_[max_patch_cycles] = {};
-    int current_[max_instruments] = {};
+    CheckedList<ProgramHistory> history_;
+    MemoryBuffer state_, pending_state_;
+    unsigned state_instruments_ = 0, state_cycles_ = 0;
+    bool state_prepared_ = false;
+    uint16_t *cursors_ = nullptr, *preview_cursors_ = nullptr;
+    int *current_ = nullptr;
     // Unlike undo state, this changes only after a successful MIDI send.
-    int last_sent_[max_instruments] = {};
+    int *last_sent_ = nullptr;
     unsigned selected_ = 0, depth_ = 0, held_ = 0;
     unsigned preview_selected_ = 0, preview_depth_ = 0;
     int center_ = -1;
@@ -249,6 +370,9 @@ private:
     bool repeating_[2] = {}, reverse_ = false;
     bool c_held_ = false, flashing_ = false, undoing_ = false, previewing_ = false;
     uint8_t brightness_ = 192;
+    void clear_programs() {
+        for (unsigned i = 0; i < state_instruments_; ++i) current_[i] = last_sent_[i] = -1;
+    }
     bool move(unsigned operation, unsigned &selected, uint16_t *cursors) const {
         if (!document_.valid() || !document_.patch_cycles()) return false;
         if (operation == 5 || operation == 6)
@@ -292,8 +416,8 @@ private:
             if (flashing_) { flashing_ = false; hardware_.set_brightness(brightness_); }
             if (executor_.started()) {
                 depth_ = 0; center_ = -1;
-                for (auto &p : current_) p = -1;
-                for (auto &p : last_sent_) p = -1;
+                history_.clear();
+                clear_programs();
                 if (executor_.status() == PatchExecutor::Status::unknown) {
                     render(); hardware_.error("Remote state unknown");
                 }
@@ -303,11 +427,7 @@ private:
         if (undoing_) { complete_undo(); render(); return; }
         unsigned p = unsigned(sending_), instrument = u16(document_.patch(p));
         if (instrument != 65535) {
-            if (depth_ == history_capacity) {
-                for (unsigned i = 1; i < depth_; ++i) history_[i - 1] = history_[i];
-                --depth_;
-            }
-            history_[depth_++] = {uint16_t(p), current_[instrument]};
+            (void)history_.append({uint16_t(p), current_[instrument]}); ++depth_;
             current_[instrument] = last_sent_[instrument] = int(p);
         }
         center_ = int(p); sending_ = -1;
@@ -321,6 +441,7 @@ private:
         selected_ = u16(document_.patch(a.patch) + 2);
         cursors_[selected_] = a.patch - u16(document_.patch_cycle(selected_) + 64);
         --depth_;
+        history_.pop_back();
         sending_ = -1; scroll(0, true);
     }
     void pane(unsigned slot, int index) {
@@ -357,4 +478,5 @@ private:
         pane(2, depth_ ? history_[depth_ - 1].previous : -1);
     }
 };
+static_assert(sizeof(void *) != 4 || sizeof(Controller) == 360, "Update layout.estimate_ram for the Controller ABI");
 } // namespace cntrl

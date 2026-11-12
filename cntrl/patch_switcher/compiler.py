@@ -576,10 +576,6 @@ def compile_show(
         )
     except (OSError, ValueError) as error:
         raise CompilationError(errors + [str(error)]) from error
-    if generated:
-        from ..fonts.assets import validate_font_count
-
-        validate_font_count(screen_records, display_records)
     if assets is not None:
         assets.update(generated)
     records = [r + struct.pack('<3H', *references[i]) for i, r in enumerate(records)]
@@ -660,7 +656,16 @@ def compile_show(
             if show.auxiliary_switches.get(j) == 'combined'
         ),
         sum(p.ram2_bytes for p in show.pages.values())
-        + midi_processing.estimate_ram(stream_settings)
+        + display.estimate_font_ram(screen_records, display_records, generated)
+        + layout.estimate_ram(
+            show.pages,
+            len(instruments),
+            len(patch_cycles),
+            switches=bool(target.max_switches),
+        )
+        + midi_processing.estimate_ram(
+            stream_settings, endpoint_count=len(target.midi_endpoints)
+        )
         + looper.estimate_ram(looper_settings)
         + arpeggiator.estimate_ram(arpeggiator_settings),
         crc32(setup_name_bytes),

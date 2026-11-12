@@ -2,9 +2,10 @@
 #define CNTRL_DEVICE_FILESYSTEM_H
 #include <SD.h>
 #include <cntrl/filesystem.h>
+#include <cntrl/memory.h>
 
 namespace cntrl::device {
-class SdFile : public files::File {
+class SdFile : public files::File, public CheckedHeapAllocation {
 public:
     bool open(const char *path, files::Mode mode) override {
         close();
@@ -38,7 +39,7 @@ public:
 private:
     FsFile file_;
 };
-class SdDirectory : public files::Directory {
+class SdDirectory : public files::Directory, public CheckedHeapAllocation {
 public:
     bool open(const char *path) override {
         close(); failed_ = false; directory_ = SD.sdfs.open(path, O_RDONLY);
@@ -67,8 +68,8 @@ public:
     bool rename(const char *from, const char *to) override { return SD.sdfs.rename(from, to); }
     bool remove(const char *path) override { return SD.sdfs.remove(path); }
     bool available() const override { return SD.sdfs.card() && !SD.sdfs.card()->errorCode(); }
-    std::unique_ptr<files::Directory> directory() override { return std::make_unique<SdDirectory>(); }
-    std::unique_ptr<files::File> file() override { return std::make_unique<SdFile>(); }
+    std::unique_ptr<files::Directory> directory() override { return std::unique_ptr<files::Directory>(new (std::nothrow) SdDirectory); }
+    std::unique_ptr<files::File> file() override { return std::unique_ptr<files::File>(new (std::nothrow) SdFile); }
 };
 } // namespace cntrl::device
 #endif

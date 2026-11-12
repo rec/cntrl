@@ -84,6 +84,7 @@ void disconnect_and_late_service_discard_captured_traffic() {
 }
 }
 int main() {
+    cntrl::memory_budget = 524288;
     held_notes_split_and_use_original_velocity(); controls_are_emitted_once_at_mirrored_time();
     sysex_crossing_boundary_stays_complete_and_ordered(); finite_reverse_waits_for_clip_end();
     disconnect_and_late_service_discard_captured_traffic();

@@ -1,6 +1,7 @@
 #pragma once
 #include "midi_bridge.h"
 #include "memory.h"
+#include "checked_list.h"
 #include <algorithm>
 #include <cstdio>
 #include <new>
@@ -19,41 +20,47 @@ public:
     };
     bool open(uint32_t now) {
         close();
-        if (!buffer_.resize(sizeof(Storage))) return false;
-        storage_ = new(buffer_.data) Storage(); previous_ = now;
+        active_ = true; previous_ = now;
         elapsed_ = next_ = cursor_ = 0; scan_ = 0; frozen_ = advanced_ = false;
+        dropped_ = 0;
         return true;
     }
-    void close() { storage_ = nullptr; buffer_.clear(); }
-    bool active() const { return storage_; }
+    void close() { active_ = false; entries_.release(); decoders_.release(); connections_.release(); }
+    bool active() const { return active_; }
     bool frozen() const { return frozen_; }
     bool advanced() const { return advanced_; }
-    uint64_t oldest() const { return next_ > capacity ? next_ - capacity : 0; }
+    uint64_t oldest() const { return next_ - entries_.size(); }
     uint64_t tail() const { return next_; }
     uint64_t cursor() const { return cursor_; }
     uint64_t overwritten() const { return oldest(); }
-    unsigned memory_bytes() const { return sizeof(Storage); }
+    unsigned memory_bytes() const {
+        return entries_.memory_bytes() + decoders_.memory_bytes() + connections_.memory_bytes();
+    }
+    unsigned dropped() const { return dropped_; }
     const Entry *entry(uint64_t sequence) const {
-        return storage_ && sequence >= oldest() && sequence < next_ ? &storage_->entries[sequence % capacity] : nullptr;
+        return active_ && sequence >= oldest() && sequence < next_ ? &entries_[unsigned(sequence - oldest())] : nullptr;
     }
     void freeze() { frozen_ = !frozen_; cursor_ = next_; advanced_ = false; }
     void browse(bool backward) {
-        if (!storage_ || !frozen_ || next_ == oldest()) return;
+        if (!active_ || !frozen_ || next_ == oldest()) return;
         if (backward && cursor_ > oldest() + 1) --cursor_;
         if (!backward && cursor_ < next_) ++cursor_;
     }
     void byte(Direction direction, unsigned route, unsigned cable, uint8_t value, uint32_t now, bool diagnostic_traffic = false) {
-        if (!storage_) return;
+        if (!active_) return;
         time(now);
         if (route >= max_routes || cable >= 16) {
             append(direction, route, cable, raw, &value, 1); return;
         }
-        Decoder &d = storage_->decoders[slot(direction, route, cable)];
-        d.diagnostic_traffic = diagnostic_traffic;
         if (value >= 0xf8) {
             append(direction, route, cable, uint8_t((diagnostic_traffic ? diagnostic : 0) | (value == 0xf9 || value == 0xfd ? raw : 0)), &value, 1);
             return;
         }
+        Context *context = nullptr;
+        for (auto &c : decoders_) if (c.direction == direction && c.route == route && c.cable == cable) { context = &c; break; }
+        if (!context) context = decoders_.append({direction, route, cable, {}});
+        if (!context) { ++dropped_; return; }
+        Decoder &d = context->decoder; d.diagnostic_traffic = diagnostic_traffic;
         if ((value & 0x80) && !(value == 0xf7 && d.parser.sysex())) {
             if (d.used || d.parser.sysex()) flush(d, direction, route, cable);
             d.parser.reset();
@@ -78,31 +85,36 @@ public:
         for (unsigned i = 0; i < packet.size(); ++i) byte(direction, route, cable, packet.bytes[i], now, diagnostic_traffic);
     }
     void connection(unsigned route, bool present, uint64_t identity, uint64_t generation, uint32_t now) {
-        if (!storage_ || route >= max_routes) return;
+        if (!active_ || route >= max_routes) return;
         time(now);
-        auto &c = storage_->connections[route];
+        Connection *connection = nullptr;
+        for (auto &c : connections_) if (c.route == route) { connection = &c; break; }
+        if (!connection) connection = connections_.append({route, 0, 0, false, false});
+        if (!connection) { ++dropped_; return; }
+        auto &c = *connection;
         if (c.known && (c.present != present || c.identity != identity || c.generation != generation)) {
-            for (unsigned direction = 0; direction < 2; ++direction) for (unsigned cable = 0; cable < 16; ++cable) {
-                auto &d = storage_->decoders[slot(Direction(direction), route, cable)];
-                if (d.used || d.parser.sysex()) flush(d, Direction(direction), route, cable);
-                d = Decoder();
+            for (auto &context : decoders_) if (context.route == route) {
+                auto &d = context.decoder;
+                if (d.used || d.parser.sysex()) flush(d, context.direction, route, context.cable);
             }
+            decoders_.erase_if([route](const Context &context) { return context.route == route; });
             append(Direction::both, route, 0, present ? connected : disconnected, nullptr, 0);
         }
-        c = {identity, generation, true, present};
+        c = {route, identity, generation, true, present};
     }
     void poll(uint32_t now) {
-        if (!storage_) return;
+        if (!active_) return;
         time(now);
         // Bound maintenance independently of message rates and endpoint count.
-        for (unsigned i = 0; i < 8; ++i) {
-            unsigned index = scan_++ % (2 * max_routes * 16);
-            auto &d = storage_->decoders[index];
+        for (unsigned i = 0; i < std::min(8u, decoders_.size()); ++i) {
+            auto &context = decoders_[scan_++ % decoders_.size()];
+            auto &d = context.decoder;
             if ((d.used || d.parser.sysex()) && uint32_t(now - d.last) >= 250000) {
-                flush(d, Direction(index / (max_routes * 16)), index / 16 % max_routes, index % 16);
+                flush(d, context.direction, context.route, context.cable);
                 d = Decoder();
             }
         }
+        decoders_.trim(8);
     }
     static void describe(const Entry &e, char *text, unsigned size) {
         if (e.flags & connected) { std::snprintf(text, size, "Connected / changed"); return; }
@@ -130,25 +142,27 @@ public:
     }
 private:
     struct Decoder { Parser parser; uint32_t last = 0; uint8_t bytes[3] = {}, used = 0, status = 0; bool diagnostic_traffic = false; };
-    struct Connection { uint64_t identity = 0, generation = 0; bool known = false, present = false; };
-    struct Storage { Entry entries[capacity]; Decoder decoders[2 * max_routes * 16]; Connection connections[max_routes]; };
-    static_assert(sizeof(Storage) <= 16 * 1024);
-    MemoryBuffer buffer_;
-    Storage *storage_ = nullptr;
+    struct Context { Direction direction; unsigned route, cable; Decoder decoder; };
+    struct Connection { unsigned route; uint64_t identity = 0, generation = 0; bool known = false, present = false; };
+    CheckedList<Entry> entries_;
+    CheckedList<Context> decoders_;
+    CheckedList<Connection> connections_;
+    bool active_ = false;
     uint64_t elapsed_ = 0, next_ = 0, cursor_ = 0;
     uint32_t previous_ = 0;
-    unsigned scan_ = 0;
+    unsigned scan_ = 0, dropped_ = 0;
     bool frozen_ = false, advanced_ = false;
-    static unsigned slot(Direction direction, unsigned route, unsigned cable) { return (unsigned(direction) * max_routes + route) * 16 + cable; }
     void time(uint32_t now) { elapsed_ += uint32_t(now - previous_); previous_ = now; }
     void flush(Decoder &d, Direction direction, unsigned route, unsigned cable) {
         append(direction, route, cable, uint8_t(raw | (d.parser.sysex() ? sysex : 0) | (d.diagnostic_traffic ? diagnostic : 0)), d.bytes, d.used);
         d.used = 0;
     }
     void append(Direction direction, unsigned route, unsigned cable, uint8_t flags, const uint8_t *bytes, unsigned size) {
-        Entry &e = storage_->entries[next_ % capacity]; e = Entry();
+        Entry e;
         e.time = elapsed_; e.direction = direction; e.route = uint8_t(route); e.cable = uint8_t(cable); e.flags = flags; e.size = uint8_t(size);
         if (size) std::memcpy(e.bytes, bytes, size);
+        if (entries_.size() == capacity) entries_.erase(entries_.begin());
+        if (!entries_.append(e)) { ++dropped_; return; }
         ++next_;
         if (!frozen_) cursor_ = next_;
         else if (next_ > capacity && cursor_ <= oldest()) { cursor_ = oldest() + 1; advanced_ = true; }

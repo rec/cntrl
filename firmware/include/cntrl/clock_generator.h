@@ -1,6 +1,5 @@
 #pragma once
 #include "midi_bridge.h"
-#include <vector>
 
 namespace cntrl {
 namespace midi {
@@ -29,26 +28,18 @@ public:
 
     void start(uint32_t now, unsigned outputs, bool resume) {
         if (running_ || stopping()) return;
-        unsigned routes = 0;
-        for (unsigned mask = outputs; mask; mask >>= 1) ++routes;
-        pending_.assign(routes, 0);
+        start_pending_ = outputs; stop_pending_ = 0; resume_ = resume;
         running_ = true; active_ = outputs; previous_ = now; phase_ = 0;
         beat_previous_ = now;
         if (!resume) { beats_ = beat_remainder_ = 0; ++restart_; }
         skipped = blocked = late_us = 0;
-        for (unsigned i = 0; i < pending_.size(); ++i)
-            if (outputs & (1u << i)) pending_[i] = resume ? 0xfb : 0xfa;
     }
     void stop() {
-        for (unsigned i = 0; i < pending_.size(); ++i)
-            if (active_ & (1u << i)) pending_[i] = 0xfc;
+        stop_pending_ = active_; start_pending_ = 0;
         active_ = 0; running_ = false;
     }
     unsigned stopping() const {
-        unsigned mask = 0;
-        for (unsigned i = 0; i < pending_.size(); ++i)
-            if (pending_[i] == 0xfc) mask |= 1u << i;
-        return mask;
+        return stop_pending_;
     }
     void poll(uint32_t now, unsigned available, midi::Sink &sink) {
         advance_beats(now);
@@ -66,11 +57,13 @@ public:
             }
         }
         previous_ = now;
-        for (unsigned i = 0; i < pending_.size(); ++i) {
+        start_pending_ &= available; stop_pending_ &= available;
+        for (unsigned i = 0, mask = active_ | start_pending_ | stop_pending_; mask; ++i, mask >>= 1) {
             unsigned bit = 1u << i;
-            if (!(available & bit)) { pending_[i] = 0; continue; }
-            if (pending_[i] && sink.submit(i, {15, {pending_[i], 0, 0}})) pending_[i] = 0;
-            if (tick && (active_ & bit) && (pending_[i] || !sink.submit(i, {15, {0xf8, 0, 0}}))) ++blocked;
+            if (!(available & bit)) continue;
+            const uint8_t pending = stop_pending_ & bit ? 0xfc : start_pending_ & bit ? (resume_ ? 0xfb : 0xfa) : 0;
+            if (pending && sink.submit(i, {15, {pending, 0, 0}})) { start_pending_ &= ~bit; stop_pending_ &= ~bit; }
+            if (tick && (active_ & bit) && (((start_pending_ | stop_pending_) & bit) || !sink.submit(i, {15, {0xf8, 0, 0}}))) ++blocked;
         }
     }
 private:
@@ -83,7 +76,8 @@ private:
         beats_ += (elapsed / quarter_us_) * (uint64_t(1) << 32) + numerator / quarter_us_;
         beat_remainder_ = numerator % quarter_us_;
     }
-    std::vector<uint8_t> pending_;
+    unsigned start_pending_ = 0, stop_pending_ = 0;
+    bool resume_ = false;
     uint64_t phase_ = 0;
     uint32_t previous_ = 0, quarter_us_ = 500000;
     unsigned active_ = 0;

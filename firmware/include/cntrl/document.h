@@ -282,10 +282,9 @@ public:
             if (length - names < 14 || u16(bytes + names + 4) != 1 || !u16(bytes + names + 6)
                 || !u16(bytes + names + 8) || (u16(bytes + names + 8) & ~input_routes)
                 || !u16(bytes + names + 10) || (u16(bytes + names + 10) & ~output_routes)
-                || !u16(bytes + names + 12) || u16(bytes + names + 12) > 4096) return false;
+                || !u16(bytes + names + 12)) return false;
             unsigned mask = u16(bytes + names + 10);
             if (!output_mask_valid(mask,bytes + meta + trs_modes_offset,bytes[19],hardware)
-                || u32(bytes + meta + scrolling_offset + 6) < 156u * u16(bytes + names + 12) + 33472u
                 || hardware.memory_capacity() < hardware.memory_runtime()
                 || u32(bytes + meta + scrolling_offset + 6) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
             for (const auto &connection : hardware.midi_outputs()) if (connection.port != midi::no_port
@@ -304,12 +303,16 @@ public:
             uint64_t gate = uint64_t(u32(p + 26)) | uint64_t(u32(p + 30)) << 32;
             if (p[4] != 1 || p[5] > 1 || p[6] > 8 || p[7] > 15 || !u16(p + 8)
                 || !u16(p + 10) || (u16(p + 10) & ~input_routes) || !u16(p + 12) || (u16(p + 12) & ~output_routes)
-                || !u16(p + 14) || u16(p + 14) > 4096 || u16(p + 16) < 2
+                || !u16(p + 14) || u16(p + 16) < 2
                 || !gate || gate > step || step > (uint64_t(64) << 32)
                 || !u32(p + 42) || uint64_t(u32(p + 34)) + u32(p + 38) > u32(p + 42) || !u32(p + 46)
                 || !output_mask_valid(u16(p + 12),bytes + meta + trs_modes_offset,bytes[19],hardware)) return false;
-            uint64_t required = uint64_t(u16(p + 14)) * 1536 + 32768;
-            if (looper) required += 156u * u16(bytes + looper + 12) + 33472u;
+            unsigned outputs = 0, channels = 0;
+            for (unsigned mask = u16(p + 12); mask; mask &= mask - 1) ++outputs;
+            for (unsigned mask = u16(p + 8); mask; mask &= mask - 1) ++channels;
+            const uint64_t events = u16(p + 14);
+            uint64_t required = p[5] ? 104u * outputs
+                : 64u * events + 56u * events * outputs + 496u * outputs + 412u * outputs * channels + 16;
             if (u32(bytes + meta + scrolling_offset + 6) < required || hardware.memory_capacity() < hardware.memory_runtime()
                 || u32(bytes + meta + scrolling_offset + 6) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
             arpeggiator = names; names += 50;
@@ -331,14 +334,15 @@ public:
         if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count,looper != 0)) return false;
         if (pickup && u16(bytes + pickup + 4) != u16(bytes + graph + 8)) return false;
         if (streams) {
-            std::vector<midi::OutputConnection> configured;
+            CheckedArray<midi::OutputConnection> configured;
+            if (!configured.reserve(hardware.midi_outputs().count)) return false;
             for (auto connection : hardware.midi_outputs()) {
                 connection.input = bool(input_routes & (1u << connection.route));
                 connection.output = bool(output_routes & (1u << connection.route));
                 if (connection.port != midi::no_port
                     && !midi::midi_output(midi::TrsMode(bytes[meta + trs_modes_offset + connection.port])))
                     connection.input = connection.output = false;
-                configured.push_back(connection);
+                if (!configured.append(connection)) return false;
             }
             if (!midi::Streams::valid(bytes + streams, u32(bytes + streams + 4),
                 {configured.data(), unsigned(configured.size())}, u16(bytes + graph + 8))) return false;
@@ -484,24 +488,31 @@ public:
         return policy != 1;
     }
     unsigned pickup_pairing_ms() const { return pickup_ ? u16(data_ + pickup_ + 7) : 2; }
-    unsigned stream_scope(unsigned root) const {
-        std::vector<unsigned> pending{root};
-        std::vector<bool> visited(nodes(), false);
+    bool stream_scope(unsigned root, unsigned &scope) const {
+        unsigned edges = 1;
+        for (unsigned i = 0; i < nodes(); ++i) {
+            const uint8_t *record = node(i);
+            if (record[0] == 5) edges += u16(record + 4);
+            else if (record[0] == 10 || (record[0] == 6 && u16(record + 4) == 65535)) ++edges;
+        }
+        CheckedArray<unsigned> pending;
+        CheckedArray<uint8_t> visited;
+        if (!pending.reserve(edges) || !visited.resize(nodes()) || !pending.append(root)) return false;
         while (!pending.empty()) {
-            unsigned index = pending.back(); pending.pop_back();
+            unsigned index = pending.back(); pending.resize(pending.size() - 1);
             if (index >= nodes() || visited[index]) continue;
             visited[index] = true;
             const uint8_t *record = node(index), *p = record + 4;
-            if (record[0] == 12) return index;
-            if (record[0] == 10) pending.push_back(u16(p));
+            if (record[0] == 12) { scope = index; return true; }
+            if (record[0] == 10) { if (!pending.append(u16(p))) return false; }
             else if (record[0] == 5) {
-                for (unsigned i = u16(p); i; --i) pending.push_back(u16(p + 2 + (i - 1) * 2));
+                for (unsigned i = u16(p); i; --i) if (!pending.append(u16(p + 2 + (i - 1) * 2))) return false;
             } else if (record[0] == 6 && u16(p) == 65535) {
                 int child = named_patch(reinterpret_cast<const char *>(p + 2));
-                if (child >= 0) pending.push_back(unsigned(child));
+                if (child >= 0 && !pending.append(unsigned(child))) return false;
             }
         }
-        return midi::Streams::system_scope;
+        scope = midi::Streams::system_scope; return true;
     }
     const uint8_t *switch_assignment(unsigned i) const { return data_ + graph_ + 16 + nodes() * 4 + patches_ * 2 + i * 72; }
     unsigned nodes() const { return u16(data_ + graph_ + 8); }
@@ -633,9 +644,22 @@ public:
         return read_graphics(p);
     }
     bool prepare_fonts(Hardware &hardware) const {
-        hardware.begin_fonts();
-        for (unsigned i = 0; i < 3u + u16(data_ + styles_ - 12); ++i) {
-            const uint8_t *p = i < 3 ? data_ + 28 + i * 16 : data_ + styles_ + (i - 3) * 16;
+        const unsigned styles = 3u + u16(data_ + styles_ - 12);
+        auto style = [&](unsigned i) { return i < 3 ? data_ + 28 + i * 16 : data_ + styles_ + (i - 3) * 16; };
+        unsigned fonts = 0;
+        for (unsigned i = 0; i < styles; ++i) {
+            const auto *p = style(i);
+            if (p[0] != 255) continue;
+            bool duplicate = false;
+            for (unsigned j = 0; j < i; ++j) {
+                const auto *previous = style(j);
+                if (previous[0] == 255 && previous[1] == p[1] && u32(previous + 12) == u32(p + 12)) { duplicate = true; break; }
+            }
+            fonts += !duplicate;
+        }
+        if (!hardware.begin_fonts(fonts)) return false;
+        for (unsigned i = 0; i < styles; ++i) {
+            const uint8_t *p = style(i);
             if (p[0] == 255 && !hardware.stage_font(u32(p + 12), p[1])) {
                 hardware.finish_fonts(false); return false;
             }

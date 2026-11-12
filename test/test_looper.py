@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import compiler, looper, models, resolved
+from cntrl.patch_switcher import (
+    compiler,
+    layout,
+    looper,
+    midi_processing,
+    models,
+    resolved,
+)
 
 
 @pytest.fixture
@@ -37,7 +44,19 @@ def test_looper_views_share_one_budget_and_round_trip(target: models.Target) -> 
         settings is not None and settings.channels == [1, 3] and settings.events == 512
     )
     config = looper.pack(models.Setup.model_validate(source), target)
-    expected = looper.estimate_ram(config)
+    expected = (
+        looper.estimate_ram(config)
+        + layout.estimate_ram(
+            models.Setup.model_validate(source).pages,
+            0,
+            0,
+            switches=bool(target.max_switches),
+        )
+        + midi_processing.estimate_ram(b'', endpoint_count=len(target.midi_endpoints))
+    )
+    assert resolved.arm_memory(data)['looper'] == looper.estimate_arm_ram(
+        config, capture_contexts=2
+    )
     instruments, cycles, patches = struct.unpack_from('<HHH', data, 12)
     metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
     assert (
@@ -47,9 +66,20 @@ def test_looper_views_share_one_budget_and_round_trip(target: models.Target) -> 
     source['pages']['other'] = {'type': 'midi-looper'}
     second = compiler.compile_show(source, {}, [], target)
     assert second.count(b'CLOP') == 1
+    additional_page = layout.estimate_ram(
+        models.Setup.model_validate(source).pages,
+        0,
+        0,
+        switches=bool(target.max_switches),
+    ) - layout.estimate_ram(
+        models.Setup.model_validate(exported).pages,
+        0,
+        0,
+        switches=bool(target.max_switches),
+    )
     assert (
         struct.unpack_from('<I', second, metadata + compiler.METADATA.size - 8)[0]
-        == expected
+        == expected + additional_page
     )
 
 
@@ -74,7 +104,7 @@ def test_a_looper_page_gets_the_default_shared_configuration(
     assert settings is not None and settings.events == 512
 
 
-@pytest.mark.parametrize('events', [0, 4097, True])
+@pytest.mark.parametrize('events', [0, 65536, True])
 def test_event_capacity_is_bounded(events: object) -> None:
     with pytest.raises(ValueError):
         models.LooperSettings.model_validate({'events': events})

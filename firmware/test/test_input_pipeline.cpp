@@ -126,7 +126,7 @@ static void raw_press_reaches_midi(std::vector<uint8_t> bytes, bool fast, uint32
     cntrl::Documents documents(setups, hardware, primary, hardware); cntrl::Songs songs(song_storage, hardware);
     {
         cntrl::ui::Application application(hardware, documents, primary, hardware, hardware, songs, hardware, true);
-        assert(application.prepare_pages(configuration.page_layout())); application.finish_pages(true);
+        assert(application.prepare_pages(configuration)); application.finish_pages(true);
         application.layout = configuration.page_layout(); primary.activate(configuration, false);
         constexpr cntrl::ui::ControlBinding bindings[] = {{2, "A"}, {1, "B"}, {0, "C"}, {5, "D"}, {4, "E"}, {3, "F"}};
         cntrl::ButtonState states[6];
@@ -152,31 +152,60 @@ static void controller_storage_preserves_active_pages_on_failure() {
     cntrl::memory_budget = initial + 8 * sizeof(cntrl::Controller);
     {
         cntrl::ui::Application application(hardware, documents, primary, hardware, hardware, songs, hardware, true);
-        uint8_t records[8 + 4 * 34] = {};
+        uint8_t records[8 + 5 * 34] = {};
         records[4] = 1;
         records[8 + 32] = cntrl::PageLayout::patch_switcher;
-        assert(application.prepare_pages({records})); application.finish_pages(true);
-        assert(cntrl::memory_used == initial);
+        assert(application.prepare_layout({records})); application.finish_pages(true);
+        const unsigned single = initial + unsigned(cntrl::memory_charge(4 * sizeof(const char *)));
+        assert(cntrl::memory_used == single);
         records[4] = 4;
         for (unsigned i = 1; i < 4; ++i) records[8 + i * 34 + 32] = cntrl::PageLayout::patch_switcher;
-        cntrl::memory_budget = initial;
-        assert(!application.prepare_pages({records})); application.finish_pages(false);
-        assert(&application.at(0) == &primary && cntrl::memory_used == initial);
+        cntrl::memory_budget = cntrl::memory_used;
+        assert(!application.prepare_layout({records})); application.finish_pages(false);
+        assert(&application.at(0) == &primary && cntrl::memory_used == single);
         cntrl::memory_budget = initial + 8 * sizeof(cntrl::Controller);
-        assert(application.prepare_pages({records})); application.finish_pages(false);
-        assert(cntrl::memory_used == initial);
-        assert(application.prepare_pages({records})); application.finish_pages(true);
-        assert(cntrl::memory_used == initial + 3 * sizeof(cntrl::Controller));
+        assert(application.prepare_layout({records})); application.finish_pages(false);
+        assert(cntrl::memory_used == single);
+        assert(application.prepare_layout({records})); application.finish_pages(true);
+        assert(cntrl::memory_used == initial + cntrl::memory_charge(7 * sizeof(const char *)) + cntrl::memory_charge(3 * sizeof(cntrl::Controller)));
         auto *fourth = &application.at(3);
         records[4] = 2; cntrl::memory_budget = cntrl::memory_used;
-        assert(!application.prepare_pages({records})); application.finish_pages(false);
+        assert(!application.prepare_layout({records})); application.finish_pages(false);
         assert(&application.at(3) == fourth);
+        records[4] = 5; records[8 + 4 * 34 + 32] = cntrl::PageLayout::patch_switcher;
+        cntrl::memory_budget = initial + 12 * sizeof(cntrl::Controller);
+        assert(application.prepare_layout({records})); application.finish_pages(true);
+        assert(&application.at(4) != &primary);
         records[4] = 1;
-        assert(application.prepare_pages({records})); application.finish_pages(true);
-        assert(cntrl::memory_used == initial);
+        cntrl::memory_budget = initial + 8 * sizeof(cntrl::Controller);
+        assert(application.prepare_layout({records})); application.finish_pages(true);
+        assert(cntrl::memory_used == single);
     }
     assert(cntrl::memory_used == initial);
     cntrl::memory_budget = previous_budget;
+}
+static void navigation_snapshots_are_counted_and_failure_preserves_state(const std::vector<uint8_t> &bytes) {
+    Hardware hardware;
+    cntrl::Document document;
+    assert(document.load(bytes.data(), unsigned(bytes.size()), hardware));
+    cntrl::Controller controller(hardware, hardware, hardware); hardware.controller = &controller;
+    assert(controller.activate(document, false));
+    const auto saved = controller.navigation();
+    assert(saved.valid && saved.cycles == document.patch_cycles() && saved.instruments == document.instruments());
+    cntrl::MemoryBuffer encoded;
+    assert(encoded.resize(saved.encoded_size()) && saved.encode(encoded.data, encoded.size));
+    cntrl::Controller::NavigationState restored;
+    assert(restored.decode(encoded.data, encoded.size));
+    assert(restored.cycles == saved.cycles && restored.instruments == saved.instruments && restored.depth == saved.depth);
+    const unsigned budget = cntrl::memory_budget, used = cntrl::memory_used;
+    cntrl::memory_budget = used;
+    const auto shared = saved;
+    assert(shared.cursors == saved.cursors && shared.current == saved.current && cntrl::memory_used == used);
+    assert(!controller.navigation().valid);
+    const auto *previous = restored.current;
+    assert(!restored.decode(encoded.data, encoded.size) && restored.current == previous);
+    assert(controller.navigation(saved));
+    cntrl::memory_budget = budget;
 }
 int main(int argc, char **argv) {
     {
@@ -184,6 +213,7 @@ int main(int argc, char **argv) {
         cntrl::memory_budget = initial + 16384;
         Hardware hardware;
         cntrl::PatchExecutor a(hardware, hardware, hardware, 8), b(hardware, hardware, hardware, 8);
+        const unsigned idle = cntrl::memory_used;
         cntrl::NavigationSnapshots snapshots;
         cntrl::Controller::NavigationState state; state.center = 17;
         assert(snapshots.put(a, state));
@@ -198,12 +228,13 @@ int main(int argc, char **argv) {
         assert(snapshots.put(b, state));
         assert(snapshots.find(a) == first && snapshots.find(b) != first);
         snapshots.erase(b);
-        snapshots.erase(a); assert(!snapshots.find(a) && cntrl::memory_used == initial);
+        snapshots.erase(a); assert(!snapshots.find(a) && cntrl::memory_used == idle);
         cntrl::memory_budget = budget;
     }
     controller_storage_preserves_active_pages_on_failure();
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex; std::vector<uint8_t> bytes;
     for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    navigation_snapshots_are_counted_and_failure_preserves_state(bytes);
     raw_press_reaches_midi(bytes, true, 0, false);
     raw_press_reaches_midi(bytes, true, 3, false);
     raw_press_reaches_midi(bytes, true, 0, true);

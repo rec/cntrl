@@ -8,7 +8,7 @@
 namespace cntrl::midi {
 struct LooperSettings {
     uint16_t inputs = 0xffff, channels = 0xffff, outputs = 1;
-    unsigned events = 512;
+    unsigned events = 512; // User-configurable arm admission limit, not idle storage.
 };
 
 class MidiLooper {
@@ -16,19 +16,19 @@ public:
     enum class State { empty, armed, recording, closing, playing, overdub_armed, overdubbing, preparing, stopped, launching, undo_pending, loading };
     enum class Error { none, busy, clock, capacity, memory, late, output, file, input };
     static constexpr uint64_t beat = uint64_t(1) << 32;
-    static constexpr unsigned ppqn = 3840, maximum_beats = 64, maximum_held = 32;
+    // The live looper contract supports sixteen four-beat bars per take.
+    static constexpr unsigned ppqn = 3840, maximum_beats = 64;
     MidiLooper(MidiFilePlayer &player, MidiFileRecorder &recorder) : player_(player), recorder_(recorder) {}
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_configure)
 #endif
     bool configure(const LooperSettings &settings, Sink &sink) {
         if (cleanup_pending_ && !sink.loop_cleaning()) { player_.release_prepared(sink); cleanup_pending_ = false; }
-        if (owned() || saving_ || !settings.events || settings.events > 4096 || !settings.inputs || !settings.channels || !settings.outputs) return false;
+        if (owned() || saving_ || !settings.events || settings.events > 65535 || !settings.inputs || !settings.channels || !settings.outputs) return false;
         configured_ = false;
+        release_buffers(sink);
         settings_ = settings;
-        for (auto &g : generations_) if (!g.source.reserve(settings.events * 8 + 64) || !g.index.reserve(settings.events * 32)) { release_buffers(sink); return fail(Error::memory); }
-        if (!scratch_.reserve(settings.events * 32) || !order_.resize(settings.events * sizeof(unsigned)) || !capture_.reserve()) { release_buffers(sink); return fail(Error::memory); }
-        if (!sink.reserve_loop_ownership(128 + maximum_held * 16)) { release_buffers(sink); return fail(Error::memory); }
+        sink_ = &sink;
         peak_events_ = peak_held_ = late_ = failed_outputs_ = maximum_late_us_ = capture_.discarded = 0;
         configured_ = true; shutdown_ = false; error_ = Error::none; return true;
     }
@@ -176,8 +176,8 @@ public:
 #endif
     bool load_begin(MidiFile &source) {
         if (!configured_ || saving_ || candidate_ < 3 || (state_ != State::empty && state_ != State::playing && state_ != State::stopped)) return fail(Error::busy);
-        stop();
         if (!prepare(500000)) return false;
+        player_.cancel(); cleanup_pending_ = true;
         import_source_ = &source; import_stage_ = import_cursor_ = 0;
         scratch_.reset(); state_ = State::loading; error_ = Error::none; return true;
     }
@@ -190,7 +190,7 @@ public:
     void input_connection(unsigned input) {
         if (!configured_) return;
         if (state_ == State::recording || state_ == State::overdubbing)
-            for (unsigned i = 0; i < held_count_; ++i) if (held_[i].source / 16 == input) { abort_candidate(Error::input); break; }
+            for (unsigned i = 0; i < held_count_; ++i) if (held(i).source / 16 == input) { abort_candidate(Error::input); break; }
         capture_.forget_input(input);
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -210,10 +210,25 @@ public:
     CNTRL_FLASH_ROUTINE(midi_looper_poll)
 #endif
     void poll(BeatPosition clock, bool clock_available, unsigned available, Sink &sink, unsigned quarter_us = 500000) {
+        sink.reclaim_memory();
         if (!configured_ && !shutdown_) return;
         bool first_played = false;
         if (quarter_us) quarter_us_ = quarter_us;
-        if (state_ == State::empty && !cleanup_pending_ && !shutdown_) { last_restart_ = clock.restart; return; }
+        if (state_ == State::empty && !cleanup_pending_ && !shutdown_) { release_buffers(sink); last_restart_ = clock.restart; return; }
+        if (candidate_ == absent && (state_ == State::playing || state_ == State::stopped)) {
+            scratch_.reserve(0); order_.clear(); held_.clear(); capture_.release(); recorder_.release_storage();
+            for (unsigned i = 0; i < generations_.size(); ++i) {
+                auto &generation = generations_[i];
+                if (i == active_ || i == previous_) { generation.source.trim(); generation.index.trim(); }
+                else { generation.source.reserve(0); generation.index.reserve(0); }
+            }
+            unsigned count = active_ < 3 ? generations_[active_].count : 0;
+            const unsigned previous = previous_ < 3 ? generations_[previous_].count : 0;
+            unsigned outputs = 0;
+            for (unsigned mask = settings_.outputs; mask; mask &= mask - 1) ++outputs;
+            sink.reserve_loop_ownership((std::max(count,previous) / 2) * outputs);
+            sink.shrink_playback_state((count + previous) * outputs,0,4);
+        }
         if (!playing()) player_.release_prepared(sink);
         if (shutdown_) {
             cleanup(sink,0xffff,available);
@@ -309,18 +324,18 @@ private:
         bool note = kind == 8 || kind == 9, hold = kind == 11 && packet.bytes[1] >= 64 && packet.bytes[1] <= 69;
         if (note || hold) {
             unsigned key = packet.bytes[1] + (hold ? 128 : 0), i = 0;
-            while (i < held_count_ && (held_[i].source != source || held_[i].channel != channel || held_[i].key != key)) ++i;
+            while (i < held_count_ && (held(i).source != source || held(i).channel != channel || held(i).key != key)) ++i;
             bool on = note ? kind == 9 && packet.bytes[2] : packet.bytes[2] >= 64;
             if (on) {
                 if (i == held_count_) {
-                    if (held_count_ == maximum_held) { abort_candidate(Error::capacity); return; }
-                    held_[held_count_++] = {source, channel, key, 1};
-                } else if (note) ++held_[i].count;
+                    if (held_count_ == held_capacity()) { abort_candidate(Error::capacity); return; }
+                    held(held_count_++) = {source, channel, key, 1};
+                } else if (note) ++held(i).count;
             } else {
                 if (i == held_count_) return;
-                if (hold || !--held_[i].count) held_[i] = held_[--held_count_];
+                if (hold || !--held(i).count) held(i) = held(--held_count_);
                 if (hold) for (unsigned j = 0; j < held_count_; ++j)
-                    if (held_[j].channel == channel && held_[j].key == key) return;
+                    if (held(j).channel == channel && held(j).key == key) return;
             }
         }
         if (!capture_.receive(source,packet,tick,{this,emit_capture})) abort_candidate(Error::capacity);
@@ -335,7 +350,8 @@ private:
     LoopFile scratch_;
     LoopCapture capture_;
     MemoryBuffer order_;
-    std::array<Held, maximum_held> held_{};
+    MemoryBuffer held_;
+    Sink *sink_ = nullptr;
     unsigned held_count_ = 0, active_ = absent, previous_ = absent, candidate_ = absent;
     unsigned outputs_ = 0, failed_outputs_ = 0, late_ = 0, restart_ = 0, last_restart_ = 0;
     unsigned merge_count_ = 0, merge_cursor_ = 0, base_count_ = 0;
@@ -352,6 +368,8 @@ private:
     unsigned quarter_us_ = 500000, maximum_late_us_ = 0;
     unsigned peak_events_ = 0, peak_held_ = 0;
     unsigned pairing_ = 1;
+    unsigned held_capacity() const { return settings_.events / 2; }
+    Held &held(unsigned i) { return reinterpret_cast<Held *>(held_.data)[i]; }
     static bool emit_capture(void *context,const Packet *packets,unsigned count,uint64_t tick) {
         return static_cast<MidiLooper *>(context)->append_packets(packets,count,tick);
     }
@@ -375,7 +393,8 @@ private:
 #endif
     void release_buffers(Sink &sink) {
         for (auto &g : generations_) { g.source.reserve(0); g.index.reserve(0); }
-        scratch_.reserve(0); order_.clear(); capture_.release(); sink.reserve_loop_ownership(0);
+        scratch_.reserve(0); order_.clear(); held_.clear(); capture_.release(); sink.reserve_loop_ownership(0);
+        sink.reserve_playback_state(0,0,0); recorder_.release_storage(); player_.trim_prepared_storage();
     }
     bool ready(BeatPosition clock) { return configured_ && clock.running ? true : fail(Error::clock); }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -395,21 +414,41 @@ private:
 #endif
     bool prepare(unsigned tempo) {
         if (candidate_ < 3 || recorder_.active() || (active_ == absent && (player_.active() || player_.cleaning()))) return fail(Error::busy);
+        unsigned candidate = 0; while (candidate == active_ || candidate == previous_) ++candidate;
+        auto &g = generations_[candidate];
+        // These owners are unpinned while no candidate is being prepared.
+        g.source.reserve(0); g.index.reserve(0); scratch_.reserve(0);
+        order_.clear(); held_.clear(); capture_.release();
+        LoopFile source, index, scratch;
+        MemoryBuffer order, held;
+        LoopCapture capture;
+        capture.discarded = capture_.discarded;
+        if (!source.reserve(settings_.events * 8 + 64) || !index.reserve(settings_.events * 32)
+            || !scratch.reserve(settings_.events * 32) || !order.resize(settings_.events * sizeof(unsigned))
+            || !held.resize(held_capacity() * sizeof(Held))
+            || !capture.reserve(sink_->capture_contexts(settings_.inputs,settings_.channels))) return fail(Error::memory);
+        unsigned outputs = 0;
+        for (unsigned mask = settings_.outputs; mask; mask &= mask - 1) ++outputs;
+        if (!recorder_.reserve_prepared(settings_.events) || !player_.reserve_prepared()
+            || !sink_->reserve_playback_state(settings_.events * outputs,settings_.outputs,settings_.channels)
+            || !sink_->reserve_loop_ownership(held_capacity() * outputs)) return fail(Error::memory);
+        g.source.swap(source); g.index.swap(index); scratch_.swap(scratch);
+        order_.swap(order); held_.swap(held); capture_.swap(capture);
+        for (unsigned i = 0; i < held_capacity(); ++i) new (held_.data + i * sizeof(Held)) Held{};
         reversing_ = edit_stopped_ = false;
-        candidate_ = 0; while (candidate_ == active_ || candidate_ == previous_) ++candidate_;
-        auto &g = generations_[candidate_]; g.source.reset(); g.index.reset(); g.count = 0; g.length = g.last_time = 0;
+        candidate_ = candidate; g.count = 0; g.length = g.last_time = 0;
         held_count_ = 0; capture_cycle_ = 0; close_ = 0;
         pairing_ = unsigned(std::min(uint64_t(UINT32_MAX),beat * 2000 / tempo));
         capture_.reset(pairing_);
-        if (!recorder_.bind(g.source) || !recorder_.start_prepared({0xffff,1},g.index,ppqn,tempo)) { candidate_ = absent; return fail(Error::file); }
+        if (!recorder_.bind(g.source) || !recorder_.start_prepared({0xffff,1},g.index,ppqn,tempo,settings_.events)) { candidate_ = absent; return fail(Error::file); }
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_append)
 #endif
     bool append_packets(const Packet *packets, unsigned count, uint64_t time, bool boundary_release = false) {
-        unsigned reserved = 0; for (unsigned i = 0; i < held_count_; ++i) reserved += held_[i].count;
-        if (reserved > maximum_held) { abort_candidate(Error::capacity); return false; }
+        unsigned reserved = 0; for (unsigned i = 0; i < held_count_; ++i) reserved += held(i).count;
+        if (reserved > held_capacity()) { abort_candidate(Error::capacity); return false; }
         unsigned base = active_ < 3 && state_ != State::loading ? generations_[active_].count : 0;
         auto &g = generations_[candidate_];
         if (base + g.count + reserved + count > settings_.events) { abort_candidate(Error::capacity); return false; }
@@ -457,12 +496,12 @@ private:
 #endif
     bool close_held(uint64_t duration) {
         while (held_count_) {
-            auto &h = held_[held_count_ - 1];
+            auto &h = held(held_count_ - 1);
             Packet packet{uint8_t(h.key < 128 ? 8 : 11), {uint8_t((h.key < 128 ? 0x80 : 0xb0) | h.channel),uint8_t(h.key % 128),0}};
             if (!--h.count) --held_count_;
             bool other_hold = false;
             if (packet.cin == 11) for (unsigned i = 0; i < held_count_; ++i)
-                if (held_[i].channel == unsigned(packet.bytes[0] & 15) && held_[i].key == unsigned(packet.bytes[1]) + 128) other_hold = true;
+                if (held(i).channel == unsigned(packet.bytes[0] & 15) && held(i).key == unsigned(packet.bytes[1]) + 128) other_hold = true;
             if (other_hold) continue;
             if (!append_packets(&packet,1,duration,true)) return false;
         }
@@ -558,7 +597,7 @@ private:
             }
             if (event.status >> 4 == 9 && event.second) ++held;
             if ((event.status >> 4 == 8 || (event.status >> 4 == 9 && !event.second)) && held) --held;
-            if (held > maximum_held) { abort_candidate(Error::capacity); return false; }
+            if (held > held_capacity()) { abort_candidate(Error::capacity); return false; }
             peak_held_ = std::max(peak_held_,held);
             if (event.previous) {
                 unsigned row = original < base_count_ ? original : original - base_count_;
@@ -578,7 +617,7 @@ private:
     bool begin_file() {
         auto &g = generations_[candidate_]; scratch_.reset(); g.source.reset(); recorder_.cancel();
         recorder_.bind(g.source);
-        if (!recorder_.start_prepared({0xffff,1},scratch_,ppqn,500000)) { abort_candidate(Error::file); return false; }
+        if (!recorder_.start_prepared({0xffff,1},scratch_,ppqn,500000,settings_.events)) { abort_candidate(Error::file); return false; }
         if (!import_pending_) state_ = State::preparing;
         return true;
     }
@@ -608,14 +647,14 @@ private:
         unsigned kind = event.status >> 4, channel = event.status & 15;
         event.reverse_value = 0;
         if (kind == 9 && event.second) {
-            if (held_count_ == maximum_held) return false;
-            held_[held_count_++] = {0,channel,event.first,event.second};
+            if (held_count_ == held_capacity()) return false;
+            held(held_count_++) = {0,channel,event.first,event.second};
         } else if (kind == 8 || (kind == 9 && !event.second)) {
             unsigned i = 0;
-            while (i < held_count_ && (held_[i].channel != channel || held_[i].key != unsigned(event.first))) ++i;
+            while (i < held_count_ && (held(i).channel != channel || held(i).key != unsigned(event.first))) ++i;
             if (i == held_count_) return false;
-            event.reverse_value = uint8_t(held_[i].count);
-            for (unsigned j = i + 1; j < held_count_; ++j) held_[j - 1] = held_[j];
+            event.reverse_value = uint8_t(held(i).count);
+            for (unsigned j = i + 1; j < held_count_; ++j) held(j - 1) = held(j);
             --held_count_;
         } else if (kind == 11 && event.first >= 64 && event.first <= 69) {
             auto &value = reverse_holds_[channel][event.first - 64];

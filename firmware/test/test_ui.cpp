@@ -106,9 +106,25 @@ static void portable_font_bearings_and_character_advances() {
     assert(fonts.glyph(16, 8, 0, "AB", 1, glyph)); assert(glyph.x == 3 && glyph.y == 0 && glyph.width == 2);
     assert(!fonts.glyph(16, 8, 0, "AB", 2, glyph)); assert(cntrl::memory_used == 0);
     cntrl::MemoryBuffer staged; assert(staged.resize(52)); std::memcpy(staged.data, data, 52);
-    font_assets::cache.begin(); assert(font_assets::cache.add(11, descriptor, std::move(staged))); font_assets::cache.finish(true);
+    assert(font_assets::cache.begin(1)); assert(font_assets::cache.add(11, descriptor, std::move(staged))); font_assets::cache.finish(true);
     assert(fonts.glyph(255, 8, 11, "AB", 0, glyph)); assert(glyph.y == -2);
-    font_assets::cache.begin(); font_assets::cache.finish(true); assert(cntrl::memory_used == 0);
+    const auto *active = font_assets::cache.get(11, 8);
+    const unsigned budget = cntrl::memory_budget, used = cntrl::memory_used;
+    cntrl::memory_budget = used;
+    assert(!font_assets::cache.begin(1));
+    assert(font_assets::cache.get(11, 8) == active && cntrl::memory_used == used);
+    cntrl::memory_budget = budget;
+    assert(font_assets::cache.begin(1) && font_assets::cache.reuse(11, 8));
+    font_assets::cache.finish(false);
+    assert(font_assets::cache.get(11, 8) == active && cntrl::memory_used == used);
+    assert(font_assets::cache.begin(33));
+    for (unsigned i = 0; i < 33; ++i) {
+        cntrl::MemoryBuffer pixels; assert(pixels.resize(52)); std::memcpy(pixels.data, data, 52);
+        assert(font_assets::cache.add(100 + i, descriptor, std::move(pixels)));
+    }
+    assert(!font_assets::cache.fits()); font_assets::cache.finish(true);
+    assert(font_assets::cache.get(132, 8) && !font_assets::cache.get(11, 8));
+    assert(font_assets::cache.begin(0)); font_assets::cache.finish(true); assert(cntrl::memory_used == 0);
 }
 struct MixedDisplay final : cntrl::ui::Display {
     const cntrl::ui::Viewport views[5] = {{9, 13, 2, 0}, {17, 7, 0, 0}, {21, 11, 3, 0}, {7, 19, 0, 0}, {15, 5, 0, 0}};

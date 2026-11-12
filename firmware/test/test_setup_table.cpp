@@ -130,7 +130,14 @@ int main(int argc, char **argv) {
     unsigned initial_budget = cntrl::memory_budget;
     assert(cntrl::memory_used == 0);
     unsigned setup_length = cntrl::u32(file.bytes.data() + 40 + 64);
-    if (argv[2][0] == '0') cntrl::memory_budget = 2 * setup_length;
+    if (argv[2][0] == '0') {
+        cntrl::memory_peak = cntrl::memory_used;
+        assert(table.open(file, board));
+        const unsigned metadata = cntrl::memory_used - table.resident_bytes();
+        const unsigned validation_slack = cntrl::memory_peak - cntrl::memory_used;
+        table.clear();
+        cntrl::memory_budget = 2 * setup_length + metadata + validation_slack;
+    }
     assert(table.open(file, board));
     assert(cntrl::memory_used >= table.resident_bytes());
     cntrl::MemoryBuffer competing;
@@ -147,7 +154,7 @@ int main(int argc, char **argv) {
         assert(table.get(1)->brightness() == 101 && table.get(2)->brightness() == 102);
         assert(file.reads == reads);
     } else {
-        assert(table.total_free_ram2() == 2 * length);
+        assert(table.total_free_ram2() >= 2 * length);
         assert(table.resident_bytes() == 2 * length);
         assert(table.get(2)->brightness() == 102 && file.reads > reads);
         assert(table.get(0) == first); // Eviction did not invalidate a pinned view.

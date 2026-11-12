@@ -30,6 +30,9 @@ public:
             songs_.import_abort(); receiving_ = false; replies_.reply("CNTRL ERROR songs-timeout");
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_transfer_command)
+#endif
     bool command(const char *line, uint32_t now = 0) {
         last_ = now;
         if (std::strncmp(line, "CNTRL SONGS ", 12)) return false;

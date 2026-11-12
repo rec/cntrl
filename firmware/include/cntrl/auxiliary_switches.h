@@ -1,7 +1,7 @@
 #pragma once
 #include "document.h"
 #include "buttons.h"
-#include <array>
+#include "checked_array.h"
 #include <algorithm>
 
 namespace cntrl {
@@ -9,24 +9,37 @@ namespace cntrl {
 // use the normal switch debounce; a combined third switch settles as a pair.
 class AuxiliarySwitches {
 public:
+    bool prepare(const Hardware &hardware) {
+        unsigned ports = 0;
+        // These offsets delimit the setup format's TRS role bytes.
+        for (unsigned port = 0; port < scrolling_offset - trs_modes_offset; ++port) {
+            if (!hardware.supports_trs_mode(port, midi::TrsMode::aux)) continue;
+            for (const auto &connection : hardware.midi_outputs()) if (connection.port == port) { ++ports; break; }
+        }
+        if (hardware.input_count() > 32 || ports > (32 - hardware.input_count()) / 3) return false;
+        CheckedArray<State> states; CheckedArray<uint8_t> events;
+        if (!states.resize(ports) || !events.resize(hardware.input_count() + ports * 3)) return false;
+        unsigned index = 0;
+        for (unsigned port = 0; port < scrolling_offset - trs_modes_offset; ++port) {
+            if (!hardware.supports_trs_mode(port, midi::TrsMode::aux)) continue;
+            for (const auto &connection : hardware.midi_outputs()) if (connection.port == port) { states[index++].port = port; break; }
+        }
+        states_.swap(states); events_.swap(events); held_ = 0; return true;
+    }
     uint32_t held() const { return held_; }
-    uint8_t event(unsigned input) const { return events_[input]; }
+    uint8_t event(unsigned input) const { return input < events_.size() ? events_[input] : 0; }
     template<class Read, class Debounce>
     void scan(const Hardware &hardware, const Document &document, uint32_t now, Read read, Debounce debounce) {
-        events_.fill(0); held_ = 0;
+        std::fill(events_.begin(), events_.end(), uint8_t(0)); held_ = 0;
         unsigned base = hardware.input_count();
-        for (unsigned port = 0; port < states_.size(); ++port) {
-            if (!hardware.supports_trs_mode(port, midi::TrsMode::aux)) continue;
-            bool declared = false;
-            for (const auto &c : hardware.midi_outputs()) if (c.port == port) declared = true;
-            if (!declared) continue;
-            auto &state = states_[port];
+        for (auto &state : states_) {
+            const unsigned port = state.port;
             bool enabled = document.valid() && document.inputs() >= base + 3 && document.trs_modes()[port] == unsigned(midi::TrsMode::aux);
             bool combined = enabled && document.auxiliary_combined(port);
             unsigned sample = enabled ? read(port) & 3u : 0;
             unsigned previous = state.logical;
             if (!enabled) {
-                state = State();
+                state = State(); state.port = port;
             } else if (!state.enabled || state.combined != combined) {
                 state.enabled = true; state.combined = combined;
                 state.arming = combined && sample;
@@ -65,13 +78,14 @@ public:
     }
 private:
     struct State {
+        unsigned port = 0;
         ButtonState buttons[2];
         unsigned candidate = 0, logical = 0;
         uint32_t since = 0;
         bool enabled = false, combined = false, arming = false;
     };
-    std::array<State, 4> states_;
-    std::array<uint8_t, 32> events_{};
+    CheckedArray<State> states_;
+    CheckedArray<uint8_t> events_;
     uint32_t held_ = 0;
 };
 } // namespace cntrl

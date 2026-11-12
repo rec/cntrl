@@ -1,9 +1,10 @@
 #pragma once
 #include "midi_bridge.h"
+#include "checked_array.h"
+#include "checked_list.h"
 #include <algorithm>
 #include <cstdint>
 #include <memory>
-#include <vector>
 
 namespace cntrl::midi {
 struct PlayMidiFilePatch;
@@ -70,21 +71,27 @@ struct TimelinePacket {
     unsigned source = 0;
     uint64_t token = 0;
     uint64_t owner = 0;
+    unsigned order = 0;
 };
 
 // Bounded reversal of a finite sequence. SysEx packets belonging to one frame
 // retain their byte order and take their placement from frame completion time.
 // Capture code supplies boundary releases for notes still held at clip end.
-inline bool reverse_sequence(std::vector<TimelinePacket> &events, uint64_t duration,
-                             unsigned limit = 512) {
+template<class Events>
+#ifdef CNTRL_NOINLINE
+CNTRL_NOINLINE
+#endif
+bool reverse_sequence(Events &events, uint64_t duration,
+                             unsigned limit = UINT32_MAX) {
     if (events.size() > limit) return false;
     struct Voice { unsigned source; uint8_t channel, note, velocity; unsigned index; };
     struct Frame { unsigned source, group; bool open; };
     struct Ordered { TimelinePacket event; unsigned group, part, priority; };
-    std::vector<Voice> voices;
-    std::vector<Frame> frames;
-    std::vector<Ordered> result;
-    result.reserve(events.size());
+    CheckedList<Voice> voices;
+    CheckedList<Frame> frames;
+    CheckedArray<Ordered> result;
+    const unsigned count = unsigned(events.size());
+    if (!voices.reserve(count) || !frames.reserve(count) || !result.reserve(count)) return false;
     unsigned next_group = 0;
     for (const auto &event : events) {
         if (event.time > duration) return false;
@@ -93,8 +100,8 @@ inline bool reverse_sequence(std::vector<TimelinePacket> &events, uint64_t durat
         uint8_t velocity = 0;
         unsigned paired_index = unsigned(-1);
         if (kind == 9 && event.packet.bytes[2]) {
-            voices.push_back({event.source, uint8_t(event.packet.bytes[0] & 15),
-                event.packet.bytes[1], event.packet.bytes[2], unsigned(result.size())});
+            if (!voices.append({event.source, uint8_t(event.packet.bytes[0] & 15),
+                event.packet.bytes[1], event.packet.bytes[2], unsigned(result.size())})) return false;
         } else if (kind == 8 || (kind == 9 && !event.packet.bytes[2])) {
             auto voice = std::find_if(voices.begin(), voices.end(), [&](const Voice &v) {
                 return v.source == event.source && v.channel == (event.packet.bytes[0] & 15)
@@ -125,7 +132,9 @@ inline bool reverse_sequence(std::vector<TimelinePacket> &events, uint64_t durat
             });
             if (event.packet.bytes[0] == 0xf0) {
                 if (frame != frames.end()) return false;
-                frames.push_back({event.source, group, true}); frame = frames.end() - 1;
+                auto *added = frames.append({event.source, group, true});
+                if (!added) return false;
+                frame = std::find_if(frames.begin(), frames.end(), [&](const Frame &f) { return &f == added; });
             }
             if (frame == frames.end()) return false;
             group = frame->group;
@@ -134,10 +143,10 @@ inline bool reverse_sequence(std::vector<TimelinePacket> &events, uint64_t durat
             }
             if (cin != 4) frame->open = false;
         }
-        result.push_back({reversed, group, part, priority});
+        if (!result.append({reversed, group, part, priority})) return false;
     }
     if (!voices.empty() || std::any_of(frames.begin(), frames.end(), [](const Frame &f) { return f.open; })) return false;
-    std::stable_sort(result.begin(), result.end(), [](const Ordered &a, const Ordered &b) {
+    std::sort(result.begin(), result.end(), [](const Ordered &a, const Ordered &b) {
         if (a.event.time != b.event.time) return a.event.time < b.event.time;
         if (a.priority != b.priority) return a.priority < b.priority;
         if (a.group == b.group) return a.part < b.part;
@@ -145,8 +154,8 @@ inline bool reverse_sequence(std::vector<TimelinePacket> &events, uint64_t durat
         // simultaneous events retain their original order.
         return a.group < b.group;
     });
-    events.clear();
-    for (const auto &item : result) events.push_back(item.event);
+    events.resize(result.size());
+    for (unsigned i = 0; i < result.size(); ++i) events[i] = result[i].event;
     return true;
 }
 } // namespace cntrl::midi

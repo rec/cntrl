@@ -2,7 +2,7 @@
 #include "document.h"
 #include "setup_names.h"
 #include <cstdio>
-#include <vector>
+#include "checked_array.h"
 
 namespace cntrl {
 // The target's nano C library does not support long-long scanf conversions.
@@ -98,8 +98,9 @@ public:
                 || info_.length < 116 || info_.length > memory_budget
                 || (!current && u32(header_ + 16) > 65535)) { invalid(); return; }
             names_count_ = current ? 0 : u32(header_ + 16);
-            body_offset_ = width + names_count_ * 64;
-            if (uint64_t(body_offset_) + info_.length + 4 != storage_.size(slot_)) { invalid(); return; }
+            const uint64_t body_offset = uint64_t(width) + uint64_t(names_count_) * 64;
+            if (body_offset > UINT_MAX || body_offset + info_.length + 4 != storage_.size(slot_)) { invalid(); return; }
+            body_offset_ = unsigned(body_offset);
             if (current) {
                 if (!text_valid(header_ + 20, 64) || name_compare(reinterpret_cast<const char *>(header_ + 20), name_)) { invalid(); return; }
                 info_.number = u32(header_ + 4); info_.modified = u32(header_ + 16);
@@ -109,7 +110,9 @@ public:
             }
             expected_crc_ = u32(header_ + crc_offset); offset_ = 0; crc_ = 0xffffffff;
             if (!buffer_->resize(info_.length)) { memory_failed_ = true; finish(false); return; }
-            remap_.assign(names_count_, 65535); name_position_ = 0;
+            if (!remap_.resize(names_count_)) { memory_failed_ = true; finish(false); return; }
+            for (auto &name : remap_) name = 65535;
+            name_position_ = 0;
             phase_ = names_count_ ? Phase::read_names : Phase::read; return;
         }
         case Phase::read_names: {
@@ -233,7 +236,7 @@ private:
     MemoryBuffer *buffer_ = nullptr;
     unsigned offset_ = 0, slot_ = 0;
     unsigned names_count_ = 0, name_position_ = 0, body_offset_ = 0;
-    std::vector<uint16_t> remap_;
+    CheckedArray<uint16_t> remap_;
     uint32_t crc_ = 0xffffffff, expected_crc_ = 0;
     uint64_t best_ = 0;
     bool good_ = false, opened_ = false, memory_failed_ = false, fallback_ = false;
@@ -242,7 +245,7 @@ private:
     void initialize(const char *name, MemoryBuffer *data) {
         std::snprintf(name_, sizeof(name_), "%s", name); buffer_ = data;
         info_ = Revision(); offset_ = slot_ = 0; crc_ = 0xffffffff; good_ = opened_ = false;
-        names_count_ = name_position_ = body_offset_ = 0; remap_.clear();
+        names_count_ = name_position_ = body_offset_ = 0; remap_.release();
         memory_failed_ = fallback_ = false;
         std::memset(header_, 0, sizeof(header_));
     }
@@ -258,6 +261,6 @@ private:
         if (fallback_) { fallback_ = false; slot_ = 0; phase_ = Phase::header; return; }
         if (operation_ == Operation::next) scan(info_.number); else finish(false);
     }
-    void finish(bool good) { if (opened_) { storage_.finish(); opened_ = false; } good_ = good; phase_ = Phase::idle; }
+    void finish(bool good) { if (opened_) { storage_.finish(); opened_ = false; } remap_.release(); good_ = good; phase_ = Phase::idle; }
 };
 }

@@ -1,5 +1,7 @@
 #pragma once
 #include "setup_table.h"
+#include "checked_array.h"
+#include <climits>
 
 namespace cntrl {
 // Keep the editor/history record protocol, backed by one indexed bundle.
@@ -234,49 +236,59 @@ private:
         if (table_.pinned()) return false;
         if (std::memcmp(incoming_header_, "CNST", 4) || checksum(incoming_header_, 92) != u32(incoming_header_ + 92)) return false;
         replacement_length_ = u32(incoming_header_ + 8); replacement_modified_ = u32(incoming_header_ + 16);
-        unsigned count = table_.count(), prefix = 2 + 4 * (count - 1), total = 0, active = 0;
+        unsigned count = table_.count(), active = 0;
+        if (!count) return false;
+        const unsigned prefix = 2 + 4 * (count - 1);
+        uint64_t total = 0;
         for (unsigned i = 0; i < count; ++i) {
             total += int(i) == index_ ? replacement_length_ : table_.length(i);
             active = std::max(active, int(i) == index_ ? replacement_ram2_ : table_.ram2(i));
         }
-        unsigned needs = table_.cntrl_ram2() + active + setup_table_ram_overhead(count);
-        if (uint64_t(needs) + table_.memory_margin() >= table_.memory_capacity()) return false;
-        unsigned capacity = table_.memory_capacity() - needs - table_.memory_margin();
+        uint64_t needs = uint64_t(table_.cntrl_ram2()) + active + setup_table_ram_overhead(count);
+        if (needs + table_.memory_margin() >= table_.memory_capacity()) return false;
+        unsigned capacity = unsigned(table_.memory_capacity() - needs - table_.memory_margin());
         if (replacement_length_ > memory_budget) return false;
-        std::vector<unsigned> sizes(count);
+        CheckedArray<unsigned> sizes;
+        if (!sizes.resize(count)) return false;
         for (unsigned i = 0; i < count; ++i) sizes[i] = int(i) == index_ ? replacement_length_ : table_.length(i);
         for (unsigned n : sizes) if (n > memory_budget) return false;
-        auto chosen = prefill(sizes, capacity);
-        std::vector<uint8_t> manifest(count * 76 + prefix);
+        MemoryBuffer chosen;
+        if (!prefill(sizes, capacity, chosen)) return false;
+        MemoryBuffer manifest;
+        if (!manifest.resize(count * 76 + prefix) || uint64_t(40) + manifest.size + total > UINT_MAX) return false;
         unsigned offset = 0;
-        manifest[count * 76] = uint8_t(count); manifest[count * 76 + 1] = uint8_t(count >> 8);
+        manifest.data[count * 76] = uint8_t(count); manifest.data[count * 76 + 1] = uint8_t(count >> 8);
         for (unsigned i = 0; i < count; ++i) {
-            uint8_t *entry = manifest.data() + i * 76;
+            uint8_t *entry = manifest.data + i * 76;
+            std::memset(entry, 0, 76);
             std::snprintf(reinterpret_cast<char *>(entry), 64, "%s", table_.name(uint16_t(i)));
             put32(entry + 64, sizes[i]); put32(entry + 68, int(i) == index_ ? replacement_ram2_ : table_.ram2(i));
-            entry[72] = chosen[i]; offset += sizes[i];
-            if (i + 1 < count) put32(manifest.data() + count * 76 + 2 + i * 4, offset);
+            entry[72] = bool(chosen.data[i / 8] & (1u << (i % 8))); offset += sizes[i];
+            if (i + 1 < count) put32(manifest.data + count * 76 + 2 + i * 4, offset);
         }
+        std::memset(bundle_header_, 0, sizeof(bundle_header_));
         std::memcpy(bundle_header_, "CSTB", 4); bundle_header_[4] = 1;
         bundle_header_[6] = uint8_t(count); bundle_header_[7] = uint8_t(count >> 8);
-        upload_length_ = 40 + unsigned(manifest.size()) + total;
+        upload_length_ = 40 + manifest.size + unsigned(total);
         put32(bundle_header_ + 8, upload_length_); put32(bundle_header_ + 16, table_.memory_margin());
         put32(bundle_header_ + 20, table_.cntrl_ram2()); put32(bundle_header_ + 24, active);
-        put32(bundle_header_ + 28, needs); put32(bundle_header_ + 32, total); put32(bundle_header_ + 36, capacity);
+        put32(bundle_header_ + 28, unsigned(needs)); put32(bundle_header_ + 32, unsigned(total)); put32(bundle_header_ + 36, capacity);
         output_slot_ = 1 - image_.slot; disk_.choose(bundle_name); uint8_t blank[96] = {};
         body_crc_ = 0xffffffff;
         return disk_.begin(output_slot_) && disk_.write(blank, 96) && disk_.write(bundle_header_, 40)
-            && append(manifest.data(), unsigned(manifest.size()))
+            && append(manifest.data, manifest.size)
             && copy(40 + count * 76 + prefix, table_.offset(unsigned(index_)));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(bundle_prefill)
 #endif
-    static std::vector<bool> prefill(const std::vector<unsigned> &sizes, unsigned capacity) {
-        std::vector<bool> chosen(sizes.size(), false);
+    static bool prefill(const CheckedArray<unsigned> &sizes, unsigned capacity, MemoryBuffer &chosen) {
+        if (!chosen.resize((sizes.size() + 7) / 8)) return false;
+        if (chosen.size) std::memset(chosen.data, 0, chosen.size);
         uint64_t sum = 0; for (unsigned n : sizes) sum += n;
-        if (sum <= capacity) { std::fill(chosen.begin(), chosen.end(), true); return chosen; }
-        std::vector<uint64_t> bits(capacity / 64 + 1);
+        if (sum <= capacity) { if (chosen.size) std::memset(chosen.data, 255, chosen.size); return true; }
+        CheckedArray<uint64_t> bits;
+        if (!bits.resize(capacity / 64 + 1)) return false;
         auto reachable = [&](unsigned count) {
             std::fill(bits.begin(), bits.end(), 0); bits[0] = 1;
             for (unsigned i = 0; i < count; ++i) {
@@ -292,9 +304,9 @@ private:
         while (!(bits[target / 64] & (uint64_t(1) << (target % 64)))) --target;
         for (unsigned i = unsigned(sizes.size()); i--;) {
             reachable(i);
-            if (!(bits[target / 64] & (uint64_t(1) << (target % 64)))) { chosen[i] = true; target -= sizes[i]; }
+            if (!(bits[target / 64] & (uint64_t(1) << (target % 64)))) { chosen.data[i / 8] |= uint8_t(1u << (i % 8)); target -= sizes[i]; }
         }
-        return chosen;
+        return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(bundle_commit_image)

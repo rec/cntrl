@@ -21,6 +21,7 @@ void receive(cntrl::CableTest &test, unsigned port, uint8_t status, uint8_t valu
 }
 
 int main() {
+    cntrl::memory_budget = 524288;
     Hardware hw;
     cntrl::CableTest test(hw, test_cable_outputs, 2);
     test.enter(); test.tick(100);

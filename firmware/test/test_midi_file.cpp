@@ -313,7 +313,7 @@ void test_prepared_recording_plays_before_file_finalization_without_reading_sour
     cntrl::memory_budget = 65536;
     assert(sink.reserve_loop_ownership(128));
     cntrl::midi::MidiFileRecorder recorder(source);
-    assert(recorder.start_prepared({}, index, 3840, 500000));
+    assert(recorder.start_prepared({}, index, 3840, 500000, 2));
     recorder.receive_tick(0,{9,{0x90,60,100}},0); recorder.poll(0);
     recorder.receive_tick(0,{8,{0x80,60,0}},1920); recorder.poll(0);
     assert(recorder.prepared_count() == 2 && recorder.request_finish_tick(3840));

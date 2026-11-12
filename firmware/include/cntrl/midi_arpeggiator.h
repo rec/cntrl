@@ -3,8 +3,8 @@
 #include "document.h"
 #include "clock_generator.h"
 #include "midi_loop_capture.h"
+#include "checked_list.h"
 #include <array>
-#include <vector>
 
 namespace cntrl::midi {
 class MidiArpeggiator : public NoteRouting {
@@ -17,12 +17,38 @@ public:
     unsigned size() const { return unsigned(mono_ ? bank_.size() : held_.size()); }
     unsigned selection() const { return selection_.kind; }
     bool configured() const { return configured_; }
+    bool input_selected(unsigned input) const { return configured_ && input < 16 && (inputs_ & (1u << input)); }
+    void input_memory_ready(bool ready) { input_memory_ready_ = ready; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(arp_configure)
 #endif
     void configure(const uint8_t *p) {
-        stop(); reconfigure_ = true; enable_pending_ = p != nullptr;
+        if (prepared_ && enable_pending_ == (p != nullptr)
+            && (!p || std::equal(p,p + pending_.size(),pending_.begin()))) return;
+        prepared_ = false; reconfigure_ = true; enable_pending_ = p != nullptr;
         if (p) std::copy(p,p + pending_.size(),pending_.begin());
+    }
+    bool prepare_configuration(const uint8_t *p, Sink &sink) {
+        const auto previous = pending_;
+        const bool enabled = enable_pending_;
+        enable_pending_ = p != nullptr;
+        if (p) std::copy(p,p + pending_.size(),pending_.begin());
+        if (!stage_configuration(sink)) {
+            pending_ = previous; enable_pending_ = enabled;
+            error_ = Error::capacity; return false;
+        }
+        prepared_ = true;
+        return true;
+    }
+    void finish_configuration() {
+        if (!prepared_) return;
+        reconfigure_ = true;
+        stop();
+    }
+    void discard_prepared_configuration() {
+        prepared_resources_ = Prepared{};
+        prepared_ = false;
+        reconfigure_ = false;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(arp_toggle)
@@ -40,13 +66,29 @@ public:
 #endif
     bool record(BeatPosition clock) {
         if (!configured_ || !mono_ || !clock.running) { error_ = Error::clock; return false; }
+        if (!input_memory_ready_) { error_ = Error::capacity; return false; }
         if (state_ == State::recording) { finish_ = boundary(clock.value,beat); state_ = State::finishing; return true; }
         if (state_ == State::armed || state_ == State::finishing) return true;
-        stop(); candidate_.clear(); candidate_events_ = 0;
+        unsigned outputs = 0;
+        for (unsigned mask = outputs_; mask; mask &= mask - 1) ++outputs;
+        const unsigned segments = candidate_.capacity(), groups = candidate_groups_.capacity();
+        const unsigned retired = retired_.capacity(), snapshots = snapshot_.capacity();
+        if (!candidate_.reserve(capacity_ / 2) || !candidate_groups_.reserve(capacity_)
+            || !retired_.reserve(retired_.size() + capacity_ / 2)
+            || !snapshot_.reserve(snapshot_.size() + capacity_)
+            || !capture_.reserve(sink_->capture_contexts(inputs_,channels_))
+            || !order_.reserve(capacity_ / 2)
+            || !sink_->reserve_playback_state(capacity_ * outputs,outputs_,channels_,1)
+            || !sink_->reserve_arpeggiator_ownership(outputs)) {
+            candidate_.trim(candidate_.capacity() - segments); candidate_groups_.trim(candidate_groups_.capacity() - groups);
+            retired_.trim(retired_.capacity() - retired); snapshot_.trim(snapshot_.capacity() - snapshots);
+            error_ = Error::capacity; return false;
+        }
+        stop(); candidate_.clear(); candidate_groups_.clear(); candidate_events_ = 0;
         begin_ = boundary(clock.value,beat); restart_ = clock.restart;
         state_ = State::armed; error_ = Error::none; return true;
     }
-    void stop() { state_ = State::stopped; waiting_clock_ = false; selected_ = absent; candidate_.clear(); finish_ = 0; }
+    void stop() { state_ = State::stopped; waiting_clock_ = false; selected_ = absent; candidate_.clear(); candidate_groups_.clear(); finish_ = 0; }
     void suspend() { stop(); held_.clear(); routed_.clear(); }
     void disconnect(unsigned route) {
         capture_.forget_input(route);
@@ -57,7 +99,7 @@ public:
             } else ++i;
         }
         for (auto i = routed_.begin(); i != routed_.end();) {
-            if (i->output == route || i->packet.source / 16 == route) i = routed_.erase(i); else ++i;
+            if (i->output == route || unsigned(i->packet.source) / 16 == route) i = routed_.erase(i); else ++i;
         }
         for (auto &voice : voices_) if (voice.output == route) voice.active = false;
         for (auto i = snapshot_.begin(); i != snapshot_.end();) {
@@ -76,7 +118,7 @@ public:
         Packet p = packet; p.source = uint16_t(source);
         if (kind == 11 && (p.bytes[1] == 120 || p.bytes[1] >= 123)) {
             if (mono_ && !candidate_.empty() && candidate_.back().source == source) close_note(clock.value,0,true);
-            held_.erase(std::remove_if(held_.begin(),held_.end(),[&](const Held &h) { return h.source == source && (h.packet.bytes[0] & 15) == (p.bytes[0] & 15); }),held_.end());
+            held_.erase_if([&](const Held &h) { return h.source == source && (h.packet.bytes[0] & 15) == (p.bytes[0] & 15); });
             retain_selection();
             for (auto &voice : voices_) if ((voice.attack.bytes[0] & 15) == (p.bytes[0] & 15)) voice.end = clock.value;
             return;
@@ -84,14 +126,14 @@ public:
         bool on = kind == 9 && p.bytes[2], off = kind == 8 || (kind == 9 && !p.bytes[2]);
         if (!mono_) {
             if (on) {
-                if (held_.size() == capacity_) { error_ = Error::capacity; stop(); return; }
+                if (held_.size() == capacity_) { error_ = Error::capacity; return; }
                 Held held{source,next_identity_++,p};
                 auto position = std::upper_bound(held_.begin(),held_.end(),held,[](const Held &a,const Held &b) {
                     if (a.packet.bytes[1] != b.packet.bytes[1]) return a.packet.bytes[1] < b.packet.bytes[1];
                     if (a.source != b.source) return a.source < b.source;
                     return a.packet.bytes[0] < b.packet.bytes[0];
                 });
-                held_.insert(position,held);
+                if (!held_.insert(position,held)) { error_ = Error::capacity; return; }
             } else if (off) {
                 auto i = std::find_if(held_.begin(),held_.end(),[&](const Held &h) { return h.source == source && (h.packet.bytes[0] & 15) == (p.bytes[0] & 15) && h.packet.bytes[1] == p.bytes[1]; });
                 if (i != held_.end()) {
@@ -117,9 +159,12 @@ public:
                 if (s.packets[0].bytes[0] >> 4 == 10 && s.packets[0].bytes[1] != p.bytes[1]) continue;
                 Group copy = s; copy.time = 0;
                 if (candidate_events_ + copy.count + 2 > capacity_) { abort(); return; }
-                segment.expression.push_back(copy); candidate_events_ += copy.count;
+                auto *group = candidate_groups_.append(copy);
+                if (!group) { abort(); return; }
+                append_expression(segment,group); candidate_events_ += copy.count;
             }
-            candidate_.push_back(std::move(segment)); candidate_events_ += 2;
+            if (!candidate_.append(std::move(segment))) { abort(); return; }
+            candidate_events_ += 2;
         } else if (capturing && off && !candidate_.empty()) {
             auto &s = candidate_.back();
             if (!s.end && s.source == source && (s.on.bytes[0] & 15) == (p.bytes[0] & 15) && s.on.bytes[1] == p.bytes[1]) close_note(clock.value,p.bytes[2]);
@@ -134,21 +179,70 @@ public:
     bool suppress(unsigned output, const Packet &packet) override {
         if (!routable(output,packet) || !muted()) return false;
         bool on = packet.bytes[0] >> 4 == 9 && packet.bytes[2];
-        if (on) { track(output,packet,false); return true; }
+        if (on) {
+            if (!prepare(output,packet)) return false;
+            track(output,packet,false); consume_batch(); return true;
+        }
         auto i = routed_note(output,packet);
         if (i == routed_.end()) return true;
         if (i->sounding) return false;
         routed_.erase(i); return true;
     }
+    bool prepare(unsigned output, const Packet &packet) override {
+        if (!routable(output,packet) || packet.bytes[0] >> 4 != 9 || !packet.bytes[2]) return true;
+        if ((current_batch_ && !current_batch_->remaining)
+            || (!current_batch_ && reserved_routes_ >= routed_limit_ - routed_.size())
+            || routed_.size() == routed_limit_) { error_ = Error::capacity; return false; }
+        return routed_.reserve(routed_.size() + 1);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(arp_prepare_batch)
+#endif
+    bool prepare_batch(unsigned output,const uint8_t *bytes,unsigned size,unsigned source = 65535) override {
+        const unsigned onsets = batch_onsets(output,bytes,size,source);
+        if (!onsets) return true;
+        if (reserved_routes_ > routed_limit_ - routed_.size()
+            || onsets > routed_limit_ - routed_.size() - reserved_routes_) { error_ = Error::capacity; return false; }
+        return routed_.reserve(routed_.size() + onsets);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(arp_begin_batch)
+#endif
+    bool begin_batch(unsigned owner,unsigned output,const uint8_t *bytes,unsigned size,unsigned source = 65535) override {
+        const unsigned onsets = batch_onsets(output,bytes,size,source);
+        if (!onsets) return true;
+        for (const auto &batch : batches_) if (batch.owner == owner) return false;
+        if (!prepare_batch(output,bytes,size,source) || !batches_.append({owner,onsets})) return false;
+        reserved_routes_ += onsets;
+        return true;
+    }
+    void enter_batch(unsigned owner) override {
+        current_batch_ = nullptr;
+        for (auto &batch : batches_) if (batch.owner == owner) { current_batch_ = &batch; break; }
+    }
+    void leave_batch() override { current_batch_ = nullptr; }
+    void finish_batch(unsigned owner) override {
+        for (auto i = batches_.begin(); i != batches_.end(); ++i) if (i->owner == owner) {
+            reserved_routes_ -= i->remaining;
+            if (current_batch_ == &*i) current_batch_ = nullptr;
+            batches_.erase(i); break;
+        }
+    }
     void accepted(unsigned output, const Packet &packet) override {
         if (!routable(output,packet)) return;
-        if (packet.bytes[0] >> 4 == 9 && packet.bytes[2]) track(output,packet,true);
+        if (packet.bytes[0] >> 4 == 9 && packet.bytes[2]) { track(output,packet,true); consume_batch(); }
         else { auto i = routed_note(output,packet); if (i != routed_.end()) routed_.erase(i); }
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(arp_poll)
 #endif
     void poll(BeatPosition clock, unsigned available, unsigned busy, Sink &sink, unsigned quarter_us = 500000) {
+        sink.reclaim_memory();
+        batches_.trim(1);
+        if (reconfigure_ && !prepared_) {
+            if (!stage_configuration(sink)) { reconfigure_ = false; error_ = Error::capacity; }
+            else { stop(); prepared_ = true; }
+        }
         if (state_ == State::waiting && waiting_clock_ && clock.running) {
             restart_ = clock.restart; next_ = boundary(clock.value,step_); waiting_clock_ = false;
         }
@@ -160,7 +254,7 @@ public:
             if (!(available & (1u << voice.output))) voice.active = false;
             else if (!voice.attacked || (!(busy & (1u << voice.output)) && sink.submit_arpeggiator(voice.output,voice.off))) voice.active = false;
         }
-        if (reconfigure_ && !sounding()) {
+        if (reconfigure_ && !sounding() && batches_.empty()) {
             bool restored = true;
             for (auto &r : routed_) if (!r.sounding && (available & (1u << r.output))) {
                 NoteRouting *routing = sink.note_routing; sink.note_routing = nullptr;
@@ -171,6 +265,13 @@ public:
             if (restored) apply(sink);
         }
         if (!configured_ || reconfigure_) return;
+        if (!sounding() && state_ != State::armed && state_ != State::recording && state_ != State::finishing
+            && (state_ == State::stopped || clock.value < next_)) {
+            candidate_.trim(1); candidate_groups_.trim(1); bank_.trim(1); bank_groups_.trim(1);
+            snapshot_.trim(1); retired_.trim(1);
+            const unsigned keys = mono_ ? (bank_groups_.size() + unsigned(!bank_.empty())) * voices_.size() : voices_.size();
+            sink.shrink_playback_state(keys,1,4);
+        }
         if (state_ != State::stopped && (!clock.running || clock.restart != restart_)) {
             if (!waiting_clock_) stop();
             return;
@@ -188,7 +289,8 @@ public:
         if (state_ == State::finishing && clock.value >= finish_ && !sounding()) {
             context.capturing = true;
             capture_.flush(finish_,true,{&context,emit_capture});
-            close_note(finish_,0,true); bank_.swap(candidate_); candidate_.clear(); finish_ = 0;
+            close_note(finish_,0,true); bank_.swap(candidate_); bank_groups_.swap(candidate_groups_);
+            candidate_.clear(); candidate_groups_.clear(); finish_ = 0;
             order_.reset(selection_); next_ = boundary(clock.value,step_); state_ = State::waiting;
         }
         expression_playback(clock,available,busy,sink);
@@ -206,10 +308,13 @@ public:
         }
         attack.source = release.source = 65535;
         for (unsigned output = 0; output < 16; ++output) if ((outputs_ & available & ~busy & ~handoff) & (1u << output)) {
-            auto &voice = voices_[output];
+            auto *prepared = output_voice(output);
+            if (!prepared) { error_ = Error::capacity; continue; }
+            auto &voice = *prepared;
             if (voice.active) continue;
             voice = {}; voice.active = true; voice.output = output; voice.begin = at;
             voice.end = at + gate_; voice.off = release; voice.attack = attack; voice.segment = segment;
+            voice.group = segment ? segment->expression : nullptr;
         }
         expression_playback(clock,available,busy,sink);
     }
@@ -219,14 +324,14 @@ public:
     void expression_playback(BeatPosition clock,unsigned available,unsigned busy,Sink &sink) {
         for (auto &voice : voices_) if (voice.active && ((available & ~busy) & (1u << voice.output)) && clock.value < voice.end) {
             for (unsigned work = 0; work < 16; ++work) {
-                bool complete = !voice.segment || voice.group == voice.segment->expression.size();
-                if (!voice.attacked && (complete || voice.segment->expression[voice.group].time > 0)) {
+                bool complete = !voice.group;
+                if (!voice.attacked && (complete || voice.group->time > 0)) {
                     if (!sink.submit_arpeggiator(voice.output,voice.attack)) { error_ = Error::output; break; }
                     voice.attacked = true;
                 }
                 if (complete) break;
                 const auto &segment = *voice.segment;
-                const auto &group = segment.expression[voice.group];
+                const auto &group = *voice.group;
                 uint64_t duration = std::max(uint64_t(1),segment.end - segment.begin);
                 uint64_t due = voice.begin + uint64_t((static_cast<long double>(group.time) / duration) * gate_);
                 if (clock.value < due || clock.value >= voice.end) break;
@@ -236,12 +341,12 @@ public:
                     uint8_t bytes[18] = {};
                     for (unsigned i = 0; i < group.count; ++i) std::copy(group.packets[i].bytes,group.packets[i].bytes + 3,bytes + i * 3);
                     Parameter parameter;
-                    if (!parameter.decode_messages(bytes,group.count * 3)) { ++voice.group; voice.packet = 0; continue; }
+                    if (!parameter.decode_messages(bytes,group.count * 3)) { voice.group = voice.group->next; voice.packet = 0; continue; }
                     if (!voice.token) voice.token = (uint64_t(1) << 63) | ++next_token_;
                     accepted = sink.submit_loop_group(voice.output,packet,parameter,voice.token,voice.packet == 0,voice.packet + 1 == group.count);
                 } else accepted = sink.submit_arpeggiator(voice.output,packet);
                 if (!accepted) { error_ = Error::output; break; }
-                if (++voice.packet == group.count) { voice.packet = 0; voice.token = 0; ++voice.group; }
+                if (++voice.packet == group.count) { voice.packet = 0; voice.token = 0; voice.group = voice.group->next; }
             }
         }
     }
@@ -254,29 +359,61 @@ private:
     static constexpr uint64_t beat = uint64_t(1) << 32;
     static constexpr unsigned absent = ~0u;
     struct Held { unsigned source, identity; Packet packet; };
-    struct Group { unsigned source = 0, key = 0, count = 0; uint64_t time = 0; std::array<Packet,6> packets{}; };
-    struct Segment { unsigned source = 0; Packet on{}, off{}; uint64_t begin = 0, end = 0; std::vector<Group> expression; };
-    struct Voice { bool active = false, attacked = false; unsigned output = 0; uint64_t begin = 0, end = 0, token = 0; Packet off{}, attack{}; const Segment *segment = nullptr; unsigned group = 0, packet = 0; };
+    struct Group { unsigned source = 0, key = 0, count = 0; uint64_t time = 0; std::array<Packet,6> packets{}; Group *next = nullptr; };
+    struct Segment { unsigned source = 0; Packet on{}, off{}; uint64_t begin = 0, end = 0; Group *expression = nullptr, *last_expression = nullptr; };
+    struct Voice { bool active = false, attacked = false; unsigned output = 0; uint64_t begin = 0, end = 0, token = 0; Packet off{}, attack{}; const Segment *segment = nullptr; const Group *group = nullptr; unsigned packet = 0; };
     struct Routed { unsigned output; Packet packet; bool sounding; };
+    struct Batch { unsigned owner, remaining; };
+#if UINTPTR_MAX == UINT32_MAX
+    static_assert(CheckedList<Held>::node_size() == 44 && CheckedList<Routed>::node_size() == 40);
+    static_assert(CheckedList<Group>::node_size() == 96 && CheckedList<Segment>::node_size() == 72);
+    static_assert(CheckedList<Voice>::node_size() == 88);
+#endif
     State state_ = State::stopped;
     Error error_ = Error::none;
-    bool mono_ = false, configured_ = false, waiting_clock_ = false;
-    unsigned inputs_ = 0, outputs_ = 0, channels_ = 0, capacity_ = 512;
+    bool mono_ = false, configured_ = false, waiting_clock_ = false, input_memory_ready_ = true;
+    unsigned inputs_ = 0, outputs_ = 0, channels_ = 0, capacity_ = 0;
+    unsigned routed_limit_ = 0;
+    unsigned reserved_routes_ = 0;
+    CheckedList<Batch> batches_;
+    Batch *current_batch_ = nullptr;
     unsigned next_identity_ = 0, selected_ = absent, candidate_events_ = 0;
     uint64_t step_ = beat / 4, gate_ = beat / 5, next_ = 0, begin_ = 0, finish_ = 0;
     uint32_t restart_ = 0;
     uint64_t next_token_ = 0;
     std::array<uint8_t,50> pending_{};
-    bool reconfigure_ = false, enable_pending_ = false;
+    bool reconfigure_ = false, enable_pending_ = false, prepared_ = false;
     ArpeggiatorSelection selection_;
     ArpeggiatorOrder order_;
     LoopCapture capture_;
-    std::vector<Held> held_;
-    std::vector<Segment> bank_, candidate_;
-    std::vector<Group> snapshot_;
-    std::vector<Packet> retired_;
-    std::vector<Routed> routed_;
-    std::array<Voice,16> voices_{};
+    CheckedList<Held> held_;
+    CheckedList<Segment> bank_, candidate_;
+    CheckedList<Group> snapshot_, bank_groups_, candidate_groups_;
+    CheckedList<Packet> retired_;
+    CheckedList<Routed> routed_;
+    CheckedList<Voice> voices_;
+    Sink *sink_ = nullptr;
+    struct Prepared {
+        CheckedList<Held> held;
+        CheckedList<Routed> routed;
+        CheckedList<Voice> voices;
+        ArpeggiatorOrder order;
+    } prepared_resources_;
+    Voice *output_voice(unsigned output) {
+        for (auto &voice : voices_) if (voice.output == output) return &voice;
+        return nullptr;
+    }
+    static void append_expression(Segment &segment, Group *group) {
+        group->next = nullptr;
+        if (segment.last_expression) segment.last_expression->next = group; else segment.expression = group;
+        segment.last_expression = group;
+    }
+    static void insert_expression(Segment &segment, Group *group) {
+        if (!segment.last_expression || segment.last_expression->time <= group->time) { append_expression(segment,group); return; }
+        auto **position = &segment.expression;
+        while (*position && (*position)->time <= group->time) position = &(*position)->next;
+        group->next = *position; *position = group;
+    }
     static uint64_t boundary(uint64_t value,uint64_t step) { return (value / step + 1) * step; }
     bool sounding() const { for (const auto &v : voices_) if (v.active) return true; return false; }
     bool muted() const { return configured_ && !mono_ && (state_ != State::stopped || sounding()); }
@@ -284,23 +421,37 @@ private:
         return configured_ && !mono_ && p.source < 256 && (inputs_ & (1u << (p.source / 16))) && (outputs_ & (1u << output))
             && (channels_ & (1u << (p.bytes[0] & 15))) && (p.bytes[0] >> 4 == 8 || p.bytes[0] >> 4 == 9);
     }
-    std::vector<Routed>::iterator routed_note(unsigned output,const Packet &p) {
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(arp_batch_onsets)
+#endif
+    unsigned batch_onsets(unsigned output,const uint8_t *bytes,unsigned size,unsigned source) const {
+        if (!configured_ || mono_ || source >= 256 || !(inputs_ & (1u << (source / 16)))
+            || !(outputs_ & (1u << output))) return 0;
+        Parser parser; Packet packet; unsigned onsets = 0;
+        for (unsigned i = 0; i < size; ++i) if (parser.receive(bytes[i],packet)
+            && packet.bytes[0] >> 4 == 9 && packet.bytes[2] && (channels_ & (1u << (packet.bytes[0] & 15)))) ++onsets;
+        return onsets;
+    }
+    void consume_batch() {
+        if (current_batch_ && current_batch_->remaining) { --current_batch_->remaining; --reserved_routes_; }
+    }
+    CheckedList<Routed>::iterator routed_note(unsigned output,const Packet &p) {
         return std::find_if(routed_.begin(),routed_.end(),[&](const Routed &r) { return r.output == output && r.packet.source == p.source && (r.packet.bytes[0] & 15) == (p.bytes[0] & 15) && r.packet.bytes[1] == p.bytes[1]; });
     }
     void track(unsigned output,const Packet &p,bool sounding) {
-        if (routed_.size() >= capacity_ * 16) { error_ = Error::capacity; stop(); return; }
-        routed_.push_back({output,p,sounding});
+        if (routed_.size() >= routed_limit_) { error_ = Error::capacity; return; }
+        if (!routed_.append({output,p,sounding})) error_ = Error::capacity;
     }
     void retain_selection() {
         if (selected_ == absent) return;
         for (unsigned i = 0; i < held_.size(); ++i) if (held_[i].identity == selected_) { order_.retain(i); return; }
         order_.reset(selection_); selected_ = absent;
     }
-    void abort() { candidate_.clear(); candidate_events_ = 0; finish_ = 0; state_ = State::stopped; error_ = Error::capacity; }
+    void abort() { candidate_.clear(); candidate_groups_.clear(); candidate_events_ = 0; finish_ = 0; state_ = State::stopped; error_ = Error::capacity; }
     void close_note(uint64_t at,uint8_t velocity,bool synthetic = false) {
         if (candidate_.empty() || candidate_.back().end) return;
         auto &s = candidate_.back(); s.end = std::max(at,s.begin + 1);
-        if (synthetic && retired_.size() < capacity_) retired_.push_back(s.on);
+        if (synthetic && retired_.size() < capacity_ && !retired_.append(s.on)) { error_ = Error::capacity; }
         s.off = {8,{uint8_t(0x80 | (s.on.bytes[0] & 15)),s.on.bytes[1],velocity}};
     }
     bool expression(unsigned source,const Packet *packets,unsigned count,uint64_t time,bool capturing) {
@@ -313,16 +464,16 @@ private:
         std::copy(packets,packets + count,group.packets.begin());
         auto i = std::find_if(snapshot_.begin(),snapshot_.end(),[&](const Group &s) { return s.source == source && s.key == group.key; });
         if (i != snapshot_.end()) *i = group;
-        else if (snapshot_.size() < capacity_) snapshot_.push_back(group);
-        else { abort(); return false; }
+        else if (!snapshot_.append(group)) { error_ = Error::capacity; return false; }
         if (capturing && !candidate_.empty()) {
             auto &s = candidate_.back();
             if (!s.end && time >= s.begin && s.source == source && (s.on.bytes[0] & 15) == (packets[0].bytes[0] & 15)) {
                 if (kind == 10 && address != s.on.bytes[1]) return true;
                 if (candidate_events_ + count > capacity_) { abort(); return false; }
                 group.time = time > s.begin ? time - s.begin : 0;
-                auto position = std::upper_bound(s.expression.begin(),s.expression.end(),group.time,[](uint64_t time,const Group &g) { return time < g.time; });
-                s.expression.insert(position,group); candidate_events_ += count;
+                auto *copy = candidate_groups_.append(group);
+                if (!copy) { abort(); return false; }
+                insert_expression(s,copy); candidate_events_ += count;
             }
         }
         return true;
@@ -331,19 +482,45 @@ private:
     CNTRL_FLASH_ROUTINE(arp_apply)
 #endif
     void apply(Sink &sink) {
-        std::vector<Held>{}.swap(held_); std::vector<Segment>{}.swap(bank_); std::vector<Segment>{}.swap(candidate_);
-        std::vector<Group>{}.swap(snapshot_); std::vector<Routed>{}.swap(routed_); std::vector<Packet>{}.swap(retired_);
+        sink_ = &sink;
+        held_ = std::move(prepared_resources_.held); routed_ = std::move(prepared_resources_.routed);
+        voices_ = std::move(prepared_resources_.voices); order_ = std::move(prepared_resources_.order);
+        bank_.release(); candidate_.release(); bank_groups_.release(); candidate_groups_.release();
+        snapshot_.release(); retired_.release();
+        prepared_ = false;
         reconfigure_ = false; configured_ = enable_pending_;
-        if (!configured_) { capture_.release(); sink.reserve_arpeggiator_ownership(0); return; }
+        if (!configured_) { capture_.release(); sink.reserve_arpeggiator_ownership(0); sink.reserve_playback_state(0,0,0,1); return; }
         const auto *p = pending_.data(); mono_ = p[5] != 0;
+        if (mono_) { sink.reserve_arpeggiator_ownership(0); sink.reserve_playback_state(0,0,0,1); }
         selection_ = {p[6],p[7],u16(p + 16),u32(p + 34),u32(p + 38),u32(p + 42),u32(p + 46)};
         channels_ = u16(p + 8); inputs_ = u16(p + 10); outputs_ = u16(p + 12); capacity_ = u16(p + 14);
-        held_.reserve(capacity_); routed_.reserve(capacity_ * 16); snapshot_.reserve(capacity_);
+        routed_limit_ = routed_.capacity();
         step_ = uint64_t(u32(p + 18)) | uint64_t(u32(p + 22)) << 32;
         gate_ = uint64_t(u32(p + 26)) | uint64_t(u32(p + 30)) << 32;
         order_.reset(selection_);
-        if (!capture_.reserve() || !sink.reserve_arpeggiator_ownership(capacity_ * 16 + 128)) { configured_ = false; error_ = Error::capacity; }
+        capture_.release();
         capture_.reset(1);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(arp_stage_configuration)
+#endif
+    bool stage_configuration(Sink &sink) {
+        Prepared staged;
+        if (!enable_pending_) { prepared_resources_ = std::move(staged); return true; }
+        const auto *p = pending_.data();
+        const unsigned count = u16(p + 14), outputs = u16(p + 12);
+        unsigned selected = 0;
+        for (unsigned mask = outputs; mask; mask &= mask - 1) ++selected;
+        if (!p[5] && (!staged.held.reserve(count) || !staged.routed.reserve(count * selected)
+            || !staged.order.reserve(count))) return false;
+        if (!staged.voices.reserve(selected)) return false;
+        for (unsigned output = 0; output < 16; ++output) if (outputs & (1u << output)) {
+            Voice voice; voice.output = output;
+            if (!staged.voices.append(voice)) return false;
+        }
+        if (!p[5] && (!sink.reserve_playback_state(selected,outputs,u16(p + 8),1)
+            || !sink.reserve_arpeggiator_ownership(selected))) return false;
+        prepared_resources_ = std::move(staged); return true;
     }
 };
 } // namespace cntrl::midi

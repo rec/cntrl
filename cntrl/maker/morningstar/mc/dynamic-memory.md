@@ -2,8 +2,9 @@
 
 Supporting hardware-specific audit for
 [the shared plan](../../../../plan/dynamic-memory.md).
-Source baseline: `a32af63`, 2026-11-12. This is a plan, not an implementation or
-hardware qualification result. Paths below are relative to this directory.
+Original source baseline: `a32af63`, 2026-11-12. The original inventory is retained
+below; implementation checkpoints are recorded separately. Physical qualification
+is pending. Paths below are relative to this directory.
 
 ## Controller allocation implementation
 
@@ -45,7 +46,72 @@ are 319968 bytes, with 7712 bytes left for local variables. This recovers anothe
 section alignment. Each live snapshot's actual node bytes are charged to the
 shared memory ledger. Cancellation and completion reclaim the node.
 
-## Product target reservations
+## Integrated implementation checkpoint
+
+The integrated target build passes with the same pinned toolchain:
+
+| Region | Original baseline | Integrated candidate |
+| --- | ---: | ---: |
+| RAM1 variables | 319904 bytes | 309728 bytes |
+| RAM1 available for local variables | 7776 bytes | 17952 bytes |
+| RAM2 static variables | 118912 bytes | 90752 bytes |
+| RAM2 available for allocation | 405376 bytes | 433536 bytes |
+
+This recovers 28160 bytes of static RAM2. Local-variable availability is a linker
+total, not a measured stack high-water mark. Cold preparation/reclamation/UI code
+uses FLASH placement; hot insertion/iteration/parsing/ISR paths retain their
+normal placement. Final timing qualification must use this placement.
+
+Configuration arrays use encoded counts, while admitted performance records use
+checked stable nodes. Candidate controllers, fonts, stream graphs and
+arpeggiator resources are prepared before publication. Active/undo/candidate
+looper roles remain separate, but disabled/empty generations reserve no event
+buffers. Explicit arm estimates are reported separately from idle allocations.
+
+The linked allocator is traced through the reentrant newlib allocation APIs.
+`MemoryBuffer` charges actual nano chunks on this target and retains the old
+allocation until a complete replacement is admitted. Native tests and host
+estimates use the documented alignment/header model, independently of the native
+operating system's allocator. SDK bootstrap use is subtracted from the available
+budget; later SDK growth is reported separately. The tracked
+`firmware/patch_switcher/heap_trace.cpp` depends on the pinned toolchain's nano
+chunk layout. Its totals and validity must be checked on the physical target.
+
+`CNTRL HEAP` is an explicit idle-only diagnostic. It reports actual checked/SDK
+bytes, SDK growth, largest free block, free block count, conservative peak,
+allocation failures, allocator cycle maxima and interrupt allocation count.
+It walks the free list only when requested, outside MIDI service. Linked
+allocation fault injection is available to qualification code through
+`heap_fault_after`; normal firmware leaves it disabled.
+
+`CNTRL MIDI STATUS N` adds a maximum `service_gap_us` across calls, including
+intervening display/storage work. `CNTRL MIDI RESET` resets timing counters.
+The status also identifies Bridge/stream input cable quarantine masks and the
+generated pedal route quarantine. After an unseen key cannot record a refused
+strike, reconnect/reset the source before accepting new onsets; accepted releases
+continue. Heap recovery alone cannot safely identify an untracked old note-off.
+
+The tracked native stress test is `firmware/test/test_dynamic_memory_stress.cpp`.
+An optimized host run with a 430112-byte modeled budget accepted all traffic in
+the 24/32-route cases. Denser 48/64-route bursts exhausted that budget and
+refused new work while preserving the accepted seed's releases. A 24-point
+allocation fault sweep completed without stranded voices, pending events or
+recovery work. Rebuild with the usual native test flags for sanitizers, or
+`-O2` without sanitizers for comparative timings. Logs and binaries in `build/`
+are disposable outputs; the complete harness and native suite entry are tracked.
+
+These results do not establish pedal timing. The CPU defer/reject policy and
+the general allocator's worst-case latency remain open pending target stress
+measurements. No bounded allocator or completed physical qualification is claimed.
+
+The retained fixed storage has specific roles: physical display pixel caches
+and DMA transfers; byte/mask/record format domains; three looper generation roles;
+USB framing and retry units; redundant flash journals; and explicit text/history
+retention policies. Endpoint-sized constructor vectors are created once from
+actual hardware counts and are included in SDK/bootstrap heap reporting. They
+do not grow on player actions. Shared presentation no longer allocates per frame.
+
+## Original product target reservations
 
 | Location | Present storage or constraint | Required treatment |
 | --- | --- | --- |

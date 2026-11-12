@@ -20,7 +20,7 @@ struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     bool supports_function(unsigned code) const override { return code == 1; }
     bool supports_font(unsigned face, unsigned size) const override { return face == 0 && size >= 8 && size <= 96 && size % 8 == 0; }
     bool supports_font_asset(uint32_t key, unsigned size) const override { return fonts.supports(key, size); }
-    void begin_fonts() override { font_assets::cache.begin(); }
+    bool begin_fonts(unsigned count) override { return font_assets::cache.begin(count); }
     bool stage_font(uint32_t key, unsigned size) override { return fonts.stage(key, size); }
     void finish_fonts(bool commit) override { font_assets::cache.finish(commit); }
     unsigned display_width() const override { return 160; }
@@ -70,12 +70,12 @@ int main(int argc, char **argv) {
             else if (std::sscanf(line.c_str(), "STAGE %lx %u", &key, &size) == 2) {
                 const auto *active = font_assets::cache.get(uint32_t(key), size);
                 const uint8_t *original = active ? active->data.data : nullptr;
-                font_assets::cache.begin();
+                assert(font_assets::cache.begin(1));
                 bool good = peer.fonts.supports(uint32_t(key), size) && peer.fonts.stage(uint32_t(key), size);
                 if (good && original) {
                     font_assets::cache.finish(false);
                     assert(font_assets::cache.get(uint32_t(key), size)->data.data == original);
-                    font_assets::cache.begin(); assert(peer.fonts.stage(uint32_t(key), size));
+                    assert(font_assets::cache.begin(1)); assert(peer.fonts.stage(uint32_t(key), size));
                 }
                 font_assets::cache.finish(good);
                 if (good && original) assert(font_assets::cache.get(uint32_t(key), size)->data.data == original);

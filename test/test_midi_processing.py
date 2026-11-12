@@ -46,6 +46,51 @@ def test_thru_compiles_direct_endpoint_indexes() -> None:
     ) == (0, 0)
 
 
+def test_deep_routes_and_processing_use_encoded_counts() -> None:
+    routes = {
+        f'route-{i}': {
+            'from': 'din' if not i else f'route-{i - 1}',
+            'to': 'usb-host/synth',
+            'via': [{'transpose': 0}] * 17 if not i else [],
+        }
+        for i in reversed(range(1100))
+    }
+    routes['joined'] = {
+        'from': [f'route-{i}' for i in range(1100)],
+        'to': 'usb-host/synth',
+    }
+    data = midi_processing.compile_routes(routes, {}, endpoints())
+    assert midi_processing.HEADER.unpack_from(data)[2] == 1101
+    assert midi_processing.ROUTE.unpack_from(data, midi_processing.HEADER.size)[3] == 17
+    assert midi_processing.estimate_ram(
+        data, endpoint_count=3
+    ) > midi_processing.estimate_ram(b'', endpoint_count=3)
+
+
+def test_lfo_instances_and_destinations_are_not_limited_to_fixed_slots() -> None:
+    routes = {
+        f'lfo-{i}': {
+            'generate': {
+                'lfo': {
+                    'target': {
+                        'type': 'control-change',
+                        'channel': i % 16 + 1,
+                        'controller': i // 16 + 7,
+                    },
+                    'shape': 'triangle',
+                    'range': [0, 127],
+                    'period': '1 s',
+                    'off': {'action': 'hold'},
+                }
+            },
+            'to': 'usb-host/synth',
+        }
+        for i in range(129)
+    }
+    data = midi_processing.compile_routes(routes, {}, endpoints())
+    assert midi_processing.HEADER.unpack_from(data)[2] == 129
+
+
 def test_no_routes_preserves_legacy_forwarding_but_empty_matrix_is_explicit() -> None:
     assert midi_processing.compile_routes(None, {}, endpoints()) == b''
     data = midi_processing.compile_routes({}, {}, endpoints())
@@ -314,7 +359,14 @@ def test_registered_processor_compiles_without_builtin_dispatch_changes(
         endpoints(),
     )
     assert data.endswith(midi_processing.STEP.pack(128, 2, 1) + bytes([40]))
-    assert midi_processing.estimate_ram(data) == 4096 + 163840 + 4 * len(data) + 256
+    builtin = midi_processing.compile_routes(
+        {'keys': {'from': 'din', 'to': 'usb-host/synth', 'via': [{'transpose': 0}]}},
+        {},
+        endpoints(),
+    )
+    assert midi_processing.estimate_ram(data, endpoint_count=3) == (
+        midi_processing.estimate_ram(builtin, endpoint_count=3) + 256 + 16
+    )
     with pytest.raises(ValidationError):
         midi_processing.compile_routes(
             {

@@ -21,6 +21,7 @@ public:
         return nullptr;
     }
     bool put(const PatchExecutor &invocation, const Controller::NavigationState &state) {
+        if (!state.valid) return false;
         for (auto *entry = head_; entry; entry = entry->next)
             if (entry->invocation == &invocation) { entry->state = state; return true; }
         MemoryBuffer allocation;

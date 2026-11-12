@@ -1,5 +1,6 @@
 """Named pages share one configuration and preserve order and window layouts."""
 
+import struct
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,21 @@ def test_named_instances_and_order_survive_compilation() -> None:
     assert compiler.compile_show(exported, {}, [], target()) == data
 
 
+def test_compiled_ram_budget_counts_only_declared_switcher_instances() -> None:
+    def compile_pages(pages: dict[str, object]) -> tuple[int, int, int]:
+        data = compiler.compile_show({'pages': pages}, {}, [], target())
+        instruments, cycles, patches = struct.unpack_from('<HHH', data, 12)
+        metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
+        return compiler.METADATA.unpack_from(data, metadata)[-2], instruments, cycles
+
+    single, instruments, cycles = compile_pages({'live': {}})
+    double, _, _ = compile_pages({'live': {}, 'second': {}})
+    status, _, _ = compile_pages({'live': {}, 'status': {'type': 'status'}})
+    assert (instruments, cycles) == (0, 0)
+    assert double - single == 376
+    assert status - single == 8
+
+
 @pytest.mark.parametrize(
     'source',
     [
@@ -83,9 +99,11 @@ def test_window_priority_requires_every_declared_id() -> None:
         )
 
 
-def test_patch_switcher_instance_limit_is_preserved() -> None:
-    with pytest.raises(ValueError, match='four patch-switcher'):
-        layout.pack({str(i): models.Page() for i in range(5)}, ['screen'])
+@pytest.mark.parametrize('count', [5, 40, 255])
+def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
+    pages = {str(i): models.Page() for i in range(count)}
+    data = layout.pack(pages, ['screen'])
+    assert len(layout.unpack(data, 0)['pages']) == count
 
 
 @pytest.mark.parametrize('count', [1, 2, 3])

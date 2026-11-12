@@ -8,6 +8,9 @@ struct RecordingSink : cntrl::midi::Sink {
     std::vector<Packet> sent[2];
     unsigned blocked = 0;
     unsigned allowance = UINT32_MAX;
+    unsigned capture_contexts(unsigned inputs, unsigned channels) const override {
+        return cntrl::midi::Sink::capture_contexts(inputs & 3,channels) / 16;
+    }
     bool write_packet(unsigned output, const Packet &packet) override {
         if ((blocked & (1u << output)) || !allowance) return false;
         --allowance;
@@ -127,7 +130,7 @@ void fine_controls_and_parameters_are_complete_atomic_transactions() {
 void loading_preserves_fractional_beats_and_rejects_system_events() {
     Session s; s.take(); s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
     LoopFile source, index; assert(source.reserve(512) && index.reserve(512));
-    MidiFileRecorder recorder(source); assert(recorder.start_prepared({},index,480,500000));
+    MidiFileRecorder recorder(source); assert(recorder.start_prepared({},index,480,500000,2));
     recorder.receive_tick(0,{9,{0x90,67,99}},0); recorder.poll(0);
     recorder.receive_tick(0,{8,{0x80,67,0}},240); recorder.poll(0);
     assert(recorder.request_finish_tick(720)); for (unsigned i = 0; i < 8; ++i) recorder.poll(0);
@@ -181,6 +184,7 @@ void a_missed_first_wrap_is_rejected_and_hold_sources_are_unioned() {
     s.poll(MidiLooper::beat * 2 + MidiLooper::beat / 2); assert(s.sink.sent[0].size() == 3 && s.sink.sent[0][2].bytes[2] == 0);
 }
 void a_full_take_and_multiple_overdub_passes_preserve_events() {
+    {
     Session full; assert(full.loop.record(full.clock(),500000)); full.poll(MidiLooper::beat);
     for (unsigned i = 0; i < 256; ++i) {
         full.position = MidiLooper::beat + i * MidiLooper::beat / 512;
@@ -194,6 +198,7 @@ void a_full_take_and_multiple_overdub_passes_preserve_events() {
     assert(full.loop.reverse({0,1,false}));
     for (unsigned i = 0; i < 128; ++i) full.loop.poll({0,1,false},true,3,full.sink);
     assert(full.loop.state() == MidiLooper::State::stopped && full.loop.events() == 512 && full.loop.undo_available());
+    }
 
     Session s; s.take(); assert(s.loop.record(s.clock(),500000));
     s.poll(MidiLooper::beat * 2 + MidiLooper::beat / 2); s.poll(MidiLooper::beat * 3);
@@ -256,7 +261,7 @@ void direction_switches_at_boundaries_and_preserves_the_saved_phrase() {
     assert(s.loop.backward() && !s.sink.loop_cleaning());
     s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
     assert(s.loop.direction({0,1,false}) && !s.loop.backward());
-    assert(cntrl::memory_used == memory);
+    assert(cntrl::memory_used <= memory);
 }
 void reversing_a_stopped_phrase_preserves_silence_velocities_holds_and_undo() {
     Session s; constexpr uint64_t beat = MidiLooper::beat;
@@ -354,8 +359,59 @@ void direction_switches_retire_blocked_outputs_and_stop_cancels_reverse_edits() 
     assert(s.loop.clear()); s.loop.poll({0,1,false},true,3,s.sink);
     assert(!s.loop.backward() && !s.loop.direction_pending() && !s.loop.owned());
 }
+void idle_configuration_and_failed_arm_preserve_available_memory() {
+    Session s(32);
+    const unsigned idle = cntrl::memory_used, budget = cntrl::memory_budget;
+    cntrl::memory_budget = idle;
+    assert(!s.loop.record(s.clock(),500000));
+    assert(s.loop.configured() && s.loop.state() == MidiLooper::State::empty);
+    assert(s.loop.error() == MidiLooper::Error::memory && cntrl::memory_used == idle);
+    cntrl::memory_budget = budget;
+    assert(s.loop.record(s.clock(),500000));
+    s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
+    for (unsigned i = 0; i < 256; ++i) s.loop.poll(s.clock(),true,3,s.sink);
+    assert(cntrl::memory_used == idle);
+}
+void failed_reverse_preparation_preserves_the_take_and_undo() {
+    Session s(32); s.take(); s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
+    assert(s.loop.reverse({0,1,false}));
+    for (unsigned i = 0; i < 128; ++i) s.loop.poll({0,1,false},true,3,s.sink);
+    assert(s.loop.state() == MidiLooper::State::stopped && s.loop.undo_available());
+    MidiFile *file = s.loop.save_begin(); assert(file);
+    std::vector<uint8_t> before(file->size()); assert(file->read(0,before.data(),unsigned(before.size()))); s.loop.save_complete(true);
+    const unsigned used = cntrl::memory_used, budget = cntrl::memory_budget;
+    cntrl::memory_budget = used;
+    assert(!s.loop.reverse({0,1,false}));
+    assert(s.loop.state() == MidiLooper::State::stopped && s.loop.undo_available());
+    assert(s.loop.error() == MidiLooper::Error::memory);
+    file = s.loop.save_begin(); assert(file);
+    std::vector<uint8_t> after(file->size()); assert(file->read(0,after.data(),unsigned(after.size()))); s.loop.save_complete(true);
+    assert(before == after); cntrl::memory_budget = budget;
+}
+void armed_capacity_survives_exhaustion_through_the_first_wrap() {
+    Session s(16);
+    assert(s.loop.record(s.clock(),500000));
+    const unsigned allocations = cntrl::memory_allocations;
+    cntrl::memory_fail_after = 0;
+    s.poll(MidiLooper::beat);
+    for (unsigned i = 0; i < 8; ++i) s.note(60 + i,true);
+    s.position += MidiLooper::beat / 2;
+    assert(s.loop.record(s.clock(),500000));
+    s.poll(MidiLooper::beat * 2,32);
+    if (s.loop.state() != MidiLooper::State::playing)
+        std::fprintf(stderr,"first wrap: state=%u error=%u events=%u\n",unsigned(s.loop.state()),unsigned(s.loop.error()),s.loop.events());
+    assert(s.loop.state() == MidiLooper::State::playing && s.loop.events() == 16);
+    assert(s.loop.error() == MidiLooper::Error::none && s.sink.sent[0].size() == 8);
+    s.poll(MidiLooper::beat * 3,32);
+    assert(s.loop.state() == MidiLooper::State::playing && s.loop.failed_outputs() == 0);
+    assert(cntrl::memory_allocations == allocations);
+    cntrl::memory_fail_after = -1;
+}
 int main() {
     cntrl::memory_budget = 524288;
+    idle_configuration_and_failed_arm_preserve_available_memory();
+    failed_reverse_preparation_preserves_the_take_and_undo();
+    armed_capacity_survives_exhaustion_through_the_first_wrap();
     first_wrap_and_thousands_of_irregular_cycles_keep_absolute_phase();
     a_silent_take_has_a_positive_length_and_can_be_stopped();
     overdub_is_published_at_a_boundary_and_undo_has_one_level();

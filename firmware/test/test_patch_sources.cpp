@@ -48,7 +48,15 @@ int main(int argc, char **argv) {
         std::memcpy(p + payload + i * length, setup.data(), length);
     }
     cntrl::put32(p + 12, cntrl::checksum(p + 40, file.size() - 40));
-    cntrl::memory_budget = 2 * length; cntrl::SetupTable table; assert(table.open(file, board));
+    cntrl::memory_budget = 192 * 1024; cntrl::memory_peak = cntrl::memory_used;
+    cntrl::SetupTable table; assert(table.open(file, board));
+    const unsigned metadata = cntrl::memory_used - table.resident_bytes();
+    const unsigned validation = cntrl::memory_peak - cntrl::memory_used;
+    table.clear();
+    cntrl::CheckedList<uint16_t> pins; assert(pins.reserve(2));
+    const unsigned pin_bytes = pins.memory_bytes(); pins.release();
+    cntrl::memory_budget = 2 * length + metadata + validation + pin_bytes;
+    assert(table.open(file, board));
     cntrl::StoredPatchSources sources(table); sources.begin(); sources.begin();
     const cntrl::Document *a = nullptr, *b = nullptr; uint32_t revision;
     assert(sources.acquire(0, a, revision) && sources.acquire(1, b, revision));

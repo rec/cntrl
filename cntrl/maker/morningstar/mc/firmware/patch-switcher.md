@@ -387,8 +387,28 @@ is sized to its contents; staging and scratch are released when idle. Reusing an
 active font retains its allocation and counts it once. During a setup change,
 both old and newly loaded data count until the change commits or is cancelled.
 Allocation failure preserves the active setup and fonts and reports an error.
-Other runtime allocations and allocator overhead also consume the physical heap,
-so an allocation may fail before the tracked payload bytes reach the linked limit.
+The target charges each checked allocation's actual pinned newlib-nano chunk,
+including alignment and allocator overhead. Native tests use the ARM admission
+model `round_up(payload, 8) + 8`; host estimates also include allocation costs.
+Replacing a buffer requires room for both complete allocations before copying.
+SDK allocations made during initialization are measured and subtracted from the
+linked budget. Later SDK growth is reported separately, and fragmentation can
+still prevent an allocation even when sufficient total free bytes remain.
+
+With playback, clocks and held notes/pedals stopped and MIDI inputs quiet,
+`CNTRL HEAP` reports actual checked and SDK heap bytes, SDK growth since boot,
+largest ordinary-malloc request available, free-block count, allocation/failure
+counts and maximum allocation/free cycle counts. It refuses active performance.
+This explicit diagnostic walks the pinned allocator's free list; it is not run
+by normal MIDI service. `valid=1` confirms that traced chunks match `mallinfo`
+and the free-list representation passes validation. A reported peak is a
+conservative peak for reallocations, which may temporarily require both blocks.
+Linked allocator faults are disabled normally and can be enabled only by the
+qualification harness through `device::heap_fault_after`.
+
+These counters do not establish a MIDI timing bound for newlib's linear free-list
+search. Physical fragmentation and timing qualification remain necessary before
+claiming that live allocation meets the scan deadline.
 
 The target supports 32 routed instruments, 128 categories and 128 Undo entries.
 Record sizes impose an upper bound that depends on instrument/category tables,

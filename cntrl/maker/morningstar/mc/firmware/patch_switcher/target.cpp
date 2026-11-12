@@ -1,4 +1,5 @@
 #include "target.h"
+#include "heap_trace.h"
 #include "target_capabilities.h"
 #if CNTRL_ORIGINAL_FIRMWARE
 #include "../boot_switch/selection.h"
@@ -7,6 +8,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <Arduino.h>
 // Inline shared routines need distinct sections alongside strong FLASHMEM functions.
 #define CNTRL_FLASH_ROUTINE(name) __attribute__((section(".flashmem.cntrl_" #name), noinline))
+#define CNTRL_NOINLINE __attribute__((noinline))
 #include <cntrl/runtime.h>
 #include <cntrl/ui/controls.h>
 #include <cntrl/ui/application.h>
@@ -148,16 +150,16 @@ public:
     void configure_midi_streams(const cntrl::Document &document) override {
         pickup(document.pickup(), document.pickup_pairing_ms());
         midi_runtime_.streams().file_provider(&midi_files);
-        if (!midi_runtime_.streams().load(document.midi_streams(), document.midi_streams_size(), midi_outputs(), document.nodes(), midi_runtime_.stream_time(micros())))
-            error("Invalid MIDI stream graph");
     }
     bool select_midi_streams(const cntrl::Document &document, unsigned node) override {
+        unsigned scope;
+        if (!document.stream_scope(node, scope)) return false;
         pickup(document.pickup(node), document.pickup_pairing_ms());
         if (document.midi_streams_size() != documents.document().midi_streams_size()
             || (document.midi_streams_size() && std::memcmp(document.midi_streams(), documents.document().midi_streams(), document.midi_streams_size())))
             return midi_runtime_.streams().select_external(document.midi_streams(), document.midi_streams_size(),
-                midi_outputs(), document.nodes(), document.stream_scope(node), midi_runtime_.stream_time(micros()));
-        midi_runtime_.streams().select(document.stream_scope(node), midi_runtime_.stream_time(micros()));
+                midi_outputs(), document.nodes(), scope, midi_runtime_.stream_time(micros()));
+        midi_runtime_.streams().select(scope, midi_runtime_.stream_time(micros()));
         return true;
     }
     cntrl::midi::TrsMode port_mode(unsigned jack) const { return trs_ports.mode(jack); }
@@ -302,9 +304,34 @@ public:
         application.controller().validation(begin);
     }
     bool prepare_invocation(cntrl::PatchExecutor &invocation) override {
-        return invocation_navigation.put(invocation, application.controller().navigation());
+        if (!bridge_.retain_owner(invocation.owner())) return false;
+        if (!retain_owner_state(&invocation, invocation.owner())) { bridge_.release_owner(invocation.owner()); return false; }
+        activate_owner_state(&invocation, invocation.owner());
+        if (invocation.persistent()) return true;
+        if (invocation_navigation.put(invocation, application.controller().navigation())) return true;
+        release_owner_state(&invocation);
+        bridge_.release_owner(invocation.owner()); return false;
     }
-    void release_invocation(cntrl::PatchExecutor &invocation) override { invocation_navigation.erase(invocation); }
+    void release_invocation(cntrl::PatchExecutor &invocation) override {
+        invocation_navigation.erase(invocation); bridge_.release_owner(invocation.owner());
+        release_owner_state(&invocation);
+    }
+    bool retain_owner(cntrl::PatchExecutor &invocation) override {
+        if (!bridge_.retain_owner(invocation.owner())) return false;
+        if (retain_owner_state(&invocation, invocation.owner())) return true;
+        bridge_.release_owner(invocation.owner()); return false;
+    }
+    void release_retained_owner(cntrl::PatchExecutor &invocation) override {
+        release_owner_state(&invocation); bridge_.release_owner(invocation.owner());
+    }
+    bool prepare_message(cntrl::PatchExecutor &invocation, const char *name, const uint8_t *bytes, unsigned length) override {
+        const auto *output = midi_outputs().find(name);
+        return output && reserve_owner_stream(&invocation, invocation.owner(), output->route, bytes, length);
+    }
+    bool prepare_owner_cycle(cntrl::PatchExecutor &invocation) override {
+        activate_owner_state(&invocation, invocation.owner());
+        return cntrl::midi::Sink::prepare_owner_cycle(&invocation);
+    }
     bool preview_state(unsigned operation, uint32_t value) override {
 #if CNTRL_SWITCHES
         if (operation == 11 || operation == 12) return switches.open();
@@ -376,6 +403,7 @@ public:
         trs_ports.configure(modes);
     }
     void begin() {
+        if (!bridge_.prepare() || !midi_runtime_.prepare(midi_outputs())) error("MIDI memory unavailable");
         Serial1.begin(31250);
         Serial2.begin(31250);
         host.begin();
@@ -406,9 +434,36 @@ public:
         return fonts.supports(font, size);
     }
     bool supports_font_asset(uint32_t key, unsigned size) const override { return font_files.supports(key, size); }
-    void begin_fonts() override { font_assets::cache.begin(); }
-    bool prepare_pages(const cntrl::Document &document) override { return application.prepare_pages(document.valid() ? document.page_layout() : cntrl::PageLayout{}); }
-    void finish_pages(bool commit) override { application.finish_pages(commit); }
+    bool begin_fonts(unsigned count) override { return font_assets::cache.begin(count); }
+    bool prepare_pages(const cntrl::Document &document) override {
+        if (!application.prepare_pages(document)) return false;
+        if (!midi_runtime_.streams().prepare_load(document.midi_streams(), document.midi_streams_size(),
+            midi_outputs(), document.nodes(), midi_runtime_.stream_time(micros()))) {
+            application.finish_pages(false);
+            return false;
+        }
+        if (!midi_runtime_.prepare_arpeggiator_configuration(document.arpeggiator_settings(),*this,midi_outputs())) {
+            midi_runtime_.streams().finish_load(false);
+            application.finish_pages(false);
+            return false;
+        }
+        return true;
+    }
+    unsigned capture_contexts(unsigned inputs, unsigned channels) const override {
+        unsigned selected_channels = 0, count = 0;
+        for (unsigned i = 0; i < 16; ++i) selected_channels += bool(channels & (1u << i));
+        for (const auto &connection : midi_outputs()) if (connection.input && (inputs & (1u << connection.route))) {
+            const unsigned cables = connection.transport == cntrl::midi::OutputTransport::physical ? 1
+                : connection.transport == cntrl::midi::OutputTransport::usb_device ? MIDI_NUM_CABLES : 16;
+            count += cables * selected_channels;
+        }
+        return count;
+    }
+    void finish_pages(bool commit) override {
+        midi_runtime_.streams().finish_load(commit);
+        midi_runtime_.finish_arpeggiator_configuration(commit);
+        application.finish_pages(commit);
+    }
     bool stage_font(uint32_t key, unsigned size) override { return font_files.stage(key, size); }
     void finish_fonts(bool commit) override {
         if (commit) renderer_.invalidate();
@@ -417,6 +472,9 @@ public:
     bool output_idle() const override { return bridge_.idle() && trs_ports.idle(); }
     CNTRL_FLASH_ROUTINE(board_configuration_handoff)
     bool configuration_handoff() override {
+#if CNTRL_SWITCHES
+        if (switches.open()) return false;
+#endif
         midi_files.looper.stop();
         midi_files.looper.poll(ui_.pages_.beat_position(micros()),ui_.pages_.clock_ready(),clock_available(),*this);
         return !loop_cleaning() && output_idle() && !midi_files.storage_busy();
@@ -481,6 +539,23 @@ public:
     void midi_reset() { midi_runtime_.reset(*this); }
     void midi_status(unsigned route) { midi_runtime_.status(bridge_, route, documents.document(), *this); }
     void midi_stream_status() { midi_runtime_.stream_status(*this); }
+    FLASHMEM bool heap_diagnostic_ready() {
+        auto &streams = midi_runtime_.streams();
+        const auto loop = midi_files.looper.state();
+        if (configuration_locked() || documents.busy() || !output_idle() || loop_cleaning()
+            || midi_files.player.active() || midi_files.player.cleaning() || midi_files.recorder.active()
+            || (loop != cntrl::midi::MidiLooper::State::empty && loop != cntrl::midi::MidiLooper::State::stopped)
+            || arpeggiator().state() != cntrl::midi::MidiArpeggiator::State::stopped
+            || ui_.pages_.generator.running() || streams.pending() || streams.voices() || streams.recovery()
+            || streams.clock_outputs() || streams.lfo_status().running) return false;
+        for (const auto &output : cntrl::midi::Sink::state().outputs)
+            for (const auto &channel : output.channels) {
+                for (const auto &note : channel.notes) if (note.velocity && *note.velocity) return false;
+                for (const auto &control : channel.controllers)
+                    if (control.known && (control.controller == 64 || control.controller == 66) && control.value >= 64) return false;
+            }
+        return true;
+    }
     void scanned(uint32_t gap) { midi_runtime_.scanned(gap); }
 #ifdef CNTRL_DIAGNOSTICS
     void timing_mode(bool enabled) {
@@ -497,7 +572,7 @@ public:
 
 #endif
     void set_animation_color_cycle(bool enabled) override {
-        splash_player.set_color_cycle(enabled);
+        if (!splash_player.set_color_cycle(enabled)) error("Animation color memory unavailable");
     }
     bool reply_ready() const override { return usb_session.reply_ready(); }
     void reply(const char *text) override { startup_counter.reply(text, usb_session); }
@@ -698,15 +773,14 @@ cntrl::BundleTransfer bundle_transfer(setup_storage, documents, board, board);
 cntrl::HistoryImport history_import(card, documents, board, board);
 extern cntrl::Songs songs;
 
-cntrl::device::SdFile song_writer, song_readers[4];
-cntrl::files::File *song_reader_handles[] = {&song_readers[0], &song_readers[1], &song_readers[2], &song_readers[3]};
-cntrl::SlotStorage song_files(setup_filesystem, song_writer, song_reader_handles, 4, "/cntrl/songs", card.ready);
-cntrl::ui::SongSources song_sources(board, board, patch_sources, setup_storage.setups(), documents, application, songs, cntrl::Switches::capacity);
+cntrl::device::SdFile song_writer;
+cntrl::SlotStorage song_files(setup_filesystem, song_writer, 4, "/cntrl/songs", card.ready);
+cntrl::ui::SongSources song_sources(board, board, patch_sources, setup_storage.setups(), documents, application, songs, UINT_MAX - 1);
 DMAMEM cntrl::Songs songs(song_files, song_sources);
 DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
 cntrl::ui::Application application(board, documents, primary_controller, board, patch_sources, songs, song_sources, CNTRL_SWITCHES);
 #if CNTRL_ORIGINAL_FIRMWARE
-DMAMEM cntrl::ui::FirmwareVisitRecord firmware_visit_record;
+cntrl::ui::FirmwareVisitRecord firmware_visit_record;
 cntrl::device::SdFile firmware_visit_file;
 cntrl::ui::FirmwareVisit firmware_visit(firmware_visit_record, firmware_visit_file, board, board,
     documents, application, songs, song_sources, board.runtime, invocation_navigation,
@@ -809,6 +883,18 @@ PerformanceStatus performance_status() {
 void midi_status(unsigned route) { board.midi_status(route); }
 void midi_reset() { board.midi_reset(); }
 bool native_asset_command(const char *line) {
+    if (!std::strcmp(line, "CNTRL HEAP")) {
+        if (!board.heap_diagnostic_ready()) { board.reply("CNTRL ERROR busy"); return true; }
+        const auto heap = cntrl::device::heap_snapshot();
+        char response[384];
+        std::snprintf(response, sizeof(response),
+            "CNTRL HEAP actual=%u checked=%u sdk=%u sdk_growth=%u largest=%u free_blocks=%u unallocated=%u peak=%u allocations=%u frees=%u failures=%u max_alloc_cycles=%u max_free_cycles=%u interrupt_allocations=%u valid=%u",
+            heap.actual_used, heap.checked_actual, heap.sdk_used, heap.sdk_growth, heap.largest_free,
+            heap.free_blocks, heap.unallocated, heap.trace.peak, heap.trace.allocations, heap.trace.frees,
+            heap.trace.failures, heap.trace.max_allocation_cycles, heap.trace.max_free_cycles,
+            heap.trace.interrupt_allocations, heap.valid);
+        board.reply(response); return true;
+    }
     if (!std::strcmp(line,"CNTRL MIDI LOOPER")) { midi_files.looper.status(board); return true; }
     if (!std::strcmp(line, "CNTRL MIDI STREAMS")) {
         board.midi_stream_status(); return true;
@@ -857,6 +943,7 @@ FLASHMEM bool midi_storage_idle() {
         && !songs_transfer.busy() && !font_files.busy() && !splash_assets.busy() && !usb_session.active();
 }
 cntrl::ButtonState buttons[cntrl::target::button_count];
+cntrl::AuxiliarySwitches auxiliary;
 cntrl::CooperativeRuntime cooperative_runtime(cntrl::target::scan_interval_ms);
 
 } // namespace
@@ -865,6 +952,8 @@ bool switch_scan_due() { return cooperative_runtime.scan_due(millis()); }
 
 FLASHMEM void initialize_target() {
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
+    cntrl::device::initialize_heap_accounting(cntrl::memory_budget);
+    if (!auxiliary.prepare(board)) board.error("Auxiliary switch memory unavailable");
     board.page_host().looper_files(midi_files,board);
     board.page_host().arpeggiator(board.arpeggiator());
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
@@ -890,6 +979,7 @@ FLASHMEM void initialize_target() {
     font_files.ready = card.ready;
     splash_card.ready = card.ready;
     splash_assets.boot();
+    cntrl::device::initialize_heap_accounting(unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget)));
     randomSeed(Teensy3Clock.get() ^ ARM_DWT_CYCCNT);
     if (card.ready && !setup_storage.boot()) board.error("Setup bundle invalid");
     documents.boot();
@@ -959,7 +1049,6 @@ TargetControls target_controls;
 cntrl::ui::InputCoordinator input_coordinator(buttons, cntrl::target::controls, documents.document(), application, board);
 class TargetRuntime {
 public:
-    cntrl::AuxiliarySwitches auxiliary;
     uint32_t now() const { return millis(); }
     void complete_display() { poll_display_dma(); }
     void keyboard() { board.poll_keyboard(); }

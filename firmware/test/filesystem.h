@@ -1,5 +1,6 @@
 #pragma once
 #include <cntrl/filesystem.h>
+#include <cntrl/memory.h>
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
@@ -19,12 +20,13 @@ public:
         std::error_code error; std::filesystem::rename(path(from), path(to), error); return !error;
     }
     std::unique_ptr<cntrl::files::Directory> directory() override;
+    std::unique_ptr<cntrl::files::File> file() override;
     bool remove(const char *name) override { return std::filesystem::remove(path(name)); }
 private:
     std::filesystem::path root_;
 };
 
-class TestFile : public cntrl::files::File {
+class TestFile : public cntrl::files::File, public cntrl::CheckedHeapAllocation {
 public:
     explicit TestFile(TestFileSystem &filesystem) : filesystem_(filesystem) {}
     bool open(const char *name, cntrl::files::Mode mode) override {
@@ -99,3 +101,4 @@ private:
 };
 
 inline std::unique_ptr<cntrl::files::Directory> TestFileSystem::directory() { return std::make_unique<TestDirectory>(*this); }
+inline std::unique_ptr<cntrl::files::File> TestFileSystem::file() { return std::unique_ptr<cntrl::files::File>(new (std::nothrow) TestFile(*this)); }

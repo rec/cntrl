@@ -128,6 +128,7 @@ static void relay_is_bidirectional_without_enabling_the_physical_interface() {
     assert(sink.messages.size() == 5 && sink.messages.back() == Packet({9, {0x90, 63, 100}}).packed(1));
 }
 int main() {
+    cntrl::memory_budget = 524288;
     hotplug_defers_transfers_and_publishes_latest_identity();
     descriptor_adds_named_cables_and_preserves_other_interfaces();
     relay_is_bidirectional_without_enabling_the_physical_interface();

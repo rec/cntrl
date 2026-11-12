@@ -59,6 +59,7 @@ void test_calibration_survives_reload(TestFileSystem &filesystem) {
     assert(!std::strcmp(prompt, "Confirm: Calibrate"));
 }
 int main(int argc, char **argv) {
+    cntrl::memory_budget = 524288;
     assert(argc == 2);
     TestFileSystem filesystem(argv[1]);
     test_recording_selection(filesystem);

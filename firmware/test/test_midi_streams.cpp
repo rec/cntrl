@@ -21,7 +21,9 @@ struct Board : TestPatchHardware, cntrl::midi::Sink {
         sent.push_back({output, packet}); return true;
     }
     bool select_midi_streams(const cntrl::Document &document, unsigned root) override {
-        streams.select(document.stream_scope(root)); return true;
+        unsigned scope;
+        if (!document.stream_scope(root, scope)) return false;
+        streams.select(scope); return true;
     }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t, bool = false) override {}
@@ -57,7 +59,9 @@ int main(int argc, char **argv) {
         board.streams.connection(i, true, 1);
         board.streams.output_connection(i, true, 1);
     }
-    assert(document.stream_scope(unsigned(document.named_patch("alias"))) == document.stream_scope(unsigned(document.named_patch("base"))));
+    unsigned alias_scope, base_scope;
+    assert(document.stream_scope(unsigned(document.named_patch("alias")), alias_scope)
+        && document.stream_scope(unsigned(document.named_patch("base")), base_scope) && alias_scope == base_scope);
     board.select(document, "base");
     board.note(60, true);
     assert(board.sent.size() == 2);

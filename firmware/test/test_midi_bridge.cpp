@@ -53,8 +53,8 @@ void test_independent_outputs_and_pedal_reservation() {
     cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0); out.blocked[0] = true;
     for (unsigned i = 0; i < 1000; ++i) input(b, 0, {0x90, 60, 100});
-    assert(b.counters(0).high_water == b.capacity);
-    assert(b.counters(0).dropped == 1000 - b.capacity);
+    assert(b.counters(0).high_water == 1000);
+    assert(b.counters(0).dropped == 0);
     uint8_t patch[] = {0xb0, 0, 1, 0xb0, 32, 2, 0xc0, 3};
     assert(b.pedal(0, patch, sizeof(patch)));
     assert(b.pedal(1, patch, sizeof(patch)));
@@ -103,7 +103,9 @@ void test_sysex_timeout_overflow_and_disconnect() {
     assert(out.bytes[0].back() == 10);
     input(b, 0, {0xf0, 1, 2}, 1001); b.service(out, 1001);
     out.blocked[0] = true;
+    cntrl::memory_fail_after = 0;
     for (unsigned i = 0; i < 1000; ++i) input(b, 0, {1, 2, 3}, 1001);
+    cntrl::memory_fail_after = -1;
     assert(b.counters(0).aborted == 2);
     out.blocked[0] = false; b.service(out, 1001);
     assert(out.bytes[0].back() == 0xf7);
@@ -141,8 +143,10 @@ void test_usb_sysex_resynchronizes_after_overflow() {
     cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0); out.blocked[0] = true;
     forward(b, 0x0201f004, 0);
+    cntrl::memory_fail_after = 0;
     for (unsigned i = 0; i < 300; ++i) forward(b, 0x03020104, 0);
     forward(b, 0x0000f705, 0);
+    cntrl::memory_fail_after = -1;
     out.blocked[0] = false;
     forward(b, 0x00f7f006, 1); b.service(out, 1);
     assert((out.bytes[0] == std::vector<uint8_t>{0xf0, 0xf7}));
@@ -380,7 +384,75 @@ void test_file_sysex_waits_for_previous_stream_and_allows_realtime() {
     assert(out.bytes[0].size() == size + 4);
 }
 
+void test_refused_retrigger_keeps_fifo_releases_when_memory_is_full() {
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output out;
+    bridge.configure(true); bridge.connected(true, 0);
+    input(bridge, 0, {0x90, 60, 100}); bridge.service(out, 0);
+    out.blocked[0] = true;
+    cntrl::memory_fail_after = 0;
+    input(bridge, 0, {0x90, 60, 110});
+    input(bridge, 0, {0x80, 60, 0});
+    input(bridge, 0, {0x80, 60, 0});
+    out.blocked[0] = false; bridge.service(out, 0); bridge.service(out, 0);
+    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0x80, 60, 0}));
+    cntrl::memory_fail_after = -1;
+}
+
+void test_unwritten_onset_memory_failure_does_not_block_its_release() {
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output out;
+    bridge.configure(true); bridge.connected(true, 0);
+    input(bridge, 0, {0x90, 60, 100}); input(bridge, 0, {0x80, 60, 0});
+    cntrl::memory_fail_after = 0;
+    bridge.service(out, 0); bridge.service(out, 0);
+    assert(out.bytes[0].empty());
+    cntrl::memory_fail_after = -1;
+    input(bridge, 0, {0x90, 62, 100}); bridge.service(out, 0);
+    input(bridge, 0, {0x80, 62, 0}); bridge.service(out, 0);
+    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 62, 100, 0x80, 62, 0}));
+}
+
+void test_pedal_admission_keeps_note_and_pedal_releases_when_heap_is_full() {
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output out;
+    bridge.configure(true); bridge.connected(true, 0);
+    uint8_t on[] = {0x90, 60, 100, 0xb0, 64, 127};
+    uint8_t off[] = {0x80, 60, 0, 0xb0, 64, 0};
+    assert(bridge.pedal(0, on, sizeof(on)));
+    bridge.service(out, 0); bridge.service(out, 0);
+    cntrl::memory_fail_after = 0;
+    for (unsigned i = 0; i < 8; ++i) bridge.service(out, 0);
+    assert(bridge.pedal(0, off, sizeof(off)));
+    bridge.service(out, 0); bridge.service(out, 0);
+    cntrl::memory_fail_after = -1;
+    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0xb0, 64, 127, 0x80, 60, 0, 0xb0, 64, 0}));
+}
+
+void test_refused_owned_work_does_not_starve_an_admitted_terminal_release() {
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output out; int identity = 0;
+    bridge.configure(true); bridge.connected(true, 0);
+    uint8_t on[] = {0x90, 60, 100}, off[] = {0x80, 60, 0}, fresh[] = {0xb0, 7, 90};
+    assert(bridge.prepare_owner(0) && bridge.prepare_owner(1));
+    assert(out.retain_owner_state(&identity, 1));
+    assert(out.reserve_owner_stream(&identity, 1, 0, on, sizeof(on)));
+    assert(out.reserve_owner_stream(&identity, 1, 0, off, sizeof(off)));
+    assert(out.prepare_owner_cycle(&identity)); out.activate_owner_state(&identity, 1);
+    assert(bridge.owned_send(1, 0, on, sizeof(on))); bridge.service(out, 0);
+    assert(bridge.owned_send(0, 0, fresh, sizeof(fresh)));
+    assert(bridge.owned_send(1, 0, off, sizeof(off)));
+    cntrl::memory_fail_after = 0;
+    bridge.service(out, 0); bridge.service(out, 0);
+    cntrl::memory_fail_after = -1;
+    assert(bridge.delivery(0) == cntrl::midi::Bridge::Delivery::cancelled);
+    assert(bridge.delivery(1) == cntrl::midi::Bridge::Delivery::complete);
+    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0x80, 60, 0}));
+    out.release_owner_state(&identity);
+}
+
 int main() {
+    cntrl::memory_budget = 524288;
+    test_pedal_admission_keeps_note_and_pedal_releases_when_heap_is_full();
+    test_refused_owned_work_does_not_starve_an_admitted_terminal_release();
+    test_refused_retrigger_keeps_fifo_releases_when_memory_is_full();
+    test_unwritten_onset_memory_failure_does_not_block_its_release();
     const cntrl::midi::OutputConnection connections[] = {
         {"input-only", "Input", 0, cntrl::midi::OutputTransport::physical, true, false},
         {"synth", "Synth", 1, cntrl::midi::OutputTransport::physical, false, true},

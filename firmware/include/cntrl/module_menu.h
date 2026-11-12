@@ -11,7 +11,7 @@ public:
     ModuleMenu(Hardware &hardware, const char *const *names, unsigned count)
         : hardware_(hardware), names_(names), count_(count) {}
     bool open() const { return open_; }
-    void configure(unsigned count) { count_ = count; selected_ = 0; }
+    void configure(const char *const *names, unsigned count) { names_ = names; count_ = count; selected_ = 0; }
     void leave() { open_ = false; }
     void enter() { open_ = locked_ = true; selected_ = 0; render(); }
     void poll(uint8_t held) { if (!held) locked_ = false; }

@@ -12,9 +12,12 @@ using cntrl::midi::Packet;
 struct Output : cntrl::midi::Sink {
     std::vector<Packet> packets;
     unsigned allowance = 10000;
+    bool fail_allocations_after_write = false;
     bool write_packet(unsigned, const Packet &p) override {
         if (!allowance) return false;
-        --allowance; packets.push_back(p); return true;
+        --allowance; packets.push_back(p);
+        if (fail_allocations_after_write) { cntrl::memory_fail_after = 0; fail_allocations_after_write = false; }
+        return true;
     }
 };
 
@@ -209,7 +212,23 @@ void test_compiled_policy(const char *path, bool global) {
     cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size()) - 28));
     cntrl::Document rejected; assert(!rejected.load(bytes.data(), unsigned(bytes.size()), hardware));
 }
+void test_pickup_parameter_admits_every_selector_and_data_message_before_output() {
+    Output out;
+    assert(out.submit_live(0, cc(99, 1)));
+    assert(out.submit_live(0, cc(98, 2)));
+    assert(out.submit_live(0, cc(6, 10)));
+    const unsigned before = unsigned(out.packets.size());
+    out.fail_allocations_after_write = true;
+    assert(out.submit_live(0, cc(38, 11)));
+    cntrl::memory_fail_after = -1;
+    assert(out.packets.size() == before + 4);
+    assert(out.packets[before].bytes[1] == 99 && out.packets[before + 1].bytes[1] == 98);
+    assert(out.packets[before + 2].bytes[1] == 6 && out.packets[before + 3].bytes[1] == 38);
+}
+
 int main(int argc, char **argv) {
+    cntrl::memory_budget = 524288;
+    test_pickup_parameter_admits_every_selector_and_data_message_before_output();
     test_crossing_rearms_on_other_sources();
     test_unknown_disabled_and_discrete_controls();
     test_full_precision_pair_and_coarse_timeout();

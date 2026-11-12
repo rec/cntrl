@@ -100,9 +100,10 @@ void test_bounded_async_packets() {
     for (unsigned i = header_bytes + 4; i < source.size(); ++i) source.data[i] = uint8_t(i);
     struct Pending : Output {
         bool pending = false, reject = true;
-        unsigned calls = 0, x = 0, y = 0, length = 0;
+        unsigned calls = 0, begins = 0, x = 0, y = 0, length = 0;
         const uint8_t *bytes = nullptr;
         bool begin(unsigned columns, unsigned rows, unsigned streams) override {
+            ++begins;
             return columns == 333 && rows == 3 && streams == 1;
         }
         bool ready() const override { return !pending; }
@@ -116,7 +117,10 @@ void test_bounded_async_packets() {
         }
     } output;
     Player player(source, output);
-    player.set_color_cycle(true);
+    assert(player.set_color_cycle(true));
+    cntrl::memory_fail_after = 0;
+    assert(!player.start(0) && output.begins == 0);
+    cntrl::memory_fail_after = -1;
     assert(player.start(0));
     for (unsigned i = 0; i < 10; ++i) {
         assert(player.poll(0, false) == Step::playing);
@@ -184,7 +188,24 @@ void test_player_color_cycle_matches_legacy_golden() {
     assert(std::equal(output.bytes.begin(), output.bytes.end(), source.bytes.begin() + header_bytes + 4));
 }
 
+void color_state_failure_preserves_the_current_streams() {
+    const unsigned used = cntrl::memory_used;
+    ColorCycle cycle;
+    cntrl::memory_fail_after = 0;
+    assert(cycle.begin(2)); assert(!cycle.enable(true));
+    uint8_t white[] = {255,255}; cycle.pixels(1,white,1);
+    assert(white[0] == 255 && white[1] == 255 && cntrl::memory_used == used);
+    cntrl::memory_fail_after = -1;
+    assert(cycle.enable(true)); cycle.frame(0);
+    cntrl::memory_fail_after = 0;
+    assert(!cycle.begin(3)); cycle.frame(100); cycle.pixels(1,white,1);
+    assert(white[0] != 255 || white[1] != 255);
+    assert(cycle.enable(false) && cycle.begin(4));
+    assert(cntrl::memory_used == used); cntrl::memory_fail_after = -1;
+}
 int main() {
+    cntrl::memory_budget = 65536;
+    color_state_failure_preserves_the_current_streams();
     test_bounded_async_packets();
     test_player_color_cycle_matches_legacy_golden();
     Tint red = {63, 0, 0};

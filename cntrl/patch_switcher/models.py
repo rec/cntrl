@@ -818,7 +818,7 @@ class LooperSettings(BaseModel, frozen=True):
     channels: Annotated[
         list[Annotated[int, Field(strict=True, ge=1, le=16)]], Field(min_length=1)
     ] = Field(default_factory=lambda: list(range(1, 17)))
-    events: Annotated[int, Field(strict=True, ge=1, le=4096)] = 512
+    events: Annotated[int, Field(strict=True, ge=1, le=65535)] = 512
 
     @model_validator(mode='after')
     def unique_filters(self) -> 'LooperSettings':
@@ -899,7 +899,7 @@ class ArpeggiatorRhythm(BaseModel, frozen=True):
 
 
 class ArpeggiatorSettings(LooperSettings, frozen=True):
-    events: Annotated[int, Field(strict=True, ge=1, le=4096)] = 128
+    events: Annotated[int, Field(strict=True, ge=1, le=65535)] = 128
     mode: Literal['poly', 'mono'] = 'poly'
     selection: Annotated[
         ArpeggiatorSelection
@@ -1112,7 +1112,7 @@ class Setup(BaseModel, frozen=True):
             },
             'patch-switcher': Page(),
         },
-        max_length=36,
+        max_length=255,
     )
     take_first_match: Annotated[bool, Field(strict=True)] = False
     fast_switches: Annotated[bool, Field(strict=True)] = True
@@ -1298,8 +1298,8 @@ class Target(BaseModel, frozen=True):
             raise ValueError('relay output names must be unique')
         return value
 
-    max_instruments: int = Field(gt=0, le=32)
-    max_patch_cycles: int = Field(gt=0, le=128)
+    max_instruments: int = Field(gt=0, le=65535)
+    max_patch_cycles: int = Field(gt=0, le=65535)
     max_patches: int = Field(gt=0, le=65535)
     history_depth: int = Field(gt=0)
     characters: str

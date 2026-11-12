@@ -44,6 +44,9 @@ struct SongResolver {
 // uncommitted streaming import, never selected at boot. No collection is in RAM.
 class Songs {
 public:
+#ifdef CNTRL_NOINLINE
+    CNTRL_NOINLINE
+#endif
     Songs(Storage &storage, SongResolver &resolver) : storage_(storage), resolver_(resolver) {}
     const SongCounts &counts() const { return counts_; }
     uint32_t generation() const { return generation_; }
@@ -344,6 +347,9 @@ private:
         bool graph_started = false, inline_source = false, verify_sources = true;
         bool first_selection = false;
         bool done = false, item = false, is_song = false, is_selection = false, is_entry = false;
+#ifdef CNTRL_FLASH_ROUTINE
+        CNTRL_FLASH_ROUTINE(songs_cursor_step)
+#endif
         bool step(Storage &storage, unsigned slot, unsigned base, unsigned length) {
             item = false;
             if (!position) {
@@ -595,6 +601,9 @@ private:
         if (n && bytes != job_.inserted) std::memcpy(job_.inserted, bytes, n);
         job_.length = length_ - erased + n + job_.appended_length; start_hash();
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_prepare_step)
+#endif
     void prepare_step() {
         auto &c = job_.cursor;
         if (job_.edit == Edit::append_song && c.position && c.song == counts_.songs && !c.first_selection && !c.patches) {
@@ -660,6 +669,9 @@ private:
         return job_.edit == Edit::insert_patch || job_.edit == Edit::replace_patch
             || job_.edit == Edit::remove_patch || job_.edit == Edit::move_patch;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_prepare_patch)
+#endif
     void prepare_patch(const Cursor &c) {
         if (c.is_song) {
             if (job_.at >= c.song_value.count || (job_.edit == Edit::remove_patch && c.song_value.count == 1)
@@ -729,6 +741,9 @@ private:
         std::memcpy(bytes, "CSG5", 4); put32(bytes + 4, generation_ + 1);
         put32(bytes + 8, job_.length); put32(bytes + 12, job_.crc);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_stream_edit)
+#endif
     bool stream(uint8_t *buffer, unsigned n) {
         for (unsigned j = 0; j < n;) {
             unsigned at = job_.position + j, take = n - j, original = at;
@@ -798,6 +813,9 @@ private:
         }
         finish_job(true);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_edit_step)
+#endif
     void step() {
         uint8_t buffer[256];
         switch (phase_) {

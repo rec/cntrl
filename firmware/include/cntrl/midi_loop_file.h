@@ -7,7 +7,12 @@ namespace cntrl::midi {
 // same RAM2 budget as documents and fonts before the looper can be armed.
 class LoopFile final : public MidiFile {
 public:
-    bool reserve(unsigned capacity) { length_ = 0; return memory_.resize(capacity); }
+    bool reserve(unsigned capacity) {
+        if (!memory_.resize(capacity)) return false;
+        length_ = 0; return true;
+    }
+    unsigned capacity() const { return memory_.size; }
+    bool trim() { return memory_.resize(length_); }
     void reset() { length_ = 0; }
     void swap(LoopFile &other) { memory_.swap(other.memory_); std::swap(length_, other.length_); }
     uint32_t size() const override { return length_; }

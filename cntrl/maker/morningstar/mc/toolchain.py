@@ -156,6 +156,11 @@ def build(root: Path, source_root: Path, work: Path, linker: Path) -> None:
         'recipe.hooks.postbuild.1.pattern': '',
         'recipe.hooks.objcopy.postobjcopy.1.pattern': '',
     }
+    if (root / 'patch_switcher/heap_trace.cpp').is_file():
+        properties['build.flags.ld'] += (
+            ' -Wl,--wrap=_malloc_r,--wrap=_calloc_r,--wrap=_realloc_r,'
+            '--wrap=_free_r,--wrap=_memalign_r'
+        )
     command = [
         str(cli),
         'compile',

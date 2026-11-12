@@ -17,6 +17,9 @@ class Documents {
 public:
     Documents(SetupStorage &storage, Hardware &hardware, Controller &controller, Replies &replies)
         : revisions_(storage), storage_(storage), hardware_(hardware), controller_(controller), replies_(replies) {}
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_boot)
+#endif
     void boot() {
         empty();
         if (!storage_.available()) { std::strcpy(boot_error_, "storage-unavailable"); return; }
@@ -44,6 +47,9 @@ public:
         }
         return false;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_select)
+#endif
     bool select(const char *name) {
         if (busy() || dirty_ || hardware_.configuration_locked() || !hardware_.output_idle() || !setup_name(name) || !load(name)) return false;
         Document candidate;
@@ -53,7 +59,7 @@ public:
         if (std::strcmp(selected_, canonical) && !persist_selection(canonical)) { finish_resources(false); return false; }
         finish_resources(true);
         std::snprintf(selected_, sizeof(selected_), "%s", canonical);
-        activate(); return true;
+        activate(candidate); return true;
     }
     bool browse(const char *after, bool backward, bool select_result = false) {
         if (busy() || dirty_ || hardware_.configuration_locked() || !storage_.available()) return false;
@@ -85,6 +91,9 @@ public:
         default: return int(d.screensaver_timeout() / 1000);
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_adjust)
+#endif
     bool edit_adjust(unsigned patch, unsigned field, int delta) {
         Document d;
         if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_) || (field <= 4 && patch >= d.patches()) || field > 7) return false;
@@ -209,7 +218,7 @@ public:
         if (!name_compare(name, selected_)) {
             Document candidate;
             if (!candidate.load(staging_.data, length_, hardware_) || !prepare_resources(candidate)) { error("setup-resources"); return; }
-            finish_resources(true); activate();
+            finish_resources(true); activate(candidate);
         }
         if (!quiet_) replies_.reply("CNTRL OK");
         quiet_ = false; dirty_ = false;
@@ -335,7 +344,7 @@ private:
                 finish_resources(false); browse_fail(); return;
             }
             finish_resources(true); std::snprintf(selected_, 64, "%s", record_name_);
-            activate(); browse_phase_ = BrowsePhase::idle; replies_.reply("CNTRL OK"); quiet_ = false; return;
+            activate(candidate); browse_phase_ = BrowsePhase::idle; replies_.reply("CNTRL OK"); quiet_ = false; return;
         }
         }
     }
@@ -370,6 +379,9 @@ private:
         allocation_failed_ = !buffer.resize(length);
         return !allocation_failed_;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_begin_history)
+#endif
     bool begin_history(HistoryAction action, const char *name, uint64_t number, const char *label = "") {
         if (busy() || (dirty_ && action != HistoryAction::archive) || !setup_name(name) || std::strlen(label) > 63) return false;
         if (action != HistoryAction::archive) quiet_ = true;
@@ -554,7 +566,7 @@ private:
         hardware_.configure_pages(document_);
         active_.clear();
         constexpr uint8_t off[4] = {}; hardware_.configure_trs_ports(off);
-        hardware_.begin_fonts(); hardware_.finish_fonts(true);
+        hardware_.begin_fonts(0); hardware_.finish_fonts(true);
         hardware_.set_movies(nullptr, 0, nullptr, 0);
         hardware_.set_brightness(192); hardware_.set_splash(false, 0);
         hardware_.set_midi_interface(false);
@@ -564,10 +576,10 @@ private:
         std::snprintf(view.lines[1].text, sizeof(view.lines[1].text), "No setups");
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, view);
     }
-    void activate() {
+    void activate(const Document &candidate) {
         boot_error_[0] = 0;
         active_.swap(staging_);
-        document_.load(active_.data, length_, hardware_); controller_.activate(document_);
+        document_ = candidate; controller_.activate(document_);
         staging_.clear();
     }
     bool prepare_resources(const Document &document) {

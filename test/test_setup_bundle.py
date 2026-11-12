@@ -70,8 +70,11 @@ def test_native_table_and_lru_preserve_pinned_views(all_resident: bool) -> None:
     sources = {n: {'brightness': 100 + i} for i, n in enumerate(('a', 'b', 'c'))}
     setups = {n: compiler.compile_show(s, {}, [], target) for n, s in sources.items()}
     size = len(setups['a'])
+    page_ram = max(setup_bundle.build(setups, sources, MEMORY).page_ram2)
     margin = (
-        16192 if all_resident else MEMORY.capacity - MEMORY.runtime - 777 - size * 2
+        16192
+        if all_resident
+        else MEMORY.capacity - MEMORY.runtime - 777 - page_ram - size * 2
     )
     bundle = setup_bundle.build(setups, sources, MEMORY, margin)
     with TemporaryDirectory(prefix='cntrl-setup-table-test-') as directory:

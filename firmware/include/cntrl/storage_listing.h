@@ -1,8 +1,10 @@
 #pragma once
 #include "filesystem.h"
+#include "checked_array.h"
 #include <cstdio>
+#include <climits>
+#include <cstring>
 #include <memory>
-#include <string>
 
 namespace cntrl {
 // Pull one entry per acknowledged request, retaining only the directory stack.
@@ -10,15 +12,21 @@ class StorageListing {
 public:
     struct Detail { const char *key; const char *value; };
     explicit StorageListing(files::FileSystem &filesystem) : filesystem_(filesystem) {}
+    ~StorageListing() { cancel(); }
     // Detail strings belong to the caller and remain valid until cancel/END.
     bool begin(const Detail *details = nullptr, unsigned count = 0) {
-        current_ = std::make_unique<Level>(); index_ = 0;
-        details_ = details; detail_count_ = count; detail_index_ = 0;
-        current_->path = "/"; current_->directory = filesystem_.directory();
-        if (current_->directory && current_->directory->open("/")) return true;
-        cancel(); return false;
+        CheckedObject<Level> candidate;
+        if (!candidate.create() || !candidate->path.resize(2)) return false;
+        candidate->path.data[0] = '/'; candidate->path.data[1] = 0;
+        candidate->directory = filesystem_.directory();
+        if (!candidate->directory || !candidate->directory->open("/")) return false;
+        cancel(); current_ = std::move(candidate); index_ = 0;
+        details_ = details; detail_count_ = count; detail_index_ = 0; return true;
     }
-    void cancel() { current_.reset(); details_ = nullptr; detail_count_ = detail_index_ = 0; }
+    void cancel() {
+        while (current_) { auto parent = std::move(current_->parent); current_.reset(); current_ = std::move(parent); }
+        details_ = nullptr; detail_count_ = detail_index_ = 0;
+    }
     void next(char *line, unsigned capacity) {
         if (detail_index_ < detail_count_) {
             const auto &detail = details_[detail_index_++];
@@ -49,9 +57,16 @@ public:
                 used += std::snprintf(line + used, capacity - unsigned(used), "%02x", *p);
             }
             if (directory) {
-                auto child = std::make_unique<Level>(); child->directory = filesystem_.directory();
-                child->path = current_->path + (current_->path == "/" ? "" : "/") + name;
-                if (!child->directory || !child->directory->open(child->path.c_str())) { fail(line, capacity); return; }
+                CheckedObject<Level> child;
+                const unsigned parent = current_->path.size - 1, length = unsigned(std::strlen(name));
+                const unsigned separator = parent == 1 ? 0 : 1;
+                if (uint64_t(parent) + separator + length + 1 > UINT_MAX || !child.create()
+                    || !child->path.resize(parent + separator + length + 1)) { fail(line, capacity); return; }
+                child->directory = filesystem_.directory();
+                std::memcpy(child->path.data, current_->path.data, parent);
+                if (separator) child->path.data[parent] = '/';
+                std::memcpy(child->path.data + parent + separator, name, length + 1);
+                if (!child->directory || !child->directory->open(reinterpret_cast<const char *>(child->path.data))) { fail(line, capacity); return; }
                 child->id = id; child->parent = std::move(current_); current_ = std::move(child);
             }
             return;
@@ -60,14 +75,17 @@ public:
     }
 private:
     struct Level {
+        Level() = default;
+        Level(Level &&) = default;
+        Level &operator=(Level &&) = default;
         std::unique_ptr<files::Directory> directory;
-        std::string path;
+        MemoryBuffer path;
         unsigned id = 0;
-        std::unique_ptr<Level> parent;
+        CheckedObject<Level> parent;
         ~Level() { if (directory) directory->close(); }
     };
     files::FileSystem &filesystem_;
-    std::unique_ptr<Level> current_;
+    CheckedObject<Level> current_;
     unsigned index_ = 0;
     const Detail *details_ = nullptr;
     unsigned detail_count_ = 0, detail_index_ = 0;

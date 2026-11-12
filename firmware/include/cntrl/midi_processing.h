@@ -3,11 +3,13 @@
 #include "midi_file.h"
 #include "midi_stream_timeline.h"
 #include "midi_lfo.h"
+#include "checked_array.h"
+#include "checked_list.h"
+#include "input_notes.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <vector>
 
 namespace cntrl::midi {
 // The wire section is shared with patch_switcher/midi_processing.py.
@@ -28,23 +30,23 @@ public:
     static bool register_processor(unsigned opcode, unsigned version, Factory factory, bool generator = false) {
         if (opcode < 128 || opcode > 255 || !version || version > 255 || !factory) return false;
         for (const auto &entry : registry()) if (entry.opcode == opcode) return false;
-        registry().push_back({opcode, version, factory, generator}); return true;
+        return registry().append({opcode, version, factory, generator}) != nullptr;
     }
-    static constexpr unsigned system_scope = 65535, max_routes = 64;
-    struct Limits { unsigned events = 512, voices = 256, notes = 256, captures = 256; };
+    static constexpr unsigned system_scope = 65535, max_routes = UINT16_MAX;
+    struct Limits { unsigned events = UINT32_MAX, voices = UINT32_MAX, notes = UINT32_MAX, captures = UINT32_MAX; };
     struct Diagnostics { uint32_t dropped = 0, overloaded = 0, transmitted = 0, failed = 0, coalesced = 0, skipped = 0; };
-    struct LfoStatus { unsigned running = 0, pending = 0, stopping = 0, waiting = 0, missing = 0; uint64_t failed = 0; };
-    struct Field { uint8_t id = 0; std::vector<int32_t> values; };
+    struct LfoStatus { unsigned running = 0, pending = 0, stopping = 0, waiting = 0, missing = 0, failed_count = 0; uint64_t failed = 0; };
+    struct Field { uint8_t id = 0; CheckedArray<int32_t> values; };
     struct Assignment { uint8_t field = 0, source = 255; int32_t value = 0; };
     struct Step {
         uint8_t kind = 0, field = 0;
-        std::vector<Field> match;
-        std::vector<Assignment> assignments;
+        CheckedArray<Field> match;
+        CheckedArray<Assignment> assignments;
         int32_t value = 0, input_low = 0, input_high = 127, output_low = 0, output_high = 127;
         uint64_t time = 0;
         unsigned repeats = 1;
         double feedback = 1, bpm = 120;
-        std::vector<uint8_t> parameters;
+        CheckedArray<uint8_t> parameters;
         std::unique_ptr<Processor> processor;
     };
     struct Input { uint8_t kind = 0; uint16_t index = 0; };
@@ -52,15 +54,17 @@ public:
         char name[64] = {};
         uint16_t scope = system_scope, outputs = 0;
         uint16_t failed_outputs = 0;
-        std::vector<Input> inputs;
-        std::vector<Step> steps;
+        CheckedArray<Input> inputs;
+        CheckedArray<Step> steps;
         bool enabled = true, failed = false;
         uint64_t next = 0;
         StreamClock clock;
         std::unique_ptr<StreamFileSource> file;
         bool started = false;
         bool foreign = false;
-        std::unique_ptr<Lfo> lfo;
+        bool note_admission_closed = false;
+        bool activated = false;
+        CheckedObject<Lfo> lfo;
     };
     Streams() = default;
     explicit Streams(Limits limits) : limits_(limits) {}
@@ -73,6 +77,12 @@ public:
     unsigned pending() const { return unsigned(events_.size()); }
     unsigned voices() const { return unsigned(voices_.size()); }
     unsigned recovery() const { return unsigned(cleanup_.size()); }
+    unsigned input_quarantine(unsigned input) const {
+        unsigned mask = 0;
+        for (unsigned cable = 0; cable < 16; ++cable)
+            if (input_notes_.quarantined(input, uint16_t(input * 16 + cable))) mask |= 1u << cable;
+        return mask;
+    }
     void file_provider(StreamFileProvider *provider) { file_provider_ = provider; }
     void beat_position(BeatPosition position) { beat_ = position; }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -81,7 +91,7 @@ public:
     LfoStatus lfo_status() const {
         LfoStatus result;
         for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].lfo) {
-            if (routes_[i].failed) result.failed |= uint64_t(1) << i;
+            if (routes_[i].failed) { ++result.failed_count; if (i < 64) result.failed |= uint64_t(1) << i; }
             if (active(i) && routes_[i].started && !routes_[i].lfo->ended) {
                 if (routes_[i].lfo->waiting) ++result.waiting;
                 else ++result.running;
@@ -100,12 +110,19 @@ public:
     size_t retained_bytes() const {
         size_t bytes = routes_.capacity() * sizeof(Route) + parsers_.capacity() * sizeof(Parser)
             + (inputs_.capacity() + outputs_.capacity()) * sizeof(Connection)
-            + notes_.capacity() * sizeof(Note) + voices_.capacity() * sizeof(Voice)
-            + events_.capacity() * sizeof(Event) + cleanup_.capacity() * sizeof(Cleanup)
-            + holds_.capacity() * sizeof(Hold) + captures_.capacity() * sizeof(Capture)
-            + reverse_parameters_.capacity() * sizeof(Work)
-            + visits_.capacity() * sizeof(Visit) + parameters_.capacity() * sizeof(ParameterDelivery)
-            + bindings_.capacity() * sizeof(ParameterBinding);
+            + input_notes_.memory_bytes() + voices_.memory_bytes() + processing_.memory_bytes() + processing_release_tokens_.memory_bytes()
+            + events_.memory_bytes() + cleanup_.memory_bytes()
+            + holds_.memory_bytes() + captures_.memory_bytes()
+            + reverse_parameters_.memory_bytes() + visits_.memory_bytes()
+            + parameters_.memory_bytes() + bindings_.memory_bytes()
+            + owner_generations_.memory_bytes()
+            + binding_targets_.capacity() * sizeof(Parameter) + binding_owners_.capacity() * sizeof(uint64_t)
+            + downstream_reached_.capacity()
+            + parameter_cursor_.capacity() * sizeof(unsigned) + sysex_owners_.capacity() * sizeof(uint64_t)
+            + sysex_sources_.capacity() * sizeof(unsigned) + clock_claimed_.capacity() * sizeof(bool)
+            + clock_sources_.capacity() * sizeof(unsigned) + clock_owners_.capacity() * sizeof(uint64_t);
+        for (const auto &generation : owner_generations_)
+            bytes += generation.paths.capacity() * sizeof(OwnerPath) + generation.offsets.capacity() * sizeof(unsigned);
         for (const auto &route : routes_) {
             bytes += route.inputs.capacity() * sizeof(Input) + route.steps.capacity() * sizeof(Step);
             if (route.lfo) bytes += sizeof(Lfo);
@@ -145,39 +162,89 @@ public:
     CNTRL_FLASH_ROUTINE(streams_load)
 #endif
     bool load(const uint8_t *data, unsigned size, Outputs outputs, unsigned nodes, uint64_t now = 0) {
-        Streams candidate(limits_);
-        if (!candidate.decode(data, size, outputs, nodes)) return false;
+        if (!prepare_load(data, size, outputs, nodes, now)) return false;
+        finish_load(true);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_prepare_load)
+#endif
+    bool prepare_load(const uint8_t *data, unsigned size, Outputs outputs, unsigned nodes, uint64_t now = 0) {
+        finish_load(false);
+        if (!prepared_.create()) return false;
+        auto &candidate = *prepared_;
+        candidate.limits_ = limits_;
+        if (!candidate.decode(data, size, outputs, nodes)) { prepared_.reset(); return false; }
+        if (!candidate.parsers_.resize(outputs.route_count()) || !candidate.inputs_.resize(outputs.route_count())
+            || !candidate.outputs_.resize(outputs.route_count()) || !candidate.prepare_output_state(outputs.route_count())
+            || !candidate.input_notes_.configure(outputs.route_count())) { prepared_.reset(); return false; }
+        if (candidate.owner_generation_) {
+            prepared_paths_ = owner_generations_.append(std::move(*candidate.owner_generation_));
+            if (!prepared_paths_) { prepared_.reset(); return false; }
+        }
+        prepared_time_ = now;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_finish_load)
+#endif
+    void finish_load(bool commit) {
+        if (!prepared_) return;
+        if (!commit) {
+            owner_generations_.erase_if([&](const OwnerGeneration &generation) { return &generation == prepared_paths_; });
+            prepared_paths_ = nullptr;
+            prepared_.reset();
+            return;
+        }
+        auto &candidate = *prepared_;
+        // A graph change does not replace the physical endpoint session. Keep
+        // identities current through publication so queued terminal work survives
+        // the next connection poll.
+        for (unsigned i = 0; i < std::min(inputs_.size(), candidate.inputs_.size()); ++i) candidate.inputs_[i] = inputs_[i];
+        for (unsigned i = 0; i < std::min(outputs_.size(), candidate.outputs_.size()); ++i) candidate.outputs_[i] = outputs_[i];
         stop_all();
+        owner_generation_ = prepared_paths_;
+        prepared_paths_ = nullptr;
         routes_ = std::move(candidate.routes_);
+        binding_targets_ = std::move(candidate.binding_targets_);
+        binding_owners_ = std::move(candidate.binding_owners_);
+        downstream_reached_ = std::move(candidate.downstream_reached_);
+        bindings_ = std::move(candidate.bindings_);
+        processing_ = std::move(candidate.processing_);
         base_routes_ = unsigned(routes_.size()); foreign_signature_ = 0; external_selected_ = false;
         explicit_system_ = candidate.explicit_system_;
         selected_ = system_scope;
-        parsers_.assign(outputs.route_count(), Parser{});
-        inputs_.assign(outputs.route_count(), Connection{});
-        outputs_.resize(outputs.route_count());
-        outputs_count_ = outputs.route_count();
+        parsers_ = std::move(candidate.parsers_);
+        inputs_ = std::move(candidate.inputs_);
+        outputs_ = std::move(candidate.outputs_);
+        input_notes_ = std::move(candidate.input_notes_);
+        parameter_cursor_ = std::move(candidate.parameter_cursor_);
+        sysex_owners_ = std::move(candidate.sysex_owners_);
+        sysex_sources_ = std::move(candidate.sysex_sources_);
+        clock_claimed_ = std::move(candidate.clock_claimed_);
+        clock_sources_ = std::move(candidate.clock_sources_);
+        clock_owners_ = std::move(candidate.clock_owners_);
+        outputs_count_ = outputs_.size();
         for (auto &route : routes_) {
-            route.next = now;
-            if (route.lfo) route.lfo->scope(now, beat_);
+            route.next = prepared_time_;
+            if (route.lfo) route.lfo->scope(prepared_time_, beat_);
         }
-        if (std::any_of(routes_.begin(), routes_.end(), [](const Route &route) { return bool(route.lfo); })) {
-            parameters_.reserve(256); bindings_.reserve(128); events_.reserve(limits_.events); captures_.reserve(limits_.captures);
-            reverse_parameters_.reserve(limits_.captures);
-        }
-        activated_ = ~uint64_t(0);
-        return true;
+        for (auto &route : routes_) route.activated = true;
+        activation_pending_ = true;
+        prepared_.reset();
     }
     void select(unsigned scope, uint64_t now = 0) {
         if (scope == selected_ && !external_selected_) return;
         for (unsigned i = 0; i < routes_.size(); ++i)
-            if (routes_[i].scope != system_scope) { retire(uint64_t(1) << i); routes_[i].file.reset(); }
+            if (routes_[i].scope != system_scope) { retire(i); routes_[i].file.reset(); }
         selected_ = scope;
         if (external_selected_) { routes_.resize(base_routes_); external_selected_ = false; }
         for (auto &route : routes_) if (route.scope == scope) {
             route.enabled = true; route.failed = false; route.failed_outputs = 0; route.next = now; route.started = false;
             if (route.lfo) route.lfo->scope(now, beat_);
         }
-        for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].scope == scope) activated_ |= uint64_t(1) << i;
+        for (auto &route : routes_) if (route.scope == scope) { route.activated = true; route.note_admission_closed = false; }
+        activation_pending_ = true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_select_external)
@@ -192,11 +259,9 @@ public:
         unsigned local_count = 0;
         for (const auto &route : candidate.routes_) if (route.scope == scope) ++local_count;
         if (base_routes_ + local_count > max_routes) return false;
-        for (const auto &route : candidate.routes_) if (route.lfo) {
-            parameters_.reserve(256); bindings_.reserve(128); events_.reserve(limits_.events); captures_.reserve(limits_.captures);
-            reverse_parameters_.reserve(limits_.captures); break;
-        }
-        std::vector<unsigned> mapping(candidate.routes_.size(), max_routes);
+        CheckedArray<unsigned> mapping;
+        if (!mapping.resize(candidate.routes_.size()) || !routes_.reserve(base_routes_ + local_count)) return false;
+        std::fill(mapping.begin(), mapping.end(), max_routes);
         unsigned next = base_routes_;
         for (unsigned i = 0; i < candidate.routes_.size(); ++i) {
             const auto &route = candidate.routes_[i];
@@ -208,15 +273,34 @@ public:
         }
         for (const auto &route : candidate.routes_) if (route.scope == scope)
             for (const auto &input : route.inputs) if (input.kind && mapping[input.index] == max_routes) return false;
-        for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].scope != system_scope) { retire(uint64_t(1) << i); routes_[i].file.reset(); }
-        routes_.resize(base_routes_);
+        CheckedArray<Route *> merged;
+        if (!merged.reserve(base_routes_ + local_count)) return false;
+        for (unsigned i = 0; i < base_routes_; ++i) if (!merged.append(&routes_[i])) return false;
         for (auto &route : candidate.routes_) if (route.scope == scope) {
             for (auto &input : route.inputs) if (input.kind) input.index = uint16_t(mapping[input.index]);
+            if (!merged.append(&route)) return false;
+        }
+        auto *old_generation = owner_generation_;
+        if (!build_owners(merged.size(), [&](unsigned i) -> const Route & { return *merged[i]; })) return false;
+        auto *prepared_paths = owner_generation_; owner_generation_ = old_generation;
+        CheckedArray<Parameter> targets;
+        CheckedArray<uint64_t> owners;
+        CheckedArray<uint8_t> reached;
+        if (!targets.resize(merged.size()) || !owners.resize(merged.size()) || !reached.resize(merged.size())) return false;
+        CheckedList<Processing> processing;
+        if (!prepare_processing(processing, merged.size(), [&](unsigned i) -> const Route & { return *merged[i]; })) return false;
+        for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].scope != system_scope) { retire(i); routes_[i].file.reset(); }
+        owner_generation_ = prepared_paths;
+        binding_targets_ = std::move(targets); binding_owners_ = std::move(owners); downstream_reached_ = std::move(reached);
+        processing_ = std::move(processing);
+        routes_.resize(base_routes_);
+        for (auto &route : candidate.routes_) if (route.scope == scope) {
             route.foreign = true; route.next = now;
             if (route.lfo) route.lfo->scope(now, beat_);
-            routes_.push_back(std::move(route));
-            activated_ |= uint64_t(1) << (routes_.size() - 1);
+            if (!routes_.append(std::move(route))) return false;
+            routes_.back().activated = true;
         }
+        activation_pending_ = true;
         selected_ = scope; foreign_scope_ = scope; foreign_signature_ = signature; external_selected_ = true; return true;
     }
     bool gate(const char *reference, bool enabled) {
@@ -229,16 +313,16 @@ public:
     }
     void gate(unsigned route, bool enabled) {
         if (route >= routes_.size() || routes_[route].enabled == enabled) return;
-        if (!enabled) retire(uint64_t(1) << route);
+        if (!enabled) retire(route);
         routes_[route].file.reset(); routes_[route].started = false;
         routes_[route].enabled = enabled;
         if (enabled) { routes_[route].failed = false; routes_[route].failed_outputs = 0; }
-        if (enabled) activated_ |= uint64_t(1) << route;
+        if (enabled) { routes_[route].activated = true; routes_[route].note_admission_closed = false; activation_pending_ = true; }
     }
     void stop_all() {
-        retire(~uint64_t(0));
+        retire(UINT32_MAX);
         for (auto &route : routes_) { route.file.reset(); route.started = false; }
-        notes_.clear(); captures_.clear(); events_.clear();
+        input_notes_.clear(); processing_release_tokens_.clear(); captures_.clear(); events_.clear(); reverse_parameters_.clear(); bindings_.clear();
         for (auto &input : inputs_) input.blocked = false;
     }
     void connection(unsigned input, bool present, uint64_t identity, uint64_t now = 0) {
@@ -282,26 +366,20 @@ public:
         if (packet.source == 65535) packet.source = uint16_t(input * 16);
         if (input >= inputs_.size() || !inputs_[input].present) return;
         current_time_ = now;
+        refresh_output_divisor();
         unsigned kind = packet.bytes[0] >> 4;
         bool onset = kind == 9 && packet.bytes[2];
         bool release = kind == 8 || (kind == 9 && !packet.bytes[2]);
         uint64_t token = 0;
         if (onset) {
-            if (notes_.size() >= limits_.notes) { ++diagnostics_.overloaded; retire_source(input); inputs_[input].blocked = true; return; }
-            if (inputs_[input].blocked) { ++diagnostics_.dropped; return; }
-            token = ++serial_;
-            notes_.push_back({token, input, uint8_t(packet.bytes[0] & 15), packet.bytes[1]});
+            if (!admit_note(input, packet, token)) return;
         } else if (release) {
-            auto note = std::find_if(notes_.begin(), notes_.end(), [&](const Note &entry) {
-                return entry.input == input && entry.channel == (packet.bytes[0] & 15) && entry.pitch == packet.bytes[1];
-            });
-            if (note == notes_.end()) return;
-            token = note->token; notes_.erase(note);
-            release_note(token, now, packet.bytes[2], &packet);
+            release_input_note(input, packet, now);
             return;
         } else if (kind == 10) {
-            std::vector<Capture> pressure_captures;
-            for (const auto &note : notes_)
+            CheckedArray<Capture> pressure_captures;
+            if (!pressure_captures.reserve(captures_.size())) { ++diagnostics_.dropped; return; }
+            for (const auto &note : input_notes_.strikes())
                 if (note.input == input && note.channel == (packet.bytes[0] & 15) && note.pitch == packet.bytes[1]) {
                     for (const auto &voice : voices_) if (voice.token == note.token) {
                         Packet pressure = packet;
@@ -309,7 +387,8 @@ public:
                         if (pressure.bytes[0] >> 4 == 10) { pressure.bytes[0] = uint8_t(0xa0 | (voice.packet.bytes[0] & 15)); pressure.bytes[1] = voice.packet.bytes[1]; }
                         enqueue({now + voice.delay, voice.owner, 0, 0, input, voice.output, pressure});
                     }
-                    for (const auto &capture : captures_) if (capture.work.token == note.token && capture.work.packet.bytes[0] >> 4 == 9) pressure_captures.push_back(capture);
+                    for (const auto &capture : captures_) if (capture.work.token == note.token && capture.work.packet.bytes[0] >> 4 == 9)
+                        if (!pressure_captures.append(capture)) { ++diagnostics_.dropped; return; }
                 }
             for (const auto &capture : pressure_captures) {
                 Work pressure = capture.work;
@@ -331,6 +410,7 @@ public:
     void service(Sink &sink, uint64_t now, unsigned available = ~0u, unsigned busy = 0, unsigned budget = 64, unsigned exclusive = 0) {
         current_time_ = now;
         sink_ = &sink; sink.parameter_observer(this);
+        refresh_output_divisor();
         unsigned used = 0;
         bool modulation = false;
         for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].lfo && active(i)) modulation = true;
@@ -374,7 +454,7 @@ public:
             if (route.file) {
                 GeneratedSink output(*this, i, now);
                 route.file->poll(uint32_t(now), output); ++used;
-                if (route.file->failed()) { retire(uint64_t(1) << i); route.failed = true; ++diagnostics_.failed; }
+                if (route.file->failed()) { retire(i); route.failed = true; ++diagnostics_.failed; }
                 else if (route.file->finished()) { finish_reverse(i, now); route.file.reset(); }
             }
         }
@@ -382,7 +462,7 @@ public:
             for (unsigned position = 0; position < routes_[i].steps.size() && used < work_budget; ++position) {
                 auto &step = routes_[i].steps[position];
                 if (!step.processor) continue;
-                Work work{{}, now, 0, max_routes * (position + 1) + i, uint64_t(1) << i};
+                Work work{{}, now, 0, max_routes * (position + 1) + i, extend_owner(0, i)};
                 ProcessorOutput output(*this, i, position + 1, work, work_budget - used);
                 step.processor->service(now, work_budget - used, output); ++used;
             }
@@ -399,11 +479,11 @@ public:
             unsigned bit = 1u << event->output;
             if (((delivered | attempted) & bit) || !(available & bit) || (busy & bit) || recovering(event->output) || !outputs_[event->output].present) { ++event; continue; }
             bool realtime = event->packet.cin == 15;
-            if ((sysex_outputs_ & bit) && !realtime && (sysex_owners_[event->output] != event->owner || sysex_sources_[event->output] != event->input)) { ++event; continue; }
+            if ((sysex_outputs_ & bit) && !realtime && (!same_owner(sysex_owners_[event->output], event->owner) || sysex_sources_[event->output] != event->input)) { ++event; continue; }
             bool blocked_before = false;
             for (auto before = events_.begin(); before != event; ++before)
                 if (before->output == event->output && before->due <= event->due
-                    && (!(sysex_outputs_ & bit) || (before->owner == sysex_owners_[event->output] && before->input == sysex_sources_[event->output]))) { blocked_before = true; break; }
+                    && (!(sysex_outputs_ & bit) || (same_owner(before->owner, sysex_owners_[event->output]) && before->input == sysex_sources_[event->output]))) { blocked_before = true; break; }
             if (blocked_before) { ++event; continue; }
             ++used;
             Voice *voice = nullptr;
@@ -413,32 +493,46 @@ public:
             bool write = true;
             bool clock = event->packet.bytes[0] == 0xf8 || (event->packet.bytes[0] >= 0xfa && event->packet.bytes[0] <= 0xfc);
             if (clock && (external_clock_ & bit)) write = false;
-            if (clock && clock_claimed_[event->output] && (clock_sources_[event->output] != event->input || clock_owners_[event->output] != event->owner)) write = false;
+            if (clock && clock_claimed_[event->output] && (clock_sources_[event->output] != event->input || !same_owner(clock_owners_[event->output], event->owner))) write = false;
             if (voice && onset) {
-                for (const auto &other : voices_) if (other.id != voice->id && other.sounding && same_key(other, *voice) && (other.owner != voice->owner || other.input != voice->input)) write = false;
+                for (const auto &other : voices_) if (other.id != voice->id && other.sounding && same_key(other, *voice) && (!same_owner(other.owner, voice->owner) || other.input != voice->input)) write = false;
             }
             if (voice && release) {
                 if (!voice->sounding) write = false;
-                for (const auto &other : voices_) if (other.id != voice->id && other.sounding && same_key(other, *voice) && (other.owner != voice->owner || other.input != voice->input)) write = false;
+                for (const auto &other : voices_) if (other.id != voice->id && other.sounding && same_key(other, *voice) && (!same_owner(other.owner, voice->owner) || other.input != voice->input)) write = false;
             }
             bool hold = is_hold(event->packet);
             bool holding = hold && event->packet.bytes[2] >= 64;
             bool own_hold = false;
             if (hold) for (const auto &claim : holds_)
-                if (claim.output == event->output && claim.channel == (event->packet.bytes[0] & 15) && claim.controller == event->packet.bytes[1] && claim.owner == event->owner && claim.input == event->input) own_hold = true;
-            if (holding && !own_hold && holds_.size() >= limits_.voices) { write = false; ++diagnostics_.dropped; }
+                if (claim.output == event->output && claim.channel == (event->packet.bytes[0] & 15) && claim.controller == event->packet.bytes[1] && same_owner(claim.owner, event->owner) && claim.input == event->input) own_hold = true;
+            if (holding && !own_hold && (holds_.size() >= limits_.voices || !holds_.reserve(holds_.size() + 1)
+                || !cleanup_.reserve(cleanup_.size() + voices_.size() + holds_.size() + outputs_.size() + 1))) { write = false; ++diagnostics_.dropped; }
             if (hold && !holding && !own_hold) write = false;
             if (hold && !holding) {
                 for (const auto &claim : holds_)
                     if (claim.output == event->output && claim.channel == (event->packet.bytes[0] & 15) && claim.controller == event->packet.bytes[1]
-                        && (claim.owner != event->owner || claim.input != event->input)) write = false;
+                        && (!same_owner(claim.owner, event->owner) || claim.input != event->input)) write = false;
             }
             bool live = event->input < max_routes && event->packet.source != 65535;
             Packet delivered_packet = event->packet;
             // Streams already merges its logical owners. The physical ledger
             // sees that aggregate, including a last release from another route.
             if (onset || release || hold) delivered_packet.source = 65533;
-            if (write && !(live ? sink.submit_live(event->output, delivered_packet, &diagnostics_.transmitted) : sink.submit(event->output, delivered_packet))) { attempted |= bit; ++event; continue; }
+            if (write && !(live ? sink.submit_live(event->output, delivered_packet, &diagnostics_.transmitted) : sink.submit(event->output, delivered_packet))) {
+                if (sink.memory_refused() && onset && voice && !voice->sounding) {
+                    // An onset refused before its first byte must not block
+                    // releases already owed by other accepted voices.
+                    const uint64_t id = voice->id;
+                    erase_if(voices_, [id](const Voice &entry) { return entry.id == id; });
+                    event = events_.erase(event);
+                    erase_if(events_, [id](const Event &entry) { return entry.voice == id; });
+                    event = events_.begin();
+                    ++diagnostics_.dropped;
+                    continue;
+                }
+                attempted |= bit; ++event; continue;
+            }
             if (write) { if (!live) ++diagnostics_.transmitted; delivered |= bit; }
             if (write && clock) { clock_claimed_[event->output] = true; clock_sources_[event->output] = event->input; clock_owners_[event->output] = event->owner; }
             if (voice && onset) voice->sounding = true;
@@ -449,9 +543,9 @@ public:
                     erase_if(holds_, [&](const Hold &claim) { return claim.output == event->output && (event->packet.bytes[0] == 0xff || claim.channel == (event->packet.bytes[0] & 15)); });
             }
             if (hold) {
-                auto claim = std::find_if(holds_.begin(), holds_.end(), [&](const Hold &entry) { return entry.output == event->output && entry.input == event->input && entry.owner == event->owner && entry.channel == (event->packet.bytes[0] & 15) && entry.controller == event->packet.bytes[1]; });
+                auto claim = std::find_if(holds_.begin(), holds_.end(), [&](const Hold &entry) { return entry.output == event->output && entry.input == event->input && same_owner(entry.owner, event->owner) && entry.channel == (event->packet.bytes[0] & 15) && entry.controller == event->packet.bytes[1]; });
                 if (holding && write && claim == holds_.end()) {
-                    if (holds_.size() < limits_.voices) holds_.push_back({event->input, event->output, event->owner, uint8_t(event->packet.bytes[0] & 15), event->packet.bytes[1]});
+                    if (!holds_.append({event->input, event->output, event->owner, uint8_t(event->packet.bytes[0] & 15), event->packet.bytes[1]})) ++diagnostics_.dropped;
                 } else if (!holding && claim != holds_.end()) holds_.erase(claim);
             }
             if (event->packet.cin == 4) { sysex_outputs_ |= bit; sysex_owners_[event->output] = event->owner; sysex_sources_[event->output] = event->input; }
@@ -472,20 +566,119 @@ public:
         }
         erase_if(parameters_, [&](const ParameterDelivery &delivery) {
             if (!delivery.finished) return false;
-            for (unsigned i = 0; i < routes_.size(); ++i) if ((delivery.owner & (uint64_t(1) << i)) && !active(i)) return true;
+            for (unsigned i = 0; i < routes_.size(); ++i) if (owns(delivery.owner, i) && !active(i)) return true;
             for (const auto &route : routes_) if (route.lfo && route.lfo->id == delivery.lfo) return false;
             return true;
         });
+        reclaim_owner_generation();
     }
 private:
+    struct OwnerPath { unsigned route; const OwnerPath *parent = nullptr; };
+    struct OwnerGeneration {
+        CheckedArray<OwnerPath> paths;
+        CheckedArray<unsigned> offsets;
+    };
+    CheckedList<OwnerGeneration> owner_generations_;
+    OwnerGeneration *owner_generation_ = nullptr;
+    OwnerGeneration *prepared_paths_ = nullptr;
+    CheckedObject<Streams> prepared_;
+    uint64_t prepared_time_ = 0;
+    static const OwnerPath *owner_path(uint64_t owner) { return reinterpret_cast<const OwnerPath *>(uintptr_t(owner)); }
+    static uint64_t owner_id(const OwnerPath *owner) { return uint64_t(reinterpret_cast<uintptr_t>(owner)); }
+    static bool same_owner(uint64_t a, uint64_t b) {
+        auto *left = owner_path(a); auto *right = owner_path(b);
+        while (left && right) {
+            if (left->route != right->route) return false;
+            left = left->parent; right = right->parent;
+        }
+        return !left && !right;
+    }
+    static bool owns(uint64_t owner, unsigned route) {
+        for (auto *path = owner_path(owner); path; path = path->parent) if (path->route == route) return true;
+        return false;
+    }
+    uint64_t extend_owner(uint64_t parent, unsigned route) const {
+        if (parent && owner_path(parent)->route == route) return parent;
+        if (!owner_generation_ || route + 1 >= owner_generation_->offsets.size()) return 0;
+        for (unsigned i = owner_generation_->offsets[route]; i < owner_generation_->offsets[route + 1]; ++i)
+            if (same_owner(owner_id(owner_generation_->paths[i].parent), parent)) return owner_id(&owner_generation_->paths[i]);
+        return 0;
+    }
+    template<class RouteAt> bool build_owners(unsigned count, RouteAt route_at) {
+        OwnerGeneration candidate;
+        if (!candidate.offsets.resize(count + 1)) return false;
+        uint64_t total = 0;
+        for (unsigned i = 0; i < count; ++i) {
+            const auto &route = route_at(i);
+            unsigned roots = route.inputs.empty() ? 1 : 0;
+            for (const auto &input : route.inputs) {
+                if (!input.kind) roots = 1;
+                else total += candidate.offsets[input.index + 1] - candidate.offsets[input.index];
+            }
+            total += roots;
+            if (total > UINT32_MAX / sizeof(OwnerPath)) return false;
+            candidate.offsets[i + 1] = unsigned(total);
+        }
+        if (!candidate.paths.resize(unsigned(total))) return false;
+        for (unsigned i = 0; i < count; ++i) {
+            const auto &route = route_at(i);
+            unsigned cursor = candidate.offsets[i];
+            bool root = route.inputs.empty();
+            for (const auto &input : route.inputs) if (!input.kind) root = true;
+            if (root) candidate.paths[cursor++] = {i, nullptr};
+            for (const auto &input : route.inputs) if (input.kind)
+                for (unsigned j = candidate.offsets[input.index]; j < candidate.offsets[input.index + 1]; ++j)
+                    candidate.paths[cursor++] = {i, &candidate.paths[j]};
+        }
+        auto *generation = owner_generations_.append(std::move(candidate));
+        if (!generation) return false;
+        owner_generation_ = generation; return true;
+    }
+    bool owner_activated(uint64_t owner) const {
+        for (auto *path = owner_path(owner); path; path = path->parent)
+            if (path->route < routes_.size() && routes_[path->route].activated) return true;
+        return false;
+    }
+    void reclaim_owner_generation() {
+        for (auto generation = owner_generations_.begin(); generation != owner_generations_.end(); ++generation) {
+            if (&*generation == owner_generation_ || &*generation == prepared_paths_) continue;
+            const uintptr_t first = reinterpret_cast<uintptr_t>(generation->paths.data());
+            const uintptr_t last = first + generation->paths.size() * sizeof(OwnerPath);
+            auto contains = [&](uint64_t owner) { return owner && owner >= first && owner < last; };
+            bool referenced = false;
+            for (const auto &voice : voices_) referenced = referenced || contains(voice.owner);
+            for (const auto &event : events_) referenced = referenced || contains(event.owner);
+            for (const auto &capture : captures_) referenced = referenced || contains(capture.work.owner);
+            for (const auto &visit : visits_) referenced = referenced || contains(visit.owner);
+            for (const auto &hold : holds_) referenced = referenced || contains(hold.owner);
+            for (const auto &delivery : parameters_) referenced = referenced || contains(delivery.owner);
+            for (unsigned output = 0; output < outputs_.size(); ++output)
+                referenced = referenced || ((sysex_outputs_ & (1u << output)) && contains(sysex_owners_[output]))
+                    || (clock_claimed_[output] && contains(clock_owners_[output]));
+            if (!referenced) { owner_generations_.erase(generation); return; }
+        }
+    }
     struct Registration { unsigned opcode, version; Factory factory; bool generator; };
-    static std::vector<Registration> &registry() { static std::vector<Registration> result; return result; }
-    struct Connection { bool present = true, blocked = false; uint64_t identity = 0; unsigned generation = 0; };
+    static CheckedList<Registration> &registry() { static CheckedList<Registration> result; return result; }
+    struct Connection { bool present = true; uint16_t blocked = 0; uint64_t identity = 0; unsigned generation = 0; };
     struct Work {
         Packet packet; uint64_t due, token; unsigned input; uint64_t owner;
         Parameter parameter = {}; uint64_t lfo = 0; uint8_t sample = 1;
     };
-    struct Note { uint64_t token; unsigned input; uint8_t channel, pitch; };
+    struct Processing { unsigned route, position; Work work; };
+    CheckedList<Processing> processing_;
+    CheckedList<uint64_t> processing_release_tokens_;
+    CheckedList<Processing>::iterator processing_position_;
+    bool processing_active_ = false;
+    template<class RouteAt> static bool prepare_processing(CheckedList<Processing> &pending, unsigned count, RouteAt route_at) {
+        uint64_t capacity = 1;
+        for (unsigned i = 0; i < count; ++i) {
+            const auto &route = route_at(i);
+            for (const auto &input : route.inputs) capacity += bool(input.kind);
+            for (const auto &step : route.steps) if (step.kind == 6) capacity += step.repeats;
+        }
+        return capacity <= UINT32_MAX && pending.reserve(unsigned(capacity));
+    }
     struct Voice {
         uint64_t id, token, owner, delay;
         unsigned input, output;
@@ -523,17 +716,20 @@ private:
     uint64_t foreign_signature_ = 0;
     bool external_selected_ = false;
     uint64_t serial_ = 0;
-    std::vector<Route> routes_;
-    std::vector<Parser> parsers_;
-    std::vector<Connection> inputs_, outputs_;
-    std::vector<Note> notes_;
-    std::vector<Voice> voices_;
-    std::vector<Event> events_;
-    std::vector<Cleanup> cleanup_;
-    std::vector<Hold> holds_;
-    std::vector<ParameterDelivery> parameters_;
-    std::vector<ParameterBinding> bindings_;
-    uint64_t activated_ = 0;
+    CheckedArray<Route> routes_;
+    CheckedArray<Parser> parsers_;
+    CheckedArray<Connection> inputs_, outputs_;
+    InputNotes input_notes_;
+    CheckedList<Voice> voices_;
+    CheckedList<Event> events_;
+    CheckedList<Cleanup> cleanup_;
+    CheckedList<Hold> holds_;
+    CheckedList<ParameterDelivery> parameters_;
+    CheckedList<ParameterBinding> bindings_;
+    bool activation_pending_ = false;
+    CheckedArray<Parameter> binding_targets_;
+    CheckedArray<uint64_t> binding_owners_;
+    mutable CheckedArray<uint8_t> downstream_reached_;
     BeatPosition beat_;
     Sink *sink_ = nullptr;
     static bool parameter_step(const Step &step, Parameter &target) {
@@ -557,23 +753,24 @@ private:
 #endif
     bool parameter_bindings(unsigned root) {
         bindings_.clear();
-        Parameter targets[max_routes] = {};
-        uint64_t owners[max_routes] = {};
+        std::fill(binding_targets_.begin(), binding_targets_.end(), Parameter{});
+        std::fill(binding_owners_.begin(), binding_owners_.end(), uint64_t(0));
+        auto &targets = binding_targets_;
+        auto &owners = binding_owners_;
         targets[root] = routes_[root].lfo->config.target;
         for (unsigned i = root; i < routes_.size(); ++i) if (active(i)) {
             unsigned sources = 0;
-            if (i == root) owners[i] = uint64_t(1) << root;
+            if (i == root) owners[i] = extend_owner(0, root);
             else for (const auto &input : routes_[i].inputs) if (input.kind && owners[input.index]) {
                 if (++sources > 1) return false;
-                targets[i] = targets[input.index]; owners[i] = owners[input.index] | (uint64_t(1) << i);
+                targets[i] = targets[input.index]; owners[i] = extend_owner(owners[input.index], i);
             }
             if (!owners[i]) continue;
             unsigned begin = i == root ? 1 : 0;
             for (unsigned j = begin; j < routes_[i].steps.size(); ++j)
                 if (!parameter_step(routes_[i].steps[j], targets[i])) return false;
             for (unsigned output = 0; output < outputs_count_; ++output) if (routes_[i].outputs & (1u << output)) {
-                if (bindings_.size() >= 128) return false;
-                bindings_.push_back({output, owners[i], targets[i]});
+                if (!bindings_.append({output, owners[i], targets[i]})) return false;
             }
         }
         return true;
@@ -584,18 +781,18 @@ private:
     bool validate_lfos() {
         unsigned generators = 0;
         for (const auto &route : routes_) generators += bool(route.lfo);
-        if (generators > 16) return false;
-        std::vector<ParameterBinding> all;
+        (void)generators;
+        CheckedList<ParameterBinding> all;
         for (unsigned context = 0; context <= routes_.size(); ++context) {
             selected_ = context == routes_.size() ? system_scope : routes_[context].scope;
             all.clear();
             for (unsigned root = 0; root < routes_.size(); ++root) if (routes_[root].lfo && active(root)) {
-                if (!parameter_bindings(root) || all.size() + bindings_.size() > 128) return false;
+                if (!parameter_bindings(root)) return false;
                 for (const auto &binding : bindings_) {
                     if (routes_[root].lfo->config.off == 1 && (routes_[root].lfo->config.final_value < binding.target.minimum()
                         || routes_[root].lfo->config.final_value > binding.target.maximum())) return false;
                     for (const auto &other : all) if (binding.output == other.output && binding.target.overlaps(other.target)) return false;
-                    all.push_back(binding);
+                    if (!all.append(binding)) return false;
                 }
             }
         }
@@ -611,10 +808,10 @@ private:
         for (const auto &binding : bindings_) {
             bool existing = false;
             for (const auto &delivery : parameters_) if (delivery.lfo == id && delivery.output == binding.output
-                && delivery.owner == binding.owner && delivery.target.same(binding.target)) {
-                if (!delivery.finished || (!fresh && !(binding.owner & activated_))) existing = true;
+                && same_owner(delivery.owner, binding.owner) && delivery.target.same(binding.target)) {
+                if (!delivery.finished || (!fresh && !owner_activated(binding.owner))) existing = true;
             }
-            if (existing || (!fresh && !(binding.owner & activated_))) continue;
+            if (existing || (!fresh && !owner_activated(binding.owner))) continue;
             ++needed;
             for (const auto &delivery : parameters_) if (!delivery.finished && delivery.output == binding.output && delivery.target.overlaps(binding.target)) {
                 if (!delivery.stopping) { route.failed = true; ++diagnostics_.failed; }
@@ -624,18 +821,18 @@ private:
                 route.failed = true; ++diagnostics_.failed; return false;
             }
         }
-        if (parameters_.size() + needed > 256) { ++diagnostics_.overloaded; return false; }
+        if (!parameters_.reserve(parameters_.size() + needed)) { ++diagnostics_.overloaded; return false; }
         for (const auto &binding : bindings_) {
             bool existing = false;
             for (const auto &delivery : parameters_) if (delivery.lfo == id && delivery.output == binding.output
-                && delivery.owner == binding.owner && delivery.target.same(binding.target)
-                && (!delivery.finished || (!fresh && !(binding.owner & activated_)))) existing = true;
-            if (existing || (!fresh && !(binding.owner & activated_))) continue;
+                && same_owner(delivery.owner, binding.owner) && delivery.target.same(binding.target)
+                && (!delivery.finished || (!fresh && !owner_activated(binding.owner)))) existing = true;
+            if (existing || (!fresh && !owner_activated(binding.owner))) continue;
             ParameterDelivery delivery{binding.output, binding.owner, id, outputs_[binding.output].identity, binding.target};
             delivery.off = route.lfo->config.off; delivery.final_value = route.lfo->config.final_value;
             delivery.snapshot = sink_->parameter_value(binding.output, binding.target);
             delivery.finished = !outputs_[binding.output].present;
-            parameters_.push_back(delivery);
+            if (!parameters_.append(delivery)) return false;
         }
         return true;
     }
@@ -654,7 +851,7 @@ private:
                 uint64_t id = serial_ + 1;
                 if (!bind_lfo(root, id, true)) { synchronized = false; continue; }
                 ++serial_; lfo.enable(now, beat_, id); route.started = true;
-            } else if (activated_ && !bind_lfo(root, lfo.id, false)) { synchronized = false; continue; }
+            } else if (activation_pending_ && !bind_lfo(root, lfo.id, false)) { synchronized = false; continue; }
             if (lfo.ended || (lfo.generated && (now < lfo.next || lfo.waiting))) continue;
             bool terminal = lfo.generated && lfo.complete();
             uint8_t sample = !lfo.generated ? 0 : terminal ? 2 : 1;
@@ -669,7 +866,7 @@ private:
             process(root, 1, work); ++used;
             lfo.generated = true; lfo.ended = terminal; lfo.next = now + lfo.config.interval;
         }
-        if (synchronized) activated_ = 0;
+        if (synchronized) { activation_pending_ = false; for (auto &route : routes_) route.activated = false; }
     }
     void stop_parameter(ParameterDelivery &delivery, bool terminal) {
         if (delivery.finished) return;
@@ -679,7 +876,7 @@ private:
         if (!delivery.flight.position && (!terminal || delivery.sample == 1)) delivery.flight = {};
     }
     void accept_parameter(const Event &event) {
-        for (auto &delivery : parameters_) if (delivery.lfo == event.lfo && delivery.owner == event.owner
+        for (auto &delivery : parameters_) if (delivery.lfo == event.lfo && same_owner(delivery.owner, event.owner)
             && delivery.output == event.output && delivery.target.same(event.parameter)) {
             if (delivery.finished || delivery.stopping) continue;
             unsigned slot = event.sample;
@@ -749,16 +946,45 @@ private:
         }
     }
     unsigned outputs_count_ = 0;
-    unsigned parameter_cursor_[16] = {};
-    uint64_t sysex_owners_[16] = {};
-    unsigned sysex_sources_[16] = {};
-    bool clock_claimed_[16] = {};
-    unsigned clock_sources_[16] = {};
-    uint64_t clock_owners_[16] = {};
-    std::vector<Capture> captures_;
-    std::vector<Work> reverse_parameters_;
-    std::vector<Visit> visits_;
+    CheckedArray<unsigned> parameter_cursor_;
+    CheckedArray<uint64_t> sysex_owners_;
+    CheckedArray<unsigned> sysex_sources_;
+    CheckedArray<bool> clock_claimed_;
+    CheckedArray<unsigned> clock_sources_;
+    CheckedArray<uint64_t> clock_owners_;
+    bool prepare_output_state(unsigned count) {
+        return parameter_cursor_.resize(count) && sysex_owners_.resize(count) && sysex_sources_.resize(count)
+            && clock_claimed_.resize(count) && clock_sources_.resize(count) && clock_owners_.resize(count);
+    }
+    CheckedList<Capture> captures_;
+    CheckedList<Work> reverse_parameters_;
+    CheckedList<Visit> visits_;
     StreamFileProvider *file_provider_ = nullptr;
+    bool admit_note(unsigned input, const Packet &packet, uint64_t &token, bool resources_ready = true, unsigned destination = 0) {
+        const unsigned generated_route = input % max_routes;
+        const bool blocked = input >= inputs_.size() && generated_route < routes_.size() && routes_[generated_route].note_admission_closed;
+        bool ready = resources_ready && !blocked && input_notes_.outstanding() < limits_.notes;
+        if (ready && processing_active_)
+            ready = processing_.reserve(processing_.size() + processing_release_tokens_.size() + 2)
+                && processing_release_tokens_.reserve(processing_release_tokens_.size() + 1);
+        const auto admission = input_notes_.admit(input, packet.source, packet, serial_ + 1, ready, destination);
+        if (!admission.accepted) {
+            ++diagnostics_.dropped;
+            if (admission.untracked && generated_route < routes_.size()) routes_[generated_route].note_admission_closed = true;
+            return false;
+        }
+        token = ++serial_;
+        if (processing_active_ && !processing_release_tokens_.append(token)) return false;
+        return true;
+    }
+    void release_input_note(unsigned input, const Packet &packet, uint64_t now, unsigned destination = 0) {
+        const auto release = input_notes_.release(input, packet.source, packet, destination);
+        if (!release.token) return;
+        processing_release_tokens_.erase_if([&](uint64_t token) { return token == release.token; });
+        if (processing_active_) {
+            if (!processing_.insert(processing_position_, {UINT32_MAX, 0, {packet, now, release.token, input, 0}})) ++diagnostics_.failed;
+        } else release_note(release.token, now, packet.bytes[2], &packet);
+    }
     struct GeneratedSink : Sink {
         Streams &streams; unsigned route; uint64_t now;
         GeneratedSink(Streams &streams, unsigned route, uint64_t now) : streams(streams), route(route), now(now) {}
@@ -769,19 +995,23 @@ private:
         ProcessorOutput(Streams &engine, unsigned route, unsigned position, Work work, unsigned credits)
             : engine(engine), route(route), position(position), work(work), credits(credits) {}
         bool emit(const Packet &packet, uint64_t delay = 0) override {
-            if (!credits || engine.events_.size() + engine.voices_.size() >= engine.limits_.events) return false;
-            --credits;
             Work transformed = work; transformed.packet = packet; transformed.due += delay;
             transformed.packet.source = work.packet.source;
+            const unsigned destination = max_routes * position + route;
             unsigned kind = packet.bytes[0] >> 4;
+            if (!work.token && (kind == 8 || (kind == 9 && !packet.bytes[2]))) {
+                engine.release_input_note(work.input, transformed.packet, transformed.due, destination); return true;
+            }
+            if (!credits || engine.events_.size() + engine.voices_.size() >= engine.limits_.events) {
+                if (!work.token && kind == 9 && packet.bytes[2]) {
+                    uint64_t refused = 0;
+                    engine.admit_note(work.input, transformed.packet, refused, false, destination);
+                }
+                return false;
+            }
+            --credits;
             if (!work.token && kind == 9 && packet.bytes[2]) {
-                if (engine.notes_.size() >= engine.limits_.notes) return false;
-                transformed.token = ++engine.serial_;
-                engine.notes_.push_back({transformed.token, work.input, uint8_t(packet.bytes[0] & 15), packet.bytes[1]});
-            } else if (!work.token && (kind == 8 || (kind == 9 && !packet.bytes[2]))) {
-                auto note = std::find_if(engine.notes_.begin(), engine.notes_.end(), [&](const Note &note) { return note.input == work.input && note.channel == (packet.bytes[0] & 15) && note.pitch == packet.bytes[1]; });
-                if (note == engine.notes_.end()) return true;
-                uint64_t token = note->token; engine.notes_.erase(note); engine.release_note(token, transformed.due, packet.bytes[2], &packet); return true;
+                if (!engine.admit_note(work.input, transformed.packet, transformed.token, true, destination)) return false;
             }
             engine.process(route, position, transformed); return true;
         }
@@ -791,18 +1021,14 @@ private:
         unsigned kind = packet.bytes[0] >> 4;
         uint64_t token = 0;
         if (kind == 9 && packet.bytes[2]) {
-            if (notes_.size() >= limits_.notes) { overload(uint64_t(1) << route); return; }
-            token = ++serial_;
-            notes_.push_back({token, input, uint8_t(packet.bytes[0] & 15), packet.bytes[1]});
+            if (!admit_note(input, packet, token)) return;
         } else if (kind == 8 || (kind == 9 && !packet.bytes[2])) {
-            auto note = std::find_if(notes_.begin(), notes_.end(), [&](const Note &note) { return note.input == input && note.channel == (packet.bytes[0] & 15) && note.pitch == packet.bytes[1]; });
-            if (note == notes_.end()) return;
-            token = note->token; notes_.erase(note); release_note(token, now, packet.bytes[2], &packet); return;
+            release_input_note(input, packet, now); return;
         }
         process(route, 1, {packet, now, token, input, 0});
     }
-    template<class T, class Predicate> static void erase_if(std::vector<T> &items, Predicate predicate) {
-        items.erase(std::remove_if(items.begin(), items.end(), predicate), items.end());
+    template<class T, class Predicate> static void erase_if(CheckedList<T> &items, Predicate predicate) {
+        items.erase_if(predicate);
     }
     bool active(unsigned route) const {
         const auto &entry = routes_[route];
@@ -810,9 +1036,10 @@ private:
     }
     unsigned downstream_outputs(unsigned route) const {
         unsigned outputs = routes_[route].outputs;
-        uint64_t reached = uint64_t(1) << route;
+        std::fill(downstream_reached_.begin(), downstream_reached_.end(), uint8_t(0));
+        auto &reached = downstream_reached_; reached[route] = 1;
         for (unsigned i = route + 1; i < routes_.size(); ++i) if (active(i))
-            for (const auto &input : routes_[i].inputs) if (input.kind && (reached & (uint64_t(1) << input.index))) { outputs |= routes_[i].outputs; reached |= uint64_t(1) << i; break; }
+            for (const auto &input : routes_[i].inputs) if (input.kind && reached[input.index]) { outputs |= routes_[i].outputs; reached[i] = 1; break; }
         return outputs;
     }
     bool recovering(unsigned output) const {
@@ -825,7 +1052,7 @@ private:
     void cleanup_packet(unsigned output, Packet packet) {
         for (const auto &entry : cleanup_)
             if (entry.output == output && !std::memcmp(entry.packet.bytes, packet.bytes, 3)) return;
-        if (cleanup_.size() < limits_.voices * 2 + 16) cleanup_.push_back({output, packet});
+        if (!cleanup_.append({output, packet})) ++diagnostics_.failed;
     }
     template<class Predicate> void retire_holds(Predicate predicate) {
         for (const auto &claim : holds_) if (predicate(claim)) {
@@ -843,31 +1070,35 @@ private:
         Packet packet{8, {uint8_t(0x80 | (voice.packet.bytes[0] & 15)), voice.packet.bytes[1], 0}};
         cleanup_packet(voice.output, packet);
     }
-    void retire(uint64_t owners) {
-        for (auto &delivery : parameters_) if (delivery.owner & owners) stop_parameter(delivery, false);
+    void retire(unsigned route) {
+        const auto selected = [route](uint64_t owner) { return route == UINT32_MAX || owns(owner, route); };
+        for (auto &delivery : parameters_) if (selected(delivery.owner)) stop_parameter(delivery, false);
         for (unsigned output = 0; output < outputs_.size(); ++output)
-            if (clock_claimed_[output] && (clock_owners_[output] & owners)) clock_claimed_[output] = false;
-        for (unsigned i = 0; i < routes_.size(); ++i) if (owners & (uint64_t(1) << i)) {
+            if (clock_claimed_[output] && selected(clock_owners_[output])) clock_claimed_[output] = false;
+        for (unsigned i = 0; i < routes_.size(); ++i) if (route == UINT32_MAX || i == route) {
             routes_[i].started = false;
             for (auto &step : routes_[i].steps) if (step.processor) step.processor->stop();
         }
-        retire_holds([owners](const Hold &claim) { return bool(claim.owner & owners); });
+        retire_holds([&](const Hold &claim) { return selected(claim.owner); });
         for (unsigned output = 0; output < outputs_.size(); ++output)
-            if ((sysex_outputs_ & (1u << output)) && (sysex_owners_[output] & owners)) cleanup_packet(output, {5, {0xf7, 0, 0}});
-        for (const auto &voice : voices_) if ((voice.owner & owners) && voice.sounding) {
+            if ((sysex_outputs_ & (1u << output)) && selected(sysex_owners_[output])) cleanup_packet(output, {5, {0xf7, 0, 0}});
+        for (const auto &voice : voices_) if (selected(voice.owner) && voice.sounding) {
             bool shared = false;
-            for (const auto &other : voices_) if (!(other.owner & owners) && other.sounding && same_key(other, voice)) shared = true;
+            for (const auto &other : voices_) if (!selected(other.owner) && other.sounding && same_key(other, voice)) shared = true;
             if (!shared) owe(voice);
         }
-        erase_if(voices_, [owners](const Voice &voice) { return bool(voice.owner & owners); });
-        erase_if(events_, [owners](const Event &event) { return bool(event.owner & owners); });
-        erase_if(captures_, [owners](const Capture &capture) { return bool(capture.work.owner & owners); });
-        erase_if(visits_, [owners](const Visit &visit) { return bool(visit.owner & owners); });
+        erase_if(voices_, [&](const Voice &voice) { return selected(voice.owner); });
+        erase_if(events_, [&](const Event &event) { return selected(event.owner); });
+        erase_if(captures_, [&](const Capture &capture) { return selected(capture.work.owner); });
+        erase_if(visits_, [&](const Visit &visit) { return selected(visit.owner); });
     }
     void retire_source(unsigned input) {
-        std::vector<uint64_t> stopped;
-        for (const auto &visit : visits_) if (visit.input == input && std::find(stopped.begin(), stopped.end(), visit.token) == stopped.end()) stopped.push_back(visit.token);
-        for (auto token : stopped) notify_release(token, 0, current_time_);
+        const uint64_t before = serial_;
+        for (;;) {
+            auto visit = std::find_if(visits_.begin(), visits_.end(), [&](const Visit &entry) { return entry.input == input && entry.token <= before; });
+            if (visit == visits_.end()) break;
+            notify_release(visit->token, 0, current_time_);
+        }
         for (unsigned output = 0; output < outputs_.size(); ++output)
             if (clock_claimed_[output] && clock_sources_[output] == input) clock_claimed_[output] = false;
         retire_holds([input](const Hold &claim) { return claim.input == input; });
@@ -880,27 +1111,28 @@ private:
         }
         erase_if(voices_, [input](const Voice &voice) { return voice.input == input; });
         erase_if(events_, [input](const Event &event) { return event.input == input; });
-        erase_if(notes_, [input](const Note &note) { return note.input == input; });
+        for (const auto &strike : input_notes_.strikes()) if (strike.input == input)
+            processing_release_tokens_.erase_if([&](uint64_t token) { return token == strike.token; });
+        input_notes_.forget_input(input);
         erase_if(captures_, [input](const Capture &capture) { return capture.work.input == input; });
         if (input < inputs_.size()) inputs_[input].blocked = false;
     }
-    void overload(uint64_t owners) {
-        if (!owners) return;
-        // The final node owns a failure. Upstream nodes may still feed healthy
-        // siblings and must remain active.
-        while (owners & (owners - 1)) owners &= owners - 1;
+    void overload_route(unsigned route) {
         ++diagnostics_.overloaded;
-        retire(owners);
-        for (unsigned i = 0; i < routes_.size(); ++i) if (owners & (uint64_t(1) << i)) routes_[i].failed = true;
+        retire(route); routes_[route].failed = true;
     }
-    unsigned used_outputs() const {
+    void overload(uint64_t owner) {
+        if (owner) overload_route(owner_path(owner)->route);
+    }
+    unsigned output_divisor_ = 1;
+    void refresh_output_divisor() {
         unsigned mask = 0, count = 0;
         for (unsigned i = 0; i < routes_.size(); ++i) if (active(i)) mask |= routes_[i].outputs;
         while (mask) { mask &= mask - 1; ++count; }
-        return std::max(1u, count);
+        output_divisor_ = std::max(1u, count);
     }
-    unsigned output_event_limit() const { return std::max(1u, limits_.events / used_outputs()); }
-    unsigned output_voice_limit() const { return std::max(1u, limits_.voices / used_outputs()); }
+    unsigned output_event_limit() const { return std::max(1u, limits_.events / output_divisor_); }
+    unsigned output_voice_limit() const { return std::max(1u, limits_.voices / output_divisor_); }
     unsigned output_events(unsigned output) const {
         unsigned count = 0;
         for (const auto &event : events_) if (event.output == output) ++count;
@@ -913,18 +1145,17 @@ private:
     }
     void fail_output(unsigned route, unsigned output) {
         ++diagnostics_.overloaded;
-        uint64_t owner = uint64_t(1) << route;
         routes_[route].failed_outputs |= uint16_t(1u << output);
-        retire_holds([&](const Hold &hold) { return hold.output == output && bool(hold.owner & owner); });
-        for (const auto &voice : voices_) if (voice.output == output && (voice.owner & owner) && voice.sounding) {
+        retire_holds([&](const Hold &hold) { return hold.output == output && owns(hold.owner, route); });
+        for (const auto &voice : voices_) if (voice.output == output && owns(voice.owner, route) && voice.sounding) {
             bool shared = false;
-            for (const auto &other : voices_) if (!(other.owner & owner) && other.sounding && same_key(other, voice)) shared = true;
+            for (const auto &other : voices_) if (!owns(other.owner, route) && other.sounding && same_key(other, voice)) shared = true;
             if (!shared) owe(voice);
         }
-        erase_if(voices_, [&](const Voice &voice) { return voice.output == output && bool(voice.owner & owner); });
-        erase_if(events_, [&](const Event &event) { return event.output == output && bool(event.owner & owner); });
-        if ((sysex_outputs_ & (1u << output)) && (sysex_owners_[output] & owner)) cleanup_packet(output, {5, {0xf7,0,0}});
-        if (clock_claimed_[output] && (clock_owners_[output] & owner)) clock_claimed_[output] = false;
+        erase_if(voices_, [&](const Voice &voice) { return voice.output == output && owns(voice.owner, route); });
+        erase_if(events_, [&](const Event &event) { return event.output == output && owns(event.owner, route); });
+        if ((sysex_outputs_ & (1u << output)) && owns(sysex_owners_[output], route)) cleanup_packet(output, {5, {0xf7,0,0}});
+        if (clock_claimed_[output] && owns(clock_owners_[output], route)) clock_claimed_[output] = false;
     }
     bool enqueue(Event event) {
         if (event.parameter.kind && event.sample == 1 && event.due <= current_time_) {
@@ -939,14 +1170,16 @@ private:
             || output_events(event.output) + (release ? 0 : output_voices(event.output)) >= output_event_limit()) { ++diagnostics_.dropped; return false; }
         event.sequence = ++serial_;
         auto position = std::upper_bound(events_.begin(), events_.end(), event, [](const Event &a, const Event &b) { return a.due < b.due; });
-        events_.insert(position, event); return true;
+        if (!release && !events_.reserve(events_.size() + voices_.size() + 2)) { ++diagnostics_.dropped; return false; }
+        if (!events_.insert(position, event)) { ++diagnostics_.dropped; return false; }
+        return true;
     }
     void release_note(uint64_t token, uint64_t now, uint8_t velocity, const Packet *source = nullptr) {
         notify_release(token, velocity, now);
         for (auto &capture : captures_) if (capture.work.token == token && !capture.closed) {
             capture.end = now + capture.delay; capture.closed = true;
         }
-        std::vector<Event> releases;
+        unsigned failed_outputs = 0;
         for (const auto &voice : voices_) if (voice.token == token) {
             Packet release = source ? *source : Packet{8, {uint8_t(0x80 | (voice.packet.bytes[0] & 15)), voice.packet.bytes[1], velocity}};
             release.cin = 8; release.bytes[0] = uint8_t(0x80 | (release.bytes[0] & 15));
@@ -954,24 +1187,28 @@ private:
             // restore the mapping recorded when its onset was admitted.
             owned_fields(release, voice.owner, voice.input);
             release.cin = 8; release.bytes[0] = uint8_t(0x80 | (voice.packet.bytes[0] & 15)); release.bytes[1] = voice.packet.bytes[1];
-            releases.push_back({now + voice.delay, voice.owner, voice.id, 0, voice.input, voice.output, release});
+            if (!enqueue({now + voice.delay, voice.owner, voice.id, 0, voice.input, voice.output, release})) failed_outputs |= 1u << voice.output;
         }
-        for (const auto &event : releases) if (!enqueue(event)) {
-            unsigned route = 0;
-            for (unsigned i = 0; i < routes_.size(); ++i) if (event.owner & (uint64_t(1) << i)) route = i;
-            fail_output(route, event.output);
+        for (unsigned output = 0; output < outputs_.size(); ++output) if (failed_outputs & (1u << output)) {
+            for (;;) {
+                auto voice = std::find_if(voices_.begin(), voices_.end(), [&](const Voice &entry) { return entry.token == token && entry.output == output; });
+                if (voice == voices_.end()) break;
+                unsigned route = 0;
+                if (voice->owner) route = owner_path(voice->owner)->route;
+                fail_output(route, output);
+            }
         }
     }
     void notify_release(uint64_t token, uint8_t velocity, uint64_t now) {
-        std::vector<Visit> completed;
-        for (const auto &visit : visits_) if (visit.token == token) completed.push_back(visit);
-        erase_if(visits_, [token](const Visit &visit) { return visit.token == token; });
-        for (const auto &visit : completed) {
+        for (;;) {
+            auto pending = std::find_if(visits_.begin(), visits_.end(), [token](const Visit &entry) { return entry.token == token; });
+            if (pending == visits_.end()) break;
+            const Visit visit = *pending; visits_.erase(pending);
             Packet release{8, {uint8_t(0x80 | (visit.onset.bytes[0] & 15)), visit.onset.bytes[1], velocity}};
             Work work{release, now, 0, max_routes * (visit.step + 1) + visit.route, visit.owner};
             ProcessorOutput output(*this, visit.route, visit.step + 1, work, limits_.events);
             auto &processor = routes_[visit.route].steps[visit.step].processor;
-            if (processor && !processor->push(release, visit.input, output)) { ++diagnostics_.failed; overload(uint64_t(1) << visit.route); }
+            if (processor && !processor->push(release, visit.input, output)) { ++diagnostics_.failed; overload_route(visit.route); }
         }
     }
     static int field(const Packet &packet, unsigned id, unsigned input) {
@@ -1081,7 +1318,7 @@ private:
     }
     bool owned_fields(Packet &packet, uint64_t owner, unsigned input, unsigned stop_route = max_routes, unsigned stop_step = 0) const {
         Work work{packet, 0, 0, input, owner};
-        for (unsigned route = 0; route < routes_.size() && route <= stop_route; ++route) if (owner & (uint64_t(1) << route)) {
+        for (unsigned route = 0; route < routes_.size() && route <= stop_route; ++route) if (owns(owner, route)) {
             unsigned count = route == stop_route ? stop_step : unsigned(routes_[route].steps.size());
             for (unsigned step = 0; step < count; ++step)
                 if (!numeric_fields(routes_[route].steps[step], work)) return false;
@@ -1092,8 +1329,27 @@ private:
     CNTRL_FLASH_ROUTINE(streams_process)
 #endif
     void process(unsigned route, unsigned position, Work work) {
+        const auto position_in_queue = processing_active_ ? processing_position_ : processing_.end();
+        if (!processing_.reserve(processing_.size() + processing_release_tokens_.size() + 1)) { ++diagnostics_.dropped; return; }
+        if (!processing_.insert(position_in_queue, {route, position, work})) { ++diagnostics_.dropped; return; }
+        if (processing_active_) return;
+        processing_active_ = true;
+        while (!processing_.empty()) {
+            const Processing next = processing_.front();
+            processing_.erase(processing_.begin());
+            processing_position_ = processing_.begin();
+            if (next.route == UINT32_MAX) release_note(next.work.token, next.work.due, next.work.packet.bytes[2], &next.work.packet);
+            else process_one(next.route, next.position, next.work);
+        }
+        processing_active_ = false;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_process_one)
+#endif
+    void process_one(unsigned route, unsigned position, Work work) {
         if (!active(route)) return;
-        work.owner |= uint64_t(1) << route;
+        work.owner = extend_owner(work.owner, route);
+        if (!work.owner) { ++diagnostics_.dropped; return; }
         auto &entry = routes_[route];
         for (unsigned i = position; i < entry.steps.size(); ++i) {
             auto &step = entry.steps[i];
@@ -1101,8 +1357,8 @@ private:
                 if (work.token && work.packet.bytes[0] >> 4 == 9) {
                     auto visit = std::find_if(visits_.begin(), visits_.end(), [&](const Visit &entry) { return entry.token == work.token && entry.route == route && entry.step == i; });
                     if (visit == visits_.end()) {
-                        if (visits_.size() >= limits_.voices) { overload(uint64_t(1) << route); return; }
-                        visits_.push_back({work.token, work.owner, route, i, work.input, work.packet});
+                        if (visits_.size() >= limits_.voices) { overload_route(route); return; }
+                        if (!visits_.append({work.token, work.owner, route, i, work.input, work.packet})) { ++diagnostics_.dropped; return; }
                     }
                 }
                 ProcessorOutput output(*this, route, i + 1, work, limits_.events);
@@ -1160,7 +1416,8 @@ private:
                         }
                     }
                 }
-                captures_.push_back(capture); return;
+                if (!captures_.append(capture)) ++diagnostics_.dropped;
+                return;
             }
         }
         if (work.packet.bytes[0] >> 4 == 9 && !work.packet.bytes[2]) return;
@@ -1168,8 +1425,13 @@ private:
             if (entry.failed_outputs & (1u << output)) continue;
             if (!outputs_[output].present || recovering(output)) { ++diagnostics_.dropped; continue; }
             if (work.parameter.kind) {
-                if (!enqueue({work.due, work.owner, 0, 0, work.input, output, work.packet, work.parameter, work.lfo, work.sample})) fail_output(route, output);
+                const unsigned failures = memory_failures;
+                if (!enqueue({work.due, work.owner, 0, 0, work.input, output, work.packet, work.parameter, work.lfo, work.sample})
+                    && failures == memory_failures) fail_output(route, output);
                 continue;
+            }
+            if (work.packet.cin == 4 && !cleanup_.reserve(cleanup_.size() + voices_.size() + holds_.size() + outputs_.size())) {
+                ++diagnostics_.dropped; continue;
             }
             uint64_t voice = 0;
             if (work.packet.bytes[0] >> 4 == 9 && work.token) {
@@ -1177,9 +1439,20 @@ private:
                     || events_.size() + voices_.size() + 2 >= limits_.events
                     || output_events(output) + output_voices(output) + 2 >= output_event_limit()) { fail_output(route, output); continue; }
                 voice = ++serial_;
-                voices_.push_back({voice, work.token, work.owner, work.due - current_time_, work.input, output, work.packet, false});
+                if (!events_.reserve(events_.size() + voices_.size() + 3)
+                    || !cleanup_.reserve(cleanup_.size() + voices_.size() + holds_.size() + outputs_.size() + 1)
+                    || !voices_.append({voice, work.token, work.owner, work.due - current_time_, work.input, output, work.packet, false})) { ++diagnostics_.dropped; continue; }
             }
-            if (!enqueue({work.due, work.owner, voice, 0, work.input, output, work.packet})) { fail_output(route, output); continue; }
+            const unsigned failures = memory_failures;
+            if (!enqueue({work.due, work.owner, voice, 0, work.input, output, work.packet})) {
+                if (failures == memory_failures) fail_output(route, output);
+                else {
+                    erase_if(voices_, [voice](const Voice &entry) { return voice && entry.id == voice; });
+                    if ((sysex_outputs_ & (1u << output)) && same_owner(sysex_owners_[output], work.owner)
+                        && sysex_sources_[output] == work.input) cleanup_packet(output, {5, {0xf7, 0, 0}});
+                }
+                continue;
+            }
         }
         for (unsigned downstream = route + 1; downstream < routes_.size(); ++downstream) if (active(downstream))
             for (const auto &source : routes_[downstream].inputs) if (source.kind && source.index == route) { process(downstream, 0, work); break; }
@@ -1200,24 +1473,33 @@ private:
         uint64_t boundary = finite ? now : begin + window;
         if (now < boundary) return;
         // A service stall cannot turn into an unbounded burst of old windows.
-        if (!finite && now - boundary >= window) { overload(uint64_t(1) << route); return; }
-        std::vector<TimelinePacket> sequence;
+        if (!finite && now - boundary >= window) { overload_route(route); return; }
+        CheckedArray<TimelinePacket> sequence;
+        struct Token { uint64_t old, fresh; };
+        CheckedList<Token> tokens;
+        unsigned selected = 0;
+        auto eligible = [&](const Capture &capture) {
+            if (capture.route != route || capture.step != step || (capture.frame && !capture.closed)) return false;
+            const uint64_t time = capture.frame ? capture.end : capture.start;
+            return time >= begin && (finite || time < boundary);
+        };
+        for (const auto &capture : captures_) if (eligible(capture)) ++selected;
+        if (selected > UINT32_MAX / 2 || !sequence.reserve(selected * 2)
+            || !tokens.reserve(selected) || !reverse_parameters_.reserve(selected)) { ++diagnostics_.dropped; return; }
         reverse_parameters_.clear();
-        for (auto capture = captures_.begin(); capture != captures_.end();) {
-            if (capture->route != route || capture->step != step
-                || (capture->frame && !capture->closed)) { ++capture; continue; }
+        for (auto capture = captures_.begin(); capture != captures_.end(); ++capture) {
+            if (!eligible(*capture)) continue;
             uint64_t time = capture->frame ? capture->end : capture->start;
-            if (time < begin || (!finite && time >= boundary)) { ++capture; continue; }
             if (capture->work.parameter.kind) {
                 Work reversed = capture->work;
                 reversed.due = boundary + boundary - capture->start;
-                reverse_parameters_.push_back(reversed);
-                capture = captures_.erase(capture);
+                if (!reverse_parameters_.append(reversed)) { ++diagnostics_.dropped; return; }
                 continue;
             }
             TimelinePacket onset{time - begin, capture->work.packet, capture->work.input,
                 capture->work.token, capture->work.owner};
-            sequence.push_back(onset);
+            onset.order = sequence.size();
+            if (!sequence.append(onset)) return;
             bool note = onset.packet.bytes[0] >> 4 == 9 && onset.token;
             if (note) {
                 uint64_t end = capture->closed ? std::min(capture->end, boundary) : boundary;
@@ -1225,27 +1507,29 @@ private:
                 release.packet.cin = 8;
                 release.packet.bytes[0] = uint8_t(0x80 | (onset.packet.bytes[0] & 15));
                 release.packet.bytes[2] = 0;
-                sequence.push_back(release);
-                if (!finite && (!capture->closed || capture->end > boundary)) {
-                    capture->start = boundary; ++capture; continue;
-                }
+                release.order = sequence.size();
+                if (!sequence.append(release)) return;
             }
-            capture = captures_.erase(capture);
+        }
+        std::sort(sequence.begin(), sequence.end(), [](const TimelinePacket &a, const TimelinePacket &b) {
+            return a.time == b.time ? a.order < b.order : a.time < b.time;
+        });
+        if (!reverse_sequence(sequence, boundary - begin)) { ++diagnostics_.dropped; return; }
+        for (auto capture = captures_.begin(); capture != captures_.end();) {
+            if (!eligible(*capture)) { ++capture; continue; }
+            bool note = capture->work.packet.bytes[0] >> 4 == 9 && capture->work.token;
+            if (note && !finite && (!capture->closed || capture->end > boundary)) {
+                capture->start = boundary; ++capture;
+            } else capture = captures_.erase(capture);
         }
         for (const auto &value : reverse_parameters_) process(route, step + 1, value);
-        if (sequence.empty()) return;
-        std::stable_sort(sequence.begin(), sequence.end(), [](const TimelinePacket &a, const TimelinePacket &b) { return a.time < b.time; });
-        if (!reverse_sequence(sequence, boundary - begin, limits_.captures * 2)) {
-            overload(uint64_t(1) << route); return;
-        }
-        struct Token { uint64_t old, fresh; };
-        std::vector<Token> tokens;
         for (const auto &event : sequence) {
             Work reversed{event.packet, boundary + event.time, event.token, event.source, event.owner};
             reversed.packet.source = 65535;
             unsigned kind = event.packet.bytes[0] >> 4;
             if (kind == 9 && event.token) {
-                reversed.token = ++serial_; tokens.push_back({event.token, reversed.token});
+                reversed.token = ++serial_;
+                if (!tokens.append({event.token, reversed.token})) return;
             } else if (kind == 8 && event.token) {
                 auto token = std::find_if(tokens.begin(), tokens.end(), [&](const Token &entry) { return entry.old == event.token; });
                 if (token == tokens.end()) continue;
@@ -1264,20 +1548,21 @@ public:
                 if (routes_[route].steps[step].kind == 7 && !routes_[route].steps[step].time) {
                     bool owned = false;
                     for (const auto &capture : captures_) if (capture.route == route && capture.step == step
-                        && (capture.work.owner & (uint64_t(1) << owner_route))) owned = true;
+                        && owns(capture.work.owner, owner_route)) owned = true;
                     if (owned) reverse_group(route, step, now, true);
                 }
     }
 private:
     void flush_reverse(uint64_t now) {
-        uint64_t timed_out = 0;
-        for (const auto &capture : captures_) if (capture.frame && !capture.closed) {
-            uint64_t latest = capture.start;
-            for (const auto &other : captures_) if (other.frame == capture.frame) latest = std::max(latest, other.start);
-            if (now >= latest && now - latest >= 1000000) timed_out |= uint64_t(1) << capture.route;
+        for (unsigned route = 0; route < routes_.size(); ++route) {
+            bool timed_out = false;
+            for (const auto &capture : captures_) if (capture.route == route && capture.frame && !capture.closed) {
+                uint64_t latest = capture.start;
+                for (const auto &other : captures_) if (other.frame == capture.frame) latest = std::max(latest, other.start);
+                if (now >= latest && now - latest >= 1000000) timed_out = true;
+            }
+            if (timed_out) overload_route(route);
         }
-        for (unsigned route = 0; route < routes_.size(); ++route)
-            if (timed_out & (uint64_t(1) << route)) overload(uint64_t(1) << route);
         for (unsigned route = 0; route < routes_.size(); ++route)
             for (unsigned step = 0; step < routes_[route].steps.size(); ++step)
                 if (routes_[route].steps[step].kind == 7 && routes_[route].steps[step].time)
@@ -1291,13 +1576,15 @@ private:
         bool match(Step &step) {
             unsigned count = byte();
             if (count > 9) return false;
+            if (!step.match.reserve(count)) return false;
             unsigned fields = 0;
             for (unsigned i = 0; i < count; ++i) {
                 Field field; field.id = uint8_t(byte()); unsigned values = byte();
                 if (field.id > 9 || !values || (fields & (1u << field.id))) return false;
                 fields |= 1u << field.id;
-                for (unsigned j = 0; j < values; ++j) field.values.push_back(int32_t(integer(4)));
-                step.match.push_back(std::move(field));
+                if (!field.values.reserve(values)) return false;
+                for (unsigned j = 0; j < values; ++j) if (!field.values.append(int32_t(integer(4)))) return false;
+                if (!step.match.append(std::move(field))) return false;
             }
             return ok;
         }
@@ -1313,11 +1600,13 @@ private:
         if (reader.integer(4) != size) return false;
         unsigned count = unsigned(reader.integer(2)), flags = unsigned(reader.integer(2));
         if (count > max_routes || flags > 1) return false;
+        if (!routes_.reserve(count)) return false;
         explicit_system_ = flags;
         for (unsigned i = 0; i < count; ++i) {
             Route route; route.scope = uint16_t(reader.integer(2)); unsigned inputs = unsigned(reader.integer(2));
             route.outputs = uint16_t(reader.integer(2)); unsigned steps = unsigned(reader.integer(2));
-            if ((route.scope != system_scope && route.scope >= nodes) || inputs > 64 || steps > 17 || (route.outputs & ~outputs.mask())) return false;
+            if ((route.scope != system_scope && route.scope >= nodes) || (route.outputs & ~outputs.mask())) return false;
+            if (!route.inputs.reserve(inputs) || !route.steps.reserve(steps)) return false;
             bool name_end = false;
             for (unsigned j = 0; j < 64; ++j) { unsigned c = reader.byte(); route.name[j] = char(c); if (!c) name_end = true; else if (name_end || c < 32 || c == '/') return false; }
             if (!name_end) return false;
@@ -1327,7 +1616,7 @@ private:
                 Input input; input.kind = uint8_t(reader.byte()); input.index = uint16_t(reader.integer(2));
                 if (input.kind > 1 || (input.kind ? input.index >= i : input.index >= 16 || !(outputs.mask(true) & (1u << input.index)))) return false;
                 if (input.kind && routes_[input.index].scope != system_scope && routes_[input.index].scope != route.scope) return false;
-                route.inputs.push_back(input);
+                if (!route.inputs.append(input)) return false;
             }
             for (unsigned j = 0; j < steps; ++j) {
                 Step step; step.kind = uint8_t(reader.byte()); unsigned reserved = reader.byte(), length = unsigned(reader.integer(2));
@@ -1359,6 +1648,7 @@ private:
                     if (!payload.match(step)) return false;
                     unsigned assignments = payload.byte();
                     if (!assignments || assignments > 8) return false;
+                    if (!step.assignments.reserve(assignments)) return false;
                     for (unsigned k = 0; k < assignments; ++k) {
                         Assignment assignment; assignment.field = uint8_t(payload.byte()); assignment.source = uint8_t(payload.byte()); assignment.value = int32_t(payload.integer(4));
                         if (assignment.field > 9 || assignment.field == 8 || (assignment.source > 7 && assignment.source != 9 && assignment.source != 255)) return false;
@@ -1372,7 +1662,7 @@ private:
                                 if (!((type >= 8 && type <= 14) || type == 16 || type == 17 || type == 0xf1 || type == 0xf2 || type == 0xf3 || type == 0xf6 || type == 0xf8 || type == 0xfa || type == 0xfb || type == 0xfc || type == 0xfe || type == 0xff)) return false;
                             } else if (assignment.value < minimum || assignment.value > maximum) return false;
                         }
-                        step.assignments.push_back(assignment);
+                        if (!step.assignments.append(assignment)) return false;
                     }
                 } else if (step.kind == 6) {
                     step.time = payload.integer(8); step.repeats = unsigned(payload.integer(2)); uint32_t bits = uint32_t(payload.integer(4)); float feedback; std::memcpy(&feedback, &bits, 4); step.feedback = feedback;
@@ -1383,11 +1673,12 @@ private:
                     if (!std::isfinite(step.bpm) || step.bpm <= 0 || step.bpm > 1000 || j || inputs) return false;
                 } else if (step.kind == 10) {
                     if (j || inputs) return false;
-                    route.lfo = std::make_unique<Lfo>();
+                    if (!route.lfo.create()) return false;
                     if (!route.lfo->config.decode(payload.cursor, length)) return false;
                     payload.cursor = payload.end;
                 } else {
-                    step.parameters.assign(payload.cursor, payload.end); payload.cursor = payload.end;
+                    if (!step.parameters.resize(length)) return false;
+                    std::memcpy(step.parameters.data(), payload.cursor, length); payload.cursor = payload.end;
                     if (j || inputs || length != 126 || !std::memchr(step.parameters.data(), 0, 96)) return false;
                     bool ended = false;
                     for (unsigned k = 0; k < 96; ++k) {
@@ -1404,12 +1695,16 @@ private:
                     int transpose = int8_t(settings.byte()); if (transpose == -128) return false;
                 }
                 if (!payload.ok || payload.cursor != payload.end) return false;
-                route.steps.push_back(std::move(step));
+                if (!route.steps.append(std::move(step))) return false;
             }
             if (!inputs && (route.steps.empty() || route.steps[0].kind < 8)) return false;
-            routes_.push_back(std::move(route));
+            if (!routes_.append(std::move(route))) return false;
         }
-        return reader.ok && reader.cursor == reader.end && validate_lfos();
+        if (!reader.ok || reader.cursor != reader.end || !binding_targets_.resize(count)
+            || !binding_owners_.resize(count) || !downstream_reached_.resize(count)) return false;
+        if (count && !build_owners(count, [&](unsigned i) -> const Route & { return routes_[i]; })) return false;
+        if (!prepare_processing(processing_, count, [&](unsigned i) -> const Route & { return routes_[i]; })) return false;
+        return validate_lfos();
     }
 };
 } // namespace cntrl::midi

@@ -53,6 +53,34 @@ void transforms_and_release() {
     assert(output.packets[1][1].bytes[1] == 72 && output.packets[1][1].bytes[2] == 23);
     assert(!streams.voices());
 }
+void replacement_graph_prepares_without_interrupting_active_notes() {
+    auto original = compiled({Route{}}), replacement = compiled({transpose()});
+    Streams streams; Output output;
+    assert(streams.load(original.data(), unsigned(original.size()), outputs, 1));
+    streams.output_connection(1,true,42);
+    note(streams, 0x90, 60, 100); poll(streams, output, 0);
+    assert(streams.prepare_load(replacement.data(), unsigned(replacement.size()), outputs, 1));
+    poll(streams, output, 0);
+    assert(output.packets[1].size() == 1 && streams.voices() == 1);
+    streams.finish_load(false);
+    cntrl::memory_fail_after = 0;
+    assert(!streams.prepare_load(replacement.data(), unsigned(replacement.size()), outputs, 1));
+    note(streams, 0x80, 60, 0); poll(streams, output, 0);
+    assert(output.packets[1].size() == 2 && !streams.voices());
+    cntrl::memory_fail_after = -1;
+    note(streams,0x90,61,100); poll(streams,output,0);
+    assert(streams.prepare_load(replacement.data(), unsigned(replacement.size()), outputs, 1));
+    cntrl::memory_fail_after = 0;
+    streams.finish_load(true);
+    streams.output_connection(1,true,42);
+    poll(streams,output,0);
+    assert(output.packets[1].back().bytes[0] == 0x80 && output.packets[1].back().bytes[1] == 61);
+    cntrl::memory_fail_after = -1;
+    note(streams, 0x90, 60, 100); poll(streams, output, 0);
+    assert(output.packets[1].back().bytes[1] == 72);
+    note(streams, 0x80, 60, 0); poll(streams, output, 0);
+    assert(!streams.voices());
+}
 void patch_scope_and_cleanup() {
     auto data = compiled({transpose(0)}); Streams streams; Output output;
     assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
@@ -140,6 +168,99 @@ void registered_processor_uses_shared_delivery_and_cleanup() {
     assert(output.packets[1].size() == 1 && output.packets[1][0].bytes[2] == 120);
     streams.stop_all(); poll(streams, output, 0);
     assert(output.packets[1].back().bytes[0] == 0x80);
+}
+struct Burst : Streams::Processor {
+    bool push(const Packet &packet, unsigned, Streams::Emit &output) override {
+        if (packet.bytes[0] >> 4 != 11) return output.emit(packet);
+        bool accepted = output.emit({9,{0x90,62,100}}) && output.emit({9,{0x90,63,100}});
+        cntrl::memory_fail_after = 0;
+        return output.emit({8,{0x80,62,0}}) && output.emit({8,{0x80,63,0}}) && accepted;
+    }
+};
+std::unique_ptr<Streams::Processor> burst(const uint8_t *, unsigned) { return std::make_unique<Burst>(); }
+void generated_releases_keep_their_traversal_credit_under_exhaustion() {
+    assert(Streams::register_processor(130,1,burst));
+    Route route; route.count = 1; route.steps = {130,1,0,0}; auto data = compiled({route});
+    Streams streams; Output output;
+    assert(streams.load(data.data(),unsigned(data.size()),outputs,1));
+    note(streams,0x90,62,100); note(streams,0x90,63,100); poll(streams,output,0);
+    note(streams,0x80,62,0); note(streams,0x80,63,0); poll(streams,output,0);
+    streams.receive(0,{11,{0xb0,7,1}},1); poll(streams,output,1);
+    cntrl::memory_fail_after = -1;
+    assert(!streams.voices() && !streams.pending() && !streams.diagnostics().failed);
+    assert(output.packets[1].size() == 8 && output.packets[1].back().bytes[0] == 0x80);
+}
+struct TriggeredNote : Streams::Processor {
+    unsigned controller;
+    explicit TriggeredNote(unsigned control = 7) : controller(control) {}
+    bool push(const Packet &packet, unsigned, Streams::Emit &output) override {
+        if (packet.bytes[0] >> 4 == 11 && packet.bytes[1] == controller) {
+            const bool on = packet.bytes[2] != 0;
+            output.emit({uint8_t(on ? 9 : 8), {uint8_t(on ? 0x90 : 0x80), 60, uint8_t(on ? 100 : 0)}});
+        }
+        return true;
+    }
+};
+std::unique_ptr<Streams::Processor> triggered_note(const uint8_t *bytes, unsigned size) {
+    return size <= 1 ? std::make_unique<TriggeredNote>(size ? bytes[0] : 7) : nullptr;
+}
+void generated_refusals_keep_fifo_pairing_at_the_note_limit() {
+    assert(Streams::register_processor(131, 1, triggered_note));
+    Route route; route.count = 1; route.steps = {131, 1, 0, 0}; auto data = compiled({route});
+    Streams::Limits limits; limits.notes = 1;
+    Streams streams(limits); Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    auto trigger = [&](bool on) {
+        streams.receive(0, {11, {0xb0, 7, uint8_t(on ? 127 : 0)}}, 0);
+        poll(streams, output, 0);
+    };
+    trigger(true); // A is admitted.
+    trigger(true); // B is refused at the note limit.
+    assert(output.packets[1].size() == 1);
+    trigger(false); // Off A releases its accepted voice first.
+    assert(output.packets[1].size() == 2 && output.packets[1].back().bytes[0] == 0x80);
+    trigger(true); // C remains refused until B's Off arrives.
+    assert(output.packets[1].size() == 2);
+    trigger(false); trigger(false); // Drain Off B and Off C.
+    assert(output.packets[1].size() == 2);
+    trigger(true); // D can now be admitted.
+    assert(output.packets[1].size() == 3 && output.packets[1].back().bytes[0] == 0x90);
+    trigger(false);
+    assert(output.packets[1].size() == 4 && !streams.voices() && !streams.pending());
+}
+void generated_notes_pair_with_the_processor_that_emitted_them() {
+    Route a, b; a.output = 1; a.count = b.count = 1;
+    a.steps = {131, 1, 1, 0, 7}; b.steps = {131, 1, 1, 0, 8};
+    auto data = compiled({a, b}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    auto trigger = [&](unsigned controller, bool on) {
+        streams.receive(0, {11, {0xb0, uint8_t(controller), uint8_t(on ? 127 : 0)}}, 0);
+        poll(streams, output, 0);
+    };
+    trigger(7, true); trigger(8, true);
+    assert(output.packets[0].size() == 1 && output.packets[1].size() == 1);
+    trigger(8, false);
+    assert(output.packets[0].size() == 1);
+    assert(output.packets[1].size() == 2 && output.packets[1].back().bytes[0] == 0x80);
+    trigger(7, false);
+    assert(output.packets[0].size() == 2 && !streams.voices());
+}
+void generated_refusals_preserve_the_original_input_cable() {
+    Route route; route.count = 1; route.steps = {131, 1, 0, 0}; auto data = compiled({route});
+    Streams::Limits limits; limits.notes = 1;
+    Streams streams(limits); Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    auto trigger = [&](unsigned cable, bool on) {
+        streams.receive(0, {11, {0xb0, 7, uint8_t(on ? 127 : 0)}, uint16_t(cable)}, 0);
+        poll(streams, output, 0);
+    };
+    trigger(0, true); trigger(1, true); // Only cable 1's new onset is refused.
+    trigger(0, false);
+    assert(output.packets[1].size() == 2);
+    trigger(0, true); // Cable 1's missing Off must not close cable 0.
+    assert(output.packets[1].size() == 3 && output.packets[1].back().bytes[0] == 0x90);
+    trigger(1, false); trigger(0, false);
+    assert(output.packets[1].size() == 4 && !streams.voices());
 }
 void external_patch_scope_restores_local_routes() {
     auto data = compiled({transpose(0)}); auto external = compiled({Route{}}); Streams streams; Output output;
@@ -297,10 +418,16 @@ void pickup_uses_mapped_destination_and_separate_live_sources() {
 }
 }
 int main() {
+    cntrl::memory_budget = 1024 * 1024;
+    replacement_graph_prepares_without_interrupting_active_notes();
     transforms_and_release(); patch_scope_and_cleanup(); reconnect_and_independent_outputs();
     delay_duration_and_no_stale_onsets(); malformed_sections_are_rejected();
     sustain_cleanup_and_shared_inputs(); thru_preserves_repeated_note_articulation();
     registered_processor_uses_shared_delivery_and_cleanup(); external_patch_scope_restores_local_routes();
+    generated_releases_keep_their_traversal_credit_under_exhaustion();
+    generated_refusals_keep_fifo_pairing_at_the_note_limit();
+    generated_notes_pair_with_the_processor_that_emitted_them();
+    generated_refusals_preserve_the_original_input_cable();
     system_message_conversion_has_correct_payload_width();
     merged_clocks_have_one_owner_until_disconnect();
     blocked_fanout_does_not_interrupt_healthy_notes_or_releases();

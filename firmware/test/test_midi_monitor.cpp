@@ -111,7 +111,10 @@ void test_history_freeze_overflow_memory_and_rollover() {
     monitor.freeze(); assert(monitor.cursor() == monitor.tail());
     monitor.close(); assert(cntrl::memory_used == before);
     unsigned budget = cntrl::memory_budget; cntrl::memory_budget = before;
-    assert(!monitor.open(0)); cntrl::memory_budget = budget;
+    assert(monitor.open(0));
+    receive(monitor, {0xf8}); assert(monitor.tail() == 0 && monitor.dropped() == 1);
+    Sink sink(monitor); assert(sink.submit(0, {15,{0xf8,0,0}}) && sink.writes == 1);
+    assert(monitor.dropped() == 2); cntrl::memory_budget = budget;
 }
 
 void test_connections_reset_partial_and_running_status() {
@@ -139,7 +142,10 @@ void test_dense_clock_and_long_sysex_keep_memory_bounded() {
     assert(monitor.tail() == 3334 + 157 && monitor.overwritten() == monitor.tail() - Monitor::capacity);
     assert(monitor.entry(monitor.tail() - 1)->flags & Monitor::end);
     for (uint64_t sequence = monitor.oldest(); sequence < monitor.tail(); ++sequence) assert(monitor.entry(sequence)->size <= 3);
-    assert(cntrl::memory_used == memory);
+    assert(cntrl::memory_used > memory && monitor.memory_bytes() == cntrl::memory_used - memory);
+    const unsigned full = cntrl::memory_used, budget = cntrl::memory_budget; cntrl::memory_budget = full;
+    for (unsigned i = 0; i < 1000; ++i) receive(monitor, {0xf8});
+    assert(cntrl::memory_used == full && !monitor.dropped()); cntrl::memory_budget = budget;
 }
 
 struct Fonts : cntrl::ui::Fonts {

@@ -1,7 +1,6 @@
 #pragma once
 #include <cntrl/hardware.h>
 #include <algorithm>
-#include <vector>
 
 namespace cntrl::ui {
 // Management views express context, selection and detail as logical panes.
@@ -19,23 +18,23 @@ void present(Hardware &hardware, const Pane (&parts)[Count], unsigned primary) {
         }
         return;
     }
-    std::vector<Pane> merged(windows);
-    std::vector<unsigned> lines(windows);
-    for (unsigned window = 0; window < windows; ++window) merged[window].graphics = parts[primary].graphics;
-    auto append = [&](unsigned part, unsigned window) {
-        for (const auto &line : parts[part].lines) if (line.text[0] && lines[window] < max_lines) {
-            auto &out = merged[window].lines[lines[window]++]; out = line; out.y = -1; out.graphics.top = 0;
-        }
-    };
-    append(primary, 0);
-    unsigned destination = windows > 1 ? 1 : 0;
-    for (unsigned part = 0; part < Count; ++part) if (part != primary) {
-        append(part, destination); destination = (destination + 1) % windows;
-    }
     for (unsigned window = 0; window < windows; ++window) {
-        auto &pane = merged[window]; pane.graphics.pad = 0;
-        const unsigned size = lines[window] * 16 <= hardware.display_height() ? 16 : 8;
-        for (unsigned i = 0; i < lines[window]; ++i) {
+        Pane pane; unsigned lines = 0;
+        pane.graphics = parts[primary].graphics;
+        auto append = [&](unsigned part) {
+            for (const auto &line : parts[part].lines) if (line.text[0] && lines < max_lines) {
+                auto &out = pane.lines[lines++]; out = line; out.y = -1; out.graphics.top = 0;
+            }
+        };
+        if (!window) append(primary);
+        unsigned destination = windows > 1 ? 1 : 0;
+        for (unsigned part = 0; part < Count; ++part) if (part != primary) {
+            if (destination == window) append(part);
+            destination = (destination + 1) % windows;
+        }
+        pane.graphics.pad = 0;
+        const unsigned size = lines * 16 <= hardware.display_height() ? 16 : 8;
+        for (unsigned i = 0; i < lines; ++i) {
             auto &line = pane.lines[i]; line.graphics.size = uint8_t(size); line.graphics.line_height = uint16_t(size);
             line.graphics.pad = 0; line.x = uint16_t(std::min<unsigned>(line.x, hardware.display_width() / 8));
         }

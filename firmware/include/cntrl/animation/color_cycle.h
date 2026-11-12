@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include <vector>
+#include "../checked_array.h"
 
 namespace cntrl::animation {
 struct Tint {
@@ -82,14 +82,15 @@ inline uint16_t tint_white(uint16_t pixel, Tint tint) {
 // transformed in the caller's packet, without a second transfer buffer.
 class ColorCycle {
 public:
-    void enable(bool enabled) { enabled_ = enabled; }
-    void begin(unsigned streams) {
-        while (states_.size() > streams) states_.pop_back();
-        while (states_.size() < streams) {
-            unsigned index = unsigned(states_.size());
-            uint32_t seed = index ? 0x243f6a89u + (index - 1) * 0x9e3779b9u : 0x9e3779b9u;
-            states_.emplace_back(seed);
-        }
+    bool enable(bool enabled) {
+        if (enabled && !prepare(streams_)) return false;
+        enabled_ = enabled;
+        if (!enabled) states_.release();
+        return true;
+    }
+    bool begin(unsigned streams) {
+        if (enabled_ && !prepare(streams)) return false;
+        streams_ = streams; return true;
     }
     void frame(uint32_t now) {
         if (enabled_) for (auto &state : states_) state.tint = state.walk.at(now);
@@ -103,12 +104,23 @@ public:
         }
     }
 private:
+    bool prepare(unsigned streams) {
+        if (!states_.reserve(streams)) return false;
+        if (states_.size() > streams) states_.resize(streams);
+        while (states_.size() < streams) {
+            unsigned index = unsigned(states_.size());
+            uint32_t seed = index ? 0x243f6a89u + (index - 1) * 0x9e3779b9u : 0x9e3779b9u;
+            if (!states_.append(State(seed))) return false;
+        }
+        return true;
+    }
     struct State {
-        explicit State(uint32_t seed) : walk(seed) {}
+        explicit State(uint32_t seed = 0x9e3779b9u) : walk(seed) {}
         ColorWalk walk;
         Tint tint = {63, 63, 63};
     };
-    std::vector<State> states_;
+    CheckedArray<State> states_;
+    unsigned streams_ = 0;
     bool enabled_ = false;
 };
 

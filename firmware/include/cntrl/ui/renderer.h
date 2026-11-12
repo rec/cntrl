@@ -12,13 +12,14 @@ class Renderer {
 public:
     Renderer(Display &display, const Fonts &fonts, uint16_t *work, unsigned work_capacity,
              uint16_t *cache, uint16_t *previous, unsigned storage_capacity)
-        : display_(display), fonts_(fonts), raster_(fonts, work), cache_(cache), previous_(previous) {
-        unsigned offset = 0, maximum = 0;
+        : display_(display), fonts_(fonts), raster_(fonts, work), cache_(cache), previous_(previous), screens_(display.count()) {
+        unsigned offset = 0, maximum = 0, transfer = 0;
         for (unsigned i = 0; i < display.count(); ++i) {
             const auto v = display.viewport(i); const unsigned area = v.width * v.height;
-            screens_.push_back({v, offset, Pane{}, true, false, 0}); offset += area; maximum = std::max(maximum, area);
-            transfer_.resize(std::max(transfer_.size(), size_t(v.height * 8 * 2)));
+            screens_[i] = {v, offset, Pane{}, true, false, 0}; offset += area; maximum = std::max(maximum, area);
+            transfer = std::max(transfer, unsigned(v.height * 8 * 2));
         }
+        transfer_.resize(transfer);
         usable_ = maximum <= work_capacity && offset <= storage_capacity && !screens_.empty();
     }
     void target_brightness(uint8_t value) { requested_brightness_ = std::min(value, uint8_t(128)); }
@@ -71,6 +72,9 @@ public:
         for (auto &screen : screens_) { screen.dirty = true; screen.valid = false; screen.ring = 0; }
         reset_scroll_ = true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_show)
+#endif
     void show(unsigned pane, const Pane &content) {
         if (pane >= screens_.size()) return;
         auto &screen = screens_[pane];
@@ -182,6 +186,9 @@ private:
         const unsigned pad = painting_.graphics.pad, available = height > 2 * pad ? height - 2 * pad : 0;
         return int(pad + preceding + (used < available && count ? (available - used) * (2 * index + 1) / (2 * count) : 0) + line.graphics.top);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_backgrounds)
+#endif
     void backgrounds(bool preserve = false) {
         const auto v = screens_[unsigned(drawing_)].viewport;
         unsigned start = painting_.heading_band ? 0 : painting_.graphics.pad;
@@ -247,6 +254,9 @@ private:
         return columns ? display_.ring_column(screen, (screens_[screen].ring + column) % columns, transfer_.data(), height)
             : display_.submit(screen, column, 0, 1, height, transfer_.data());
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_animate_ring)
+#endif
     void animate_ring(uint32_t now) {
         if (settle_anchor_) {
             settled_ = now; settle_anchor_ = false; settling_ = true; return;
@@ -297,6 +307,9 @@ private:
             if (!(progress_ % quantum) || progress_ == distance()) { reveal_ = true; reveal_screen_ = 0; }
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_animate)
+#endif
     void animate(uint32_t now) {
         if (ring_scroll_) { animate_ring(now); return; }
         if (!animation_screen_ && !animation_column_) {

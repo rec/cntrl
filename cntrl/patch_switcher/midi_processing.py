@@ -201,7 +201,7 @@ class File(BaseModel, frozen=True):
 class Route(BaseModel, frozen=True):
     source: str | list[str] | None = Field(default=None, alias='from')
     to: str | list[str] | None = None
-    via: list[dict[str, object]] = Field(default_factory=list, max_length=16)
+    via: list[dict[str, object]] = Field(default_factory=list, max_length=65535)
     generate: dict[str, object] | None = None
 
     @field_validator('source', 'to', mode='before')
@@ -212,8 +212,8 @@ class Route(BaseModel, frozen=True):
         names = value if isinstance(value, list) else [value]
         if not names or any(not isinstance(n, str) or not n for n in names):
             raise ValueError('expected an endpoint name or nonempty list of names')
-        if len(names) > 64:
-            raise ValueError('route exceeds 64 inputs or outputs')
+        if len(names) > 65535:
+            raise ValueError('route exceeds the encoded input or output count')
         if len(set(names)) != len(names):
             raise ValueError('duplicate endpoint or route reference')
         return value
@@ -223,8 +223,8 @@ class Route(BaseModel, frozen=True):
         if (self.source is None) == (self.generate is None):
             raise ValueError('supply exactly one of from and generate')
         if self.generate is not None:
-            if len(self.via) == 16:
-                raise ValueError('generator and processing exceed 16 stages')
+            if len(self.via) == 65535:
+                raise ValueError('generator and processing exceed 65535 stages')
             if len(self.generate) != 1:
                 raise ValueError('generate requires one generator')
             for name, argument in self.generate.items():
@@ -323,8 +323,8 @@ def compile_routes(
                     'MIDI route name exceeds 63 bytes or contains controls'
                 )
             definitions[scope, name] = Route.model_validate(raw)
-    if len(definitions) > 64:
-        raise ValueError('MIDI graph exceeds 64 routes')
+    if len(definitions) > 65535:
+        raise ValueError('MIDI graph exceeds the encoded 65535 routes')
     references: dict[tuple[int, str], list[tuple[int, str]]] = {}
     consumed: set[tuple[int, str]] = set()
     for key, route in definitions.items():
@@ -351,20 +351,25 @@ def compile_routes(
     visiting: set[tuple[int, str]] = set()
     complete: set[tuple[int, str]] = set()
 
-    def visit(key: tuple[int, str]) -> None:
-        if key in complete:
-            return
-        if key in visiting:
-            raise ValueError(f'MIDI route cycle at {key[1]!r}')
-        visiting.add(key)
-        for dependency in references[key]:
-            visit(dependency)
-        visiting.remove(key)
-        complete.add(key)
-        ordered.append(key)
-
-    for key in definitions:
-        visit(key)
+    for root in definitions:
+        if root in complete:
+            continue
+        pending = [(root, 0)]
+        while pending:
+            key, next_dependency = pending[-1]
+            visiting.add(key)
+            if next_dependency < len(references[key]):
+                dependency = references[key][next_dependency]
+                pending[-1] = (key, next_dependency + 1)
+                if dependency in visiting:
+                    raise ValueError(f'MIDI route cycle at {dependency[1]!r}')
+                if dependency not in complete:
+                    pending.append((dependency, 0))
+                continue
+            pending.pop()
+            visiting.remove(key)
+            complete.add(key)
+            ordered.append(key)
     validate_lfo_routes(definitions, ordered, references)
     clock_sources: dict[tuple[int, str], int] = {}
     clock_outputs: dict[str, dict[int, int]] = {}
@@ -446,12 +451,10 @@ def validate_lfo_routes(
     references: dict[tuple[int, str], list[tuple[int, str]]],
 ) -> None:
     bindings: list[tuple[int, str, lfos.Target]] = []
-    generators = 0
     for root in ordered:
         generator = definitions[root].generate
         if generator is None or 'lfo' not in generator:
             continue
-        generators += 1
         lfo = lfos.Lfo.model_validate(generator['lfo'])
         reached: dict[tuple[int, str], lfos.Target] = {root: lfo.target}
         for key in ordered[ordered.index(root) :]:
@@ -551,15 +554,6 @@ def validate_lfo_routes(
                             f'{output}: overlapping active LFO parameter writers'
                         )
                 bindings.append((scope, output, target))
-    if generators > 16:
-        raise ValueError('MIDI graph exceeds 16 LFO generators')
-    scopes = {s for s, _, _ in bindings if s != 65535}
-    if (
-        sum(s == 65535 for s, _, _ in bindings)
-        + max((sum(s == p for s, _, _ in bindings) for p in scopes), default=0)
-        > 128
-    ):
-        raise ValueError('MIDI graph exceeds 128 active LFO destinations')
 
 
 def section_end(data: bytes, offset: int) -> int:
@@ -573,41 +567,71 @@ def section_end(data: bytes, offset: int) -> int:
     return offset + size
 
 
-def estimate_ram(section: bytes) -> int:
-    """Conservatively budget bounded engine pools and decoded graph records.
+def estimate_ram(section: bytes, *, endpoint_count: int) -> int:
+    """Count resident ARM32 graph storage and reusable traversal workspace.
 
-    The sparse vectors grow on demand. Reserve their peak including vector
-    growth, temporary cleanup/capture work and allocator overhead in the
-    setup budget. Empty matrices require only endpoint parser/connection state.
+    Live notes, echoes, captures and deliveries acquire checked storage when
+    admitted. Include 16 bytes per configured allocation for heap alignment and
+    allocator metadata, rather than reserving fixed traffic pools.
     """
+    # Parser 7, two Connection 24 records, quarantine 2, output bookkeeping 29.
+    memory = endpoint_count * 86 + (160 if endpoint_count else 0)
     if not section:
-        return 0
+        return memory
     if section_end(section, 0) != len(section):
         raise ValueError('invalid MIDI stream section')
     count = HEADER.unpack_from(section)[2]
     cursor = HEADER.size
-    plugin_memory: dict[int, int] = {}
-    has_lfo = False
+    scratch = 1
+    paths: list[int] = []
     by_opcode = {p.opcode: p for p in REGISTERED_PROCESSORS.values()}
     for _ in range(count):
-        scope, inputs, _, steps, _ = ROUTE.unpack_from(section, cursor)
-        cursor += ROUTE.size + inputs * INPUT.size
+        _, inputs, _, steps, _ = ROUTE.unpack_from(section, cursor)
+        cursor += ROUTE.size
+        root = not inputs
+        owners = 0
+        for _ in range(inputs):
+            kind, index = INPUT.unpack_from(section, cursor)
+            cursor += INPUT.size
+            if kind:
+                scratch += 1
+                owners += paths[index]
+            else:
+                root = True
+        paths.append(owners + root)
+        memory += (inputs * 4 + 16 if inputs else 0) + (steps * 96 + 16 if steps else 0)
         for _ in range(steps):
             opcode, _, size = STEP.unpack_from(section, cursor)
-            cursor += STEP.size + size
-            has_lfo |= opcode == 10
+            cursor += STEP.size
+            payload = section[cursor : cursor + size]
+            cursor += size
+            position = 0
+            if opcode in (0, 1, 4, 5):
+                fields = payload[position]
+                position += 1
+                memory += fields * 16 + (16 if fields else 0)
+                for _ in range(fields):
+                    alternatives = payload[position + 1]
+                    position += 2 + alternatives * 4
+                    memory += alternatives * 4 + 16
+            if opcode == 5:
+                memory += payload[position] * 8 + 16
+            elif opcode == 6:
+                scratch += struct.unpack_from('<H', payload, 8)[0]
+            elif opcode == 9:
+                memory += size + 16
+            elif opcode == 10:
+                memory += 120 + 16
             if opcode in by_opcode:
-                plugin_memory[scope] = (
-                    plugin_memory.get(scope, 0) + by_opcode[opcode].ram_bytes
-                )
-    system_memory = plugin_memory.pop(65535, 0)
-    return (
-        4096
-        + ((196608 if has_lfo else 163840) if count else 0)
-        + 4 * len(section)
-        + system_memory
-        + max(plugin_memory.values(), default=0)
-    )
+                memory += by_opcode[opcode].ram_bytes + 16
+    # Route 168 plus target 8/owner 8/reached 1; offsets 4 and OwnerPath 8.
+    if count:
+        if sum(paths) > 4294967295 // 8:
+            raise ValueError('MIDI ownership paths exceed addressable storage')
+        memory += count * 185 + 64 + (count + 1) * 4 + 16
+        memory += sum(paths) * 8 + 16 + 52 + 16
+    # CheckedList<Processing> nodes are 104 bytes on ARM32.
+    return memory + scratch * 120
 
 
 def _pack_match(match: Match, ports: dict[str, Endpoint]) -> bytes:

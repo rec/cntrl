@@ -160,6 +160,23 @@ int main(int argc, char **argv) {
         assert(rejected.wire[0].empty() && rejected.wire[1].empty());
         assert(!rejected.pins && !rejected.released && rejected.last_error == "Patch memory unavailable");
     }
+    {
+        struct RejectMetadata : PatchBoard {
+            unsigned prepared = 0;
+            bool prepare_message(cntrl::PatchExecutor &, const char *, const uint8_t *, unsigned) override { return ++prepared < 2; }
+        } rejected;
+        cntrl::Document original;
+        assert(original.load(base.data(), unsigned(base.size()), rejected));
+        const unsigned first = original.nodes();
+        Bytes image = extend(base, {midi("din", {0xb0, 7, 100}), midi("trs", {0xb1, 64, 0}), sequence({first, first + 1})}, rejected);
+        cntrl::Document document;
+        assert(document.load(image.data(), unsigned(image.size()), rejected));
+        cntrl::PatchExecutor executor(rejected, rejected, rejected, 0);
+        assert(!executor.start(document, first + 2) && rejected.prepared == 2);
+        executor.tick(); rejected.bridge.service(rejected, 0);
+        assert(rejected.wire[0].empty() && rejected.wire[1].empty() && !rejected.pins);
+        assert(rejected.last_error == "MIDI state memory unavailable");
+    }
     // An accepted switch press reaches the wire in one tick and one service.
     {
         PatchBoard direct;
@@ -172,6 +189,11 @@ int main(int argc, char **argv) {
         assert(direct.wire[0].empty());
         direct.bridge.service(direct, 20);
         assert(!direct.wire[0].empty());
+        const unsigned revision = switches.revision(), budget = cntrl::memory_budget;
+        cntrl::memory_budget = cntrl::memory_used;
+        switches.enter(document, 0);
+        assert(switches.open() && switches.revision() == revision);
+        cntrl::memory_budget = budget;
     }
     PatchBoard board; cntrl::Document original; assert(original.load(base.data(), unsigned(base.size()), board));
     unsigned first = original.nodes();
