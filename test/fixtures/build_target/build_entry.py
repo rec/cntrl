@@ -11,6 +11,7 @@ from pydantic import BaseModel
 class Build(BaseModel, frozen=True):
     source_root: Path
     output: Path
+    diagnostics: bool = False
 
 
 def run(command: Build) -> None:
@@ -22,7 +23,10 @@ def run(command: Build) -> None:
         temporary.write(b'temporary build data\n')
     (command.output / 'temporary-path.txt').write_bytes(temporary.name.encode())
     (command.output / 'build.toml').write_bytes(
-        "# Café А\nimage = 'firmware.bin'\ntarget = 'target.toml'\n".encode()
+        (
+            "# Café А\nimage = 'firmware.bin'\ntarget = 'target.toml'\n"
+            f'diagnostics = {str(command.diagnostics).lower()}\n'
+        ).encode()
     )
     (command.output / 'firmware.bin').write_bytes(b'test image\n')
     (command.output / 'target.toml').write_text("buttons = ['one']\n")

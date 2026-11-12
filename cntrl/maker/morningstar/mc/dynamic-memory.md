@@ -110,6 +110,23 @@ Use `uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc`
 to discover the MIDI endpoints. Target options follow `--`. The DIN output must
 connect to the DIN input for the forwarding checks below.
 
+For a crash or hang investigation, build with `cntrl build --diagnostics` using
+the same target and output options. This opt-in image reserves 128 bytes of RAM2
+for the SDK fault record and six retained execution breadcrumbs. Its exported
+`firmware.elf` must stay with the image for address decoding. Normal builds omit
+these hooks and keep their existing reset behavior.
+
+`cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --inspect --report
+build/inspection.toml` reads serial counters and retained crash evidence without
+opening MIDI endpoints or arming the watchdog. A `--run` on a diagnostic image
+arms an eight-second watchdog and records execution phase, packet, heap operation
+and loop progress. It stops recording afterwards; the watchdog remains enabled
+and is fed only when the cooperative loop completes. After a failure, keep power
+connected, allow the warm restart, and use `--inspect` before another run clears
+the retained record. A watchdog reset gives breadcrumbs rather than a fault PC.
+Instrumentation changes timing, so use a normal image for final performance
+measurements.
+
 The tracked `qualification/dynamic-memory-thru.toml` setup enables the ordinary
 interface. Copy it with `cntrl setup copy`, using the built `target.toml`, then
 select `dynamic-memory-thru` with `cntrl setup set`. Run:

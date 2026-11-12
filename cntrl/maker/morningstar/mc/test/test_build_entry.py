@@ -28,6 +28,7 @@ def test_adapter_entry_binds_selected_helpers(tmp_path: Path) -> None:
     )
     assert '--source-root' in result.stdout
     assert '--output' in result.stdout
+    assert '--diagnostics' in result.stdout
     result = subprocess.run(
         [sys.executable, str(directory / 'upload_helper_entry.py'), '--help'],
         cwd=tmp_path,

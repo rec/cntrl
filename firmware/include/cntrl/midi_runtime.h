@@ -1,4 +1,10 @@
 #pragma once
+#ifndef CNTRL_RUNTIME_TRACE
+#define CNTRL_RUNTIME_TRACE(name) ((void)0)
+#endif
+#ifndef CNTRL_RUNTIME_PACKET
+#define CNTRL_RUNTIME_PACKET(route, packet) ((void)0)
+#endif
 #include "document.h"
 #include "midi_bridge.h"
 #include "midi_monitor.h"
@@ -136,11 +142,14 @@ public:
         bridge.clock_owner(pages.clock_owner() | files.player.clock_outputs() | stream_clocks);
         pages.generator.poll(s.microseconds(), available & ~files.player.clock_outputs() & ~stream_clocks, s);
         unsigned count = s.midi_source_count();
+        CNTRL_RUNTIME_TRACE(midi_inputs);
         for (unsigned i = 0; i < count && uint32_t(s.microseconds() - begin) < input_budget_us_; ++i) {
             unsigned source = (source_cursor_ + i) % count;
             for (unsigned item = 0; item < source_items_ && uint32_t(s.microseconds() - begin) < input_budget_us_; ++item) {
                 InputEvent event;
                 if (!s.midi_read_event(source, event)) break;
+                CNTRL_RUNTIME_TRACE(midi_ingress);
+                CNTRL_RUNTIME_PACKET(event.input, event.packetized ? event.packet.packed(event.input) : uint32_t(event.byte) << 8);
                 event.packet.source = uint16_t(event.input * 16 + event.cable);
                 uint32_t timestamp = s.microseconds();
                 bool diagnostic_traffic = false;
@@ -198,6 +207,7 @@ public:
             }
         }
         source_cursor_ = count ? (source_cursor_ + 1) % count : 0;
+        CNTRL_RUNTIME_TRACE(midi_derived);
         files.looper.poll(pages.beat_position(s.microseconds()),pages.clock_ready(),available,s,pages.clock_period());
         arpeggiator.poll(pages.arpeggiator_beat_position(s.microseconds()),available,bridge.busy_outputs() | files.player.sysex_outputs() | streams_.sysex_outputs(),s,pages.clock_period());
         prepare_arpeggiator_inputs(s.midi_outputs());
@@ -210,6 +220,7 @@ public:
             if (!s.panic.active()) { bridge.configure(s.runtime.interface); s.panic_owns_midi = false; }
         } else
 #endif
+        CNTRL_RUNTIME_TRACE(midi_bridge);
 #if CNTRL_CABLE_TEST
         if (s.cable_test.enabled()) { if (!s.loop_cleaning() && bridge.handoff(s)) s.cable_test.tick(now); }
         else
@@ -222,16 +233,20 @@ public:
 #if CNTRL_CABLE_TEST
         exclusive = exclusive || s.cable_test.enabled();
 #endif
+        CNTRL_RUNTIME_TRACE(midi_streams);
         if (exclusive) streams_.stop_all();
         else {
             streams_.beat_position(pages.beat_position(s.microseconds()));
             streams_.service(s, extend(s.microseconds()), available,
                 bridge.busy_outputs() | files.player.sysex_outputs(), 64, files.player.sysex_outputs());
         }
+        CNTRL_RUNTIME_TRACE(midi_reclaim);
         if (!exclusive) s.pickup_poll(s.microseconds(), bridge.destinations(),
             available & ~bridge.busy_outputs() & ~files.player.sysex_outputs() & ~streams_.sysex_outputs());
+        CNTRL_RUNTIME_TRACE(midi_flush);
         s.midi_flush();
         if (monitor_.active()) monitor_.poll(s.microseconds());
+        CNTRL_RUNTIME_TRACE(midi_files);
         files.recorder.poll(s.microseconds());
         if (files.recorder.failed() && !recording_failed_) s.error("MIDI recording write failed");
         recording_failed_ = files.recorder.failed();

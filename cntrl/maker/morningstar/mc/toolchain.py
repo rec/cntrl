@@ -127,7 +127,12 @@ def apply_patch(directory: Path, patch: Path) -> None:
 
 
 def compile_command(
-    root: Path, source_root: Path, work: Path, linker: Path
+    root: Path,
+    source_root: Path,
+    work: Path,
+    linker: Path,
+    *,
+    diagnostics: bool = False,
 ) -> list[str]:
     """Use the production compiler invocation for builds and footprint experiments."""
     root, source_root, work, linker = (
@@ -149,6 +154,8 @@ def compile_command(
         '-DCNTRL_CABLE_TEST=1 -DCNTRL_ORIGINAL_FIRMWARE=1 '
         '-DCNTRL_PANIC=1 -DCNTRL_SWITCHES=1'
     )
+    if diagnostics:
+        cpp += ' -DCNTRL_MEMORY_QUALIFICATION'
     properties = {
         'build.flags.ld': (
             '-Wl,--gc-sections,--relax,--no-warn-rwx-segments '
@@ -180,7 +187,14 @@ def compile_command(
     return [*command, str(root / 'patch_switcher')]
 
 
-def build(root: Path, source_root: Path, work: Path, linker: Path) -> None:
+def build(
+    root: Path,
+    source_root: Path,
+    work: Path,
+    linker: Path,
+    *,
+    diagnostics: bool = False,
+) -> None:
     root, source_root, work, linker = (
         root.resolve(),
         source_root.resolve(),
@@ -188,7 +202,7 @@ def build(root: Path, source_root: Path, work: Path, linker: Path) -> None:
         linker.resolve(),
     )
     subprocess.run(
-        compile_command(root, source_root, work, linker),
+        compile_command(root, source_root, work, linker, diagnostics=diagnostics),
         env=environment(root),
         check=True,
         timeout=900,

@@ -18,6 +18,7 @@ from .upload_helper import validate_firmware
 
 
 class Build(BaseModel, frozen=True):
+    diagnostics: bool = False
     switch_window: Annotated[
         float,
         Field(strict=True, ge=0.001, le=0.112),
@@ -69,11 +70,19 @@ def combine(
     return bytes(result)
 
 
-def linker_script(original: str) -> str:
+def linker_script(original: str, *, diagnostics: bool = False) -> str:
     region = 'FLASH (rx): ORIGIN = 0x60000000, LENGTH = 7936K'
     flash = '*(.flashmem*)'
     if original.count(region) != 1 or original.count(flash) != 1:
         raise ValueError('unexpected Teensy linker script')
+    if diagnostics:
+        heap = '_heap_end = ORIGIN(RAM) + LENGTH(RAM);'
+        if original.count(heap) != 1:
+            raise ValueError('unexpected Teensy heap boundary')
+        # The SDK preserves its crash record in the top 128 bytes of OCRAM.
+        original = original.replace(
+            heap, '_heap_end = ORIGIN(RAM) + LENGTH(RAM) - 128;'
+        )
     # Allocator preparation/reclamation and finite reversal are cold. Keep
     # insertion, erasure and iteration in ITCM. Template COMDAT sections cannot
     # safely share an explicit section attribute across local and public types.
@@ -121,9 +130,13 @@ def build(command: Build, *, source_root: Path | None = None) -> None:
     toolchain.ensure(root)
     original = (core / 'cores/teensy4/imxrt1062_t41.ld').read_text()
     linker = work / 'cntrl.ld'
-    linker.write_text(linker_script(original))
+    linker.write_text(linker_script(original, diagnostics=command.diagnostics))
     toolchain.build(
-        root, source_root or Path(__file__).resolve().parents[4], work, linker
+        root,
+        source_root or Path(__file__).resolve().parents[4],
+        work,
+        linker,
+        diagnostics=command.diagnostics,
     )
     custom = read_hex(work / 'cntrl.hex')
     entry = struct.unpack_from('<I', custom.data, 0x1004)[0]

@@ -16,6 +16,7 @@ from . import boot_switch, export_fonts, toolchain
 class Build(BaseModel, frozen=True):
     source_root: Path
     output: Path
+    diagnostics: bool = False
 
 
 def run(command: Build) -> None:
@@ -39,10 +40,17 @@ def run(command: Build) -> None:
     (command.output / 'target.toml').write_text(
         tomlkit.dumps(target.model_dump(mode='json', exclude_none=True))
     )
-    boot_switch.build(boot_switch.Build(), source_root=command.source_root)
+    boot_switch.build(
+        boot_switch.Build(diagnostics=command.diagnostics),
+        source_root=command.source_root,
+    )
     shutil.copyfile(
         root / 'firmware/build/boot-switch/combined.hex',
         command.output / 'firmware.hex',
+    )
+    shutil.copyfile(
+        root / 'firmware/build/boot-switch/cntrl/patch_switcher.ino.elf',
+        command.output / 'firmware.elf',
     )
     shutil.copyfile(
         root / 'firmware/.tools/provenance.toml', command.output / 'toolchain.toml'
@@ -51,7 +59,14 @@ def run(command: Build) -> None:
         root / 'firmware/build/boot-switch/memory.txt', command.output / 'memory.txt'
     )
     (command.output / 'build.toml').write_text(
-        tomlkit.dumps({'image': 'firmware.hex', 'target': 'target.toml'})
+        tomlkit.dumps(
+            {
+                'image': 'firmware.hex',
+                'elf': 'firmware.elf',
+                'target': 'target.toml',
+                'diagnostics': command.diagnostics,
+            }
+        )
     )
 
 

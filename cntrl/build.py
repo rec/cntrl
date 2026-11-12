@@ -13,6 +13,7 @@ class Build(BaseModel, frozen=True):
     target_dir: Path
     output: Path
     source_root: Path = Field(default_factory=Path.cwd)
+    diagnostics: bool = False
 
 
 class Artifacts(BaseModel, frozen=True):
@@ -66,6 +67,7 @@ def run(command: Build) -> Artifacts:
             str(command.source_root.resolve()),
             '--output',
             str(output),
+            *(['--diagnostics'] if command.diagnostics else []),
         ],
         check=True,
         env=environment,

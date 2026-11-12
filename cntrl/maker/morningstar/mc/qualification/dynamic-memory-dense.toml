@@ -8,7 +8,7 @@ usb_host_midi = false
 forward_device_to_host = false
 fill_in_styles = false
 pickup = false
-pages = {}
+pages = {status = {type = 'status'}}
 
 [page_settings]
 tempo_font = 'classic'

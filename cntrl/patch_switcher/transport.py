@@ -21,9 +21,11 @@ class UsbProtocolError(ValueError):
 class SerialConnection:
     """A resumable, acknowledged byte stream over a replaceable serial port."""
 
-    def __init__(self, port: Path, timeout: float = 30) -> None:
+    def __init__(self, port: Path, timeout: float = 30, *, retry: bool = True) -> None:
         self.port = port
         self.timeout = timeout
+        self.retry = retry
+        self.connection_attempted = False
         self.usb_block_size = 4096
         self.serial: Serial | None = None
         self.session = secrets.randbits(32) or 1
@@ -45,6 +47,13 @@ class SerialConnection:
         try:
             if args and args[0] in (KeyboardInterrupt, UsbProtocolError):
                 self.release()
+            elif args and args[0] is not None:
+                if self.serial is not None:
+                    try:
+                        self.sequence = 0
+                        self.exchange(b'', Kind.close, retry=False)
+                    except (OSError, UsbProtocolError):
+                        self.release()
             else:
                 self.sequence = 0
                 self.exchange(b'', Kind.close)
@@ -80,7 +89,9 @@ class SerialConnection:
         self.serial.reset_input_buffer()
         self.frame_received.clear()
 
-    def exchange(self, data: bytes, kind: Kind = Kind.command) -> None:
+    def exchange(
+        self, data: bytes, kind: Kind = Kind.command, *, retry: bool = True
+    ) -> None:
         frame = Frame(
             kind=kind,
             session=self.session,
@@ -94,6 +105,9 @@ class SerialConnection:
         while True:
             try:
                 if self.serial is None:
+                    if not retry or (not self.retry and self.connection_attempted):
+                        raise OSError('USB connection is closed')
+                    self.connection_attempted = True
                     self.connect()
                 self.write_frame(frame)
                 while True:
@@ -146,6 +160,8 @@ class SerialConnection:
                     return
             except OSError as error:
                 self.close()
+                if not retry or not self.retry:
+                    raise
                 failures += 1
                 if failures >= 3:
                     print(

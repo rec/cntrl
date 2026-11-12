@@ -1,5 +1,6 @@
 #include "target.h"
 #include "heap_trace.h"
+#include "qualification.h"
 #include "target_capabilities.h"
 #if CNTRL_ORIGINAL_FIRMWARE
 #include "../boot_switch/selection.h"
@@ -9,6 +10,10 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 // Inline shared routines need distinct sections alongside strong FLASHMEM functions.
 #define CNTRL_FLASH_ROUTINE(name) __attribute__((section(".flashmem.cntrl_" #name), noinline))
 #define CNTRL_NOINLINE __attribute__((noinline))
+#if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
+#define CNTRL_RUNTIME_TRACE(name) cntrl::device::qualification_phase(cntrl::device::QualificationPhase::name)
+#define CNTRL_RUNTIME_PACKET(route, packet) cntrl::device::qualification_packet(route, packet)
+#endif
 #include <cntrl/runtime.h>
 #include <cntrl/ui/controls.h>
 #include <cntrl/ui/application.h>
@@ -505,6 +510,8 @@ public:
     }
     // Keep the transport backend in flash to leave RAM1 for runtime state.
     FLASHMEM bool write_packet(unsigned route, const cntrl::midi::Packet &p) override {
+        CNTRL_RUNTIME_TRACE(midi_write);
+        CNTRL_RUNTIME_PACKET(route, p.packed(route));
         if (!bridge_.usb_enabled(route)) return false;
         const auto *connection = midi_outputs().route(route);
         if (!connection) return false;
@@ -888,6 +895,18 @@ PerformanceStatus performance_status() {
 void midi_status(unsigned route) { board.midi_status(route); }
 void midi_reset() { board.midi_reset(); }
 bool native_asset_command(const char *line) {
+#if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
+    if (!std::strcmp(line, "CNTRL QUAL STATUS")) {
+        char response[384]; cntrl::device::qualification_status(response, sizeof(response)); board.reply(response); return true;
+    }
+    if (!std::strcmp(line, "CNTRL QUAL START")) {
+        if (!board.heap_diagnostic_ready()) { board.reply("CNTRL ERROR busy"); return true; }
+        board.reply(cntrl::device::qualification_start() ? "CNTRL OK" : "CNTRL ERROR qualification-watchdog-busy"); return true;
+    }
+    if (!std::strcmp(line, "CNTRL QUAL STOP")) {
+        cntrl::device::qualification_stop(); board.reply("CNTRL OK"); return true;
+    }
+#endif
     if (!std::strcmp(line, "CNTRL HEAP")) {
         if (!board.heap_diagnostic_ready()) { board.reply("CNTRL ERROR busy"); return true; }
         const auto heap = cntrl::device::heap_snapshot();
@@ -962,6 +981,9 @@ cntrl::CooperativeRuntime cooperative_runtime(cntrl::target::scan_interval_ms);
 bool switch_scan_due() { return cooperative_runtime.scan_due(millis()); }
 
 FLASHMEM void initialize_target() {
+#if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
+    cntrl::device::initialize_qualification();
+#endif
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     cntrl::device::initialize_heap_accounting(cntrl::memory_budget);
     if (!auxiliary.prepare(board)) board.error("Auxiliary switch memory unavailable");
@@ -1061,10 +1083,11 @@ cntrl::ui::InputCoordinator input_coordinator(buttons, cntrl::target::controls, 
 class TargetRuntime {
 public:
     uint32_t now() const { return millis(); }
-    void complete_display() { poll_display_dma(); }
-    void keyboard() { board.poll_keyboard(); }
+    void complete_display() { CNTRL_RUNTIME_TRACE(display); poll_display_dma(); }
+    void keyboard() { CNTRL_RUNTIME_TRACE(keyboard); board.poll_keyboard(); }
     bool scan_available() const { return !display_spi_busy(); }
     void scan(uint32_t now, uint32_t gap) {
+        CNTRL_RUNTIME_TRACE(scan);
         if (gap) board.scanned(gap);
         const uint8_t raw = read_buttons();
         uint8_t logical = 0;
@@ -1123,8 +1146,8 @@ public:
 #endif
     }
     TargetControls &actions() { return target_controls; }
-    void pages(uint32_t now) { if (application.feature_open(board) || history_import.busy()) application.controller().cancel_gesture(); application.tick(now); }
-    void midi() { board.poll(); }
+    void pages(uint32_t now) { CNTRL_RUNTIME_TRACE(pages); if (application.feature_open(board) || history_import.busy()) application.controller().cancel_gesture(); application.tick(now); }
+    void midi() { CNTRL_RUNTIME_TRACE(midi); board.poll(); }
     auto &session() { return usb_session; }
     auto &commands() { return serial_router; }
     auto &song_transfer() { return songs_transfer; }
@@ -1137,6 +1160,7 @@ public:
     auto &songs() { return ::songs; }
     auto &replies() { return board; }
     bool serial_available() const {
+        CNTRL_RUNTIME_TRACE(serial);
         usb_session.text_connection(bool(Serial), millis());
         return Serial.available();
     }
@@ -1152,11 +1176,17 @@ public:
 #endif
     }
     bool expression_allowed() const { return commands_allowed(); }
-    void expression(uint32_t now) { board.poll_expression(now); }
-    void navigation() { if (!history_import.busy()) input_coordinator.finish(target_controls); }
-    void display(uint32_t now) { board.display(now, documents.busy() || application.feature_open(board) || application.patch_pending()); }
+    void expression(uint32_t now) { CNTRL_RUNTIME_TRACE(expression); board.poll_expression(now); }
+    void navigation() { CNTRL_RUNTIME_TRACE(navigation); if (!history_import.busy()) input_coordinator.finish(target_controls); }
+    void display(uint32_t now) { CNTRL_RUNTIME_TRACE(display); board.display(now, documents.busy() || application.feature_open(board) || application.patch_pending()); }
 };
 TargetRuntime target_runtime;
 } // namespace
 
-void poll_target() { cooperative_runtime.poll(target_runtime); }
+void poll_target() {
+    CNTRL_RUNTIME_TRACE(loop);
+    cooperative_runtime.poll(target_runtime);
+#if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
+    cntrl::device::qualification_progress();
+#endif
+}

@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <cntrl/memory.h>
 #include "heap_trace.h"
+#include "qualification.h"
 
 extern "C" {
 extern char _heap_start, _heap_end;
@@ -42,6 +43,17 @@ struct HeapCall {
     }
     ~HeapCall() { active_context = previous_context; --depth; }
 };
+#if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
+struct QualificationHeap {
+    unsigned previous;
+    QualificationHeap(bool freeing, const void *pointer, unsigned size, uintptr_t caller)
+        : previous(cntrl::device::qualification_heap(freeing, pointer, size, caller)) {}
+    ~QualificationHeap() { cntrl::device::qualification_phase(previous); }
+};
+#define CNTRL_HEAP_QUALIFY(freeing, pointer, size) QualificationHeap qualification(freeing, pointer, unsigned(std::min<size_t>(size, UINT32_MAX)), reinterpret_cast<uintptr_t>(__builtin_return_address(0)))
+#else
+#define CNTRL_HEAP_QUALIFY(freeing, pointer, size) ((void)0)
+#endif
 FLASHMEM unsigned chunk_bytes(const void *memory) {
     if (!memory) return 0;
     const auto address = reinterpret_cast<uintptr_t>(memory);
@@ -76,6 +88,7 @@ FLASHMEM void complete(void *result, unsigned previous, bool released, uint32_t 
 extern "C" FLASHMEM void *__wrap__malloc_r(_reent *context, size_t size) {
     HeapCall call(true);
     if (call.nested) return __real__malloc_r(context, size);
+    CNTRL_HEAP_QUALIFY(false, nullptr, size);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
     const bool admitted = begin(context, size, false);
     void *result = admitted ? __real__malloc_r(context, size) : nullptr;
@@ -87,6 +100,7 @@ extern "C" FLASHMEM void *__wrap__calloc_r(_reent *context, size_t count, size_t
     if (call.nested) return __real__calloc_r(context, count, size);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
     const size_t request = count && size > SIZE_MAX / count ? SIZE_MAX : count * size;
+    CNTRL_HEAP_QUALIFY(false, nullptr, request);
     const bool admitted = begin(context, request, false);
     void *result = admitted ? __real__calloc_r(context, count, size) : nullptr;
     if (admitted) complete(result, 0, false, started);
@@ -95,6 +109,7 @@ extern "C" FLASHMEM void *__wrap__calloc_r(_reent *context, size_t count, size_t
 extern "C" FLASHMEM void *__wrap__realloc_r(_reent *context, void *memory, size_t size) {
     HeapCall call(true);
     if (call.nested) return __real__realloc_r(context, memory, size);
+    CNTRL_HEAP_QUALIFY(false, memory, size);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
     const unsigned previous = chunk_bytes(memory);
     const bool admitted = begin(context, size, true);
@@ -105,6 +120,7 @@ extern "C" FLASHMEM void *__wrap__realloc_r(_reent *context, void *memory, size_
 extern "C" FLASHMEM void *__wrap__memalign_r(_reent *context, size_t alignment, size_t size) {
     HeapCall call(true);
     if (call.nested) return __real__memalign_r(context, alignment, size);
+    CNTRL_HEAP_QUALIFY(false, nullptr, size);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
     const bool admitted = begin(context, size, false);
     void *result = admitted ? __real__memalign_r(context, alignment, size) : nullptr;
@@ -114,6 +130,7 @@ extern "C" FLASHMEM void *__wrap__memalign_r(_reent *context, size_t alignment, 
 extern "C" FLASHMEM void __wrap__free_r(_reent *context, void *memory) {
     HeapCall call(false);
     if (call.nested) { __real__free_r(context, memory); return; }
+    CNTRL_HEAP_QUALIFY(true, memory, 0);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
     const unsigned previous = chunk_bytes(memory);
     __real__free_r(context, memory);

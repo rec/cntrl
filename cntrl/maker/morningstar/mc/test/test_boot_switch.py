@@ -4,7 +4,41 @@ from pathlib import Path
 import pytest
 
 from cntrl.firmware.intel_hex import AddressRange, FirmwareImage, encode_hex, read_hex
-from cntrl.maker.morningstar.mc import boot_switch
+from cntrl.maker.morningstar.mc import boot_switch, toolchain
+
+
+def test_diagnostic_linker_reserves_the_sdk_crash_record_only_when_enabled() -> None:
+    original = (
+        'FLASH (rx): ORIGIN = 0x60000000, LENGTH = 7936K\n'
+        '.text.code : { *(.flashmem*) } > FLASH\n'
+        '_heap_end = ORIGIN(RAM) + LENGTH(RAM);\n'
+    )
+    assert '_heap_end = ORIGIN(RAM) + LENGTH(RAM);' in boot_switch.linker_script(
+        original
+    )
+    assert '_heap_end = ORIGIN(RAM) + LENGTH(RAM) - 128;' in boot_switch.linker_script(
+        original, diagnostics=True
+    )
+    with pytest.raises(ValueError, match='heap boundary'):
+        boot_switch.linker_script(
+            original.replace('_heap_end', '_unexpected'), diagnostics=True
+        )
+
+
+@pytest.mark.parametrize('diagnostics', [False, True])
+def test_build_enables_memory_qualification_only_when_requested(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, diagnostics: bool
+) -> None:
+    monkeypatch.setattr(toolchain, 'ensure', lambda root: tmp_path / 'arduino-cli')
+    command = toolchain.compile_command(
+        tmp_path,
+        tmp_path,
+        tmp_path / 'work',
+        tmp_path / 'image.ld',
+        diagnostics=diagnostics,
+    )
+    flags = next(v for v in command if v.startswith('build.flags.cpp='))
+    assert ('-DCNTRL_MEMORY_QUALIFICATION' in flags) is diagnostics
 
 
 def test_linker_places_only_cold_container_methods_in_flash() -> None:

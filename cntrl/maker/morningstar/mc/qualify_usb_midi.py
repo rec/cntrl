@@ -19,6 +19,8 @@ class Options(BaseModel, frozen=True):
     """List endpoints by default; --run sends test traffic to the chosen output."""
 
     run: bool = False
+    inspect: bool = False
+    """Read serial diagnostics without opening MIDI endpoints or sending MIDI."""
     destination: str = ''
     source: str = ''
     port: Path = Path('/dev/cu.usbmodem144682801')
@@ -27,10 +29,12 @@ class Options(BaseModel, frozen=True):
     stress_only: bool = False
     """Skip exact byte checks for transforming graphs; send only PC/modulation load."""
     report: Path | None = None
-    """With --run, save before/after diagnostics and byte checks as TOML."""
+    """Save serial inspection or before/after run diagnostics as TOML."""
 
     @model_validator(mode='after')
     def stress_run(self) -> 'Options':
+        if self.inspect and self.run:
+            raise ValueError('inspect and run are separate modes; select only one')
         if self.stress_only and (not self.run or self.stress_seconds <= 0):
             raise ValueError('stress-only requires --run and positive --stress-seconds')
         return self
@@ -62,6 +66,7 @@ def diagnostics(client: SetupClient) -> dict[str, str]:
         ('heap', 'CNTRL HEAP'),
         ('streams', 'CNTRL MIDI STREAMS'),
         ('looper', 'CNTRL MIDI LOOPER'),
+        ('qualification', 'CNTRL QUAL STATUS'),
     ):
         try:
             result[name] = client.request(command)
@@ -90,9 +95,25 @@ def save_report(path: Path | None, result: dict[str, object]) -> None:
 
 
 def run(options: Options) -> None:
+    if options.inspect:
+        inspection: dict[str, object] = {
+            'success': False,
+            'options': options.model_dump(mode='json', exclude_none=True),
+        }
+        try:
+            with SerialConnection(options.port, timeout=3, retry=False) as connection:
+                inspection['diagnostics'] = diagnostics(SetupClient(connection))
+        except (OSError, ValueError) as error:
+            inspection['error'] = str(error)
+            save_report(options.report, inspection)
+            raise
+        inspection['success'] = True
+        save_report(options.report, inspection)
+        return
     if sys.platform != 'darwin':
         sys.exit('This qualification uses macOS CoreMIDI.')
     midi = Midi()
+    report: dict[str, object] | None = None
     try:
         sources, destinations = midi.endpoints(True), midi.endpoints(False)
         for n in sources:
@@ -103,7 +124,7 @@ def run(options: Options) -> None:
             return
         destination, source = destinations[options.destination], sources[options.source]
         midi.check(midi.core.MIDIPortConnectSource(midi.input, source, None))
-        with SerialConnection(options.port, timeout=3) as connection:
+        with SerialConnection(options.port, timeout=3, retry=False) as connection:
             client = SetupClient(connection)
             before = client.request('CNTRL MIDI STATUS 0')
             print(before, flush=True)
@@ -113,110 +134,145 @@ def run(options: Options) -> None:
                 )
             client.ok('CNTRL MIDI RESET')
             time.sleep(0.1)
-            report: dict[str, object] = {
+            before_diagnostics = diagnostics(client)
+            report = {
                 'success': False,
                 'options': options.model_dump(mode='json', exclude_none=True),
-                'before': diagnostics(client),
+                'before': before_diagnostics,
                 'timing': (
                     'CoreMIDI receiver bytes only; no wire timestamps '
                     'or clock jitter measurement'
                 ),
             }
             save_report(options.report, report)
-            # Program changes and benign modulation controls, not note events.
-            messages = b''.join(bytes((0xC0 | i % 16, i)) for i in range(128))
-            messages += b''.join(bytes((0xB0 | i, 1, 0)) for i in range(16))
-            if options.stress_only:
-                report['byte_checks'] = 'skipped'
-                print(
-                    'Exact byte and note-release checks skipped for stress-only mode',
-                    flush=True,
-                )
-            else:
-                received = exchange(
-                    midi,
-                    destination,
-                    messages,
-                    messages if options.expect_enabled else b'',
-                    chunk_bytes=len(messages),
-                    interval_seconds=0,
-                    settle_seconds=0.5,
-                    label='Short messages',
-                )
-                print(f'Short messages: {len(received)} bytes verified', flush=True)
-                verified = {
-                    'short_sent_bytes': len(messages),
-                    'short_received_bytes': len(received),
-                }
-                report['verified'] = verified
-                notes = note_lifecycle()
-                received = exchange(
-                    midi,
-                    destination,
-                    notes,
-                    notes if options.expect_enabled else b'',
-                    chunk_bytes=3,
-                    interval_seconds=0.002,
-                    settle_seconds=0.2,
-                    label='Notes and sustain',
-                )
-                print(f'Notes and sustain: {len(received)} bytes verified', flush=True)
-                verified.update(
-                    notes_sent_bytes=len(notes),
-                    notes_received_bytes=len(received),
-                    note_onsets_sent=64,
-                    note_releases_sent=64,
-                    sustain_messages_sent=4,
-                )
-                save_report(options.report, report)
-                # Non-commercial SysEx; pace below conventional MIDI capacity.
-                sysex = b'\xf0\x7d' + bytes(i % 128 for i in range(4096)) + b'\xf7'
-                received = exchange(
-                    midi,
-                    destination,
-                    sysex,
-                    sysex if options.expect_enabled else b'',
-                    chunk_bytes=60,
-                    interval_seconds=0.025,
-                    settle_seconds=0.2,
-                    label='SysEx',
-                )
-                print(f'Streamed SysEx: {len(received)} bytes verified', flush=True)
-                verified.update(
-                    sysex_sent_bytes=len(sysex), sysex_received_bytes=len(received)
-                )
-                report['byte_checks'] = 'verified'
-            if options.stress_seconds:
-                peers = [
-                    v for k, v in destinations.items() if 'cntrl experimental' in k
-                ]
-                if not peers:
-                    raise ValueError('No cntrl MIDI outputs found for the stress run')
-                report['before_stress'] = diagnostics(client)
-                save_report(options.report, report)
-                client.ok('CNTRL MIDI RESET')
-                midi.data.clear()
-                begin = time.monotonic()
-                deadline = begin + options.stress_seconds
-                calls = 0
-                while time.monotonic() < deadline:
-                    for p in peers:
-                        midi.send(p, messages)
-                    calls += 1
-                    time.sleep(0.001)
-                time.sleep(0.5)
-                print(f'Overload: {calls} bursts to {len(peers)} outputs', flush=True)
-                report['stress'] = {
-                    'bursts': calls,
-                    'outputs': len(peers),
-                    'sent_bytes': calls * len(peers) * len(messages),
-                    'received_bytes': len(midi.data),
-                    'elapsed_seconds': time.monotonic() - begin,
-                }
-                report['stress_timing'] = client.request('CNTRL MIDI STATUS 0')
+            armed = False
+            try:
+                if 'enabled=1' in before_diagnostics['qualification'].split():
+                    armed = True
+                    client.ok('CNTRL QUAL START')
+                # Program changes and benign modulation controls, not note events.
+                messages = b''.join(bytes((0xC0 | i % 16, i)) for i in range(128))
+                messages += b''.join(bytes((0xB0 | i, 1, 0)) for i in range(16))
+                if options.stress_only:
+                    report['byte_checks'] = 'skipped'
+                    print(
+                        'Exact byte and note-release checks skipped '
+                        'for stress-only mode',
+                        flush=True,
+                    )
+                else:
+                    received = exchange(
+                        midi,
+                        destination,
+                        messages,
+                        messages if options.expect_enabled else b'',
+                        chunk_bytes=len(messages),
+                        interval_seconds=0,
+                        settle_seconds=0.5,
+                        label='Short messages',
+                    )
+                    print(f'Short messages: {len(received)} bytes verified', flush=True)
+                    verified = {
+                        'short_sent_bytes': len(messages),
+                        'short_received_bytes': len(received),
+                    }
+                    report['verified'] = verified
+                    notes = note_lifecycle()
+                    received = exchange(
+                        midi,
+                        destination,
+                        notes,
+                        notes if options.expect_enabled else b'',
+                        chunk_bytes=3,
+                        interval_seconds=0.002,
+                        settle_seconds=0.2,
+                        label='Notes and sustain',
+                    )
+                    print(
+                        f'Notes and sustain: {len(received)} bytes verified', flush=True
+                    )
+                    verified.update(
+                        notes_sent_bytes=len(notes),
+                        notes_received_bytes=len(received),
+                        note_onsets_sent=64,
+                        note_releases_sent=64,
+                        sustain_messages_sent=4,
+                    )
+                    save_report(options.report, report)
+                    # Submit one complete non-commercial SysEx frame to CoreMIDI.
+                    # Allow its 4,099 bytes to drain over DIN at 3,125 bytes/second.
+                    sysex = b'\xf0\x7d' + bytes(i % 128 for i in range(4096)) + b'\xf7'
+                    received = exchange(
+                        midi,
+                        destination,
+                        sysex,
+                        sysex if options.expect_enabled else b'',
+                        chunk_bytes=len(sysex),
+                        interval_seconds=0,
+                        settle_seconds=2,
+                        label='SysEx',
+                    )
+                    print(f'Streamed SysEx: {len(received)} bytes verified', flush=True)
+                    verified.update(
+                        sysex_sent_bytes=len(sysex), sysex_received_bytes=len(received)
+                    )
+                    report['byte_checks'] = 'verified'
+                if options.stress_seconds:
+                    peers = [
+                        v for k, v in destinations.items() if 'cntrl experimental' in k
+                    ]
+                    if not peers:
+                        raise ValueError(
+                            'No cntrl MIDI outputs found for the stress run'
+                        )
+                    report['before_stress'] = diagnostics(client)
+                    save_report(options.report, report)
+                    client.ok('CNTRL MIDI RESET')
+                    midi.data.clear()
+                    begin = time.monotonic()
+                    deadline = begin + options.stress_seconds
+                    calls = 0
+                    while time.monotonic() < deadline:
+                        for p in peers:
+                            midi.send(p, messages)
+                        calls += 1
+                        time.sleep(0.001)
+                    time.sleep(0.5)
+                    print(
+                        f'Overload: {calls} bursts to {len(peers)} outputs', flush=True
+                    )
+                    report['stress'] = {
+                        'bursts': calls,
+                        'outputs': len(peers),
+                        'sent_bytes': calls * len(peers) * len(messages),
+                        'received_bytes': len(midi.data),
+                        'elapsed_seconds': time.monotonic() - begin,
+                    }
+                    report['stress_timing'] = client.request('CNTRL MIDI STATUS 0')
+            finally:
+                if armed and connection.serial is not None:
+                    try:
+                        client.ok('CNTRL QUAL STOP')
+                    except (OSError, ValueError) as error:
+                        print(
+                            f'Qualification stop failed: {error}',
+                            file=sys.stderr,
+                            flush=True,
+                        )
             report['after'] = diagnostics(client)
             report['success'] = True
             save_report(options.report, report)
+    except (OSError, ValueError) as error:
+        if options.report is not None:
+            if report is None:
+                report = {'options': options.model_dump(mode='json', exclude_none=True)}
+            report.update(
+                success=False,
+                error=str(error),
+                received_hex=bytes(midi.data).hex(),
+            )
+            save_report(options.report, report)
+        raise
     finally:
         midi.close()
 

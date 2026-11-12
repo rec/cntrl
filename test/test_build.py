@@ -7,12 +7,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import tomlkit
 
 from cntrl import build
 
 
+@pytest.mark.parametrize('diagnostics', [False, True])
 def test_build_exports_survive_relocation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, diagnostics: bool
 ) -> None:
     monkeypatch.setattr(
         io, 'text_encoding', lambda encoding, *args: encoding or 'cp1252'
@@ -22,7 +24,15 @@ def test_build_exports_survive_relocation(
     inherited_temporary = str(tmp_path / 'outside output')
     for name in ('TMPDIR', 'TMP', 'TEMP'):
         monkeypatch.setenv(name, inherited_temporary)
-    artifacts = build.run(build.Build(target_dir=adapter, output=output))
+    artifacts = build.run(
+        build.Build(target_dir=adapter, output=output, diagnostics=diagnostics)
+    )
+    assert (
+        tomlkit.parse((output / 'build.toml').read_bytes().decode()).unwrap()[
+            'diagnostics'
+        ]
+        is diagnostics
+    )
     temporary_file = Path((output / 'temporary-path.txt').read_bytes().decode().strip())
     assert temporary_file.parent == output / 'tmp'
     assert temporary_file.read_text() == 'temporary build data\n'
