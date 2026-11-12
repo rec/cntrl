@@ -513,6 +513,7 @@ public:
             if (hold) for (const auto &claim : holds_)
                 if (claim.output == event->output && claim.channel == (event->packet.bytes[0] & 15) && claim.controller == event->packet.bytes[1] && same_owner(claim.owner, event->owner) && claim.input == event->input) own_hold = true;
             if (holding && !own_hold && (holds_.size() >= limits_.voices || !holds_.reserve(holds_.size() + 1)
+                || !events_.reserve(events_.size() + voices_.size() + holds_.size() + 1)
                 || !cleanup_.reserve(cleanup_.size() + voices_.size() + holds_.size() + outputs_.size() + 1))) { write = false; ++diagnostics_.dropped; }
             if (hold && !holding && !own_hold) write = false;
             if (hold && !holding) {
@@ -525,8 +526,10 @@ public:
             // Streams already merges its logical owners. The physical ledger
             // sees that aggregate, including a last release from another route.
             if (onset || release || hold) delivered_packet.source = 65533;
+            const unsigned allocation_failures = memory_failures;
             if (write && !(live ? sink.submit_live(event->output, delivered_packet, &diagnostics_.transmitted) : sink.submit(event->output, delivered_packet))) {
-                if (sink.memory_refused() && onset && voice && !voice->sounding) {
+                const bool memory_refused = sink.memory_refused() || memory_failures != allocation_failures;
+                if (memory_refused && onset && voice && !voice->sounding) {
                     // An onset refused before its first byte must not block
                     // releases already owed by other accepted voices.
                     const uint64_t id = voice->id;
@@ -536,6 +539,10 @@ public:
                     event = events_.begin();
                     ++diagnostics_.dropped;
                     continue;
+                }
+                const bool sysex = event->packet.cin >= 4 && event->packet.cin <= 7 && event->packet.bytes[0] != 0xf6;
+                if (memory_refused && !release_credit(*event) && !sysex) {
+                    event = events_.erase(event); ++diagnostics_.dropped; continue;
                 }
                 attempted |= bit; ++event; continue;
             }
@@ -577,6 +584,16 @@ public:
             return true;
         });
         reclaim_owner_generation();
+        // After allocation pressure, retire at most four unused nodes per call
+        // so downstream metadata and other services can make progress. Preserve
+        // one terminal event slot per voice (including unsent) and pedal claim.
+        if (memory_failures != observed_memory_failures_) {
+            reclaim_events_ = true; observed_memory_failures_ = memory_failures;
+        }
+        const unsigned event_credits = events_.size() + voices_.size() + holds_.size();
+        if (reclaim_events_ && events_.capacity() > event_credits)
+            events_.trim(std::min(4u, events_.capacity() - event_credits));
+        if (events_.empty() && events_.capacity() <= event_credits) reclaim_events_ = false;
     }
 private:
     struct OwnerPath { unsigned route; const OwnerPath *parent = nullptr; };
@@ -673,6 +690,8 @@ private:
     };
     struct Processing { unsigned route, position; Work work; };
     CheckedList<Processing> processing_;
+    unsigned observed_memory_failures_ = memory_failures;
+    bool reclaim_events_ = false;
     CheckedList<uint64_t> processing_release_tokens_;
     CheckedList<Processing>::iterator processing_position_;
     bool processing_active_ = false;
@@ -1055,6 +1074,27 @@ private:
     static bool is_hold(const Packet &packet) {
         return packet.bytes[0] >> 4 == 11 && (packet.bytes[1] == 64 || packet.bytes[1] == 66 || packet.bytes[1] == 69);
     }
+    bool release_credit(const Event &event) const {
+        const bool note = event.packet.bytes[0] >> 4 == 8;
+        const bool pedal = is_hold(event.packet) && event.packet.bytes[2] < 64;
+        bool owned = false;
+        if (note && event.voice) for (const auto &voice : voices_)
+            if (voice.id == event.voice && voice.output == event.output && voice.input == event.input
+                && same_owner(voice.owner, event.owner)) owned = true;
+        if (pedal) for (const auto &hold : holds_)
+            if (hold.output == event.output && hold.input == event.input && same_owner(hold.owner, event.owner)
+                && hold.channel == (event.packet.bytes[0] & 15) && hold.controller == event.packet.bytes[1]) owned = true;
+        if (!owned) return false;
+        // A claim contributes one terminal slot, never one per repeated Off.
+        for (const auto &pending : events_) {
+            if (&pending == &event) break;
+            if (pending.output != event.output || pending.input != event.input || !same_owner(pending.owner, event.owner)) continue;
+            if (note && pending.voice == event.voice && pending.packet.bytes[0] >> 4 == 8) return false;
+            if (pedal && pending.packet.bytes[0] == event.packet.bytes[0] && pending.packet.bytes[1] == event.packet.bytes[1]
+                && pending.packet.bytes[2] < 64) return false;
+        }
+        return true;
+    }
     void cleanup_packet(unsigned output, Packet packet) {
         for (const auto &entry : cleanup_)
             if (entry.output == output && !std::memcmp(entry.packet.bytes, packet.bytes, 3)) return;
@@ -1171,12 +1211,12 @@ private:
                 ++diagnostics_.coalesced; return true;
             }
         }
-        bool release = event.packet.bytes[0] >> 4 == 8;
-        if (events_.size() + (release ? 0 : voices_.size()) >= limits_.events
+        bool release = release_credit(event);
+        if (events_.size() + (release ? 0 : voices_.size() + holds_.size()) >= limits_.events
             || output_events(event.output) + (release ? 0 : output_voices(event.output)) >= output_event_limit()) { ++diagnostics_.dropped; return false; }
         event.sequence = ++serial_;
         auto position = std::upper_bound(events_.begin(), events_.end(), event, [](const Event &a, const Event &b) { return a.due < b.due; });
-        if (!release && !events_.reserve(events_.size() + voices_.size() + 2)) { ++diagnostics_.dropped; return false; }
+        if (!release && !events_.reserve(events_.size() + voices_.size() + holds_.size() + 2)) { ++diagnostics_.dropped; return false; }
         if (!events_.insert(position, event)) { ++diagnostics_.dropped; return false; }
         return true;
     }
@@ -1440,10 +1480,10 @@ private:
             uint64_t voice = 0;
             if (work.packet.bytes[0] >> 4 == 9 && work.token) {
                 if (voices_.size() >= limits_.voices || output_voices(output) >= output_voice_limit()
-                    || events_.size() + voices_.size() + 2 >= limits_.events
+                    || events_.size() + voices_.size() + holds_.size() + 2 >= limits_.events
                     || output_events(output) + output_voices(output) + 2 >= output_event_limit()) { fail_output(route, output); continue; }
                 voice = ++serial_;
-                if (!events_.reserve(events_.size() + voices_.size() + 3)
+                if (!events_.reserve(events_.size() + voices_.size() + holds_.size() + 3)
                     || !cleanup_.reserve(cleanup_.size() + voices_.size() + holds_.size() + outputs_.size() + 1)
                     || !voices_.append({voice, work.token, work.owner, work.due - current_time_, work.input, output, work.packet, false})) { ++diagnostics_.dropped; continue; }
             }

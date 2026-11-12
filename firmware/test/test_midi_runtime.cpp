@@ -361,10 +361,34 @@ void service_gap_reports_external_stalls_and_resets_across_timer_wrap() {
     runtime.status(services.bridge,0,document,services);
     assert(services.replies.back().find("service_gap_us=1000") != std::string::npos);
 }
+void stream_phase_maxima_report_entry_queue_sizes_and_reset_together() {
+    Services services(1); services.sources[0].clear(); services.timer_step = 7;
+    cntrl::midi::Runtime runtime(1,1000);
+    std::vector<uint8_t> graph(87,0);
+    std::memcpy(graph.data(),"CSTR",4); cntrl::put32(graph.data() + 4,unsigned(graph.size()));
+    graph[8] = graph[10] = graph[14] = 1;
+    graph[12] = graph[13] = 255; graph[16] = 2; graph[20] = 'a';
+    assert(runtime.streams().load(graph.data(),unsigned(graph.size()),services.midi_outputs(),0));
+    runtime.poll(services); runtime.reset(services);
+    runtime.streams().receive(0,{11,{0xb0,1,40}},0);
+    cntrl::midi::InputEvent event; event.packetized = true; event.packet = {11,{0xb0,1,41}};
+    services.sources[0].push_back(event);
+    runtime.poll(services);
+    cntrl::Document document;
+    runtime.status(services.bridge,0,document,services);
+    const std::string expected = "stream_input_us=7 stream_input_pending=1 stream_service_us=7 stream_service_pending=2";
+    assert(services.replies.back().find(expected) != std::string::npos);
+    services.timer_step = 1; runtime.poll(services);
+    runtime.status(services.bridge,0,document,services);
+    assert(services.replies.back().find(expected) != std::string::npos);
+    runtime.reset(services); runtime.status(services.bridge,0,document,services);
+    assert(services.replies.back().find("stream_input_us=0 stream_input_pending=0 stream_service_us=0 stream_service_pending=0") != std::string::npos);
+}
 int main() {
     cntrl::memory_budget = 524288;
     stream_status_preserves_all_failure_bits_and_following_fields();
     service_gap_reports_external_stalls_and_resets_across_timer_wrap();
+    stream_phase_maxima_report_entry_queue_sizes_and_reset_together();
     input_metadata_failure_keeps_service_running_and_reports_once();
     configured_raw_inputs_use_admitted_parser_storage();
     test_text_arrives_without_forwarding_and_usb_enable_is_respected();

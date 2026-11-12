@@ -202,16 +202,28 @@ def run(options: Options) -> None:
                     # Submit one complete non-commercial SysEx frame to CoreMIDI.
                     # Allow its 4,099 bytes to drain over DIN at 3,125 bytes/second.
                     sysex = b'\xf0\x7d' + bytes(i % 128 for i in range(4096)) + b'\xf7'
-                    received = exchange(
-                        midi,
-                        destination,
-                        sysex,
-                        sysex if options.expect_enabled else b'',
-                        chunk_bytes=len(sysex),
-                        interval_seconds=0,
-                        settle_seconds=2,
-                        label='SysEx',
-                    )
+                    client.ok('CNTRL MIDI RESET')
+                    try:
+                        received = exchange(
+                            midi,
+                            destination,
+                            sysex,
+                            sysex if options.expect_enabled else b'',
+                            chunk_bytes=len(sysex),
+                            interval_seconds=0,
+                            settle_seconds=2,
+                            label='SysEx',
+                        )
+                    finally:
+                        if connection.serial is not None:
+                            try:
+                                report['sysex_timing'] = client.request(
+                                    'CNTRL MIDI STATUS 0'
+                                )
+                            except (OSError, ValueError) as error:
+                                report['sysex_timing_error'] = str(error)
+                        else:
+                            report['sysex_timing_error'] = 'USB connection is closed'
                     print(f'Streamed SysEx: {len(received)} bytes verified', flush=True)
                     verified.update(
                         sysex_sent_bytes=len(sysex), sysex_received_bytes=len(received)

@@ -43,6 +43,58 @@ Route transpose(unsigned scope = 65535) {
 }
 void poll(Streams &streams, Output &output, uint64_t now) { for (unsigned i = 0; i < 20; ++i) streams.service(output, now); }
 void note(Streams &streams, uint8_t status, uint8_t pitch, uint8_t velocity, uint64_t now = 0) { streams.receive(0, {uint8_t(status >> 4), {status, pitch, velocity}}, now); }
+void stopped_input_allows_memory_refused_work_and_owned_releases_to_drain() {
+    struct Delivery : Sink {
+        Bridge &bridge;
+        Output &physical;
+        bool queued;
+        Delivery(Bridge &transport, Output &wire, bool handoff) : bridge(transport), physical(wire), queued(handoff) { pickup(false); }
+        bool write_packet(unsigned output, const Packet &packet) override {
+            return queued ? bridge.pedal(output, packet.bytes, packet.size(), packet.source) : physical.write_packet(output, packet);
+        }
+    };
+    const unsigned original_budget = cntrl::memory_budget;
+    auto data = compiled({Route{}, Route{}});
+    for (bool queued : {false, true}) {
+        Streams streams; Bridge bridge{outputs}; Output physical; Delivery output(bridge, physical, queued);
+        bridge.configure(true); bridge.connected(true, 0);
+        assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+        auto drain = [&] {
+            for (unsigned i = 0; i < 1000; ++i) {
+                streams.service(output, 0); bridge.service(physical, 0);
+                output.reclaim_memory(); physical.reclaim_memory();
+            }
+        };
+        note(streams, 0x90, 60, 100);
+        streams.receive(0, {11, {0xb0, 64, 127}}, 0); drain();
+        assert(!physical.packets[1].empty() && physical.packets[1].front().bytes[0] == 0x90);
+        cntrl::memory_budget = cntrl::memory_used + 8192;
+        const unsigned failures = cntrl::memory_failures;
+        for (unsigned i = 0; i < 256; ++i)
+            streams.receive(0, {12, {uint8_t(0xc0 | (i % 16)), uint8_t(i % 128), 0}}, 0);
+        assert(cntrl::memory_failures > failures && streams.pending());
+        drain();
+        assert(!streams.pending());
+        const unsigned before_release = unsigned(physical.packets[1].size());
+        cntrl::memory_fail_after = 0;
+        // Unmatched and unowned pedal Offs cannot spend another claim's slots.
+        for (unsigned controller : {64u, 65u, 67u, 68u})
+            streams.receive(0, {11, {uint8_t(controller == 64 ? 0xb1 : 0xb0), uint8_t(controller), 0}}, 0);
+        assert(!streams.pending());
+        note(streams, 0x80, 60, 0);
+        streams.receive(0, {11, {0xb0, 64, 0}}, 0); drain();
+        cntrl::memory_fail_after = -1;
+        assert(!streams.pending() && !streams.voices());
+        bool note_off = false;
+        for (unsigned i = before_release; i < physical.packets[1].size(); ++i) note_off |= physical.packets[1][i].bytes[0] == 0x80;
+        assert(note_off && physical.packets[1].back().bytes[0] == 0xb0 && !physical.packets[1].back().bytes[2]);
+        // Recovered idle storage must admit previously unseen controller state.
+        const unsigned sent = unsigned(physical.packets[1].size());
+        streams.receive(0, {11, {0xbf, 74, 99}}, 0); drain();
+        assert(physical.packets[1].size() > sent && physical.packets[1].back().bytes[0] == 0xbf);
+        cntrl::memory_budget = original_budget;
+    }
+}
 void transforms_and_release() {
     auto data = compiled({transpose()}); Streams streams; Output output;
     assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
@@ -435,6 +487,7 @@ void pickup_uses_mapped_destination_and_separate_live_sources() {
 }
 int main() {
     cntrl::memory_budget = 1024 * 1024;
+    stopped_input_allows_memory_refused_work_and_owned_releases_to_drain();
     echo_decay_rounds_half_velocities_up_and_releases_each_note();
     replacement_graph_prepares_without_interrupting_active_notes();
     transforms_and_release(); patch_scope_and_cleanup(); reconnect_and_independent_outputs();

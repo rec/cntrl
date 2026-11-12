@@ -192,8 +192,14 @@ public:
 #if CNTRL_PANIC
                 if (s.panic_owns_midi) continue;
 #endif
+                const unsigned input_pending = streams_.pending();
+                const uint32_t input_started = s.microseconds();
                 if (event.packetized) streams_.receive(event.input, event.packet, extend(timestamp));
                 else streams_.byte(event.input, event.byte, extend(timestamp), event.cable);
+                const uint32_t input_elapsed = s.microseconds() - input_started;
+                if (input_elapsed > max_stream_input_us_) {
+                    max_stream_input_us_ = input_elapsed; max_stream_input_pending_ = input_pending;
+                }
                 if (streams_.explicit_system()) continue;
                 if (event.forward == InputEvent::absent) continue;
                 if (event.relay) {
@@ -237,8 +243,14 @@ public:
         if (exclusive) streams_.stop_all();
         else {
             streams_.beat_position(pages.beat_position(s.microseconds()));
-            streams_.service(s, extend(s.microseconds()), available,
+            const unsigned service_pending = streams_.pending();
+            const uint32_t service_started = s.microseconds();
+            streams_.service(s, extend(service_started), available,
                 bridge.busy_outputs() | files.player.sysex_outputs(), 64, files.player.sysex_outputs());
+            const uint32_t service_elapsed = s.microseconds() - service_started;
+            if (service_elapsed > max_stream_service_us_) {
+                max_stream_service_us_ = service_elapsed; max_stream_service_pending_ = service_pending;
+            }
         }
         CNTRL_RUNTIME_TRACE(midi_reclaim);
         if (!exclusive) s.pickup_poll(s.microseconds(), bridge.destinations(),
@@ -275,7 +287,12 @@ public:
         replies.reply(response);
     }
     template<class Replies>
-    void reset(Replies &replies) { max_midi_us_ = max_scan_gap_ = max_service_gap_us_ = 0; polled_ = false; replies.reply("CNTRL OK"); }
+    void reset(Replies &replies) {
+        max_midi_us_ = max_scan_gap_ = max_service_gap_us_ = 0;
+        max_stream_input_us_ = max_stream_service_us_ = 0;
+        max_stream_input_pending_ = max_stream_service_pending_ = 0;
+        polled_ = false; replies.reply("CNTRL OK");
+    }
     template<class Services>
     void status(const Bridge &bridge, unsigned route, const Document &document, Services &s) const {
         if (route >= bridge.destinations()) { s.reply("CNTRL ERROR midi-route"); return; }
@@ -286,13 +303,15 @@ public:
         const auto &counts = bridge.counters(route);
         unsigned quarantine = 0;
         for (unsigned cable = 0; cable < 16; ++cable) if (bridge.input_quarantined(route, cable)) quarantine |= 1u << cable;
-        char response[400];
-        std::snprintf(response, sizeof(response), "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u bridge_quarantine=%x stream_quarantine=%x pedal_quarantine=%u service_gap_us=%lu",
+        char response[512];
+        std::snprintf(response, sizeof(response), "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u bridge_quarantine=%x stream_quarantine=%x pedal_quarantine=%u service_gap_us=%lu stream_input_us=%lu stream_input_pending=%u stream_service_us=%lu stream_service_pending=%u",
             unsigned(bridge.enabled()), route, (unsigned long)counts.received,
             (unsigned long)counts.transmitted, (unsigned long)counts.dropped, (unsigned long)counts.aborted,
             counts.high_water, (unsigned long)max_midi_us_, (unsigned long)max_scan_gap_,
             (unsigned long)scan_count_, (unsigned long)display_count_, errors, quarantine,
-            streams_.input_quarantine(route), unsigned(bridge.pedal_quarantined(route)), (unsigned long)max_service_gap_us_);
+            streams_.input_quarantine(route), unsigned(bridge.pedal_quarantined(route)), (unsigned long)max_service_gap_us_,
+            (unsigned long)max_stream_input_us_, max_stream_input_pending_,
+            (unsigned long)max_stream_service_us_, max_stream_service_pending_);
         s.reply(response);
     }
 private:
@@ -343,6 +362,9 @@ private:
     unsigned source_items_, input_budget_us_, source_cursor_ = 0;
     uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
     uint32_t previous_poll_us_ = 0, max_service_gap_us_ = 0;
+    // Queue sizes are captured at entry to the call which sets each maximum.
+    uint32_t max_stream_input_us_ = 0, max_stream_service_us_ = 0;
+    unsigned max_stream_input_pending_ = 0, max_stream_service_pending_ = 0;
     bool polled_ = false;
     bool recording_failed_ = false;
 };
