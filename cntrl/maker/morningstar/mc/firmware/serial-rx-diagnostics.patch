@@ -1,0 +1,32 @@
+--- a/cores/teensy4/HardwareSerial.h
++++ b/cores/teensy4/HardwareSerial.h
+@@ -215,1 +215,5 @@
+-	virtual int available(void);
++	virtual int available(void);
++	// Cumulative modulo-2^32 diagnostics. Hardware latches can combine losses.
++	uint32_t rxSoftwareDrops(void) const { return rx_software_drops_; }
++	uint32_t rxOverrunLatches(void) const { return rx_overrun_latches_; }
++
+@@ -327,1 +331,3 @@
+-	volatile uint16_t 	rx_buffer_tail_ = 0;
++	volatile uint16_t 	rx_buffer_tail_ = 0;
++	volatile uint32_t rx_software_drops_ = 0;
++	volatile uint32_t rx_overrun_latches_ = 0;
+--- a/cores/teensy4/HardwareSerial.cpp
++++ b/cores/teensy4/HardwareSerial.cpp
+@@ -624,1 +624,9 @@
+-	uint32_t ctrl;
++	uint32_t ctrl;
++	// Count observed hardware overrun latches, not an exact lost-byte total.
++	// Preserve format controls while clearing only the OR write-one-to-clear flag.
++	const uint32_t status = port->STAT;
++	if (status & LPUART_STAT_OR) {
++		++rx_overrun_latches_;
++		port->STAT = (status & (LPUART_STAT_MSBF | LPUART_STAT_RXINV | LPUART_STAT_RWUID
++			| LPUART_STAT_BRK13 | LPUART_STAT_LBKDE)) | LPUART_STAT_OR;
++	}
+@@ -650,1 +658,3 @@
+-				}
++				}
++				else ++rx_software_drops_;
++				// The DATA byte above is discarded when the software ring is full.

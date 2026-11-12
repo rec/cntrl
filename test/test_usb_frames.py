@@ -39,6 +39,30 @@ def test_nonretrying_session_attempts_one_connection_and_preserves_io_failure(
         backend.close.assert_called_once()
 
 
+def test_explicit_release_and_close_exits_without_a_new_handshake(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = SerialConnection(Path('unused'), retry=False)
+    connection.session = 42
+    wire = Frame(kind=Kind.text, session=42, sequence=1, block_size=4096).encode()
+    source = BytesIO(wire)
+    backend = Mock(in_waiting=len(wire))
+    backend.read.side_effect = source.read
+    backend.write.side_effect = lambda data: len(data)
+    connection.serial = backend
+
+    def unexpected_reconnect() -> None:
+        pytest.fail('An explicitly closed session must not reconnect')
+
+    monkeypatch.setattr(connection, 'connect', unexpected_reconnect)
+    with connection:
+        connection.release()
+        connection.close()
+    assert backend.write.call_count == 2
+    assert Frame.decode(bytes(backend.write.call_args.args[0])).kind == Kind.close
+    backend.close.assert_called_once()
+
+
 def test_raw_payload_preserves_all_byte_values_and_embedded_frame_magic() -> None:
     frame = Frame(
         kind=Kind.data,

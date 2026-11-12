@@ -303,15 +303,18 @@ public:
         const auto &counts = bridge.counters(route);
         unsigned quarantine = 0;
         for (unsigned cable = 0; cable < 16; ++cable) if (bridge.input_quarantined(route, cable)) quarantine |= 1u << cable;
+        uint32_t uart_drops = 0, uart_overrun_latches = 0;
+        uart_counters(s, route, uart_drops, uart_overrun_latches, 0);
         char response[512];
-        std::snprintf(response, sizeof(response), "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u bridge_quarantine=%x stream_quarantine=%x pedal_quarantine=%u service_gap_us=%lu stream_input_us=%lu stream_input_pending=%u stream_service_us=%lu stream_service_pending=%u",
+        std::snprintf(response, sizeof(response), "CNTRL MIDI %u %u %lu %lu %lu %lu %u %lu %lu %lu %lu %u bridge_quarantine=%x stream_quarantine=%x pedal_quarantine=%u service_gap_us=%lu stream_input_us=%lu stream_input_pending=%u stream_service_us=%lu stream_service_pending=%u uart_rx_drops=%lu uart_overrun_latches=%lu",
             unsigned(bridge.enabled()), route, (unsigned long)counts.received,
             (unsigned long)counts.transmitted, (unsigned long)counts.dropped, (unsigned long)counts.aborted,
             counts.high_water, (unsigned long)max_midi_us_, (unsigned long)max_scan_gap_,
             (unsigned long)scan_count_, (unsigned long)display_count_, errors, quarantine,
             streams_.input_quarantine(route), unsigned(bridge.pedal_quarantined(route)), (unsigned long)max_service_gap_us_,
             (unsigned long)max_stream_input_us_, max_stream_input_pending_,
-            (unsigned long)max_stream_service_us_, max_stream_service_pending_);
+            (unsigned long)max_stream_service_us_, max_stream_service_pending_,
+            (unsigned long)uart_drops, (unsigned long)uart_overrun_latches);
         s.reply(response);
     }
 private:
@@ -359,6 +362,11 @@ private:
     }
     template<class Services>
     static uint64_t endpoint_generation(Services &, unsigned, long) { return 0; }
+    template<class Services>
+    static auto uart_counters(Services &s, unsigned route, uint32_t &drops, uint32_t &latches, int)
+        -> decltype(s.midi_uart_counters(route, drops, latches)) { return s.midi_uart_counters(route, drops, latches); }
+    template<class Services>
+    static void uart_counters(Services &, unsigned, uint32_t &, uint32_t &, long) {}
     unsigned source_items_, input_budget_us_, source_cursor_ = 0;
     uint32_t max_midi_us_ = 0, max_scan_gap_ = 0, scan_count_ = 0, display_count_ = 0;
     uint32_t previous_poll_us_ = 0, max_service_gap_us_ = 0;

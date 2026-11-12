@@ -151,12 +151,28 @@ the retained record. A watchdog reset gives breadcrumbs rather than a fault PC.
 Instrumentation changes timing, so use a normal image for final performance
 measurements.
 
+Before relying on the watchdog, run the explicit idle self-test:
+
+```bash
+uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --watchdog-test --report build/watchdog-selftest.toml
+```
+
+This acknowledges a deliberate hang, releases the serial session without waiting
+for another target command, and requires the next startup count, the watchdog
+reset cause, retained phase 21 and no fault PC. `QUAL STATUS` also reports the
+watchdog, clock and reset-route registers. A masked reset route is rejected;
+the diagnostic does not change it. `QUAL HANG` starts only after its reply has
+been copied to the USB driver, and keeps interrupts enabled while withholding
+the cooperative-loop watchdog refresh. No MIDI endpoints are opened by this test.
+
 The diagnostic checkpoint before continuations uses the shared headers exported by
 `git archive 72a949a firmware/include` into a generated source-root directory,
-and the target SDK locator sources. Pass that directory as `--source-root` with
-`--diagnostics` to reproduce the checkpoint without including unfinished shared
-changes. Keep the resulting image and ELF together; generated source exports and
-reports under `build/` are disposable and derive from the tracked Git sources.
+with the current tracked `firmware/include/cntrl/midi_runtime.h` overlaid for UART
+loss reporting, and the current target diagnostic sources and SDK patches. Pass
+that directory as `--source-root` with `--diagnostics` to reproduce the checkpoint
+without including unfinished shared continuation changes. Keep the resulting
+image and ELF together; generated source exports and reports under `build/` are
+disposable and derive from the tracked Git sources.
 
 The tracked `qualification/dynamic-memory-thru.toml` setup enables the ordinary
 interface. Copy it with `cntrl setup copy`, using the built `target.toml`, then
@@ -172,10 +188,12 @@ and streamed SysEx bytes. It does not measure wire timestamps or clock jitter.
 For intermittent short-message failures, add `--probe-short-messages` to the
 same `--run` command and use a separate report filename. This mode checks a
 Mac-only virtual-source loopback, then compares paced and burst deliveries of
-the short-message sequence. It preserves unsolicited idle bytes, exact sent and
+the short-message sequence and one complete long SysEx message. It preserves
+unsolicited idle bytes, exact sent and
 received bytes, and serial counters before and after each trial. Each received
 trace is saved before requesting the post-trial diagnostics, so a subsequent
-USB timeout does not lose that evidence. This probe does not arm the watchdog.
+USB timeout does not lose that evidence. Like the other `--run` checks, this
+probe arms the watchdog when the installed firmware supports diagnostics.
 
 The November 12 investigation found exact short-message delivery in repeated
 paced and burst trials, but also reproduced USB disappearance during a later
@@ -192,6 +210,16 @@ the tests have not yet correlated a specific overflow with a captured mismatch.
 It does not explain the USB disappearance. The leading empty SysEx observed on
 some first deliveries also remains unlocalized; do not filter it from expected
 results or treat it as confirmed host behavior.
+
+The explicit watchdog self-test passed on the UART diagnostic image (HEX
+SHA-256 `328d8344139cc0bc2b370ad6f278c568d141e1ead305a7a40f2eb1792d68fc9f`):
+startup count advanced from 45 to 46, reset cause was `0x10`, retained phase was
+21 and no fault was recorded. One subsequent paced/burst pair delivered all 304
+bytes in each trial with zero UART software drops and hardware overrun latches.
+A later paced trial lost communication after 44 received bytes; its trace was
+saved, but post-failure UART and watchdog status could not be read. That result
+does not establish UART overflow as the cause. Further MIDI traffic was stopped
+at that point to prepare restoration of normal firmware and the original setup.
 
 The separate `qualification/dynamic-memory-dense.toml` setup has 24 parallel
 USB-to-DIN routes with 16 identity transforms each, plus a DIN-to-USB return

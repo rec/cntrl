@@ -10,7 +10,7 @@ arm_fault_info_struct saved_fault{};
 crashreport_breadcrumbs_struct saved_breadcrumbs{};
 uint32_t saved_reset = 0, progress = 0, phase = 0;
 unsigned timeout_ms = 8000;
-bool fault_valid = false, armed = false, watchdog = false, started = false;
+bool fault_valid = false, armed = false, watchdog = false, started = false, hang_pending = false;
 
 const crashreport_breadcrumbs_struct *breadcrumbs() {
     return reinterpret_cast<const crashreport_breadcrumbs_struct *>(0x2027ffc0);
@@ -46,6 +46,7 @@ FLASHMEM void initialize_qualification() {
 }
 
 FLASHMEM bool qualification_start() {
+    if ((SRC_SCR & SRC_SCR_MASK_WDOG_RST(15)) != SRC_SCR_MASK_WDOG_RST(10)) return false;
     if (!watchdog) {
         // WDOG01: internal reset (WDT=0), no interrupt or external assertion.
         // WT=15 gives eight seconds. WDE cannot be cleared after enabling it.
@@ -74,7 +75,7 @@ FLASHMEM bool qualification_start() {
 }
 
 FLASHMEM void qualification_stop() {
-    armed = false;
+    armed = hang_pending = false;
     // Keep feeding at normal loop completion: enabling WDE is irreversible.
     if (watchdog) refresh_watchdog();
 }
@@ -98,11 +99,30 @@ FLASHMEM void qualification_progress() {
     if (armed) { breadcrumb(6, ++progress); qualification_phase(QualificationPhase::loop); }
     if (watchdog) refresh_watchdog();
 }
+FLASHMEM bool qualification_request_hang() {
+    if (!armed || !watchdog || !(WDOG1_WCR & WDOG_WCR_WDE)
+        || (SRC_SCR & SRC_SCR_MASK_WDOG_RST(15)) != SRC_SCR_MASK_WDOG_RST(10)) return false;
+    hang_pending = true; return true;
+}
+FLASHMEM void qualification_poll(bool output_pending) {
+    if (!hang_pending || output_pending) return;
+    qualification_phase(QualificationPhase::watchdog_test);
+    // The command reply has reached the USB driver. Keep its interrupts live
+    // while intentionally withholding the main-loop watchdog refresh.
+    __enable_irq();
+    while (true) __asm__ volatile("nop");
+}
 FLASHMEM void qualification_status(char *output, unsigned size) {
     const auto &record = started ? *breadcrumbs() : saved_breadcrumbs;
     const bool valid = valid_breadcrumbs(record);
+    const uint32_t gate = CCM_CCGR3;
+    const bool clocked = gate & CCM_CCGR3_WDOG1(CCM_CCGR_ON);
+    // Do not read a disabled peripheral: zero fields with clocked=0 are
+    // unavailable, not observations of its watchdog register contents.
+    const unsigned wcr = clocked ? WDOG1_WCR : 0, wmcr = clocked ? WDOG1_WMCR : 0;
+    const unsigned wicr = clocked ? WDOG1_WICR : 0, wrsr = clocked ? WDOG1_WRSR : 0;
     std::snprintf(output, size,
-        "CNTRL QUAL STATUS enabled=1 armed=%u watchdog=%u timeout_ms=%u fault=%u pc=%lx cfsr=%lx hfsr=%lx mmfar=%lx bfar=%lx ipsr=%lx xpsr=%lx reset=%lx breadcrumbs=%lx b1=%lx b2=%lx b3=%lx b4=%lx b5=%lx b6=%lx",
+        "CNTRL QUAL STATUS enabled=1 armed=%u watchdog=%u timeout_ms=%u fault=%u pc=%lx cfsr=%lx hfsr=%lx mmfar=%lx bfar=%lx ipsr=%lx xpsr=%lx reset=%lx breadcrumbs=%lx b1=%lx b2=%lx b3=%lx b4=%lx b5=%lx b6=%lx wdog_clocked=%u wdog_wcr=%x wdog_wmcr=%x wdog_wicr=%x wdog_wrsr=%x ccgr3=%lx src_scr=%lx",
         unsigned(armed), unsigned(watchdog), timeout_ms, unsigned(fault_valid),
         (unsigned long)saved_fault.ret, (unsigned long)saved_fault.cfsr, (unsigned long)saved_fault.hfsr,
         (unsigned long)saved_fault.mmfar, (unsigned long)saved_fault.bfar, (unsigned long)saved_fault.ipsr,
@@ -110,7 +130,8 @@ FLASHMEM void qualification_status(char *output, unsigned size) {
         (unsigned long)saved_reset, (unsigned long)(valid ? record.bitmask : 0),
         (unsigned long)(valid ? record.value[0] : 0), (unsigned long)(valid ? record.value[1] : 0),
         (unsigned long)(valid ? record.value[2] : 0), (unsigned long)(valid ? record.value[3] : 0),
-        (unsigned long)(valid ? record.value[4] : 0), (unsigned long)(valid ? record.value[5] : 0));
+        (unsigned long)(valid ? record.value[4] : 0), (unsigned long)(valid ? record.value[5] : 0),
+        unsigned(clocked), wcr, wmcr, wicr, wrsr, (unsigned long)gate, (unsigned long)SRC_SCR);
 }
 }
 #endif

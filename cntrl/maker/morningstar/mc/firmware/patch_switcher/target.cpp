@@ -545,6 +545,14 @@ public:
     cntrl::TextMessages &text_messages() { return midi_runtime_.text_messages; }
     void midi_reset() { midi_runtime_.reset(*this); }
     void midi_status(unsigned route) { midi_runtime_.status(bridge_, route, documents.document(), *this); }
+    void midi_uart_counters(unsigned route, uint32_t &drops, uint32_t &latches) {
+        const auto *connection = midi_outputs().route(route);
+        if (!connection) return;
+        const auto driver = cntrl::device::midi_binding(*connection).driver;
+        auto *serial = driver == cntrl::device::MidiDriver::din ? &Serial1
+            : driver == cntrl::device::MidiDriver::trs ? &Serial2 : nullptr;
+        if (serial) { drops = serial->rxSoftwareDrops(); latches = serial->rxOverrunLatches(); }
+    }
     void midi_stream_status() { midi_runtime_.stream_status(*this); }
     bool midi_file_assets_busy() {
         return midi_files.storage_busy() || midi_files.player.active() || midi_files.player.cleaning()
@@ -896,11 +904,18 @@ void midi_reset() { board.midi_reset(); }
 bool native_asset_command(const char *line) {
 #if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
     if (!std::strcmp(line, "CNTRL QUAL STATUS")) {
-        char response[384]; cntrl::device::qualification_status(response, sizeof(response)); board.reply(response); return true;
+        char response[640]; cntrl::device::qualification_status(response, sizeof(response)); board.reply(response); return true;
     }
     if (!std::strcmp(line, "CNTRL QUAL START")) {
         if (!board.heap_diagnostic_ready()) { board.reply("CNTRL ERROR busy"); return true; }
+        if ((SRC_SCR & SRC_SCR_MASK_WDOG_RST(15)) != SRC_SCR_MASK_WDOG_RST(10)) {
+            board.reply("CNTRL ERROR qualification-watchdog-reset-masked"); return true;
+        }
         board.reply(cntrl::device::qualification_start() ? "CNTRL OK" : "CNTRL ERROR qualification-watchdog-busy"); return true;
+    }
+    if (!std::strcmp(line, "CNTRL QUAL HANG")) {
+        if (!board.heap_diagnostic_ready()) { board.reply("CNTRL ERROR busy"); return true; }
+        board.reply(cntrl::device::qualification_request_hang() ? "CNTRL OK" : "CNTRL ERROR qualification-watchdog-not-armed"); return true;
     }
     if (!std::strcmp(line, "CNTRL QUAL STOP")) {
         cntrl::device::qualification_stop(); board.reply("CNTRL OK"); return true;
@@ -1191,6 +1206,7 @@ void poll_target() {
     CNTRL_RUNTIME_TRACE(loop);
     cooperative_runtime.poll(target_runtime);
 #if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
+    cntrl::device::qualification_poll(usb_session.output_pending());
     cntrl::device::qualification_progress();
 #endif
 }

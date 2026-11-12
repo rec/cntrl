@@ -98,6 +98,13 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             '*(.text._ZN5cntrl4midi7StreamsD[12]Ev*)',
             '*(.text._ZN5cntrl4midi7RuntimeC[12]E*)',
             '*(.text._ZN5cntrl5SongsC[12]E*)',
+            # Management screens, browsing and saved-return decoding are cold.
+            # Leave the MIDI preparation/queue iteration paths in ITCM.
+            '*(.text._ZN5cntrl7SongsUi6renderEv*)',
+            '*(.text._ZN5cntrl7SongsUi13handle_buttonEjb*)',
+            '*(.text._ZN5cntrl10ModuleMenu6renderEv*)',
+            '*(.text._ZN5cntrl14StorageListing4nextE*)',
+            '*(.text._ZN5cntrl2ui19FirmwareVisitRecord6decodeE*)',
             # target.cpp's static Board/runtime construction runs only at boot.
             '*(.text.startup._GLOBAL__sub_I__Z15switch_scan_duev)',
         )

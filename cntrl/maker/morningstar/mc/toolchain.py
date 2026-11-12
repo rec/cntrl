@@ -248,6 +248,7 @@ PATCHES = (
     'external-flash-config',
     'usb-keyboard',
     'flex-serial-release',
+    'serial-rx-diagnostics',
     'usb-midi-interface',
     'usb-host-forward',
     'fonts-in-flash',

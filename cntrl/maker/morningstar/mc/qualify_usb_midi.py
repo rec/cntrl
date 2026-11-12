@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from reccy.configuration.tyro import unit_spec
 from reccy.configuration.units import Seconds
 
+from ....patch_switcher import devices
 from ....patch_switcher.core_midi import Midi, exchange
 from ....patch_switcher.transport import SerialConnection, SetupClient
 
@@ -22,6 +23,8 @@ class Options(BaseModel, frozen=True):
     run: bool = False
     inspect: bool = False
     """Read serial diagnostics without opening MIDI endpoints or sending MIDI."""
+    watchdog_test: bool = False
+    """Intentionally hang diagnostic firmware and verify its watchdog warm reset."""
     destination: str = ''
     source: str = ''
     port: Path = Path('/dev/cu.usbmodem144682801')
@@ -35,7 +38,7 @@ class Options(BaseModel, frozen=True):
     stress_only: bool = False
     """Skip exact byte checks for transforming graphs; send only PC/modulation load."""
     probe_short_messages: bool = False
-    """Compare burst and paced program changes, retaining raw bytes and counters."""
+    """Compare paced/burst short messages and SysEx with raw bytes and counters."""
     report: Path | None = None
     """Save serial inspection or before/after run diagnostics as TOML."""
 
@@ -45,8 +48,10 @@ class Options(BaseModel, frozen=True):
             not self.run or self.inspect or self.stress_only or self.stress_seconds
         ):
             raise ValueError('probe-short-messages requires --run without other modes')
-        if self.inspect and self.run:
-            raise ValueError('inspect and run are separate modes; select only one')
+        if sum((self.inspect, self.run, self.watchdog_test)) > 1:
+            raise ValueError(
+                'inspect, run and watchdog-test are separate modes; select only one'
+            )
         if self.stress_only and (not self.run or self.stress_seconds <= 0):
             raise ValueError('stress-only requires --run and positive --stress-seconds')
         if self.stress_bursts is not None and (
@@ -112,6 +117,106 @@ def save_report(path: Path | None, result: dict[str, object]) -> None:
         path.write_text(tomlkit.dumps(result))
 
 
+def status_fields(text: str) -> dict[str, str]:
+    return dict(s.split('=', 1) for s in text.split() if '=' in s)
+
+
+def watchdog_evidence(before: dict[str, str], after: dict[str, str]) -> dict[str, int]:
+    previous = status_fields(before['device'])
+    current = status_fields(after['device'])
+    qualification = status_fields(after['qualification'])
+    if (
+        previous.get('starts_status') != 'ready'
+        or current.get('starts_status') != 'ready'
+    ):
+        raise ValueError('Watchdog verification requires ready startup counters')
+    first, last = int(previous['starts']), int(current['starts'])
+    reset = int(qualification.get('reset', '0'), 16)
+    phase = int(qualification.get('b1', '0'), 16)
+    if last != first + 1:
+        raise ValueError(f'Watchdog reset expected starts={first + 1}, got {last}')
+    if not reset & (1 << 4):
+        raise ValueError('Reboot did not retain the SRC watchdog reset bit')
+    if not int(qualification.get('breadcrumbs', '0'), 16) & 1 or phase != 21:
+        raise ValueError('Reboot did not retain the watchdog-test breadcrumb')
+    if qualification.get('fault') != '0' or int(qualification.get('pc', '0'), 16):
+        raise ValueError('Watchdog self-test reboot retained an unexpected fault')
+    return {
+        'starts_before': first,
+        'starts_after': last,
+        'reset': reset,
+        'phase': phase,
+    }
+
+
+def watchdog_test(options: Options) -> None:
+    report: dict[str, object] = {
+        'success': False,
+        'options': options.model_dump(mode='json', exclude_none=True),
+    }
+    try:
+        with SerialConnection(options.port, timeout=3, retry=False) as connection:
+            client = SetupClient(connection)
+            before = diagnostics(client)
+            report['before'] = before
+            if 'enabled=1' not in before['qualification'].split():
+                raise ValueError('Watchdog self-test requires diagnostic firmware')
+            initial = status_fields(before['device'])
+            if initial.get('starts_status') != 'ready':
+                raise ValueError('Watchdog self-test requires a ready startup counter')
+            starts = int(initial['starts'])
+            save_report(options.report, report)
+            client.ok('CNTRL QUAL START')
+            try:
+                client.ok('CNTRL QUAL HANG')
+            except (OSError, ValueError):
+                if connection.serial is not None:
+                    try:
+                        client.ok('CNTRL QUAL STOP')
+                    except (OSError, ValueError) as error:
+                        print(f'Qualification STOP failed: {error}', file=sys.stderr)
+                raise
+            report['hang_acknowledged'] = True
+            save_report(options.report, report)
+            # The target deliberately stops processing commands after this ACK.
+            # Release without an acknowledged context-close exchange.
+            connection.release()
+            connection.close()
+        save_report(options.report, report)
+        deadline = time.monotonic() + 30
+        time.sleep(8.5)
+        last_error = 'USB serial endpoint has not returned'
+        while time.monotonic() < deadline:
+            after = None
+            if any(d.port == options.port for d in devices.connected()):
+                try:
+                    with SerialConnection(
+                        options.port, timeout=3, retry=False
+                    ) as connection:
+                        client = SetupClient(connection)
+                        current = status_fields(client.request('CNTRL STATUS'))
+                        if (
+                            current.get('starts_status') == 'ready'
+                            and int(current['starts']) != starts
+                        ):
+                            after = diagnostics(client)
+                except (OSError, ValueError) as error:
+                    last_error = str(error)
+            if after is not None:
+                report['after'] = after
+                report['evidence'] = watchdog_evidence(before, after)
+                report['success'] = True
+                save_report(options.report, report)
+                print('Watchdog warm reset verified', flush=True)
+                return
+            time.sleep(0.25)
+        raise TimeoutError(f'Watchdog warm reset was not observed: {last_error}')
+    except (OSError, ValueError) as error:
+        report['error'] = str(error)
+        save_report(options.report, report)
+        raise
+
+
 def probe_virtual_source(midi: Midi) -> dict[str, object]:
     """Check first-delivery framing without USB, firmware or the DIN cable."""
     midi.core.MIDISourceCreate.argtypes = [
@@ -163,29 +268,27 @@ def probe_short_messages(
     report: dict[str, object],
     path: Path | None,
 ) -> list[dict[str, object]]:
-    """Retain unsolicited traffic separately from each controlled PC trial."""
+    """Retain unsolicited traffic separately from each controlled wire trial."""
     messages = [bytes((0xC0 | i % 16, i)) for i in range(128)]
     messages.extend(bytes((0xB0 | i, 1, 0)) for i in range(16))
-    payload = b''.join(messages)
+    sysex = b'\xf0\x7d' + bytes(i % 128 for i in range(4096)) + b'\xf7'
     trials: list[dict[str, object]] = []
     report['trials'] = trials
-    for name, interval in [
-        ('paced-first', 0.002),
-        ('burst-1', 0),
-        ('burst-2', 0),
-        ('burst-3', 0),
-        ('burst-4', 0),
-        ('paced', 0.002),
+    for name, interval, chunks, settle in [
+        ('paced', 0.002, messages, 0.5),
+        ('burst', 0, [b''.join(messages)], 0.5),
+        ('sysex', 0, [sysex], 2),
     ]:
+        payload = b''.join(chunks)
         before = diagnostics(client)
         time.sleep(0.2)
         idle = bytes(midi.data)
         midi.data.clear()
-        for message in messages if interval else [payload]:
+        for message in chunks:
             midi.send(destination, message)
             if interval:
                 time.sleep(interval)
-        time.sleep(0.5)
+        time.sleep(settle)
         received = bytes(midi.data)
         trial: dict[str, object] = {
             'name': name,
@@ -209,6 +312,9 @@ def probe_short_messages(
 
 
 def run(options: Options) -> None:
+    if options.watchdog_test:
+        watchdog_test(options)
+        return
     if options.inspect:
         inspection: dict[str, object] = {
             'success': False,
@@ -259,25 +365,23 @@ def run(options: Options) -> None:
                 ),
             }
             save_report(options.report, report)
-            if options.probe_short_messages:
-                report['host_loopback'] = probe_virtual_source(midi)
-                report['trials'] = trials = probe_short_messages(
-                    midi, destination, client, report, options.report
-                )
-                report['success'] = report['host_loopback']['matches'] and all(
-                    t['matches'] for t in trials
-                )
-                save_report(options.report, report)
-                if not report['success']:
-                    raise ValueError(
-                        'Program-change probe mismatch; see trial bytes and counters'
-                    )
-                return
             armed = False
             try:
                 if 'enabled=1' in before_diagnostics['qualification'].split():
                     armed = True
                     client.ok('CNTRL QUAL START')
+                if options.probe_short_messages:
+                    report['host_loopback'] = probe_virtual_source(midi)
+                    report['trials'] = trials = probe_short_messages(
+                        midi, destination, client, report, options.report
+                    )
+                    report['success'] = report['host_loopback']['matches'] and all(
+                        t['matches'] for t in trials
+                    )
+                    save_report(options.report, report)
+                    if not report['success']:
+                        raise ValueError('Probe mismatch; see trial bytes and counters')
+                    return
                 # Program changes and benign modulation controls, not note events.
                 messages = b''.join(bytes((0xC0 | i % 16, i)) for i in range(128))
                 messages += b''.join(bytes((0xB0 | i, 1, 0)) for i in range(16))

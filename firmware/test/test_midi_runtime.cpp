@@ -384,8 +384,31 @@ void stream_phase_maxima_report_entry_queue_sizes_and_reset_together() {
     runtime.reset(services); runtime.status(services.bridge,0,document,services);
     assert(services.replies.back().find("stream_input_us=0 stream_input_pending=0 stream_service_us=0 stream_service_pending=0") != std::string::npos);
 }
+void uart_loss_diagnostics_preserve_unsigned_counts_across_reset() {
+    struct UartServices : Services {
+        uint32_t drops = UINT32_MAX, latches = UINT32_MAX - 1;
+        UartServices() : Services(1) {}
+        void midi_uart_counters(unsigned route, uint32_t &software, uint32_t &hardware) {
+            if (!route) { software = drops; hardware = latches; }
+        }
+    } services;
+    cntrl::midi::Runtime runtime;
+    cntrl::Document document;
+    runtime.status(services.bridge, 0, document, services);
+    assert(services.replies.back().find("uart_rx_drops=4294967295 uart_overrun_latches=4294967294") != std::string::npos);
+    runtime.reset(services);
+    runtime.status(services.bridge, 0, document, services);
+    assert(services.replies.back().find("uart_rx_drops=4294967295 uart_overrun_latches=4294967294") != std::string::npos);
+    services.drops += 1;
+    services.latches += 2;
+    runtime.status(services.bridge, 0, document, services);
+    assert(services.replies.back().find("uart_rx_drops=0 uart_overrun_latches=0") != std::string::npos);
+    runtime.status(services.bridge, 1, document, services);
+    assert(services.replies.back().find("uart_rx_drops=0 uart_overrun_latches=0") != std::string::npos);
+}
 int main() {
     cntrl::memory_budget = 524288;
+    uart_loss_diagnostics_preserve_unsigned_counts_across_reset();
     stream_status_preserves_all_failure_bits_and_following_fields();
     service_gap_reports_external_stalls_and_resets_across_timer_wrap();
     stream_phase_maxima_report_entry_queue_sizes_and_reset_together();

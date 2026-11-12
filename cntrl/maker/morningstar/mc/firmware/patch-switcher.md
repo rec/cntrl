@@ -331,6 +331,12 @@ configurable-4 = 'midi-b'
 
 Use the same jack name as a MIDI patch or instrument's `output`. The
 `CNTRL MIDI STATUS` counters use routes 2 through 5 in jack order.
+For the DIN UART (route 0) and fixed TRS UART (route 1), status also reports
+`uart_rx_drops`, the exact bytes discarded by a full software receive ring, and
+`uart_overrun_latches`, observed hardware overrun flags. One hardware flag can
+represent several lost bytes. These cumulative 32-bit counters wrap modulo
+2^32 and survive `CNTRL MIDI RESET`; compare snapshots to measure a test.
+Other routes report zero because these UART counters do not cover them.
 Type A sends data on tip with ring high. Type B swaps tip and ring.
 Expression uses tip as analog input and drives ring high. Aux uses tip and ring
 as switch inputs pulled up to detect contacts closing to sleeve. Off releases

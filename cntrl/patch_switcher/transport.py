@@ -54,7 +54,7 @@ class SerialConnection:
                         self.exchange(b'', Kind.close, retry=False)
                     except (OSError, UsbProtocolError):
                         self.release()
-            else:
+            elif self.serial is not None:
                 self.sequence = 0
                 self.exchange(b'', Kind.close)
         finally:

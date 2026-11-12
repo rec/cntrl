@@ -6,7 +6,7 @@ namespace cntrl::device {
 enum class QualificationPhase : unsigned {
     loop = 1, display, keyboard, scan, pages, midi, serial, expression, navigation,
     midi_inputs, midi_ingress, midi_derived, midi_bridge, midi_streams,
-    midi_reclaim, midi_flush, midi_files, midi_write, heap_allocate, heap_free
+    midi_reclaim, midi_flush, midi_files, midi_write, heap_allocate, heap_free, watchdog_test
 };
 #if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
 void initialize_qualification();
@@ -18,5 +18,7 @@ inline void qualification_phase(QualificationPhase phase) { qualification_phase(
 void qualification_packet(unsigned route, uint32_t packet);
 unsigned qualification_heap(bool freeing, const void *pointer, unsigned size, uintptr_t caller);
 void qualification_progress();
+bool qualification_request_hang();
+void qualification_poll(bool output_pending);
 #endif
 }

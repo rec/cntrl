@@ -8,6 +8,7 @@ from cntrl.maker.morningstar.mc.qualify_usb_midi import (
     Options,
     note_lifecycle,
     save_report,
+    watchdog_evidence,
 )
 
 
@@ -35,6 +36,45 @@ def test_inspection_is_a_separate_mode_without_midi_run_options() -> None:
     assert not options.destination and not options.source
     with pytest.raises(ValueError, match='select only one'):
         Options(inspect=True, run=True)
+
+
+def test_watchdog_selftest_is_explicit_and_cannot_run_midi_traffic() -> None:
+    options = tyro.cli(Options, args=['--watchdog-test'])
+    assert options.watchdog_test and not options.inspect and not options.run
+    for values in ({'run': True}, {'inspect': True}):
+        with pytest.raises(ValueError, match='select only one'):
+            Options.model_validate({'watchdog_test': True, **values})
+
+
+def test_watchdog_proof_requires_the_next_boot_reset_cause_and_retained_phase() -> None:
+    before = {'device': 'CNTRL READY 40 starts=147 starts_status=ready'}
+    after = {
+        'device': 'CNTRL READY 40 starts=148 starts_status=ready',
+        'qualification': (
+            'CNTRL QUAL STATUS enabled=1 reset=10 breadcrumbs=3f b1=15 fault=0 pc=0'
+        ),
+    }
+    assert watchdog_evidence(before, after) == {
+        'starts_before': 147,
+        'starts_after': 148,
+        'reset': 16,
+        'phase': 21,
+    }
+    for field, wrong in (
+        ('device', 'CNTRL READY 40 starts=147 starts_status=ready'),
+        ('qualification', after['qualification'].replace('reset=10', 'reset=1')),
+        (
+            'qualification',
+            after['qualification'].replace('breadcrumbs=3f', 'breadcrumbs=0'),
+        ),
+        ('qualification', after['qualification'].replace('b1=15', 'b1=1')),
+        (
+            'qualification',
+            after['qualification'].replace('fault=0 pc=0', 'fault=1 pc=1234'),
+        ),
+    ):
+        with pytest.raises(ValueError):
+            watchdog_evidence(before, after | {field: wrong})
 
 
 def test_burst_cap_requires_a_positive_count_and_a_timed_run() -> None:
