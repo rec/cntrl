@@ -117,7 +117,7 @@ int main(int argc, char **argv) {
     cntrl::put32(invalid.data() + 20, cntrl::checksum(invalid.data() + 28, unsigned(invalid.size()) - 28));
     cntrl::Document bad; assert(!bad.load(invalid.data(), unsigned(invalid.size()), board));
     invalid = bytes; alternate = unsigned(document.switch_shifted(3) - bytes.data());
-    invalid[alternate + 16] = invalid[alternate + 17] = 255;
+    invalid[alternate + 4 + cntrl::gesture_debounce_offset] = invalid[alternate + 5 + cntrl::gesture_debounce_offset] = 255;
     cntrl::put32(invalid.data() + 20, cntrl::checksum(invalid.data() + 28, unsigned(invalid.size()) - 28));
     assert(!bad.load(invalid.data(), unsigned(invalid.size()), board));
 }

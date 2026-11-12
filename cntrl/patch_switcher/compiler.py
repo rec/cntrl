@@ -290,11 +290,11 @@ def compile_show(
     switch_records: list[bytes] = []
     switch_views: list[display.DisplayPatch] = []
     assignments: list[tuple[str, models.SwitchAssignment, int, int]] = []
-    gesture_records = [GESTURES.pack(*([65535] * 6), 0, 0, 0, 0) for _ in range(5)]
+    gesture_records = [GESTURES.pack(*([65535] * 8), 0, 0, 0, 0) for _ in range(5)]
     gesture_assignments: list[tuple[str, models.SwitchAssignment, int, int]] = []
     hook_records = [SWITCH_HOOKS.pack(65535, 65535, False) for _ in range(5)]
     shifted_records = [
-        SHIFTED_ACTIONS.pack(*([65535] * 8), 0, 0, 0, 0) for _ in range(5)
+        SHIFTED_ACTIONS.pack(*([65535] * 10), 0, 0, 0, 0) for _ in range(5)
     ]
     buttons: set[str] = set()
     for key, raw in show.switches.items():
@@ -371,7 +371,7 @@ def compile_show(
                 else 65535
             )
             gesture_assignments.append((key, assignment, shifted_on, shifted_off))
-            events = [65535] * 6
+            events = [65535] * 8
             timings = [0] * 4
             if shifted.gestures is not None:
                 gesture = shifted.gestures
@@ -1155,7 +1155,7 @@ class PatchCompiler:
             assignment: models.SwitchAssignment,
         ) -> bytes:
             if gesture is None:
-                return GESTURES.pack(*([65535] * 6), 0, 0, 0, 0)
+                return GESTURES.pack(*([65535] * 8), 0, 0, 0, 0)
             return GESTURES.pack(
                 *(
                     add_action(
@@ -1244,7 +1244,7 @@ class PatchCompiler:
                         assignment,
                     )
                     if action.shifted
-                    else SHIFTED_ACTIONS.pack(*([65535] * 8), 0, 0, 0, 0)
+                    else SHIFTED_ACTIONS.pack(*([65535] * 10), 0, 0, 0, 0)
                 )
             )
         settings = self.show.page_settings.model_copy(
@@ -1889,14 +1889,16 @@ class PatchCompiler:
                     offsets = [4]
                 elif data[0] == 10:
                     offsets = [4] + [
-                        224 + i * 121 + j
+                        224 + i * BINDING_RECORD_SIZE + j
                         for i in range(data[70])
                         for j in (
                             *range(2, 6, 2),
-                            *range(72, 84, 2),
-                            92,
-                            94,
-                            *range(97, 113, 2),
+                            *range(72, 72 + len(GESTURE_EVENTS) * 2, 2),
+                            BINDING_HOOKS_OFFSET,
+                            BINDING_HOOKS_OFFSET + 2,
+                            *range(
+                                BINDING_SHIFTED_OFFSET, BINDING_SHIFTED_OFFSET + 20, 2
+                            ),
                         )
                     ]
                 for offset in offsets:
@@ -1981,9 +1983,12 @@ def _name_record(text: str | None, path: str, errors: list[str]) -> bytes:
 GRAPH = struct.Struct('<4sIHHHH')
 SWITCH = struct.Struct('<BBHH64sH')
 GESTURES_FLAG = 1 << 14
-GESTURES = struct.Struct('<10H')
+GESTURES = struct.Struct('<12H')
 SWITCH_HOOKS = struct.Struct('<HH?')
-SHIFTED_ACTIONS = struct.Struct('<8H4H')
+SHIFTED_ACTIONS = struct.Struct('<10H4H')
+BINDING_HOOKS_OFFSET = SWITCH.size + GESTURES.size
+BINDING_SHIFTED_OFFSET = BINDING_HOOKS_OFFSET + SWITCH_HOOKS.size
+BINDING_RECORD_SIZE = BINDING_SHIFTED_OFFSET + SHIFTED_ACTIONS.size
 GESTURE_EVENTS = (
     'release',
     'long_press',
@@ -1991,6 +1996,8 @@ GESTURE_EVENTS = (
     'double_tap',
     'double_release',
     'repeat',
+    'long_double_tap',
+    'long_double_release',
 )
 GESTURE_TIMINGS = ('debounce', 'long_delay', 'double_delay', 'repeat_interval')
 NAMED = struct.Struct('<64sH')
@@ -2280,7 +2287,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 39
+DOCUMENT_VERSION = 40
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

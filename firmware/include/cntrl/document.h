@@ -12,7 +12,14 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 39;
+constexpr unsigned document_version = 40;
+constexpr unsigned gesture_event_count = 8;
+constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
+constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
+constexpr unsigned shifted_action_size = 4 + gesture_record_size;
+constexpr unsigned binding_hooks_offset = 72 + gesture_record_size;
+constexpr unsigned binding_shifted_offset = binding_hooks_offset + 5;
+constexpr unsigned binding_record_size = binding_shifted_offset + shifted_action_size;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -139,13 +146,13 @@ public:
             names += 6 + count * 39;
         }
         unsigned gestures = names;
-        if (bytes[19] & 0x40) names += 100;
+        if (bytes[19] & 0x40) names += 5 * gesture_record_size;
         unsigned hooks = names;
         bool has_hooks = names + 4 <= length && !std::memcmp(bytes + names, "CHOK", 4);
         if (has_hooks) names += 29;
         unsigned shifted = names;
         bool has_shifted = names + 4 <= length && !std::memcmp(bytes + names, "CSHF", 4);
-        if (has_shifted) names += 124;
+        if (has_shifted) names += 4 + 5 * shifted_action_size;
         const unsigned layout = names;
         if (names + 12 > length || std::memcmp(bytes + names, "CPAG", 4)
             || bytes[names + 4] > PageLayout::max_pages || !bytes[names + 5]
@@ -377,14 +384,14 @@ public:
         }
         if (bytes[19] & 0x40) {
             for (unsigned b = 0; b < 5; ++b) {
-                const uint8_t *p = bytes + gestures + b * 20;
+                const uint8_t *p = bytes + gestures + b * gesture_record_size;
                 bool assigned = b < switch_count && bytes[switch_start + b * 72 + 1] == 0;
                 if (!gestures_valid(p, u16(bytes + graph + 8), assigned)) return false;
             }
         }
         if (has_shifted) {
             for (unsigned b = 0; b < 5; ++b) {
-                const uint8_t *p = bytes + shifted + 4 + b * 24;
+                const uint8_t *p = bytes + shifted + 4 + b * shifted_action_size;
                 const uint8_t *record = b < switch_count ? bytes + switch_start + b * 72 : nullptr;
                 bool configured = u16(p) != 65535;
                 unsigned count = u16(bytes + graph + 8);
@@ -599,7 +606,7 @@ public:
     }
     unsigned keyboard_size() const { return !std::memcmp(keyboard_section(), "CKBD", 4) ? 6 + u16(keyboard_section() + 4) * 39 : 0; }
     const uint8_t *switch_hook_section() const {
-        return bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0) + keyboard_size() + ((data_[19] & 0x40) ? 100 : 0);
+        return bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0) + keyboard_size() + ((data_[19] & 0x40) ? 5 * gesture_record_size : 0);
     }
     const uint8_t *switch_hooks(unsigned button) const {
         const uint8_t *p = switch_hook_section();
@@ -613,7 +620,7 @@ public:
         if (!std::memcmp(p, "CHOK", 4)) p += 29;
         if (std::memcmp(p, "CSHF", 4)) return nullptr;
         unsigned slot = switch_slot(button); if (slot == switches()) return nullptr;
-        p += 4 + slot * 24;
+        p += 4 + slot * shifted_action_size;
         return u16(p) != 65535 ? p : nullptr;
     }
     const uint8_t *arpeggiator_section() const {
@@ -637,7 +644,7 @@ public:
     PageLayout page_layout() const {
         const uint8_t *p = switch_hook_section();
         if (!std::memcmp(p, "CHOK", 4)) p += 29;
-        if (!std::memcmp(p, "CSHF", 4)) p += 124;
+        if (!std::memcmp(p, "CSHF", 4)) p += 4 + 5 * shifted_action_size;
         return PageLayout{p};
     }
     unsigned switch_slot(unsigned button) const {
@@ -647,8 +654,8 @@ public:
     const uint8_t *switch_gestures(unsigned button) const {
         if (!(data_[19] & 0x40)) return nullptr;
         unsigned slot = switch_slot(button); if (slot == switches()) return nullptr;
-        const uint8_t *p = switch_hook_section() - 100 + slot * 20;
-        return u16(p + 12) ? p : nullptr;
+        const uint8_t *p = switch_hook_section() - 5 * gesture_record_size + slot * gesture_record_size;
+        return u16(p + gesture_debounce_offset) ? p : nullptr;
     }
     const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }
     bool usb_host_midi() const { return data_[19] & 16; }
@@ -710,12 +717,13 @@ public:
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
     static bool gestures_valid(const uint8_t *p, unsigned count, bool assigned) {
-        unsigned debounce = u16(p + 12);
-        if (debounce && (!assigned || debounce > 1000 || u16(p + 14) < debounce
-            || u16(p + 16) < debounce || u16(p + 18) < debounce
+        unsigned debounce = u16(p + gesture_debounce_offset);
+        if (debounce && (!assigned || debounce > 1000 || u16(p + gesture_debounce_offset + 2) < debounce
+            || u16(p + gesture_debounce_offset + 4) < debounce || u16(p + gesture_debounce_offset + 6) < debounce
             || (u16(p + 4) != 65535 && u16(p + 2) == 65535 && u16(p + 10) == 65535)
-            || (u16(p + 8) != 65535 && u16(p + 6) == 65535))) return false;
-        for (unsigned j = 0; j < 6; ++j)
+            || (u16(p + 8) != 65535 && u16(p + 6) == 65535)
+            || (u16(p + 14) != 65535 && u16(p + 12) == 65535))) return false;
+        for (unsigned j = 0; j < gesture_event_count; ++j)
             if (u16(p + j * 2) != 65535 && (!debounce || u16(p + j * 2) >= count)) return false;
         return true;
     }
@@ -826,7 +834,7 @@ private:
                 break;
             case 10: {
                 if (!hardware.switch_capacity() || n[1] || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
-                    || p[66] > 8 || p[66] > input_count || p[67] || length != 220u + 121u * p[66]) return false;
+                    || p[66] > 8 || p[66] > input_count || p[67] || length != 220u + binding_record_size * p[66]) return false;
                 for (unsigned j = 0; j < 4; ++j) {
                     const uint8_t *e = p + 68 + j * expression_record_size;
                     if (!e[32]) continue;
@@ -836,16 +844,16 @@ private:
                 }
                 unsigned assigned = 0;
                 for (unsigned j = 0; j < p[66]; ++j) {
-                    const uint8_t *s = p + 220 + j * 121;
+                    const uint8_t *s = p + 220 + j * binding_record_size;
                     if (s[0] >= input_count || (assigned & (1u << s[0])) || s[1] > 2
                         || !label_valid(s + 6, 64) || u16(s + 2) >= count
                         || (s[1] ? u16(s + 4) >= count : u16(s + 4) != 65535) || u16(s + 70) != 65535) return false;
                     assigned |= 1u << s[0];
-                    if (!gestures_valid(s + 72, count, !s[1]) || s[96] > 1 || (s[96] && u16(s + 92) == 65535)) return false;
-                    for (unsigned k = 0; k < 2; ++k) if (u16(s + 92 + k * 2) != 65535 && u16(s + 92 + k * 2) >= count) return false;
-                    for (unsigned k = 0; k < 8; ++k) if (u16(s + 97 + k * 2) != 65535 && u16(s + 97 + k * 2) >= count) return false;
-                    if (u16(s + 97) != 65535 && (s[1] ? u16(s + 99) == 65535 : u16(s + 99) != 65535)) return false;
-                    if (!gestures_valid(s + 101, count, u16(s + 97) != 65535 && !s[1])) return false;
+                    if (!gestures_valid(s + 72, count, !s[1]) || s[binding_hooks_offset + 4] > 1 || (s[binding_hooks_offset + 4] && u16(s + binding_hooks_offset) == 65535)) return false;
+                    for (unsigned k = 0; k < 2; ++k) if (u16(s + binding_hooks_offset + k * 2) != 65535 && u16(s + binding_hooks_offset + k * 2) >= count) return false;
+                    for (unsigned k = 0; k < 2 + gesture_event_count; ++k) if (u16(s + binding_shifted_offset + k * 2) != 65535 && u16(s + binding_shifted_offset + k * 2) >= count) return false;
+                    if (u16(s + binding_shifted_offset) != 65535 && (s[1] ? u16(s + binding_shifted_offset + 2) == 65535 : u16(s + binding_shifted_offset + 2) != 65535)) return false;
+                    if (!gestures_valid(s + binding_shifted_offset + 4, count, u16(s + binding_shifted_offset) != 65535 && !s[1])) return false;
                 }
                 break;
             }

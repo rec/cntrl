@@ -8,15 +8,15 @@
 
 void test_configured_debounce() {
     for (uint16_t delay : std::initializer_list<uint16_t>{5, 20, 40}) {
-        uint8_t settings[20] = {};
-        for (unsigned i = 0; i < 12; ++i) settings[i] = 255;
-        settings[12] = uint8_t(delay);
+        uint8_t settings[cntrl::gesture_record_size] = {};
+        for (unsigned i = 0; i < cntrl::gesture_debounce_offset; ++i) settings[i] = 255;
+        settings[cntrl::gesture_debounce_offset] = uint8_t(delay);
         cntrl::ButtonState button;
         cntrl::SwitchGestures gesture;
         gesture.reset(settings);
         std::vector<unsigned> events;
         auto sample = [&](bool down, uint32_t now) {
-            auto edges = button.update(down, now, cntrl::u16(settings + 12));
+            auto edges = button.update(down, now, cntrl::u16(settings + cntrl::gesture_debounce_offset));
             if (edges & cntrl::press_event) gesture.input(true, now);
             if (edges & cntrl::release_event) gesture.input(false, now);
             gesture.tick(now, true, [&](unsigned event) { events.push_back(event); });

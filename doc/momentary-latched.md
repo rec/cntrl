@@ -178,7 +178,7 @@ it is never persisted across navigation, setup changes or restart.
 ## Programmable gestures
 
 A `press` assignment can include a `gestures` table. `on` is its single-press
-patch. The six optional gesture patches accept the same Patch representation.
+patch. The eight optional gesture patches accept the same Patch representation.
 
 ```toml
 [switches.lead]
@@ -191,6 +191,8 @@ long_press = 'solo'
 long_release = 'solo-release'
 double_tap = 'boost'
 double_release = 'boost-release'
+long_double_tap = 'sustain-boost'
+long_double_release = 'sustain-boost-release'
 repeat = 'step'
 debounce = '20 ms'
 long_delay = '500 ms'
@@ -217,6 +219,20 @@ up to `double_delay` after the first release to single-tap latency, plus input
 debouncing and the normal service interval. A press exactly at the deadline
 starts a new tap. `long_release` requires `long_press` or `repeat`, and
 `double_release` requires `double_tap`. Omit any unneeded patch.
+
+With `long_double_tap`, the second press waits for the same `long_delay` used
+by a first-press hold. Releasing it before that threshold runs `double_tap`
+followed by `double_release`. Holding through the threshold runs
+`long_double_tap`, and releasing afterward runs `long_double_release`.
+The held second press excludes ordinary double actions, first-press long
+actions and repeats. An ordinary double tap therefore runs on its second
+release when this hold gesture is configured. `long_double_release` requires
+`long_double_tap`, which can also be used without an ordinary `double_tap`.
+Cancelling an undecided second press emits nothing. Cancelling a recognized
+hold runs its matching release action.
+
+These gesture slots use compiled setup format 40. Rebuild older compiled
+setups from their TOML sources before using them with this firmware.
 
 The gestures table is available only in `press` mode. Gesture patches stay in
 the switch context, so stock-firmware visits and menu/back navigation are

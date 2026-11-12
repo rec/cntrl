@@ -10,8 +10,9 @@ from scripts import native_tests
 
 
 @pytest.mark.parametrize('fast_switches', [True, False])
+@pytest.mark.parametrize('long_double', [True, False])
 def test_gesture_patches_round_trip_and_execute(
-    tmp_path: Path, fast_switches: bool
+    tmp_path: Path, fast_switches: bool, long_double: bool
 ) -> None:
     assert models.Setup().fast_switches is True
     root = Path(__file__).parents[1]
@@ -20,7 +21,7 @@ def test_gesture_patches_round_trip_and_execute(
     )
     patches = [
         dict(type='control-change', output='din', channel=1, controller=7, value=i)
-        for i in range(7)
+        for i in range(9 if long_double else 7)
     ]
     events = (
         'release',
@@ -29,7 +30,7 @@ def test_gesture_patches_round_trip_and_execute(
         'double_tap',
         'double_release',
         'repeat',
-    )
+    ) + (('long_double_tap', 'long_double_release') if long_double else ())
     show = {
         'fast_switches': fast_switches,
         'switches': {
@@ -63,7 +64,8 @@ def test_gesture_patches_round_trip_and_execute(
         check=True,
     )
     native_tests.run_native(
-        [str(executable), str(fixture), str(int(fast_switches))], check=True
+        [str(executable), str(fixture), str(int(fast_switches)), str(int(long_double))],
+        check=True,
     )
 
 
@@ -73,6 +75,8 @@ def test_gesture_patches_round_trip_and_execute(
         {'mode': 'latched', 'off': {'operation': 'brightness', 'value': 3}},
         {'gestures': {'long_release': {'operation': 'brightness', 'value': 3}}},
         {'gestures': {'double_release': {'operation': 'brightness', 'value': 3}}},
+        {'gestures': {'long_double_release': {'operation': 'brightness', 'value': 3}}},
+        {'gestures': {'long_double_tap': {'patch': 'missing'}}},
         {'gestures': {'debounce': '50 ms', 'double_delay': '10 ms'}},
         {'gestures': {'repeat_interval': 0}},
         {'gestures': {'repeat': {'patch': 'missing'}}},

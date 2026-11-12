@@ -196,6 +196,43 @@ def cc(controller: int, value: int) -> dict[str, object]:
     return {'controller': controller, 'value': value, 'output': 'din', 'channel': 1}
 
 
+@pytest.mark.parametrize('shifted', [False, True])
+@pytest.mark.parametrize('local', [False, True])
+def test_long_double_actions_round_trip_in_each_control_layer(
+    tmp_path: Path, binding_runner: Path, shifted: bool, local: bool
+) -> None:
+    action = {
+        'on': cc(7, 10),
+        'gestures': {'long_double_tap': cc(7, 100), 'long_double_release': cc(7, 0)},
+    }
+    if shifted:
+        action = {'on': cc(7, 10), 'shifted': action}
+    source = (
+        {'patches': {'test': {'bindings': {'A': action}}}}
+        if local
+        else {'switches': {'test': action | {'button': 'A'}}}
+    )
+    target = binding_target()
+    data = compiler.compile_show(source, {}, [], target)
+    assert (
+        compiler.compile_show(
+            tomlkit.parse(resolved.export(data)).unwrap(), {}, [], target
+        )
+        == data
+    )
+    if local:
+        data = compiler.compile_show(
+            {'patch_cycles': {'Show': [{'document': 'source', 'patch': 'test'}]}},
+            {},
+            [],
+            target,
+            documents={'source': source},
+        )
+    fixture = tmp_path / 'long-double.bin'
+    fixture.write_bytes(data)
+    subprocess.run([str(binding_runner), str(fixture), '--validate'], check=True)
+
+
 def binding_target() -> models.Target:
     target = models.Target.model_validate(
         compiler.read_document(Path('firmware/test/target.json'))

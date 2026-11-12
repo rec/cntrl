@@ -40,7 +40,7 @@ public:
     std::optional<uint16_t> debounce_ms(unsigned button) const {
         if (!open_ || closing_) return std::nullopt;
         for (unsigned i = 0; i < count_; ++i)
-            if (states_[i].record[0] == button && states_[i].settings) return u16(states_[i].settings + 12);
+            if (states_[i].record[0] == button && states_[i].settings) return u16(states_[i].settings + gesture_debounce_offset);
         return std::nullopt;
     }
     bool closing() const { return closing_; }
@@ -57,7 +57,7 @@ public:
             if (!s.shifted) continue;
             if (held_ & (1u << s.record[0])) continue;
             s.input_layer = shifted_ && s.shifted;
-            s.settings = s.input_layer ? (u16(s.shifted + 16) ? s.shifted + 4 : nullptr)
+            s.settings = s.input_layer ? (u16(s.shifted + 4 + gesture_debounce_offset) ? s.shifted + 4 : nullptr)
                 : gestures(s.record[0]);
             s.gesture.reset(s.settings);
         }
@@ -128,10 +128,10 @@ private:
             State &s = states_[i]; s.executor.cancel();
             if (!s.executor.retain_owner()) { hardware_.error("Switch delivery memory unavailable"); open_ = false; unpin(); return; }
             s.record = bindings_ ? bindings_.record(i) : document_.switch_assignment(i);
-            s.actions = s.record + 2; s.shifted = bindings_ ? (u16(s.record + 97) != 65535 ? s.record + 97 : nullptr) : document_.switch_shifted(s.record[0]);
+            s.actions = s.record + 2; s.shifted = bindings_ ? (u16(s.record + binding_shifted_offset) != 65535 ? s.record + binding_shifted_offset : nullptr) : document_.switch_shifted(s.record[0]);
             s.layer = s.input_layer = false;
             s.settings = gestures(s.record[0]);
-            s.hooks = bindings_ ? (u16(s.record + 92) != 65535 || u16(s.record + 94) != 65535 ? s.record + 92 : nullptr) : document_.switch_hooks(s.record[0]);
+            s.hooks = bindings_ ? (u16(s.record + binding_hooks_offset) != 65535 || u16(s.record + binding_hooks_offset + 2) != 65535 ? s.record + binding_hooks_offset : nullptr) : document_.switch_hooks(s.record[0]);
             if (s.hooks && (u16(s.hooks) != 65535 || u16(s.hooks + 2) != 65535)) hooks_enabled_ = true;
             if (s.shifted) hooks_enabled_ = true;
             for (unsigned layer = 0; layer < 2; ++layer) {
@@ -141,20 +141,21 @@ private:
             s.gesture.reset(s.settings); clear_queue(s);
             s.requested = s.active = s.unknown = s.failed = s.owned = false; s.presses = 0;
             s.resource_count = 0;
-            for (unsigned branch = 0; branch < 18; ++branch) {
-                unsigned layer = branch / 8, part = branch % 8, node = 65535;
-                if (branch < 16) {
+            constexpr unsigned layer_actions = 2 + gesture_event_count;
+            for (unsigned branch = 0; branch < 2 * layer_actions + 2; ++branch) {
+                unsigned layer = branch / layer_actions, part = branch % layer_actions, node = 65535;
+                if (branch < 2 * layer_actions) {
                     const uint8_t *actions = layer ? s.shifted : s.record + 2;
-                    const uint8_t *settings = layer ? (s.shifted && u16(s.shifted + 16) ? s.shifted + 4 : nullptr) : s.settings;
+                    const uint8_t *settings = layer ? (s.shifted && u16(s.shifted + 4 + gesture_debounce_offset) ? s.shifted + 4 : nullptr) : s.settings;
                     if (actions && part < 2) node = u16(actions + part * 2);
                     else if (settings) node = u16(settings + (part - 2) * 2);
-                } else if (s.hooks) node = u16(s.hooks + (branch - 16) * 2);
+                } else if (s.hooks) node = u16(s.hooks + (branch - 2 * layer_actions) * 2);
                 if (node == 65535) continue;
                 if (!s.executor.start(document_, node, s.record[1] != 0 || s.settings || s.hooks || s.shifted)) {
                     s.executor.cancel(); open_ = false; unpin(); return;
                 }
                 unsigned resources_count = s.executor.resource_count();
-                if (branch < 16 && part < 2) {
+                if (branch < 2 * layer_actions && part < 2) {
                     Pattern &pattern = part ? s.off[layer] : s.on[layer];
                     if (!capture(pattern, s.executor)) {
                         s.executor.cancel(); hardware_.error("Switch state memory exhausted"); open_ = false; unpin(); return;
@@ -208,7 +209,7 @@ public:
                 bool layer = shifted_;
                 if (s.input_layer != layer) {
                     s.input_layer = layer;
-                    s.settings = layer ? (u16(s.shifted + 16) ? s.shifted + 4 : nullptr)
+                    s.settings = layer ? (u16(s.shifted + 4 + gesture_debounce_offset) ? s.shifted + 4 : nullptr)
                         : gestures(button);
                     s.gesture.reset(s.settings);
                 }
@@ -403,7 +404,7 @@ private:
     const uint8_t *gestures(unsigned input) const {
         if (!bindings_) return document_.switch_gestures(input);
         const auto *p = bindings_.find(input);
-        return p && u16(p + 84) ? p + 72 : nullptr;
+        return p && u16(p + 72 + gesture_debounce_offset) ? p + 72 : nullptr;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_install_pending)

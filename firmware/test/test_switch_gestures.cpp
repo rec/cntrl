@@ -32,7 +32,8 @@ struct Board : TestPatchHardware {
 
 int main(int argc, char **argv) {
     cntrl::memory_budget = 192 * 1024;
-    assert(argc == 3);
+    assert(argc == 4);
+    const bool long_double = argv[3][0] == '1';
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
     Board board; cntrl::Document document;
@@ -46,7 +47,7 @@ int main(int argc, char **argv) {
     edge(true, 100); edge(false, 150); tick(469); assert(board.sent.empty());
     tick(470); assert((board.sent == std::vector<unsigned>{0, 1}));
     board.sent.clear(); edge(true, 1000); edge(false, 1050); edge(true, 1200);
-    assert((board.sent == std::vector<unsigned>{4}));
+    assert(board.sent == (long_double ? std::vector<unsigned>{} : std::vector<unsigned>{4}));
     edge(false, 1250); tick(2000);
     assert((board.sent == std::vector<unsigned>{4, 5}));
     // Exact hold threshold, paired release, and bounded repeats.
@@ -71,6 +72,20 @@ int main(int argc, char **argv) {
     assert(board.sent.empty());
     edge(true, 1302000); edge(false, 1302050); tick(1302370);
     assert((board.sent == std::vector<unsigned>{0, 1}));
+    if (long_double) {
+        // A held second press selects only its long-double action and release.
+        board.sent.clear(); edge(true, 1400000); edge(false, 1400050); edge(true, 1400200);
+        tick(1400719); assert(board.sent.empty());
+        tick(1400720); tick(1400900); assert((board.sent == std::vector<unsigned>{7}));
+        edge(false, 1401000); assert((board.sent == std::vector<unsigned>{7, 8}));
+        // Closing an undecided second press emits nothing.
+        board.sent.clear(); edge(true, 1500000); edge(false, 1500050); edge(true, 1500200);
+        switches.close(); tick(1500300); assert(board.sent.empty() && !switches.open());
+        // A recognized held second press is paired when its context closes.
+        switches.enter(document, 0);
+        edge(true, 1600000); edge(false, 1600050); edge(true, 1600200); tick(1600720);
+        switches.close(); tick(1600800); assert((board.sent == std::vector<unsigned>{7, 8}));
+    }
     // Extension node references must be validated by the native decoder.
     auto bad = bytes;
     unsigned address = unsigned(document.switch_gestures(0) - bytes.data());
@@ -91,7 +106,9 @@ int main(int argc, char **argv) {
     assert(!board.errors);
 
     // Recognition alone covers exact boundaries and the 32-bit clock wrap.
-    uint8_t settings[20]; std::memcpy(settings, document.switch_gestures(0), 20);
+    uint8_t settings[cntrl::gesture_record_size]; std::memcpy(settings, document.switch_gestures(0), sizeof(settings));
+    // Baseline gestures retain their original recognition times.
+    settings[12] = settings[13] = settings[14] = settings[15] = 255;
     cntrl::SwitchGestures gesture;
     std::vector<unsigned> events;
     auto recognize = [&](uint32_t now) { gesture.tick(now, true, [&](unsigned e) { events.push_back(e); }); };
@@ -112,8 +129,35 @@ int main(int argc, char **argv) {
     gesture.input(true, 0xfffffff0u); recognize(0xfffffff0u);
     recognize(484); assert((events == std::vector<unsigned>{2, 6}));
     // With release only, the press remains immediate after debouncing.
-    for (unsigned i = 1; i < 6; ++i) settings[i * 2] = settings[i * 2 + 1] = 255;
+    for (unsigned i = 1; i < cntrl::gesture_event_count; ++i) settings[i * 2] = settings[i * 2 + 1] = 255;
     gesture.reset(settings); events.clear(); gesture.input(true, 20); recognize(20);
     assert((events == std::vector<unsigned>{0}));
     gesture.input(false, 70); recognize(70); assert(events.back() == 1);
+
+    // Second-press thresholds use confirmed edge times, including wraparound.
+    std::memcpy(settings, document.switch_gestures(0), sizeof(settings));
+    settings[12] = 7; settings[13] = 0; settings[14] = 8; settings[15] = 0;
+    auto double_press = [&](uint32_t base) {
+        gesture.reset(settings); events.clear();
+        gesture.input(true, base); recognize(base);
+        gesture.input(false, base + 10); recognize(base + 10);
+        gesture.input(true, base + 100); recognize(base + 100);
+        assert(events.empty());
+    };
+    double_press(0); recognize(599); assert(events.empty());
+    gesture.input(false, 600); recognize(600);
+    assert((events == std::vector<unsigned>{7, 8}));
+    double_press(1000); gesture.input(false, 1599); recognize(1900);
+    assert((events == std::vector<unsigned>{4, 5}));
+    double_press(2000); gesture.cancel([&](unsigned event) { events.push_back(event); });
+    assert(events.empty());
+    double_press(0xfffffff0u); recognize(583); assert(events.empty());
+    recognize(584); recognize(1000); assert((events == std::vector<unsigned>{7}));
+    gesture.cancel([&](unsigned event) { events.push_back(event); });
+    assert((events == std::vector<unsigned>{7, 8}));
+    // The long double gesture also works without an ordinary double action.
+    settings[6] = settings[7] = 255;
+    double_press(3000); recognize(3600);
+    gesture.input(false, 3610); recognize(3610);
+    assert((events == std::vector<unsigned>{7, 8}));
 }
