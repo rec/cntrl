@@ -221,6 +221,69 @@ saved, but post-failure UART and watchdog status could not be read. That result
 does not establish UART overflow as the cause. Further MIDI traffic was stopped
 at that point to prepare restoration of normal firmware and the original setup.
 
+Data recovery initially finished on the retained normal format-41 image using
+newlib, without the bounded heap or qualification watchdog. Its HEX SHA-256 is
+`1757d72b2d42afb58b632d7bfcedd90f59493ada163a0295ccb0987f7cb3d2f3`.
+The normal image reported the older heap diagnostics and rejected `QUAL STATUS`,
+confirming the diagnostic image was no longer running. The uploader still
+returned a nonzero status after reset/disappearance; this was not a successful
+uploader attestation of the requested hash.
+
+The earlier format-36 image did not stay reachable with the newer saved data;
+the user chose the compatible normal format-41 recovery instead. Restore and
+verification used the matching CLI exported from `8e1f07f`, with its frozen
+dependencies, and the immutable `build/dynamic-memory-upgrade-backup` directory.
+The original format-36 backup was upgraded through that CLI's existing format-41
+restore path. Both setups, 15 history revisions, backed-up assets and songs
+were restored. The two qualification setups were removed, then the restore was
+repeated with only the original two entries to relink their setup-table indices.
+The final comparison passed with `simple-setup` selected and
+`CNTRL READY 41 25405 7ee6114a starts=83 starts_status=ready`.
+The startup count stayed at 83 during restoration and verification. The user
+then cycled from TRS Ports back to Patch Switcher and confirmed it was displayed.
+MIDI stress testing stopped; the communication failure is not considered fixed.
+
+The user then found that the region migration had changed the working page layout
+and controls. The normal image was rebuilt with the one-window tool policy in
+`b857268` and the legacy layout/control repair in `63f43ca`. The retained region
+architecture now keeps Patch Switcher on the left, tools on the right, and the
+old full-width Patch Switcher position in the F cycle. The user confirmed the
+layout and F cycle physically. The new image's HEX SHA-256 is
+`9d3a942d775a56a948c3ab73551fd4b39761862d3a170a36f37ef323e433d927`;
+the pedal returned with startup count 86. The first upload failed on a USB write;
+the second reached reset/disappearance with a nonzero uploader status again.
+
+The already-converted format-41 data retained its saved region layout, so the
+original format-36 backup was restored through the corrected upgrader. Existing
+history imports correctly rejected different bytes under the same revision
+number. With the user's approval, both converted history collections were
+cleared and their original 15 numbered revisions restored with their original
+dates and labels. The pre-repair format-41 backup is retained separately under
+`build/page-regions-normal-target/before/`.
+Final `cntrl setup verify` passed for selection, setups, history, backed-up
+assets and songs, reporting
+`CNTRL READY 41 25477 b32ccca8 starts=87 starts_status=ready`.
+
+To reproduce the recovery tooling without modifying the working checkout,
+export `git archive 8e1f07f` into a generated source directory under `build/`.
+Its `../reccy` editable dependency must point to the existing tracked sibling
+project; the local recovery used a generated `build/reccy` symlink to it. Run
+`uv sync --frozen` and the existing `cntrl setup restore`, `setup del` and
+`setup verify` commands from that export, using the normal image's `target.toml`.
+For the final page repair, overlay the `b857268` versions of
+`firmware/include/cntrl/page_layout.h`, `firmware/include/cntrl/document.h`,
+`cntrl/patch_switcher/models.py` and `cntrl/patch_switcher/layout.py`, then apply
+the `63f43ca` changes. Keep the remaining production sources at `8e1f07f` and use
+an SDK containing only that revision's declared patches, preserving newlib and
+normal reset behavior. The local export used a private SDK copy with the later
+UART diagnostic patch reversed. Build through `cntrl build`, then use
+`cntrl flash --skip-build` and the existing upload helper if the first upload
+fails. The repaired data must come from the original format-36 backup through
+this export's `cntrl setup restore`, not the already-converted format-41 backup.
+Source exports, virtual environments, decoded images, reports and dependency
+symlinks under `build/` are disposable derivatives of tracked sources, not the
+only copies of recovery implementation code. Preserve the original data backup.
+
 The separate `qualification/dynamic-memory-dense.toml` setup has 24 parallel
 USB-to-DIN routes with 16 identity transforms each, plus a DIN-to-USB return
 route. Copy and select it with the same setup commands, then run:
