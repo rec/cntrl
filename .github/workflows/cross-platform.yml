@@ -56,6 +56,8 @@ jobs:
             cntrl/build/freetype
             cntrl/cntrl/**/firmware/.tools
           key: native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.profile }}-${{ hashFiles('cntrl/uv.lock', 'cntrl/cntrl/fonts/provision.py', 'cntrl/cntrl/**/toolchain.py', 'cntrl/cntrl/**/*.patch') }}
+      - name: Use HTTPS for public GitHub dependencies
+        run: git config --global url.https://github.com/.insteadOf ssh://git@github.com/
       - name: Install locked dependencies
         run: uv sync --frozen --group dev --extra emulator --no-editable
       - name: Provision pinned native rasterizer
