@@ -59,6 +59,9 @@ jobs:
       - name: Use HTTPS for public GitHub dependencies
         run: git config --global url.https://github.com/.insteadOf ssh://git@github.com/
       - name: Install locked dependencies
+        env:
+          # middy's native CoreMIDI backend requires macOS 11 or later.
+          MACOSX_DEPLOYMENT_TARGET: '11.0'
         run: uv sync --frozen --group dev --extra emulator --no-editable
       - name: Provision pinned native rasterizer
         run: uv run --no-sync python -m cntrl.fonts.provision
