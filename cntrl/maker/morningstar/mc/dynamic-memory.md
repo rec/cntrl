@@ -264,6 +264,19 @@ Final `cntrl setup verify` passed for selection, setups, history, backed-up
 assets and songs, reporting
 `CNTRL READY 41 25477 b32ccca8 starts=87 starts_status=ready`.
 
+The Expression page update in `ca33347` was then overlaid on this normal recovery
+source and built under `build/expression-dirty-normal-target/`. Its HEX SHA-256 is
+`e48514e4a0d0f7bf12bd18ed5103863e222c50b717b0413e488890085441cc83`.
+The approved `cntrl flash --skip-build` flow saved a fresh `before/` backup and
+prepared `restore/`. The first upload hit the same USB write failure; the
+`cntrl upload-helper` retry reached reset/disappearance, again with nonzero
+uploader status. The pedal returned with startup count 88, and
+`cntrl setup verify` against `restore/` confirmed both setups, all 15 history
+revisions, backed-up assets, songs and selection unchanged. No restore writes
+were necessary. The user confirmed a smooth TRS Ports to Expression transition
+and readable fixed-layout text. The two previously unreadable, unreferenced
+movie files remained unavailable to the backup, as before.
+
 To reproduce the recovery tooling without modifying the working checkout,
 export `git archive 8e1f07f` into a generated source directory under `build/`.
 Its `../reccy` editable dependency must point to the existing tracked sibling
@@ -273,7 +286,8 @@ project; the local recovery used a generated `build/reccy` symlink to it. Run
 For the final page repair, overlay the `b857268` versions of
 `firmware/include/cntrl/page_layout.h`, `firmware/include/cntrl/document.h`,
 `cntrl/patch_switcher/models.py` and `cntrl/patch_switcher/layout.py`, then apply
-the `63f43ca` changes. Keep the remaining production sources at `8e1f07f` and use
+the `63f43ca` changes and, for the Expression update, the production changes in
+`ca33347`. Keep the remaining production sources at `8e1f07f` and use
 an SDK containing only that revision's declared patches, preserving newlib and
 normal reset behavior. The local export used a private SDK copy with the later
 UART diagnostic patch reversed. Build through `cntrl build`, then use
