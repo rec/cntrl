@@ -20,6 +20,9 @@ dependencies = [
 [project.scripts]
 cntrl = "cntrl.patch_switcher.cli:main"
 
+[project.optional-dependencies]
+emulator = ["pyside6-essentials>=6.10", "middy>=0.2.0"]
+
 [dependency-groups]
 dev = [
     "pytest",
@@ -44,4 +47,9 @@ line-length = 88
 quote-style = "single"
 
 [tool.uv.sources]
-reccy = { path = "../reccy", editable = true }
+reccy = { git = "https://github.com/rec/reccy.git", rev = "a2bbdc5daadcbf18660f2f184e2a38ea1903c6a0" }
+middy = { git = "https://github.com/rec/middy.git", rev = "6c064b8e692b7b2fddfcdef779a86930cd1df676" }
+
+[tool.uv]
+# middy's declared Git source is replaced by the same root-pinned reccy source.
+override-dependencies = ["reccy>=0.2.0"]

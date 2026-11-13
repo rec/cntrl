@@ -1,11 +1,13 @@
 """Manually dispatched host qualification, logs and reproducible provenance."""
 
 import hashlib
+import json
 import os
 import platform
 import shutil
 import subprocess
 import sys
+from importlib.metadata import distribution
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -42,9 +44,7 @@ def run(options: QualificationRun) -> None:
         'revision': subprocess.check_output(
             ['git', 'rev-parse', 'HEAD'], text=True
         ).strip(),
-        'dependency_revision': subprocess.check_output(
-            ['git', '-C', '../reccy', 'rev-parse', 'HEAD'], text=True
-        ).strip(),
+        'dependency_revision': dependency_revision('reccy'),
         'os': platform.platform(),
         'architecture': platform.machine(),
         'python': sys.version,
@@ -142,15 +142,28 @@ def execute(
         raise subprocess.CalledProcessError(result.returncode, command)
 
 
+def dependency_revision(name: str) -> str:
+    metadata = distribution(name).read_text('direct_url.json')
+    if metadata is None:
+        raise ValueError(f'{name}: qualification requires a pinned Git installation')
+    record = json.loads(metadata)
+    if (
+        not isinstance(record, dict)
+        or not isinstance(vcs := record.get('vcs_info'), dict)
+        or not isinstance(revision := vcs.get('commit_id'), str)
+    ):
+        raise ValueError(f'{name}: installed Git revision metadata is missing')
+    return revision
+
+
 def wheel_smoke(root: Path, output: Path) -> None:
     wheels = output / 'wheels'
     wheels.mkdir(exist_ok=True)
-    for name, source in [('cntrl', root), ('reccy', root.parent / 'reccy')]:
-        execute(
-            ['uv', 'build', '--wheel', str(source), '--out-dir', str(wheels)],
-            output / f'wheel-{name}.log',
-            root,
-        )
+    execute(
+        ['uv', 'build', '--wheel', str(root), '--out-dir', str(wheels)],
+        output / 'wheel-cntrl.log',
+        root,
+    )
     requirements = output / 'requirements.txt'
     execute(
         [
@@ -159,8 +172,6 @@ def wheel_smoke(root: Path, output: Path) -> None:
             '--frozen',
             '--no-dev',
             '--no-emit-project',
-            '--no-emit-package',
-            'reccy',
             '--output-file',
             str(requirements),
         ],

@@ -1,8 +1,14 @@
 # Host development and qualification
 
-Use Python 3.13 and `uv`. Check out this repository beside the compatible
-`reccy` checkout and run `uv sync --frozen --group dev`. The workflow pins that
-dependency to `5d7e42b47ed8b14fba185a6be1581a013ccd9a67`.
+Use Python 3.13 and `uv`. Run
+`uv sync --frozen --group dev --extra emulator --no-editable` from this checkout
+for development and complete type checks. The lockfile pins reccy and middy to
+Git revisions; no sibling checkout or editable dependency is required. The
+optional emulator extra supplies GUI/MIDI packages and can be omitted for tools
+that do not use the desktop emulator. Qualification records the installed
+reccy revision and installs its locked source during the isolated wheel check.
+These two dependency sources use HTTPS so clean CI runners do not need SSH
+credentials. This repository's Git origin remains on SSH.
 
 Provision FreeType 2.14.3 after syncing dependencies so font pixels match the
 committed assets. This uses CMake and the host compiler, downloads digest-checked
@@ -14,7 +20,7 @@ host, preserving the committed pixels on Windows without changing FreeType's
 public ABI. Pillow remains available for image and animation conversion.
 
 ```sh
-uv run --frozen python -m cntrl.fonts.provision
+uv run --no-sync python -m cntrl.fonts.provision
 ```
 
 Generated sources/build outputs live in `build/freetype`; the tracked provisioning
@@ -29,14 +35,18 @@ with the developer command environment active. All hosts require CMake and Git.
 macOS requires Xcode command line tools; Linux requires GCC/G++. No Unix shell
 or make is required on Windows.
 
+Linux emulator development also needs the MIDI development libraries
+`libasound2-dev`, `libudev-dev` and `pkg-config`; offscreen GUI tests require
+`libegl1` and `libopengl0`. The qualification workflow installs these packages.
+
 Run common checks from the repository root:
 
 ```sh
-uv run --frozen python -m scripts.ci --profile core
+uv run --no-sync python -m scripts.ci --profile core
 ```
 
 Type checking can target another host without that operating system installed,
-for example `uv run --frozen ty check --python-platform win32 cntrl`. This checks
+for example `uv run --no-sync ty check --python-platform win32 cntrl`. This checks
 platform-specific Python APIs; native execution still requires the matrix.
 
 The full profile additionally requires `--target-dir path/to/implementation`.
