@@ -20,6 +20,7 @@ def test_capabilities_compile_without_an_implementation(
     assert isinstance(data, dict)
     data['memory'] = {'capacity': 803840, 'runtime': 120000}
     data['buttons'] = buttons
+    data['controls'] = {'previous_page': buttons[-1] if buttons else None}
     data['usb_block_size'] = 256
     data['displays'] = [
         {'id': f'view-{i}', 'label': f'View {i}', 'width': 177 + i, 'height': 131}
@@ -49,5 +50,13 @@ def test_capabilities_compile_without_an_implementation(
         check=True,
     )
     native_tests.run_native(
-        [str(executable), '803840', '177', str(count), str(len(buttons))], check=True
+        [
+            str(executable),
+            '803840',
+            '177',
+            str(count),
+            str(len(buttons)),
+            str(len(buttons) - 1 if buttons else 4294967295),
+        ],
+        check=True,
     )

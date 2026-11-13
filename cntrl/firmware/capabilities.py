@@ -1,8 +1,9 @@
 """Generate firmware capability data from the host compiler's target model."""
 
 import json
+from typing import get_args
 
-from ..patch_switcher.models import Target
+from ..patch_switcher.models import Target, TrsMode
 
 
 def header(target: Target) -> str:
@@ -83,11 +84,24 @@ def header(target: Target) -> str:
     port_count = max(
         (e.port + 1 for e in target.midi_endpoints if e.port is not None), default=0
     )
+    modes = list(get_args(TrsMode))
+    port_modes = [1] * port_count
+    for endpoint in target.midi_endpoints:
+        if endpoint.port is not None:
+            for mode in target.trs_ports.get(endpoint.name, []):
+                port_modes[endpoint.port] |= 1 << modes.index(mode)
     lines.extend(
         [
             'inline constexpr midi::Outputs '
             f'cable_connections{{cable_endpoints.data(), {cable_count}}};',
             f'inline constexpr unsigned port_count = {port_count};',
+            'inline constexpr std::array<unsigned, port_count> trs_mode_masks = {',
+            '    ' + ', '.join(str(m) for m in port_modes),
+            '};',
+            'inline constexpr std::array<const char *, '
+            f'{len(target.relay_outputs)}> relay_names = {{{{',
+            *[f'    {json.dumps(n)},' for n in target.relay_outputs],
+            '}};',
             'inline constexpr std::array<ui::ControlBinding, button_count> '
             'control_bindings = {{',
         ]
@@ -110,7 +124,13 @@ def header(target: Target) -> str:
         lines.append(f'    {index},')
     lines.extend(
         [
-            '    control_bindings.data(), button_count};',
+            '    control_bindings.data(), button_count, '
+            + (
+                str(target.buttons.index(target.controls.previous_page))
+                if target.controls.previous_page is not None
+                else 'ui::Controls::absent'
+            )
+            + '};',
             '} // namespace cntrl::target',
             '',
         ]

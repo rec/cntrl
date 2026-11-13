@@ -28,6 +28,26 @@ class EmbeddedRaster(NativeRaster):
         return glyph.model_copy(update={'top': glyph.top + self.tables[size][2][-1]})
 
 
+def embedded_font(path: Path, name: str, face: int) -> bytes:
+    """Prepare the same neutral font asset for firmware and desktop execution."""
+    raster = EmbeddedRaster(path, name)
+    ascii_text = ''.join(chr(c) for c in range(32, 127))
+    selected = {s: list(ascii_text) for s in raster.tables}
+    metrics = native_face(path.read_text(), name, face).sizes
+    embedded_metrics = {
+        s: models.FontMetrics(line_height=m.line_height, top=raster.tables[s][2][-1])
+        for s, m in metrics.items()
+    }
+    return pack(
+        raster,
+        selected,
+        embedded_metrics,
+        runtime_characters=ascii_text,
+        hinted_advances=True,
+        prepared_runs=False,
+    )
+
+
 def export(options: FontExport) -> dict[str, str]:
     options.output.mkdir(parents=True, exist_ok=True)
     sources = {}
@@ -47,10 +67,10 @@ def export(options: FontExport) -> dict[str, str]:
             if face < 3
             else options.generated / f'font_{native}.cpp'
         )
-        raster = NativeRaster(path, native)
-        selected = {s: list(ascii_text) for s in raster.tables}
-        metrics = native_face(path.read_text(), native, face).sizes
         if face < 3:
+            raster = NativeRaster(path, native)
+            selected = {s: list(ascii_text) for s in raster.tables}
+            metrics = native_face(path.read_text(), native, face).sizes
             data = pack(
                 raster,
                 selected,
@@ -64,21 +84,7 @@ def export(options: FontExport) -> dict[str, str]:
             sources[name] = resource
         if name not in options.ui_fonts:
             continue
-        embedded_metrics = {
-            s: models.FontMetrics(
-                line_height=m.line_height, top=raster.tables[s][2][-1]
-            )
-            for s, m in metrics.items()
-        }
-        data = pack(
-            EmbeddedRaster(path, native),
-            selected,
-            embedded_metrics,
-            runtime_characters=ascii_text,
-            hinted_advances=True,
-            prepared_runs=False,
-        )
-        embedded[name] = data
+        embedded[name] = embedded_font(path, native, face)
     prefix = (
         '#if defined(__IMXRT1062__)\n'
         '#define CNTRL_UI_FONT_STORAGE __attribute__((section(".progmem")))\n'

@@ -101,8 +101,7 @@ public:
         uint64_t stream_time = extend(s.microseconds());
         for (const auto &endpoint : s.midi_outputs()) {
             if (endpoint.route >= generations_.size()) continue;
-            bool present = endpoint.transport == OutputTransport::physical
-                || (endpoint.transport == OutputTransport::usb_host ? s.midi_host_connected() : s.midi_device_connected());
+            bool present = endpoint_connected(s,endpoint,0);
             uint64_t identity = endpoint_identity(s, endpoint.route, 0);
             uint64_t generation = endpoint_generation(s, endpoint.route, 0);
             if (!present || generation != generations_[endpoint.route] || !bridge.usb_enabled(endpoint.route)) text_messages.forget(endpoint.route);
@@ -349,6 +348,15 @@ private:
     uint64_t extend(uint32_t now) {
         stream_time_ += uint32_t(now - previous_time_); previous_time_ = now;
         return stream_time_;
+    }
+    template<class Services>
+    static auto endpoint_connected(Services &s, const OutputConnection &endpoint, int) -> decltype(s.midi_endpoint_connected(endpoint.route)) {
+        return s.midi_endpoint_connected(endpoint.route);
+    }
+    template<class Services>
+    static bool endpoint_connected(Services &s, const OutputConnection &endpoint, long) {
+        return endpoint.transport == OutputTransport::physical
+            || (endpoint.transport == OutputTransport::usb_host ? s.midi_host_connected() : s.midi_device_connected());
     }
     template<class Services>
     static auto endpoint_identity(Services &s, unsigned route, int) -> decltype(s.midi_endpoint_identity(route)) {

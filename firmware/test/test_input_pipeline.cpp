@@ -52,6 +52,7 @@ struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServi
 };
 struct Actions {
     cntrl::ui::Application &application;
+    std::vector<bool> page_directions{};
     bool controls_locked() const { return application.controls_locked; }
     bool menu_open() const { return application.menu.open(); }
     bool setup_open() const { return application.setups.open(); }
@@ -59,7 +60,7 @@ struct Actions {
     bool switches_open() const { return false; }
     void switch_button(unsigned, bool, uint32_t) {}
     void invoke(cntrl::ui::Operation) { assert(false); }
-    void browse(bool) {}
+    void browse(bool reverse) { page_directions.push_back(reverse); }
     bool midi_reserved() const { return false; }
     bool keyboard(unsigned, bool) { return false; }
     bool monitor(unsigned, bool) { return false; }
@@ -208,7 +209,24 @@ static void navigation_snapshots_are_counted_and_failure_preserves_state(const s
     assert(controller.navigation(saved));
     cntrl::memory_budget = budget;
 }
+static void independent_page_switches_browse_on_press_without_a_chord() {
+    Hardware hardware; TestStorage setups, song_storage;
+    cntrl::Controller primary(hardware, hardware, hardware);
+    cntrl::Documents documents(setups, hardware, primary, hardware);
+    cntrl::Songs songs(song_storage, hardware);
+    cntrl::ui::Application application(hardware, documents, primary, hardware, hardware, songs, hardware, false);
+    Actions actions{application};
+    cntrl::ui::Controls controls; controls.count = 2;
+    controls.previous_page = 0; controls.next_page = 1;
+    cntrl::ui::ControlRouter router(controls);
+    uint8_t previous[2] = {cntrl::press_event, 0}, next[2] = {0, cntrl::press_event};
+    router.route(actions, previous, 1, 0); router.route(actions, next, 2, 1);
+    previous[0] = cntrl::release_event; next[1] = cntrl::release_event;
+    router.route(actions, previous, 0, 2); router.route(actions, next, 0, 3);
+    assert((actions.page_directions == std::vector<bool>{true, false}));
+}
 int main(int argc, char **argv) {
+    independent_page_switches_browse_on_press_without_a_chord();
     {
         const unsigned initial = cntrl::memory_used, budget = cntrl::memory_budget;
         cntrl::memory_budget = initial + 16384;

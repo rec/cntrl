@@ -56,6 +56,11 @@ inline constexpr std::array<midi::OutputConnection, 2> cable_endpoints = {{
 }};
 inline constexpr midi::Outputs cable_connections{cable_endpoints.data(), 2};
 inline constexpr unsigned port_count = 4;
+inline constexpr std::array<unsigned, port_count> trs_mode_masks = {
+    31, 31, 31, 31
+};
+inline constexpr std::array<const char *, 0> relay_names = {{
+}};
 inline constexpr std::array<ui::ControlBinding, button_count> control_bindings = {{
     {2, "A"},
     {1, "B"},
@@ -74,5 +79,5 @@ inline constexpr ui::Controls controls{
     5,
     3,
     2,
-    control_bindings.data(), button_count};
+    control_bindings.data(), button_count, ui::Controls::absent};
 } // namespace cntrl::target

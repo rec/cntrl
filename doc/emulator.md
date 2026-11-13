@@ -1,0 +1,123 @@
+# Desktop controller emulator
+
+The emulator runs cntrl's shared C++ application in a native host process. A
+Python/PySide6 window supplies the controls and shows the production renderer's
+pixels. It does not run an ARM image or a manufacturer's original firmware.
+
+Install from the source checkout, including the optional desktop/MIDI packages:
+
+```sh
+uv sync --frozen --extra emulator --no-editable
+```
+
+The GUI uses the official PySide6 Essentials package; web-engine and other Qt
+add-ons are not required. Reccy and middy come from the Git revisions in the
+lockfile, without editable or sibling-directory dependencies. A native C++17
+compiler is required: `c++` on macOS/Linux or `cl` in a Windows developer shell.
+
+## Three separate inputs
+
+- The existing controller catalogue describes controls, displays and ports.
+- An emulator layout TOML places catalogue components on a dimensionless canvas.
+  It references controls and displays by their existing IDs. It does not assign
+  MIDI actions or redefine native pixel resolution.
+- A cntrl execution target supplies supported application capabilities, input
+  bindings, native viewports and exported fonts. Compile setups against that
+  target. A catalogue entry alone does not supply an execution implementation.
+
+Start an interactive session with explicit layout, target, compiled CSTB setup
+bundle and mutable storage directory:
+
+```sh
+uv run --no-sync cntrl emulate --layout controller-layout.toml --target target.toml --setup setup.bin --storage session --source-root .
+```
+
+The native executable and generated target/font headers are built under
+`session/.emulator-build`. Generated outputs can be recreated from the checkout
+and execution target. The session directory supplies the emulated filesystem;
+no SD card, formatting operation or connected pedal is involved. Reopen the same
+directory to retain its saved data; choose a new directory for a fresh session.
+Fonts and movies exported beside the compiled bundle are imported into the
+session through the existing asset formats. Put referenced MIDI files under
+the session's `midi/` directory before playing them.
+
+See the [Morningstar profiles](../cntrl/maker/morningstar/mc/emulator/README.md)
+for the initial six-switch/three-display and eight-switch/four-display layouts.
+
+## Controls and inspectors
+
+Press a switch with the mouse or its labelled keyboard key. Auto-repeat does
+not generate repeated presses. Shift-click or right-click latches a switch so
+chords and holds can be operated with one mouse. Leaving the window releases
+held controls through the normal input path.
+
+The inspector provides virtual MIDI injection, output blocking, connection
+state, manual time stepping, expression/auxiliary inputs and display snapshots.
+The enclosure drawing retains
+its aspect ratio when resized, and each display retains its native aspect ratio
+and pixels within its placement rectangle. The inspectors do not take firmware
+display windows.
+
+Host MIDI connections use middy and are opened only after explicit selection.
+Loading a profile does not connect or send to a real MIDI destination. MIDI
+captured from the runtime records acceptance by the emulated output transport;
+it is not acknowledgement from a synthesizer. The emulator uses only the setup's
+explicit `[midi]` routes for incoming MIDI. It does not infer the physical
+adapter's legacy USB/DIN forwarding connections or echo input back to itself.
+
+Built-in controller features that the selected execution backend cannot service
+are rejected explicitly. The generic layout model has no six/eight-switch or
+three/four-display limit. The initial cntrl backend retains its existing eight
+physical-input, five assignable switch-slot and sixteen-route limits. Numeric
+and character-display backends and built-in relative/absolute control bindings
+require additional application support; they are not silently mapped to buttons.
+
+## Deterministic replay
+
+The same native process and input path serve interactive and headless operation.
+A TOML scenario selects a random seed, ordered input events and an end time.
+Save replay exports the inputs from the current session. Replaying requires the
+same target, bundle and initial session state; use fresh session directories
+for independent reproducible runs, or preserve a copy of an existing session
+before recording changes to it.
+Times accept the project's duration notation. Events with the same timestamp
+are applied in file order. Advancing time never rewinds the runtime.
+
+```toml
+seed = 17
+until = '1 second'
+
+[[events]]
+at = '20 milliseconds'
+kind = 'button'
+target = 'a'
+value = 1
+
+[[events]]
+at = '120 milliseconds'
+kind = 'button'
+target = 'a'
+value = 0
+```
+
+Other event kinds are `midi` (`target` endpoint name and `data` byte list),
+`block` (`target` output name and `value` zero/one), `connection` (`target`
+endpoint and `value` zero/one), `expression` (`target` port slot as text and
+`value` raw 0..1023), `auxiliary` (`target` port slot and `value` contact mask
+0..3), `cleanup`, and `text` (`text` ASCII cue and optional `value = 1` for
+warning). Input follows production debounce and scheduling;
+a press/release at one instant is not a debounced physical press.
+
+```sh
+uv run --no-sync cntrl emulate --layout controller-layout.toml --target target.toml --setup setup.bin --storage replay-session --source-root . --scenario scenario.toml --output replay-results
+```
+
+Replay exports a PNG for each display and an accepted-output/error trace in
+`trace.toml`. Use a fresh session directory when comparing independent scenarios.
+
+## Evidence limits
+
+Native operation can reproduce application behavior, rendering, messages,
+storage policies and MIDI scheduling under the injected conditions. It does not
+qualify physical USB/DIN timing, wiring, display quality, MCU memory layout,
+interrupts, DMA, power loss or firmware bootability on an unowned controller.

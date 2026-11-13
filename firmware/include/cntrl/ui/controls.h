@@ -16,6 +16,7 @@ struct Controls {
     unsigned next_page = absent, reverse_page = absent, tap = absent;
     const ControlBinding *bindings = nullptr;
     unsigned count = 0;
+    unsigned previous_page = absent;
 };
 class ControlRouter {
 public:
@@ -57,6 +58,10 @@ public:
                 if (!services.midi_reserved() && (press || release) && services.looper(i, press)) continue;
                 if (i == controls_.next_page) {
                     if (press) services.browse(false);
+                    continue;
+                }
+                if (i == controls_.previous_page) {
+                    if (press) services.browse(true);
                     continue;
                 }
                 if (i == controls_.reverse_page && controls_.next_page < 64

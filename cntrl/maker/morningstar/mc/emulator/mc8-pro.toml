@@ -1,0 +1,21 @@
+catalogue = '../mc.toml'
+controller = 'mc8_pro'
+width = 132
+height = 70
+provisional = true
+
+[controls]
+a = {x = 12, y = 54, width = 12, height = 12}
+b = {x = 44, y = 54, width = 12, height = 12}
+c = {x = 76, y = 54, width = 12, height = 12}
+d = {x = 108, y = 54, width = 12, height = 12}
+e = {x = 12, y = 4, width = 12, height = 12}
+f = {x = 44, y = 4, width = 12, height = 12}
+g = {x = 76, y = 4, width = 12, height = 12}
+h = {x = 108, y = 4, width = 12, height = 12}
+
+[displays]
+lcd-1 = {x = 4, y = 22, width = 28, height = 24}
+lcd-2 = {x = 36, y = 22, width = 28, height = 24}
+lcd-3 = {x = 68, y = 22, width = 28, height = 24}
+lcd-4 = {x = 100, y = 22, width = 28, height = 24}

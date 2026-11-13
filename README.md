@@ -9,6 +9,9 @@
 See [installation and host qualification](doc/cross-platform.md) for macOS,
 Windows and Linux development setup.
 
+Use the [desktop emulator](doc/emulator.md) to exercise the shared application
+with a controller layout, virtual MIDI and local session storage without a pedal.
+
 ## What is `cntrl`?
 
 It's a toolkit in Python and C designed to help build new interfaces and firmwave for

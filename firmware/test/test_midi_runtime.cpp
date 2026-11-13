@@ -140,6 +140,22 @@ void test_rotating_sources_and_delivery_precede_file_work() {
     runtime.poll(services);
     assert((services.reads == std::vector<unsigned>{0, 1, 2, 1, 2, 0}));
 }
+void virtual_endpoints_report_physical_disconnect_and_reconnect() {
+    struct VirtualServices : Services {
+        VirtualServices() : Services(0) {}
+        bool wire_connected = true;
+        bool midi_endpoint_connected(unsigned route) const { return route != 0 || wire_connected; }
+    } services;
+    cntrl::midi::Runtime runtime;
+    assert(runtime.monitor().open(0));
+    runtime.poll(services);
+    services.wire_connected = false; runtime.poll(services);
+    const auto *disconnected = runtime.monitor().entry(runtime.monitor().tail() - 1);
+    assert(disconnected && disconnected->route == 0 && (disconnected->flags & cntrl::midi::Monitor::disconnected));
+    services.wire_connected = true; runtime.poll(services);
+    const auto *connected = runtime.monitor().entry(runtime.monitor().tail() - 1);
+    assert(connected && connected->route == 0 && (connected->flags & cntrl::midi::Monitor::connected));
+}
 void test_time_budget_zero_sources_and_failure_edges() {
     Services services(5);
     cntrl::midi::Runtime runtime(1, 180);
@@ -410,6 +426,7 @@ void uart_loss_diagnostics_preserve_unsigned_counts_across_reset() {
 }
 int main() {
     cntrl::memory_budget = 524288;
+    virtual_endpoints_report_physical_disconnect_and_reconnect();
     uart_loss_diagnostics_preserve_unsigned_counts_across_reset();
     stream_status_preserves_all_failure_bits_and_following_fields();
     service_gap_reports_external_stalls_and_resets_across_timer_wrap();

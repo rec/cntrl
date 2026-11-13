@@ -1216,6 +1216,7 @@ class TargetControls(BaseModel, frozen=True):
     next_section: str | None = None
     back: str | None = None
     next_page: str | None = None
+    previous_page: str | None = None
     reverse_page: str | None = None
     tap: str | None = None
     app_actions: dict[

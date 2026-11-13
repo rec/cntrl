@@ -1,7 +1,15 @@
 # Reconfigurable MIDI controller emulator
 
-Status: proposed. Implement one emulator that can represent different MIDI
-controllers, starting with the current MC6 Pro and an MC8 Pro profile. Adding a
+Status: implemented with the shared native runtime and optional PySide6/middy
+frontend. Usage is documented in `doc/emulator.md`; the initial profile exports
+and layouts are under `cntrl/maker/morningstar/mc/emulator/`. A macOS interactive
+smoke check verified both profile layouts, virtual switch MIDI output, latched
+chords, release-all and 10 ms manual time stepping. Physical host MIDI and the
+Linux/Windows desktop paths remain to be qualified. The MC8 Pro profile has
+explicitly provisional geometry.
+
+Implement one emulator that can represent different MIDI controllers, starting
+with the current MC6 Pro and an MC8 Pro profile. Adding a
 controller with supported features should require data, rather than a separate
 application. New kinds of controls, displays or behavior can require software.
 
@@ -253,17 +261,33 @@ can exercise admission failures but cannot reproduce the ARM allocator or memory
 layout exactly. Existing physical qualification remains necessary for those
 properties.
 
-## Decisions before implementation
+## Implementation decisions
 
-- Select the desktop GUI toolkit after confirming its macOS/Linux/Windows
-  support and integration with the native process. Do not add a GUI or MIDI
-  dependency during this planning change.
-- Resolve authoritative display geometry, input/action bindings and which MC8
-  Pro claims can be made with the available evidence. Treat provisional profiles
-  explicitly rather than presenting them as verified device support.
-- Define the bounded frontend/native message contract and equal-timestamp replay
-  ordering while implementing the first backend. Use one communication path
-  for interactive and headless operation.
+- Use PySide6 Essentials for the GUI and middy for explicit host MIDI access,
+  installed through the optional `emulator` extra. Pin reccy and middy to Git
+  revisions; do not use editable dependencies or sibling-directory paths.
+- Keep the MC6 Pro's current usable viewports and create a provisional MC8 Pro
+  profile with eight switches and four 160×128 virtual viewports. G/H select
+  previous/next page independently. The catalogue's unresolved physical display
+  dimensions are unchanged.
+- Frame local process messages with a little-endian payload length and opcode,
+  bounded to 65,536 bytes, and acknowledge each command. Display rectangles use
+  the existing column-major RGB565 big-endian format. Input requests, display
+  updates, accepted MIDI, relay states and errors share this communication path
+  in interactive and headless operation. Bound response waits and terminate an
+  unresponsive native process rather than leaving the GUI blocked indefinitely.
+- Use existing CSTB compiler output and the production bundle/storage policies,
+  including cross-setup references, history, fonts and movies. No alternate
+  emulator setup format or raw-CSW1 compatibility path is introduced.
+- Apply equal-timestamp events in TOML order. Record inputs and the random seed
+  for export through Save replay. Use the same initial target, bundle and session
+  state when replaying a recording.
+- Route incoming MIDI only through explicit setup `[midi]` routes. Do not infer
+  the physical adapter's legacy USB/DIN wiring, and do not echo injected input.
+- Original firmware execution and USB HID keyboard output remain unsupported
+  platform features. Other unsupported controller component kinds are reported
+  explicitly; the generic layout records retain their hardware-independent
+  shape for later execution adapters.
 
 ## Additional work beyond the prompt
 

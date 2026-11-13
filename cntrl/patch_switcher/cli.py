@@ -14,6 +14,7 @@ import tyro
 from pydantic import BaseModel, Field
 
 from .. import build, flash, qualify, upload
+from ..emulator.cli import Emulate, emulate
 from . import (
     backups,
     compiler,
@@ -585,11 +586,14 @@ def main() -> None:
         | Annotated[build.Build, tyro.conf.subcommand(name='build')]
         | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
         | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
-        | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')],
+        | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')]
+        | Annotated[Emulate, tyro.conf.subcommand(name='emulate')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
-        if isinstance(command, qualify.Qualify):
+        if isinstance(command, Emulate):
+            emulate(command)
+        elif isinstance(command, qualify.Qualify):
             qualify.run(command)
         elif isinstance(command, upload.Helper):
             upload.run(command)
