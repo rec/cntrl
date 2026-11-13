@@ -114,7 +114,7 @@ def section_end(data: bytes, offset: int) -> int:
 
 
 def upgrade(data: bytes, offset: int) -> bytes:
-    """Preserve legacy page order in one region with the new allocation rules."""
+    """Keep the legacy single-switcher view beside its independently cycling tools."""
     end = section_end(data, offset)
     if data[offset + 6] == 2:
         return data[offset:end]
@@ -129,7 +129,45 @@ def upgrade(data: bytes, offset: int) -> bytes:
             else b''
         )
     )
-    unpack(converted, 0)
+    settings = models.Setup.model_validate(unpack(converted, 0))
+    switchers = [n for n, p in settings.pages.items() if p.type == 'patch-switcher']
+    if len(switchers) == 1 and windows >= 2:
+        if count == 255:
+            raise ValueError(
+                'legacy page layout has no room for the full-performance page'
+            )
+        switcher = switchers[0]
+        pages = dict(settings.pages)
+        pages[switcher] = pages[switcher].model_copy(
+            update={'min_windows': min(pages[switcher].min_windows, 1)}
+        )
+        placeholder, suffix = 'full-performance', 2
+        while placeholder in pages:
+            placeholder = f'full-performance-{suffix}'
+            suffix += 1
+        pages[placeholder] = models.Page(
+            type='None', give_up_windows=pages[switcher].give_up_windows
+        )
+        tools = [placeholder if n == switcher else n for n in settings.pages]
+        settings = settings.model_copy(
+            update={
+                'pages': pages,
+                'regions': {
+                    'performance': models.PageRegion(pages=[switcher]),
+                    'tools': models.PageRegion(pages=tools),
+                },
+                'layout': models.PageLayout(
+                    order=['performance', 'tools'], focus='tools'
+                ),
+            }
+        )
+        names = [
+            data[offset + 8 + i * 32 : offset + 40 + i * 32]
+            .split(b'\0')[0]
+            .decode('ascii')
+            for i in range(windows)
+        ]
+        return pack(settings, names)
     return converted
 
 

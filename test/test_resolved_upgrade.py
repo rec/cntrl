@@ -33,10 +33,11 @@ def test_historical_setup_preserves_graph_assets_and_page_order(version: int) ->
     assert upgraded[28:new_page] == original[28:old_page]
     assert upgraded[new_end:] == original[old_end:]
     old_layout = layout.unpack(original, old_page)
+    old_pages = old_layout['pages']
+    assert isinstance(old_pages, dict)
     source = tomlkit.parse(resolved.export(upgraded)).unwrap()
-    assert list(source['pages']) == list(old_layout['pages'])
-    if version < 39:
-        assert source['regions'] == {'main': {'pages': list(source['pages'])}}
+    assert list(source['pages']) == list(old_pages)
+    assert source['regions'] == old_layout['regions']
     settings = models.Setup.model_validate(source)
     windows = [
         upgraded[new_page + 12 + i * 32 : new_page + 12 + (i + 1) * 32]
@@ -46,6 +47,66 @@ def test_historical_setup_preserves_graph_assets_and_page_order(version: int) ->
     ]
     assert layout.pack(settings, windows) == upgraded[new_page:new_end]
     assert original[resolved.graph_offset(original) :][:4] == b'CPAT'
+
+
+def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position() -> None:
+    original = bytes.fromhex((ROOT / 'setup36.golden').read_text())
+    source = tomlkit.parse(resolved.export(resolved.upgrade(original))).unwrap()
+    tools = [
+        'status',
+        'firmware',
+        'cable-test',
+        'panic',
+        'trs-ports',
+        'expression',
+        'clock-transport',
+        'clock-tempo',
+        'keyboard',
+        'tap-tempo',
+        'full-performance',
+    ]
+    assert source['regions'] == {
+        'performance': {'pages': ['patch-switcher']},
+        'tools': {'pages': tools},
+    }
+    assert source['layout'] == {
+        'order': ['performance', 'tools'],
+        'left_wins': False,
+        'focus': 'tools',
+    }
+    assert list(source['pages']) == tools[:-1] + ['patch-switcher', 'full-performance']
+    assert source['pages']['patch-switcher']['min_windows'] == 1
+    assert source['pages']['patch-switcher']['give_up_windows'] == [
+        'right',
+        'center',
+        'left',
+    ]
+    assert source['pages']['full-performance']['type'] == 'None'
+    assert source['pages']['full-performance']['min_windows'] == 0
+
+
+def test_legacy_full_width_position_and_page_names_are_preserved() -> None:
+    original = bytes.fromhex((ROOT / 'setup36.golden').read_text())
+    offset = original.index(b'CPAG')
+    section = bytearray(original[offset : layout.section_end(original, offset)])
+    count, windows = section[4:6]
+    start, size = 8 + windows * 32, 34 + windows
+    records = [
+        bytearray(section[start + i * size : start + (i + 1) * size])
+        for i in range(count)
+    ]
+    records[0][:32] = layout.encoded_name('full-performance')
+    # A legacy setup may start at its full-width switcher position rather than Status.
+    section[start:] = b''.join(records[-1:] + records[:-1])
+    source = layout.unpack(layout.upgrade(bytes(section), 0), 0)
+    settings = models.Setup.model_validate(source)
+    assert settings.regions['tools'].pages[:2] == [
+        'full-performance-2',
+        'full-performance',
+    ]
+    assert settings.pages['full-performance'].type == 'status'
+    assert settings.pages['full-performance-2'].type == 'None'
+    assert settings.regions['performance'].pages == ['patch-switcher']
 
 
 def test_current_setup_is_returned_unchanged(current_setup: bytes) -> None:

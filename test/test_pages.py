@@ -48,6 +48,30 @@ def test_named_instances_and_order_survive_compilation() -> None:
     assert compiler.compile_show(exported, {}, [], target()) == data
 
 
+def test_migrated_legacy_setup_keeps_live_patch_state_while_cycling_tools(
+    tmp_path: Path,
+) -> None:
+    original = bytes.fromhex((ROOT / 'setup36.golden').read_text())
+    legacy = models.Setup.model_validate(
+        layout.unpack(original, original.index(b'CPAG'))
+    )
+    assert sum(p.type == 'patch-switcher' for p in legacy.pages.values()) == 1
+    migrated = tmp_path / 'legacy.golden'
+    migrated.write_text(resolved.upgrade(original).hex())
+    program = tmp_path / 'application'
+    native_tests.compile_native(
+        [
+            'c++',
+            '-std=c++17',
+            f'-I{ROOT.parent / "include"}',
+            str(ROOT / 'test_application.cpp'),
+            '-o',
+            str(program),
+        ]
+    )
+    native_tests.run_native([str(program), str(ROOT / 'pages.golden'), str(migrated)])
+
+
 @pytest.mark.parametrize(
     'source',
     [

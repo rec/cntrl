@@ -113,3 +113,11 @@ Setup format 39 uses `CPAG` version 2, containing target display IDs, named
 page records with minimums, ordered region cycles, allocation direction and
 initial focus. Recompile authored setups after changing page `windows` to
 `min_windows`. Editable export preserves the compiled region layout.
+
+Upgrading an older layout with one Patch Switcher and multiple displays keeps
+Patch Switcher on the left and its original tool cycle on the right. The tools
+region starts focused, so F cycles tools while unused tool buttons continue to
+control the visible Patch Switcher. The old Patch Switcher position in that
+cycle becomes a blank `full-performance` page, giving Patch Switcher every
+display without replacing its navigation or undo state. Existing page names
+and order are retained. Layouts already using regions retain their saved layout.

@@ -2,6 +2,7 @@
 #include <cntrl/ui/song_sources.h>
 #include <cntrl/ui/firmware_visit.h>
 #include <cntrl/ui/page_host.h>
+#include <cntrl/buttons.h>
 #include "patch_hardware.h"
 #include "storage.h"
 #include <cassert>
@@ -266,6 +267,148 @@ static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately
     assert(!host.pages_.looper_prompt[0]);
     cntrl::memory_budget = memory_budget;
 }
+static std::vector<uint8_t> read_fixture(const char *path) {
+    std::ifstream file(path); std::string hex; file >> hex;
+    std::vector<uint8_t> bytes;
+    for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    return bytes;
+}
+static void legacy_single_patch_switcher_preserves_performance_while_cycling_tools(const char *path) {
+    struct InputHardware : Hardware {
+        cntrl::ui::PageHost<PagePlatform> *presentation = nullptr;
+        unsigned sent = 0, taps = 0;
+        std::vector<unsigned> operations;
+        bool send(const char *, const uint8_t *, unsigned) override { ++sent; return true; }
+        bool state(unsigned operation, uint32_t value) override {
+            operations.push_back(operation); return TestPatchHardware::state(operation, value);
+        }
+        void tap_tempo(uint32_t now) override { ++taps; if (presentation) presentation->tap_tempo(now); }
+    } hardware;
+    auto bytes = read_fixture(path);
+    TestStorage storage, library;
+    cntrl::Controller primary(hardware, hardware, hardware);
+    hardware.controller = &primary;
+    cntrl::Documents documents(storage, hardware, primary, hardware);
+    cntrl::Songs songs(library, hardware);
+    cntrl::ui::Application app(hardware, documents, primary, hardware, hardware, songs, hardware, false);
+    cntrl::Document checked; assert(checked.load(bytes.data(), unsigned(bytes.size()), hardware));
+    assert(app.prepare_pages(checked)); app.finish_pages(true);
+    char put[128]; std::snprintf(put, sizeof(put), "CNTRL SETUP PUT 4c6567616379 %u %08lx 0\n",
+        unsigned(bytes.size()), (unsigned long)cntrl::checksum(bytes.data(), unsigned(bytes.size())));
+    for (char c : std::string(put)) documents.receive(uint8_t(c), 0);
+    for (uint8_t b : bytes) documents.receive(b, 0);
+    for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
+    assert(!documents.busy() && documents.select("Legacy"));
+    PagePlatform platform; PageFonts fonts; PageDisplay display; display.windows = 3;
+    uint16_t work[4096] = {}, cache[3 * 4096] = {}, previous[3 * 4096] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 4096, cache, previous, 3 * 4096);
+    constexpr cntrl::ui::ControlBinding bindings[] = {{2,"A"},{1,"B"},{0,"C"},{5,"D"},{4,"E"},{3,"F"}};
+    const cntrl::ui::Controls controls{0,1,2,3,4,5,5,3,2,bindings,6};
+    cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, controls);
+    hardware.presentation = &host;
+    host.configure_pages(documents.document());
+    const auto layout = documents.document().page_layout();
+    assert(layout.windows() == 3 && layout.controllers() == 1 && layout.regions() == 2);
+    const unsigned patch = layout.controller_page(0), tools = layout.page_region(0);
+    assert(layout.page(0)[0] == unsigned(cntrl::ui::Pages::Page::status));
+    assert(app.allocation.focus() == tools && host.pages_.index() == 0);
+    assert(app.allocation.region(0).selected == patch && app.allocation.region(0).first == 0);
+    assert(app.allocation.region(0).count == 2 && app.allocation.region(tools).first == 2);
+    assert(app.allocation.region(tools).count == 1);
+    assert(app.allocation.controller_window(0,0) == 0 && app.allocation.controller_window(0,1) == 1);
+    assert(app.allocation.controller_window(0,2) == -1);
+    // Establish a sent patch and an undoable second send before changing tools.
+    assert(primary.navigate(7)); for (unsigned i = 0; i < 100; ++i) app.tick(i);
+    assert(primary.navigate(3) && primary.navigate(7));
+    for (unsigned i = 0; i < 100; ++i) app.tick(100 + i);
+    const auto state = primary.navigation();
+    assert(state.valid && state.depth == 2 && state.history[1].previous >= 0);
+    std::vector<uint8_t> before(state.encoded_size()); assert(state.encode(before.data(), unsigned(before.size())));
+    const unsigned count = layout.region_size(tools);
+    assert(count == 11);
+    for (unsigned step = 1; step <= count; ++step) {
+        host.browse_page(false);
+        const unsigned selected = layout.region_page(tools,step % count);
+        assert(host.pages_.index() == selected && app.allocation.focus() == tools);
+        assert(app.allocation.region(0).selected == patch && &app.controller() == &primary);
+        const bool blank = layout.page(selected)[0] == unsigned(cntrl::ui::Pages::Page::none);
+        assert(blank == (step == count - 1)); // The old patch-page cycle position is now None.
+        assert(app.allocation.region(tools).count == (blank ? 0u : 1u));
+        assert(app.allocation.region(0).first == 0 && app.allocation.region(0).count == (blank ? 3u : 2u));
+        assert(app.allocation.controller_window(0,2) == (blank ? 2 : -1));
+        const auto current = primary.navigation(); std::vector<uint8_t> after(current.encoded_size());
+        assert(current.encode(after.data(), unsigned(after.size())) && after == before);
+    }
+    assert(primary.navigate(8)); for (unsigned i = 0; i < 100; ++i) app.tick(200 + i);
+    const auto undone = primary.navigation();
+    assert(undone.depth == 1 && undone.center == state.history[1].previous);
+    struct Inputs {
+        cntrl::ui::Application &app;
+        cntrl::ui::PageHost<PagePlatform> &host;
+        PagePlatform &platform;
+        bool switches_open() const { return false; }
+        bool controls_locked() const { return app.controls_locked; }
+        bool menu_open() const { return app.menu.open(); }
+        bool songs_open() const { return app.song_ui.open(); }
+        bool setup_open() const { return app.setups.open(); }
+        void invoke(cntrl::ui::Operation operation) { app.operation_ui(operation, platform); }
+        void switch_button(unsigned, bool, uint32_t) { assert(false); }
+        void browse(bool reverse) { host.browse_page(reverse); }
+        bool midi_reserved() const { return false; }
+        bool keyboard(unsigned input, bool pressed) { return host.keyboard_button(input, pressed); }
+        bool monitor(unsigned input, bool pressed) { return host.monitor_button(input, pressed); }
+        bool looper(unsigned input, bool pressed) { return host.looper_button(input, pressed); }
+        bool expression(unsigned input) { return host.expression_button(input); }
+        bool port(unsigned input) { return host.trs_button(input); }
+        bool clock(unsigned input, bool pressed) { return host.clock_control(input, pressed); }
+        bool has_controller() const { return app.visible(); }
+        void controller(unsigned input, bool pressed, uint32_t now) { app.controller().button(input, pressed, now); }
+        void tap(uint32_t now) { host.tap_tempo(now); }
+    } inputs{app, host, platform};
+    cntrl::ui::ControlRouter router(controls);
+    const auto edge = [&](unsigned input, bool pressed, uint32_t now) {
+        uint8_t events[6] = {}; events[input] = pressed ? cntrl::press_event : cntrl::release_event;
+        if (pressed) app.held |= uint64_t(1) << input; else app.held &= ~(uint64_t(1) << input);
+        router.route(inputs, events, app.held, now);
+        for (unsigned i = 0; i < 32; ++i) app.tick(now + i);
+    };
+    const auto click = [&](unsigned input, uint32_t now) { edge(input, true, now); edge(input, false, now + 1); };
+    assert(host.pages_.page() == cntrl::ui::Pages::Page::status && !app.focused_controller() && app.visible());
+    hardware.operations.clear(); click(1, 1000);
+    assert(std::find(hardware.operations.begin(), hardware.operations.end(), 3u) != hardware.operations.end());
+    const unsigned sent = hardware.sent; click(0, 1100); assert(hardware.sent > sent);
+    hardware.operations.clear(); click(3, 1200);
+    assert(std::find(hardware.operations.begin(), hardware.operations.end(), 8u) != hardware.operations.end());
+    hardware.operations.clear(); click(4, 1300);
+    assert(std::find(hardware.operations.begin(), hardware.operations.end(), 5u) != hardware.operations.end());
+    const unsigned taps = hardware.taps; click(2, 1400); assert(hardware.taps == taps + 1);
+    const auto performance = primary.navigation();
+    std::vector<uint8_t> performance_bytes(performance.encoded_size());
+    assert(performance.encode(performance_bytes.data(), unsigned(performance_bytes.size())));
+    const unsigned before_tools = hardware.sent;
+    for (unsigned step = 1; step <= count; ++step) {
+        click(5, 2000 + step * 100);
+        assert(host.pages_.index() == layout.region_page(tools, step % count));
+        assert(app.allocation.focus() == tools && app.allocation.region(0).selected == patch);
+    }
+    const auto after_tools = primary.navigation(); std::vector<uint8_t> after_bytes(after_tools.encoded_size());
+    assert(after_tools.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes && hardware.sent == before_tools);
+    const auto select_tool = [&](cntrl::ui::Pages::Page type) {
+        for (unsigned page = 0; page < layout.pages(); ++page) if (layout.page(page)[0] == unsigned(type)) {
+            host.select_page(page); return;
+        }
+        assert(false);
+    };
+    select_tool(cntrl::ui::Pages::Page::tap);
+    const unsigned before_tap = hardware.sent, tap_callbacks = hardware.taps;
+    click(2, 4100); assert(hardware.taps == tap_callbacks + 1 && hardware.sent == before_tap);
+    edge(2, true, 4200); click(5, 4300); edge(2, false, 4400);
+    assert(host.pages_.page() != cntrl::ui::Pages::Page::confirm_firmware && hardware.sent == before_tap);
+    select_tool(cntrl::ui::Pages::Page::firmware);
+    click(2, 4500);
+    assert(host.pages_.page() == cntrl::ui::Pages::Page::confirm_firmware && hardware.sent == before_tap);
+    click(2, 4600); assert(host.pages_.page() == cntrl::ui::Pages::Page::firmware);
+}
 static void selecting_pages_preserves_state_and_background_work(const char *path) {
     struct Context : Hardware {
         cntrl::ui::Application *application = nullptr;
@@ -277,9 +420,7 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         bool selection(unsigned operation, const cntrl::Document *&document, unsigned &node) override { return application->controller().selection(operation, document, node); }
         void selection_complete(unsigned operation) override { application->controller().selection_complete(operation); }
     } hardware;
-    std::ifstream file(path); std::string hex; file >> hex;
-    std::vector<uint8_t> bytes;
-    for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    auto bytes = read_fixture(path);
     cntrl::Document document; assert(document.load(bytes.data(), unsigned(bytes.size()), hardware));
     const unsigned monitor_page = unsigned(document.page_layout().page(1) - bytes.data());
     for (unsigned count : {0u,1u,2u,3u,4u}) {
@@ -395,7 +536,8 @@ static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware 
     assert(!failed.busy() && !execution && hardware.last_error == "Firmware switch failed");
 }
 int main(int argc, char **argv) {
-    assert(argc == 2); selecting_pages_preserves_state_and_background_work(argv[1]);
+    assert(argc == 2 || argc == 3); selecting_pages_preserves_state_and_background_work(argv[1]);
+    if (argc == 3) legacy_single_patch_switcher_preserves_performance_while_cycling_tools(argv[2]);
     Hardware hardware; TestStorage setup_storage, song_storage;
     cntrl::Controller primary(hardware, hardware, hardware);
     cntrl::Documents documents(setup_storage, hardware, primary, hardware);
