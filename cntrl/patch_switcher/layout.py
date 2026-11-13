@@ -169,11 +169,14 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         for i in range(window_count)
     ]
     cursor += window_count * 32
+    canonical = bytearray(data[offset:end])
     pages = {}
     for _ in range(count):
         name = data[cursor : cursor + 32].split(b'\0')[0].decode('ascii')
         if name in pages or data[cursor + 32] >= len(PAGE_TYPES):
             raise ValueError('invalid page record')
+        if data[cursor + 33] > window_count:
+            raise ValueError('invalid page window count')
         priority = data[cursor + 34 : cursor + 34 + window_count]
         if sorted(priority) != list(range(window_count)):
             raise ValueError('invalid logical window priority')
@@ -182,6 +185,10 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             'min_windows': data[cursor + 33],
             'give_up_windows': [windows[i] for i in priority],
         }
+        if pages[name]['type'] not in ('None', 'patch-switcher'):
+            # Stored minima remain readable, but tool pages now have fixed width.
+            pages[name]['min_windows'] = 1
+            canonical[cursor - offset + 33] = 1
         cursor += 34 + window_count
     cycles = cursor + region_count * 34
     names = list(pages)
@@ -213,7 +220,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
                 'focus': order[focus],
             },
         )
-    if pack(models.Setup.model_validate(result), windows) != data[offset:end]:
+    if pack(models.Setup.model_validate(result), windows) != canonical:
         raise ValueError('invalid page layout records')
     return result
 

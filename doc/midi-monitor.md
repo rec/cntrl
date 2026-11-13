@@ -9,19 +9,10 @@ type = 'midi-monitor'
 min_windows = 1
 ```
 
-The region allocator chooses the layout from the number of windows received:
-
-| Windows | Layout, left to right |
-| --- | --- |
-| 1 | Combined incoming and outgoing traffic |
-| 2 | Incoming, Outgoing |
-| 3 | Incoming, Combined, Outgoing |
-
-The minimum defaults to one and may be zero. The monitor can use up to three
-windows. Raise `min_windows` to reserve more, provided every selectable region
-combination still fits. Its region can appear on either side; setup allocation
-priority determines spare windows. See [Pages](pages.md). Background patches
-continue when all displays belong to the monitor.
+Like the other tool pages, the monitor uses exactly one window, showing combined
+incoming and outgoing traffic. Its `min_windows` is forced to one, including
+for existing saved setups. Its region can appear on either side; see
+[Pages](pages.md). Background patches continue while the monitor is visible.
 
 Select the page through the usual Pages and tools menu or page-cycle control.
 The monitor observes all enabled endpoints and USB cables exposed by the
@@ -64,7 +55,7 @@ endpoint, cable and direction.
 
 - Confirm freezes the display. Confirm again returns to live traffic.
 - Previous and Next move the shared observation cursor backward and forward
-  while frozen. Both directional windows and Combined use the same cursor.
+  while frozen. All selected monitor pages use the same cursor.
 - Back opens the normal menu. The page-cycle control continues to select other
   pages. If those roles share a button, page cycling keeps its usual priority.
 
@@ -75,7 +66,7 @@ Capture continues while frozen; if the frozen position is overwritten, the
 cursor moves to the oldest retained entry and `advanced` appears in the status.
 
 Capture starts with empty history when a monitor page is first selected.
-Capture continues under menus, without focus and with zero allocated windows.
+Capture continues under menus, without focus and while the page is hidden.
 Selecting away from the last monitor view or loading a setup releases capture
 storage. Returning starts a fresh history. Multiple selected monitor views
 share history and the observation cursor. When an adapter reports a disconnected or replaced endpoint, it is

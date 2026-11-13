@@ -26,8 +26,8 @@ int main(int argc,char **argv) {
         cntrl::PageLayout layout{bytes.data()}; cntrl::PageAllocation allocation;
         assert(allocation.prepare(layout)); allocation.finish(true); allocation.configure(layout);
         assert(allocation.focus() == 0 && allocation.selected() == 0);
-        assert(allocation.region(0).count == (left ? 2u : 1u));
-        assert(allocation.region(1).count == (left ? 1u : 2u));
+        assert(allocation.region(0).count == 2);
+        assert(allocation.region(1).count == 1);
         assert(allocation.controller_window(0,0) == 0);
         assert(allocation.controller_window(0,2) == -1);
         allocation.select(3);
@@ -46,5 +46,18 @@ int main(int argc,char **argv) {
     a.configure({left.data()}); b.configure({right.data()});
     assert(a.region(0).count == b.region(1).count && a.region(1).count == b.region(0).count);
     for (unsigned type = 0; type <= cntrl::PageLayout::arpeggiator; ++type)
-        assert(cntrl::PageLayout::maximum_windows(type,5) == (type == 1 ? 1u : type == 10 ? 0u : type == 12 ? 3u : 5u));
+        assert(cntrl::PageLayout::maximum_windows(type,5) == (type == 10 ? 0u : type == 11 ? 5u : 1u));
+    for (unsigned type = 0; type <= cntrl::PageLayout::arpeggiator; ++type) {
+        if (type == 10 || type == 11) continue;
+        for (unsigned saved : {0u,3u}) {
+            auto bytes = page_fixture(5,{11,type},{{0},{1}});
+            cntrl::PageLayout layout{bytes.data()};
+            bytes[layout.record(1) - bytes.data() + 33] = uint8_t(saved);
+            cntrl::PageAllocation allocation;
+            assert(allocation.prepare(layout)); allocation.finish(true); allocation.configure(layout);
+            assert(allocation.region(1).count == 1 && allocation.region(0).count == 4);
+            assert(allocation.controller_window(0,3) == 3);
+            assert(allocation.controller_window(0,4) == -1);
+        }
+    }
 }

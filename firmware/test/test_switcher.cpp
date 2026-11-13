@@ -705,7 +705,7 @@ static void test_pages_run_independently(const std::string &path) {
     allocation.select(6);
     assert(allocation.controller_window(1,0) == -1 && allocation.controller_window(1,1) == 0 && allocation.controller_window(1,2) == 1);
     allocation.select(2);
-    assert(allocation.controller_window(1,1) == 0 && allocation.controller_window(1,2) == -1);
+    assert(allocation.controller_window(1,1) == 0 && allocation.controller_window(1,2) == 1);
     assert(layout.page(0)[0] == 10 && layout.page(0)[1] == 0);
     cntrl::Controller first(hw, hw, hw, 5), second(hw, hw, hw, 6);
     hw.controller = hw.visible = &first; first.activate(document);
@@ -737,7 +737,7 @@ static void test_pages_run_independently(const std::string &path) {
             {page_offset + 1, uint8_t(1)}, {page_offset + 38, uint8_t(4)},
             {regions_offset, uint8_t(0)}, {regions_offset + 32, uint8_t(1)}, {regions_offset + 33, uint8_t(0)},
             {cycles_offset, uint8_t(36)}, {cycles_offset + 1, uint8_t(5)},
-            {app_offset + 33, uint8_t(2)}}) {
+            {app_offset + 33, uint8_t(3)}}) {
         auto corrupt = bytes; corrupt[offset + bad.first] = bad.second;
         cntrl::put32(corrupt.data() + 20, cntrl::checksum(corrupt.data() + 28, unsigned(corrupt.size()) - 28));
         cntrl::Document rejected; assert(!rejected.load(corrupt.data(), unsigned(corrupt.size()), hw));

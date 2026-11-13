@@ -176,7 +176,7 @@ public:
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
             if (!PageLayout::valid_name(p) || p[32] > PageLayout::arpeggiator
-                || p[33] > PageLayout::maximum_windows(p[32],windows)) return false;
+                || p[33] > windows || (p[32] == 10 && p[33])) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < windows; ++j) {
                 if (p[34 + j] >= windows || seen[p[34 + j]]) return false;
@@ -194,7 +194,7 @@ public:
             for (unsigned i = 0; i < p[33]; ++i) {
                 unsigned page = arrangement.region_page(r,i);
                 if (page >= page_count || assigned_pages[page]) return false;
-                assigned_pages[page] = true; largest = std::max(largest,unsigned(arrangement.page(page)[1]));
+                assigned_pages[page] = true; largest = std::max(largest,arrangement.minimum_windows(page));
             }
             assigned += p[33]; minimum += largest;
             for (unsigned i = 0; i < r; ++i) if (!std::strcmp(arrangement.region_name(r),arrangement.region_name(i))) return false;

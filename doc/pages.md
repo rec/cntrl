@@ -66,16 +66,16 @@ give_up_windows = ['left', 'right', 'center']
 
 ## Window allocation
 
-`min_windows` replaces the former page setting `windows`. It defaults to one.
-An explicit zero lets the page receive no windows while its controls and
-background work remain available. The `None` page always has minimum and
-maximum zero. A zero minimum can still receive spare windows.
+Every visible page type except Patch Switcher uses exactly one window. This
+includes Status, Tap Tempo, MIDI Monitor, MIDI Looper and Arpeggiator. Their
+`min_windows` values are forced to one when compiling, exporting or allocating
+an existing saved setup. They do not acquire spare windows. The blank `None`
+placeholder keeps minimum and maximum zero.
 
-Each page type supplies its maximum in code: Status uses at most one window,
-MIDI Monitor at most three, and Patch Switcher and the remaining utility pages
-can use all available target windows. Utility pages distribute their body rows
-across the allocated span, repeating the heading. MIDI Monitor has dedicated
-one-, two- and three-window layouts; see [MIDI monitor](midi-monitor.md).
+For Patch Switcher, `min_windows` replaces the former page setting `windows`
+and defaults to one. An explicit zero lets it receive no windows while its
+controls and background work remain available. It can acquire spare windows up
+to the target's display count.
 
 Every selected page receives its minimum first. `layout.left_wins = false`,
 the default, awards remaining windows from the rightmost region toward the
@@ -85,9 +85,9 @@ maxima stays black. Compilation rejects a setup if any selectable combination
 cannot meet its minimums, or a minimum exceeds its type's maximum.
 
 On a three-display pedal, the example gives Live two windows and Status one.
-Selecting Monitor gives Live one and Monitor two. Reverse `layout.order` to
-move tools to the left. Set `left_wins = true` if those tools should retain
-first claim on spare windows after moving.
+Selecting Monitor also gives Live two windows and Monitor one. Reverse
+`layout.order` to move tools to the left. Allocation priority affects spare
+windows only where more than one selected Patch Switcher can use them.
 
 Patch Switcher's `give_up_windows` lists logical content slots to surrender
 first, defaulting to the reverse target display order. Surviving slots keep

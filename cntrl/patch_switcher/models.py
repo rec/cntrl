@@ -1078,16 +1078,14 @@ class Page(BaseModel, frozen=True):
             if 'min_windows' in self.model_fields_set and self.min_windows:
                 raise ValueError('None must have zero minimum windows')
             object.__setattr__(self, 'min_windows', 0)
+        elif self.type != 'patch-switcher':
+            object.__setattr__(self, 'min_windows', 1)
         return self
 
     def maximum_windows(self, available: int) -> int:
         if self.type == 'None':
             return 0
-        if self.type == 'status':
-            return min(1, available)
-        if self.type == 'midi-monitor':
-            return min(3, available)
-        return available
+        return available if self.type == 'patch-switcher' else min(1, available)
 
     model_config = ConfigDict(extra='forbid')
 

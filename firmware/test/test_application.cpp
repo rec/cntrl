@@ -285,7 +285,8 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
     for (unsigned count : {0u,1u,2u,3u,4u}) {
         auto monitored = bytes; monitored[monitor_page] = cntrl::PageLayout::midi_monitor; monitored[monitor_page + 1] = uint8_t(count);
         cntrl::put32(monitored.data() + 20, cntrl::checksum(monitored.data() + 28, unsigned(monitored.size() - 28)));
-        cntrl::Document checked; assert(checked.load(monitored.data(), unsigned(monitored.size()), hardware) == (count <= 2));
+        cntrl::Document checked; assert(checked.load(monitored.data(), unsigned(monitored.size()), hardware) == (count <= 3));
+        if (checked.valid()) assert(checked.page_layout().minimum_windows(1) == 1);
     }
     // Match the pedal's one-window Tap Tempo page followed by its patch page.
     const unsigned tap = unsigned(document.page_layout().page(4) - bytes.data());

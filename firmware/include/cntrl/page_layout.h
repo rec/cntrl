@@ -43,7 +43,12 @@ struct PageLayout {
         return regions();
     }
     static unsigned maximum_windows(unsigned type,unsigned available) {
-        return type == 10 ? 0 : type == 1 ? std::min(1u,available) : type == midi_monitor ? std::min(3u,available) : available;
+        return type == 10 ? 0 : type == patch_switcher ? available : std::min(1u,available);
+    }
+    unsigned minimum_windows(unsigned index) const {
+        const auto *p = page(index);
+        // Preserve stored records while overriding old tool-page window claims.
+        return p[0] == 10 ? 0 : p[0] == patch_switcher ? p[1] : 1;
     }
     static bool valid_name(const uint8_t *name) {
         if (!name[0]) return false;
@@ -104,7 +109,7 @@ private:
 #endif
     void allocate() {
         unsigned spare = layout.windows();
-        for (auto &r : regions_) { r.count = layout.page(r.selected)[1]; spare -= r.count; }
+        for (auto &r : regions_) { r.count = layout.minimum_windows(r.selected); spare -= r.count; }
         for (unsigned i = 0; i < regions_.size(); ++i) {
             auto &r = regions_[layout.left_wins() ? i : regions_.size() - i - 1];
             unsigned extra = std::min(spare,PageLayout::maximum_windows(layout.page(r.selected)[0],layout.windows()) - r.count);
