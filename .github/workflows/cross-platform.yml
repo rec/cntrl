@@ -60,7 +60,7 @@ jobs:
             cntrl/cntrl/**/firmware/.tools
           key: native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.profile }}-${{ hashFiles('cntrl/uv.lock', 'cntrl/cntrl/fonts/provision.py', 'cntrl/cntrl/**/toolchain.py', 'cntrl/cntrl/**/*.patch') }}
       - name: Install locked dependencies
-        run: uv sync --frozen --group dev
+        run: uv sync --frozen --group dev --no-editable
       - name: Provision pinned native rasterizer
         run: uv run --no-sync python -m cntrl.fonts.provision
       - name: Record tested revision
