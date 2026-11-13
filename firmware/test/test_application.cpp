@@ -103,13 +103,14 @@ struct PagePlatform : Hardware {
     bool switch_firmware() { return false; }
     struct Expression {
         unsigned index = 0;
+        const char *position_text = "50%";
         void configure(const cntrl::ExpressionAssignment *) {}
         void cancel() {}
         void select(unsigned value) { index = value; }
         unsigned selected() const { return index; }
         void calibrate(bool) {}
         void status(const char *,bool,char *title,char *position,char *prompt) {
-            std::strcpy(title,"Expression"); std::strcpy(position,"50%"); std::strcpy(prompt,"Calibrate");
+            std::strcpy(title,"Expression"); std::strcpy(position,position_text); std::strcpy(prompt,"Calibrate");
         }
     } expression;
     struct Bridge { void clock_owner(unsigned) {} } bridge;
@@ -408,6 +409,19 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     click(2, 4500);
     assert(host.pages_.page() == cntrl::ui::Pages::Page::confirm_firmware && hardware.sent == before_tap);
     click(2, 4600); assert(host.pages_.page() == cntrl::ui::Pages::Page::firmware);
+    const cntrl::midi::OutputConnection jack{"jack","Expression jack",0,cntrl::midi::OutputTransport::physical,true,true,3};
+    platform.endpoints = {&jack,1};
+    host.configure_page_settings(documents.document().page_settings());
+    select_tool(cntrl::ui::Pages::Page::expression);
+    host.display(5000,false);
+    assert(std::strcmp(host.pages_.view(5000,5000000,{}).lines[2].text,"50%") == 0);
+    assert(!host.pages_.due(5080));
+    host.display(5080,false);
+    assert(!host.pages_.due(5080));
+    platform.expression.position_text = "51%";
+    host.display(5160,false);
+    assert(std::strcmp(host.pages_.view(5160,5160000,{}).lines[2].text,"51%") == 0);
+    assert(!host.pages_.due(5240));
 }
 static void selecting_pages_preserves_state_and_background_work(const char *path) {
     struct Context : Hardware {

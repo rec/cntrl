@@ -449,9 +449,7 @@ public:
             const auto &region = application_.allocation.region(r);
             if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_switcher) continue;
             load_view(region.selected);
-            if (!pages_.due(now)) continue;
-            if (pages_.page() == Pages::Page::midi_looper && looper_files_) refresh_looper_prompt();
-            if (pages_.page() == Pages::Page::expression) {
+            if (pages_.page() == Pages::Page::expression && pages_.expression_status_due(now)) {
                 if (expression_ports_.empty()) pages_.expression_status("No configurable ports", "", "");
                 else {
                     const unsigned selected = platform_.expression_controls().selected();
@@ -461,6 +459,8 @@ public:
                     pages_.expression_status(title, position, prompt);
                 }
             }
+            if (!pages_.due(now)) { save_view(); continue; }
+            if (pages_.page() == Pages::Page::midi_looper && looper_files_) refresh_looper_prompt();
             if (pages_.page() == Pages::Page::midi_monitor && !platform_.midi_monitor().active() && !monitor_unavailable_) enter_page();
             // Prepare the incoming card during the renderer's bounded transition preparation.
             PerformanceStatus status = pages_.page() == Pages::Page::status ? platform_.status() : PerformanceStatus{};

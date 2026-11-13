@@ -112,6 +112,7 @@ public:
         recall_slot();
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
         clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
+        prepare_expression_layout();
         clock_changed_ = true;
         dirty_ = true;
     }
@@ -239,13 +240,19 @@ public:
             }
         }
     }
+    bool expression_status_due(uint32_t now) {
+        // Sampling a value does not make an unchanged page dirty.
+        if (!dirty_ && uint32_t(now - refreshed_) < 80) return false;
+        refreshed_ = now;
+        return true;
+    }
     bool due(uint32_t now) {
         using R = cntrl::PageSettings;
         if (dirty_) return true;
         if (page_ == Page::midi_monitor) return uint32_t(now - refreshed_) >= midi::Monitor::refresh_ms;
         if (page_ == Page::midi_looper) return uint32_t(now - refreshed_) >= 50;
         if (page_ == Page::arpeggiator) return uint32_t(now - refreshed_) >= 50;
-        if (page_ == Page::expression || page_ == Page::cable || page_ == Page::panic) return uint32_t(now - refreshed_) >= 80;
+        if (page_ == Page::cable || page_ == Page::panic) return uint32_t(now - refreshed_) >= 80;
         if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
@@ -261,6 +268,13 @@ public:
         if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
         if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
         if (page_ == Page::arpeggiator) { arpeggiator_view(pane); return pane; }
+        if (page_ == Page::expression) {
+            pane.heading_band = true;
+            std::copy_n(expression_layout_, 5, pane.lines);
+            for (unsigned i = 0; i < 3; ++i)
+                std::snprintf(pane.lines[i + 1].text, sizeof(pane.lines[i + 1].text), "%s", expression_lines_[i]);
+            return pane;
+        }
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
         if (page_ == Page::confirm_firmware) {
             const unsigned height = title * 3 / 2;
@@ -270,13 +284,8 @@ public:
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::keyboard ? "Keyboard" : page_ == Page::expression ? "Expression" : "Firmware";
-        line(pane, 0, heading, pad + 2, heading_text_height, settings_[R::title_font], true, "MIDI Cable Test");
-        pane.heading_band = true;
-        auto &header = pane.lines[0];
-        header.graphics.line_height += 4;
-        header.graphics.foreground = 0xffff; header.graphics.background = 0;
-        header.graphics.top = header.y; header.y = 0;
+        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::keyboard ? "Keyboard" : "Firmware";
+        page_heading(pane, heading);
         if (clock_page()) {
             const unsigned font = settings_[R::status_font];
             char tempo[32], detail[64];
@@ -340,13 +349,6 @@ public:
             line(pane, 2, shortcut_held ? "Held" : "Ready", vertical(66), vertical(20), font, true);
             line(pane, 3, prompt("%s/%s: Select", controls_.previous, controls_.next), vertical(91), vertical(16), font, true);
             line(pane, 4, prompt("Hold %s: Send", controls_.confirm), vertical(109), vertical(16), font, true);
-            return pane;
-        }
-        if (page_ == Page::expression) {
-            const unsigned font = settings_[R::status_font];
-            for (unsigned i = 0; i < 3; ++i)
-                line(pane, i + 1, expression_lines_[i], vertical(30 + 24 * i), vertical(20), font, true);
-            line(pane, 4, prompt("%s: Jack   %s: Cancel", controls_.previous, controls_.next), vertical(105), vertical(18), font, true);
             return pane;
         }
         if (page_ == Page::ports) {
@@ -625,6 +627,48 @@ private:
         }
     }
 
+    void page_heading(cntrl::Pane &pane, const char *text) {
+        using R = cntrl::PageSettings;
+        const unsigned pad = pane.graphics.pad;
+        const unsigned height = std::min(unsigned(settings_[R::title_height]) * 3 / 2, (viewport_.height - 2 * pad) / 2);
+        line(pane, 0, text, pad + 2, height, settings_[R::title_font], true, "MIDI Cable Test");
+        pane.heading_band = true;
+        auto &header = pane.lines[0];
+        header.graphics.line_height += 4;
+        header.graphics.foreground = 0xffff; header.graphics.background = 0;
+        header.graphics.top = header.y; header.y = 0;
+    }
+    void prepare_expression_layout() {
+        using R = cntrl::PageSettings;
+        cntrl::Pane pane;
+        pane.graphics.background = settings_[R::background];
+        pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
+        page_heading(pane, "Expression");
+        const unsigned font = settings_[R::status_font];
+        // Fit port labels and status messages once, sharing one stable body size.
+        unsigned size = 96;
+        const auto fit = [&](const char *text) {
+            line(pane, 1, text, vertical(30), vertical(20), font, false, nullptr, 0, 0, size);
+            size = pane.lines[1].graphics.size;
+        };
+        fit("No configurable ports");
+        fit("Raw 8888  Uncalibrated");
+        fit("Select expression role");
+        fit("Reconnect: heel");
+        fit(prompt("%s: Calibrate", controls_.confirm));
+        for (const auto &port : outputs_) if (port.port != midi::no_port) {
+            char text[40];
+            std::snprintf(text, sizeof(text), "%.24s  Unassigned", port.label); fit(text);
+            std::snprintf(text, sizeof(text), "%.20s  CC 888 Ch 88", port.label); fit(text);
+        }
+        for (unsigned i = 0; i < 3; ++i) {
+            line(pane, i + 1, "Ag0123456789", vertical(30 + 24 * i), vertical(20), font, false, nullptr, 0, 0, size);
+            pane.lines[i + 1].text[0] = 0;
+        }
+        line(pane, 4, prompt("%s: Jack   %s: Cancel", controls_.previous, controls_.next), vertical(105), vertical(18), font, true);
+        std::copy_n(pane.lines, 5, expression_layout_);
+    }
+    TextLine expression_layout_[5]; // Heading, three live values, and control hint.
     char expression_lines_[3][40] = {};
     cntrl::PageSettings settings_;
     cntrl::TapTempo tap_;

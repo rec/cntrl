@@ -6,6 +6,7 @@
 #include <cassert>
 #include <vector>
 #include <algorithm>
+#include "page_fixture.h"
 
 struct Fonts final : cntrl::ui::Fonts {
     const uint8_t bits[2] = {0x80, 0x80};
@@ -254,7 +255,57 @@ void messages_restore_the_latest_page_after_replacement_and_expiry() {
     for (unsigned i = 0; i < 500; ++i) { renderer.draw(); display.complete(); }
     assert(std::all_of(display.pixels.begin(), display.pixels.end(), [](uint16_t p) { return p == 0x5678; }));
 }
+static void expression_reuses_its_initial_layout_and_redraws_only_changed_content() {
+    struct MeasuredFonts : cntrl::ui::Fonts {
+        mutable unsigned measurements = 0;
+        bool supports(unsigned, unsigned size, uint32_t = 0) const override { ++measurements; return size >= 8 && size <= 24; }
+        cntrl::ui::Bounds bounds(unsigned, unsigned size, uint32_t, const char *text) const override {
+            ++measurements; return {0, -int(size), int(std::strlen(text) * size / 2), int(size)};
+        }
+        bool glyph(unsigned, unsigned, uint32_t, const char *, unsigned, cntrl::ui::Glyph &) const override { return false; }
+    } fonts;
+    cntrl::ui::Pages pages(fonts, {200, 128, 0, 0});
+    constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"}};
+    pages.controls({0,1,2,0,1,2,2,0,2,bindings,3});
+    const cntrl::midi::OutputConnection output{"jack","A longer port label",0,cntrl::midi::OutputTransport::physical,true,true,3};
+    pages.outputs({&output,1});
+    cntrl::PageSettings settings;
+    settings.words[cntrl::PageSettings::padding] = 2;
+    settings.words[cntrl::PageSettings::title_height] = 12;
+    settings.words[cntrl::PageSettings::status_font] = 16;
+    settings.words[cntrl::PageSettings::title_font] = 16;
+    pages.configure(settings);
+    auto layout = page_fixture(1,{unsigned(cntrl::ui::Pages::Page::expression)},{{0}});
+    pages.layout(cntrl::PageLayout{layout.data()});
+    const unsigned prepared = fonts.measurements; assert(prepared);
+    pages.expression_status("Jack 1  Unassigned","50%  Calibrated","C: Calibrate");
+    assert(pages.due(0));
+    const auto first = pages.view(0,0,{});
+    assert(std::strcmp(first.lines[0].text,"Expression") == 0);
+    assert(std::strcmp(first.lines[4].text,"A: Jack   B: Cancel") == 0);
+    assert(!pages.expression_status_due(79) && pages.expression_status_due(80));
+    assert(!pages.expression_status_due(81));
+    assert(!pages.due(80) && !pages.due(10000));
+    pages.expression_status("Jack 1  Unassigned","50%  Calibrated","C: Calibrate");
+    assert(!pages.due(10000));
+    pages.expression_status("A longer port label  CC 127 Ch 16","Raw 1023  Uncalibrated","Reconnect: heel");
+    assert(pages.due(10000));
+    const auto changed = pages.view(10000,10000000,{});
+    assert(std::strcmp(changed.lines[2].text,"Raw 1023  Uncalibrated") == 0);
+    for (unsigned i = 0; i < 5; ++i) {
+        assert(first.lines[i].x == changed.lines[i].x && first.lines[i].y == changed.lines[i].y);
+        assert(first.lines[i].graphics.font == changed.lines[i].graphics.font);
+        assert(first.lines[i].graphics.size == changed.lines[i].graphics.size);
+    }
+    assert(first.lines[1].graphics.size == first.lines[2].graphics.size && first.lines[2].graphics.size == first.lines[3].graphics.size);
+    assert(!pages.due(20000));
+    pages.select(0); assert(pages.due(20000)); // Re-entering exposes the page again.
+    pages.view(20000,20000000,{});
+    assert(fonts.measurements == prepared); // No font fitting on visits or changed-value redraws.
+}
+
 int main() {
+    expression_reuses_its_initial_layout_and_redraws_only_changed_content();
     messages_restore_the_latest_page_after_replacement_and_expiry();
     cntrl::memory_budget = 192 * 1024;
     automatic_text_survives_background_and_stipple_passes();
