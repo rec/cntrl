@@ -12,7 +12,7 @@ namespace cntrl {
 template<class T> class CheckedList {
     struct Node {
         MemoryBuffer allocation;
-        Node *allocated = nullptr, *next = nullptr, *previous = nullptr;
+        Node *next = nullptr, *previous = nullptr;
         CheckedList *origin = nullptr;
         std::optional<T> value;
     };
@@ -60,8 +60,8 @@ public:
             }
             auto *node = new (allocation.data) Node;
             node->allocation.swap(allocation);
-            node->allocated = allocated_; allocated_ = node;
             node->next = free_; free_ = node; ++capacity_;
+            bytes_ += node_bytes(node);
         }
         return true;
     }
@@ -69,21 +69,16 @@ public:
         return insert(end(), std::move(value));
     }
     [[nodiscard]] T *insert(iterator position, T value) {
-        if (!free_ && (size_ == UINT32_MAX || !reserve(size_ + 1))) return nullptr;
-        auto *node = free_; free_ = node->next;
-        node->next = position.node_; node->previous = position.node_ ? position.node_->previous : tail_;
+        if (!free_ && !borrowed_free_ && (size_ == UINT32_MAX || !reserve(size_ + 1))) return nullptr;
+        auto *node = pop_free();
         node->value.emplace(std::move(value));
-        if (node->previous) node->previous->next = node; else head_ = node;
-        if (node->next) node->next->previous = node; else tail_ = node;
-        ++size_; return &*node->value;
+        link(position.node_, node); return &*node->value;
     }
     iterator erase(iterator position) {
         auto *node = position.node_; auto *next = node->next;
-        if (node->previous) node->previous->next = next; else head_ = next;
-        if (next) next->previous = node->previous; else tail_ = node->previous;
-        node->value.reset(); --size_;
+        unlink(node); node->value.reset();
         if (node->origin) return_node(node);
-        else { node->next = free_; free_ = node; }
+        else push_free(node);
         return iterator(next);
     }
     template<class Predicate> void erase_if(Predicate predicate) {
@@ -91,40 +86,50 @@ public:
     }
     void clear() { while (!empty()) erase(begin()); }
     void pop_back() { erase(iterator(tail_)); }
+    // Move the actual live node, preserving its value, address and original
+    // loan donor. No destination reservation or value construction is needed.
+    iterator splice(iterator position, CheckedList &source, iterator item) {
+        auto *node = item.node_;
+        if (&source == this && (position.node_ == node || position.node_ == node->next)) return item;
+        source.unlink(node);
+        if (&source != this) adopt(source, node);
+        link(position.node_, node); return iterator(node);
+    }
+    // Transfer unused node ownership without creating loans. Work is constant
+    // per transferred node; callers choose the amount of admission/reclaim work.
+    unsigned transfer_free(CheckedList &source, unsigned count) {
+        if (&source == this) return 0;
+        unsigned transferred = 0;
+        while (transferred < count && (source.free_ || source.borrowed_free_)) {
+            auto *node = source.pop_free(); adopt(source, node); push_free(node); ++transferred;
+        }
+        return transferred;
+    }
     // A donor with outstanding loans must remain at its original address.
     bool take_reserved(CheckedList &source, unsigned count) {
         if (source.capacity_ - source.size_ < count) return false;
+        if (&source == this) return true;
         while (count--) {
-            auto *node = source.free_; source.free_ = node->next;
-            auto **link = &source.allocated_;
-            while (*link != node) link = &(*link)->allocated;
-            *link = node->allocated;
-            node->allocated = allocated_; allocated_ = node;
-            node->origin = &source; ++source.loans_;
-            node->next = free_; free_ = node;
-            --source.capacity_; ++capacity_;
+            auto *node = source.pop_free();
+            if (!node->origin) { node->origin = &source; ++source.loans_; }
+            adopt(source, node); push_free(node);
         }
         return true;
     }
     void return_reserved() {
-        for (auto **link = &free_; *link;) {
-            auto *node = *link;
-            if (!node->origin) { link = &node->next; continue; }
-            *link = node->next; return_node(node);
-        }
+        while (borrowed_free_) { auto *node = borrowed_free_; borrowed_free_ = node->next; return_node(node); }
     }
 #ifdef CNTRL_NOINLINE
     CNTRL_NOINLINE
 #endif
     unsigned trim(unsigned budget) {
         unsigned retired = 0;
-        while (free_ && retired < budget) {
-            auto *node = free_; free_ = node->next;
+        while ((free_ || borrowed_free_) && retired < budget) {
+            auto *&head = free_ ? free_ : borrowed_free_;
+            auto *node = head; head = node->next;
             if (node->origin) return_node(node);
             else {
-                auto **link = &allocated_;
-                while (*link != node) link = &(*link)->allocated;
-                *link = node->allocated; --capacity_;
+                bytes_ -= node_bytes(node); --capacity_;
                 MemoryBuffer allocation; allocation.swap(node->allocation); node->~Node();
             }
             ++retired;
@@ -135,20 +140,19 @@ public:
     CNTRL_NOINLINE
 #endif
     void release() {
-        while (allocated_) {
-            if (allocated_->origin) {
-                auto *node = allocated_; node->value.reset(); return_node(node); continue;
-            }
-            auto *node = allocated_; allocated_ = node->allocated;
+        clear(); return_reserved();
+        while (free_) {
+            auto *node = free_; free_ = node->next;
             MemoryBuffer allocation; allocation.swap(node->allocation); node->~Node();
         }
-        head_ = tail_ = free_ = nullptr; size_ = capacity_ = 0;
+        size_ = capacity_ = bytes_ = 0;
     }
     void swap(CheckedList &other) noexcept {
-        std::swap(allocated_, other.allocated_); std::swap(head_, other.head_);
+        std::swap(borrowed_free_, other.borrowed_free_); std::swap(head_, other.head_);
         std::swap(tail_, other.tail_); std::swap(free_, other.free_);
         std::swap(size_, other.size_); std::swap(capacity_, other.capacity_);
         std::swap(loans_, other.loans_);
+        std::swap(bytes_, other.bytes_);
     }
     iterator begin() { return iterator(head_); }
     iterator end() { return iterator(); }
@@ -156,12 +160,7 @@ public:
     const_iterator end() const { return const_iterator(); }
     unsigned size() const { return size_; }
     unsigned capacity() const { return capacity_; }
-    unsigned memory_bytes() const {
-        unsigned bytes = 0;
-        for (auto *node = allocated_; node; node = node->allocated)
-            bytes += unsigned(memory_allocation_charge(node->allocation.data, node->allocation.size));
-        return bytes;
-    }
+    unsigned memory_bytes() const { return bytes_; }
     unsigned loans() const { return loans_; }
     bool empty() const { return !size_; }
     T &front() { return *head_->value; }
@@ -171,15 +170,38 @@ public:
     T &operator[](unsigned index) { auto i = begin(); while (index--) ++i; return *i; }
     const T &operator[](unsigned index) const { auto i = begin(); while (index--) ++i; return *i; }
 private:
-    void return_node(Node *node) {
-        auto **link = &allocated_;
-        while (*link != node) link = &(*link)->allocated;
-        *link = node->allocated; --capacity_;
-        auto &origin = *node->origin; node->origin = nullptr; --origin.loans_;
-        node->allocated = origin.allocated_; origin.allocated_ = node;
-        node->next = origin.free_; origin.free_ = node; ++origin.capacity_;
+    static unsigned node_bytes(const Node *node) {
+        return unsigned(memory_allocation_charge(node->allocation.data, node->allocation.size));
     }
-    Node *allocated_ = nullptr, *head_ = nullptr, *tail_ = nullptr, *free_ = nullptr;
-    unsigned size_ = 0, capacity_ = 0, loans_ = 0;
+    Node *pop_free() {
+        auto *&head = borrowed_free_ ? borrowed_free_ : free_;
+        auto *node = head; head = node->next; return node;
+    }
+    void push_free(Node *node) {
+        auto *&head = node->origin ? borrowed_free_ : free_;
+        node->next = head; head = node;
+    }
+    void adopt(CheckedList &source, Node *node) {
+        const unsigned bytes = node_bytes(node);
+        --source.capacity_; source.bytes_ -= bytes; ++capacity_; bytes_ += bytes;
+        if (node->origin == this) { node->origin = nullptr; --loans_; }
+    }
+    void unlink(Node *node) {
+        if (node->previous) node->previous->next = node->next; else head_ = node->next;
+        if (node->next) node->next->previous = node->previous; else tail_ = node->previous;
+        --size_;
+    }
+    void link(Node *position, Node *node) {
+        node->next = position; node->previous = position ? position->previous : tail_;
+        if (node->previous) node->previous->next = node; else head_ = node;
+        if (node->next) node->next->previous = node; else tail_ = node;
+        ++size_;
+    }
+    void return_node(Node *node) {
+        auto &origin = *node->origin; node->origin = nullptr; --origin.loans_;
+        origin.adopt(*this, node); origin.push_free(node);
+    }
+    Node *borrowed_free_ = nullptr, *head_ = nullptr, *tail_ = nullptr, *free_ = nullptr;
+    unsigned size_ = 0, capacity_ = 0, loans_ = 0, bytes_ = 0;
 };
 }

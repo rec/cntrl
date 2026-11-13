@@ -201,6 +201,7 @@ void test_explicit_routes_replace_forwarding_and_yield_to_utilities() {
     event.packet = {9, {0x90, 60, 100}};
     services.sources[0].push_back(event);
     runtime.poll(services);
+    for (unsigned i = 0; i < 8 && runtime.streams().pending(); ++i) runtime.poll(services);
     assert(services.writes == std::vector<unsigned>{1});
     runtime.streams().receive(0, {9, {0x90, 62, 100}}, services.time);
     services.cable_test.running = true;
@@ -237,6 +238,7 @@ void test_monitor_observes_inputs_before_gates_and_actual_transformed_outputs() 
     graph[12] = graph[13] = 255; graph[16] = 1; graph[20] = 'a'; // Input 0, output 0.
     assert(runtime.streams().load(graph.data(), unsigned(graph.size()), services.midi_outputs(), 0));
     services.sources[0].push_back(event); runtime.poll(services);
+    for (unsigned i = 0; i < 8 && runtime.streams().pending(); ++i) runtime.poll(services);
     assert(runtime.monitor().tail() == 3 && services.writes.size() == 1);
     assert(runtime.monitor().entry(1)->direction == cntrl::midi::Monitor::Direction::incoming);
     assert(runtime.monitor().entry(2)->direction == cntrl::midi::Monitor::Direction::outgoing);

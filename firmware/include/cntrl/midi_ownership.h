@@ -194,7 +194,7 @@ private:
         return nullptr;
     }
 #if UINTPTR_MAX == UINT32_MAX
-    static_assert(CheckedList<Key>::node_size() == 44 && CheckedList<Claim>::node_size() == 40);
+    static_assert(CheckedList<Key>::node_size() == 40 && CheckedList<Claim>::node_size() == 36);
 #endif
     CheckedList<Key> keys_;
     CheckedList<Claim> claims_;

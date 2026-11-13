@@ -822,7 +822,7 @@ unsigned random_movie(unsigned count) { return unsigned(random(count)); }
 cntrl::animation::Session splash_session(splash_assets, splash_player, random_movie);
 
 cntrl::StorageListing storage_listing(setup_filesystem);
-void storage_info(bool scan) {
+FLASHMEM void storage_info(bool scan) {
     if (!card.ready) { board.reply("CNTRL ERROR storage-unavailable"); return; }
     auto *device = SD.sdfs.card();
     cid_t cid;
@@ -901,7 +901,7 @@ PerformanceStatus performance_status() {
 
 void midi_status(unsigned route) { board.midi_status(route); }
 void midi_reset() { board.midi_reset(); }
-bool native_asset_command(const char *line) {
+FLASHMEM bool native_asset_command(const char *line) {
 #if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
     if (!std::strcmp(line, "CNTRL QUAL STATUS")) {
         char response[640]; cntrl::device::qualification_status(response, sizeof(response)); board.reply(response); return true;

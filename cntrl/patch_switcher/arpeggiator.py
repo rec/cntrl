@@ -158,10 +158,10 @@ def estimate_ram(data: bytes) -> int:
     if mono:
         return 104 * count
     return (
-        64 * events
-        + 56 * events * count
-        + 496 * count
-        + 412 * count * channels.bit_count()
+        60 * events
+        + 52 * events * count
+        + 472 * count
+        + 396 * count * channels.bit_count()
         + 16
     )
 
@@ -179,11 +179,11 @@ def estimate_arm_ram(data: bytes, *, capture_contexts: int | None = None) -> int
     # Include 16 bytes per allocation for allocator metadata and alignment.
     return (
         224 * events
-        + 140 * (events // 2)
-        + 144 * events * count
+        + 136 * (events // 2)
+        + 132 * events * count
         + 56 * capture_contexts
-        + 412 * count * channels.bit_count()
-        + 248 * count
+        + 396 * count * channels.bit_count()
+        + 236 * count
         + 32
     )
 

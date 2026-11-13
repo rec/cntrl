@@ -366,7 +366,7 @@ private:
     struct Routed { unsigned output; Packet packet; bool sounding; };
     struct Batch { unsigned owner, remaining; };
 #if UINTPTR_MAX == UINT32_MAX
-    static_assert(CheckedList<Held>::node_size() == 44 && CheckedList<Routed>::node_size() == 40);
+    static_assert(CheckedList<Held>::node_size() == 40 && CheckedList<Routed>::node_size() == 36);
     static_assert(CheckedList<Group>::node_size() == 96 && CheckedList<Segment>::node_size() == 72);
     static_assert(CheckedList<Voice>::node_size() == 88);
 #endif

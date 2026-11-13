@@ -104,13 +104,13 @@ def estimate_arm_ram(data: bytes, *, capture_contexts: int | None = None) -> int
         + events * 4
         + (events // 2) * 16
         + capture_contexts * 56
-        + 172 * (events // 2) * count
+        + 160 * (events // 2) * count
         + 72 * events
-        + 144 * events * count
-        + 412 * contexts
+        + 132 * events * count
+        + 396 * contexts
         + 76 * count
         + 6 * 16
-        + 52
+        + 48
     )
 
 

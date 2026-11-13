@@ -40,10 +40,10 @@ struct OutputState {
     CheckedList<ChannelState> channels;
 };
 #if UINTPTR_MAX == UINT32_MAX
-static_assert(CheckedList<NoteState>::node_size() == 32);
-static_assert(CheckedList<ControllerState>::node_size() == 28);
-static_assert(CheckedList<ParameterState>::node_size() == 36);
-static_assert(CheckedList<ChannelState>::node_size() == 132);
+static_assert(CheckedList<NoteState>::node_size() == 28);
+static_assert(CheckedList<ControllerState>::node_size() == 24);
+static_assert(CheckedList<ParameterState>::node_size() == 32);
+static_assert(CheckedList<ChannelState>::node_size() == 140);
 static_assert(CheckedList<OutputState>::node_size() == 60);
 #endif
 

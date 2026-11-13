@@ -59,6 +59,9 @@ public:
         }
         return false;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(history_import_tick)
+#endif
     void tick(uint32_t now) {
         if (!busy()) return;
         if (uint32_t(now - last_) > 10000) { fail("history-import-timeout"); return; }

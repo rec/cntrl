@@ -43,6 +43,198 @@ Route transpose(unsigned scope = 65535) {
 }
 void poll(Streams &streams, Output &output, uint64_t now) { for (unsigned i = 0; i < 20; ++i) streams.service(output, now); }
 void note(Streams &streams, uint8_t status, uint8_t pitch, uint8_t velocity, uint64_t now = 0) { streams.receive(0, {uint8_t(status >> 4), {status, pitch, velocity}}, now); }
+void deferred_fanout_keeps_declared_branch_order() {
+    Route dry = transpose(); dry.steps[4] = 0;
+    auto data = compiled({dry, transpose()}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    note(streams, 0x90, 60, 100);
+    poll(streams, output, 100);
+    assert(output.packets[1].size() == 2);
+    assert(output.packets[1][0].bytes[1] == 60 && output.packets[1][1].bytes[1] == 72);
+}
+void deferred_poly_pressure_stays_between_its_transformed_onset_and_release() {
+    auto data = compiled({transpose()}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    note(streams, 0x90, 60, 100, 10);
+    note(streams, 0xa0, 60, 77, 20);
+    note(streams, 0x80, 60, 5, 30);
+    for (unsigned i = 0; i < 100 && streams.pending(); ++i) streams.service(output, 1000, ~0u, 0, 4);
+    assert(!streams.pending() && !streams.voices() && output.packets[1].size() == 3);
+    assert(output.packets[1][0].bytes[0] == 0x90 && output.packets[1][0].bytes[1] == 72);
+    assert(output.packets[1][1].bytes[0] == 0xa0 && output.packets[1][1].bytes[1] == 72 && output.packets[1][1].bytes[2] == 77);
+    assert(output.packets[1][2].bytes[0] == 0x80 && output.packets[1][2].bytes[1] == 72);
+}
+void deferred_pedal_on_reserves_ingress_for_its_off() {
+    auto data = compiled({Route{}});
+    for (uint8_t controller : {64, 66, 69}) {
+        Streams streams; Output output;
+        assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+        streams.receive(0, {11, {0xb0, controller, 127}}, 10);
+        cntrl::memory_fail_after = 0;
+        streams.receive(0, {11, {0xb0, controller, 0}}, 20);
+        cntrl::memory_fail_after = -1;
+        for (unsigned i = 0; i < 100 && streams.pending(); ++i) streams.service(output, 1000, ~0u, 0, 4);
+        assert(!streams.pending() && output.packets[1].size() == 2);
+        assert(output.packets[1][0].bytes[1] == controller && output.packets[1][0].bytes[2] == 127);
+        assert(output.packets[1][1].bytes[1] == controller && output.packets[1][1].bytes[2] == 0);
+    }
+}
+void ready_event_nodes_are_reused_for_deferred_admission_under_exhaustion() {
+    auto data = compiled({Route{}}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    for (unsigned i = 0; i < 2; ++i) { streams.receive(0, {12, {0xc0, uint8_t(i), 0}}, 0); poll(streams, output, 0); }
+    const unsigned allocations = cntrl::memory_allocations;
+    cntrl::memory_fail_after = 0;
+    for (unsigned i = 2; i < 100; ++i) { streams.receive(0, {12, {0xc0, uint8_t(i), 0}}, 0); poll(streams, output, 0); }
+    cntrl::memory_fail_after = -1;
+    assert(output.packets[1].size() == 100 && !streams.pending());
+    assert(cntrl::memory_allocations == allocations && !streams.diagnostics().dropped && !streams.diagnostics().failed);
+}
+void deferred_minima_survive_arbitrary_retirement_and_timestamp_order() {
+    Route first; first.output = 1;
+    Route second; second.input = 1;
+    auto data = compiled({first, second}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    std::vector<std::pair<unsigned, unsigned>> expected;
+    for (unsigned i = 0; i < 80; ++i) {
+        const unsigned time = 2 + (i * 37) % 97;
+        streams.receive(i % 2, {12, {0xc0, uint8_t(i), 0}}, time);
+        if (i % 2) expected.push_back({time, i});
+    }
+    for (unsigned i = 0; i < 50; ++i) streams.service(output, 1000, 0, 0, 4);
+    streams.gate(0u, false); streams.gate(0u, true);
+    streams.receive(0, {12, {0xc0, 127, 0}}, 1);
+    for (unsigned i = 0; i < 3000 && streams.pending(); ++i) streams.service(output, 1000, ~0u, 0, 4);
+    assert(!streams.pending() && output.packets[0].size() == 1 && output.packets[0][0].bytes[1] == 127);
+    std::stable_sort(expected.begin(), expected.end());
+    assert(output.packets[1].size() == expected.size());
+    for (unsigned i = 0; i < expected.size(); ++i) assert(output.packets[1][i].bytes[1] == expected[i].second);
+}
+void accepted_delivery_makes_progress_while_new_ingress_continues() {
+    auto data = compiled({Route{}}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    for (unsigned cycle = 0; cycle < 400; ++cycle) {
+        for (unsigned i = 0; i < 4; ++i)
+            streams.receive(0, {12, {0xc0, uint8_t((cycle + i) % 128), 0}}, cycle);
+        streams.service(output, 1000 + cycle, ~0u, 0, 16);
+        if (cycle == 200) assert(output.packets[1].size() > 50 && streams.pending());
+    }
+    assert(output.packets[1].size() > 100 && streams.pending());
+    for (unsigned i = 0; i < 10000 && streams.pending(); ++i) streams.service(output, 2000, ~0u, 0, 16);
+    assert(!streams.pending() && output.packets[1].size() == 1600);
+}
+void aborting_sysex_restores_the_earliest_blocked_output_event() {
+    Route other; Route frame; frame.input = 1;
+    auto data = compiled({other, frame}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    streams.receive(1, {4, {0xf0, 0x7d, 1}}, 0); poll(streams, output, 0);
+    assert(output.packets[1].size() == 1);
+    streams.receive(0, {12, {0xc0, 10, 0}}, 1);
+    streams.receive(1, {4, {2, 3, 4}}, 2);
+    streams.receive(0, {12, {0xc0, 20, 0}}, 3);
+    for (unsigned i = 0; i < 30; ++i) streams.service(output, 10, 0);
+    streams.service(output, 10); streams.service(output, 10);
+    assert(output.packets[1].size() == 2 && output.packets[1].back().bytes[0] == 2);
+    streams.gate(1u, false); poll(streams, output, 10);
+    assert(output.packets[1].size() == 5);
+    assert(output.packets[1][2].bytes[0] == 0xf7);
+    assert(output.packets[1][3].bytes[0] == 0xc0 && output.packets[1][3].bytes[1] == 10);
+    assert(output.packets[1][4].bytes[0] == 0xc0 && output.packets[1][4].bytes[1] == 20);
+}
+void sysex_owner_keeps_progress_when_new_chunks_are_published() {
+    Route other; Route frame; frame.input = 1;
+    auto data = compiled({other, frame}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    streams.receive(1, {4, {0xf0, 0x7d, 1}}, 0); poll(streams, output, 0);
+    streams.receive(0, {12, {0xc0, 10, 0}}, 1);
+    for (unsigned i = 0; i < 20; ++i) {
+        streams.receive(1, {4, {uint8_t(i + 1), 2, 3}}, i + 2);
+        streams.service(output, 100 + i);
+    }
+    assert(output.packets[1].size() > 1);
+    streams.receive(1, {5, {0xf7, 0, 0}}, 22); poll(streams, output, 200);
+    assert(!streams.pending() && output.packets[1].size() == 23);
+    assert(output.packets[1][21].bytes[0] == 0xf7 && output.packets[1][22].bytes[0] == 0xc0);
+}
+void pedal_release_fanout_survives_a_full_ingress_queue_and_exhaustion() {
+    Route first; first.output = 1; auto data = compiled({first, Route{}});
+    Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    streams.receive(0, {11, {0xb0, 64, 127}}, 0); poll(streams, output, 0);
+    assert(output.packets[0].size() == 1 && output.packets[1].size() == 1);
+    streams.receive(0, {11, {0xb0, 64, 0}}, 1);
+    cntrl::memory_fail_after = 0;
+    for (unsigned i = 0; i < 32; ++i) {
+        const auto dropped = streams.diagnostics().dropped;
+        streams.receive(0, {12, {0xc0, uint8_t(i), 0}}, i + 2);
+        if (streams.diagnostics().dropped != dropped) break;
+    }
+    for (unsigned i = 0; i < 200 && streams.pending(); ++i) streams.service(output, 1000);
+    cntrl::memory_fail_after = -1;
+    for (unsigned destination = 0; destination < 2; ++destination) {
+        bool released = false;
+        for (const auto &packet : output.packets[destination]) released |= packet.bytes[0] == 0xb0 && packet.bytes[1] == 64 && !packet.bytes[2];
+        assert(released);
+    }
+    assert(!streams.pending() && !streams.diagnostics().failed);
+}
+void output_replacement_cancels_old_ingress_but_keeps_other_outputs_and_new_work() {
+    Route both; both.output = 3; auto data = compiled({both}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    note(streams, 0x90, 60, 100, 0);
+    streams.output_connection(0, false, 2); streams.output_connection(0, true, 3);
+    poll(streams, output, 100);
+    assert(output.packets[0].empty() && output.packets[1].size() == 1);
+    note(streams, 0x80, 60, 0, 101); poll(streams, output, 101);
+    note(streams, 0x90, 61, 100, 102); poll(streams, output, 102);
+    assert(output.packets[0].size() == 1 && output.packets[0][0].bytes[1] == 61);
+    assert(output.packets[1].size() == 3 && output.packets[1].back().bytes[1] == 61);
+}
+void deferred_preparation_preserves_cross_input_sustain_and_note_timing() {
+    Route slow = transpose(); slow.steps.clear(); slow.count = 400;
+    for (unsigned i = 0; i < slow.count; ++i)
+        slow.steps.insert(slow.steps.end(), {2, 0, 4, 0, 0, 0, 0, 0});
+    Route pedal; pedal.input = 1;
+    auto data = compiled({slow, pedal}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    note(streams, 0x90, 60, 100, 10);
+    streams.receive(1, {11, {0xb0, 64, 127}}, 15);
+    note(streams, 0x80, 60, 7, 20);
+    assert(output.packets[1].empty());
+    const auto before = streams.diagnostics();
+    streams.service(output, 100000, ~0u, 0, 8);
+    assert(output.packets[1].empty() && streams.pending());
+    assert(streams.diagnostics().preparation_visits - before.preparation_visits <= 16);
+    for (unsigned i = 0; i < 300 && streams.pending(); ++i) streams.service(output, 100000, ~0u, 0, 8);
+    assert(!streams.pending() && !streams.voices());
+    assert(output.packets[1].size() == 3);
+    assert(output.packets[1][0].bytes[0] == 0x90);
+    assert(output.packets[1][1].bytes[0] == 0xb0 && output.packets[1][1].bytes[2] == 127);
+    assert(output.packets[1][2].bytes[0] == 0x80 && output.packets[1][2].bytes[2] == 7);
+}
+void blocked_delivery_and_nonmonotonic_insertion_yield_between_node_visits() {
+    auto data = compiled({Route{}}); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    for (unsigned i = 0; i < 100; ++i) streams.receive(0, {12, {0xc0, uint8_t(i), 0}}, 100 + i);
+    for (unsigned i = 0; i < 1000; ++i) {
+        const auto before = streams.diagnostics();
+        streams.service(output, 1000, 0, 0, 4);
+        assert(streams.diagnostics().preparation_visits - before.preparation_visits <= 8);
+        assert(streams.diagnostics().delivery_visits - before.delivery_visits <= 4);
+    }
+    // An older timestamp forces a real traversal of the sorted destination.
+    streams.receive(0, {12, {0xc0, 127, 0}}, 150);
+    for (unsigned i = 0; i < 1000 && streams.pending(); ++i) {
+        const auto before = streams.diagnostics();
+        streams.service(output, 1000, ~0u, 0, 4);
+        assert(streams.diagnostics().preparation_visits - before.preparation_visits <= 8);
+        assert(streams.diagnostics().delivery_visits - before.delivery_visits <= 4);
+    }
+    assert(!streams.pending() && output.packets[1].size() == 101);
+    for (unsigned i = 0; i <= 50; ++i) assert(output.packets[1][i].bytes[1] == i);
+    assert(output.packets[1][51].bytes[1] == 127);
+    for (unsigned i = 52; i < 101; ++i) assert(output.packets[1][i].bytes[1] == i - 1);
+}
 void stopped_input_allows_memory_refused_work_and_owned_releases_to_drain() {
     struct Delivery : Sink {
         Bridge &bridge;
@@ -80,6 +272,7 @@ void stopped_input_allows_memory_refused_work_and_owned_releases_to_drain() {
         // Unmatched and unowned pedal Offs cannot spend another claim's slots.
         for (unsigned controller : {64u, 65u, 67u, 68u})
             streams.receive(0, {11, {uint8_t(controller == 64 ? 0xb1 : 0xb0), uint8_t(controller), 0}}, 0);
+        drain();
         assert(!streams.pending());
         note(streams, 0x80, 60, 0);
         streams.receive(0, {11, {0xb0, 64, 0}}, 0); drain();
@@ -246,6 +439,37 @@ struct Burst : Streams::Processor {
     }
 };
 std::unique_ptr<Streams::Processor> burst(const uint8_t *, unsigned) { return std::make_unique<Burst>(); }
+struct PedalControl : Streams::Processor {
+    bool push(const Packet &packet, unsigned, Streams::Emit &output) override {
+        if (packet.bytes[0] == 0xb0 && packet.bytes[1] == 7)
+            return output.emit({11, {0xb0, 64, uint8_t(packet.bytes[2] ? 127 : 0)}});
+        return output.emit(packet);
+    }
+};
+std::unique_ptr<Streams::Processor> pedal_control(const uint8_t *, unsigned) { return std::make_unique<PedalControl>(); }
+void retiring_a_pedal_producer_releases_its_ingress_credit() {
+    assert(Streams::register_processor(132, 1, pedal_control));
+    Route route; route.count = 1; route.steps = {132, 1, 0, 0}; auto data = compiled({route});
+    const auto available_ingress = [&](bool retire) {
+        Streams streams; Output output;
+        assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+        streams.receive(0, {11, {0xb0, 7, 127}}, 0); poll(streams, output, 0);
+        if (retire) { streams.gate(0u, false); poll(streams, output, 0); streams.gate(0u, true); }
+        else { streams.receive(0, {11, {0xb0, 7, 0}}, 1); poll(streams, output, 1); }
+        assert(output.packets[1].size() == 2 && output.packets[1].back().bytes[2] == 0);
+        unsigned admitted = 0;
+        cntrl::memory_fail_after = 0;
+        for (; admitted < 32; ++admitted) {
+            const unsigned dropped = streams.diagnostics().dropped;
+            streams.receive(0, {12, {0xc0, uint8_t(admitted), 0}}, 2);
+            if (streams.diagnostics().dropped != dropped) break;
+        }
+        cntrl::memory_fail_after = -1;
+        return admitted;
+    };
+    const unsigned explicit_off = available_ingress(false);
+    assert(explicit_off && available_ingress(true) == explicit_off);
+}
 void generated_releases_keep_their_traversal_credit_under_exhaustion() {
     assert(Streams::register_processor(130,1,burst));
     Route route; route.count = 1; route.steps = {130,1,0,0}; auto data = compiled({route});
@@ -487,6 +711,18 @@ void pickup_uses_mapped_destination_and_separate_live_sources() {
 }
 int main() {
     cntrl::memory_budget = 1024 * 1024;
+    deferred_fanout_keeps_declared_branch_order();
+    deferred_poly_pressure_stays_between_its_transformed_onset_and_release();
+    deferred_pedal_on_reserves_ingress_for_its_off();
+    ready_event_nodes_are_reused_for_deferred_admission_under_exhaustion();
+    deferred_minima_survive_arbitrary_retirement_and_timestamp_order();
+    accepted_delivery_makes_progress_while_new_ingress_continues();
+    aborting_sysex_restores_the_earliest_blocked_output_event();
+    sysex_owner_keeps_progress_when_new_chunks_are_published();
+    pedal_release_fanout_survives_a_full_ingress_queue_and_exhaustion();
+    output_replacement_cancels_old_ingress_but_keeps_other_outputs_and_new_work();
+    deferred_preparation_preserves_cross_input_sustain_and_note_timing();
+    blocked_delivery_and_nonmonotonic_insertion_yield_between_node_visits();
     stopped_input_allows_memory_refused_work_and_owned_releases_to_drain();
     echo_decay_rounds_half_velocities_up_and_releases_each_note();
     replacement_graph_prepares_without_interrupting_active_notes();
@@ -495,6 +731,7 @@ int main() {
     sustain_cleanup_and_shared_inputs(); thru_preserves_repeated_note_articulation();
     registered_processor_uses_shared_delivery_and_cleanup(); external_patch_scope_restores_local_routes();
     generated_releases_keep_their_traversal_credit_under_exhaustion();
+    retiring_a_pedal_producer_releases_its_ingress_credit();
     generated_refusals_keep_fifo_pairing_at_the_note_limit();
     generated_notes_pair_with_the_processor_that_emitted_them();
     generated_refusals_preserve_the_original_input_cable();

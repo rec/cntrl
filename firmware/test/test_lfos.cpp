@@ -151,13 +151,20 @@ int main(int argc, char **argv) {
     std::string mode = argv[2];
     if (mode == "stress") {
         for (unsigned i = 0; i < 256; ++i) streams.receive(0, {9,{uint8_t(0x90 | (i / 128)),uint8_t(i % 128),100}}, 0);
+        size_t settled_storage = 0;
         for (unsigned i = 0; i < 2000; ++i) {
             output.blocked = i < 500 ? 1 : 0;
             poll(streams, output, uint64_t(i) * 1000, 1);
-            assert(streams.retained_bytes() + 32768 <= 200704 + 4 * data.size());
+            assert(streams.retained_bytes() <= cntrl::memory_used && cntrl::memory_used <= cntrl::memory_budget);
+            // Deferred burst preparation can retain both input continuations
+            // and active voices. Once that finite burst and reconnect settle,
+            // continuing LFO traffic must reuse its admitted working set.
+            if (i == 1000) settled_storage = streams.retained_bytes();
+            if (i > 1000) assert(streams.retained_bytes() <= settled_storage);
         }
         assert(streams.lfo_status().pending == 0);
         assert(streams.diagnostics().coalesced != 0);
+        assert(output.count[0] && output.count[1] > 256);
         std::printf("retained storage: %llu\n", (unsigned long long)streams.retained_bytes());
         return 0;
     }
@@ -203,7 +210,7 @@ int main(int argc, char **argv) {
         assert(streams.gate("sweep", true)); poll(streams, output, 750000);
         output.blocked = 0; poll(streams, output, 1000000);
     } else if (mode == "partial-stop") {
-        poll(streams, output, 250000, 1);
+        for (unsigned i = 0; i < 64 && !output.parameter_locked(0); ++i) poll(streams, output, 250000, 1);
         assert(output.parameter_locked(0));
         assert(streams.gate("sweep", false));
         poll(streams, output, 250000);

@@ -37,6 +37,105 @@ void allocator_charge_refusal_preserves_the_running_buffer() {
     assert(charge_queries >= 5 && cntrl::memory_used == 0 && !cntrl::memory_checked_operations);
     cntrl::memory_actual_charge = callback;
 }
+void list_nodes_keep_addresses_and_credits_through_transfer() {
+    cntrl::memory_budget = 64 * 1024;
+    const unsigned baseline = cntrl::memory_used;
+    {
+        cntrl::CheckedList<unsigned> owner, borrowed, published;
+        assert(owner.reserve(5));
+        const unsigned bytes = owner.memory_bytes();
+        assert(bytes == cntrl::memory_used - baseline);
+        assert(borrowed.take_reserved(owner, 2) && owner.loans() == 2);
+        auto *value = borrowed.append(71); assert(value);
+        const auto item = published.splice(published.end(), borrowed, borrowed.begin());
+        assert(&*item == value && *item == 71 && borrowed.empty());
+        assert(owner.loans() == 2);
+        assert(owner.memory_bytes() + borrowed.memory_bytes() + published.memory_bytes() == bytes);
+        assert(published.transfer_free(borrowed, 1) == 1 && borrowed.capacity() == 0);
+        assert(borrowed.take_reserved(published, 1) && owner.loans() == 2 && !published.loans());
+        assert(published.transfer_free(borrowed, 1) == 1);
+        published.return_reserved();
+        assert(owner.loans() == 1);
+        published.erase(item);
+        assert(owner.loans() == 0 && owner.capacity() == 5 && owner.memory_bytes() == bytes);
+        assert(published.empty() && published.capacity() == 0);
+        assert(borrowed.transfer_free(owner, 3) == 3 && owner.loans() == 0);
+        value = borrowed.append(23); assert(value);
+        cntrl::CheckedList<unsigned> moved(std::move(borrowed));
+        assert(&moved.front() == value && borrowed.empty() && !borrowed.capacity());
+        cntrl::memory_fail_after = 0;
+        assert(moved.append(24) && moved.append(25) && !moved.append(26));
+        const auto next = owner.splice(owner.end(), moved, moved.begin());
+        assert(&*next == value && *next == 23);
+        assert(owner.trim(1) == 1);
+        assert(owner.memory_bytes() + moved.memory_bytes() == cntrl::memory_used - baseline);
+        cntrl::memory_fail_after = -1;
+    }
+    assert(cntrl::memory_used == baseline);
+}
+void list_reservation_failure_keeps_owned_and_borrowed_nodes() {
+    cntrl::memory_budget = 64 * 1024;
+    const unsigned baseline = cntrl::memory_used;
+    {
+        cntrl::CheckedList<unsigned> donor, receiver;
+        assert(donor.reserve(3) && receiver.take_reserved(donor, 2) && receiver.reserve(5));
+        const unsigned bytes = cntrl::memory_used;
+        cntrl::memory_fail_after = 1;
+        assert(!receiver.reserve(7));
+        assert(receiver.capacity() == 5 && donor.loans() == 2 && cntrl::memory_used == bytes);
+        cntrl::memory_fail_after = 0;
+        receiver.return_reserved();
+        assert(receiver.capacity() == 3 && donor.capacity() == 3 && !donor.loans());
+        assert(receiver.memory_bytes() + donor.memory_bytes() == bytes - baseline);
+        assert(receiver.append(11) && receiver.append(33));
+        assert(donor.append(22));
+        auto position = receiver.begin(); ++position;
+        auto *address = &donor.front();
+        const auto inserted = receiver.splice(position, donor, donor.begin());
+        assert(&*inserted == address && receiver.size() == 3 && donor.empty());
+        auto item = receiver.begin(); assert(*item++ == 11); assert(*item++ == 22); assert(*item++ == 33);
+        cntrl::memory_fail_after = -1;
+    }
+    assert(cntrl::memory_used == baseline);
+}
+void list_transfer_preserves_nested_payload_lifetime() {
+    struct Counts { unsigned moves = 0, destructions = 0; } counts;
+    struct Payload {
+        Counts *counts;
+        cntrl::CheckedList<unsigned> nested;
+        explicit Payload(Counts &value) : counts(&value) {
+            assert(nested.reserve(2)); assert(nested.append(7) && nested.append(8));
+        }
+        Payload(const Payload &) = delete;
+        Payload(Payload &&other) noexcept : counts(other.counts), nested(std::move(other.nested)) { ++counts->moves; }
+        ~Payload() { ++counts->destructions; }
+    };
+    cntrl::memory_budget = 64 * 1024;
+    const unsigned baseline = cntrl::memory_used;
+    unsigned destroyed = 0;
+    {
+        cntrl::CheckedList<Payload> donor, borrowed, published;
+        assert(donor.reserve(2) && borrowed.take_reserved(donor,2));
+        auto *payload = borrowed.append(Payload(counts)); assert(payload);
+        auto *nested = &payload->nested.front();
+        const unsigned moves = counts.moves, allocations = cntrl::memory_allocations;
+        const unsigned failures = cntrl::memory_failures, bytes = cntrl::memory_used;
+        destroyed = counts.destructions;
+        cntrl::memory_fail_after = 0;
+        assert(published.transfer_free(borrowed,1) == 1);
+        const auto item = published.splice(published.end(),borrowed,borrowed.begin());
+        assert(&*item == payload && &item->nested.front() == nested);
+        assert(item->nested.size() == 2 && item->nested.front() == 7 && item->nested.back() == 8);
+        assert(counts.moves == moves && counts.destructions == destroyed);
+        assert(cntrl::memory_used == bytes && cntrl::memory_allocations == allocations && cntrl::memory_failures == failures);
+        published.erase(item);
+        assert(counts.destructions == destroyed + 1 && donor.loans() == 1);
+        published.return_reserved();
+        assert(!donor.loans() && donor.capacity() == 2 && !published.capacity());
+        cntrl::memory_fail_after = -1;
+    }
+    assert(counts.destructions == destroyed + 1 && cntrl::memory_used == baseline);
+}
 void buffer_growth_preserves_running_data_until_replacement_fits() {
     using cntrl::memory_charge;
     assert(memory_charge(0) == 0);
@@ -121,7 +220,7 @@ struct Timing {
         service_samples.push_back(uint64_t(elapsed));
     }
     void drain(Streams &streams,Output &output,uint64_t now) {
-        for (unsigned i = 0; i < 128; ++i) service(streams,output,now);
+        for (unsigned i = 0; i < 4096 && (!i || streams.pending() || streams.recovery()); ++i) service(streams,output,now);
     }
     void report(const char *scenario,unsigned peak,unsigned allocations,unsigned failures) const {
         std::printf("dynamic-memory %s: service_calls=%llu mean_ns=%llu max_ns=%llu input_calls=%llu input_mean_ns=%llu input_max_ns=%llu ledger_peak=%u allocations=%u failures=%u\n",
@@ -199,6 +298,9 @@ void deterministic_refusal_preserves_releases() {
 }
 int main() {
     allocator_charge_refusal_preserves_the_running_buffer();
+    list_nodes_keep_addresses_and_credits_through_transfer();
+    list_reservation_failure_keeps_owned_and_borrowed_nodes();
+    list_transfer_preserves_nested_payload_lifetime();
     buffer_growth_preserves_running_data_until_replacement_fits();
     cntrl::memory_budget = 430112;
     dense_input_and_service(24,false,"wide24-16steps-16notes");

@@ -574,15 +574,15 @@ def estimate_ram(section: bytes, *, endpoint_count: int) -> int:
     admitted. Include 16 bytes per configured allocation for heap alignment and
     allocator metadata, rather than reserving fixed traffic pools.
     """
-    # Parser 7, two Connection 24 records, quarantine 2, output bookkeeping 29.
-    memory = endpoint_count * 86 + (160 if endpoint_count else 0)
+    # Parser 7, two Connection 24 records, quarantine 2, output bookkeeping 61.
+    memory = endpoint_count * 118 + (176 if endpoint_count else 0)
     if not section:
         return memory
     if section_end(section, 0) != len(section):
         raise ValueError('invalid MIDI stream section')
     count = HEADER.unpack_from(section)[2]
     cursor = HEADER.size
-    scratch = 1
+    scratch = 1 + count
     paths: list[int] = []
     by_opcode = {p.opcode: p for p in REGISTERED_PROCESSORS.values()}
     for _ in range(count):
@@ -624,14 +624,14 @@ def estimate_ram(section: bytes, *, endpoint_count: int) -> int:
                 memory += 120 + 16
             if opcode in by_opcode:
                 memory += by_opcode[opcode].ram_bytes + 16
-    # Route 168 plus target 8/owner 8/reached 1; offsets 4 and OwnerPath 8.
+    # Route 184 plus target 8/owner 8/reached 1; offsets 4 and OwnerPath 8.
     if count:
         if sum(paths) > 4294967295 // 8:
             raise ValueError('MIDI ownership paths exceed addressable storage')
-        memory += count * 185 + 64 + (count + 1) * 4 + 16
-        memory += sum(paths) * 8 + 16 + 52 + 16
-    # CheckedList<Processing> nodes are 104 bytes on ARM32.
-    return memory + scratch * 120
+        memory += count * 201 + 64 + (count + 1) * 4 + 16
+        memory += sum(paths) * 8 + 16 + 48 + 16
+    # CheckedList<Processing> nodes are 144 bytes on ARM32.
+    return memory + scratch * 160
 
 
 def _pack_match(match: Match, ports: dict[str, Endpoint]) -> bytes:

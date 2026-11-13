@@ -638,6 +638,9 @@ private:
         header.graphics.foreground = 0xffff; header.graphics.background = 0;
         header.graphics.top = header.y; header.y = 0;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_expression_layout)
+#endif
     void prepare_expression_layout() {
         using R = cntrl::PageSettings;
         cntrl::Pane pane;

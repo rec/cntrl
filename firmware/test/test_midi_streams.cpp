@@ -29,16 +29,20 @@ struct Board : TestPatchHardware, cntrl::midi::Sink {
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override { assert(false); }
+    void settle() {
+        for (unsigned i = 0; i < 128 && (!i || streams.pending() || streams.recovery()); ++i) streams.service(*this, 100);
+        assert(!streams.pending() && !streams.recovery());
+    }
     void select(const cntrl::Document &document, const char *name) {
         int node = document.named_patch(name); assert(node >= 0);
         assert(entry.start(document, unsigned(node), false, true));
         for (unsigned i = 0; i < 32 && entry.busy(); ++i) entry.tick(i);
         assert(entry.status() == cntrl::PatchExecutor::Status::completed);
-        streams.service(*this, 100);
+        settle();
     }
     void note(unsigned pitch, bool down) {
         streams.receive(0, {uint8_t(down ? 9 : 8), {uint8_t(down ? 0x90 : 0x80), uint8_t(pitch), uint8_t(down ? 100 : 0)}}, 100);
-        streams.service(*this, 100);
+        settle();
     }
     void check(unsigned index, unsigned output, unsigned kind, unsigned pitch) const {
         assert(index < sent.size());

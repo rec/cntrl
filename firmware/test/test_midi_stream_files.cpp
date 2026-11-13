@@ -97,7 +97,7 @@ void independent_file_generators_do_not_share_position_or_indexes() {
     assert(!files.open_stream(settings, 2));
     assert(!storage.exists("/index.stream-2"));
 }
-void file_generator_runs_through_finite_reverse() {
+void file_generator_runs_through_finite_reverse(bool defer_completion = false) {
     Storage storage;
     storage.files["/midi/a.mid"] = {'M','T','h','d',0,0,0,6,0,0,0,1,1,0xe0,
         'M','T','r','k',0,0,0,13,0,0x90,60,97,0x83,0x60,0x80,60,0,0,0xff,0x2f,0};
@@ -120,6 +120,13 @@ void file_generator_runs_through_finite_reverse() {
     assert(streams.load(section.data(), unsigned(section.size()), {&endpoint,1}, 0));
     for (unsigned i = 0; i < 32; ++i) streams.service(sink, 0);
     assert(sink.bytes.empty());
+    if (defer_completion) {
+        for (unsigned i = 0; i < 4; ++i) streams.service(sink, 500000, ~0u, 0, 1);
+        for (unsigned i = 0; i < 128; ++i) streams.service(sink, 1000000, ~0u, 0, 1);
+        assert((sink.bytes == Bytes{0x90,60,97,0x80,60,0}));
+        assert(!streams.voices());
+        return;
+    }
     for (unsigned i = 0; i < 32; ++i) streams.service(sink, 500000);
     assert((sink.bytes == Bytes{0x90,60,97}));
     for (unsigned i = 0; i < 32; ++i) streams.service(sink, 1000000);
@@ -205,6 +212,7 @@ int main() {
     cntrl::memory_budget = 524288;
     independent_file_generators_do_not_share_position_or_indexes();
     file_generator_runs_through_finite_reverse();
+    file_generator_runs_through_finite_reverse(true);
     loop_save_is_exclusive_bounded_and_load_never_autoplays();
     loop_capture_keeps_running_status_and_usb_cables_separate();
     assert(cntrl::memory_used == 0);

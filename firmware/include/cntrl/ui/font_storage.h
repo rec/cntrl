@@ -34,6 +34,9 @@ public:
         bool opened = open(key); auto &file = reader_; Entry entry; unsigned offset;
         return opened && find(file, size, entry, offset);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_stage)
+#endif
     bool stage(uint32_t key, unsigned size) {
         if (cache.contains(key, size)) return true;
         Close close{reader_};
@@ -45,6 +48,9 @@ public:
         return data.resize(entry.length()) && file.read(offset, data.data, entry.length())
             && cache.add(key, entry, std::move(data));
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_command)
+#endif
     bool command(const char *line, cntrl::Replies &replies, uint32_t now = 0) {
         if (std::strncmp(line, "CNTRL FONT ", 11)) return false;
         last_ = now; Close close{reader_};
@@ -108,6 +114,9 @@ private:
         if (file.size() < 8 || file.size() > max_file || !file.read(0, bytes, 8) || std::memcmp(bytes, "CFN2", 4)) return false;
         count = cntrl::u32(bytes + 4); return count && count <= UINT8_MAX;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_find)
+#endif
     static bool find(cntrl::files::File &file, unsigned size, Entry &result, unsigned &offset) {
         unsigned count; if (!header(file, count)) return false;
         unsigned cursor = 8; bool found = false; bool seen[256] = {};
@@ -136,6 +145,9 @@ private:
         }
         return ~crc == key;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_validate)
+#endif
     static bool validate(cntrl::files::File &file) {
         unsigned count; if (!header(file, count)) return false;
         unsigned cursor = 8; bool seen[256] = {};

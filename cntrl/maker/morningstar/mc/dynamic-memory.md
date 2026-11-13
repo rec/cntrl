@@ -128,6 +128,47 @@ The user chose preparation across service cycles while preserving MIDI order;
 earlier preparation through a release may delay it under overload. Physical
 qualification remains in progress.
 
+## Continuation implementation checkpoint
+
+Graph preparation, chronological insertion and blocked-output scans now yield
+between node visits. Prepared deliveries and cleanup run before more graph work;
+causal barriers retain MIDI order across inputs. Independent ingress keeps
+`1 + routes + stream references + echo repeats` traversal nodes available in
+addition to each admitted note/pedal's terminal credit. Publishing an event
+transfers its stable node instead of allocating or copying another record.
+
+Focused sanitizer regressions cover sustained SysEx publication without starvation,
+two-output pedal release with allocations failing, rejection of old queued output
+work after reconnect, and finite file reversal whose preparation finishes later
+than the source. Nested-payload tests verify allocation-free node transfer and
+exactly-once destruction. The full native suite and 1360 Python tests passed
+locally with non-editable dependencies; physical timing remains unqualified.
+
+The checked ARM layouts are Route 184 bytes, output bookkeeping 32 bytes and a
+processing node 144 bytes. Compiler estimates include those sizes and the
+graph-derived protected workspace. Both normal and diagnostic builds pass:
+
+| Region | Normal continuation | Diagnostic continuation |
+| --- | ---: | ---: |
+| RAM1 variables | 308416 bytes | 312608 bytes |
+| RAM1 available for local variables | 19264 bytes | 15072 bytes |
+| RAM2 static variables | 90752 bytes | 90752 bytes |
+| RAM2 available for allocation | 433536 bytes | 433536 bytes |
+
+The first link crossed another 32 KiB instruction-RAM bank. Existing cold-code
+placement now covers storage inventory/native asset commands, font staging and
+validation/transfer commands, history import and Expression layout initialization.
+Queue insertion, minimum-index operations and interrupt handlers retain their
+normal placement. Normal instruction code uses 195376 bytes; the diagnostic
+uses 196296 bytes, retaining six instruction-memory banks. These totals are not
+measured stack high-water values or a proof of a wall-clock service bound.
+
+Reproduce with `uv run --frozen --no-editable cntrl build --target-dir
+cntrl/maker/morningstar/mc --source-root . --output build/continuation-target`,
+adding `--diagnostics` for the diagnostic image. Retain its exported ELF with
+the image. Source changes are tracked; generated images and reports are outputs.
+Do not overwrite the working normal recovery image during qualification.
+
 ## Physical qualification procedure
 
 Use `uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc`
@@ -279,9 +320,9 @@ movie files remained unavailable to the backup, as before.
 
 To reproduce the recovery tooling without modifying the working checkout,
 export `git archive 8e1f07f` into a generated source directory under `build/`.
-Its `../reccy` editable dependency must point to the existing tracked sibling
+Its `../reccy` source dependency must point to the existing tracked sibling
 project; the local recovery used a generated `build/reccy` symlink to it. Run
-`uv sync --frozen` and the existing `cntrl setup restore`, `setup del` and
+`uv sync --frozen --no-editable` and the existing `cntrl setup restore`, `setup del` and
 `setup verify` commands from that export, using the normal image's `target.toml`.
 For the final page repair, overlay the `b857268` versions of
 `firmware/include/cntrl/page_layout.h`, `firmware/include/cntrl/document.h`,

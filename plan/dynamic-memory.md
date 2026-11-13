@@ -1,6 +1,7 @@
 # Demand-sized firmware memory
 
-Status: implementation and qualification in progress, 2026-11-12.
+Status: continuation implementation validated locally; physical qualification
+remains in progress, 2026-11-13.
 The inventory below records the original audit; implementation results and
 outstanding qualification gates are tracked here and in the target appendix.
 
@@ -45,7 +46,22 @@ Physical stress measured an ingress call of 9.30 ms with about 2700 queued event
 The user chose preparation across cycles, preserving MIDI order and prioritizing
 the causal preparation through a release over later work. Earlier accepted
 changes can delay a release under overload; already-prepared playback and cleanup
-run first. That continuation implementation is in progress.
+run first. Preparation now yields between route inputs, graph steps, echo copies,
+output branches, release bookkeeping and ordered-event insertion visits. New
+admission retains graph-derived traversal workspace alongside terminal credits,
+so an accepted pedal release can complete its fanout under allocation failure.
+Stable event nodes move from staging to delivery without allocation. Intrusive
+minimum indexes retain causal ordering across inputs without rescanning the whole
+preparation queue for each output. Reconnects discard old output-generation work;
+finite file reversal retains the original completion time while work drains.
+
+Native sanitizer regressions cover continued SysEx publication, exhausted pedal
+fanout, disconnect/reconnect, deferred finite reversal and nested node lifetimes.
+Host RAM estimates and compiled fixtures match the checked ARM layouts. Normal
+and diagnostic target builds pass. This bounds graph visits, not elapsed time:
+processor callbacks, receive-time note-ledger scans and other atomic operations
+still require physical timing measurements. Manual cross-platform qualification
+and the physical exhaustion/timing matrix remain completion gates.
 
 One bounded shared RAM2 allocator now replaces the SDK and checked application's
 newlib allocation path. Metadata lookup/coalescing has bounded work; payload
