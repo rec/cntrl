@@ -169,6 +169,39 @@ adding `--diagnostics` for the diagnostic image. Retain its exported ELF with
 the image. Source changes are tracked; generated images and reports are outputs.
 Do not overwrite the working normal recovery image during qualification.
 
+## Normal-firmware MIDI failure, 2026-11-13
+
+Before installing either continuation image, the bounded short-message probe
+reproduced a failure on the working normal/newlib Expression image, SHA-256
+`e48514e4a0d0f7bf12bd18ed5103863e222c50b717b0413e488890085441cc83`.
+The original setup, history and readable assets were backed up to
+`build/midi-loss-baseline-backup-20261113/` before selecting the tracked temporary
+`qualification/dynamic-memory-thru.toml` setup. The two previously unreadable,
+unreferenced movie files remained untouched.
+
+The virtual-source framing check passed. The first physical, paced trial expected
+304 bytes: 128 Program Changes followed by 16 Control Changes. It received only
+the first 120 Program Changes, 240 bytes ending in `c777`; the entire remaining
+64-byte suffix was absent. An empty SysEx (`f0f7`) was captured separately during
+the idle interval. Burst and long-SysEx trials did not run. The following serial
+diagnostic timed out, so post-trial route counters were unavailable and the loss
+cannot yet be localized to USB input, DIN transmission/receive or USB return.
+The raw trial was saved before that request in
+`build/midi-loss-baseline-probe-20261113.toml`.
+
+During the failure, macOS still enumerated both the application USB device and
+its serial port with the same USB session ID, `679780132959`. A subsequent
+read-only inspection opened no CoreMIDI client, received no serial response and
+stalled while closing the port. The process sample in
+`build/midi-loss-baseline-inspect-close.sample.txt` places its main thread in
+Python's `os_close`, then macOS `close`; that process eventually exited and
+released the port. Its final report is
+`build/midi-loss-baseline-after-20261113.toml`. Enumeration alone does not prove
+that the firmware loop or USB endpoints were progressing. This reproduction
+establishes that the communication failure also occurs on the previous allocator
+and firmware, but does not establish its cause. Neither continuation image was
+installed for this trial.
+
 ## Physical qualification procedure
 
 Use `uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc`
