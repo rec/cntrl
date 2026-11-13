@@ -588,29 +588,23 @@ def run(command: Copy | Download) -> None:
             upload(client, data, command.overwrite)
         print('Song library copied and verified')
     else:
-        command.directory.mkdir(parents=True, exist_ok=True)
-        destination = command.directory / 'songs.toml'
-        if destination.exists():
-            raise ValueError(f'{destination}: already exists')
         with transport.SerialConnection(command.port) as connection:
             client = transport.SetupClient(connection)
             library = decode(download(client))
-            for path in library.fonts.values():
-                key = int(Path(path).stem, 16)
-                cli.save_asset(command.directory / path, client.download_font(key))
-        companion_names = references(library)
-        if companion_names:
-            cli.run_setup(
-                cli.Download(
-                    names=companion_names,
-                    directory=command.directory,
-                    port=command.port,
-                )
+            companion_names = references(library)
+            files = (
+                cli.download_files(client, companion_names) if companion_names else {}
             )
-        destination.write_bytes(
-            tomlkit.dumps(library.model_dump(exclude_none=True)).encode()
-        )
-        print(destination)
+            for path in library.fonts.values():
+                if Path(path) not in files:
+                    files[Path(path)] = client.download_font(int(Path(path).stem, 16))
+        text = tomlkit.dumps(library.model_dump(exclude_none=True)).encode()
+        if Path('songs.toml') in files and files[Path('songs.toml')] != text:
+            raise ValueError(
+                'songs.toml: conflicts with a downloaded setup or MIDI file'
+            )
+        files[Path('songs.toml')] = text
+        cli.publish_download(files, command.directory)
 
 
 SELECTION = struct.Struct('<64s64s64sII')

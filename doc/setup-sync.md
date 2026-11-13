@@ -7,7 +7,25 @@ compiled Host documents. It writes a review and recovery snapshot to a visible
 with the project and include it in backups. It contains source before-images,
 compiled setups, editable exports, required fonts/movies/MIDI files, and TOML records.
 
-Use the same document expressions, target, definitions and tables as for copying:
+To copy saved pedal setups into a host directory without merging authoring files:
+
+```sh
+cntrl setup download --port PORT -o recovered
+```
+
+Omit setup names to download all setups, or supply names to download a selection
+and its referenced companion setups. The directory receives editable TOML,
+`fonts/` and `movies/` assets, and referenced MIDI files beside the TOML documents,
+so they can be copied back with the existing `setup copy` workflow.
+The default output is the current directory. Every destination is checked before
+any directories or files are written. If any copied file already exists, the
+entire download is refused, even if its contents match. Use `-f`/`--force` to
+replace those files; unrelated files are retained. `-o`/`--output` selects the
+destination. The existing `setup restore` command still restores a host backup
+to the pedal.
+
+For source synchronization, use the same document expressions, target,
+definitions and tables as for copying:
 
 ```sh
 cntrl setup sync Show=show.toml + shared.toml --target target.toml --port PORT

@@ -11,7 +11,7 @@ from typing import Annotated
 
 import tomlkit
 import tyro
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import build, flash, qualify, upload
 from . import (
@@ -73,12 +73,12 @@ class Rotate(BaseModel, frozen=True):
 
 
 class Download(BaseModel, frozen=True):
-    """Download self-contained, editable TOML setups."""
+    """Download editable setups and their files; omit names to download all setups."""
 
-    names: Annotated[list[str], tyro.conf.Positional]
+    names: Annotated[list[str], tyro.conf.Positional] = Field(default_factory=list)
     port: Path
-    directory: Path = Path('.')
-    overwrite: Annotated[bool, tyro.conf.arg(aliases=['-o'])] = False
+    output: Annotated[Path, tyro.conf.arg(aliases=['-o'])] = Path('.')
+    force: Annotated[bool, tyro.conf.arg(aliases=['-f'])] = False
 
 
 class SetupCLI(BaseModel, frozen=True):
@@ -379,7 +379,10 @@ def run_setup(
             entries = {e.name.lower(): e.name for e in client.catalogue()}
             errors: list[str] = []
             names: list[str] = []
-            for n in command.names:
+            requested = command.names
+            if isinstance(command, Download) and not requested:
+                requested = list(entries.values())
+            for n in requested:
                 try:
                     data_files.validate_name(n)
                 except ValueError as error:
@@ -392,14 +395,6 @@ def run_setup(
                     names.append(entries[n.lower()])
             if not names:
                 errors.append('at least one setup name is required')
-            if isinstance(command, Download):
-                if not command.directory.is_dir():
-                    errors.append(f'{command.directory}: not a directory')
-                for n in names:
-                    if (
-                        command.directory / f'{n}.toml'
-                    ).exists() and not command.overwrite:
-                        errors.append(f'{n}.toml: exists; use --overwrite/-o')
             if errors:
                 raise compiler.CompilationError(errors)
             if isinstance(command, Delete):
@@ -433,40 +428,98 @@ def run_setup(
                     raise
                 print('Deleted: ' + ', '.join(names))
             else:
-                for n in names:
-                    text = resolved.export(client.download(n))
-                    fonts = tomlkit.parse(text).unwrap().get('fonts', {})
-                    if isinstance(fonts, dict):
-                        for p in fonts.values():
-                            if not isinstance(p, str):
-                                raise ValueError('invalid font asset path')
-                            key = int(Path(p).stem, 16)
-                            data = client.download_font(key)
-                            save_asset(
-                                command.directory / 'fonts' / f'{key:08x}.cfont', data
-                            )
-                    settings = models.Setup.model_validate(tomlkit.parse(text).unwrap())
-                    for p in settings.splash_movie + settings.idle_movie:
-                        key = int(Path(p).stem, 16)
-                        save_asset(command.directory / p, client.download_movie(key))
-                    destination = command.directory / f'{n}.toml'
-                    # Complete transfer before touching the destination; publish
-                    # a synced sibling atomically, including overwrite protection.
-                    with NamedTemporaryFile(
-                        mode='w', dir=command.directory, prefix='.cntrl-', delete=False
-                    ) as output:
-                        temporary = Path(output.name)
-                        output.write(text)
-                        output.flush()
-                        os.fsync(output.fileno())
-                    try:
-                        if command.overwrite:
-                            temporary.replace(destination)
-                        else:
-                            destination.hardlink_to(temporary)
-                    finally:
-                        temporary.unlink(missing_ok=True)
-                    print(destination)
+                files = download_files(client, names)
+                publish_download(files, command.output, command.force)
+
+
+def download_files(
+    client: transport.SetupClient, names: list[str]
+) -> dict[Path, bytes]:
+    """Collect a complete setup/dependency batch without writing host files."""
+    entries = {e.name.lower(): e.name for e in client.catalogue()}
+    pending = list(names)
+    setups: dict[str, bytes] = {}
+    files: dict[Path, bytes] = {}
+    for name in pending:
+        data_files.validate_name(name)
+        if name.lower() not in entries:
+            raise ValueError(f'{name}: no such setup')
+        name = entries[name.lower()]
+        if name in setups:
+            continue
+        data = client.download(name)
+        text = resolved.export(data)
+        source = tomlkit.parse(text).unwrap()
+        setups[name] = data
+        files[Path(f'{name}.toml')] = text.encode()
+        pending.extend(document_references(source))
+    for data in setups.values():
+        settings = models.Setup.model_validate(
+            tomlkit.parse(resolved.export(data)).unwrap()
+        )
+        for value in settings.fonts.values():
+            path = Path(value)
+            if path not in files:
+                files[path] = client.download_font(int(path.stem, 16))
+        for value in settings.splash_movie + settings.idle_movie:
+            path = Path(value)
+            if path not in files:
+                files[path] = client.download_movie(int(path.stem, 16))
+    for name in midi_assets.referenced(setups):
+        path = Path(name)
+        data = client.download_midi(name)
+        if path in files and files[path] != data:
+            raise ValueError(
+                f'{name}: MIDI file conflicts with another downloaded file'
+            )
+        files[path] = data
+    return files
+
+
+def publish_download(
+    files: dict[Path, bytes], output: Path, force: bool = False
+) -> None:
+    """Preflight every destination before creating directories or writing files."""
+    paths = {str(p).casefold(): p for p in files}
+    errors: list[str] = []
+    if len(paths) != len(files):
+        errors.append('downloaded filenames differ only in case')
+    for relative in files:
+        if relative.is_absolute() or relative.drive or '..' in relative.parts:
+            errors.append(f'{relative}: invalid downloaded asset path')
+            continue
+        destination = output / relative
+        if destination.is_dir():
+            errors.append(f'{destination}: is a directory')
+        elif not force and (destination.exists() or destination.is_symlink()):
+            errors.append(f'{destination}: exists; use --force/-f')
+        for parent in relative.parents:
+            if str(parent).casefold() in paths:
+                errors.append(f'{parent}: required as both a file and a directory')
+        for parent in destination.parents:
+            if (parent.exists() or parent.is_symlink()) and not parent.is_dir():
+                errors.append(f'{parent}: not a directory')
+    if errors:
+        raise compiler.CompilationError(errors)
+    for relative, data in files.items():
+        destination = output / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        stream = NamedTemporaryFile(
+            dir=destination.parent, prefix='.cntrl-', delete=False
+        )
+        temporary = Path(stream.name)
+        try:
+            with stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if force:
+                temporary.replace(destination)
+            else:
+                destination.hardlink_to(temporary)
+        finally:
+            temporary.unlink(missing_ok=True)
+        print(destination)
 
 
 def save_asset(destination: Path, data: bytes) -> None:

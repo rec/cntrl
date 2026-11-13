@@ -16,6 +16,7 @@ from cntrl.patch_switcher import (
     cli,
     compiler,
     data_files,
+    midi_assets,
     models,
     resolved,
     setup_sync,
@@ -220,12 +221,12 @@ def test_setup_cli_copy_download_and_delete(
         run(['rotate', '-b'])
         run(['set'])
         assert capsys.readouterr().out.strip() == 'Jazz'
-        run(['download', 'Evening', '--directory', str(tmp_path)])
+        run(['download', 'Evening', '--output', str(tmp_path)])
         downloaded = tmp_path / 'Evening.toml'
         assert downloaded.exists()
-        with pytest.raises(SystemExit, match='--overwrite'):
-            run(['download', 'Evening', '--directory', str(tmp_path)])
-        run(['download', 'Evening', '--directory', str(tmp_path), '-o'])
+        with pytest.raises(SystemExit, match='--force'):
+            run(['download', 'Evening', '--output', str(tmp_path)])
+        run(['download', 'Evening', '-o', str(tmp_path), '-f'])
         run(
             [
                 'copy',
@@ -659,6 +660,66 @@ def test_setup_copy_transfers_playback_and_looper_dependencies(
             assert client.download_midi('loop.mid') == loop
         # Repeating the upload with identical assets succeeds without replacing them.
         cli.run_setup(command.model_copy(update={'overwrite': True}))
+
+
+def test_download_collects_setups_companions_and_midi_before_writing(
+    bundle_peer: Path, tmp_path: Path
+) -> None:
+    host = tmp_path / 'host'
+    host.mkdir()
+    device = tmp_path / 'device'
+    device.mkdir()
+    (host / 'Other.toml').write_text(
+        '[patches.play]\noperation="play-midi-file"\nfilename="song.mid"\n'
+    )
+    source = host / 'Show.toml'
+    source.write_text(
+        'inline_patches=false\n[patch_cycles]\nmain=[{document="Other",patch="play"}]\n'
+    )
+    midi = bytes.fromhex('4d546864000000060000000103e84d54726b0000000400ff2f00')
+    (host / 'song.mid').write_bytes(midi)
+    target = [str(ROOT / 'firmware/test/target.json')]
+    with NativePeer([str(bundle_peer), str(device)]) as port:
+        cli.run_setup(cli.Copy(document=[str(source)], target=target, port=Path(port)))
+        output = tmp_path / 'download'
+        cli.run_setup(cli.Download(output=output, port=Path(port)))
+        assert sorted(p.name for p in output.iterdir()) == [
+            'Other.toml',
+            'Show.toml',
+            'song.mid',
+        ]
+        assert (output / 'song.mid').read_bytes() == midi
+        rebuilt = cli.compile_inputs(
+            data_files.Sources(document=[str(output / 'Show.toml')], target=target)
+        )
+        assert rebuilt.names == ['Other', 'Show']
+        assert midi_assets.collect(
+            rebuilt.setups, {p: p.read_bytes() for p in output.glob('*.toml')}
+        ) == {'song.mid': midi}
+        # Selecting only Show still downloads its live companion and assets.
+        selected = tmp_path / 'selected'
+        cli.run_setup(cli.Download(names=['Show'], output=selected, port=Path(port)))
+        assert sorted(p.name for p in selected.iterdir()) == [
+            'Other.toml',
+            'Show.toml',
+            'song.mid',
+        ]
+        blocked = tmp_path / 'blocked'
+        blocked.mkdir()
+        (blocked / 'song.mid').write_bytes(b'existing MIDI')
+        command = cli.Download(names=['Show'], output=blocked, port=Path(port))
+        with pytest.raises(compiler.CompilationError, match='--force/-f'):
+            cli.run_setup(command)
+        assert [p.name for p in blocked.iterdir()] == ['song.mid']
+        assert (blocked / 'song.mid').read_bytes() == b'existing MIDI'
+        cli.run_setup(command.model_copy(update={'force': True}))
+        assert (blocked / 'song.mid').read_bytes() == midi
+        # A missing asset must also leave a nonexistent output directory untouched.
+        (device / 'cntrl/midi/song.mid').unlink()
+        missing = tmp_path / 'missing'
+        with pytest.raises(FileNotFoundError):
+            cli.run_setup(cli.Download(output=missing, port=Path(port)))
+        assert not missing.exists()
 
 
 def test_progress_reply_is_not_returned_as_the_command_result() -> None:
