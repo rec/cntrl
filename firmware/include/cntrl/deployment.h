@@ -110,7 +110,7 @@ private:
     CNTRL_FLASH_ROUTINE(deployment_publish)
 #endif
     bool publish(uint32_t root) {
-        if (!filesystem_.make_directory("/cntrl/deploy")) return false;
+        if (!filesystem_.exists("/cntrl/deploy") && !filesystem_.make_directory("/cntrl/deploy")) return false;
         uint8_t bytes[24] = {};
         std::memcpy(bytes, "CDEP", 4); binary::write32(bytes + 4, sequence_ + 1);
         binary::write32(bytes + 8, root);
@@ -123,7 +123,7 @@ private:
         std::snprintf(directory, sizeof(directory), "/cntrl/generations/%08lx", (unsigned long)root);
         completion_path(root, completed);
         if (!filesystem_.exists(completed)) {
-            if (!filesystem_.make_directory(directory) || !write_record(completed, bytes)) return false;
+            if ((!filesystem_.exists(directory) && !filesystem_.make_directory(directory)) || !write_record(completed, bytes)) return false;
         }
         char path[64]; filename((sequence_ + 1) % 2, path);
         if (!write_record(path, bytes)) return false;

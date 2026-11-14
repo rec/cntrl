@@ -11,6 +11,9 @@ struct Faults : TestFileSystem {
     int remaining = -1;
     bool sync_ok = true;
     bool hide_songs = false;
+    bool make_directory(const char *path) override {
+        return !exists(path) && TestFileSystem::make_directory(path);
+    }
     bool exists(const char *path) override {
         return !(hide_songs && !std::strncmp(path, "/cntrl/songs/", 13)) && TestFileSystem::exists(path);
     }

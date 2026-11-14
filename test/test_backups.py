@@ -433,7 +433,7 @@ def test_failed_startup_still_allows_an_incomplete_raw_recovery_backup(
 
         def request(self, command: str) -> str:
             if command == 'CNTRL STATUS':
-                return 'CNTRL ERROR incompatible-format'
+                raise ValueError('CNTRL ERROR incompatible-format')
             if command == 'CNTRL DEPLOY STATUS':
                 return 'CNTRL DEPLOY 0 0 0'
             assert command.startswith('CNTRL STORAGE')
@@ -625,6 +625,8 @@ def test_restore_uploads_saved_data_before_restoring_selection(
 
     def snapshot(directory: Path, port: Path, connection: object) -> None:
         directory.mkdir()
+        (directory / 'backup-pending.toml').write_text('complete = false')
+        backups.write_backup_manifest(directory, complete=True, raw_state=False)
 
     monkeypatch.setattr(backups, 'backup_pedal', snapshot)
     monkeypatch.setattr(
@@ -650,11 +652,13 @@ def test_restore_uploads_saved_data_before_restoring_selection(
 
 
 @pytest.mark.parametrize('converted', [False, True])
+@pytest.mark.parametrize('journal_ready', [False, True])
 def test_installing_a_converted_collection_retains_an_unreadable_active_root(
     tmp_path: Path,
     target: models.Target,
     monkeypatch: pytest.MonkeyPatch,
     converted: bool,
+    journal_ready: bool,
 ) -> None:
     from cntrl.patch_switcher.setup_sync import write_record
 
@@ -678,7 +682,7 @@ def test_installing_a_converted_collection_retains_an_unreadable_active_root(
         selected: str = ''
 
         def recover_deployment(self) -> bool:
-            return False
+            return journal_ready
 
         def download_bundle(self) -> bytes:
             pytest.fail('an unreadable active bundle must not be merged')
@@ -737,7 +741,7 @@ def test_installing_a_converted_collection_retains_an_unreadable_active_root(
     if not converted:
         with pytest.raises(ValueError, match='offline converted backup'):
             backups.restore_setups(directory, Path('/unused'), target)
-        assert not operations
+        assert operations == ['backup']
         return
     backups.restore_setups(directory, Path('/unused'), target)
     assert operations == ['backup', 'begin', 'bundle', 'songs', 'select', 'commit']
