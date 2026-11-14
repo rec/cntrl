@@ -16,6 +16,10 @@ on:
         description: Qualify without restored dependency or SDK caches
         type: boolean
         default: false
+      native_backtrace:
+        description: Capture a native backtrace if Linux Python tests crash
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -49,6 +53,9 @@ jobs:
       - name: Linux MIDI and offscreen GUI prerequisites
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config libegl1 libopengl0
+      - name: Linux native crash debugger
+        if: runner.os == 'Linux' && inputs.native_backtrace
+        run: sudo apt-get install -y gdb
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         if: ${{ !inputs.cold_cache }}
         with:
@@ -71,6 +78,7 @@ jobs:
         env:
           CNTRL_CI_PROFILE: ${{ inputs.profile }}
           CNTRL_CI_TARGET_DIR: ${{ inputs.target_dir }}
+          CNTRL_CI_NATIVE_BACKTRACE: ${{ runner.os == 'Linux' && inputs.native_backtrace && '1' || '0' }}
         run: uv run --no-sync python -m scripts.ci
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

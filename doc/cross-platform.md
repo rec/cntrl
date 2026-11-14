@@ -63,6 +63,12 @@ lockfile hash in TOML. Matrix jobs do not cancel one another on failure. A newer
 dispatch for the same ref and profile supersedes an older run. Qualification
 requires a passing complete matrix.
 
+For a Linux native crash in the Python tests, enable `native_backtrace` on the
+manual dispatch. The workflow installs GDB and captures all thread backtraces
+in `pytest.log` while retaining the test process's exit status. The equivalent
+Linux CLI option is `python -m scripts.ci --native-backtrace`. It is disabled by
+default and leaves the normal matrix checks in place.
+
 Serial access and enumeration use pySerial on all hosts. Endpoint names remain
 opaque: use `--port COM10` on Windows or the appropriate `/dev/...` endpoint on
 POSIX hosts. Linux users need read/write permission on the device, commonly

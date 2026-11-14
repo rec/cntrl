@@ -22,6 +22,8 @@ from scripts.qualify_portable import Qualification, qualify
 
 class QualificationRun(BaseModel, frozen=True):
     profile: str = os.environ.get('CNTRL_CI_PROFILE', 'core')
+    native_backtrace: bool = os.environ.get('CNTRL_CI_NATIVE_BACKTRACE') == '1'
+    """Run Linux Python tests under GDB and retain native crash stacks."""
     target_dir: Path | None = Field(
         default_factory=lambda: (
             Path(os.environ['CNTRL_CI_TARGET_DIR'])
@@ -40,6 +42,8 @@ def run(options: QualificationRun) -> None:
         raise ValueError('profile must be core or full')
     if options.profile == 'full' and options.target_dir is None:
         raise ValueError('full qualification requires --target-dir')
+    if options.native_backtrace and sys.platform != 'linux':
+        raise ValueError('native backtrace capture requires Linux and GDB')
     provenance = {
         'revision': subprocess.check_output(
             ['git', 'rev-parse', 'HEAD'], text=True
@@ -111,6 +115,24 @@ def run(options: QualificationRun) -> None:
         'typing': ['uv', 'run', '--no-sync', 'ty', 'check', 'cntrl'],
     }
     for name, command in commands.items():
+        if name == 'pytest' and options.native_backtrace:
+            command = [
+                'gdb',
+                '--batch',
+                '--return-child-result',
+                '--ex',
+                'set debuginfod enabled off',
+                '--ex',
+                'set print thread-events off',
+                '--ex',
+                'handle SIGPIPE nostop noprint pass',
+                '--ex',
+                'run',
+                '--ex',
+                'thread apply all bt',
+                '--args',
+                *command,
+            ]
         execute(command, output / f'{name}.log', root)
     wheel_smoke(root, output)
     if options.target_dir is not None and options.profile == 'full':
