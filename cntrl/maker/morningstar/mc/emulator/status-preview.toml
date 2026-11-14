@@ -1,0 +1,4 @@
+# Save the startup Status framebuffer before opening the interactive window.
+seed = 1
+until = '1 second'
+events = []
