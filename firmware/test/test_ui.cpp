@@ -5,6 +5,7 @@
 #include <cntrl/ui/pixel_throb.h>
 #include <cassert>
 #include <vector>
+#include <string>
 #include <algorithm>
 #include "page_fixture.h"
 

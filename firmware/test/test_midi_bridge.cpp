@@ -71,7 +71,8 @@ void test_independent_outputs_and_pedal_reservation() {
 void test_unparsed_usb_bytes_preserve_messages_and_mixed_sysex() {
     cntrl::midi::Bridge bridge{test_midi_outputs}; Output out;
     bridge.configure(true); bridge.connected(true, 0);
-    for (uint8_t byte : {0x90, 60, 100, 61, 101, 0xc0, 12, 0xf1, 2})
+    const uint8_t unparsed[] = {0x90, 60, 100, 61, 101, 0xc0, 12, 0xf1, 2};
+    for (uint8_t byte : unparsed)
         bridge.forward_packet(0, {15, {byte, 0, 0}}, 0);
     for (unsigned i = 0; i < 8; ++i) bridge.service(out, 0);
     assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0x90, 61, 101, 0xc0, 12, 0xf1, 2}));
