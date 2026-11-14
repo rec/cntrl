@@ -383,6 +383,10 @@ class Navigation(Presentation, frozen=True):
         'menu',
         'back',
         'next-song-patch',
+        'next-bank',
+        'previous-bank',
+        'next-bank-page',
+        'previous-bank-page',
     ]
 
 
@@ -1088,11 +1092,15 @@ class Page(BaseModel, frozen=True):
         'midi-monitor',
         'midi-looper',
         'arpeggiator',
+        'banked',
         'None',
     ] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
     min_windows: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
     give_up_windows: list[str] = Field(default_factory=list, max_length=255)
+    banks: list[list[str]] = Field(default_factory=list, max_length=128)
+    initial_bank: Annotated[int, Field(strict=True, ge=0, le=127)] = 0
+    chords: dict[str, list[str]] = Field(default_factory=dict)
 
     @model_validator(mode='after')
     def window_allocation(self) -> 'Page':
@@ -1102,6 +1110,8 @@ class Page(BaseModel, frozen=True):
             if 'min_windows' in self.model_fields_set and self.min_windows:
                 raise ValueError('None must have zero minimum windows')
             object.__setattr__(self, 'min_windows', 0)
+        elif self.type == 'banked':
+            object.__setattr__(self, 'min_windows', 3)
         elif self.type != 'patch-switcher':
             object.__setattr__(self, 'min_windows', 1)
         return self
@@ -1109,7 +1119,11 @@ class Page(BaseModel, frozen=True):
     def maximum_windows(self, available: int) -> int:
         if self.type == 'None':
             return 0
-        return available if self.type == 'patch-switcher' else min(1, available)
+        return (
+            available
+            if self.type == 'patch-switcher'
+            else min(3 if self.type == 'banked' else 1, available)
+        )
 
     model_config = ConfigDict(extra='forbid')
 

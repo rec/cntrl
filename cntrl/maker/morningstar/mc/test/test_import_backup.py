@@ -19,6 +19,9 @@ def test_saved_vl70_bank_converts_to_editable_toml(
     file_regression: FileRegressionFixture,
 ) -> None:
     setup = convert(json.loads(BACKUP.read_bytes()), 0)
+    assert len(setup.pages['performance'].banks) == 128
+    assert all(len(b) == 4 for b in setup.pages['performance'].banks)
+    assert not setup.patch_cycles
     file_regression.check(
         tomlkit.dumps(
             setup.model_dump(mode='json', exclude_none=True, exclude_defaults=True)
@@ -48,9 +51,10 @@ def test_imported_bank_runs_counters_and_bank_transitions(
     restored = tomlkit.parse(resolved.export(raw)).unwrap()
     assert compiler.compile_show(restored, {}, [], target) == raw
     bundle = tmp_path / 'setup.bin'
-    bundle.write_bytes(
-        setup_bundle.build({'vl70-1': raw}, {'vl70-1': show}, target.memory).pack()
-    )
+    planned = setup_bundle.build({'vl70-1': raw}, {'vl70-1': show}, target.memory)
+    assert planned.prefill == [0]
+    assert resolved.refresh_memory(raw, {}, switches=True) == raw
+    bundle.write_bytes(planned.pack())
     executable = backend.build(target, tmp_path / 'native', BASE.parents[3])
     layout = EmulatorLayout.load(BASE / 'emulator' / 'mc6-pro.toml')
     storage = tmp_path / 'session'
@@ -84,7 +88,7 @@ def test_imported_bank_runs_counters_and_bank_transitions(
             now += 60000
             session.advance(now)
 
-        press('a')  # Activate the imported bank; no MIDI on bank entry.
+        session.advance(20000)
         assert not [e for e in session.messages if e.kind == 'midi']
         snapshot()
         press('a')  # Counter 3: 21 -> 22, on both channels and both outputs.
@@ -114,6 +118,49 @@ def test_imported_bank_runs_counters_and_bank_transitions(
         ]
         file_regression.check(tomlkit.dumps({'din': din}), extension='.toml')
         assert usb == din
+
+        def chord(buttons: str) -> None:
+            nonlocal now
+            now += 20000
+            session.advance(now)
+            for b in buttons:
+                session.button(b, True)
+            now += 60000
+            session.advance(now)
+            for b in buttons:
+                session.button(b, False)
+            now += 60000
+            session.advance(now)
+
+        before = len(din)
+        chord('bc')  # Bank 1.
+        chord('bc')  # Bank 2, a distinct slot with the same VL70-1 name.
+        press('a')
+        assert [
+            list(e.data)
+            for e in session.messages
+            if e.kind == 'midi' and e.endpoint == 'din'
+        ][before:] == [[0xC0, 22], [0xC1, 22]]
+        chord('bc')  # Empty bank 3.
+        press('a')
+        chord('ef')  # Empty preset page 2.
+        press('a')
+        chord('de')  # Return to preset page 1.
+        chord('ab')  # Bank 2.
+        chord('ab')  # Bank 1.
+        chord('ab')  # Bank 0.
+        chord('df')  # cntrl menu.
+        press('f')  # Return to the Banked Page.
+        assert (
+            len(
+                [
+                    e
+                    for e in session.messages
+                    if e.kind == 'midi' and e.endpoint == 'din'
+                ]
+            )
+            == before + 2
+        )
         # The backup sends counter 8 on Ch1 and counter 3 on Ch2 in VL70-2.
         assert din[12] == [0xC0, 47] and din[13] == [0xC1, 23]
         for port, controller in ((0, 13), (1, 4)):
@@ -140,6 +187,19 @@ def test_imported_bank_runs_counters_and_bank_transitions(
             assert primary and primary[-1] == [0xB0, controller, 127]
             assert mirror == primary
         assert not [e.message for e in session.messages if e.kind == 'error']
+        memory = session.memory()
+        assert memory['failures'] == 0
+        assert memory['peak'] < target.memory.capacity - target.memory.runtime - 16192
+        (tmp_path / 'capacity.toml').write_text(
+            tomlkit.dumps(
+                dict(
+                    compiled_bytes=len(raw),
+                    resident_headroom=planned.total_free_ram2()
+                    - planned.total_setup_ram,
+                    **memory,
+                )
+            )
+        )
         cli.save(session, tmp_path / 'rendered')
         comparison = Image.new(
             'RGB', (target.display_width * 3, target.display_height * len(frames))
@@ -161,6 +221,63 @@ def test_imported_bank_runs_counters_and_bank_transitions(
             basename='vl70-appearance',
             check_fn=compare_pixels,
         )
+
+
+def test_banked_page_keeps_selection_and_runs_actions_while_hidden(
+    tmp_path: Path,
+) -> None:
+    target = cli.load_target(
+        profiles.export(
+            BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+        )
+    )
+    show = convert(json.loads(BACKUP.read_bytes()), 0).model_dump(exclude_none=True)
+    show['pages']['status'] = {'type': 'status'}
+    show['regions'] = {'main': {'pages': ['performance', 'status']}}
+    actions = show['patches']['bank1_page0']['bindings']['a']['on']['patches']
+    actions.insert(0, {'type': 'delay', 'duration': '400 milliseconds'})
+    raw = compiler.compile_show(show, {}, [], target)
+    bundle = tmp_path / 'setup.bin'
+    bundle.write_bytes(
+        setup_bundle.build({'banks': raw}, {'banks': show}, target.memory).pack()
+    )
+    executable = backend.build(target, tmp_path / 'native', BASE.parents[3])
+    layout = EmulatorLayout.load(BASE / 'emulator' / 'mc6-pro.toml')
+    with backend.Session(
+        layout, target, executable, tmp_path / 'session', bundle
+    ) as session:
+        now = 0
+
+        def press(button: str) -> None:
+            nonlocal now
+            now += 20000
+            session.advance(now)
+            session.button(button, True)
+            now += 60000
+            session.advance(now)
+            session.button(button, False)
+            now += 60000
+            session.advance(now)
+
+        press('c')  # Bank 1.
+        press('a')  # A delayed program send.
+        session.request(b'\x08\x00')  # The emulator's page selector chooses Status.
+        now += 1000000
+        session.advance(now)
+        assert [
+            list(e.data)
+            for e in session.messages
+            if e.kind == 'midi' and e.endpoint == 'din'
+        ] == [[0xC0, 47], [0xC1, 21]]
+        session.request(b'\x08\x00')  # Return to the same bank.
+        press('c')  # Bank 1's C returns to bank 0.
+        press('a')
+        assert [
+            list(e.data)
+            for e in session.messages
+            if e.kind == 'midi' and e.endpoint == 'din'
+        ][-2:] == [[0xC0, 22], [0xC1, 22]]
+        assert not [e for e in session.messages if e.kind == 'error']
 
 
 BASE = Path(__file__).parents[1]

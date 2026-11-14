@@ -3,6 +3,10 @@
 #include <cstring>
 
 namespace cntrl {
+inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
+inline uint32_t u32(const uint8_t *p) {
+    return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
+}
 // A portable full-width product; Cortex-M7 does not provide __int128.
 struct IntegerProduct {
     uint64_t high, low;

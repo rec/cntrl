@@ -10,8 +10,14 @@ def pack(show: models.Setup, windows: list[str]) -> bytes:
         if len(windows) == 1:
             regions = {'main': models.PageRegion(pages=list(pages))}
         else:
-            performance = [n for n, p in pages.items() if p.type == 'patch-switcher']
-            tools = [n for n, p in pages.items() if p.type != 'patch-switcher']
+            performance = [
+                n for n, p in pages.items() if p.type in ('patch-switcher', 'banked')
+            ]
+            tools = [
+                n
+                for n, p in pages.items()
+                if p.type not in ('patch-switcher', 'banked')
+            ]
             regions = {
                 n: models.PageRegion(pages=p)
                 for n, p in [('performance', performance), ('tools', tools)]
@@ -223,7 +229,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             'min_windows': data[cursor + 33],
             'give_up_windows': [windows[i] for i in priority],
         }
-        if pages[name]['type'] not in ('None', 'patch-switcher'):
+        if pages[name]['type'] not in ('None', 'patch-switcher', 'banked'):
             # Stored minima remain readable, but tool pages now have fixed width.
             pages[name]['min_windows'] = 1
             canonical[cursor - offset + 33] = 1
@@ -279,4 +285,5 @@ PAGE_TYPES = (
     'midi-monitor',
     'midi-looper',
     'arpeggiator',
+    'banked',
 )

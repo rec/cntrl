@@ -42,6 +42,9 @@ public:
     CNTRL_FLASH_ROUTINE(looper_button)
 #endif
     bool looper_button(unsigned input, bool pressed) {
+        if (auto *bank = application_.focused_bank()) {
+            bank->button(input, pressed, platform_.milliseconds()); return true;
+        }
         if (pages_.page() == Pages::Page::arpeggiator && pages_.arpeggiator) {
             if (input != controls_.next && (input != controls_.previous || !pages_.arpeggiator->mono())) return false;
             if (!pressed) return true;
@@ -123,6 +126,13 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_show)
 #endif
     void show(unsigned pane, const cntrl::Pane &content) {
+        if (content.page < application_.layout.pages()) {
+            const unsigned r = application_.layout.page_region(content.page);
+            const auto &region = application_.allocation.region(r);
+            if (application_.feature_open(platform_) || region.selected != content.page || pane >= region.count) return;
+            Pane view = content; view.focused = r == application_.allocation.focus();
+            renderer_.show(region.first + pane, view); return;
+        }
         if (content.performance) {
             if (!application_.visible() || application_.feature_open(platform_)) return;
             const int destination = application_.allocation.controller_window(application_.rendering(),pane);
@@ -144,6 +154,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_configure_pages)
 #endif
     void configure_pages(const cntrl::Document &document) {
+        expression_bank_ = nullptr;
         keyboard_.clear(); platform_.midi_monitor().close(); monitor_unavailable_ = false;
         port_save_pending_ = management_visible_ = false;
         if (pages_.arpeggiator) pages_.arpeggiator->configure(document.valid() ? document.arpeggiator_settings() : nullptr);
@@ -203,6 +214,8 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_enter_page)
 #endif
     void enter_page() {
+        expression_bank_ = nullptr;
+        if (auto *bank = application_.focused_bank()) bank->refresh();
         if (pages_.page() == Pages::Page::midi_monitor) {
             if (!platform_.midi_monitor().active()) {
                 monitor_unavailable_ = !platform_.midi_monitor().open(platform_.microseconds());
@@ -403,6 +416,14 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
+        if (auto *bank = application_.focused_bank()) {
+            if (expression_bank_ != bank || expression_revision_ != bank->revision()) {
+                ExpressionAssignment assignments[4];
+                for (unsigned i = 0; i < 4; ++i) assignments[i] = bank->expression(i);
+                platform_.expression_controls().configure(assignments, platform_.midi_outputs());
+                expression_bank_ = bank; expression_revision_ = bank->revision();
+            }
+        } else expression_bank_ = nullptr;
         const auto &message = platform_.text_messages();
         if (message.active(now)) platform_.animation_session().stop();
         renderer_.message(message, now);
@@ -447,7 +468,7 @@ public:
         if (!splash_visible_ && !application_.feature_open(platform_) && documents_.document().valid()) {
           for (unsigned r = 0; r < application_.layout.regions(); ++r) {
             const auto &region = application_.allocation.region(r);
-            if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_switcher) continue;
+            if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_switcher || application_.layout.page(region.selected)[0] == PageLayout::banked) continue;
             load_view(region.selected);
             if (pages_.page() == Pages::Page::expression && pages_.expression_status_due(now)) {
                 if (expression_ports_.empty()) pages_.expression_status("No configurable ports", "", "");
@@ -503,6 +524,8 @@ public:
     Pages pages_;
     Keyboard keyboard_;
 private:
+    BankedPage *expression_bank_ = nullptr;
+    unsigned expression_revision_ = 0;
     void save_view() { if (pages_.index() < application_.views.size()) application_.views[pages_.index()] = pages_.save_view(); }
     void load_view(unsigned page) { if (page < application_.views.size()) pages_.restore_view(application_.views[page]); }
     bool other_selected(Pages::Page type) const {

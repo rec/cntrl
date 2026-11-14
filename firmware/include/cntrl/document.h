@@ -4,6 +4,7 @@
 #include "midi_processing.h"
 #include "numeric.h"
 #include "binary_format.h"
+#include "banked_pages.h"
 #include <cstring>
 #include <cstdio>
 
@@ -13,7 +14,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 43;
+constexpr unsigned document_version = 44;
 constexpr unsigned gesture_event_count = 12;
 constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
 constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
@@ -25,10 +26,6 @@ constexpr unsigned binding_record_size = binding_shifted_offset + shifted_action
 // then short/detail graphics and detail text for each switch.
 constexpr unsigned binding_view_header_size = 2 * 16 + 1 + 64;
 constexpr unsigned binding_view_record_size = 2 * 16 + 64;
-inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
-inline uint32_t u32(const uint8_t *p) {
-    return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
-}
 inline void put32(uint8_t *p, uint32_t n) {
     for (unsigned i = 0; i < 4; ++i) p[i] = uint8_t(n >> (8 * i));
 }
@@ -185,7 +182,7 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!PageLayout::valid_name(p) || p[32] > PageLayout::arpeggiator
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::banked
                 || p[33] > windows || (p[32] == 10 && p[33])) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < windows; ++j) {
@@ -210,6 +207,11 @@ public:
             for (unsigned i = 0; i < r; ++i) if (!std::strcmp(arrangement.region_name(r),arrangement.region_name(i))) return false;
         }
         if (assigned != page_count || minimum > windows) return false;
+        const unsigned banked_offset = names;
+        if (names + 4 <= length && !std::memcmp(bytes + names, "CBPG", 4)) {
+            if (!BankedPages::valid(bytes + names, length - names, arrangement)) return false;
+            names += u32(bytes + names + 4);
+        } else for (unsigned i = 0; i < page_count; ++i) if (arrangement.page(i)[0] == PageLayout::banked) return false;
         if (names + 8 > length || std::memcmp(bytes + names, "CMOV", 4)) return false;
         unsigned movie_count = unsigned(u16(bytes + names + 4)) + u16(bytes + names + 6);
         if (movie_count > (length - names - 8) / 4) return false;
@@ -367,6 +369,21 @@ public:
         }
         unsigned graph = end;
         if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count,looper != 0)) return false;
+        if (!std::memcmp(bytes + banked_offset, "CBPG", 4)) {
+            const uint8_t *p = bytes + banked_offset + 10;
+            for (unsigned i = 0; i < u16(bytes + banked_offset + 8); ++i) {
+                for (unsigned b = 0; b < u16(p + 2); ++b) {
+                    const uint8_t *bank = BankedPages::bank(p, b);
+                    for (unsigned j = 0; j < u16(bank); ++j) {
+                        unsigned node = u16(bank + 2 + j * 2);
+                        if (node >= u16(bytes + graph + 8) || bytes[graph + u32(bytes + graph + 16 + node * 4)] != 10) return false;
+                    }
+                }
+                const uint8_t *chords = BankedPages::bank(p, u16(p + 2));
+                for (unsigned j = 0; j < u16(p + 6); ++j) if (u32(chords + j * 5 + 1) & ~(inputs >= 32 ? UINT32_MAX : (1u << inputs) - 1)) return false;
+                p = BankedPages::next(p);
+            }
+        }
         if (pickup && u16(bytes + pickup + 4) != u16(bytes + graph + 8)) return false;
         if (streams) {
             CheckedArray<midi::OutputConnection> configured;
@@ -655,7 +672,13 @@ public:
     }
     const uint8_t *movie_section() const {
         const auto layout = page_layout();
-        return layout.records + layout.length();
+        const uint8_t *end = layout.records + layout.length();
+        return !std::memcmp(end, "CBPG", 4) ? end + u32(end + 4) : end;
+    }
+    BankedPages banked_pages() const {
+        const auto layout = page_layout();
+        const uint8_t *p = layout.records + layout.length();
+        return {std::memcmp(p, "CBPG", 4) ? nullptr : p};
     }
     unsigned movies(bool idle) const { return u16(movie_section() + (idle ? 6 : 4)); }
     const uint8_t *movie_keys(bool idle) const { return movie_section() + 8 + (idle ? 4 * movies(false) : 0); }
@@ -685,6 +708,9 @@ public:
         const uint8_t *p = data_ + core_ + 28 + slot * 16;
         return read_graphics(p);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_prepare_fonts)
+#endif
     bool prepare_fonts(Hardware &hardware) const {
         const unsigned styles = 3u + u16(data_ + styles_ - 12);
         auto style = [&](unsigned i) { return i < 3 ? data_ + core_ + 28 + i * 16 : data_ + styles_ + (i - 3) * 16; };
@@ -712,10 +738,19 @@ public:
         unsigned page = u16(patch(index) + 76 + slot * 2);
         page_record(view, page, index, already_sent, "", values);
     }
-    void counter_text(char *text, unsigned size, const char *source, const Counters &values) const {
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_counter_text)
+#endif
+    void counter_text(char *text, unsigned size, const char *source, const Counters &values, int bank = -1, int page = -1) const {
         unsigned used = 0;
         while (*source && used + 1 < size) {
             bool substituted = false;
+            if ((bank >= 0 && !std::strncmp(source, "{bank:03d}", 10)) || (page >= 0 && !std::strncmp(source, "{page}", 6))) {
+                const bool is_bank = source[1] == 'b';
+                char number[12]; std::snprintf(number, sizeof(number), is_bank ? "%03d" : "%d", (is_bank ? bank : page) + 1);
+                for (const char *p = number; *p && used + 1 < size; ++p) text[used++] = *p;
+                source += is_bank ? 10 : 6; substituted = true;
+            }
             if (!std::strncmp(source, "{counters.", 10)) {
                 const char *end = std::strchr(source + 10, '}');
                 if (end) for (unsigned i = 0; i < counters(); ++i) {
@@ -842,7 +877,7 @@ private:
                 }
                 break;
             case 3:
-                if (n[1] || length != 5 || p[0] < 1 || p[0] > 13
+                if (n[1] || length != 5 || p[0] < 1 || p[0] > 17
                     || (p[0] >= 11 && !hardware.switch_capacity())
                     || (p[0] == 1 && u32(p + 1) > 255) || (p[0] == 2 && u32(p + 1) > 1)
                     || (p[0] > 2 && u32(p + 1))) return false;

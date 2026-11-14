@@ -15,7 +15,7 @@ def current_setup() -> bytes:
     return bytes.fromhex((ROOT / 'show.golden').read_text())
 
 
-@pytest.mark.parametrize('version', [36, 38, 39, 40, 41, 42])
+@pytest.mark.parametrize('version', [36, 38, 39, 40, 41, 42, 43])
 def test_historical_setup_preserves_graph_assets_and_page_order(version: int) -> None:
     # Actual outputs from a6916c8^, 1c8dd6b, c502794, 48fafdf, 32bdbab and 109a9cb.
     original = bytes.fromhex((ROOT / f'setup{version}.golden').read_text())

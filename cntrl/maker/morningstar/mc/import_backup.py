@@ -17,12 +17,12 @@ from ....patch_switcher import models
 
 class ImportBackup(BaseModel, frozen=True):
     backup: Annotated[Path, tyro.conf.Positional]
-    bank: int
+    bank: int = 0
     output: Path
 
 
 def convert(document: dict, bank: int) -> models.Setup:
-    """Convert a PC-scroll bank and the banks reached by its up/down actions."""
+    """Convert all banks; bank selects the initial bank of the Banked Page."""
     if (
         document.get('schemaVersion'),
         document.get('deviceModel'),
@@ -33,7 +33,10 @@ def convert(document: dict, bank: int) -> models.Setup:
     banks = {b['bankNumber']: b for b in data['bankArray']}
     settings = data['controller_settings']['data']
     general = settings['controller_settings']['data']
-    arrangement = [b['data']['bankNum'] for b in settings['bank_arrangement']['data']]
+    if settings['bank_arrangement']['isActive']:
+        raise ValueError('active bank arrangements are not supported yet')
+    if sorted(banks) != list(range(len(banks))) or bank not in banks:
+        raise ValueError('expected consecutive bank slots and a valid initial bank')
     channels = {
         c['data']['channel']: c['data'] for c in settings['midi_channels']['data']
     }
@@ -45,11 +48,9 @@ def convert(document: dict, bank: int) -> models.Setup:
     }
     if any(t not in (1, 12) for t in ports.values()):
         raise ValueError('only expression or disabled Omniports are supported')
-    pending = [bank]
-    included: list[int] = []
     counters: dict[str, object] = {}
     patches: dict[str, object] = {}
-    cycles: dict[str, object] = {}
+    bank_pages: list[list[str]] = []
 
     def label(text: str) -> str:
         # Official editor icon 46 ('.') is the right chevron.
@@ -62,17 +63,12 @@ def convert(document: dict, bank: int) -> models.Setup:
             text,
         )
 
-    while pending:
-        number = pending.pop(0)
-        if number in included:
-            continue
-        source = banks[number]
+    for number, source in sorted(banks.items()):
         context = f'/data/bankArray/{number}'
         if source['bankClearToggle'] or any(m['t'] for m in source['bankMsgArray']):
             raise ValueError(
                 f'{context}: bank messages or clear-toggle are not supported yet'
             )
-        included.append(number)
         bindings: dict[str, object] = {}
         for preset in source['expPresetArray']:
             index = preset['presetNum']
@@ -114,15 +110,11 @@ def convert(document: dict, bank: int) -> models.Setup:
             ).model_dump(exclude_none=True)
         for preset in source['presetArray']:
             messages = [m for m in preset['msgArray'] if m['t']]
-            if not messages:
-                continue
             index = preset['presetNum']
             location = f'{context}/presetArray/{index}'
-            if index >= 6 or any(
-                preset[k] for k in ('toToggle', 'toBlink', 'toMsgScroll')
-            ):
+            if any(preset[k] for k in ('toToggle', 'toBlink', 'toMsgScroll')):
                 raise ValueError(
-                    f'{location}: only first-page, non-toggle assignments are supported'
+                    f'{location}: only non-toggle assignments are supported'
                 )
             actions: list[dict[str, object]] = []
             for message in messages:
@@ -173,25 +165,14 @@ def convert(document: dict, bank: int) -> models.Setup:
                         )
                 elif message['t'] in (10, 11):
                     direction = 1 if message['t'] == 10 else -1
-                    destination = arrangement[
-                        (arrangement.index(number) + direction) % len(arrangement)
-                    ]
-                    pending.append(destination)
-                    actions.extend(
-                        [
-                            {
-                                'operation': 'next-patch-cycle'
-                                if direction > 0
-                                else 'previous-patch-cycle'
-                            },
-                            {'operation': 'activate-selection'},
-                        ]
+                    actions.append(
+                        {'operation': 'next-bank' if direction > 0 else 'previous-bank'}
                     )
                 else:
                     raise ValueError(
                         f'{pointer}: unsupported message type {message["t"]}'
                     )
-            bindings['abcdef'[index]] = {
+            bindings[str(index)] = {
                 'name': label(preset['shortName']),
                 'display_name': label(preset['longName'] or preset['shortName']),
                 'style': {
@@ -201,39 +182,59 @@ def convert(document: dict, bank: int) -> models.Setup:
                 },
                 'on': {'patches': actions},
             }
-        key = f'bank{number}'
-        patches[key] = {
-            'name': source['bankName'] or key,
-            'patches': [],
-            'bindings': bindings,
-            'style': {
-                'foreground_color': palette_color(source['textColor'])
-                if source['isColorEnabled']
-                else 'white',
-                'background_color': palette_color(source['backgroundColor'])
-                if source['isColorEnabled']
-                else 'black',
-            },
-            'binding_view': {
-                'maximum_size': 2 * (18 - general['presetMaxFontSize']),
-                'detail_size': 18 - general['middleLayerFontSize'],
-                'status_size': (12, 10, 8, 8)[general['bankPageFontSize']],
-                'status_style': {'foreground_color': 'blue'},
-                'align': 'switch' if general['lcdAlign'] else 'left',
-                'show_labels': general['showPresetLabels'],
-                'status': f'B{number + 1:03d} PG1'
-                if general['bankPageFontSize'] != 3
-                else '',
-            },
-        }
-        cycles[key] = [key]
-    # Retain arrangement order among the reachable banks.
-    ordered = [n for n in arrangement if n in included]
-    selected = ordered.index(bank)
-    ordered = ordered[selected:] + ordered[:selected]
+        pages = []
+        for page in range(source['pageLimit'] or 4):
+            root = {
+                'name': source['bankName'] or ' ',
+                'patches': [],
+                'bindings': {
+                    k: v for k, v in bindings.items() if k.startswith('configurable-')
+                }
+                | {'abcdef'[i]: bindings[str(page * 6 + i)] for i in range(6)},
+                'style': {
+                    'foreground_color': palette_color(source['textColor'])
+                    if source['isColorEnabled'] and source['textColor'] != 127
+                    else '0x800080',
+                    'background_color': palette_color(source['backgroundColor'])
+                    if source['isColorEnabled'] and source['backgroundColor'] != 127
+                    else 'white',
+                },
+                'binding_view': {
+                    'maximum_size': 2 * (18 - general['presetMaxFontSize']),
+                    'detail_size': 18 - general['middleLayerFontSize'],
+                    'status_size': (12, 10, 8, 8)[general['bankPageFontSize']],
+                    'status_style': {'foreground_color': 'blue'},
+                    'align': 'switch' if general['lcdAlign'] else 'left',
+                    'show_labels': general['showPresetLabels'],
+                    'status': 'B{bank:03d} PG{page}'
+                    if general['bankPageFontSize'] != 3
+                    else '',
+                },
+            }
+            key = next(
+                (n for n, p in patches.items() if p == root), f'bank{number}_page{page}'
+            )
+            patches[key] = root
+            pages.append(key)
+        bank_pages.append(pages)
     return models.Setup.model_validate(
         {
-            'pages': {'performance': {'type': 'patch-switcher'}},
+            'pages': {
+                'performance': {
+                    'type': 'banked',
+                    'banks': bank_pages,
+                    'initial_bank': bank,
+                    'chords': {}
+                    if general['dualLock']
+                    else {
+                        'next-bank': ['b', 'c'],
+                        'previous-bank': ['a', 'b'],
+                        'next-bank-page': ['e', 'f'],
+                        'previous-bank-page': ['d', 'e'],
+                        'menu': ['d', 'f'],
+                    },
+                }
+            },
             'fill_in_styles': False,
             'fast_switches': True,
             'counters': counters,
@@ -243,7 +244,6 @@ def convert(document: dict, bank: int) -> models.Setup:
                 if t == 1
             },
             'patches': patches,
-            'patch_cycles': {f'bank{n}': cycles[f'bank{n}'] for n in ordered},
         }
     )
 
@@ -263,9 +263,9 @@ def run(command: ImportBackup) -> None:
         'backup': str(command.backup.resolve()),
         'sha256': hashlib.sha256(content).hexdigest(),
         'selected_bank': command.bank,
-        'included_banks': list(setup.patch_cycles),
+        'included_banks': len(setup.pages['performance'].banks),
         'scope': 'PC-scroll press assignments, continuous expression CCs '
-        'and reachable bank up/down transitions',
+        'and all bank/preset-page slots in one Banked Page',
         'presentation': 'saved palette, switch alignment, short and long names, '
         'three display bands; photo-matched Atkinson Next SemiBold labels '
         'and Arial middle-band text substitute for the stock typeface',
@@ -287,25 +287,13 @@ def run(command: ImportBackup) -> None:
         tomlkit.dumps(
             {
                 'until': '100 milliseconds',
-                'events': [
-                    {
-                        'at': '20 milliseconds',
-                        'kind': 'button',
-                        'target': 'a',
-                        'value': 1,
-                    },
-                    {
-                        'at': '60 milliseconds',
-                        'kind': 'button',
-                        'target': 'a',
-                        'value': 0,
-                    },
-                ],
+                'events': [],
             }
         )
     )
     print(
-        f'Imported {len(setup.patch_cycles)} banks into {command.output / "setup.toml"}'
+        f'Imported {len(setup.pages["performance"].banks)} banks into '
+        f'{command.output / "setup.toml"}'
     )
 
 

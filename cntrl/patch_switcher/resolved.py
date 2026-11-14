@@ -8,6 +8,7 @@ import tomlkit
 
 from . import (
     arpeggiator,
+    banked,
     binary_format,
     counters,
     display,
@@ -92,6 +93,7 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, switches: bool) -> b
         + midi_processing.estimate_ram(streams, endpoint_count=len(endpoints))
         + looper.estimate_ram(loop)
         + arpeggiator.estimate_ram(arp)
+        + banked.estimate_ram(settings.pages, len(data))
     )
     address = metadata + METADATA.size - 8
     if struct.unpack_from('<I', data, address)[0] == needed:
@@ -137,7 +139,7 @@ def upgrade(data: bytes) -> bytes:
     if version == DOCUMENT_VERSION:
         export(data)
         return data
-    if version in (41, 42):
+    if version in (41, 42, 43):
         # New node and presentation options preserve existing records.
         converted = bytearray(data)
         struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
@@ -248,6 +250,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     cursor = _page_offsets(data)[0]
     np = HEADER.unpack_from(data)[6]
     cursor = layout.section_end(data, cursor)
+    cursor = banked.section_end(data, cursor)
     if cursor + 8 > len(data) or data[cursor : cursor + 4] != b'CMOV':
         raise ValueError('missing movie metadata')
     startup, idle = struct.unpack_from('<HH', data, cursor + 4)
@@ -572,6 +575,12 @@ def export(data: bytes) -> str:
         named_nodes[identity] = index
         named[identity] = _patch(data, offset, index, metadata, set(), labels)
     result['patches'] = named
+    banked_offset = layout.section_end(data, _page_offsets(data)[0])
+    pages = cast(dict[str, dict[str, object]], result['pages'])
+    for page, settings in banked.unpack(
+        data, banked_offset, {v: k for k, v in named_nodes.items()}, labels
+    ).items():
+        pages[list(pages)[page]].update(settings)
     patch_cycles: dict[str, object] = {}
     for i in range(nc):
         address = 76 + ni * 68 + i * 68

@@ -5,6 +5,7 @@
 #include <cntrl/setup_ui.h>
 #include <cntrl/songs_ui.h>
 #include <cntrl/switches.h>
+#include <cntrl/banked_page.h>
 #include "controls.h"
 #include "pages.h"
 #include <array>
@@ -27,13 +28,17 @@ class Application {
 public:
 #if UINTPTR_MAX == UINT32_MAX
     static_assert(sizeof(Pages::ViewState) <= 272, "Update layout.estimate_ram for larger page state");
+    static_assert(sizeof(BankedPage) <= 1024, "Update banked.estimate_ram for larger banked page state");
 #endif
     Application(Hardware &hardware, Documents &documents, Controller &primary, PatchOutputs &outputs, PatchSources &sources,
                 Songs &songs, SongCapture &capture, bool switches)
         : menu(hardware, tool_names_.data(), switches ? 3 : 2), setups(documents, hardware),
           song_ui(songs, hardware, capture), hardware_(hardware), documents_(documents), primary_(primary),
           outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) {}
-    ~Application() { destroy_controllers(pending_controllers_); destroy_controllers(controllers_); }
+    ~Application() { destroy_banked(pending_banked_); destroy_banked(banked_); destroy_controllers(pending_controllers_); destroy_controllers(controllers_); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_prepare_layout)
+#endif
     bool prepare_layout(PageLayout candidate) {
         prepared_ = false;
         destroy_controllers(pending_controllers_);
@@ -55,15 +60,31 @@ public:
         prepared_ = true;
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_prepare_pages)
+#endif
     bool prepare_pages(const Document &document) {
+        destroy_banked(pending_banked_);
         if (!prepare_layout(document.valid() ? document.page_layout() : PageLayout{})) return false;
+        if (document.valid() && document.banked_pages().count()) {
+            if (!pending_banked_.resize(document.page_layout().pages())) return false;
+            for (unsigned i = 0; i < pending_banked_.size(); ++i) if (document.page_layout().page(i)[0] == PageLayout::banked) {
+                pending_banked_[i] = new (std::nothrow) BankedPage(hardware_, outputs_, sources_, i);
+                if (!pending_banked_[i] || !pending_banked_[i]->configure(document, i)) return false;
+            }
+        }
         if (!primary_.prepare(document)) return false;
         auto &extra = prepared_ ? pending_controllers_ : controllers_;
         for (unsigned i = 0; i < extra.size / sizeof(Controller); ++i)
             if (!std::launder(reinterpret_cast<Controller *>(extra.data + i * sizeof(Controller)))->prepare(document)) return false;
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_finish_pages)
+#endif
     void finish_pages(bool commit) {
+        if (commit) { destroy_banked(banked_); banked_.swap(pending_banked_); }
+        destroy_banked(pending_banked_);
         if (commit) { visible_index = 0; processing_index = PageLayout::max_controllers; }
         else {
             primary_.cancel_preparation();
@@ -121,6 +142,7 @@ public:
         const unsigned previous = processing_index;
         services.blank_performance();
         for (unsigned i = 0; i < layout.controllers(); ++i) if (allocation.controller_visible(i)) { processing_index = i; at(i).refresh(); }
+        for (unsigned i = 0; i < banked_.size(); ++i) if (banked_[i]) banked_[i]->refresh();
         processing_index = previous;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -140,6 +162,8 @@ public:
         if (!hardware_.relays.tick(now)) hardware_.error("Relay pulse restore failed");
         for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) { processing_index = i; at(i).tick(now); }
         processing_index = PageLayout::max_controllers;
+        for (unsigned i = 0; i < banked_.size(); ++i) if (banked_[i]) { processing_banked_ = i; banked_[i]->tick(now, uint32_t(held)); }
+        processing_banked_ = PageLayout::max_pages;
         if (next_song_patch_ && !patch_pending()) {
             next_song_patch_ = false;
             if (!songs_.next()) hardware_.error(songs_.last_error());
@@ -149,6 +173,10 @@ public:
     CNTRL_FLASH_ROUTINE(application_state)
 #endif
     bool state(unsigned operation, uint32_t value, ApplicationServices &services) {
+        if (operation >= 14 && operation <= 17) {
+            const unsigned page = processing_banked_ < banked_.size() ? processing_banked_ : allocation.selected();
+            return page < banked_.size() && banked_[page] && banked_[page]->navigate(operation);
+        }
         if (operation == 1) { hardware_.set_brightness(uint8_t(value)); return true; }
         if (operation == 2) { hardware_.set_midi_interface(value != 0); return true; }
         if (operation == 11 || operation == 12) return services.shift_switch_editor(operation == 11);
@@ -239,6 +267,10 @@ public:
     bool return_to_switches = false, controls_locked = false;
     bool binding_return_songs = false;
     uint64_t held = 0;
+    BankedPage *focused_bank() {
+        const unsigned page = allocation.selected();
+        return page < banked_.size() ? banked_[page] : nullptr;
+    }
 private:
     std::array<const char *, 3> tool_names_{"Setups", "Songs and setlists", "Switches"};
     MemoryBuffer names_, pending_names_;
@@ -256,6 +288,15 @@ private:
     PatchOutputs &outputs_;
     PatchSources &sources_;
     MemoryBuffer controllers_, pending_controllers_;
+    CheckedArray<BankedPage *> banked_, pending_banked_;
+    unsigned processing_banked_ = PageLayout::max_pages;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_destroy_banked)
+#endif
+    static void destroy_banked(CheckedArray<BankedPage *> &pages) {
+        for (auto *page : pages) delete page;
+        pages.release();
+    }
     bool prepared_ = false;
     static void destroy_controllers(MemoryBuffer &storage) {
         for (unsigned i = storage.size / sizeof(Controller); i--;)
