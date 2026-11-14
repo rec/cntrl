@@ -424,7 +424,7 @@ public:
                 status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : "error") : "--");
 #ifdef CNTRL_GIT_COMMIT
             const auto starts_length = std::strlen(rows[4]);
-            std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, " Git:%07x", unsigned(CNTRL_GIT_COMMIT));
+            std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", unsigned(CNTRL_GIT_COMMIT));
 #endif
             std::snprintf(tap_label, sizeof(tap_label), "Tap: %s", tap);
             const unsigned body_top = pad + heading_height;
