@@ -3,11 +3,13 @@
 import struct
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from zlib import crc32
 
 import pytest
 import tomlkit
 
 from cntrl.patch_switcher import (
+    binary_format,
     cli,
     compiler,
     data_files,
@@ -36,12 +38,12 @@ def test_static_table_is_sorted_and_offsets_address_every_setup() -> None:
 
 
 def test_prefill_maximizes_bytes_when_largest_first_would_waste_space() -> None:
-    # Metadata/save workspace occupy 777 bytes. Leave a ten-byte cache.
+    # Metadata/save workspace occupy 825 bytes. Leave a ten-byte cache.
     bundle = setup_bundle.SetupBundle(
         setups={'a': b'a' * 8, 'b': b'b' * 6, 'c': b'c' * 4},
         page_ram2=[0, 0, 0],
         memory=models.TargetMemory(capacity=400000, runtime=0),
-        memory_margin=400000 - 777 - 10,
+        memory_margin=400000 - 825 - 10,
     )
     assert bundle.total_free_ram2() == 10
     assert bundle.prefill == [1, 2]
@@ -56,7 +58,7 @@ def test_active_setup_accounting_does_not_sum_inactive_setups() -> None:
         },
         memory=MEMORY,
     )
-    assert bundle.total_ram2_needs() == MEMORY.runtime + 528 + 100
+    assert bundle.total_ram2_needs() == MEMORY.runtime + 560 + 100
     assert (
         bundle.total_free_ram2() == MEMORY.capacity - 16192 - bundle.total_ram2_needs()
     )
@@ -68,6 +70,29 @@ def test_setup_fit_is_decided_by_the_linked_firmware_budget() -> None:
     assert setup_bundle.unpack(bundle.pack()) == bundle.setups
 
 
+@pytest.mark.parametrize('damage', ['empty', 'table', 'offset', 'length', 'duplicate'])
+def test_bundle_reader_rejects_corrupt_tables_before_returning_setups(
+    damage: str,
+) -> None:
+    data = bytearray(
+        setup_bundle.build({'a': b'a', 'b': b'b'}, {'a': {}, 'b': {}}, MEMORY).pack()
+    )
+    table = setup_bundle.HEADER.size + 2 * setup_bundle.ENTRY.size
+    if damage == 'empty':
+        struct.pack_into('<H', data, 6, 0)
+    elif damage == 'table':
+        struct.pack_into('<H', data, table, 1)
+    elif damage == 'offset':
+        struct.pack_into('<I', data, table + 2, 2)
+    elif damage == 'length':
+        struct.pack_into('<I', data, setup_bundle.HEADER.size + 64, 0xFFFFFFFF)
+    else:
+        data[setup_bundle.HEADER.size + setup_bundle.ENTRY.size] = ord('a')
+    struct.pack_into('<I', data, 12, crc32(data[setup_bundle.HEADER.size :]))
+    with pytest.raises(ValueError, match='invalid setup bundle'):
+        setup_bundle.unpack(bytes(data))
+
+
 @pytest.mark.parametrize('all_resident', [True, False])
 def test_native_table_and_lru_preserve_pinned_views(
     all_resident: bool, native_programs: native_tests.NativePrograms
@@ -77,13 +102,26 @@ def test_native_table_and_lru_preserve_pinned_views(
         compiler.read_document(root / 'firmware/test/target.json')
     )
     sources = {n: {'brightness': 100 + i} for i, n in enumerate(('a', 'b', 'c'))}
-    setups = {n: compiler.compile_show(s, {}, [], target) for n, s in sources.items()}
-    size = len(setups['a'])
+    setups = {
+        n: binary_format.Document(
+            kind=binary_format.Kind.setup,
+            records=[
+                binary_format.Record(
+                    tag=1,
+                    required=True,
+                    data=compiler.compile_show(s, {}, [], target, documents=sources),
+                ),
+                binary_format.Record(tag=321, data=b'future metadata'),
+            ],
+        ).pack()
+        for n, s in sources.items()
+    }
+    size = len(binary_format.wrap(setups['a']))
     page_ram = max(setup_bundle.build(setups, sources, MEMORY).page_ram2)
     margin = (
         16192
         if all_resident
-        else MEMORY.capacity - MEMORY.runtime - 777 - page_ram - size * 2
+        else MEMORY.capacity - MEMORY.runtime - 825 - page_ram - size * 2
     )
     bundle = setup_bundle.build(setups, sources, MEMORY, margin)
     with TemporaryDirectory(prefix='cntrl-setup-table-test-') as directory:

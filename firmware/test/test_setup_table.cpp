@@ -59,9 +59,15 @@ void test_saving_and_history(File &file, Board &board) {
     cntrl::Documents documents(storage, board, controller, board);
     documents.boot();
     assert(!std::strcmp(documents.selected(), "a") && documents.document().brightness() == 100);
+    const auto &before = documents.document();
+    const unsigned tail = before.core_offset() + before.core_length();
+    std::vector<uint8_t> metadata(before.data() + tail, before.data() + before.length());
     assert(documents.edit_begin() && documents.edit_adjust(0, 5, 5) && documents.edit_save(0));
     for (unsigned i = 0; i < 10000 && documents.busy(); ++i) documents.tick(i);
     assert(!documents.busy() && !documents.dirty() && documents.document().brightness() == 105);
+    const auto &after = documents.document();
+    assert(after.length() - after.core_offset() - after.core_length() == metadata.size());
+    assert(std::equal(metadata.begin(), metadata.end(), after.data() + after.core_offset() + after.core_length()));
     assert(documents.history_restore("a", 1, 0));
     for (unsigned i = 0; i < 10000 && documents.busy(); ++i) documents.tick(i);
     assert(!documents.busy() && documents.document().brightness() == 100);

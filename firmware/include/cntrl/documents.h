@@ -119,9 +119,9 @@ public:
         } else if (field == 2 && value >= 1 && value <= 16) staging_.data[d.instrument(u16(p)) - staging_.data + 64] = uint8_t(value - 1);
         else if (field == 3 && value >= -1 && value <= 127) p[7] = value < 0 ? 255 : uint8_t(value);
         else if (field == 4 && value >= -65 && value <= 63) p[8] = value == -65 ? 255 : uint8_t(value + 64);
-        else if (field == 5 && value >= 0 && value <= 255) staging_.data[18] = uint8_t(value);
-        else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_.data + 24, unsigned(value) * 1000);
-        else if (field == 7 && value >= 0 && value <= 1) staging_.data[19] = (staging_.data[19] & ~uint8_t(2)) | (uint8_t(value) << 1);
+        else if (field == 5 && value >= 0 && value <= 255) staging_.data[d.core_offset() + 18] = uint8_t(value);
+        else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_.data + d.core_offset() + 24, unsigned(value) * 1000);
+        else if (field == 7 && value >= 0 && value <= 1) staging_.data[d.core_offset() + 19] = (staging_.data[d.core_offset() + 19] & ~uint8_t(2)) | (uint8_t(value) << 1);
         else return false;
         if (field <= 4) {
             uint8_t *program = staging_.data + (d.node(unsigned(node)) - staging_.data) + 4;
@@ -134,7 +134,7 @@ public:
                 std::memcpy(staging_.data + (d.bank(i) - staging_.data), program + 7, 4);
             }
         }
-        put32(staging_.data + 20, checksum(staging_.data + 28, document_.length() - 28));
+        binary::seal_setup(staging_.data, document_.length());
         Document candidate;
         if (!candidate.load(staging_.data, document_.length(), hardware_)) {
             std::memcpy(staging_.data, scratch_.data, document_.length());
@@ -146,7 +146,7 @@ public:
         if (jack >= 4 || dirty_ || !edit_begin()) return false;
         staging_.data[document_.trs_modes() - document_.data() + jack] = uint8_t(mode);
         if (mode != midi::TrsMode::aux) staging_.data[document_.metadata() + scrolling_offset + 5] &= ~(4u << jack);
-        put32(staging_.data + 20, checksum(staging_.data + 28, document_.length() - 28));
+        binary::seal_setup(staging_.data, document_.length());
         Document candidate;
         if (candidate.load(staging_.data, document_.length(), hardware_) && edit_save(now)) return true;
         edit_cancel(); return false;
@@ -540,7 +540,7 @@ private:
             return cursor;
         };
         unsigned a = u32(old.data() + old.display_metadata() + 12), b = u32(current.data() + current.display_metadata() + 12);
-        formatting = a != b || std::memcmp(old.data() + old.length() - a, current.data() + current.length() - b, a);
+        formatting = a != b || std::memcmp(old.data() + old.core_offset() + old.core_length() - a, current.data() + current.core_offset() + current.core_length() - b, a);
         unsigned old_names = names_end(old) - old.metadata(), current_names = names_end(current) - current.metadata();
         formatting = formatting || old_names != current_names
             || std::memcmp(old.data() + old.metadata(), current.data() + current.metadata(), old_names);
@@ -749,6 +749,10 @@ private:
 #endif
     void command(uint32_t now) {
         char hex[127] = {}, name[64] = {}; unsigned length = 0, overwrite = 0; unsigned long crc = 0, epoch = 0; int end = 0;
+        if (!std::strcmp(line_, "CNTRL FORMAT")) {
+            char response[64]; std::snprintf(response, sizeof(response), "CNTRL FORMAT %u 1", binary::development_format);
+            replies_.reply(response); return;
+        }
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
             char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY %u %u %08lx", document_version, document_.length(),

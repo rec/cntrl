@@ -478,5 +478,5 @@ private:
         pane(2, depth_ ? history_[depth_ - 1].previous : -1);
     }
 };
-static_assert(sizeof(void *) != 4 || sizeof(Controller) == 364, "Update layout.estimate_ram for the Controller ABI");
+static_assert(sizeof(void *) != 4 || sizeof(Controller) == 388, "Update layout.estimate_ram for the Controller ABI");
 } // namespace cntrl

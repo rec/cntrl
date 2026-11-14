@@ -3,6 +3,7 @@
 #include "midi_bridge.h"
 #include "midi_processing.h"
 #include "numeric.h"
+#include "binary_format.h"
 #include <cstring>
 #include <cstdio>
 
@@ -78,6 +79,11 @@ public:
     CNTRL_FLASH_ROUTINE(document_load)
 #endif
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
+        const uint8_t *serialized = bytes;
+        const unsigned serialized_length = length;
+        binary::View persistent;
+        if (!binary::open(bytes, length, binary::Kind::setup, persistent)) return false;
+        bytes += persistent.offset; length = persistent.length;
         if (length < 76 || std::memcmp(bytes, "CSW1", 4)
             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
             || u32(bytes + 8) != length || u32(bytes + 24) > 2147483000u
@@ -497,9 +503,12 @@ public:
             next += count;
         }
         if (next != np) return false;
-        data_ = bytes; length_ = length; instruments_ = ni; patch_cycles_ = nc; patches_ = np;
-        styles_ = styles; pages_ = page_start; texts_ = texts;
-        graph_ = graph; streams_ = streams; pickup_ = pickup; looper_ = looper;
+        data_ = serialized; length_ = serialized_length; core_ = persistent.offset;
+        core_length_ = length; opaque_ = persistent.opaque;
+        instruments_ = ni; patch_cycles_ = nc; patches_ = np;
+        styles_ = styles + core_; pages_ = page_start + core_; texts_ = texts + core_;
+        graph_ = graph + core_; streams_ = streams ? streams + core_ : 0;
+        pickup_ = pickup ? pickup + core_ : 0; looper_ = looper ? looper + core_ : 0;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
@@ -558,10 +567,13 @@ public:
     unsigned display_metadata() const { return graph_ + u32(data_ + graph_ + 4); }
     unsigned length() const { return length_; }
     const uint8_t *data() const { return data_; }
+    unsigned core_offset() const { return core_; }
+    unsigned core_length() const { return core_length_; }
+    bool has_opaque_metadata() const { return opaque_; }
     unsigned patch_cycles() const { return patch_cycles_; }
     unsigned instruments() const { return instruments_; }
     unsigned patches() const { return patches_; }
-    unsigned navigation_hold_ms() const { return u16(data_ + 6); }
+    unsigned navigation_hold_ms() const { return u16(data_ + core_ + 6); }
     bool fast_switches() const { return data_[metadata() + scrolling_offset + 5] & 1; }
     bool forward_device_to_host() const { return !(data_[metadata() + scrolling_offset + 5] & 2); }
     bool auxiliary_combined(unsigned port) const { return data_[metadata() + scrolling_offset + 5] & (4u << port); }
@@ -579,7 +591,7 @@ public:
     const uint8_t *counter(unsigned index) const { return counter_section() + 6 + index * 104; }
     unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
     uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 10); }
-    uint8_t brightness() const { return data_[18]; }
+    uint8_t brightness() const { return data_[core_ + 18]; }
     unsigned pulse_delay_ms() const { return u16(data_ + metadata() + 14); }
     unsigned pulse_period_ms() const { return u16(data_ + metadata() + 8); }
     uint8_t pulse_minimum() const { return data_[metadata() + 10]; }
@@ -588,7 +600,7 @@ public:
     PageSettings page_settings() const {
         PageSettings settings;
         for (unsigned i = 0; i < PageSettings::clock_outputs; ++i) settings.words[i] = u16(data_ + metadata() + pages_offset + 2 * i);
-        if (data_[19] & 0x80) for (unsigned i = 0; i < 4; ++i) {
+        if (data_[core_ + 19] & 0x80) for (unsigned i = 0; i < 4; ++i) {
             const uint8_t *p = bank(patches()) + i * expression_record_size;
             auto &a = settings.expression[i];
             std::memcpy(a.output, p, sizeof(a.output));
@@ -597,22 +609,22 @@ public:
             a.mirror_route = p[37] >> 2 ? (p[37] >> 2) - 1 : 255;
         }
         settings.words[PageSettings::slot1] = 120;
-        if (data_[19] & 0x20) read_clock(settings, bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0));
+        if (data_[core_ + 19] & 0x20) read_clock(settings, bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0));
         if (keyboard_size()) {
             settings.keyboard_count = u16(keyboard_section() + 4);
             settings.keyboard = keyboard_section() + 6;
         }
         return settings;
     }
-    bool splash() const { return data_[19] & 1; }
-    bool animation_color_cycle() const { return data_[19] & 4; }
-    bool usb_device_midi() const { return data_[19] & 8; }
+    bool splash() const { return data_[core_ + 19] & 1; }
+    bool animation_color_cycle() const { return data_[core_ + 19] & 4; }
+    bool usb_device_midi() const { return data_[core_ + 19] & 8; }
     const uint8_t *keyboard_section() const {
-        return bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0);
+        return bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0) + ((data_[core_ + 19] & 0x20) ? clock_section_size : 0);
     }
     unsigned keyboard_size() const { return !std::memcmp(keyboard_section(), "CKBD", 4) ? 6 + u16(keyboard_section() + 4) * 39 : 0; }
     const uint8_t *switch_hook_section() const {
-        return bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0) + ((data_[19] & 0x20) ? clock_section_size : 0) + keyboard_size() + ((data_[19] & 0x40) ? 5 * gesture_record_size : 0);
+        return bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0) + ((data_[core_ + 19] & 0x20) ? clock_section_size : 0) + keyboard_size() + ((data_[core_ + 19] & 0x40) ? 5 * gesture_record_size : 0);
     }
     const uint8_t *switch_hooks(unsigned button) const {
         const uint8_t *p = switch_hook_section();
@@ -658,24 +670,24 @@ public:
         return switches();
     }
     const uint8_t *switch_gestures(unsigned button) const {
-        if (!(data_[19] & 0x40)) return nullptr;
+        if (!(data_[core_ + 19] & 0x40)) return nullptr;
         unsigned slot = switch_slot(button); if (slot == switches()) return nullptr;
         const uint8_t *p = switch_hook_section() - 5 * gesture_record_size + slot * gesture_record_size;
         return u16(p + gesture_debounce_offset) ? p : nullptr;
     }
     const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }
-    bool usb_host_midi() const { return data_[19] & 16; }
-    bool is_midi_interface() const { return data_[19] & 2; }
-    uint32_t screensaver_timeout() const { return u32(data_ + 24); }
+    bool usb_host_midi() const { return data_[core_ + 19] & 16; }
+    bool is_midi_interface() const { return data_[core_ + 19] & 2; }
+    uint32_t screensaver_timeout() const { return u32(data_ + core_ + 24); }
     unsigned scroll_ms(bool vertical = false) const { return u16(data_ + metadata() + (vertical ? scrolling_offset : 6)); }
     unsigned scroll_direction(unsigned action) const { return data_[metadata() + scrolling_offset + 2 + action]; }
     ScreenGraphics graphics(unsigned slot) const {
-        const uint8_t *p = data_ + 28 + slot * 16;
+        const uint8_t *p = data_ + core_ + 28 + slot * 16;
         return read_graphics(p);
     }
     bool prepare_fonts(Hardware &hardware) const {
         const unsigned styles = 3u + u16(data_ + styles_ - 12);
-        auto style = [&](unsigned i) { return i < 3 ? data_ + 28 + i * 16 : data_ + styles_ + (i - 3) * 16; };
+        auto style = [&](unsigned i) { return i < 3 ? data_ + core_ + 28 + i * 16 : data_ + styles_ + (i - 3) * 16; };
         unsigned fonts = 0;
         for (unsigned i = 0; i < styles; ++i) {
             const auto *p = style(i);
@@ -711,7 +723,7 @@ public:
                     if (std::strlen(reinterpret_cast<const char *>(c)) != unsigned(end - source - 10)
                         || std::strncmp(reinterpret_cast<const char *>(c), source + 10, end - source - 10)) continue;
                     char number[8];
-                    std::snprintf(number, sizeof(number), "%u", values.value(u32(data_ + 20), i, c[98]) + (c[96] >> 4 == 12));
+                    std::snprintf(number, sizeof(number), "%u", values.value(u32(data_ + core_ + 20), i, c[98]) + (c[96] >> 4 == 12));
                     for (const char *p = number; *p && used + 1 < size; ++p) text[used++] = *p;
                     source = end + 1; substituted = true; break;
                 }
@@ -737,10 +749,10 @@ public:
             else field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6), values);
         }
     }
-    const uint8_t *instrument(unsigned i) const { return data_ + 76 + i * 68; }
-    const uint8_t *patch_cycle(unsigned i) const { return data_ + 76 + instruments_ * 68 + i * 68; }
-    const uint8_t *patch(unsigned i) const { return data_ + 76 + instruments_ * 68 + patch_cycles_ * 68 + i * 82; }
-    unsigned metadata() const { return 76 + instruments_ * 68 + patch_cycles_ * 68 + patches_ * 82; }
+    const uint8_t *instrument(unsigned i) const { return data_ + core_ + 76 + i * 68; }
+    const uint8_t *patch_cycle(unsigned i) const { return data_ + core_ + 76 + instruments_ * 68 + i * 68; }
+    const uint8_t *patch(unsigned i) const { return data_ + core_ + 76 + instruments_ * 68 + patch_cycles_ * 68 + i * 82; }
+    unsigned metadata() const { return core_ + 76 + instruments_ * 68 + patch_cycles_ * 68 + patches_ * 82; }
     unsigned mappings() const { return u16(data_ + metadata() + 4); }
     const uint8_t *mapping(unsigned i) const { return data_ + metadata() + metadata_header_size + instruments_ * 64 + i * 8; }
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
@@ -998,7 +1010,7 @@ private:
             for (unsigned i = 0; i < counters(); ++i) {
                 const uint8_t *c = counter(i);
                 if (std::strcmp(reinterpret_cast<const char *>(c), reinterpret_cast<const char *>(source))) continue;
-                unsigned value = values ? values->value(u32(data_ + 20), i, c[98]) : c[98];
+                unsigned value = values ? values->value(u32(data_ + core_ + 20), i, c[98]) : c[98];
                 std::snprintf(text, size, "%u", value + (c[96] >> 4 == 12)); return;
             }
             return;
@@ -1029,6 +1041,8 @@ private:
     }
     const uint8_t *data_ = nullptr;
     unsigned length_ = 0, instruments_ = 0, patch_cycles_ = 0, patches_ = 0;
+    unsigned core_ = 0, core_length_ = 0;
+    bool opaque_ = false;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
     unsigned graph_ = 0, streams_ = 0, pickup_ = 0, looper_ = 0;
 };

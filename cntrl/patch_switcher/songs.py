@@ -17,7 +17,16 @@ from pydantic import (
     field_validator,
 )
 
-from . import compiler, inputs, models, resolved, setup_bundle, transport
+from . import (
+    binary_format,
+    compiler,
+    inputs,
+    midi_assets,
+    models,
+    resolved,
+    setup_bundle,
+    transport,
+)
 from .data_files import validate_name
 from .usb_frames import Kind
 
@@ -226,6 +235,7 @@ def encode(
         + b'CSP5'
     )
     if source:
+        source = binary_format.wrap(source)
         payload += struct.pack('<I', len(source)) + source
     if len(payload) > 0xFFFFFFFF - 20:
         raise ValueError('song library exceeds the SD file format size')
@@ -249,6 +259,8 @@ def upgrade(
             switches=switches,
             preserve_memory_estimates=preserve_memory_estimates,
         )
+        if not preserve_memory_estimates:
+            value = binary_format.wrap(value)
         result += struct.pack('<I', len(value)) + value
     upgraded = bytes(result)
     decode(upgraded)
@@ -488,8 +500,30 @@ def references(library: Library) -> list[str]:
     return sorted(result)
 
 
-def download(client: transport.SetupClient) -> bytes:
-    response = client.request('CNTRL SONGS SIZE').split()
+def asset_references(data: bytes) -> dict[str, list[str]]:
+    """Include assets belonging to every captured setup, not just selected nodes."""
+    result: dict[str, list[str]] = {'fonts': [], 'movies': [], 'midi': []}
+    for source in _parse(data)[4]:
+        settings = models.Setup.model_validate(
+            tomlkit.parse(resolved.export(source)).unwrap()
+        )
+        for category, paths in (
+            ('fonts', list(settings.fonts.values())),
+            ('movies', settings.splash_movie + settings.idle_movie),
+            ('midi', midi_assets.referenced({'captured': source})),
+        ):
+            for path in paths:
+                relative = f'midi/{path}' if category == 'midi' else path
+                if relative not in result[category]:
+                    result[category].append(relative)
+    return {k: sorted(v) for k, v in result.items()}
+
+
+def download(client: transport.SetupClient, *, undo: bool = False) -> bytes:
+    prefix = 'CNTRL SONGS UNDO' if undo else 'CNTRL SONGS'
+    response = client.request(prefix + ' SIZE').split()
+    if undo and response == ['CNTRL', 'SONGS', 'UNDO', 'NONE']:
+        return b''
     if (
         len(response) != 4
         or response[:2] != ['CNTRL', 'SONGS']
@@ -499,7 +533,7 @@ def download(client: transport.SetupClient) -> bytes:
     length = int(response[2])
     result = bytearray()
     while len(result) < length:
-        chunk = client.request_data(f'CNTRL SONGS READ {len(result)}')
+        chunk = client.request_data(f'{prefix} READ {len(result)}')
         if not 1 <= len(chunk) <= client.connection.usb_block_size:
             raise ValueError('invalid song library chunk')
         result.extend(chunk)

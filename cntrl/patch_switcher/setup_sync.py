@@ -14,7 +14,15 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field
 
-from . import backups, compiler, data_files, resolved, setup_bundle, transport
+from . import (
+    backups,
+    binary_format,
+    compiler,
+    data_files,
+    resolved,
+    setup_bundle,
+    transport,
+)
 
 
 class Choice(StrEnum):
@@ -235,6 +243,43 @@ def baseline(root: Path) -> dict[str, bytes]:
             raise ValueError(f'{n}: damaged synchronization baseline')
         result[n] = data
     return result
+
+
+def migrate_baselines(root: Path) -> None:
+    """Publish converted baselines together while retaining their source snapshots."""
+    check_pending(root)
+    original = base_record(root)
+    if not original:
+        return
+    saved = baseline(root)
+    converted = {n: binary_format.wrap(resolved.upgrade(d)) for n, d in saved.items()}
+    if converted == saved:
+        return
+    record = tomlkit.parse(original.decode()).unwrap()
+    entries = cast(dict[str, dict[str, str]], record['setups'])
+    version = binary_format.format_name(binary_format.DEVELOPMENT_FORMAT)
+    folder = Path(mkdtemp(prefix=f'format-{version}-', dir=root))
+    replace(folder / 'base.before', original)
+    write_record(
+        folder / 'conversion.toml', {'format': version, 'setups': list(converted)}
+    )
+    write_record(
+        root / 'pending.toml',
+        {'review': str(folder / 'conversion.toml'), 'sources': []},
+    )
+    for name, data in converted.items():
+        source = root / entries[name]['file']
+        destination = source.parent / f'.converted-{version}-{digest(data)}.bin'
+        if destination.exists() and destination.read_bytes() != data:
+            raise ValueError(f'{destination}: converted baseline checksum differs')
+        replace(destination, data)
+        entries[name] = {
+            'file': str(destination.relative_to(root)),
+            'checksum': digest(data),
+        }
+    write_record(root / 'base.toml', record)
+    write_record(folder / 'applied.toml', {'complete': True})
+    (root / 'pending.toml').unlink()
 
 
 def advance(root: Path, folder: Path, names: list[str]) -> None:
@@ -473,6 +518,7 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
 
     root = store(inputs)
     check_pending(root)
+    migrate_baselines(root)
     trace = data_files.Trace()
     host_bundle = compile_inputs(inputs, trace=trace)
     known_consumers(root, trace)
@@ -744,6 +790,7 @@ def prepare_upload(
     """Archive all current setups and retain independent, unreplaced pedal data."""
     root = store(inputs)
     check_pending(root)
+    migrate_baselines(root)
     existing: dict[str, bytes] = {}
     folder = snapshot(root, 'upload-', existing, trace, inputs)
     for e in client.catalogue():
@@ -751,7 +798,16 @@ def prepare_upload(
         save_setup(folder, e.name, existing[e.name])
     capture_assets(client, existing, folder)
     bases = baseline(root)
+    prepared = dict(bundle.setups)
     for n in bundle.names:
+        if n in existing and existing[n].startswith(binary_format.MAGIC):
+            document = binary_format.unpack(existing[n], binary_format.Kind.setup)
+            if len(document.records) > 1:
+                if binary_format.core(existing[n]) != binary_format.core(prepared[n]):
+                    raise ValueError(
+                        f'{n}: cannot recompile opaque metadata. Backup: {folder}'
+                    )
+                prepared[n] = existing[n]
         if (
             n in existing
             and n in bases
@@ -770,7 +826,7 @@ def prepare_upload(
                 f'{n}: no synchronization baseline; run cntrl setup sync and '
                 f'review the differences before uploading. Backup: {folder}'
             )
-    combined = setup_bundle.reindex(existing | bundle.setups)
+    combined = setup_bundle.reindex(existing | prepared)
     sources: dict[str, object] = {
         n: tomlkit.parse(resolved.export(v)).unwrap() for n, v in combined.items()
     }

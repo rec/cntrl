@@ -8,6 +8,7 @@ import tomlkit
 
 from . import (
     arpeggiator,
+    binary_format,
     counters,
     display,
     graphics,
@@ -48,6 +49,10 @@ from .models import MidiEndpoint, Setup
 
 def refresh_memory(data: bytes, fonts: dict[int, bytes], *, switches: bool) -> bytes:
     """Refresh current setup memory accounting directly from its wire records."""
+    if data.startswith(binary_format.MAGIC):
+        return binary_format.replace_core(
+            data, refresh_memory(binary_format.core(data), fonts, switches=switches)
+        )
     graph = graph_offset(data)
     if struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
         raise ValueError('upgrade setup before refreshing its memory estimate')
@@ -121,6 +126,12 @@ def upgrade(data: bytes) -> bytes:
     Preserve graph node IDs and all existing records. Extend only legacy page
     layout and gesture records, then update section offsets, lengths and CRC.
     """
+    if data.startswith(binary_format.MAGIC):
+        original = binary_format.core(data)
+        converted = upgrade(original)
+        if converted != original:
+            binary_format.require_structural_edit(data)
+        return binary_format.replace_core(data, converted)
     graph = graph_offset(data)
     version = struct.unpack_from('<H', data, 4)[0]
     if version == DOCUMENT_VERSION:
@@ -173,12 +184,20 @@ def upgrade(data: bytes) -> bytes:
 
 
 def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
+    if data.startswith(binary_format.MAGIC):
+        offset = binary_format.core_offset(data)
+        page, gestures, shifted = _page_offsets(binary_format.core(data))
+        return (
+            page + offset,
+            None if gestures is None else gestures + offset,
+            None if shifted is None else shifted + offset,
+        )
     if len(data) < 76:
         raise ValueError('truncated setup')
     magic, version, _, length, ni, nc, np, flags, crc, _ = HEADER.unpack_from(data)
     if (
         magic != b'CSW1'
-        or version not in (36, 38, 39, 40, 41, 42, DOCUMENT_VERSION)
+        or version not in binary_format.SETUP_VERSIONS
         or flags
         & ~(
             0x1FFF
@@ -222,6 +241,10 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
 
 def _sections(data: bytes) -> tuple[int, int, int]:
     """Locate sections in the original bytes, including supported old formats."""
+    if data.startswith(binary_format.MAGIC):
+        offset = binary_format.core_offset(data)
+        graph, endpoints, labels = _sections(binary_format.core(data))
+        return graph + offset, endpoints + offset, labels + offset
     cursor = _page_offsets(data)[0]
     np = HEADER.unpack_from(data)[6]
     cursor = layout.section_end(data, cursor)
@@ -357,6 +380,7 @@ def arm_memory(data: bytes) -> dict[str, int]:
 
 def patch(data: bytes, node: int) -> dict[str, object]:
     """Decode any graph node into the common tagged Patch authoring table."""
+    data = binary_format.core(data)
     if len(data) >= 6 and struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
         data = upgrade(data)
     offset = graph_offset(data)
@@ -367,6 +391,7 @@ def patch(data: bytes, node: int) -> dict[str, object]:
 
 
 def export(data: bytes) -> str:
+    data = binary_format.core(data)
     if len(data) >= 6 and struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
         data = upgrade(data)
     offset = graph_offset(data)

@@ -69,7 +69,7 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(startup_counter_start)
 #endif
-    void start(files::File &file) {
+    void start(files::File &file, uint64_t minimum = 0) {
         count = 0; status = Status::error; std::strcpy(error, "open");
         if (!file.opened()) return;
         error[0] = 0;
@@ -93,7 +93,8 @@ public:
             if (latest < 0 || saved > count) { count = saved; latest = int(slot); }
         }
         if (latest < 0 && file.size()) return;
-        if (count == INT64_MAX) { std::strcpy(error, "limit"); return; }
+        if (minimum > count) count = minimum;
+        if (count >= INT64_MAX) { std::strcpy(error, "limit"); return; }
         unsigned slot = latest < 0 ? 0 : unsigned(latest) ^ 1;
         uint64_t next = count + 1;
         std::memset(record, ' ', record_size);

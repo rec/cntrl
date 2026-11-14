@@ -1,12 +1,57 @@
 """Three-way semantics, source provenance and interrupted publication recovery."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 import tomlkit
 import tyro
 
-from cntrl.patch_switcher import data_files, setup_sync
+from cntrl.patch_switcher import binary_format, data_files, setup_sync
+
+
+@pytest.mark.parametrize('interrupted', [False, True])
+def test_baseline_conversion_preserves_provenance_and_recovers_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, interrupted: bool
+) -> None:
+    root = tmp_path / 'setup-sync'
+    snapshot = root / 'snapshot'
+    snapshot.mkdir(parents=True)
+    data = bytes.fromhex(
+        (Path(__file__).parents[1] / 'firmware/test/show.golden').read_text()
+    )
+    (snapshot / 'Show.bin').write_bytes(data)
+    provenance = b'compiler_checksum="original"\nsources=[]\n'
+    (snapshot / 'snapshot.toml').write_bytes(provenance)
+    (snapshot / 'source-0.original').write_bytes(b'brightness=192\n')
+    setup_sync.advance(root, snapshot, ['Show'])
+    original = setup_sync.base_record(root)
+    publish = setup_sync.write_record
+
+    def write(path: Path, value: Mapping[str, object]) -> None:
+        if interrupted and path == root / 'base.toml':
+            raise OSError('interrupted baseline publication')
+        publish(path, value)
+
+    monkeypatch.setattr(setup_sync, 'write_record', write)
+    if interrupted:
+        with pytest.raises(OSError, match='interrupted baseline'):
+            setup_sync.migrate_baselines(root)
+        with pytest.raises(ValueError, match='interrupted apply'):
+            setup_sync.check_pending(root)
+        setup_sync.recover(root / 'pending.toml')
+        assert setup_sync.base_record(root) == original
+        assert setup_sync.baseline(root) == {'Show': data}
+    else:
+        setup_sync.migrate_baselines(root)
+        assert setup_sync.baseline(root) == {'Show': binary_format.wrap(data)}
+        entry = tomlkit.parse(setup_sync.base_record(root).decode())['setups']['Show']
+        assert (root / entry['file']).parent == snapshot
+        assert setup_sync.base_record(root) != original
+        assert not (root / 'pending.toml').exists()
+    assert (snapshot / 'Show.bin').read_bytes() == data
+    assert (snapshot / 'snapshot.toml').read_bytes() == provenance
+    assert (snapshot / 'source-0.original').read_bytes() == b'brightness=192\n'
 
 
 @pytest.mark.parametrize(
