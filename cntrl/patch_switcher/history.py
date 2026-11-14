@@ -150,7 +150,7 @@ def reserved_numbers(directory: Path) -> list[tuple[str, int]]:
         if status.exists()
         else 0
     )
-    prefix = f'/cntrl/.generations/{root:08x}/' if root else ''
+    prefix = f'/cntrl/generations/{root:08x}/' if root else ''
     result: set[tuple[str, int]] = set()
     for entry in report.get('entries', []):
         if not isinstance(entry, dict) or not entry.get('directory'):

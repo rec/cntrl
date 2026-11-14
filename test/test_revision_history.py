@@ -15,12 +15,12 @@ def test_reserved_revisions_follow_the_selected_storage_root(tmp_path: Path) -> 
                 'entries': [
                     {
                         'directory': True,
-                        'path': '/cntrl/.generations/0000002a/history/Evening/'
+                        'path': '/cntrl/generations/0000002a/history/Evening/'
                         '0000000000000003',
                     },
                     {
                         'directory': True,
-                        'path': '/cntrl/.generations/00000029/history/Evening/'
+                        'path': '/cntrl/generations/00000029/history/Evening/'
                         '0000000000000004',
                     },
                     {

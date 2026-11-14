@@ -201,14 +201,20 @@ invalidates older unapplied reviews; their choices remain available for inspecti
 Single-file saves continue using their journals. For a coordinated restoration,
 the host first retains a recovery backup, stages the complete mutable collection
 and reads it back. Only then does it publish one activation record. Setup/history,
-selection and song paths map into `/cntrl/.generations/<eight-hex-root>/`.
+selection and song paths map into `/cntrl/generations/<eight-hex-root>/`.
 Root zero refers to the original paths. Retained roots are never overwritten.
+
+Internal storage directories use visible names: `setups/bundle`, `deploy` and
+`generations`. Cards from development builds that used leading-dot directory
+names must have those directories renamed before deploying this layout,
+including `setups/bundle` inside each retained generation. There is no automatic
+path migration.
 
 Fonts, movies, recordings and the startup counter remain shared. Immutable assets
 are reused; a MIDI filename collision with different bytes is refused. The
 startup counter must never be restored to a lower value over surviving recordings.
 
-The activation journal uses `/cntrl/.deploy/0.bin` and `1.bin`. Each record is:
+The activation journal uses `/cntrl/deploy/0.bin` and `1.bin`. Each record is:
 
 | Offset | Size | Meaning |
 | --- | --- | --- |

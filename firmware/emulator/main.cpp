@@ -508,7 +508,7 @@ private:
         }
     }
     void import(const char *setup,bool replace) {
-        if (!replace && (filesystem.exists("/cntrl/setups/.bundle/0.bin") || filesystem.exists("/cntrl/setups/.bundle/1.bin"))) return;
+        if (!replace && (filesystem.exists("/cntrl/setups/bundle/0.bin") || filesystem.exists("/cntrl/setups/bundle/1.bin"))) return;
         std::ifstream stream(std::filesystem::u8path(setup),std::ios::binary);
         if (!stream) throw std::runtime_error("cannot read compiled emulator setup");
         std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(stream),{}};

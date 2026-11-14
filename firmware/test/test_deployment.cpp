@@ -19,7 +19,7 @@ struct Faults : TestFileSystem {
         bool activation = false;
         explicit Handle(Faults &disk) : TestFile(disk), owner(disk) {}
         bool open(const char *path, cntrl::files::Mode mode) override {
-            activation = std::strstr(path, "/.deploy/") != nullptr;
+            activation = std::strstr(path, "/deploy/") != nullptr;
             return TestFile::open(path, mode);
         }
         bool write(uint32_t offset, const uint8_t *data, unsigned n) override {
@@ -49,8 +49,8 @@ int main(int argc, char **argv) {
     disk.hide_songs = false;
     assert(initial.begin(1));
     char path[224];
-    assert(cntrl::persistent_path("/cntrl/setups/.bundle/0.bin", path));
-    assert(!std::strcmp(path, "/cntrl/.generations/00000001/setups/.bundle/0.bin"));
+    assert(cntrl::persistent_path("/cntrl/setups/bundle/0.bin", path));
+    assert(!std::strcmp(path, "/cntrl/generations/00000001/setups/bundle/0.bin"));
     for (const char *shared : {"/cntrl/midi/255-3.mid", "/cntrl/starts.toml", "/cntrl/fonts/123.cfont", "/cntrl/movies/123.bin"}) {
         assert(cntrl::persistent_path(shared, path) && !std::strcmp(path, shared));
     }
@@ -97,11 +97,11 @@ int main(int argc, char **argv) {
     }
     // An unsupported committed format requires recovery, rather than guessing.
     auto file = disk.file();
-    assert(file->open("/cntrl/.deploy/0.bin", cntrl::files::Mode::read));
+    assert(file->open("/cntrl/deploy/0.bin", cntrl::files::Mode::read));
     uint8_t record[24]; assert(file->read(0, record, 24)); file->close();
     cntrl::binary::write32(record + 4, 0xfffffffeu); record[12] = 3; record[13] = 0;
     cntrl::binary::write32(record + 16, cntrl::binary::crc(record, 16));
-    assert(file->open("/cntrl/.deploy/0.bin", cntrl::files::Mode::truncate));
+    assert(file->open("/cntrl/deploy/0.bin", cntrl::files::Mode::truncate));
     assert(file->write(0, record, 24) && file->sync()); file->close();
     cntrl::Deployment unsupported(disk); assert(!unsupported.boot() && !unsupported.ready());
     assert(unsupported.begin(300) && unsupported.pending());

@@ -179,7 +179,7 @@ public:
     uint32_t bundle_crc() const { return bundle_crc_; }
     bool bundle_read(unsigned offset, uint8_t *data, unsigned length) { return image_.read(offset, data, length); }
 private:
-    inline static constexpr char bundle_name[] = ".bundle";
+    inline static constexpr char bundle_name[] = "bundle";
     struct Image : SetupBundleFile {
         SetupStorage &disk;
         unsigned slot = 0, length = 0;
