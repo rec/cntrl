@@ -52,6 +52,13 @@ session's `.emulator-build` directory. Generated outputs can be recreated from t
 and execution target. The session directory supplies the emulated filesystem;
 no SD card, formatting operation or connected pedal is involved. Reopen the same
 directory to retain its saved data; choose a new directory for a fresh session.
+
+The native executable is reused when its source and header contents, target,
+exported fonts, compiler identity, options and compiler environment are unchanged.
+Changes to these inputs rebuild it automatically. Re-exporting identical font
+files does not rebuild it. Setup compilation still runs when a source setup is
+supplied. A failed build is never recorded as reusable.
+
 Fonts and movies exported beside the compiled bundle are imported into the
 session through the existing asset formats. Put referenced MIDI files under
 the session's `midi/` directory before playing them.
