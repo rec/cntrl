@@ -3,6 +3,9 @@
 animation_color_cycle = false
 foreground_brightness_limit = '50%'
 
+[layout]
+focus = 'tools'
+
 [target_pulse]
 delay = 2
 period = 4
