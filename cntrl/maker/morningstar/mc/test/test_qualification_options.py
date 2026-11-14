@@ -4,12 +4,14 @@ import pytest
 import tomlkit
 import tyro
 
+from cntrl.maker.morningstar.mc import qualify_usb_midi
 from cntrl.maker.morningstar.mc.qualify_usb_midi import (
     Options,
     note_lifecycle,
     save_report,
     watchdog_evidence,
 )
+from cntrl.patch_switcher.core_midi import Midi
 
 
 @pytest.mark.parametrize('value', ['0.5', '500 ms'])
@@ -104,6 +106,67 @@ def test_short_message_probe_requires_an_explicit_separate_run() -> None:
     ):
         with pytest.raises(ValueError, match='probe-short-messages requires'):
             Options.model_validate(values)
+
+
+def test_midi_only_probe_requires_enabled_forwarding_and_explicit_run() -> None:
+    options = tyro.cli(
+        Options,
+        args=['--run', '--probe-short-messages', '--expect-enabled', '--midi-only'],
+    )
+    assert options.midi_only
+    for values in (
+        {},
+        {'run': True},
+        {'run': True, 'probe_short_messages': True},
+        {'run': True, 'expect_enabled': True},
+    ):
+        with pytest.raises(ValueError, match='midi-only requires'):
+            Options.model_validate({'midi_only': True, **values})
+
+
+@pytest.mark.parametrize(
+    'host_matches, drop', [(True, False), (True, True), (False, False)]
+)
+def test_probe_without_serial_retains_bytes_and_stops_after_a_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, host_matches: bool, drop: bool
+) -> None:
+    class Loopback(Midi):
+        def __init__(self) -> None:
+            self.data = bytearray()
+            self.sent: list[bytes] = []
+
+        def send(self, endpoint: int, data: bytes) -> None:
+            self.sent.append(data)
+            if not drop:
+                self.data.extend(data)
+
+    monkeypatch.setattr(qualify_usb_midi.time, 'sleep', lambda seconds: None)
+    monkeypatch.setattr(
+        qualify_usb_midi, 'probe_virtual_source', lambda midi: {'matches': host_matches}
+    )
+    midi = Loopback()
+    report: dict[str, object] = {'success': False}
+    path = tmp_path / 'midi-only.toml'
+    if host_matches and not drop:
+        qualify_usb_midi.run_message_probe(midi, 1, None, report, path)
+        assert report['success'] is True
+    else:
+        with pytest.raises(ValueError, match='mismatch'):
+            qualify_usb_midi.run_message_probe(midi, 1, None, report, path)
+    saved = tomlkit.parse(path.read_text()).unwrap()
+    if not host_matches:
+        assert not midi.sent and not saved['success']
+        assert saved['host_loopback']['matches'] is False
+        return
+    trials = saved['trials']
+    assert [t['name'] for t in trials] == (
+        ['paced'] if drop else ['paced', 'burst', 'sysex']
+    )
+    assert all(t['matches'] == (not drop) for t in trials)
+    assert all('before' not in t and 'after' not in t for t in trials)
+    if drop:
+        assert b''.join(midi.sent).hex() == trials[0]['sent_hex']
+        assert trials[0]['received_hex'] == ''
 
 
 def test_report_option_preserves_diagnostics_as_toml(tmp_path: Path) -> None:

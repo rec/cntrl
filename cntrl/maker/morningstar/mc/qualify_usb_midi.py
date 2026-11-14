@@ -39,6 +39,8 @@ class Options(BaseModel, frozen=True):
     """Skip exact byte checks for transforming graphs; send only PC/modulation load."""
     probe_short_messages: bool = False
     """Compare paced/burst short messages and SysEx with raw bytes and counters."""
+    midi_only: bool = False
+    """Probe without opening serial. Requires already-enabled MIDI forwarding."""
     report: Path | None = None
     """Save serial inspection or before/after run diagnostics as TOML."""
 
@@ -48,6 +50,12 @@ class Options(BaseModel, frozen=True):
             not self.run or self.inspect or self.stress_only or self.stress_seconds
         ):
             raise ValueError('probe-short-messages requires --run without other modes')
+        if self.midi_only and not (
+            self.run and self.probe_short_messages and self.expect_enabled
+        ):
+            raise ValueError(
+                'midi-only requires --run --probe-short-messages --expect-enabled'
+            )
         if sum((self.inspect, self.run, self.watchdog_test)) > 1:
             raise ValueError(
                 'inspect, run and watchdog-test are separate modes; select only one'
@@ -264,7 +272,7 @@ def probe_virtual_source(midi: Midi) -> dict[str, object]:
 def probe_short_messages(
     midi: Midi,
     destination: int,
-    client: SetupClient,
+    client: SetupClient | None,
     report: dict[str, object],
     path: Path | None,
 ) -> list[dict[str, object]]:
@@ -280,7 +288,7 @@ def probe_short_messages(
         ('sysex', 0, [sysex], 2),
     ]:
         payload = b''.join(chunks)
-        before = diagnostics(client)
+        before = diagnostics(client) if client is not None else None
         time.sleep(0.2)
         idle = bytes(midi.data)
         midi.data.clear()
@@ -296,19 +304,43 @@ def probe_short_messages(
             'received_hex': received.hex(),
             'idle_hex': idle.hex(),
             'matches': received == payload,
-            'before': before,
         }
+        if before is not None:
+            trial['before'] = before
         trials.append(trial)
         save_report(path, report)
-        trial['after'] = diagnostics(client)
-        save_report(path, report)
-        midi.data.clear()
+        if client is not None:
+            trial['after'] = diagnostics(client)
+            save_report(path, report)
         print(
             f'{name}: sent {len(payload)}, received {len(received)}, '
             f'matches={trial["matches"]}',
             flush=True,
         )
+        if client is None and not trial['matches']:
+            break
+        midi.data.clear()
     return trials
+
+
+def run_message_probe(
+    midi: Midi,
+    destination: int,
+    client: SetupClient | None,
+    report: dict[str, object],
+    path: Path | None,
+) -> None:
+    report['host_loopback'] = host = probe_virtual_source(midi)
+    if client is None and not host['matches']:
+        save_report(path, report)
+        raise ValueError('Host loopback mismatch; see the captured probe bytes')
+    report['trials'] = trials = probe_short_messages(
+        midi, destination, client, report, path
+    )
+    report['success'] = host['matches'] and all(t['matches'] for t in trials)
+    save_report(path, report)
+    if not report['success']:
+        raise ValueError('Probe mismatch; see trial bytes and available counters')
 
 
 def run(options: Options) -> None:
@@ -344,6 +376,18 @@ def run(options: Options) -> None:
             return
         destination, source = destinations[options.destination], sources[options.source]
         midi.check(midi.core.MIDIPortConnectSource(midi.input, source, None))
+        report = {
+            'success': False,
+            'options': options.model_dump(mode='json', exclude_none=True),
+            'timing': (
+                'CoreMIDI receiver bytes only; no wire timestamps '
+                'or clock jitter measurement'
+            ),
+        }
+        save_report(options.report, report)
+        if options.midi_only:
+            run_message_probe(midi, destination, None, report, options.report)
+            return
         with SerialConnection(options.port, timeout=3, retry=False) as connection:
             client = SetupClient(connection)
             before = client.request('CNTRL MIDI STATUS 0')
@@ -355,15 +399,7 @@ def run(options: Options) -> None:
             client.ok('CNTRL MIDI RESET')
             time.sleep(0.1)
             before_diagnostics = diagnostics(client)
-            report = {
-                'success': False,
-                'options': options.model_dump(mode='json', exclude_none=True),
-                'before': before_diagnostics,
-                'timing': (
-                    'CoreMIDI receiver bytes only; no wire timestamps '
-                    'or clock jitter measurement'
-                ),
-            }
+            report['before'] = before_diagnostics
             save_report(options.report, report)
             armed = False
             try:
@@ -371,16 +407,7 @@ def run(options: Options) -> None:
                     armed = True
                     client.ok('CNTRL QUAL START')
                 if options.probe_short_messages:
-                    report['host_loopback'] = probe_virtual_source(midi)
-                    report['trials'] = trials = probe_short_messages(
-                        midi, destination, client, report, options.report
-                    )
-                    report['success'] = report['host_loopback']['matches'] and all(
-                        t['matches'] for t in trials
-                    )
-                    save_report(options.report, report)
-                    if not report['success']:
-                        raise ValueError('Probe mismatch; see trial bytes and counters')
+                    run_message_probe(midi, destination, client, report, options.report)
                     return
                 # Program changes and benign modulation controls, not note events.
                 messages = b''.join(bytes((0xC0 | i % 16, i)) for i in range(128))

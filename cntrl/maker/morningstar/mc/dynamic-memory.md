@@ -222,9 +222,23 @@ RAM estimates have changed. The default upgrade path still refreshes estimates.
 
 ## Physical qualification procedure
 
-Use `uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc`
+Use `uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc`
 to discover the MIDI endpoints. Target options follow `--`. The DIN output must
 connect to the DIN input for the forwarding checks below.
+
+To isolate an active USB serial client from MIDI traffic, first select an
+already-enabled forwarding setup, close the setup command, then run:
+
+```sh
+cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --run --expect-enabled --probe-short-messages --midi-only --destination 'cntrl experimental DIN' --source 'cntrl experimental DIN' --report build/midi-only-probe.toml
+```
+
+This uses the same virtual-source check and paced/burst/SysEx payloads as the
+combined probe, but opens no serial connection and records no serial counters.
+It saves the observed bytes and stops at the first mismatch. The firmware's
+serial interface remains part of its USB descriptor; this isolates the host
+serial client, not the presence of the composite interface. Inspect serial
+diagnostics separately after the MIDI client has closed.
 
 For a crash or hang investigation, build with `cntrl build --diagnostics` using
 the same target and output options. This opt-in image reserves 128 bytes of RAM2
