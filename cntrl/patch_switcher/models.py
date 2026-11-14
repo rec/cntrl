@@ -528,8 +528,17 @@ class Delay(Presentation, frozen=True):
 
 class Banked(Presentation, frozen=True):
     type: Literal['banked'] = 'banked'
-    patches: dict[str, object]
-    banks: list[list[str]] = Field(min_length=1, max_length=128)
+    patches: dict[str, object] = Field(default_factory=dict)
+    banks: dict[
+        Annotated[int, Field(ge=0, le=127)],
+        dict[Annotated[int, Field(ge=0, le=3)], str],
+    ] = Field(default_factory=dict)
+    bank_count: Annotated[int, Field(strict=True, ge=1, le=128)]
+    page_count: Annotated[int, Field(strict=True, ge=1, le=4)] = 1
+    page_counts: dict[
+        Annotated[int, Field(ge=0, le=127)],
+        Annotated[int, Field(strict=True, ge=1, le=4)],
+    ] = Field(default_factory=dict)
     initial_bank: Annotated[int, Field(strict=True, ge=0, le=127)] = 0
     chords: dict[str, list[str]] = Field(default_factory=dict)
 

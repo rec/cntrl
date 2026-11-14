@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import struct
+from collections import Counter
 from pathlib import Path
 from typing import Annotated
 from zlib import crc32
@@ -50,7 +51,19 @@ def convert(document: dict, bank: int) -> models.Setup:
         raise ValueError('only expression or disabled Omniports are supported')
     counters: dict[str, object] = {}
     patches: dict[str, object] = {}
-    bank_pages: list[list[str]] = []
+    bank_pages: dict[int, dict[int, str]] = {}
+    page_counts = {n: b['pageLimit'] or 4 for n, b in banks.items()}
+    page_count = Counter(page_counts.values()).most_common(1)[0][0]
+    default_style = {'foreground_color': '0x800080', 'background_color': '0xFFFFFF'}
+    view = {
+        'maximum_size': 2 * (18 - general['presetMaxFontSize']),
+        'detail_size': 18 - general['middleLayerFontSize'],
+        'status_size': (12, 10, 8, 8)[general['bankPageFontSize']],
+        'status_style': {'foreground_color': 'blue'},
+        'align': 'switch' if general['lcdAlign'] else 'left',
+        'show_labels': general['showPresetLabels'],
+        'status': 'B{bank:03d} PG{page}' if general['bankPageFontSize'] != 3 else '',
+    }
 
     def label(text: str) -> str:
         # Official editor icon 46 ('.') is the right chevron.
@@ -108,10 +121,19 @@ def convert(document: dict, bank: int) -> models.Setup:
                 maximum=max(minimum, maximum),
                 reverse=minimum > maximum,
             ).model_dump(exclude_none=True)
+        populated: set[int] = set()
         for preset in source['presetArray']:
             messages = [m for m in preset['msgArray'] if m['t']]
             index = preset['presetNum']
             location = f'{context}/presetArray/{index}'
+            if (
+                messages
+                or preset['shortName'] != 'EMPTY'
+                or preset['longName'] not in ('', 'EMPTY')
+                or preset['nameColor'] != 7
+                or preset['backgroundColor'] not in (0, 64)
+            ):
+                populated.add(index // 6)
             if any(preset[k] for k in ('toToggle', 'toBlink', 'toMsgScroll')):
                 raise ValueError(
                     f'{location}: only non-toggle assignments are supported'
@@ -182,41 +204,48 @@ def convert(document: dict, bank: int) -> models.Setup:
                 },
                 'on': {'patches': actions},
             }
-        pages = []
-        for page in range(source['pageLimit'] or 4):
-            root = {
+        pages: dict[int, str] = {}
+        style = {
+            'foreground_color': palette_color(source['textColor'])
+            if source['isColorEnabled'] and source['textColor'] != 127
+            else default_style['foreground_color'],
+            'background_color': palette_color(source['backgroundColor'])
+            if source['isColorEnabled'] and source['backgroundColor'] != 127
+            else default_style['background_color'],
+        }
+        populated.intersection_update(range(page_counts[number]))
+        customised = bool(
+            source['bankName']
+            or style != default_style
+            or any(k.startswith('configurable-') for k in bindings)
+        )
+        for page in range(page_counts[number]):
+            if page not in populated and not (
+                page == 0 and customised and not populated
+            ):
+                continue
+            root: dict[str, object] = {
                 'name': source['bankName'] or ' ',
                 'patches': [],
                 'bindings': {
                     k: v for k, v in bindings.items() if k.startswith('configurable-')
                 }
                 | {'abcdef'[i]: bindings[str(page * 6 + i)] for i in range(6)},
-                'style': {
-                    'foreground_color': palette_color(source['textColor'])
-                    if source['isColorEnabled'] and source['textColor'] != 127
-                    else '0x800080',
-                    'background_color': palette_color(source['backgroundColor'])
-                    if source['isColorEnabled'] and source['backgroundColor'] != 127
-                    else 'white',
-                },
-                'binding_view': {
-                    'maximum_size': 2 * (18 - general['presetMaxFontSize']),
-                    'detail_size': 18 - general['middleLayerFontSize'],
-                    'status_size': (12, 10, 8, 8)[general['bankPageFontSize']],
-                    'status_style': {'foreground_color': 'blue'},
-                    'align': 'switch' if general['lcdAlign'] else 'left',
-                    'show_labels': general['showPresetLabels'],
-                    'status': 'B{bank:03d} PG{page}'
-                    if general['bankPageFontSize'] != 3
-                    else '',
-                },
             }
-            key = next(
-                (n for n, p in patches.items() if p == root), f'bank{number}_page{page}'
-            )
+            if style != default_style:
+                root['style'] = style
+            base = source['bankName'] or 'Untitled'
+            if page:
+                base += f' ({page + 1})'
+            key = next((n for n, p in patches.items() if p == root), base)
+            suffix = 2
+            while key in patches and patches[key] != root:
+                key = f'{base} ({suffix})'
+                suffix += 1
             patches[key] = root
-            pages.append(key)
-        bank_pages.append(pages)
+            pages[page] = key
+        if pages:
+            bank_pages[number] = pages
     return models.Setup.model_validate(
         {
             'pages': {
@@ -228,8 +257,21 @@ def convert(document: dict, bank: int) -> models.Setup:
                 'Morningstar': {
                     'type': 'banked',
                     'name': 'Morningstar',
-                    'patches': patches,
                     'banks': bank_pages,
+                    'patches': patches,
+                    'bank_count': len(banks),
+                    'page_count': page_count,
+                    **(
+                        {
+                            'page_counts': {
+                                n: c for n, c in page_counts.items() if c != page_count
+                            }
+                        }
+                        if any(c != page_count for c in page_counts.values())
+                        else {}
+                    ),
+                    'style': default_style,
+                    'binding_view': view,
                     'initial_bank': bank,
                     'chords': {}
                     if general['dualLock']
@@ -265,19 +307,18 @@ def run(command: ImportBackup) -> None:
     document.update(
         setup.model_dump(mode='json', exclude_none=True, exclude_defaults=True)
     )
-    banks = tomlkit.array()
-    for i, b in enumerate(imported.banks):
-        name = models.Sequence.model_validate(imported.patches[b[0]]).name or ''
-        label = ' '.join(name.split()) or 'unnamed'
-        banks.add_line(b, comment=f'Bank {i}: {label}')
-    banks.add_line(indent='')
+    banks = tomlkit.table()
+    for i, b in imported.banks.items():
+        pages = tomlkit.inline_table()
+        pages.update({str(j): n for j, n in b.items()})
+        banks.add(str(i), pages)
     document['patches']['Morningstar']['banks'] = banks
     (command.output / 'setup.toml').write_text(tomlkit.dumps(document))
     report = {
         'backup': str(command.backup.resolve()),
         'sha256': hashlib.sha256(content).hexdigest(),
         'selected_bank': command.bank,
-        'included_banks': len(imported.banks),
+        'included_banks': imported.bank_count,
         'scope': 'PC-scroll press assignments, continuous expression CCs '
         'and all bank/preset-page slots in one banked patch',
         'presentation': 'saved palette, switch alignment, short and long names, '
@@ -319,7 +360,7 @@ def run(command: ImportBackup) -> None:
         )
     )
     print(
-        f'Imported {len(imported.banks)} banks as one patch into '
+        f'Imported {imported.bank_count} banks as one patch into '
         f'{command.output / "setup.toml"}'
     )
 

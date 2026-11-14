@@ -3,143 +3,21 @@ fill_in_styles = false
 [patches.Morningstar]
 type = "banked"
 name = "Morningstar"
-banks = [
-    ["bank0_page0", "bank0_page1", "bank0_page1", "bank0_page1"], # Bank 0: VL70-1
-    ["bank1_page0", "bank1_page1", "bank1_page1", "bank1_page1"], # Bank 1: VL70-2
-    ["bank0_page0", "bank0_page1", "bank0_page1", "bank0_page1"], # Bank 2: VL70-1
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 3: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 4: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 5: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 6: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 7: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 8: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 9: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 10: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 11: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 12: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 13: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 14: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 15: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 16: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 17: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 18: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 19: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 20: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 21: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 22: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 23: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 24: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 25: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 26: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 27: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 28: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 29: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 30: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 31: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 32: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 33: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 34: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 35: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 36: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 37: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 38: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 39: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 40: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 41: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 42: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 43: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 44: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 45: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 46: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 47: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 48: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 49: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 50: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 51: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 52: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 53: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 54: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 55: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 56: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 57: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 58: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 59: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 60: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 61: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 62: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 63: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 64: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 65: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 66: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 67: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 68: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 69: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 70: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 71: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 72: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 73: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 74: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 75: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 76: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 77: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 78: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 79: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 80: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 81: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 82: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 83: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 84: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 85: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 86: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 87: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 88: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 89: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 90: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 91: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 92: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 93: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 94: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 95: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 96: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 97: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 98: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 99: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 100: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 101: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 102: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 103: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 104: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 105: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 106: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 107: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 108: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 109: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 110: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 111: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 112: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 113: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 114: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 115: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 116: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 117: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 118: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 119: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 120: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 121: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 122: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 123: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 124: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 125: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 126: unnamed
-    ["bank3_page0", "bank3_page0", "bank3_page0", "bank3_page0"], # Bank 127: unnamed
-]
+bank_count = 128
+page_count = 4
 initial_bank = 0
 
-[patches.Morningstar.patches.bank0_page0]
+[patches.Morningstar.banks]
+0 = {0 = "VL70-1"}
+1 = {0 = "VL70-2"}
+2 = {0 = "VL70-1"}
+
+
+[patches.Morningstar.patches.VL70-1]
 name = "VL70-1"
 patches = []
 
-[patches.Morningstar.patches.bank0_page0.bindings.configurable-1]
+[patches.Morningstar.patches.VL70-1.bindings.configurable-1]
 output = "din"
 mirror_output = "usb-device"
 channel = 1
@@ -149,7 +27,7 @@ maximum = 127
 reverse = false
 curve = "linear"
 
-[patches.Morningstar.patches.bank0_page0.bindings.configurable-2]
+[patches.Morningstar.patches.VL70-1.bindings.configurable-2]
 output = "din"
 mirror_output = "usb-device"
 channel = 1
@@ -159,16 +37,16 @@ maximum = 127
 reverse = false
 curve = "linear"
 
-[patches.Morningstar.patches.bank0_page0.bindings.a]
+[patches.Morningstar.patches.VL70-1.bindings.a]
 name = "Flutes"
 display_name = "Flute: {counters.counter3}"
 
-[patches.Morningstar.patches.bank0_page0.bindings.a.style]
+[patches.Morningstar.patches.VL70-1.bindings.a.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FFFF"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank0_page0.bindings.a.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "din"
@@ -176,7 +54,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.a.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "usb-device"
@@ -184,7 +62,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.a.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "din"
@@ -192,7 +70,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.a.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "usb-device"
@@ -200,16 +78,16 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.bank0_page0.bindings.b]
+[patches.Morningstar.patches.VL70-1.bindings.b]
 name = "World"
 display_name = "World: {counters.counter4}"
 
-[patches.Morningstar.patches.bank0_page0.bindings.b.style]
+[patches.Morningstar.patches.VL70-1.bindings.b.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFFA500"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank0_page0.bindings.b.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "din"
@@ -217,7 +95,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.b.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "usb-device"
@@ -225,7 +103,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.b.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "din"
@@ -233,7 +111,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.b.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "usb-device"
@@ -241,28 +119,28 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.bank0_page0.bindings.c]
+[patches.Morningstar.patches.VL70-1.bindings.c]
 name = ">"
 display_name = "VL70: {counters.counter3} - {counters.counter2}"
 
-[patches.Morningstar.patches.bank0_page0.bindings.c.style]
+[patches.Morningstar.patches.VL70-1.bindings.c.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFA8072"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank0_page0.bindings.c.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.c.on.patches]]
 operation = "next-bank"
 
-[patches.Morningstar.patches.bank0_page0.bindings.d]
+[patches.Morningstar.patches.VL70-1.bindings.d]
 name = "Bass"
 display_name = "Bass {counters.counter0}"
 
-[patches.Morningstar.patches.bank0_page0.bindings.d.style]
+[patches.Morningstar.patches.VL70-1.bindings.d.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FF00"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank0_page0.bindings.d.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "din"
@@ -270,7 +148,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.d.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "usb-device"
@@ -278,7 +156,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.d.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "din"
@@ -286,7 +164,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.d.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "usb-device"
@@ -294,16 +172,16 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.bank0_page0.bindings.e]
+[patches.Morningstar.patches.VL70-1.bindings.e]
 name = "Sax"
 display_name = "Sax: {counters.counter1}"
 
-[patches.Morningstar.patches.bank0_page0.bindings.e.style]
+[patches.Morningstar.patches.VL70-1.bindings.e.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFF8C00"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank0_page0.bindings.e.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter1"
 output = "din"
@@ -311,7 +189,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.e.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter1"
 output = "usb-device"
@@ -319,7 +197,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.e.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter1"
 output = "din"
@@ -327,7 +205,7 @@ channel = 2
 change = "none"
 wrap = false
 
-[[patches.Morningstar.patches.bank0_page0.bindings.e.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter1"
 output = "usb-device"
@@ -335,16 +213,16 @@ channel = 2
 change = "none"
 wrap = false
 
-[patches.Morningstar.patches.bank0_page0.bindings.f]
+[patches.Morningstar.patches.VL70-1.bindings.f]
 name = "Reeds"
 display_name = "Reeds {counters.counter2}"
 
-[patches.Morningstar.patches.bank0_page0.bindings.f.style]
+[patches.Morningstar.patches.VL70-1.bindings.f.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xF0E68C"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank0_page0.bindings.f.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter2"
 output = "din"
@@ -352,7 +230,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.f.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter2"
 output = "usb-device"
@@ -360,7 +238,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.f.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter2"
 output = "din"
@@ -368,7 +246,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank0_page0.bindings.f.on.patches]]
+[[patches.Morningstar.patches.VL70-1.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter2"
 output = "usb-device"
@@ -376,137 +254,11 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.bank0_page0.style]
-foreground_color = "0x800080"
-background_color = "0xFFFFFF"
-
-[patches.Morningstar.patches.bank0_page0.binding_view]
-maximum_size = 36
-detail_size = 18
-status_size = 12
-align = "switch"
-show_labels = false
-status = "B{bank:03d} PG{page}"
-
-[patches.Morningstar.patches.bank0_page0.binding_view.status_style]
-foreground_color = "blue"
-
-[patches.Morningstar.patches.bank0_page1]
-name = "VL70-1"
-patches = []
-
-[patches.Morningstar.patches.bank0_page1.bindings.configurable-1]
-output = "din"
-mirror_output = "usb-device"
-channel = 1
-controller = 13
-minimum = 0
-maximum = 127
-reverse = false
-curve = "linear"
-
-[patches.Morningstar.patches.bank0_page1.bindings.configurable-2]
-output = "din"
-mirror_output = "usb-device"
-channel = 1
-controller = 4
-minimum = 0
-maximum = 127
-reverse = false
-curve = "linear"
-
-[patches.Morningstar.patches.bank0_page1.bindings.a]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank0_page1.bindings.a.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank0_page1.bindings.a.on]
-patches = []
-
-[patches.Morningstar.patches.bank0_page1.bindings.b]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank0_page1.bindings.b.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank0_page1.bindings.b.on]
-patches = []
-
-[patches.Morningstar.patches.bank0_page1.bindings.c]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank0_page1.bindings.c.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank0_page1.bindings.c.on]
-patches = []
-
-[patches.Morningstar.patches.bank0_page1.bindings.d]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank0_page1.bindings.d.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank0_page1.bindings.d.on]
-patches = []
-
-[patches.Morningstar.patches.bank0_page1.bindings.e]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank0_page1.bindings.e.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank0_page1.bindings.e.on]
-patches = []
-
-[patches.Morningstar.patches.bank0_page1.bindings.f]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank0_page1.bindings.f.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank0_page1.bindings.f.on]
-patches = []
-
-[patches.Morningstar.patches.bank0_page1.style]
-foreground_color = "0x800080"
-background_color = "0xFFFFFF"
-
-[patches.Morningstar.patches.bank0_page1.binding_view]
-maximum_size = 36
-detail_size = 18
-status_size = 12
-align = "switch"
-show_labels = false
-status = "B{bank:03d} PG{page}"
-
-[patches.Morningstar.patches.bank0_page1.binding_view.status_style]
-foreground_color = "blue"
-
-[patches.Morningstar.patches.bank1_page0]
+[patches.Morningstar.patches.VL70-2]
 name = "VL70-2"
 patches = []
 
-[patches.Morningstar.patches.bank1_page0.bindings.configurable-1]
+[patches.Morningstar.patches.VL70-2.bindings.configurable-1]
 output = "din"
 mirror_output = "usb-device"
 channel = 1
@@ -516,7 +268,7 @@ maximum = 127
 reverse = false
 curve = "linear"
 
-[patches.Morningstar.patches.bank1_page0.bindings.configurable-2]
+[patches.Morningstar.patches.VL70-2.bindings.configurable-2]
 output = "din"
 mirror_output = "usb-device"
 channel = 1
@@ -526,16 +278,16 @@ maximum = 127
 reverse = false
 curve = "linear"
 
-[patches.Morningstar.patches.bank1_page0.bindings.a]
+[patches.Morningstar.patches.VL70-2.bindings.a]
 name = "Synth"
 display_name = "Synth: {counters.counter8}"
 
-[patches.Morningstar.patches.bank1_page0.bindings.a.style]
+[patches.Morningstar.patches.VL70-2.bindings.a.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FFFF"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank1_page0.bindings.a.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter8"
 output = "din"
@@ -543,7 +295,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.a.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter8"
 output = "usb-device"
@@ -551,7 +303,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.a.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "din"
@@ -559,7 +311,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.a.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "usb-device"
@@ -567,16 +319,16 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.bank1_page0.bindings.b]
+[patches.Morningstar.patches.VL70-2.bindings.b]
 name = "FX"
 display_name = "FX: {counters.counter9}"
 
-[patches.Morningstar.patches.bank1_page0.bindings.b.style]
+[patches.Morningstar.patches.VL70-2.bindings.b.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFFA500"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank1_page0.bindings.b.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter9"
 output = "din"
@@ -584,7 +336,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.b.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter9"
 output = "usb-device"
@@ -592,7 +344,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.b.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "din"
@@ -600,7 +352,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.b.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "usb-device"
@@ -608,28 +360,28 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.bank1_page0.bindings.c]
+[patches.Morningstar.patches.VL70-2.bindings.c]
 name = "<"
 display_name = "VL70: {counters.counter3} - {counters.counter2}"
 
-[patches.Morningstar.patches.bank1_page0.bindings.c.style]
+[patches.Morningstar.patches.VL70-2.bindings.c.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFA8072"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank1_page0.bindings.c.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.c.on.patches]]
 operation = "previous-bank"
 
-[patches.Morningstar.patches.bank1_page0.bindings.d]
+[patches.Morningstar.patches.VL70-2.bindings.d]
 name = "Brass"
 display_name = "Brass {counters.counter5}"
 
-[patches.Morningstar.patches.bank1_page0.bindings.d.style]
+[patches.Morningstar.patches.VL70-2.bindings.d.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FF00"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank1_page0.bindings.d.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter5"
 output = "din"
@@ -637,7 +389,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.d.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter5"
 output = "usb-device"
@@ -645,7 +397,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.d.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "din"
@@ -653,7 +405,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.d.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "usb-device"
@@ -661,16 +413,16 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.bank1_page0.bindings.e]
+[patches.Morningstar.patches.VL70-2.bindings.e]
 name = "Guitar"
 display_name = "Guitar: {counters.counter6}"
 
-[patches.Morningstar.patches.bank1_page0.bindings.e.style]
+[patches.Morningstar.patches.VL70-2.bindings.e.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFF8C00"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank1_page0.bindings.e.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter6"
 output = "din"
@@ -678,7 +430,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.e.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter6"
 output = "usb-device"
@@ -686,7 +438,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.e.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter6"
 output = "din"
@@ -694,7 +446,7 @@ channel = 2
 change = "none"
 wrap = false
 
-[[patches.Morningstar.patches.bank1_page0.bindings.e.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter6"
 output = "usb-device"
@@ -702,16 +454,16 @@ channel = 2
 change = "none"
 wrap = false
 
-[patches.Morningstar.patches.bank1_page0.bindings.f]
+[patches.Morningstar.patches.VL70-2.bindings.f]
 name = "String"
 display_name = "String: {counters.counter7}"
 
-[patches.Morningstar.patches.bank1_page0.bindings.f.style]
+[patches.Morningstar.patches.VL70-2.bindings.f.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xF0E68C"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.bank1_page0.bindings.f.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter7"
 output = "din"
@@ -719,7 +471,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.f.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter7"
 output = "usb-device"
@@ -727,7 +479,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.f.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter7"
 output = "din"
@@ -735,7 +487,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.bank1_page0.bindings.f.on.patches]]
+[[patches.Morningstar.patches.VL70-2.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter7"
 output = "usb-device"
@@ -743,11 +495,11 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.bank1_page0.style]
+[patches.Morningstar.style]
 foreground_color = "0x800080"
 background_color = "0xFFFFFF"
 
-[patches.Morningstar.patches.bank1_page0.binding_view]
+[patches.Morningstar.binding_view]
 maximum_size = 36
 detail_size = 18
 status_size = 12
@@ -755,209 +507,7 @@ align = "switch"
 show_labels = false
 status = "B{bank:03d} PG{page}"
 
-[patches.Morningstar.patches.bank1_page0.binding_view.status_style]
-foreground_color = "blue"
-
-[patches.Morningstar.patches.bank1_page1]
-name = "VL70-2"
-patches = []
-
-[patches.Morningstar.patches.bank1_page1.bindings.configurable-1]
-output = "din"
-mirror_output = "usb-device"
-channel = 1
-controller = 13
-minimum = 0
-maximum = 127
-reverse = false
-curve = "linear"
-
-[patches.Morningstar.patches.bank1_page1.bindings.configurable-2]
-output = "din"
-mirror_output = "usb-device"
-channel = 1
-controller = 4
-minimum = 0
-maximum = 127
-reverse = false
-curve = "linear"
-
-[patches.Morningstar.patches.bank1_page1.bindings.a]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank1_page1.bindings.a.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank1_page1.bindings.a.on]
-patches = []
-
-[patches.Morningstar.patches.bank1_page1.bindings.b]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank1_page1.bindings.b.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank1_page1.bindings.b.on]
-patches = []
-
-[patches.Morningstar.patches.bank1_page1.bindings.c]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank1_page1.bindings.c.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank1_page1.bindings.c.on]
-patches = []
-
-[patches.Morningstar.patches.bank1_page1.bindings.d]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank1_page1.bindings.d.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank1_page1.bindings.d.on]
-patches = []
-
-[patches.Morningstar.patches.bank1_page1.bindings.e]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank1_page1.bindings.e.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank1_page1.bindings.e.on]
-patches = []
-
-[patches.Morningstar.patches.bank1_page1.bindings.f]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank1_page1.bindings.f.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank1_page1.bindings.f.on]
-patches = []
-
-[patches.Morningstar.patches.bank1_page1.style]
-foreground_color = "0x800080"
-background_color = "0xFFFFFF"
-
-[patches.Morningstar.patches.bank1_page1.binding_view]
-maximum_size = 36
-detail_size = 18
-status_size = 12
-align = "switch"
-show_labels = false
-status = "B{bank:03d} PG{page}"
-
-[patches.Morningstar.patches.bank1_page1.binding_view.status_style]
-foreground_color = "blue"
-
-[patches.Morningstar.patches.bank3_page0]
-name = " "
-patches = []
-
-[patches.Morningstar.patches.bank3_page0.bindings.a]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank3_page0.bindings.a.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank3_page0.bindings.a.on]
-patches = []
-
-[patches.Morningstar.patches.bank3_page0.bindings.b]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank3_page0.bindings.b.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank3_page0.bindings.b.on]
-patches = []
-
-[patches.Morningstar.patches.bank3_page0.bindings.c]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank3_page0.bindings.c.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank3_page0.bindings.c.on]
-patches = []
-
-[patches.Morningstar.patches.bank3_page0.bindings.d]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank3_page0.bindings.d.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank3_page0.bindings.d.on]
-patches = []
-
-[patches.Morningstar.patches.bank3_page0.bindings.e]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank3_page0.bindings.e.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank3_page0.bindings.e.on]
-patches = []
-
-[patches.Morningstar.patches.bank3_page0.bindings.f]
-name = "EMPTY"
-display_name = "EMPTY"
-
-[patches.Morningstar.patches.bank3_page0.bindings.f.style]
-font_name = "AtkinsonNextSemiBold"
-foreground_color = "0xFFFFFF"
-background_color = "0x000000"
-
-[patches.Morningstar.patches.bank3_page0.bindings.f.on]
-patches = []
-
-[patches.Morningstar.patches.bank3_page0.style]
-foreground_color = "0x800080"
-background_color = "white"
-
-[patches.Morningstar.patches.bank3_page0.binding_view]
-maximum_size = 36
-detail_size = 18
-status_size = 12
-align = "switch"
-show_labels = false
-status = "B{bank:03d} PG{page}"
-
-[patches.Morningstar.patches.bank3_page0.binding_view.status_style]
+[patches.Morningstar.binding_view.status_style]
 foreground_color = "blue"
 
 [patches.Morningstar.chords]

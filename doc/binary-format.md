@@ -51,7 +51,7 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | Tag 1 | Required, first, singleton core snapshot |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
-The setup core snapshot uses the explicitly encoded `CSW1` schema 46,
+The setup core snapshot uses the explicitly encoded `CSW1` schema 47,
 including its indexed graph, fixed settings and retained source metadata. It is
 one record inside the authoritative document, not a separately editable cache.
 The inner body checksum and length are retained. Numeric edits update both the
@@ -146,7 +146,7 @@ competing overrides. Existing asset codecs `CFN2`,
 `CNSA` v2, Standard MIDI Files and TOML records retain their encodings. An
 envelope does not imply that firmware supports an asset's codec.
 
-Development setup importers cover 36, 38, 39, 40, 41, 42, 43, 44 and 45. The explicit
+Development setup importers cover 36, 38, 39, 40, 41, 42, 43, 44, 45 and 46. The explicit
 upgrade path verifies supported d44, d45 and d46 envelopes and writes d46 output.
 Older setup cores acquire the display defaults of two frame buffers and enabled
 animations. Activation requires the current setup core version even when the

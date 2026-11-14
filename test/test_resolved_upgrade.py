@@ -15,6 +15,15 @@ def current_setup() -> bytes:
     return bytes.fromhex((ROOT / 'show.golden').read_text())
 
 
+def test_format_46_upgrade_preserves_the_entire_body() -> None:
+    original = bytes.fromhex((ROOT / 'setup46.golden').read_text())
+    assert struct.unpack_from('<H', original, 4)[0] == 46
+    upgraded = resolved.upgrade(original)
+    assert upgraded[6:] == original[6:]
+    assert struct.unpack_from('<H', upgraded, 4)[0] == compiler.DOCUMENT_VERSION
+    assert resolved.export(original) == resolved.export(upgraded)
+
+
 @pytest.mark.parametrize('version', [36, 38, 39, 40, 41, 42, 43, 44, 45])
 def test_historical_setup_preserves_graph_assets_and_page_order(version: int) -> None:
     # Actual outputs from a6916c8^, 1c8dd6b, c502794, 48fafdf, 32bdbab and 109a9cb.

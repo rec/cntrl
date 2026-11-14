@@ -14,7 +14,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 16;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 46;
+constexpr unsigned document_version = 47;
 constexpr unsigned gesture_event_count = 12;
 constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
 constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
@@ -971,7 +971,7 @@ private:
                 if (n[1] || length != 3 || u16(p) >= counter_count || p[2] > 1) return false;
                 break;
             case 17: {
-                if (n[1] || length < 8 || !u16(p) || !u16(p + 2) || u16(p + 2) > 128 || u16(p + 4) >= u16(p + 2) || u16(p + 6) > 5) return false;
+                if (n[1] > 4 || length < 8 || !u16(p + 2) || u16(p + 2) > 128 || u16(p + 4) >= u16(p + 2) || u16(p + 6) > 5) return false;
                 const uint8_t *r = p + 8, *end = p + length;
                 for (unsigned b = 0; b < u16(p + 2); ++b) {
                     if (end - r < 2 || !u16(r) || u16(r) > 4 || end - r < 2 + 2 * u16(r)) return false;

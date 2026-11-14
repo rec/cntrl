@@ -22,12 +22,15 @@ def test_saved_vl70_bank_converts_to_editable_toml(
     setup = convert(json.loads(BACKUP.read_bytes()), 0)
     assert list(setup.patches) == ['Morningstar']
     imported = models.Banked.model_validate(setup.patches['Morningstar'])
-    assert len(imported.banks) == 128
-    assert all(len(b) == 4 for b in imported.banks)
+    assert imported.bank_count == 128 and imported.page_count == 4
+    assert imported.banks == {0: {0: 'VL70-1'}, 1: {0: 'VL70-2'}, 2: {0: 'VL70-1'}}
+    assert list(imported.patches) == ['VL70-1', 'VL70-2']
     assert setup.patch_cycles == {'Imported': ['Morningstar']}
     run(ImportBackup(backup=BACKUP, output=tmp_path))
     text = (tmp_path / 'setup.toml').read_text()
-    assert models.Setup.model_validate(tomlkit.parse(text).unwrap()) == setup
+    assert models.Setup.model_validate(tomlkit.parse(text).unwrap()).model_dump(
+        mode='json'
+    ) == setup.model_dump(mode='json')
     file_regression.check(
         text,
         fullpath=BASE / 'emulator' / 'vl70-1.toml',
@@ -41,6 +44,52 @@ def test_unsupported_messages_are_reported_at_the_source_slot() -> None:
         ValueError, match='/presetArray/0/msgArray/0: unsupported message type 99'
     ):
         convert(document, 0)
+
+
+def test_sparse_slots_preserve_customisation_and_page_limits(tmp_path: Path) -> None:
+    document = json.loads(BACKUP.read_bytes())
+    banks = document['data']['bankArray']
+    banks[3]['bankName'] = 'Ambient'
+    banks[3]['presetArray'][18]['shortName'] = 'Scene'
+    banks[4]['bankName'] = 'Quiet'
+    banks[5]['pageLimit'] = 2
+    banks[6]['bankName'] = 'VL70-1'
+    setup = convert(document, 3)
+    imported = models.Banked.model_validate(setup.patches['Morningstar'])
+    assert imported.banks[3] == {3: 'Ambient (4)'}
+    assert imported.banks[4] == {0: 'Quiet'}
+    assert imported.banks[6] == {0: 'VL70-1 (2)'}
+    assert 5 not in imported.banks
+    assert imported.page_counts == {5: 2}
+    assert imported.initial_bank == 3
+    target = cli.load_target(
+        profiles.export(
+            BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+        )
+    )
+    raw = compiler.compile_show(setup.model_dump(exclude_none=True), {}, [], target)
+    restored = tomlkit.parse(resolved.export(raw)).unwrap()
+    assert compiler.compile_show(restored, {}, [], target) == raw
+
+
+def test_completely_empty_banked_patch_round_trips(tmp_path: Path) -> None:
+    setup = convert(json.loads(BACKUP.read_bytes()), 127)
+    patch = models.Banked.model_validate(setup.patches['Morningstar']).model_copy(
+        update={'banks': {}, 'patches': {}}
+    )
+    setup.patches['Morningstar'] = patch.model_dump(exclude_none=True)
+    target = cli.load_target(
+        profiles.export(
+            BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+        )
+    )
+    raw = compiler.compile_show(setup.model_dump(exclude_none=True), {}, [], target)
+    restored = tomlkit.parse(resolved.export(raw)).unwrap()
+    empty = models.Banked.model_validate(restored['patches']['Morningstar'])
+    assert empty.banks == empty.patches == {}
+    assert empty.bank_count == 128 and empty.page_count == 4
+    assert empty.initial_bank == 127
+    assert compiler.compile_show(restored, {}, [], target) == raw
 
 
 def test_latched_switch_cannot_enter_a_banked_patch(tmp_path: Path) -> None:
@@ -166,12 +215,19 @@ def test_imported_bank_runs_counters_and_bank_transitions(
         ][before:] == [[0xC0, 22], [0xC1, 22]]
         chord('bc')  # Empty bank 3.
         press('a')
+        snapshot()
         chord('ef')  # Empty preset page 2.
         press('a')
         chord('de')  # Return to preset page 1.
         chord('ab')  # Bank 2.
         chord('ab')  # Bank 1.
         chord('ab')  # Bank 0.
+        chord('ef')  # An empty page in a populated bank retains its bank theme.
+        snapshot()
+        chord('de')
+        chord('ab')  # Wrap from bank 0 to the original last bank, 127.
+        snapshot()
+        chord('bc')
         chord('df')  # cntrl menu.
         press('f')  # Return to the Banked Page.
         assert (
@@ -264,7 +320,7 @@ def test_banked_page_keeps_selection_and_runs_actions_while_hidden(
         'program': 100,
     }
     show['patch_cycles']['Imported'].append('Plain')
-    actions = show['patches']['Morningstar']['patches']['bank1_page0']['bindings']['a'][
+    actions = show['patches']['Morningstar']['patches']['VL70-2']['bindings']['a'][
         'on'
     ]['patches']
     actions.insert(0, {'type': 'delay', 'duration': '400 milliseconds'})

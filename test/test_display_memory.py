@@ -82,7 +82,10 @@ def test_previous_development_setup_requires_upgrade_and_keeps_defaults(
     assert exported['frame_buffers'] == 2
     assert exported['use_animations'] is True
     assert binary_format.core(upgraded) == resolved.upgrade(core)
-    assert struct.unpack_from('<H', binary_format.core(upgraded), 4)[0] == 46
+    assert (
+        struct.unpack_from('<H', binary_format.core(upgraded), 4)[0]
+        == compiler.DOCUMENT_VERSION
+    )
     previous[-1] ^= 1
     with pytest.raises(ValueError, match='checksum mismatch'):
         resolved.upgrade(bytes(previous))

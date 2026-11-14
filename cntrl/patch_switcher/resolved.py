@@ -141,6 +141,12 @@ def upgrade(data: bytes) -> bytes:
     if version == DOCUMENT_VERSION:
         export(data)
         return data
+    if version == 46:
+        converted = bytearray(data)
+        struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
+        result = bytes(converted)
+        export(result)
+        return result
     _, _, _, _, instruments, cycles, patches, *_ = HEADER.unpack_from(data)
     presentation_settings = (
         76 + instruments * 68 + cycles * 68 + patches * 82 + METADATA.size - 10
@@ -814,9 +820,24 @@ def _patch(
             patches[key] = _patch(
                 data, offset, node, metadata, ancestors | {index}, labels
             )
+        page_count = flags or max(len(b) for b in banks)
+        page_counts = {
+            str(i): len(b) for i, b in enumerate(banks) if len(b) != page_count
+        }
+        for page in patches.values():
+            for field in ('style', 'binding_view'):
+                if page.get(field) == value.get(field):
+                    page.pop(field, None)
         value.update(
             type='banked',
-            banks=[[names[n] for n in b] for b in banks],
+            banks={
+                str(i): {str(j): names[n] for j, n in enumerate(b) if n in names}
+                for i, b in enumerate(banks)
+                if any(n in names for n in b)
+            },
+            bank_count=count,
+            page_count=page_count,
+            page_counts=page_counts,
             initial_bank=initial,
             chords=chords,
             patches=patches,
