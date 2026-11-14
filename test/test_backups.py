@@ -9,6 +9,7 @@ import pytest
 import tomlkit
 import tyro
 
+from cntrl.animation import asset
 from cntrl.patch_switcher import (
     backups,
     binary_format,
@@ -882,6 +883,66 @@ def saved_pedal(
     )
     monkeypatch.setattr(transport, 'SetupClient', lambda connection: client)
     return client
+
+
+@pytest.mark.parametrize('reference', ['unused', 'setup', 'history'])
+def test_unreadable_movies_block_backup_only_when_referenced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target: models.Target,
+    saved_pedal: SavedPedal,
+    reference: str,
+) -> None:
+    geometry = asset.Geometry(width=1, height=1)
+    movie = asset.encode_frames(b'\x00\x00', [100], geometry)
+    path = tmp_path / 'movie.cnsa'
+    path.write_bytes(movie)
+    target = target.model_copy(update={'animation': geometry})
+    if reference != 'unused':
+        saved_pedal.blobs[reference] = compiler.compile_show(
+            {'splash_movie': [str(path)]}, {}, [], target
+        )
+        saved_pedal.revision = saved_pedal.revision.model_copy(
+            update={'length': len(saved_pedal.blobs['history'])}
+        )
+    name = f'{crc32(movie):08x}.bin'
+    entries = iter(
+        [
+            'CNTRL STORAGE 1000000 900000 - 512',
+            'CNTRL ENTRY 1 0 D 0 636e74726c',
+            'CNTRL ENTRY 2 1 D 0 6d6f76696573',
+            f'CNTRL ENTRY 3 2 F {len(movie)} {name.encode().hex()}',
+            'CNTRL STORAGE END 3',
+        ]
+    )
+    original_request = saved_pedal.request
+
+    def request(command: str) -> str:
+        return (
+            next(entries)
+            if command.startswith('CNTRL STORAGE')
+            else original_request(command)
+        )
+
+    def download_movie(key: int) -> bytes:
+        assert key == crc32(movie)
+        raise FileNotFoundError('device cannot read the stored movie')
+
+    monkeypatch.setattr(saved_pedal, 'request', request)
+    monkeypatch.setattr(saved_pedal, 'download_movie', download_movie)
+    directory = tmp_path / 'before'
+    if reference != 'unused':
+        with pytest.raises(FileNotFoundError, match='cannot read the stored movie'):
+            backups.backup_pedal(directory, Path('/unused'))
+        with pytest.raises(ValueError, match='interrupted backup'):
+            backups.check_conversion(directory)
+    else:
+        backups.backup_pedal(directory, Path('/unused'))
+        backups.check_conversion(directory)
+        backups.prepare_restore(directory, tmp_path / 'converted', target)
+    assert (
+        directory / 'unavailable-assets.txt'
+    ).read_text() == f'/cntrl/movies/{name}\n'
 
 
 def test_post_flash_verification_accepts_all_saved_data(
