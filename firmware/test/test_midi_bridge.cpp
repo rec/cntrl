@@ -68,6 +68,29 @@ void test_independent_outputs_and_pedal_reservation() {
     assert(out.bytes[0][0] == 0xb0); // pedal precedes existing bridge backlog
 }
 
+void test_unparsed_usb_bytes_preserve_messages_and_mixed_sysex() {
+    cntrl::midi::Bridge bridge{test_midi_outputs}; Output out;
+    bridge.configure(true); bridge.connected(true, 0);
+    for (uint8_t byte : {0x90, 60, 100, 61, 101, 0xc0, 12, 0xf1, 2})
+        bridge.forward_packet(0, {15, {byte, 0, 0}}, 0);
+    for (unsigned i = 0; i < 8; ++i) bridge.service(out, 0);
+    assert((out.bytes[0] == std::vector<uint8_t>{0x90, 60, 100, 0x90, 61, 101, 0xc0, 12, 0xf1, 2}));
+    out.bytes[0].clear();
+    std::vector<uint8_t> expected{0xf0, 0x7d};
+    for (unsigned i = 0; i < 4096; ++i) expected.push_back(uint8_t(i % 128));
+    expected.push_back(0xf7);
+    for (unsigned i = 0; i < expected.size();) {
+        // Reproduce the captured CIN 0xf data byte at payload offset 750.
+        const unsigned size = i == 750 ? 1 : std::min(3u, unsigned(expected.size()) - i);
+        cntrl::midi::Packet packet{uint8_t(size == 1 ? 15 : i + size == expected.size() ? 4 + size : 4), {0, 0, 0}};
+        for (unsigned j = 0; j < size; ++j) packet.bytes[j] = expected[i + j];
+        bridge.forward_packet(0, packet, 1); bridge.service(out, 1);
+        i += size;
+    }
+    for (unsigned i = 0; i < 4; ++i) bridge.service(out, 1);
+    assert(out.bytes[0] == expected && bridge.counters(0).dropped == 0 && bridge.idle());
+}
+
 void test_sysex_streaming_and_pedal_ownership() {
     cntrl::midi::Bridge b{test_midi_outputs}; Output out;
     b.configure(true); b.connected(true, 0);
@@ -522,6 +545,7 @@ void test_refused_owned_work_does_not_starve_an_admitted_terminal_release() {
 
 int main() {
     cntrl::memory_budget = 524288;
+    test_unparsed_usb_bytes_preserve_messages_and_mixed_sysex();
     test_pedal_admission_keeps_note_and_pedal_releases_when_heap_is_full();
     test_refused_owned_work_does_not_starve_an_admitted_terminal_release();
     test_refused_retrigger_keeps_fifo_releases_when_memory_is_full();

@@ -13,6 +13,7 @@ import tyro
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from reccy.configuration.tyro import unit_spec
 from reccy.configuration.units import Seconds
+from serial.tools.list_ports import comports
 
 from ....patch_switcher import devices
 from ....patch_switcher.core_midi import Midi, exchange
@@ -550,6 +551,34 @@ def run(options: Options) -> None:
         for n in destinations:
             print(f'Output: {n}')
         if not options.run:
+            ports = [
+                {
+                    k: v
+                    for k, v in {
+                        'port': p.device,
+                        'product': p.product,
+                        'manufacturer': p.manufacturer,
+                        'serial': p.serial_number,
+                        'vid': p.vid,
+                        'pid': p.pid,
+                        'location': p.location,
+                        'interface': p.interface,
+                    }.items()
+                    if v is not None
+                }
+                for p in comports()
+            ]
+            for p in ports:
+                print(f'Serial: {p}')
+            save_report(
+                options.report,
+                {
+                    'mode': 'endpoints',
+                    'midi_sources': list(sources),
+                    'midi_destinations': list(destinations),
+                    'serial_ports': ports,
+                },
+            )
             return
         destination, source = destinations[options.destination], sources[options.source]
         midi.check(midi.core.MIDIPortConnectSource(midi.input, source, None))

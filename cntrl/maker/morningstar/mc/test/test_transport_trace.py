@@ -141,7 +141,7 @@ def test_transport_capture_keeps_raw_evidence_and_closes_each_phase(
 
 
 TRACE = (
-    'CNTRL MIDI TRACE version=1 build=0123456789abcdef active=0 '
+    'CNTRL MIDI TRACE version=2 build=0123456789abcdef active=0 '
     'usb_raw_n=26 usb_raw_crc=0x1111 usb_valid_n=25 usb_valid_crc=0x2222 '
     'din_tx_n=25 din_tx_crc=0x2222 din_rx_n=18 din_rx_crc=0x3333 '
     'usb_return_n=18 usb_return_crc=0x3333 rejects=1 reject_packet=0xf705 '
@@ -149,5 +149,6 @@ TRACE = (
     'reject_offset=2 reject_valid_offset=2 '
     'din_drops=4 din_overruns=13 trs_drops=0 trs_overruns=0 '
     'drop_gap_us=23000 drop_available=63 drop_delta=7 '
-    'overrun_gap_us=25000 overrun_available=63 overrun_delta=1'
+    'overrun_gap_us=25000 overrun_available=63 overrun_delta=1 '
+    'drop_phase=display drop_phase_us=22990 max_phase=display max_phase_us=33000'
 )

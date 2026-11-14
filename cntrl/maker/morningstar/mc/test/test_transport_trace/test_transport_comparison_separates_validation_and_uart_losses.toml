@@ -40,10 +40,16 @@ din_overruns = 1
 trs_drops = 0
 trs_overruns = 0
 
+[longest_runtime_phase]
+name = "display"
+elapsed_us = 33000
+
 [first_uart_loss_observations]
 software_drop_poll_gap_us = 23000
 software_drop_available = 63
 software_drop_delta = 7
+software_drop_phase = "display"
+software_drop_phase_us = 22990
 overrun_poll_gap_us = 25000
 overrun_available = 63
 overrun_latch_delta = 1

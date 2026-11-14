@@ -1,12 +1,13 @@
 diff --git a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
 --- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
 +++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
-@@ -12,1 +12,9 @@
+@@ -12,1 +12,10 @@
  #define CNTRL_NOINLINE __attribute__((noinline))
-+#define CNTRL_MIDI_TRACE_COLD CNTRL_FLASH_ROUTINE(midi_trace_format)
++#define CNTRL_MIDI_TRACE_COLD(name) CNTRL_FLASH_ROUTINE(name)
 +#include "midi_trace.h"
 +#include "midi_trace_build.h"
 +inline cntrl::device::MidiTrace midi_trace;
++#define CNTRL_RUNTIME_TRACE(name) do { if (midi_trace.active) midi_trace.phase(#name, micros()); } while (false)
 +#define CNTRL_MIDI_REJECT(route, packet, state, now) midi_trace.reject(route, packet, state, now)
 +#define CNTRL_MIDI_ACCEPT(route, packet) do { \
 +    if (midi_trace.active && (route) == 0) midi_trace.usb_valid.add((packet).bytes, (packet).size()); \
@@ -62,6 +63,9 @@ diff --git a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp b/cnt
 @@ -897,1 +936,2 @@
  bool native_asset_command(const char *line) {
 +    if (board.midi_trace_command(line)) return true;
+@@ -1204,1 +1253,2 @@
+     cooperative_runtime.poll(target_runtime);
++    CNTRL_RUNTIME_TRACE(yield);
 diff --git a/firmware/include/cntrl/midi_bridge.h b/firmware/include/cntrl/midi_bridge.h
 --- a/firmware/include/cntrl/midi_bridge.h
 +++ b/firmware/include/cntrl/midi_bridge.h
@@ -81,6 +85,32 @@ diff --git a/firmware/include/cntrl/midi_bridge.h b/firmware/include/cntrl/midi_
          }
 +        CNTRL_MIDI_ACCEPT(route, packet);
          for (unsigned i = 0; i < packet.size(); ++i) receive_byte(route, packet.bytes[i], now, true, packet.source);
+@@ -905,1 +914,2 @@
+-        if (p.cin == 15) return p.bytes[0] >= 0xf8;
++        // USB MIDI 1.0 Table 4-1 Note 2 permits any unparsed byte here.
++        if (p.cin == 15) return true;
+diff --git a/firmware/include/cntrl/ui/page_host.h b/firmware/include/cntrl/ui/page_host.h
+--- a/firmware/include/cntrl/ui/page_host.h
++++ b/firmware/include/cntrl/ui/page_host.h
+@@ -391,4 +391,6 @@
+     void draw() {
++        CNTRL_RUNTIME_TRACE(ui_draw);
+         if (platform_.animation_session().take_redraw()) renderer_.invalidate();
+         renderer_.draw(platform_.microseconds());
++        CNTRL_RUNTIME_TRACE(ui_done);
+     }
+@@ -436,1 +438,2 @@
++        CNTRL_RUNTIME_TRACE(ui_animation);
+         if (!platform_.display_busy()) splash_visible_ = platform_.animation_session().poll(now, renderer_.ready(), transfer_busy);
+@@ -466,1 +469,2 @@
++            CNTRL_RUNTIME_TRACE(ui_status);
+             PerformanceStatus status = pages_.page() == Pages::Page::status ? platform_.status() : PerformanceStatus{};
+@@ -469,1 +473,2 @@
+                 pages_.viewport(display_.viewport(screen));
++                CNTRL_RUNTIME_TRACE(ui_layout);
+@@ -483,1 +488,2 @@
++                CNTRL_RUNTIME_TRACE(ui_show);
+                 if (pages_.page() != Pages::Page::midi_monitor) content = Pages::window_view(content,i,region.count);
 diff --git a/cntrl/maker/morningstar/mc/toolchain.py b/cntrl/maker/morningstar/mc/toolchain.py
 --- a/cntrl/maker/morningstar/mc/toolchain.py
 +++ b/cntrl/maker/morningstar/mc/toolchain.py
