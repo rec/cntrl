@@ -353,6 +353,37 @@ second backup. The original rollback image remains at
 qualified: the unexpected empty SysEx, long-message loss and uploader failure
 remain open, and bounded-allocator/continuation hardware stress has not resumed.
 
+## Instrumented transport control, 2026-11-14
+
+The tracked [diagnostic control](diagnostic_control/README.md) reconstructs the
+working normal/newlib firmware with its corrected layout, cached Expression page
+and USB flush guard. It adds byte counts and CRCs at raw USB input, accepted USB
+input, DIN UART writes, DIN UART reads and USB return submissions. It retains the
+first rejected USB event with parser state and stream offsets, and measures UART
+software drops, hardware overrun latches and the receive polling gap at the first
+observed loss. Recording performs no allocation or serial logging; the watchdog
+remains disabled and trace collection is inactive at boot.
+
+`cntrl qualify ... --trace-build EXPORT` checks the local image hash and compiled
+recipe ID, resets the trace, runs a bounded trial and saves the final trace even
+when the MIDI bytes mismatch. The MIDI-only mode closes serial before opening MIDI
+and opens serial again only after MIDI closes. Raw MIDI evidence has a separate
+report so a later USB timeout cannot erase it. Multiple rejected events are
+counted, but only the first event's details are retained.
+
+This instrumentation is needed to separate validation rejections from loss between
+successful DIN writes and UART reads. The earlier route counters alone do not
+establish which boundary loses SysEx payload bytes.
+
+The local export `build/sysex-transport-control-main/` has trace recipe ID
+`f63a369f265cee31` and image SHA-256
+`fa8b7b21c201165abb180c4512d9a1b46ed1f21b4354a7dc593681e98931acdf`.
+Its linked application sections include 195,456 bytes of ITCM code, 31,424 bytes
+of `.data`, 275,456 bytes of `.bss`, and 90,752 bytes of RAM2 `.bss.dma`.
+These are static section sizes, not runtime free-space or stack high-water
+measurements. The adjacent generated source/SDK directory is retained so the
+existing flash flow uses the matching compiler for backup and restoration.
+
 ## Physical qualification procedure
 
 Use `uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc`

@@ -1,0 +1,90 @@
+diff --git a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
+--- a/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
++++ b/cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp
+@@ -12,1 +12,9 @@
+ #define CNTRL_NOINLINE __attribute__((noinline))
++#define CNTRL_MIDI_TRACE_COLD CNTRL_FLASH_ROUTINE(midi_trace_format)
++#include "midi_trace.h"
++#include "midi_trace_build.h"
++inline cntrl::device::MidiTrace midi_trace;
++#define CNTRL_MIDI_REJECT(route, packet, state, now) midi_trace.reject(route, packet, state, now)
++#define CNTRL_MIDI_ACCEPT(route, packet) do { \
++    if (midi_trace.active && (route) == 0) midi_trace.usb_valid.add((packet).bytes, (packet).size()); \
++} while (false)
+@@ -522,3 +530,7 @@
+-        case cntrl::device::MidiDriver::usb_device:
++        case cntrl::device::MidiDriver::usb_device: {
+             if (binding.index == 2 && !hosted_forward_active()) return false;
+-            return usb_midi_try_write_packed(p.packed(binding.index));
++            const bool accepted = usb_midi_try_write_packed(p.packed(binding.index));
++            if (accepted && binding.index == 0 && midi_trace.active)
++                midi_trace.usb_return.add(p.bytes, n);
++            return accepted;
++        }
+@@ -531,1 +543,4 @@
+-        return unsigned(serial->availableForWrite()) >= n && serial->write(p.bytes, n) == n;
++        const bool accepted = unsigned(serial->availableForWrite()) >= n && serial->write(p.bytes, n) == n;
++        if (accepted && serial == &Serial1 && midi_trace.active)
++            midi_trace.din_tx.add(p.bytes, n);
++        return accepted;
+@@ -547,1 +562,19 @@
+     void midi_reset() { midi_runtime_.reset(*this); }
++    CNTRL_FLASH_ROUTINE(midi_trace_command)
++    bool midi_trace_command(const char *line) {
++        if (!std::strcmp(line, "CNTRL MIDI TRACE RESET") || !std::strcmp(line, "CNTRL MIDI TRACE STOP")) {
++            if (!std::strcmp(line, "CNTRL MIDI TRACE RESET") && !output_idle()) { reply("CNTRL ERROR busy"); return true; }
++            if (!std::strcmp(line, "CNTRL MIDI TRACE RESET")) midi_trace.reset(Serial1.rxSoftwareDrops(), Serial1.rxOverrunLatches(), micros());
++            else midi_trace.active = false;
++            reply("CNTRL OK"); return true;
++        }
++        if (!std::strcmp(line, "CNTRL MIDI TRACE STATUS")) {
++            char response[1024];
++            const int length = midi_trace.format(response, sizeof(response), CNTRL_MIDI_TRACE_BUILD,
++                Serial1.rxSoftwareDrops(), Serial1.rxOverrunLatches(),
++                Serial2.rxSoftwareDrops(), Serial2.rxOverrunLatches());
++            reply(length > 0 && unsigned(length) < sizeof(response) ? response : "CNTRL ERROR trace-overflow");
++            return true;
++        }
++        return false;
++    }
+@@ -686,1 +719,3 @@
+             event.packet = {uint8_t(packet & 15), {uint8_t(packet >> 8), uint8_t(packet >> 16), uint8_t(packet >> 24)}};
++            if (event.clock_source == 0 && midi_trace.active)
++                midi_trace.usb_raw.add(event.packet.bytes, event.packet.size());
+@@ -701,1 +736,3 @@
+             HardwareSerial &serial = source == 1 ? Serial1 : Serial2;
++            if (source == 1 && midi_trace.active)
++                midi_trace.poll(micros(), Serial1.rxSoftwareDrops(), Serial1.rxOverrunLatches(), unsigned(serial.available()));
+@@ -705,1 +742,3 @@
+             event.input = input ? input->route : cntrl::midi::InputEvent::absent; event.byte = uint8_t(byte);
++            if (source == 1 && midi_trace.active)
++                midi_trace.din_rx.add(&event.byte, 1);
+@@ -897,1 +936,2 @@
+ bool native_asset_command(const char *line) {
++    if (board.midi_trace_command(line)) return true;
+diff --git a/firmware/include/cntrl/midi_bridge.h b/firmware/include/cntrl/midi_bridge.h
+--- a/firmware/include/cntrl/midi_bridge.h
++++ b/firmware/include/cntrl/midi_bridge.h
+@@ -10,1 +10,7 @@
+ #include <cstring>
++#ifndef CNTRL_MIDI_REJECT
++#define CNTRL_MIDI_REJECT(route, packet, state, now) ((void)0)
++#endif
++#ifndef CNTRL_MIDI_ACCEPT
++#define CNTRL_MIDI_ACCEPT(route, packet) ((void)0)
++#endif
+@@ -684,4 +690,7 @@
+         if (!valid(packet, routes_[route].parser.sysex() || routes_[route].parser.discarding())) {
++            CNTRL_MIDI_REJECT(route, packet, unsigned(routes_[route].parser.sysex())
++                | (unsigned(routes_[route].parser.discarding()) << 1), now);
+             ++routes_[route].counts.dropped; return;
+         }
++        CNTRL_MIDI_ACCEPT(route, packet);
+         for (unsigned i = 0; i < packet.size(); ++i) receive_byte(route, packet.bytes[i], now, true, packet.source);
+diff --git a/cntrl/maker/morningstar/mc/toolchain.py b/cntrl/maker/morningstar/mc/toolchain.py
+--- a/cntrl/maker/morningstar/mc/toolchain.py
++++ b/cntrl/maker/morningstar/mc/toolchain.py
+@@ -250,2 +250,3 @@
+     'flex-serial-release',
++    'serial-rx-diagnostics',
+     'usb-midi-interface',

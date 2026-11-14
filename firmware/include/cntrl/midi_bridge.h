@@ -9,6 +9,13 @@
 #include "midi_outputs.h"
 #include <cstring>
 
+#ifndef CNTRL_MIDI_REJECT
+#define CNTRL_MIDI_REJECT(route, packet, state, now) ((void)0)
+#endif
+#ifndef CNTRL_MIDI_ACCEPT
+#define CNTRL_MIDI_ACCEPT(route, packet) ((void)0)
+#endif
+
 namespace cntrl::midi {
 // A raw Patch contains exactly one self-contained MIDI message.
 inline bool message_valid(const uint8_t *bytes, unsigned size) {
@@ -682,8 +689,11 @@ private:
     }
     void receive_packet(unsigned route, const Packet &packet, uint32_t now) {
         if (!valid(packet, routes_[route].parser.sysex() || routes_[route].parser.discarding())) {
+            CNTRL_MIDI_REJECT(route, packet, unsigned(routes_[route].parser.sysex())
+                | (unsigned(routes_[route].parser.discarding()) << 1), now);
             ++routes_[route].counts.dropped; return;
         }
+        CNTRL_MIDI_ACCEPT(route, packet);
         for (unsigned i = 0; i < packet.size(); ++i) receive_byte(route, packet.bytes[i], now, true, packet.source);
     }
 public:

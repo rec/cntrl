@@ -43,6 +43,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: cntrl
+          # Controlled diagnostic targets reconstruct committed source baselines.
+          fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
         with:
@@ -84,4 +86,6 @@ jobs:
         if: always()
         with:
           name: qualification-${{ matrix.os }}-${{ github.sha }}
-          path: cntrl/reports
+          path: |
+            cntrl/reports
+            !cntrl/reports/*-source/**
