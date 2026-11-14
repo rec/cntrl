@@ -14,6 +14,7 @@ public:
         std::fill(pixels_, pixels_ + viewport.width * viewport.height, settings.background);
     }
     uint16_t *pixels() { return pixels_; }
+    const uint16_t *pixels() const { return pixels_; }
     unsigned rows(const TextLine &line) const {
         if (!line.wrap || !line.text[0]) return 1;
         return position(line, unsigned(std::strlen(line.text) - 1)).row + 1;

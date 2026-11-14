@@ -65,9 +65,11 @@ struct RingDisplay final : Display {
     }
 };
 static void ring_transition_preserves_hidden_columns_and_retries() {
+    for (unsigned frames : {1u, 2u}) {
     Fonts fonts; RingDisplay display;
-    uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18, cache, previous, 24 * 18);
+    uint16_t work[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+    assert(renderer.prepare(frames, true)); renderer.finish(true);
     cntrl::Pane pane; pane.graphics.background = 0x1111; pane.graphics.pad = 0;
     renderer.show(0, pane);
     for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 100); display.complete(); }
@@ -83,6 +85,7 @@ static void ring_transition_preserves_hidden_columns_and_retries() {
     for (unsigned i = 1000; i < 3000; ++i) { renderer.draw(i * 100); display.complete(); }
     assert(renderer.ready()); assert(display.reveals == 12);
     for (auto pixel : display.pixels) assert(pixel == 0x2222);
+    }
 }
 static void portable_font_bearings_and_character_advances() {
     std::vector<uint8_t> bytes(8 + 23 + 48 + 4);
@@ -166,6 +169,7 @@ static void font_bounds_preserve_bearings_spaces_and_shaped_offsets() {
     check(long_text.c_str(), -1, -1, 801, 8);
 }
 struct MixedDisplay final : cntrl::ui::Display {
+    unsigned calls = 0;
     const cntrl::ui::Viewport views[5] = {{9, 13, 2, 0}, {17, 7, 0, 0}, {21, 11, 3, 0}, {7, 19, 0, 0}, {15, 5, 0, 0}};
     std::vector<uint16_t> pixels[5];
     MixedDisplay() { for (unsigned i = 0; i < 5; ++i) pixels[i].resize(views[i].width * views[i].height); }
@@ -177,6 +181,7 @@ struct MixedDisplay final : cntrl::ui::Display {
     bool priority_due() const override { return false; }
     bool submit(unsigned screen, unsigned x, unsigned y, unsigned width, unsigned height, const uint8_t *data) override {
         assert(screen < 5 && x + width <= views[screen].width && y + height <= views[screen].height);
+        ++calls;
         for (unsigned col = 0; col < width; ++col) for (unsigned row = 0; row < height; ++row) {
             const unsigned i = 2 * (col * height + row);
             pixels[screen][(y + row) * views[screen].width + x + col] = uint16_t(data[i]) << 8 | data[i + 1];
@@ -185,9 +190,11 @@ struct MixedDisplay final : cntrl::ui::Display {
     }
 };
 static void distinct_geometries_and_reserved_windows() {
+    for (unsigned frames : {0u, 1u, 2u}) {
     Fonts fonts; MixedDisplay display;
-    uint16_t work[231] = {}, cache[675] = {}, previous[675] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 231, cache, previous, 675);
+    uint16_t work[231] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 231);
+    assert(renderer.prepare(frames, true)); renderer.finish(true);
     for (unsigned i = 0; i < 5; ++i) { cntrl::Pane pane; pane.graphics.background = uint16_t(i + 1); renderer.show(i, pane); }
     for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
     assert(renderer.ready());
@@ -215,6 +222,112 @@ static void distinct_geometries_and_reserved_windows() {
     renderer.target_brightness(128,0);
     for (unsigned i = 0; i < 3000; ++i) renderer.draw(i * 1000);
     for (auto pixel : display.pixels[3]) assert(pixel == 4);
+    }
+}
+static void animations_can_be_disabled_without_disabling_brightness() {
+    for (unsigned frames : {0u, 1u, 2u}) {
+        Fonts fonts; RingDisplay display; uint16_t work[24 * 18] = {};
+        cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+        assert(renderer.prepare(frames, false)); renderer.finish(true);
+        cntrl::Pane pane; pane.graphics.pad = 0; pane.graphics.background = 0xffff;
+        renderer.show(0, pane);
+        for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+        assert(renderer.ready()); renderer.transition(false, 10);
+        pane.graphics.background = 0x07e0; renderer.show(0, pane);
+        for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+        assert(renderer.ready() && display.reveals == 0);
+        for (auto pixel : display.pixels) assert(pixel == 0x07e0);
+        renderer.target_brightness(0);
+        for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+        for (auto pixel : display.pixels) assert(pixel == 0);
+        renderer.target_brightness(128);
+        for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+        for (auto pixel : display.pixels) assert(pixel == 0x07e0);
+    }
+}
+static std::vector<std::vector<uint16_t>> panoramic_first_frame(unsigned frames, bool reverse) {
+    Fonts fonts; MixedDisplay display; uint16_t work[231] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 231);
+    assert(renderer.prepare(frames, true)); renderer.finish(true);
+    for (unsigned i = 0; i < 5; ++i) {
+        cntrl::Pane pane; pane.graphics.pad = 0; pane.graphics.background = uint16_t(0x1110 + i);
+        renderer.show(i, pane);
+    }
+    for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
+    assert(renderer.ready()); renderer.transition(reverse, 10, 1, 0, false, true, 2);
+    for (unsigned i = 1; i < 3; ++i) {
+        cntrl::Pane pane; pane.graphics.pad = 0; pane.graphics.background = uint16_t(0x2220 + i);
+        pane.circles[0] = {4, 4, 4, 0, 0xffff, 0}; renderer.show(i, pane);
+    }
+    const unsigned before = display.calls;
+    for (unsigned i = 0; i < 2000 && display.calls < before + 6; ++i) renderer.draw(i * 1000);
+    assert(display.calls == before + 6);
+    const std::vector<std::vector<uint16_t>> first(display.pixels, display.pixels + 5);
+    for (unsigned i = 2000; i < 5000; ++i) renderer.draw(i * 1000);
+    assert(renderer.ready());
+    for (unsigned i : {0u, 3u, 4u}) for (auto pixel : display.pixels[i]) assert(pixel == 0x1110 + i);
+    assert(display.pixels[1].back() == 0x2221 && display.pixels[2].back() == 0x2222);
+    return first;
+}
+static std::vector<uint16_t> software_transition_first_frame(unsigned frames, bool vertical, bool reverse) {
+    Fonts fonts; Display display; uint16_t work[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+    assert(renderer.prepare(frames, true)); renderer.finish(true);
+    cntrl::Pane pane; pane.graphics.pad = 0; pane.graphics.background = 0x1111;
+    renderer.show(0, pane);
+    for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+    assert(renderer.ready()); renderer.transition(reverse, 10, 0, 0, vertical, false);
+    pane.graphics.background = 0x2222; pane.circles[0] = {12, 9, 6, 2, 0x07e0, 0xf800};
+    pane.lines[0].graphics = pane.graphics; pane.lines[0].graphics.foreground = 0xffff;
+    pane.lines[0].x = 2; pane.lines[0].y = 3; std::strcpy(pane.lines[0].text, "AB");
+    renderer.show(0, pane);
+    const unsigned before = display.calls;
+    for (unsigned i = 0; i < 1000 && display.calls < before + 3; ++i) {
+        display.accept = i != 35;
+        renderer.draw(i * 1000); display.complete();
+    }
+    assert(display.calls == before + 3);
+    const auto first = display.pixels;
+    // Both old and incoming pixels must be visible, not just the final redraw.
+    assert(std::find(first.begin(), first.end(), 0x1111) != first.end());
+    assert(std::find(first.begin(), first.end(), 0x2222) != first.end());
+    for (unsigned i = 1000; i < 4000; ++i) { renderer.draw(i * 1000); display.complete(); }
+    assert(renderer.ready());
+    assert(display.pixels[9 * 24 + 12] == 0x07e0);
+    assert(display.pixels[3 * 24 + 2] == 0xffff);
+    return first;
+}
+static void one_frame_scrolls_match_two_frame_pixels_in_both_axes_and_directions() {
+    for (bool vertical : {false, true}) for (bool reverse : {false, true})
+        assert(software_transition_first_frame(1, vertical, reverse) == software_transition_first_frame(2, vertical, reverse));
+    for (bool reverse : {false, true}) assert(panoramic_first_frame(1, reverse) == panoramic_first_frame(2, reverse));
+}
+static void frame_preparation_failure_and_rollback_preserve_active_storage() {
+    const unsigned initial = cntrl::memory_used;
+    Fonts fonts; Display display; uint16_t work[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+    assert(renderer.prepare(2, true)); renderer.finish(true);
+    const unsigned two = cntrl::memory_used;
+    cntrl::memory_fail_after = 0;
+    // The one-frame transition descriptions must be admitted before releasing
+    // either active frame. A failed change keeps the existing mode intact.
+    assert(!renderer.prepare(1, true));
+    cntrl::memory_fail_after = -1;
+    assert(cntrl::memory_used == two);
+    assert(renderer.prepare(0, false)); renderer.finish(false);
+    assert(cntrl::memory_used == two);
+    cntrl::Pane pane; pane.graphics.pad = 0; pane.graphics.background = 0x1234;
+    renderer.show(0, pane);
+    for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+    assert(renderer.ready());
+    for (auto pixel : display.pixels) assert(pixel == 0x1234);
+    assert(renderer.prepare(1, true)); renderer.finish(true);
+    const unsigned one = cntrl::memory_used;
+    assert(one == initial + cntrl::memory_charge(24 * 18 * 2) + cntrl::memory_charge(sizeof(cntrl::Pane)));
+    assert(renderer.prepare(1, false)); renderer.finish(true);
+    assert(cntrl::memory_used == initial + cntrl::memory_charge(24 * 18 * 2));
+    assert(renderer.prepare(0, true)); renderer.finish(true);
+    assert(cntrl::memory_used == initial);
 }
 static void circles_clip_before_iterating_and_do_not_overflow() {
     Fonts fonts; uint16_t pixels[24 * 18] = {};
@@ -244,8 +357,9 @@ static void minimum_viewports_follow_declared_surfaces() {
 static void automatic_text_survives_background_and_stipple_passes() {
     for (bool bands : {false, true}) for (bool stippled : {false, true}) {
         Fonts fonts; Display display;
-        uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
-        cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18, cache, previous, 24 * 18);
+        uint16_t work[24 * 18] = {};
+        cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+        assert(renderer.prepare(2, true)); renderer.finish(true);
         cntrl::Pane pane; pane.graphics.background = 0x1234; pane.graphics.pad = 0;
         pane.three_bands = bands; pane.heading_band = true;
         auto &line = pane.lines[0]; line.graphics = pane.graphics;
@@ -260,8 +374,9 @@ static void automatic_text_survives_background_and_stipple_passes() {
 }
 static void title_text_is_drawn_over_its_indicator() {
     Fonts fonts; Display display;
-    uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18, cache, previous, 24 * 18);
+    uint16_t work[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+    assert(renderer.prepare(2, true)); renderer.finish(true);
     cntrl::Pane pane; pane.graphics.pad = 0; pane.three_bands = pane.heading_band = true;
     auto &line = pane.lines[0]; line.graphics = pane.graphics;
     line.graphics.background = 0; line.graphics.foreground = 0xffff;
@@ -274,9 +389,11 @@ static void title_text_is_drawn_over_its_indicator() {
     assert(display.pixels[2 * 24 + 5] == 0x07e0);
 }
 void messages_restore_the_latest_page_after_replacement_and_expiry() {
+    for (unsigned frames : {0u, 1u, 2u}) {
     Fonts fonts; Display display;
-    uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18, cache, previous, 24 * 18);
+    uint16_t work[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+    assert(renderer.prepare(frames, true)); renderer.finish(true);
     cntrl::Pane pane; pane.graphics.pad = 0; pane.graphics.background = 0x1234;
     renderer.show(0, pane);
     cntrl::TextMessages messages;
@@ -292,6 +409,7 @@ void messages_restore_the_latest_page_after_replacement_and_expiry() {
     renderer.message(messages, 9999);
     for (unsigned i = 0; i < 500; ++i) { renderer.draw(); display.complete(); }
     assert(std::all_of(display.pixels.begin(), display.pixels.end(), [](uint16_t p) { return p == 0x5678; }));
+    }
 }
 static void expression_reuses_its_initial_layout_and_redraws_only_changed_content() {
     struct MeasuredFonts : cntrl::ui::Fonts {
@@ -343,9 +461,12 @@ static void expression_reuses_its_initial_layout_and_redraws_only_changed_conten
 }
 
 int main() {
+    cntrl::memory_budget = 192 * 1024;
+    frame_preparation_failure_and_rollback_preserve_active_storage();
+    one_frame_scrolls_match_two_frame_pixels_in_both_axes_and_directions();
+    animations_can_be_disabled_without_disabling_brightness();
     expression_reuses_its_initial_layout_and_redraws_only_changed_content();
     messages_restore_the_latest_page_after_replacement_and_expiry();
-    cntrl::memory_budget = 192 * 1024;
     automatic_text_survives_background_and_stipple_passes();
     title_text_is_drawn_over_its_indicator();
     minimum_viewports_follow_declared_surfaces();
@@ -355,8 +476,9 @@ int main() {
     font_bounds_preserve_bearings_spaces_and_shaped_offsets();
     ring_transition_preserves_hidden_columns_and_retries();
     Fonts fonts; Display display;
-    uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18, cache, previous, 24 * 18);
+    uint16_t work[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+    assert(renderer.prepare(2, true)); renderer.finish(true);
     cntrl::Pane pane; pane.graphics.background = 0x1234; pane.graphics.pad = 0;
     pane.lines[0].graphics = pane.graphics; pane.lines[0].graphics.foreground = 0xffff; pane.lines[0].y = 2; pane.lines[0].graphics.top = 3; pane.lines[0].x = 3;
     std::strcpy(pane.lines[0].text, "AB"); renderer.show(0, pane);

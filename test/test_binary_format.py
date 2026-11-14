@@ -6,14 +6,14 @@ from zlib import crc32
 
 import pytest
 
-from cntrl.patch_switcher import binary_format, resolved
+from cntrl.patch_switcher import binary_format, compiler, models, resolved
 from scripts import native_tests
 
 
 def test_envelope_has_deterministic_bytes_and_covers_its_header() -> None:
     data = binary_format.wrap(b'core')
     assert (
-        data.hex() == '434e42462d800100140000000c000000a12f31460100010004000000636f7265'
+        data.hex() == '434e42462e800100140000000c0000008628ef440100010004000000636f7265'
     )
     for i in (0, 4, 6, 8, 10, 12, 16, 20, len(data) - 1):
         damaged = bytearray(data)
@@ -74,7 +74,10 @@ def test_legacy_import_and_memory_refresh_preserve_optional_records() -> None:
     data = document.pack()
     assert resolved.export(data) == resolved.export(source)
     assert resolved.upgrade(data) == data
-    refreshed = resolved.refresh_memory(data, {}, switches=True)
+    target = models.Target.model_validate(
+        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+    )
+    refreshed = resolved.refresh_memory(data, {}, target=target)
     assert (
         binary_format.unpack(refreshed, binary_format.Kind.setup).records[1:]
         == document.records[1:]
@@ -83,7 +86,7 @@ def test_legacy_import_and_memory_refresh_preserve_optional_records() -> None:
 
 
 def test_format_names_distinguish_development_and_release() -> None:
-    assert binary_format.format_name(binary_format.DEVELOPMENT_FORMAT) == 'd45'
+    assert binary_format.format_name(binary_format.DEVELOPMENT_FORMAT) == 'd46'
     assert binary_format.format_name(0) == 'f0'
     assert binary_format.format_name(3) == 'f3'
 

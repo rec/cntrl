@@ -8,6 +8,7 @@ import tomlkit
 
 from cntrl.patch_switcher import (
     compiler,
+    display,
     layout,
     looper,
     midi_processing,
@@ -46,6 +47,7 @@ def test_looper_views_share_one_budget_and_round_trip(target: models.Target) -> 
     config = looper.pack(models.Setup.model_validate(source), target)
     expected = (
         looper.estimate_ram(config)
+        + display.estimate_frame_ram(models.Setup.model_validate(source), target)
         + layout.estimate_ram(
             models.Setup.model_validate(source).pages,
             0,

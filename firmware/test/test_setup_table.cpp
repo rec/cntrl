@@ -152,6 +152,14 @@ int main(int argc, char **argv) {
     if (argv[2][0] == '0') {
         cntrl::memory_peak = cntrl::memory_used;
         assert(table.open(file, board));
+        // A roomy heap must not override the bundle's active-resource reserve.
+        const unsigned allowance = cntrl::u32(file.bytes.data() + view.offset + 36);
+        assert(!table.all_resident() && table.resident_bytes() == 2 * setup_length);
+        assert(table.resident_bytes() <= allowance);
+        // On-demand sources still use actual checked allocation admission.
+        // The initial prefill allowance is not a permanent cap on get().
+        assert(table.get(2) && table.resident_bytes() == 3 * setup_length);
+        assert(table.resident_bytes() > allowance);
         const unsigned metadata = cntrl::memory_used - table.resident_bytes();
         const unsigned validation_slack = cntrl::memory_peak - cntrl::memory_used;
         table.clear();

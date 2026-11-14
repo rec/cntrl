@@ -94,7 +94,7 @@ def test_preserving_memory_estimates_rejects_a_format_upgrade(
     )
     with pytest.raises(ValueError, match='requires current-format setups'):
         resolved.prepare_restore(
-            data, {}, switches=bool(target.max_switches), preserve_memory_estimates=True
+            data, {}, target=target, preserve_memory_estimates=True
         )
 
 
@@ -114,9 +114,9 @@ def test_song_restore_preserves_recorded_source_memory_estimates(
         original_library, bytes(library), binary_format.Kind.songs
     )
     assert (
-        songs.upgrade(data, {}, switches=False, preserve_memory_estimates=True) == data
+        songs.upgrade(data, {}, target=target, preserve_memory_estimates=True) == data
     )
-    assert songs.upgrade(data, {}, switches=False) != data
+    assert songs.upgrade(data, {}, target=target) != data
 
 
 def test_backup_refuses_to_overwrite_an_existing_directory(tmp_path: Path) -> None:
@@ -172,9 +172,7 @@ def test_restore_preparation_upgrades_setups_and_history_without_changing_backup
         if p.is_file()
     } == saved
     expected = binary_format.wrap(
-        resolved.refresh_memory(
-            resolved.upgrade(data), {}, switches=bool(target.max_switches)
-        )
+        resolved.refresh_memory(resolved.upgrade(data), {}, target=target)
     )
     assert backups.read_setup_binaries(prepared) == {'Evening': expected}
     assert backups.read_history_binaries(prepared) == [
@@ -187,7 +185,7 @@ def test_restore_preparation_upgrades_setups_and_history_without_changing_backup
     assert (prepared / 'setups/fonts/12345678.cfont').read_bytes() == b'font'
     assert (prepared / 'songs.bin').read_bytes() == saved[Path('songs.bin')]
     assert (prepared / 'songs-undo.bin').read_bytes() == songs.upgrade(
-        undo, {}, switches=bool(target.max_switches)
+        undo, {}, target=target
     )
     backups.check_conversion(prepared)
     (prepared / 'setups/fonts/12345678.cfont').write_bytes(b'changed')
@@ -511,11 +509,7 @@ def test_restore_uploads_saved_data_before_restoring_selection(
         for n, s in backup_sources.items()
     }
     setup = setup_bundle.reindex(compiled | {'Evening': bytes(recorded)})['Evening']
-    expected = (
-        setup
-        if preserve
-        else resolved.refresh_memory(setup, {}, switches=bool(target.max_switches))
-    )
+    expected = setup if preserve else resolved.refresh_memory(setup, {}, target=target)
     library = songs.encode(songs.Library(setlists=[songs.Setlist(name='Encore')]))
     (tmp_path / 'setups').mkdir()
     (tmp_path / 'setups/Evening.bin').write_bytes(setup)
@@ -795,6 +789,10 @@ class SavedPedal(transport.SetupClient):
     def request(self, command: str) -> str:
         if command == 'CNTRL STATUS':
             return self.status
+        if command == 'CNTRL STORAGE SCAN':
+            return 'CNTRL STORAGE 1000000 900000 - 512'
+        if command == 'CNTRL STORAGE NEXT':
+            return 'CNTRL STORAGE END 0'
         if command.startswith('CNTRL HISTORY LIST '):
             before = int(command.rsplit(' ', 1)[1])
             revision = self.revision
@@ -896,6 +894,42 @@ def test_post_flash_verification_accepts_all_saved_data(
     assert (
         'Selection, setups, history, assets and songs verified unchanged.'
         in capsys.readouterr().out
+    )
+
+
+@pytest.mark.parametrize('version', [44, 45])
+def test_pre_flash_backup_keeps_previous_development_bytes_and_can_convert_them(
+    tmp_path: Path, target: models.Target, saved_pedal: SavedPedal, version: int
+) -> None:
+    original = bytearray(
+        binary_format.wrap(
+            bytes.fromhex(
+                (
+                    Path(__file__).parents[1] / f'firmware/test/setup{version}.golden'
+                ).read_text()
+            )
+        )
+    )
+    struct.pack_into('<H', original, 4, 0x8000 | version)
+    struct.pack_into('<I', original, 16, 0)
+    struct.pack_into('<I', original, 16, crc32(original))
+    saved_pedal.blobs['setup'] = saved_pedal.blobs['history'] = bytes(original)
+    saved_pedal.revision = saved_pedal.revision.model_copy(
+        update={'length': len(original)}
+    )
+    saved_pedal.status = f'CNTRL READY {version} 0 00000000'
+    directory = tmp_path / 'before'
+    backups.backup_pedal(directory, Path('/unused'))
+    assert (directory / 'setups/Evening.bin').read_bytes() == original
+    assert (directory / 'history/Evening/3.bin').read_bytes() == original
+    backups.check_conversion(directory)
+    manifest = tomlkit.parse((directory / 'history.toml').read_text()).unwrap()
+    assert manifest['revisions'][0]['version'] == version
+    converted = backups.prepare_restore(directory, tmp_path / 'converted', target)
+    restored = (converted / 'setups/Evening.bin').read_bytes()
+    assert binary_format.identify(restored) == 'd46'
+    assert resolved.export(restored) == resolved.export(
+        resolved.upgrade(bytes(original))
     )
 
 

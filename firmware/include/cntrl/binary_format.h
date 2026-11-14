@@ -4,8 +4,8 @@
 #include <algorithm>
 
 namespace cntrl::binary {
-constexpr uint16_t development_format = 0x8000u | 45u;
-constexpr bool supported_format(uint16_t format) { return format == development_format || format == (0x8000u | 44u); }
+constexpr uint16_t development_format = 0x8000u | 46u;
+constexpr bool supported_format(uint16_t format) { return format == development_format || format == (0x8000u | 44u) || format == (0x8000u | 45u); }
 enum class Kind : uint16_t { setup = 1, bundle = 2, songs = 3 };
 constexpr unsigned header_size = 20, record_size = 8, maximum_payload = 16u * 1024u * 1024u;
 inline uint16_t read16(const uint8_t *p) { return uint16_t(p[0]) | uint16_t(p[1]) << 8; }

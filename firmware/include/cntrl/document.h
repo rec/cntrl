@@ -12,9 +12,9 @@ namespace cntrl {
 constexpr unsigned pages_offset = 16;
 constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_outputs;
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
-constexpr unsigned metadata_header_size = scrolling_offset + 14;
+constexpr unsigned metadata_header_size = scrolling_offset + 16;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 45;
+constexpr unsigned document_version = 46;
 constexpr unsigned gesture_event_count = 12;
 constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
 constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
@@ -98,6 +98,7 @@ public:
         if (!u16(bytes + meta + 6) || !u16(bytes + meta + scrolling_offset)) return false;
         for (unsigned i = 0; i < 3; ++i) if (bytes[meta + scrolling_offset + 2 + i] > 3) return false;
         if (bytes[meta + scrolling_offset + 5] > 63) return false;
+        if (bytes[meta + scrolling_offset + 6] > 2 || bytes[meta + scrolling_offset + 7] > 1) return false;
         for (unsigned i = 0; i < 4; ++i)
             if ((bytes[meta + scrolling_offset + 5] & (4u << i)) && bytes[meta + trs_modes_offset + i] != unsigned(midi::TrsMode::aux)) return false;
         if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
@@ -323,7 +324,7 @@ public:
             unsigned mask = u16(bytes + names + 10);
             if (!output_mask_valid(mask,bytes + meta + trs_modes_offset,bytes[19],hardware)
                 || hardware.memory_capacity() < hardware.memory_runtime()
-                || u32(bytes + meta + scrolling_offset + 6) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
+                || u32(bytes + meta + scrolling_offset + 8) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
             for (const auto &connection : hardware.midi_outputs()) if (connection.port != midi::no_port
                 && (mask & (1u << connection.route)) && !midi::midi_output(midi::TrsMode(bytes[meta + trs_modes_offset + connection.port]))) return false;
             for (const auto &connection : hardware.midi_outputs()) if (u16(bytes + names + 8) & (1u << connection.route)) {
@@ -350,8 +351,8 @@ public:
             const uint64_t events = u16(p + 14);
             uint64_t required = p[5] ? 104u * outputs
                 : 64u * events + 56u * events * outputs + 496u * outputs + 412u * outputs * channels + 16;
-            if (u32(bytes + meta + scrolling_offset + 6) < required || hardware.memory_capacity() < hardware.memory_runtime()
-                || u32(bytes + meta + scrolling_offset + 6) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
+            if (u32(bytes + meta + scrolling_offset + 8) < required || hardware.memory_capacity() < hardware.memory_runtime()
+                || u32(bytes + meta + scrolling_offset + 8) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
             arpeggiator = names; names += 50;
         }
         for (unsigned i = 0; i < page_count; ++i)
@@ -611,8 +612,8 @@ public:
     const uint8_t *counter_section() const { return relay_section() + (relay_count() ? 6 + relay_count() * 33 : 0); }
     unsigned counters() const { return !std::memcmp(counter_section(), "CCNT", 4) ? u16(counter_section() + 4) : 0; }
     const uint8_t *counter(unsigned index) const { return counter_section() + 6 + index * 104; }
-    unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 6); }
-    uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 10); }
+    unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 8); }
+    uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 12); }
     uint8_t brightness() const { return data_[core_ + 18]; }
     unsigned pulse_delay_ms() const { return u16(data_ + metadata() + 14); }
     unsigned pulse_period_ms() const { return u16(data_ + metadata() + 8); }
@@ -708,6 +709,8 @@ public:
     bool is_midi_interface() const { return data_[core_ + 19] & 2; }
     uint32_t screensaver_timeout() const { return u32(data_ + core_ + 24); }
     unsigned scroll_ms(bool vertical = false) const { return u16(data_ + metadata() + (vertical ? scrolling_offset : 6)); }
+    unsigned frame_buffers() const { return data_[metadata() + scrolling_offset + 6]; }
+    bool use_animations() const { return data_[metadata() + scrolling_offset + 7]; }
     unsigned scroll_direction(unsigned action) const { return data_[metadata() + scrolling_offset + 2 + action]; }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + core_ + 28 + slot * 16;

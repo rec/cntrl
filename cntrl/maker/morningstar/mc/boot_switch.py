@@ -118,6 +118,10 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             '*(.text._ZN5cntrl4midi18AdvancedProcessing5StateI*ED[12]Ev*)',
             '*(.text._ZN5cntrl4midi7RuntimeC[12]E*)',
             '*(.text._ZN5cntrl5SongsC[12]E*)',
+            # Dispatch for the reusable display/runtime heap, called by the
+            # existing flash-resident allocator wrappers.
+            '*(.text._ZN5cntrl6device10SharedHeap*)',
+            '*(.text._ZNK5cntrl6device10SharedHeap*)',
             # Management screens, browsing and saved-return decoding are cold.
             # Leave the MIDI preparation/queue iteration paths in ITCM.
             '*(.text._ZN5cntrl7SongsUi6renderEv*)',

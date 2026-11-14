@@ -6,6 +6,88 @@ Original source baseline: `a32af63`, 2026-11-12. The original inventory is retai
 below; implementation checkpoints are recorded separately. Physical qualification
 is incomplete. Paths below are relative to this directory.
 
+## Configurable frame storage, 2026-11-14
+
+Setup options `frame_buffers = 2` (integer 0–2) and `use_animations = true`
+control presentation memory and visual effects. Two buffers retain the existing
+scrolling path. One retains outgoing pixels and snapshots incoming page
+descriptions, rasterizing incoming displays incrementally in the existing
+workspace. Zero draws directly without caching or scrolling. Throb remains
+independently configured and rerenders the affected display when no cache exists.
+`use_animations = false` blocks scrolling, startup/idle movies and their fades,
+including the explicit scroll-timing diagnostic. It does not override the
+requested frame count. Streamed movie playback remains available with zero
+frames when animations are enabled.
+
+The old fixed pixel arrays are replaced by a 245776-byte RAM1 pool shared by
+checked display and runtime allocations. Frame allocations require RAM1;
+ordinary checked allocations prefer RAM2 and may use unused RAM1. SDK allocations
+remain in RAM2, as do DMA work/transfer buffers. The existing bounded allocator
+uses the same chunk accounting in both regions. The pinned SDK's built-in SD
+initialization selects `FIFO_SDIO`, so checked file buffers in RAM1 are not
+SDIO DMA destinations. The allocator
+performs a constant-time same-class fit check so the two frames fit exactly,
+including their headers. No runtime heap/stack boundary is moved.
+
+| Frame count | Animations | Checked frame/snapshot bytes | Pool made available relative to two frames |
+| --- | --- | ---: | ---: |
+| 2 | Either | 245776 | 0 |
+| 1 | Enabled | 128152 | 117624 net, after 5264 bytes of page snapshots |
+| 1 | Disabled | 122888 | 122888 |
+| 0 | Either | 0 | 245776 |
+
+One frame's pixel content is 122880 bytes. Single-frame transition snapshots
+cost 1752 bytes per display plus an allocation header, allocated separately from
+the frame pool. These are allocation-accounting figures, not a claim that all
+released bytes can be combined into one contiguous allocation across RAM1/RAM2.
+The 40960-byte per-display drawing workspace remains in every mode.
+
+Setup admission stages only missing frames and page snapshots. Rejection leaves
+active storage untouched; commit cancels rendering before freeing old storage.
+Deleting the final setup releases all full frames. DMA owns its submitted pixel
+copies, so frame storage is not retained by a pending transfer. Compiler and
+restoration estimates include frames/snapshots using the target's geometry;
+the target advertises the additional checked pool without calling it extra
+physical RAM. Status reports free space separately in RAM1 and RAM2, while heap
+diagnostics retain their aggregate ledger.
+Initial setup caching now honors the bundle's existing cache allowance, which
+already reserves the active frame/runtime estimate. A roomy heap no longer
+causes startup to retain the entire setup slab at the expense of those resources.
+Later on-demand source reads still use actual checked admission and LRU eviction.
+
+Both application builds pass the existing 4096-byte ITCM reserve:
+
+| Measurement | Normal | Diagnostic |
+| --- | ---: | ---: |
+| ITCM used, including unwind bytes | 191608 | 192472 |
+| ITCM headroom | 5000 | 4136 |
+| RAM1 static reservation, including reusable pool | 309984 | 314176 |
+| RAM1 stack/local allowance, excluding reusable pool | 17696 | 13504 |
+| RAM2 linked heap budget | 433280 | 433152 |
+| Additional RAM1 pool capacity | 245776 | 245776 |
+
+The final exports, based on main through `236b59f`, are
+`/private/tmp/cntrl-frame-buffers-integrated-normal` and
+`/private/tmp/cntrl-frame-buffers-integrated-diagnostic`. The static RAM1 reservation still
+includes the pool even with zero frames; its free blocks now serve MIDI/runtime
+storage rather than becoming additional stack space. Firmware schema/core 46
+stores both settings after integrating main's banked-patch schema 45. Explicit
+backup conversion preserves older setups with
+defaults of two buffers and enabled animations.
+
+Native tests compare intermediate one/two-frame scroll pixels in both directions
+and axes, panoramic layouts, hardware scroll-ring retries and hidden columns.
+They also exercise zero-frame brightness, banners, animation suppression,
+admission rollback and reuse of released frame memory for MIDI-sized chunks.
+The integrated full suite passes 1646 tests with one skip. Ruff, formatting,
+type checking and pyupgrade checks pass. Linked ELF symbols confirm that live
+MIDI receive/queue/pressure/release paths, UART writes, SPI transfers and the
+USB interrupt handler remain in instruction RAM; shared-heap dispatch and
+display resource preparation execute from flash.
+Physical transition smoothness and MIDI timing have not been measured for this
+change; no pedal was flashed. Generated images/logs are disposable; all source,
+fixtures and regeneration procedures are tracked.
+
 ## Enforced four-KiB instruction reserve, 2026-11-14
 
 The initial controlled comparison below uses `7aa54ee` and the first ten

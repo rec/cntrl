@@ -18,8 +18,11 @@ inline int memory_fail_after = -1;
 // Compiler fences keep the tag visible to linker-wrapped malloc/free even
 // when the compiler treats those calls as allocation builtins.
 inline unsigned memory_checked_operations = 0;
+// Frame storage prefers the target's reusable RAM1 arena. Other checked
+// allocations can use that arena when display buffers release it.
+inline unsigned memory_frame_operations = 0;
 inline unsigned (*memory_actual_charge)(const void *) = nullptr;
-// The target's bounded RAM2 allocator aligns chunks to 8 bytes and uses an
+// The target's bounded allocator aligns chunks to 8 bytes and uses an
 // 8-byte header (minimum block: 16 bytes). Native tests use this target
 // admission model, independently of their operating system's malloc overhead.
 constexpr uint64_t memory_charge(unsigned length) {
@@ -31,7 +34,7 @@ inline uint64_t memory_allocation_charge(void *data, unsigned size) {
     return data && memory_actual_charge ? memory_actual_charge(data) : memory_charge(size);
 }
 
-// Resident documents, temporary buffers and font assets share the linked heap.
+// Resident documents, temporary buffers and font assets share the checked budget.
 class MemoryBuffer {
 public:
     uint8_t *data = nullptr;

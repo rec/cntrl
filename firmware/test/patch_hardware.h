@@ -12,7 +12,7 @@ struct TestPatchHardware : TestInputHardware, cntrl::PatchOutputs, cntrl::PatchS
         const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
     }
     cntrl::midi::Outputs midi_outputs() const override { return test_midi_outputs; }
-    unsigned memory_capacity() const override { return 400000; }
+    unsigned memory_capacity() const override { return 645776; }
     unsigned memory_runtime() const override { return 240000; }
     cntrl::Controller *controller = nullptr;
     uint32_t names_signature() const override { return 0; }

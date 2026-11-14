@@ -65,7 +65,7 @@ def test_active_setup_accounting_does_not_sum_inactive_setups() -> None:
 
 
 def test_setup_fit_is_decided_by_the_linked_firmware_budget() -> None:
-    bundle = setup_bundle.build({'large': bytes(300000)}, {'large': {}}, memory=MEMORY)
+    bundle = setup_bundle.build({'large': bytes(500000)}, {'large': {}}, memory=MEMORY)
     assert bundle.total_setup_ram > bundle.total_free_ram2()
     assert setup_bundle.unpack(bundle.pack()) == bundle.setups
 
@@ -217,4 +217,4 @@ def test_build_collects_dependencies_in_sorted_index_order() -> None:
         )
 
 
-MEMORY = models.TargetMemory(capacity=400000, runtime=240000)
+MEMORY = models.TargetMemory(capacity=645776, runtime=240000)

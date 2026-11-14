@@ -767,6 +767,21 @@ int main(int argc, char **argv) {
     cntrl::Document doc;
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
     test_setup_applies_usb_ports(bytes);
+    {
+        const unsigned settings = doc.metadata() + cntrl::scrolling_offset + 6;
+        assert(doc.frame_buffers() == 2 && doc.use_animations());
+        for (unsigned frames = 0; frames <= 2; ++frames) for (bool animations : {false, true}) {
+            auto configured = bytes; configured[settings] = uint8_t(frames); configured[settings + 1] = uint8_t(animations);
+            cntrl::put32(configured.data() + 20, cntrl::checksum(configured.data() + 28, unsigned(configured.size()) - 28));
+            cntrl::Document options; assert(options.load(configured.data(), unsigned(configured.size()), hw));
+            assert(options.frame_buffers() == frames && options.use_animations() == animations);
+        }
+        for (unsigned field : {0u, 1u}) {
+            auto invalid = bytes; invalid[settings + field] = uint8_t(field ? 2 : 3);
+            cntrl::put32(invalid.data() + 20, cntrl::checksum(invalid.data() + 28, unsigned(invalid.size()) - 28));
+            cntrl::Document rejected; assert(!rejected.load(invalid.data(), unsigned(invalid.size()), hw));
+        }
+    }
     test_empty_patch_windows_are_black(bytes);
     {
         std::ifstream display_file(argv[2]);

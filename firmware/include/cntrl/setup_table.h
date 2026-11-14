@@ -51,6 +51,7 @@ private:
         uint64_t needs = uint64_t(general_) + active_ + setup_table_ram_overhead(count_);
         if (general_ != hardware.memory_runtime() || needs + margin_ >= hardware.memory_capacity() || needs != u32(header + 28)
             || hardware.memory_capacity() - needs - margin_ != u32(header + 36)) return false;
+        const unsigned cache_allowance = u32(header + 36);
         uint32_t crc = 0xffffffff;
         for (unsigned offset = origin + 40; offset < end;) {
             uint8_t block[512]; unsigned n = std::min(512u, end - offset);
@@ -90,7 +91,7 @@ private:
         }
         signature_ = ~signature;
         bool validated = true;
-        if (static_setups_.resize(prefix + total_setup_ram_)) {
+        if (total_setup_ram_ <= cache_allowance && static_setups_.resize(prefix + total_setup_ram_)) {
             if (!file.read(table, static_setups_.data, prefix + total_setup_ram_)) return false;
             for (auto &entry : entries_) {
                 entry.bytes = static_setups_.data + entry.offset - table;
@@ -110,7 +111,8 @@ private:
         if (!static_setups_.data) {
             for (unsigned i = 0; i < count_; ++i) {
                 if (!entries_[i].prefill) continue;
-                if (entries_[i].length > memory_budget - memory_used) break;
+                if (uint64_t(resident_) + entries_[i].length > cache_allowance
+                    || entries_[i].length > memory_budget - memory_used) break;
                 if (!get(uint16_t(i))) return false;
             }
         }

@@ -45,14 +45,14 @@ from .compiler import (
     TRS_MODES,
 )
 from .display import read_source
-from .models import MidiEndpoint, Setup
+from .models import MidiEndpoint, Setup, Target
 
 
-def refresh_memory(data: bytes, fonts: dict[int, bytes], *, switches: bool) -> bytes:
+def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> bytes:
     """Refresh current setup memory accounting directly from its wire records."""
     if data.startswith(binary_format.MAGIC):
         return binary_format.replace_core(
-            data, refresh_memory(binary_format.core(data), fonts, switches=switches)
+            data, refresh_memory(binary_format.core(data), fonts, target=target)
         )
     graph = graph_offset(data)
     if struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
@@ -82,12 +82,13 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, switches: bool) -> b
     arp = data[cursor:end]
     needed = (
         sum(p.ram2_bytes for p in settings.pages.values())
+        + display.estimate_frame_ram(settings, target)
         + display.estimate_font_ram(windows, data[display_start:], fonts)
         + layout.estimate_ram(
             settings.pages,
             instruments,
             cycles,
-            switches=switches,
+            switches=bool(target.max_switches),
             regions=data[page + 7],
         )
         + midi_processing.estimate_ram(streams, endpoint_count=len(endpoints))
@@ -108,7 +109,7 @@ def prepare_restore(
     data: bytes,
     fonts: dict[int, bytes],
     *,
-    switches: bool,
+    target: Target,
     preserve_memory_estimates: bool = False,
 ) -> bytes:
     """Prepare a backup for current firmware or retain same-format accounting."""
@@ -119,16 +120,17 @@ def prepare_restore(
                 'preserving memory estimates requires current-format setups'
             )
         return data
-    return refresh_memory(upgraded, fonts, switches=switches)
+    return refresh_memory(upgraded, fonts, target=target)
 
 
 def upgrade(data: bytes) -> bytes:
     """Decode a supported setup and upgrade its format without recompilation.
 
-    Preserve graph node IDs and all existing records. Extend only legacy page
-    layout and gesture records, then update section offsets, lengths and CRC.
+    Preserve graph node IDs and all existing records. Add display-memory defaults
+    and extend legacy page layout and gesture records, then update lengths and CRC.
     """
     if data.startswith(binary_format.MAGIC):
+        data = binary_format.wrap(data)
         original = binary_format.core(data)
         converted = upgrade(original)
         if converted != original:
@@ -139,7 +141,11 @@ def upgrade(data: bytes) -> bytes:
     if version == DOCUMENT_VERSION:
         export(data)
         return data
-    if version in (41, 42, 43, 44):
+    _, _, _, _, instruments, cycles, patches, *_ = HEADER.unpack_from(data)
+    presentation_settings = (
+        76 + instruments * 68 + cycles * 68 + patches * 82 + METADATA.size - 10
+    )
+    if version in (41, 42, 43, 44, 45):
         if (
             version == 44
             and data[layout.section_end(data, _page_offsets(data)[0]) :][:4] == b'CBPG'
@@ -147,14 +153,20 @@ def upgrade(data: bytes) -> bytes:
             raise ValueError('re-import the backup to replace its legacy Banked Page')
         # New node and presentation options preserve existing records.
         converted = bytearray(data)
+        converted[presentation_settings:presentation_settings] = bytes([2, 1])
         struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
+        struct.pack_into('<I', converted, 8, len(converted))
+        struct.pack_into('<I', converted, 20, crc32(converted[28:]))
         result = bytes(converted)
         export(result)
         return result
     page, gestures, shifted = _page_offsets(data)
     gesture_size = _gesture_size(version)
     shifted_size = gesture_size + 4
-    edits = [(page, layout.section_end(data, page), layout.upgrade(data, page))]
+    edits = [
+        (presentation_settings, presentation_settings, bytes([2, 1])),
+        (page, layout.section_end(data, page), layout.upgrade(data, page)),
+    ]
     if gestures is not None:
         edits.append(
             (
@@ -220,7 +232,9 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
     if data[meta : meta + 4] != b'CMTA':
         raise ValueError('missing setup metadata')
     nb = struct.unpack_from('<H', data, meta + 4)[0]
-    cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
+    cursor = (
+        meta + METADATA.size - (2 if version < 46 else 0) + ni * 64 + nb * 8 + np * 4
+    )
     if flags & page_settings.EXPRESSION_FLAG:
         cursor += page_settings.EXPRESSION.size * 4
     if flags & page_settings.CLOCK_FLAG:
@@ -420,14 +434,16 @@ def export(data: bytes) -> str:
     result: dict[str, object] = {
         'brightness': flags & 255,
         'animation_color_cycle': bool(flags & 1024),
+        'frame_buffers': data[meta + METADATA.size - 10],
+        'use_animations': bool(data[meta + METADATA.size - 9]),
         'is_midi_interface': bool(flags & 512),
         'usb_device_midi': bool(flags & 2048),
         'usb_host_midi': bool(flags & 4096),
-        'fast_switches': bool(data[meta + METADATA.size - 9] & 1),
-        'forward_device_to_host': not bool(data[meta + METADATA.size - 9] & 2),
+        'fast_switches': bool(data[meta + METADATA.size - 11] & 1),
+        'forward_device_to_host': not bool(data[meta + METADATA.size - 11] & 2),
         'screensaver_timeout': timeout // 1000,
     }
-    scrolling = struct.unpack_from('<H3B', data, meta + METADATA.size - 14)
+    scrolling = struct.unpack_from('<H3B', data, meta + METADATA.size - 16)
     result['scrolling'] = {
         'horizontal_duration': struct.unpack_from('<H', data, meta + 6)[0] / 1000,
         'vertical_duration': scrolling[0] / 1000,
@@ -502,7 +518,7 @@ def export(data: bytes) -> str:
                         actual_pages[name]['ram2_bytes'] = raw['ram2_bytes']
             for key in ('pages', 'regions', 'layout'):
                 source.pop(key, None)
-    modes = data[meta + METADATA.size - 18 : meta + METADATA.size - 14]
+    modes = data[meta + METADATA.size - 20 : meta + METADATA.size - 16]
     if any(m >= len(TRS_MODES) for m in modes):
         raise ValueError('invalid TRS port role')
     if any(modes):
@@ -512,7 +528,7 @@ def export(data: bytes) -> str:
     combined = {
         j: 'combined'
         for i, j in enumerate(jacks)
-        if data[meta + METADATA.size - 9] & (4 << i)
+        if data[meta + METADATA.size - 11] & (4 << i)
     }
     if combined:
         result['auxiliary_switches'] = combined

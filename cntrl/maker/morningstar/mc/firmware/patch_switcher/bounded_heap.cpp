@@ -43,6 +43,11 @@ void BoundedHeap::remove(unsigned offset) {
 }
 unsigned BoundedHeap::find(unsigned bytes) {
     ++steps_;
+    // A freed frame-sized block can fit exactly even when its size lies below
+    // the next class boundary. Inspect just this class's head, never a list.
+    unsigned exact_first, exact_second; mapping(bytes, exact_first, exact_second);
+    const unsigned exact = heads_[exact_first][exact_second];
+    if (exact != none && size(exact) >= bytes) return exact;
     // Round the search to the next class boundary. Every member of the chosen
     // class then fits; no traversal of a size-class list is necessary.
     const unsigned shift = highest(bytes) - 3;
@@ -144,6 +149,10 @@ bool BoundedHeap::checked(const void *memory) const {
     const unsigned offset = unsigned(static_cast<const uint8_t *>(memory) - base_ - sizeof(Header));
     return header(offset).size_flags & 2;
 }
+bool BoundedHeap::contains(const void *memory) const {
+    const auto address = reinterpret_cast<uintptr_t>(memory), base = reinterpret_cast<uintptr_t>(base_);
+    return address >= base && address - base < capacity_;
+}
 unsigned BoundedHeap::largest_free() const {
     if (!first_) return 0;
     const unsigned first = highest(first_), second = highest(second_[first]);
@@ -167,5 +176,33 @@ bool BoundedHeap::inspect(unsigned &largest) const {
         previous_free = !(flags & 1); previous = length; offset += length;
     }
     return used == used_ && free_blocks == free_blocks_;
+}
+
+bool SharedHeap::initialize(void *ram2, std::size_t ram2_bytes, void *ram1, std::size_t ram1_bytes) {
+    return ram2_.initialize(ram2, ram2_bytes) && ram1_.initialize(ram1, ram1_bytes);
+}
+void *SharedHeap::allocate(std::size_t bytes, std::size_t alignment, bool checked_allocation, bool frame_allocation) {
+    if (frame_allocation) return checked_allocation ? ram1_.allocate(bytes, alignment, true) : nullptr;
+    if (void *memory = ram2_.allocate(bytes, alignment, checked_allocation)) return memory;
+    return checked_allocation ? ram1_.allocate(bytes, alignment, true) : nullptr;
+}
+void SharedHeap::release(void *memory) {
+    if (ram1_.contains(memory)) ram1_.release(memory);
+    else ram2_.release(memory);
+}
+const BoundedHeap &SharedHeap::owner(const void *memory) const { return ram1_.contains(memory) ? ram1_ : ram2_; }
+unsigned SharedHeap::charge(const void *memory) const { return owner(memory).charge(memory); }
+unsigned SharedHeap::usable(const void *memory) const { return owner(memory).usable(memory); }
+bool SharedHeap::checked(const void *memory) const { return owner(memory).checked(memory); }
+unsigned SharedHeap::capacity() const { return ram2_.capacity() + ram1_.capacity(); }
+unsigned SharedHeap::used() const { return ram2_.used() + ram1_.used(); }
+unsigned SharedHeap::ram1_unallocated() const { return ram1_.capacity() - ram1_.used(); }
+unsigned SharedHeap::ram2_unallocated() const { return ram2_.capacity() - ram2_.used(); }
+unsigned SharedHeap::free_blocks() const { return ram2_.free_blocks() + ram1_.free_blocks(); }
+unsigned SharedHeap::largest_free() const { return std::max(ram2_.largest_free(), ram1_.largest_free()); }
+bool SharedHeap::inspect(unsigned &largest) const {
+    unsigned first = 0, second = 0;
+    const bool valid = ram2_.inspect(first) && ram1_.inspect(second);
+    largest = std::max(first, second); return valid;
 }
 }

@@ -342,6 +342,16 @@ def compile_display(
     return window_records, references, block
 
 
+def estimate_frame_ram(setup: models.Setup, target: models.Target) -> int:
+    """Count checked full-frame allocations and one-frame transition snapshots."""
+    pixels = 2 * sum(d.width * d.height for d in target.displays)
+    total = setup.frame_buffers * (((pixels + 7) & ~7) + 8)
+    if setup.frame_buffers == 1 and setup.use_animations:
+        # ARM Pane is 1752 bytes; Renderer checks this against sizeof(Pane).
+        total += ((len(target.displays) * 1752 + 7) & ~7) + 8
+    return total
+
+
 def estimate_font_ram(
     windows: list[bytes], block: bytes, fonts: dict[int, bytes]
 ) -> int:

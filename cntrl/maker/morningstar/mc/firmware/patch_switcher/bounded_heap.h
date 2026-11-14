@@ -3,7 +3,7 @@
 #include <cstdint>
 
 namespace cntrl::device {
-// One arena for SDK and application allocations. Bitmap lookup, splitting and
+// One contiguous arena. Bitmap lookup, splitting and
 // coalescing touch a fixed number of records, independent of fragmentation.
 // Copying/zeroing user data is deliberately outside that metadata bound.
 class BoundedHeap {
@@ -15,6 +15,7 @@ public:
     unsigned charge(const void *memory) const;
     unsigned usable(const void *memory) const;
     bool checked(const void *memory) const;
+    bool contains(const void *memory) const;
     unsigned capacity() const { return capacity_; }
     unsigned used() const { return used_; }
     unsigned peak() const { return peak_; }
@@ -42,5 +43,27 @@ private:
     unsigned find(unsigned bytes);
     void split(unsigned offset, unsigned bytes);
     void finish();
+};
+
+// SDK allocations remain in DMA-accessible RAM2. Checked runtime storage can
+// also use RAM1 released by the renderer; frame buffers stay in that RAM1 pool.
+class SharedHeap {
+public:
+    bool initialize(void *ram2, std::size_t ram2_bytes, void *ram1, std::size_t ram1_bytes);
+    void *allocate(std::size_t bytes, std::size_t alignment, bool checked_allocation, bool frame_allocation);
+    void release(void *memory);
+    unsigned charge(const void *memory) const;
+    unsigned usable(const void *memory) const;
+    bool checked(const void *memory) const;
+    unsigned capacity() const;
+    unsigned used() const;
+    unsigned ram1_unallocated() const;
+    unsigned ram2_unallocated() const;
+    unsigned free_blocks() const;
+    unsigned largest_free() const;
+    bool inspect(unsigned &largest) const;
+private:
+    BoundedHeap ram2_, ram1_;
+    const BoundedHeap &owner(const void *memory) const;
 };
 }

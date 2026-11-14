@@ -119,6 +119,7 @@ public:
     unsigned memory_runtime() const override { return target::memory_runtime; }
     unsigned switch_capacity() const override { return target::max_switches; }
     bool prepare_pages(const Document &d) override {
+        if (!host->prepare_display(d)) return false;
         if (!app->prepare_pages(d)) return false;
         if (!midi_runtime.streams().prepare_load(d.midi_streams(),d.midi_streams_size(),midi_outputs(),d.nodes(),time)) {
             app->finish_pages(false); return false;
@@ -128,7 +129,7 @@ public:
         }
         return true;
     }
-    void finish_pages(bool commit) override { midi_runtime.streams().finish_load(commit); midi_runtime.finish_arpeggiator_configuration(commit); app->finish_pages(commit); }
+    void finish_pages(bool commit) override { host->finish_display(commit); midi_runtime.streams().finish_load(commit); midi_runtime.finish_arpeggiator_configuration(commit); app->finish_pages(commit); }
     midi::Outputs midi_outputs() const override { return target::midi_connections; }
     bool supports(const char *name) const override { auto *endpoint = midi_outputs().find(name); return endpoint && endpoint->output; }
     bool available(const char *name) const override {
@@ -330,8 +331,8 @@ public:
           midi_source(filesystem), midi_index(filesystem), recording(filesystem), midi_directory(filesystem),
           midi_files(filesystem,midi_source,midi_index,recording,midi_directory,target::midi_connections.mask(true),"/midi","/index"),
           calibrations(filesystem), expression(target::port_count,calibrations,ExpressionPedals::calibration_filename,"Confirm",1,1),
-          switches(board,board,board), work(target::maximum_display_area), cache(target::total_display_area), previous(target::total_display_area),
-          renderer(display,fonts,work.data(),unsigned(work.size()),cache.data(),previous.data(),unsigned(cache.size())),
+          switches(board,board,board), work(target::maximum_display_area),
+          renderer(display,fonts,work.data(),unsigned(work.size())),
           host(board,application,documents,display,fonts,renderer,target::controls),
           input(buttons.data(),target::controls,documents.document(),application,board), action_router{board}, cooperative(target::scan_interval_ms) {
         board.app = &application; board.documents = &documents; board.host = &host;
@@ -384,7 +385,7 @@ public:
     host::File calibrations;
     ExpressionPedals expression;
     Switches switches;
-    std::vector<uint16_t> work,cache,previous;
+    std::vector<uint16_t> work;
     ui::Renderer renderer;
     ui::PageHost<Board> host;
     std::array<ButtonState,target::button_count> buttons{};

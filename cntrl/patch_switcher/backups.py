@@ -238,9 +238,10 @@ def backup_pedal(
                 data = client.download(name)
                 (setups / f'{name}.bin').write_bytes(data)
                 try:
-                    text = resolved.export(data)
+                    readable = resolved.upgrade(data)
+                    text = resolved.export(readable)
                     (setups / f'{name}.toml').write_bytes(text.encode())
-                    backup_assets(client, data, setups, fonts, movies)
+                    backup_assets(client, readable, setups, fonts, movies)
                 except ValueError as error:
                     healthy = False
                     print(f'{name}: retained raw setup: {error}', file=sys.stderr)
@@ -257,7 +258,11 @@ def backup_pedal(
                 folder.mkdir(parents=True, exist_ok=True)
                 (folder / f'{revision.number}.bin').write_bytes(data)
                 try:
-                    version = struct.unpack_from('<H', binary_format.core(data), 4)[0]
+                    version = struct.unpack_from(
+                        '<H',
+                        binary_format.core(data),
+                        4,
+                    )[0]
                 except ValueError:
                     version = struct.unpack_from('<H', data, 4)[0]
                     healthy = False
@@ -273,10 +278,11 @@ def backup_pedal(
                     tomlkit.dumps({'revisions': snapshots}).encode()
                 )
                 if version in binary_format.SETUP_VERSIONS:
+                    readable = resolved.upgrade(data)
                     (folder / f'{revision.number}.toml').write_bytes(
-                        resolved.export(data).encode()
+                        resolved.export(readable).encode()
                     )
-                    backup_assets(client, data, setups, fonts, movies)
+                    backup_assets(client, readable, setups, fonts, movies)
                 print(
                     f'Saved {name} revision {revision.number}: {len(data)} bytes',
                     flush=True,
@@ -491,7 +497,7 @@ def restore_setups(
         n: resolved.prepare_restore(
             d,
             fonts,
-            switches=bool(target.max_switches),
+            target=target,
             preserve_memory_estimates=preserve_memory_estimates,
         )
         for n, d in read_setup_binaries(directory).items()
@@ -503,7 +509,7 @@ def restore_setups(
             resolved.prepare_restore(
                 d,
                 fonts,
-                switches=bool(target.max_switches),
+                target=target,
                 preserve_memory_estimates=preserve_memory_estimates,
             ),
         )
@@ -512,7 +518,7 @@ def restore_setups(
     library = songs.upgrade(
         (directory / 'songs.bin').read_bytes(),
         fonts,
-        switches=bool(target.max_switches),
+        target=target,
         preserve_memory_estimates=preserve_memory_estimates,
     )
     undo_path = directory / 'songs-undo.bin'
@@ -520,7 +526,7 @@ def restore_setups(
         songs.upgrade(
             undo_path.read_bytes(),
             fonts,
-            switches=bool(target.max_switches),
+            target=target,
             preserve_memory_estimates=preserve_memory_estimates,
         )
         if undo_path.exists()
@@ -715,7 +721,7 @@ def verify_after_flashing(
         n: resolved.prepare_restore(
             d,
             fonts,
-            switches=bool(target.max_switches),
+            target=target,
             preserve_memory_estimates=preserve_memory_estimates,
         )
         for n, d in read_setup_binaries(directory).items()
@@ -723,7 +729,7 @@ def verify_after_flashing(
     library = songs.upgrade(
         (directory / 'songs.bin').read_bytes(),
         fonts,
-        switches=bool(target.max_switches),
+        target=target,
         preserve_memory_estimates=preserve_memory_estimates,
     )
     with transport.SerialConnection(port) as connection:
@@ -769,7 +775,7 @@ def verify_after_flashing(
                 resolved.prepare_restore(
                     data,
                     fonts,
-                    switches=bool(target.max_switches),
+                    target=target,
                     preserve_memory_estimates=preserve_memory_estimates,
                 ),
             )
@@ -805,7 +811,7 @@ def read_setup_binaries(directory: Path) -> dict[str, bytes]:
     setups = {s.stem: s.read_bytes() for s in sorted(folder.glob('*.bin'))}
     for name, data in setups.items():
         try:
-            resolved.graph_offset(data)
+            resolved.graph_offset(resolved.upgrade(data))
         except ValueError as error:
             raise ValueError(f'{folder / name}: {error}') from error
     return setups
@@ -867,11 +873,11 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
     library = songs.upgrade(
         (directory / 'songs.bin').read_bytes(),
         fonts,
-        switches=bool(target.max_switches),
+        target=target,
     )
     undo_path = directory / 'songs-undo.bin'
     undo = (
-        songs.upgrade(undo_path.read_bytes(), fonts, switches=bool(target.max_switches))
+        songs.upgrade(undo_path.read_bytes(), fonts, target=target)
         if undo_path.exists()
         else b''
     )
@@ -879,18 +885,14 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
     if selected and selected not in setups:
         raise ValueError(f'{selected}: saved selection is absent from the backup')
     upgraded = {
-        n: binary_format.wrap(
-            resolved.prepare_restore(d, fonts, switches=bool(target.max_switches))
-        )
+        n: binary_format.wrap(resolved.prepare_restore(d, fonts, target=target))
         for n, d in setups.items()
     }
     revisions = [
         (
             n,
             r,
-            binary_format.wrap(
-                resolved.prepare_restore(d, fonts, switches=bool(target.max_switches))
-            ),
+            binary_format.wrap(resolved.prepare_restore(d, fonts, target=target)),
         )
         for n, r, d in snapshots
     ]
@@ -1020,6 +1022,6 @@ def read_history_binaries(directory: Path) -> list[tuple[str, history.Revision, 
         data = (directory / 'history' / name / f'{revision.number}.bin').read_bytes()
         if len(data) != revision.length:
             raise ValueError(f'{name}/{revision.number}: history backup length differs')
-        resolved.graph_offset(data)
+        resolved.graph_offset(resolved.upgrade(data))
         result.append((name, revision, data))
     return result

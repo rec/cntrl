@@ -85,32 +85,39 @@ struct TextFonts : cntrl::ui::Fonts {
     }
 };
 struct TextDisplay : cntrl::ui::Display {
+    uint16_t pixels[2][64 * 40]{};
     unsigned count() const override { return 2; }
     cntrl::ui::Viewport viewport(unsigned) const override { return {64, 40, 0, 0}; }
     void poll() override {}
     bool ready() const override { return true; }
     bool failed() override { return false; }
     bool priority_due() const override { return false; }
-    bool submit(unsigned, unsigned, unsigned, unsigned, unsigned, const uint8_t *) override { return true; }
+    bool submit(unsigned screen, unsigned x, unsigned y, unsigned width, unsigned height, const uint8_t *data) override {
+        for (unsigned col = 0; col < width; ++col) for (unsigned row = 0; row < height; ++row) {
+            unsigned offset = 2 * (col * height + row);
+            pixels[screen][(y + row) * 64 + x + col] = uint16_t(data[offset]) << 8 | data[offset + 1];
+        }
+        return true;
+    }
 };
 void long_text_wraps_with_an_ellipsis_on_only_the_first_screen() {
     TextDisplay display; TextFonts fonts;
-    uint16_t work[64 * 40] = {}, cache[2 * 64 * 40] = {}, previous[2 * 64 * 40] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 40, cache, previous, 2 * 64 * 40);
+    uint16_t work[64 * 40] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 40);
     cntrl::Pane page; page.graphics.pad = 0; page.graphics.background = 0x1234;
     renderer.show(0, page); renderer.show(1, page);
     cntrl::TextMessages messages;
     incoming(messages, message(std::string(80, 'x'), 2)); renderer.message(messages, 10);
     for (unsigned i = 0; i < 1000; ++i) renderer.draw();
     assert((fonts.lines == std::vector<std::string>{"Warning", "xxxxxxxxx", "xxxxxx..."}));
-    assert(cache[0] == 0xffff && cache[64 * 40] == 0x1234);
+    assert(display.pixels[0][0] == 0xffff && display.pixels[1][0] == 0x1234);
     fonts.lines.clear();
     renderer.message(messages, 11);
     for (unsigned i = 0; i < 1000; ++i) renderer.draw();
     assert(fonts.lines.empty());
     renderer.message(messages, 5010);
     for (unsigned i = 0; i < 1000; ++i) renderer.draw();
-    assert(cache[0] == 0x1234 && cache[64 * 40] == 0x1234);
+    assert(display.pixels[0][0] == 0x1234 && display.pixels[1][0] == 0x1234);
 }
 int main() {
     cntrl::memory_budget = 1024 * 1024;

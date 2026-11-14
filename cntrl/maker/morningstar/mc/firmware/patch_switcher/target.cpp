@@ -443,7 +443,9 @@ public:
     }
     bool supports_font_asset(uint32_t key, unsigned size) const override { return font_files.supports(key, size); }
     bool begin_fonts(unsigned count) override { return font_assets::cache.begin(count); }
+    CNTRL_FLASH_ROUTINE(board_prepare_pages)
     bool prepare_pages(const cntrl::Document &document) override {
+        if (!ui_.prepare_display(document)) return false;
         if (!application.prepare_pages(document)) return false;
         if (!midi_runtime_.streams().prepare_load(document.midi_streams(), document.midi_streams_size(),
             midi_outputs(), document.nodes(), midi_runtime_.stream_time(micros()))) {
@@ -467,7 +469,9 @@ public:
         }
         return count;
     }
+    CNTRL_FLASH_ROUTINE(board_finish_pages)
     void finish_pages(bool commit) override {
+        ui_.finish_display(commit);
         midi_runtime_.streams().finish_load(commit);
         midi_runtime_.finish_arpeggiator_configuration(commit);
         application.finish_pages(commit);
@@ -795,8 +799,7 @@ private:
     uint32_t stream_device_generation_ = 0;
     bool stream_device_connected_ = false;
     cntrl::midi::UsbMidiForward hosted_forward_;
-    RenderPixels pixels_;
-    cntrl::ui::Renderer renderer_{display_, fonts, render_work, cntrl::target::maximum_display_area, pixels_.cache, pixels_.previous, cntrl::target::total_display_area};
+    cntrl::ui::Renderer renderer_{display_, fonts, render_work, cntrl::target::maximum_display_area};
     cntrl::ui::PageHost<Board> ui_{*this, application, documents, display_, fonts, renderer_, cntrl::target::controls};
 };
 
@@ -915,10 +918,10 @@ PerformanceStatus performance_status() {
     uintptr_t stack;
     __asm__ volatile("mov %0, sp" : "=r"(stack));
     uintptr_t end = reinterpret_cast<uintptr_t>(&_ebss);
-    result.ram_free[0] = stack > end ? uint32_t(stack - end) : 0;
-    result.ram_used[0] = 512 * 1024 - result.ram_free[0];
     const auto heap = cntrl::device::heap_snapshot();
-    result.ram_free[1] = heap.unallocated;
+    result.ram_free[0] = (stack > end ? uint32_t(stack - end) : 0) + heap.ram1_unallocated;
+    result.ram_used[0] = 512 * 1024 - result.ram_free[0];
+    result.ram_free[1] = heap.ram2_unallocated;
     result.ram_used[1] = 512 * 1024 - result.ram_free[1];
     result.cycles = documents.document().patch_cycles(); result.patches = documents.document().patches();
     return result;
@@ -966,6 +969,9 @@ FLASHMEM bool native_asset_command(const char *line) {
 #ifdef CNTRL_DIAGNOSTICS
     if (!std::strcmp(line, "CNTRL DISPLAY EDGE")) {
         if (application.feature_open(board) || documents.busy()) { board.reply("CNTRL ERROR busy"); return true; }
+        if (documents.document().valid() && (!documents.document().use_animations() || !documents.document().frame_buffers())) {
+            board.reply("CNTRL ERROR animations-disabled"); return true;
+        }
         board.timing_mode(true); board.reply("CNTRL EDGE ARMED"); return true;
     }
     if (!std::strcmp(line, "CNTRL DISPLAY EDGE END")) {

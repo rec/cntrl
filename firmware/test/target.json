@@ -8,7 +8,7 @@
     "F"
   ],
   "memory": {
-    "capacity": 400000,
+    "capacity": 645776,
     "runtime": 240000
   },
   "default_midi_output": "din",

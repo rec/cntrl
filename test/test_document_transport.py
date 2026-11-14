@@ -229,7 +229,7 @@ def test_setup_cli_copy_download_and_delete(
     with NativePeer([str(bundle_peer)]) as port:
         with transport.SerialConnection(Path(port)) as connection:
             assert transport.SetupClient(connection).memory() == models.TargetMemory(
-                capacity=400000, runtime=240000
+                capacity=645776, runtime=240000
             )
 
         def run(arguments: list[str]) -> None:
@@ -450,7 +450,7 @@ def test_source_sync_retains_pedal_editable_fields(
             elif field == 'midi':
                 edited[19] ^= 2
             else:
-                edited[meta + compiler.METADATA.size - 18] = 1
+                edited[meta + compiler.METADATA.size - 20] = 1
             struct.pack_into('<I', edited, 20, crc32(edited[28:]))
             client.copy('Show', bytes(edited), True)
             client.ok('CNTRL SETUP FINISH')
