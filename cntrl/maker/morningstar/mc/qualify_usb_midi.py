@@ -623,25 +623,26 @@ def run(options: Options) -> None:
                         midi.input, sources[options.source], None
                     )
                 )
-                while time.monotonic() - started < options.observe_seconds:
+                while True:
                     data = bytes(midi.data)
+                    elapsed = time.monotonic() - started
                     if len(data) > offset:
                         chunks.append(
                             {
-                                'elapsed_seconds': time.monotonic() - started,
+                                'elapsed_seconds': elapsed,
                                 'received_hex': data[offset:].hex(),
                             }
                         )
                         offset = len(data)
                         save_report(options.report, report)
+                    if elapsed >= options.observe_seconds:
+                        break
                     time.sleep(0.01)
-                report['elapsed_seconds'] = time.monotonic() - started
-                report['received_hex'] = bytes(midi.data).hex()
+                report['elapsed_seconds'] = elapsed
+                report['received_hex'] = data.hex()
                 report['success'] = True
                 save_report(options.report, report)
-                print(
-                    f'Observed {len(midi.data)} bytes without sending MIDI', flush=True
-                )
+                print(f'Observed {len(data)} bytes without sending MIDI', flush=True)
             return
         destination, source = destinations[options.destination], sources[options.source]
         midi.check(midi.core.MIDIPortConnectSource(midi.input, source, None))
