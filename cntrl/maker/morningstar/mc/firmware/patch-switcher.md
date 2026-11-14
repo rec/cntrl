@@ -13,7 +13,7 @@ are included in compiled setup sizes. See the
 [movie workflow](../splash/README.md). Document format is now 34. Historical
 single-asset and `splash` boolean descriptions below are superseded.
 
-Runtime setups come from one bundle in `/cntrl/setups/.bundle/0.bin` and `1.bin`.
+Runtime setups come from one bundle in `/cntrl/setups/bundle/0.bin` and `1.bin`.
 The build includes requested setups and their companions in a sorted index table.
 A fitting collection stays resident in RAM2; otherwise the bounded LRU is
 prefilled to maximize resident bytes. Page RAM declarations and the configurable

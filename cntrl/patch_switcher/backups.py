@@ -335,11 +335,11 @@ def backup_state(client: transport.SetupClient, directory: Path, status: str) ->
         ),
         0,
     )
-    prefix = f'/cntrl/.generations/{root:08x}/' if root else ''
+    prefix = f'/cntrl/generations/{root:08x}/' if root else ''
     for entry in report.entries:
         if entry.directory or not entry.path.startswith('/cntrl/'):
             continue
-        if '/.generations/' in entry.path and not entry.path.startswith(prefix):
+        if '/generations/' in entry.path and not entry.path.startswith(prefix):
             continue
         logical = (
             '/cntrl/' + entry.path[len(prefix) :]

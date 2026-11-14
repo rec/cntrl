@@ -19,7 +19,7 @@ inline bool persistent_path(const char *path, char (&mapped)[224]) {
         if (!std::strncmp(path, store, n) && (!path[n] || path[n] == '/')) mutable_store = true;
     }
     int size = persistent_root && mutable_store
-        ? std::snprintf(mapped, sizeof(mapped), "/cntrl/.generations/%08lx%s", (unsigned long)persistent_root, path + 6)
+        ? std::snprintf(mapped, sizeof(mapped), "/cntrl/generations/%08lx%s", (unsigned long)persistent_root, path + 6)
         : std::snprintf(mapped, sizeof(mapped), "%s", path);
     return size >= 0 && unsigned(size) < sizeof(mapped);
 }
@@ -79,10 +79,10 @@ public:
         if (pending_ || !filesystem_.available() || !root || root == active_ || sequence_ == std::numeric_limits<uint32_t>::max()) return false;
         // Give the legacy root its own committed record before staging starts.
         if (!sequence_ && !publish(active_)) return false;
-        char path[96]; std::snprintf(path, sizeof(path), "/cntrl/.generations/%08lx", (unsigned long)root);
+        char path[96]; std::snprintf(path, sizeof(path), "/cntrl/generations/%08lx", (unsigned long)root);
         if (filesystem_.exists(path) || !filesystem_.make_directory(path)) return false;
         for (const char *store : {"setups", "history", "songs", "selection"}) {
-            std::snprintf(path, sizeof(path), "/cntrl/.generations/%08lx/%s", (unsigned long)root, store);
+            std::snprintf(path, sizeof(path), "/cntrl/generations/%08lx/%s", (unsigned long)root, store);
             if (!filesystem_.make_directory(path)) return false;
         }
         staged_ = root; persistent_root = root; required_ = 0; pending_ = ready_ = true; return true;
@@ -110,7 +110,7 @@ private:
     CNTRL_FLASH_ROUTINE(deployment_publish)
 #endif
     bool publish(uint32_t root) {
-        if (!filesystem_.make_directory("/cntrl/.deploy")) return false;
+        if (!filesystem_.make_directory("/cntrl/deploy")) return false;
         uint8_t bytes[24] = {};
         std::memcpy(bytes, "CDEP", 4); binary::write32(bytes + 4, sequence_ + 1);
         binary::write32(bytes + 8, root);
@@ -120,7 +120,7 @@ private:
         // Retained roots need proof of a completed stage even after both
         // activation slots have advanced. Never recover an abandoned partial root.
         char directory[96], completed[96];
-        std::snprintf(directory, sizeof(directory), "/cntrl/.generations/%08lx", (unsigned long)root);
+        std::snprintf(directory, sizeof(directory), "/cntrl/generations/%08lx", (unsigned long)root);
         completion_path(root, completed);
         if (!filesystem_.exists(completed)) {
             if (!filesystem_.make_directory(directory) || !write_record(completed, bytes)) return false;
@@ -147,7 +147,7 @@ private:
     unsigned present_stores() {
         unsigned result = 0;
         for (unsigned slot = 0; slot < 2; ++slot) {
-            char path[64]; std::snprintf(path, sizeof(path), "/cntrl/setups/.bundle/%u.bin", slot);
+            char path[64]; std::snprintf(path, sizeof(path), "/cntrl/setups/bundle/%u.bin", slot);
             if (filesystem_.exists(path)) result |= 1;
         }
         for (unsigned slot = 0; slot < 3; ++slot) {
@@ -157,10 +157,10 @@ private:
         return result;
     }
     static void filename(unsigned slot, char (&path)[64]) {
-        std::snprintf(path, sizeof(path), "/cntrl/.deploy/%u.bin", slot);
+        std::snprintf(path, sizeof(path), "/cntrl/deploy/%u.bin", slot);
     }
     static void completion_path(uint32_t root, char (&path)[96]) {
-        std::snprintf(path, sizeof(path), "/cntrl/.generations/%08lx/.committed", (unsigned long)root);
+        std::snprintf(path, sizeof(path), "/cntrl/generations/%08lx/.committed", (unsigned long)root);
     }
 };
 } // namespace cntrl
