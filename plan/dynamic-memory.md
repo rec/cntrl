@@ -1,9 +1,55 @@
 # Demand-sized firmware memory
 
-Status: continuation implementation validated locally; physical qualification
-remains in progress, 2026-11-13.
+Status: host analysis refreshed after the routing split, 2026-11-14;
+physical qualification remains incomplete. The normal target builds, but the
+diagnostic target currently exceeds RAM1. See the target appendix for measurements.
 The inventory below records the original audit; implementation results and
 outstanding qualification gates are tracked here and in the target appendix.
+
+## Current source review, 2026-11-14
+
+This review supersedes the descriptions of *present* storage in the original
+F/A inventories below. Those tables remain the historical audit and rationale.
+The measured source is `84b7a08`, including the routing split in `4f3b1f4`.
+Hardware measurements and reproduction commands are in the
+[target refresh](../cntrl/maker/morningstar/mc/dynamic-memory.md#post-routing-split-refresh-2026-11-14).
+
+| Family | Current allocation behavior | Remaining concern |
+| --- | --- | --- |
+| Controllers, navigation, switches and execution | Additional controllers and navigation snapshots are acquired for actual use. Configuration uses checked arrays; active execution, history and ownership use checked nodes. Candidate resources precede publication. | Setup changes and navigation capture can retain old and new storage together. A dynamically allocated collection is not necessarily allocation-free during performance. |
+| MIDI routing and processing | `midi_routing.h` owns common topology, admission, queues, note ownership and cleanup. `BasicProcessing` has smaller Route/Step records and empty policy state. `AdvancedProcessing` owns generator, LFO, reversal and extension state. | The application still uses `Streams`, the advanced engine. The split does not automatically select basic storage or unload code. Common output state and terminal credits remain necessary in either engine. |
+| MIDI state, pickup and ownership | Output/channel/value state, pickup sources/selectors and note claims use sparse checked collections. Admission prepares required state before delivery. | A first controller/source/parameter can allocate. Per-record node/header cost and retained free capacity matter for many distinct controls, even when few notes sound. |
+| Looper, arpeggiator and files | Disabled/empty buffers are released; capture and playback resources are prepared at arm/configuration boundaries. Active, candidate and undo/retired roles are distinct. | Recording still reserves the configured event capacity when armed. A replacement or overdub can need several live generations; event count alone is not its peak cost. Filesystem/SDK allocations also consume the target arena. |
+| Monitor, text and counters | Monitor history/decoder/connection nodes grow from actual traffic and release on close. Text parsers and counter states are checked nodes. | Monitor history deliberately retains up to 128 entries. Distinct input contexts and first-use counter/pickup state still have costs. Sparse state does not imply zero idle object size. |
+| Fonts and presentation | Font metadata/pixels are staged from configured assets. Presentation reuses geometry-sized workspace. | Active and candidate fonts can coexist. Physical pixel caches and DMA buffers remain fixed target reservations; making metadata dynamic does not remove them. |
+| Transfer, browsing, animation and SDK | Payloads, readers and source state are acquired according to their lifetimes; bounded protocol scratch and some capability-sized constructor vectors remain. | USB enumeration, SD opens, downloads and movie transitions require linked allocator/stack measurements. The checked host ledger does not measure every native library allocation. |
+
+`CheckedList::erase()` and `clear()` return nodes to that owner's reusable free
+list. They do not generally return the node allocation to the arena. `trim()` or
+`release()` does that, and array/object release has its own lifecycle. Therefore
+separate live values, retained capacity, total charged chunks and transient peak
+in any future measurement. The routing probe observes one reusable owner-generation
+node after replacement and verifies that engine destruction releases all checked
+storage.
+
+The current stream/timeline reversal paths use checked buffers and `std::sort`;
+the original `std::stable_sort` temporary-allocation concern is no longer an
+accurate description of those paths. SDK and filesystem boundaries still need
+their own evidence.
+
+The immediate priority is instruction/data RAM placement: a small instruction
+increase can claim another whole RAM bank and reduce stack space abruptly. Next,
+review the physical rendering buffers and transient setup/font/recording peaks.
+Automatically choosing the smaller routing policy could save configuration RAM,
+but would require an implementation decision about active engine ownership and
+handoff. No such behavior change, framebuffer redesign or loader is included in
+this analysis.
+
+The refreshed dense-routing and allocation-fault tests pass, including cleanup
+of accepted notes under exhaustion. They do not establish pedal deadlines,
+stack high-water, SDK bootstrap use, physical fragmentation or actual available
+heap with a user's setup loaded. Earlier transport failures continue to block a
+claim of completed physical qualification.
 
 ## Implementation decisions
 

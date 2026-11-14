@@ -6,6 +6,194 @@ Original source baseline: `a32af63`, 2026-11-12. The original inventory is retai
 below; implementation checkpoints are recorded separately. Physical qualification
 is incomplete. Paths below are relative to this directory.
 
+## Post-routing-split refresh, 2026-11-14
+
+Measured production source: `84b7a08`, including `4f3b1f4`'s routing split.
+This section supersedes earlier statements about the current build fitting both
+normal and diagnostic configurations. Earlier checkpoints and physical incident
+reports below remain historical evidence. No pedal was flashed or contacted for
+this refresh.
+
+### Linked memory and the instruction-bank boundary
+
+Rebuilt using the pinned Arduino CLI 1.5.1, Teensy core 1.62.0 and ARM GCC
+15.2.1 with the normal `-Os` configuration and existing cold-code placement.
+
+| Region | Earlier normal continuation | Current normal | Current diagnostic |
+| --- | ---: | ---: | ---: |
+| RAM1 static variables | 308416 | 308480 | 312672 |
+| `.text.itcm` bytes | 195376 | 196464 | 197344 |
+| Instruction banks reserved, 32768 bytes each | 6 | 6 | 7 |
+| RAM1 left for stack/local variables | 19264 | 19200 | **-17760** |
+| RAM2 static variables | 90752 | 90752 | 90752 |
+| RAM2 arena capacity before bootstrap allocations | 433536 | 433536 | 433536 |
+| Target build result | Passed | Passed | **Failed size check** |
+
+The current normal image's size tool counts 196472 instruction bytes, including
+its small trailing sections, leaving only **136 bytes** before a seventh bank
+is required. The diagnostic image counts 197352 bytes and needs another bank.
+Its 4192 additional static bytes plus that 32768-byte bank turn the normal
+19200-byte stack/local allowance into a 17760-byte deficit. Returning diagnostic
+code to six banks requires reducing instruction-RAM occupancy by at least
+744 bytes, subject to alignment and branch veneers. It would then leave 15008
+bytes for stack/local variables, still not a measured stack high-water result.
+
+These are aggregate changes since the earlier continuation checkpoint, not a
+controlled measurement attributing every byte to the routing split. The normal
+ELF has 383804 executable bytes (`.text.code + .text.itcm + .fini`) and 859860
+bytes of flash constants/fonts. Code in flash does not consume instruction-RAM
+banks; all features remain compiled into the normal application.
+
+The normal ELF confirms the main fixed storage:
+
+| Reservation | Bytes | Interpretation |
+| --- | ---: | --- |
+| Current and previous display caches | 245760 | Two geometry-sized pixel arrays in RAM1; about 79.7% of all RAM1 static variables. |
+| Board object, including those caches | 255536 | The caches are included here, not additional to this figure. |
+| Display render work | 40960 | RAM2 scratch for the largest physical display. |
+| USB session | 16620 | RAM2 protocol/session state and workspaces. |
+| Display bands | 4160 | RAM2 producer/DMA storage. |
+| Splash assets object | 4304 | RAM2 stream/transfer state, not an entire movie. |
+
+The fixed display reservations remain the largest data-memory opportunity.
+Moving a previous-frame cache into RAM2 or acquiring it only for transitions
+would change rendering lifetime, DMA/cache handling and failure behavior. It
+would also consume up to 122880 bytes of the arena while present. That is a
+separate design decision, not a free saving demonstrated by this analysis.
+
+### Basic versus advanced routing
+
+The tracked standalone probe is
+[`measure_midi_routing.cpp`](../../../../firmware/test/measure_midi_routing.cpp).
+Its named array symbols expose `sizeof` directly from an ARM object without
+executing firmware. The actual ARM layouts are:
+
+| Value object | Basic | Advanced | Difference |
+| --- | ---: | ---: | ---: |
+| Routing engine | 720 | 960 | 240 |
+| Route | 128 | 184 | 56 |
+| Processing step | 28 | 88 | 60 |
+
+The shared Work record remains 80 bytes and a processing-list node remains
+144 bytes, as checked by the production ARM assertions. The Python setup compiler's
+96-byte-per-step planning allowance is conservative relative to the actual
+88-byte advanced Step; it was not changed by this refresh.
+
+At 24 routes with 16 channel maps each, Route/Step payloads alone differ by
+24384 ARM bytes, before policy-specific graph buffers and allocator rounding.
+That is conditional on using `BasicRouting`. `midi::Runtime` still embeds
+`Streams`, so the current application realizes none of that policy-selection
+saving. The basic policy is independently usable, not automatically selected.
+
+The following allocation measurements execute on macOS ARM64 with Apple Clang
+16, not on the pedal. Each graph uses two endpoints, channel maps are identical
+for both policies, and no MIDI traffic is sent. `ledger` includes the checked
+host alignment/header model; it excludes ordinary native library allocation,
+the inline engine object, setup/fonts, SDK bootstrap and physical fragmentation.
+
+| Configured graph | Basic ledger | Advanced ledger | Basic replacement peak | Advanced replacement peak |
+| --- | ---: | ---: | ---: | ---: |
+| Zero routes | 528 | 544 | 2160 | 2568 |
+| One direct route | 1024 | 1160 | 3256 | 3904 |
+| 24 direct routes | 9400 | 11576 | 20008 | 24736 |
+| 24 routes, 16 channel maps each | 37240 | 70136 | 75688 | 141856 |
+
+Initial load peaks for the final row are 38448 and 71720 bytes. Replacement
+keeps the old graph, candidate graph and checked candidate engine alive together.
+After publication and one service pass, nonempty graphs retain an extra reusable
+104-byte owner-generation node on this host. This is free-list capacity;
+`CheckedList::erase()` retains the node rather than returning its allocation to
+the arena. The probe verifies that destruction returns checked usage to zero.
+
+### Exhaustion, fault injection and timing limits
+
+Reran the existing optimized stress harness with its historical 430112-byte
+modeled budget. Keeping that budget preserves comparability; it is not a claim
+that a loaded setup has that many bytes available on the pedal. Each route has
+16 identity transforms. The fixture sends 68 input note messages per dense case.
+
+| Scenario | Peak checked bytes | Refused work / allocation failures | Transmitted packets | Host service p99 / max, microseconds |
+| --- | ---: | ---: | ---: | ---: |
+| 24 wide routes | 285408 | 0 | 136 | 33.834 / 86.250 |
+| 32 wide routes | 375112 | 0 | 136 | 66.208 / 501.333 |
+| 48 wide routes | 430096 | 485 | 100 | 29.167 / 471.667 |
+| 64 wide routes | 430080 | 1191 | 64 | 15.292 / 496.916 |
+| 64 chained routes | 430080 | 1191 | 64 | 14.500 / 713.250 |
+
+Refused counts describe internal work, not necessarily distinct incoming notes.
+All dense cases finish quiet, with zero voices, pending events and recovery
+records. The 24-point deterministic allocation-fault sweep also passes, including
+release of the accepted seed while every further allocation is refused. It
+records a 31728-byte peak and 771 deliberately induced allocation failures.
+
+This host sample ran alongside other host work. Maxima include scheduling effects
+and are not pedal deadlines or a controlled before/after speed comparison. The optimized
+run is unsanitized; separate ASan/UBSan runs pass the existing dense-memory and
+basic-routing regressions and the new allocation probe. The adapter native suite
+also passes, including bounded-heap fragmentation, coalescing and failure tests.
+This refresh does not replace physical `CNTRL HEAP` observations: SDK bootstrap,
+largest allocatable block, fragmentation, interrupt allocation, stack high-water
+and wall-clock MIDI latency remain unmeasured for this image. Earlier physical
+transport failures remain unresolved qualification limits.
+
+### Reproduction
+
+Run from the repository root with the declared dependencies and pinned toolchain:
+
+```sh
+uv run --no-sync python -m cntrl.patch_switcher.cli build \
+  --target-dir cntrl/maker/morningstar/mc --source-root . \
+  --output /private/tmp/cntrl-memory-refresh-current-normal
+uv run --no-sync python -m cntrl.patch_switcher.cli build \
+  --target-dir cntrl/maker/morningstar/mc --source-root . \
+  --output /private/tmp/cntrl-memory-refresh-current-diagnostic --diagnostics
+```
+
+The diagnostic command is expected to fail its size check at this source
+revision. Its linked ELF remains in `firmware/build/boot-switch/cntrl/` under
+this target directory; retain it before another build overwrites it. Builds
+share that directory and must run sequentially. A successful normal export has
+`firmware.elf`, `memory.txt` and `toolchain.toml`.
+
+```sh
+c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -Ifirmware/include \
+  firmware/test/test_dynamic_memory_stress.cpp \
+  -o /private/tmp/cntrl-memory-refresh-stress
+/private/tmp/cntrl-memory-refresh-stress
+c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -Ifirmware/include \
+  firmware/test/measure_midi_routing.cpp \
+  -o /private/tmp/cntrl-memory-refresh-routing
+/private/tmp/cntrl-memory-refresh-routing
+```
+
+For the new probe's sanitizer run, replace `-O2` with
+`-fsanitize=address,undefined -fno-omit-frame-pointer`. Keep assertions enabled.
+The existing regressions run through ordinary pytest:
+
+```sh
+uv run --no-sync pytest -q test/test_shared_native.py \
+  -k 'dynamic_memory_stress or midi_routing'
+uv run --no-sync pytest -q cntrl/maker/morningstar/mc/test/test_native.py
+```
+
+Cross-compile the same probe to inspect the target layouts:
+
+```sh
+arm_bin=cntrl/maker/morningstar/mc/firmware/.tools/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin
+"$arm_bin/arm-none-eabi-g++" -std=gnu++17 -mthumb -mcpu=cortex-m7 \
+  -mfloat-abi=hard -mfpu=fpv5-d16 -fno-exceptions -fno-rtti \
+  -fno-threadsafe-statics -Wno-psabi -Ifirmware/include \
+  -c firmware/test/measure_midi_routing.cpp \
+  -o /private/tmp/cntrl-memory-refresh-routing-arm.o
+"$arm_bin/arm-none-eabi-nm" -S --radix=d \
+  /private/tmp/cntrl-memory-refresh-routing-arm.o
+```
+
+Read the `size_*` symbols' size column, not their addresses. The probe source
+and procedure are tracked. Binaries, exported fonts, source-derived object files
+and raw logs under `/private/tmp/cntrl-memory-refresh-*` are reproducible,
+disposable outputs; no new implementation exists only in those directories.
+
 ## Controller allocation implementation
 
 The initial controller change removes the three statically reserved extra
@@ -710,9 +898,11 @@ container growth failure is not a recoverable `bad_alloc` contract on this targe
 The shared plan must cover both explicit allocation and library/container growth.
 This audit does not propose changing toolchain or dependency versions.
 
-`std::stable_sort` in the shared stream/timeline code can request temporary
-storage. Target/native tests must cover the real nonthrowing checked path, not
-rely on differences in the host standard library's allocation failure behavior.
+The original audit identified `std::stable_sort` temporary allocation in the
+stream/timeline code. The current paths use checked storage and `std::sort`, as
+recorded in the refresh above. Target/native tests must still cover the actual
+nonthrowing checked path and transitive storage allocations rather than relying
+on native standard-library allocation failure behavior.
 
 ## RAM1, RAM2 and measurement
 
