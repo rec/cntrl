@@ -99,7 +99,7 @@ class BackupManifest(BaseModel, frozen=True):
     files: list[SavedFile]
 
 
-def check_conversion(directory: Path) -> None:
+def check_conversion(directory: Path, *, raw_recovery: bool = False) -> None:
     if (directory / 'backup-pending.toml').exists():
         raise ValueError(f'{directory}: interrupted backup')
     if (directory / 'conversion-pending.toml').exists():
@@ -109,11 +109,13 @@ def check_conversion(directory: Path) -> None:
     report = directory / 'conversion.toml'
     if not report.exists():
         report = directory / 'backup.toml'
+        if raw_recovery and not report.exists():
+            raise ValueError(f'{directory}: missing raw recovery backup manifest')
         if report.exists():
             backup = BackupManifest.model_validate(
                 tomlkit.parse(report.read_text()).unwrap()
             )
-            if not backup.complete:
+            if not backup.complete and not (raw_recovery and backup.raw_state):
                 raise ValueError(
                     f'{directory}: incomplete backup; retain raw files for recovery'
                 )
@@ -283,6 +285,8 @@ def backup_pedal(
             tomlkit.dumps({'revisions': snapshots}).encode()
         )
         (directory / 'songs.bin').write_bytes(songs.download(client))
+        if raw_state and (bundle := client.download_bundle()):
+            (directory / 'bundle.bin').write_bytes(bundle)
         if raw_state and (undo := songs.download(client, undo=True)):
             (directory / 'songs-undo.bin').write_bytes(undo)
         complete = healthy and not (directory / 'unavailable-assets.txt').exists()
@@ -529,15 +533,19 @@ def restore_setups(
         raise ValueError(f'{selected}: saved selection is absent from the backup')
     with transport.SerialConnection(port) as connection:
         client = transport.SetupClient(connection)
-        client.recover_deployment()
+        active_ready = client.recover_deployment()
+        if not active_ready and not (directory / 'conversion.toml').exists():
+            raise ValueError(
+                'recovery installation requires an offline converted backup'
+            )
         recovery = (
             directory.parent / f'{directory.name}-before-restore-{uuid4().hex[:12]}'
         )
         backup_pedal(recovery, port, connection)
-        check_conversion(recovery)
+        check_conversion(recovery, raw_recovery=not active_ready)
         previous = {
             (n, r.number): (n, r, binary_format.wrap(resolved.upgrade(d)))
-            for n, r, d in read_history_binaries(recovery)
+            for n, r, d in (read_history_binaries(recovery) if active_ready else [])
         }
         for name, revision, data in snapshots:
             key = (name, revision.number)
@@ -554,17 +562,54 @@ def restore_setups(
                     )
             previous[key] = (name, revision, data)
         snapshots = list(previous.values())
-        current_bundle = client.download_bundle()
+        current_bundle = client.download_bundle() if active_ready else b''
         existing = setup_bundle.unpack(current_bundle) if current_bundle else {}
         combined = setup_bundle.reindex(existing | setups)
+        template_path = directory / 'bundle.bin'
+        template = (
+            template_path.read_bytes() if template_path.exists() else current_bundle
+        )
+        if (
+            current_bundle
+            and template_path.exists()
+            and existing.keys() - setups.keys()
+        ):
+            old_metadata = (
+                binary_format.unpack(current_bundle, binary_format.Kind.bundle).records[
+                    1:
+                ]
+                if current_bundle.startswith(binary_format.MAGIC)
+                else []
+            )
+            new_metadata = (
+                binary_format.unpack(template, binary_format.Kind.bundle).records[1:]
+                if template.startswith(binary_format.MAGIC)
+                else []
+            )
+            if old_metadata != new_metadata:
+                raise ValueError(
+                    'cannot merge different opaque bundle metadata; '
+                    f'original retained in {recovery}'
+                )
+        library = songs.reindex(library, list(combined))
+        if undo:
+            undo = songs.reindex(undo, list(combined))
         bundle_data = b''
+        if not combined and template_path.exists():
+            bundle_data = template
+            if setup_bundle.unpack(bundle_data):
+                raise ValueError(
+                    'backup bundle contains setups absent from its setup files'
+                )
         if combined:
             source: dict[str, object] = {
                 n: tomlkit.parse(resolved.export(d)).unwrap()
                 for n, d in combined.items()
             }
             margin = (
-                setup_bundle.HEADER.unpack_from(current_bundle)[5]
+                setup_bundle.HEADER.unpack_from(
+                    binary_format.core(current_bundle, binary_format.Kind.bundle)
+                )[5]
                 if current_bundle
                 else 16192
             )
@@ -575,6 +620,7 @@ def restore_setups(
                 if current_bundle
                 else client.memory(),
                 margin,
+                previous=template or None,
             )
             bundle_data = bundle.pack()
         reservations = sorted(
@@ -587,7 +633,7 @@ def restore_setups(
                 tomlkit.parse(report_path.read_text()).unwrap()
             )
             lengths = [len(bundle_data) + 100] * 2
-            lengths.extend([len(library) + 20, len(library) + 20, len(undo) + 20])
+            lengths.extend([len(library) + 28, len(library) + 28, len(undo) + 28])
             lengths.extend(len(history.pack_revision(n, r, d)) for n, r, d in snapshots)
             stored = {e.path for e in report.entries if not e.directory}
             for kind, pattern in (
@@ -611,7 +657,15 @@ def restore_setups(
             client.copy_midi(p.name, p.read_bytes(), overwrite=False)
         if minimum_starts:
             client.ok(f'CNTRL STARTS ENSURE {minimum_starts}')
-        client.begin_deployment()
+        if active_ready:
+            client.begin_deployment()
+        else:
+            print(
+                'Installing converted collection; original collection retained in '
+                f'{recovery} and its device root.',
+                flush=True,
+            )
+            client.begin_deployment(recovery=True)
         if bundle_data:
             client.copy_bundle(bundle_data, overwrite=True)
         for name, revision, data in snapshots:
@@ -843,6 +897,51 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
     validate_assets(
         directory, [*upgraded.values(), *(d for _, _, d in revisions)], [library, undo]
     )
+    bundle = b''
+    bundle_path = directory / 'bundle.bin'
+    if bundle_path.exists():
+        original_bundle = bundle_path.read_bytes()
+        if setup_bundle.unpack(original_bundle) != setups:
+            raise ValueError(f'{bundle_path}: bundle and authoritative setups differ')
+        core = binary_format.core(original_bundle, binary_format.Kind.bundle)
+        if upgraded:
+            bundle = setup_bundle.build(
+                upgraded,
+                {
+                    n: tomlkit.parse(resolved.export(d)).unwrap()
+                    for n, d in upgraded.items()
+                },
+                target.memory,
+                setup_bundle.HEADER.unpack_from(core)[5],
+                previous=original_bundle,
+            ).pack()
+        else:
+            count = setup_bundle.HEADER.unpack_from(core)[2]
+            names = [
+                setup_bundle.ENTRY.unpack_from(
+                    core, setup_bundle.HEADER.size + i * setup_bundle.ENTRY.size
+                )[0]
+                .split(b'\0')[0]
+                .decode('ascii')
+                for i in range(count)
+            ]
+            metadata = (
+                binary_format.unpack(
+                    original_bundle, binary_format.Kind.bundle
+                ).records[1:]
+                if original_bundle.startswith(binary_format.MAGIC)
+                else []
+            )
+            bundle = setup_bundle.SetupBundle(
+                setups={n: b'' for n in names},
+                page_ram2=[0] * count,
+                memory=target.memory,
+                memory_margin=setup_bundle.HEADER.unpack_from(core)[5],
+                metadata=metadata,
+            ).pack()
+        library = songs.reindex(library, list(upgraded))
+        if undo:
+            undo = songs.reindex(undo, list(upgraded))
     originals = {
         p.relative_to(directory).as_posix(): sha256(p.read_bytes()).hexdigest()
         for p in sorted(directory.rglob('*'))
@@ -854,6 +953,8 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
     )
     shutil.copytree(directory, destination, dirs_exist_ok=True)
     (destination / 'songs.bin').write_bytes(library)
+    if bundle:
+        (destination / 'bundle.bin').write_bytes(bundle)
     if undo:
         (destination / 'songs-undo.bin').write_bytes(undo)
     for name, data in upgraded.items():

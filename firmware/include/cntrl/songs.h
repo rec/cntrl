@@ -1,6 +1,7 @@
 #pragma once
 #include "documents.h"
 #include <algorithm>
+#include <type_traits>
 
 namespace cntrl {
 #pragma pack(push, 1)
@@ -22,6 +23,34 @@ struct SongEntry { char song[64] = {}; };
 struct Setlist { char name[64] = {}; uint32_t count = 0; };
 struct SongCounts { uint32_t songs = 0, sets = 0; };
 #pragma pack(pop)
+static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 268 && sizeof(Setlist) == 68 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
+template<class T>
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(song_record_encode)
+#endif
+inline void encode_song_record(const T &value, uint8_t *bytes) {
+    if constexpr (std::is_base_of_v<SongSelection, T>) {
+        std::memcpy(bytes, value.document, 64); std::memcpy(bytes + 64, value.key, 64); std::memcpy(bytes + 128, value.label, 64);
+        put32(bytes + 192, value.source); put32(bytes + 196, value.node);
+        if constexpr (std::is_same_v<T, Song>) { std::memcpy(bytes + 200, value.name, 64); put32(bytes + 264, value.count); }
+    } else if constexpr (std::is_same_v<T, Setlist>) {
+        std::memcpy(bytes, value.name, 64); put32(bytes + 64, value.count);
+    } else if constexpr (std::is_same_v<T, SongCounts>) {
+        put32(bytes, value.songs); put32(bytes + 4, value.sets);
+    } else if constexpr (std::is_same_v<T, SongEntry>) std::memcpy(bytes, value.song, 64);
+}
+template<class T>
+inline void decode_song_record(const uint8_t *bytes, T &value) {
+    if constexpr (std::is_base_of_v<SongSelection, T>) {
+        std::memcpy(value.document, bytes, 64); std::memcpy(value.key, bytes + 64, 64); std::memcpy(value.label, bytes + 128, 64);
+        value.source = u32(bytes + 192); value.node = u32(bytes + 196);
+        if constexpr (std::is_same_v<T, Song>) { std::memcpy(value.name, bytes + 200, 64); value.count = u32(bytes + 264); }
+    } else if constexpr (std::is_same_v<T, Setlist>) {
+        std::memcpy(value.name, bytes, 64); value.count = u32(bytes + 64);
+    } else if constexpr (std::is_same_v<T, SongCounts>) {
+        value.songs = u32(bytes); value.sets = u32(bytes + 4);
+    } else if constexpr (std::is_same_v<T, SongEntry>) std::memcpy(value.song, bytes, 64);
+}
 enum class SongExecution { pending, completed, failed, unknown, suspended };
 inline bool read_song_record(Storage &storage, unsigned slot, unsigned offset, void *destination, unsigned length) {
     auto *bytes = static_cast<uint8_t *>(destination);
@@ -31,6 +60,17 @@ inline bool read_song_record(Storage &storage, unsigned slot, unsigned offset, v
         i += n;
     }
     return true;
+}
+template<class T>
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(song_record_read)
+#endif
+inline bool read_song_record(Storage &storage, unsigned slot, unsigned offset, T *destination, unsigned length) {
+    if constexpr (std::is_base_of_v<SongSelection, T> || std::is_same_v<T, Setlist> || std::is_same_v<T, SongCounts> || std::is_same_v<T, SongEntry>) {
+        uint8_t bytes[sizeof(T)];
+        if (length != sizeof(T) || !read_song_record(storage, slot, offset, static_cast<void *>(bytes), length)) return false;
+        decode_song_record(bytes, *destination); return true;
+    } else return read_song_record(storage, slot, offset, static_cast<void *>(destination), length);
 }
 struct SongResolver {
     virtual ~SongResolver() = default;
@@ -75,21 +115,33 @@ public:
             }
         }
     }
-    bool boot() {
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_boot)
+#endif
+    bool boot(bool initialize_empty = true) {
         if (busy()) return false;
         counts_ = {}; active_ = length_ = source_count_ = 0;
         can_undo_ = invalid_ = false;
-        bool found = false; uint32_t best = 0;
+        for (auto &slot : slots_) slot = Slot{};
+        bool found = false, supported = false; uint32_t best = 0;
         for (unsigned i = 0; i < 3; ++i) {
-            uint32_t generation, crc; unsigned length; SongCounts counts;
-            if (record(i, generation, length, crc, counts)
-                && (!found || int32_t(generation - best) > 0)) {
+            uint32_t generation = 0, crc = 0; unsigned length = 0; SongCounts counts;
+            bool committed = false;
+            bool valid = record(i, generation, length, crc, counts, committed);
+            if (committed && (!found || int32_t(generation - best) > 0)) {
+                supported = valid;
                 found = true; best = generation; active_ = i; length_ = length; crc_ = crc; counts_ = counts;
                 source_count_ = verified_source_count_; records_end_ = verified_records_end_;
             }
         }
-        if (!found && (storage_.size(0) || storage_.size(1) || storage_.size(2))) { ready_ = true; invalid_ = true; return false; }
+        if (found && !supported) { ready_ = true; invalid_ = true; return false; }
+        if (!found && (!initialize_empty || storage_.size(0) || storage_.size(1) || storage_.size(2))) { ready_ = true; invalid_ = true; return false; }
         generation_ = best; ready_ = true;
+        if (found && slots_[active_].previous) for (unsigned i = 0; i < 3; ++i) {
+            if (i != active_ && slots_[i].length && slots_[i].generation == slots_[active_].previous) {
+                undo_slot_ = i; undo_cursor_ = {}; undo_removed_ = false; can_undo_ = true;
+            }
+        }
         if (!found) {
             if (!commit(active_, 12, counts_, 8, 0, "CSP5", 4, nullptr, nullptr)) return false;
             while (busy()) tick(); // Initialization precedes the live main loop.
@@ -182,7 +234,7 @@ public:
         SongCounts counts = counts_; ++counts.songs;
         if (!prepare(Edit::append_song, name)) return false;
         if (!prepare_source(s) || !valid_song(s)) { finish_job(false); return false; }
-        job_.counts = counts; std::memcpy(job_.inserted, &s, sizeof(s)); return true;
+        job_.counts = counts; encode_song_record(s, job_.inserted); return true;
     }
     bool rename_song(const char *from, const char *name) {
         char previous[64]; std::snprintf(previous, 64, "%s", from);
@@ -201,7 +253,8 @@ public:
             if (!setlist(s.name)) break;
         }
         SongCounts counts = counts_; ++counts.sets;
-        if (!edit(records_end_, 0, &s, sizeof(s), counts)) return false;
+        uint8_t encoded[68]; encode_song_record(s, encoded);
+        if (!edit(records_end_, 0, encoded, sizeof(encoded), counts)) return false;
         std::snprintf(name, 64, "%s", s.name); return true;
     }
     bool rename_setlist(const char *from, const char *name) {
@@ -224,26 +277,23 @@ public:
     }
     bool undo_source(unsigned &length, uint32_t &crc) {
         if (!can_undo_) { length = 0; crc = 0; return true; }
-        uint8_t header[16];
-        if (!storage_.read(undo_slot_, 0, header, 16) || std::memcmp(header, "CSG5", 4)) return false;
-        length = u32(header + 8); crc = u32(header + 12);
-        return length >= 12 && length <= 0xffffffffu - 20 && storage_.size(undo_slot_) == length + 20;
+        length = slots_[undo_slot_].length; crc = slots_[undo_slot_].crc;
+        return length >= 12 && storage_.size(undo_slot_) == slots_[undo_slot_].base + length + 4;
     }
     bool read_undo_payload(unsigned offset, uint8_t *data, unsigned length) {
         unsigned size = 0; uint32_t crc = 0;
         return undo_source(size, crc) && offset <= size && length <= size - offset
-            && storage_.read(undo_slot_, 16 + offset, data, length);
+            && storage_.read(undo_slot_, slots_[undo_slot_].base + offset, data, length);
     }
     bool undo() {
         if (busy() || !can_undo_) return false;
-        uint8_t header[16];
-        if (!storage_.read(undo_slot_, 0, header, 16) || std::memcmp(header, "CSG5", 4)) return false;
-        unsigned length = u32(header + 8);
-        if (length < 12 || length > 0xffffffffu - 20 || storage_.size(undo_slot_) != length + 20) return false;
-        initialize_job(); job_.source = undo_slot_; job_.length = length; job_.crc = u32(header + 12);
+        unsigned length = 0; uint32_t crc = 0;
+        if (!undo_source(length, crc)) return false;
+        initialize_job(); job_.source = undo_slot_; job_.crc = crc;
+        job_.inspector = binary::Inspector(length, binary::Kind::songs, true);
         job_.undo = true;
         job_.playback = undo_cursor_; job_.removed = undo_removed_;
-        phase_ = Phase::source_hash; return true;
+        phase_ = Phase::source_envelope; return true;
     }
     void choose(const char *set) {
         if (executing()) { error_ = "Patch pending"; return; }
@@ -321,7 +371,7 @@ public:
     bool invalid() const { return invalid_; }
     const char *current_name() const { return current_song_; }
     bool removed() const { return removed_; }
-    unsigned length() const { return length_; }
+    unsigned length() const { return slots_[active_].length; }
     uint32_t crc() const { return crc_; }
     unsigned source_size(unsigned index) const {
         unsigned offset, length;
@@ -333,18 +383,22 @@ public:
             && payload(active_, start + offset, data, n);
     }
     bool read_payload(unsigned offset, uint8_t *data, unsigned n) const {
-        if (offset > length_ || n > length_ - offset) return false;
-        if (!generation_) { if (offset + n > sizeof(counts_)) return false; std::memcpy(data, reinterpret_cast<const uint8_t *>(&counts_) + offset, n); return true; }
-        return payload(active_, offset, data, n);
+        if (offset > length() || n > length() - offset) return false;
+        return read_song_record(storage_, active_, slots_[active_].base + offset, data, n);
     }
-    bool import_begin(unsigned length) { return !busy() && !executing() && ready_ && length >= 12 && length <= 0xffffffffu - 20 && storage_.begin(3); }
+    bool import_begin(unsigned length) {
+        if (busy() || executing() || !ready_ || length < 12 || length > binary::maximum_payload + binary::header_size) return false;
+        slots_[3] = Slot{}; slots_[3].base = 0; slots_[3].length = length;
+        return storage_.begin(3);
+    }
     bool import_write(const uint8_t *bytes, unsigned n) { return storage_.write(bytes, n); }
     void import_abort() { storage_.finish(); }
     bool import_finish(unsigned length, uint32_t crc) {
         if (busy() || !storage_.finish() || storage_.size(3) != length) return false;
-        initialize_job(); job_.source = 3; job_.length = length; job_.crc = crc;
+        initialize_job(); job_.source = 3; job_.crc = crc;
+        job_.inspector = binary::Inspector(length, binary::Kind::songs, true);
         job_.playback = SongContinuation(); job_.removed = false;
-        phase_ = Phase::source_hash; return true;
+        phase_ = Phase::source_envelope; return true;
     }
 private:
     struct HeaderChange { unsigned offset = 0; Setlist value; bool song = false; Song song_value; };
@@ -370,7 +424,7 @@ private:
         bool step(Storage &storage, unsigned slot, unsigned base, unsigned length) {
             item = false;
             if (!position) {
-                if (length < 8 || !storage.read(slot, base, reinterpret_cast<uint8_t *>(&counts), 8)
+                if (length < 8 || !read_song_record(storage, slot, base, &counts, 8)
                     || counts.songs > (length - 8) / sizeof(Song)) return false;
                 position = 8; return true;
             }
@@ -380,7 +434,7 @@ private:
                 remember_source(); item = is_selection = true; return true;
             }
             if (patches) {
-                if (!storage.read(slot, base + position, reinterpret_cast<uint8_t *>(&selection_value), sizeof(selection_value))
+                if (!read_song_record(storage, slot, base + position, &selection_value, sizeof(selection_value))
                     || !valid_selection(selection_value)) return false;
                 position += sizeof(selection_value); --patches; ++patch_index;
                 remember_source(); item = is_selection = true; return true;
@@ -405,7 +459,7 @@ private:
             if (set < counts.sets) {
                 Setlist value;
                 if (position > length || sizeof(value) > length - position
-                    || !storage.read(slot, base + position, reinterpret_cast<uint8_t *>(&value), sizeof(value))
+                    || !read_song_record(storage, slot, base + position, &value, sizeof(value))
                     || !text_valid(reinterpret_cast<const uint8_t *>(value.name), 64)) return false;
                 position += sizeof(value);
                 if (value.count > (length - position) / sizeof(SongEntry)) return false;
@@ -446,7 +500,7 @@ private:
                 uint8_t prefix[56];
                 if (n > memory_budget || n > length - position - 4
                     || !storage.read(slot, base + position + 4, prefix, 56)
-                    || u16(prefix + 4) != binary::development_format
+                    || !binary::supported_format(u16(prefix + 4))
                     || u16(prefix + 6) != unsigned(binary::Kind::setup)
                     || u16(prefix + 8) != 20 || u16(prefix + 10) || u32(prefix + 12) != n - 20
                     || u16(prefix + 20) != 1 || u16(prefix + 22) != 1
@@ -475,8 +529,8 @@ private:
     };
     enum class Edit { none, append_song, rename_song, change_song, rename_set, insert, remove, move,
         insert_patch, replace_patch, remove_patch, move_patch };
-    enum class Phase { idle, prepare, source_hash, source_structure,
-        hash, begin, header, write, footer, close, verify_header, verify_hash, verify_structure };
+    enum class Phase { idle, prepare, source_envelope, source_structure,
+        hash, begin, header, write, footer, close, verify_header, verify_envelope, verify_structure };
     struct Job {
         unsigned source = 0, destination = 0, length = 0, offset = 0, erased = 0, inserted_size = 0, position = 0;
         SongCounts counts;
@@ -486,6 +540,10 @@ private:
         HeaderChange change = {}; Move move = {};
         bool has_change = false, has_move = false, undo = false, opened = false;
         uint32_t crc = 0, running_crc = 0xffffffff;
+        uint8_t prefix[28] = {};
+        unsigned extensions = 0;
+        bool sealed = false;
+        binary::Inspector inspector;
         SongContinuation playback;
         bool removed = false;
         char choose[64] = {};
@@ -499,6 +557,16 @@ private:
     Phase phase_ = Phase::idle;
     bool good_ = true;
     Storage &storage_; SongResolver &resolver_;
+    struct Slot {
+        binary::View view;
+        unsigned length = 0, base = 16;
+        uint32_t crc = 0, generation = 0, previous = 0;
+    };
+    mutable Slot slots_[4];
+    struct Reader {
+        Storage &storage; unsigned slot, base;
+        bool read(unsigned offset, uint8_t *data, unsigned n) { return read_song_record(storage, slot, base + offset, data, n); }
+    };
     SongCounts counts_;
     mutable Song song_cache_;
     mutable Setlist set_cache_;
@@ -604,8 +672,9 @@ private:
         Song item; if (!payload(active_, offset, &item, sizeof(item))) return false;
         offset += sizeof(Song) + (item.count - 1) * sizeof(SongSelection); return true;
     }
-    bool payload(unsigned slot, unsigned offset, void *data, unsigned n) const {
-        return read_song_record(storage_, slot, (slot == 3 ? 0 : 16) + offset, data, n);
+    template<class T>
+    bool payload(unsigned slot, unsigned offset, T *data, unsigned n) const {
+        return read_song_record(storage_, slot, slots_[slot].base + slots_[slot].view.offset + offset, data, n);
     }
     bool crc_range(unsigned slot, unsigned offset, unsigned length, uint32_t &result) const {
         uint8_t buffer[256]; uint32_t crc = 0xffffffff;
@@ -626,21 +695,36 @@ private:
         return true;
     }
 
-    bool record(unsigned slot, uint32_t &generation, unsigned &length, uint32_t &crc, SongCounts &counts) const {
-        uint8_t header[16], tail[4];
-        if (!storage_.read(slot, 0, header, 16) || std::memcmp(header, "CSG5", 4)) return false;
-        length = u32(header + 8); crc = u32(header + 12); generation = u32(header + 4);
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_record)
+#endif
+    bool record(unsigned slot, uint32_t &generation, unsigned &length, uint32_t &crc, SongCounts &counts, bool &committed) const {
+        uint8_t header[24], tail[4];
+        committed = false;
+        if (!storage_.read(slot, 0, header, 16)) return false;
+        bool current = !std::memcmp(header, "CSG6", 4);
+        if (!current && std::memcmp(header, "CSG5", 4)) return false;
+        const unsigned base = current ? 24 : 16;
+        if (current && (!storage_.read(slot, 16, header + 16, 8) || checksum(header, 20) != u32(header + 20))) return false;
+        unsigned serialized = u32(header + 8); crc = u32(header + 12); generation = u32(header + 4);
         uint32_t actual;
-        return length <= 0xffffffffu - 20 && storage_.size(slot) == length + 20
-            && storage_.read(slot, 16 + length, tail, 4) && !std::memcmp(tail, "DONE", 4)
-            && crc_range(slot, 16, length, actual) && actual == crc && validate(slot, length, 16)
-            && storage_.read(slot, 16, reinterpret_cast<uint8_t *>(&counts), 8);
+        if (serialized > binary::maximum_payload + binary::header_size || storage_.size(slot) != base + serialized + 4
+            || !storage_.read(slot, base + serialized, tail, 4) || std::memcmp(tail, "DONE", 4)
+            || !crc_range(slot, base, serialized, actual) || actual != crc) return false;
+        committed = true; binary::View view; Reader reader{storage_, slot, base};
+        if (!binary::open_reader(reader, serialized, binary::Kind::songs, view)
+            || !validate(slot, view.length, base + view.offset)
+            || !read_song_record(storage_, slot, base + view.offset, &counts, 8)) return false;
+        slots_[slot] = {view, serialized, base, crc, generation, current ? u32(header + 16) : 0};
+        length = view.length; return true;
     }
     bool edit(unsigned offset, unsigned erased, const void *bytes, unsigned n, const SongCounts &counts) {
+        if (slots_[active_].view.opaque) { error_ = "Opaque song metadata prevents structural edits"; return false; }
         if (offset > length_ || erased > length_ - offset || n > 0xffffffffu - 20 - (length_ - erased)) return false;
         return commit(active_, length_ - erased + n, counts, offset, erased, bytes, n, nullptr, nullptr);
     }
     bool prepare(Edit edit, const char *target) {
+        if (slots_[active_].view.opaque) { error_ = "Opaque song metadata prevents structural edits"; return false; }
         if (!ready_ || invalid_ || busy() || executing() || !target[0]) return false;
         initialize_job(); job_.source = active_; job_.length = length_; job_.counts = counts_;
         job_.edit = edit; std::snprintf(job_.target, 64, "%s", target); phase_ = Phase::prepare; return true;
@@ -650,6 +734,15 @@ private:
         if (n && bytes != job_.inserted) std::memcpy(job_.inserted, bytes, n);
         job_.length = length_ - erased + n + job_.appended_length; start_hash();
     }
+    template<class T>
+    void plan(unsigned offset, unsigned erased, const T *bytes, unsigned n) {
+        if constexpr (std::is_base_of_v<SongSelection, T> || std::is_same_v<T, Setlist> || std::is_same_v<T, SongEntry>) {
+            uint8_t encoded[sizeof(job_.inserted)];
+            if (n > sizeof(encoded) || n % sizeof(T)) { finish_job(false); return; }
+            for (unsigned i = 0; i < n / sizeof(T); ++i) encode_song_record(bytes[i], encoded + i * sizeof(T));
+            plan(offset, erased, static_cast<const void *>(encoded), n);
+        } else plan(offset, erased, static_cast<const void *>(bytes), n);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_prepare_step)
 #endif
@@ -658,7 +751,7 @@ private:
         if (job_.edit == Edit::append_song && c.position && c.song == counts_.songs && !c.first_selection && !c.patches) {
             plan(c.position, 0, job_.inserted, sizeof(Song)); return;
         }
-        if (!c.step(storage_, active_, 16, length_) || c.done) { finish_job(false); return; }
+        if (!c.step(storage_, active_, slots_[active_].base + slots_[active_].view.offset, length_) || c.done) { finish_job(false); return; }
         if (!c.item) return;
         if (patch_edit() && !std::strcmp(c.song_value.name, job_.target)) { prepare_patch(c); return; }
         if (c.is_selection) return;
@@ -775,8 +868,11 @@ private:
         if (inserted_size) std::memcpy(job_.inserted, inserted, inserted_size);
         if (change) { job_.has_change = true; job_.change = *change; }
         if (move) { job_.has_move = true; job_.move = *move; }
-        phase_ = Phase::hash; return true;
+        start_hash(); return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_initialize_job)
+#endif
     void initialize_job() {
         job_ = Job(); job_.playback = continuation(); job_.removed = removed_; good_ = false; error_ = "";
         while (job_.destination == active_ || (can_undo_ && job_.destination == undo_slot_)) ++job_.destination;
@@ -787,8 +883,10 @@ private:
         phase_ = Phase::idle;
     }
     void header(uint8_t *bytes) const {
-        std::memcpy(bytes, "CSG5", 4); put32(bytes + 4, generation_ + 1);
-        put32(bytes + 8, job_.length); put32(bytes + 12, job_.crc);
+        std::memcpy(bytes, "CSG6", 4); put32(bytes + 4, generation_ + 1);
+        put32(bytes + 8, 28 + job_.length + job_.extensions); put32(bytes + 12, job_.crc);
+        put32(bytes + 16, job_.undo ? 0 : generation_);
+        put32(bytes + 20, checksum(bytes, 20));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_stream_edit)
@@ -797,6 +895,7 @@ private:
         for (unsigned j = 0; j < n;) {
             unsigned at = job_.position + j, take = n - j, original = at;
             const uint8_t *memory = nullptr;
+            uint8_t encoded[268];
             const auto &change = job_.change; const auto &move = job_.move;
             uint8_t appended_size[4];
             unsigned append_at = job_.length - job_.appended_length;
@@ -805,10 +904,10 @@ private:
                 if (relative < 4) { put32(appended_size, job_.appended->length()); memory = appended_size + relative; take = 4 - relative; }
                 else { memory = job_.appended->data() + relative - 4; take = job_.appended_length - relative; }
             }
-            else if (at < 8) { memory = reinterpret_cast<const uint8_t *>(&job_.counts) + at; take = 8 - at; }
+            else if (at < 8) { encode_song_record(job_.counts, encoded); memory = encoded + at; take = 8 - at; }
             else if (job_.has_change && at >= change.offset && at < change.offset + (change.song ? sizeof(Song) : sizeof(Setlist))) {
-                memory = (change.song ? reinterpret_cast<const uint8_t *>(&change.song_value)
-                    : reinterpret_cast<const uint8_t *>(&change.value)) + (at - change.offset);
+                if (change.song) encode_song_record(change.song_value, encoded); else encode_song_record(change.value, encoded);
+                memory = encoded + (at - change.offset);
                 take = change.offset + (change.song ? sizeof(Song) : sizeof(Setlist)) - at;
             } else if (job_.inserted_size && at >= job_.offset && at < job_.offset + job_.inserted_size) {
                 memory = job_.inserted + (at - job_.offset); take = job_.offset + job_.inserted_size - at;
@@ -832,7 +931,7 @@ private:
             if (job_.edit == Edit::rename_song && !memory && original < records_end_) {
                 auto &c = job_.cursor;
                 while (!c.done && (!c.item || c.position <= original))
-                    if (!c.step(storage_, job_.source, 16, length_)) return false;
+                    if (!c.step(storage_, job_.source, slots_[job_.source].base + slots_[job_.source].view.offset, length_)) return false;
                 if (c.is_entry && !std::strcmp(c.entry_value.song, job_.target)) {
                     unsigned start = c.position - sizeof(SongEntry);
                     if (original < start) take = std::min(take, start - original);
@@ -846,8 +945,15 @@ private:
         }
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_start_hash)
+#endif
     void start_hash() {
+        const auto &source = slots_[job_.source];
+        job_.extensions = source.length - source.view.offset - source.view.length;
+        if (!job_.sealed && !binary::prefix(job_.prefix, binary::Kind::songs, job_.length, job_.extensions)) { finish_job(false); return; }
         job_.position = 0; job_.running_crc = 0xffffffff; job_.cursor = Cursor(); job_.cursor.verify_sources = false; phase_ = Phase::hash;
+        update_crc(job_.running_crc, job_.prefix, 28);
     }
     void publish() {
         undo_slot_ = active_; undo_cursor_ = continuation(); undo_removed_ = removed_;
@@ -870,23 +976,23 @@ private:
         switch (phase_) {
         case Phase::idle: return;
         case Phase::prepare: prepare_step(); return;
-        case Phase::source_hash:
-        case Phase::verify_hash: {
-            bool source = phase_ == Phase::source_hash;
-            unsigned n = std::min(256u, job_.length - job_.position);
-            if (!payload(source ? job_.source : job_.destination, job_.position, buffer, n)) { finish_job(false); return; }
-            update_crc(job_.running_crc, buffer, n); job_.position += n;
-            if (job_.position != job_.length) return;
-            if (~job_.running_crc != job_.crc) { finish_job(false); return; }
-            if (source && job_.source != 3 && (!storage_.read(job_.source, 16 + job_.length, buffer, 4)
-                || std::memcmp(buffer, "DONE", 4))) { finish_job(false); return; }
+        case Phase::source_envelope:
+        case Phase::verify_envelope: {
+            bool source = phase_ == Phase::source_envelope;
+            unsigned slot = source ? job_.source : job_.destination;
+            Reader reader{storage_, slot, slots_[slot].base};
+            if (!job_.inspector.step(reader)) { finish_job(false); return; }
+            if (!job_.inspector.done()) return;
+            if (job_.inspector.checksum() != job_.crc) { finish_job(false); return; }
+            slots_[slot].view = job_.inspector.view(); slots_[slot].crc = job_.crc;
+            if (source) job_.length = slots_[slot].view.length;
             job_.cursor = Cursor(); phase_ = source ? Phase::source_structure : Phase::verify_structure; return;
         }
         case Phase::source_structure:
         case Phase::verify_structure: {
             bool source = phase_ == Phase::source_structure;
-            if (!job_.cursor.step(storage_, source ? job_.source : job_.destination,
-                    source && job_.source == 3 ? 0 : 16, job_.length)) { finish_job(false); return; }
+            unsigned slot = source ? job_.source : job_.destination;
+            if (!job_.cursor.step(storage_, slot, slots_[slot].base + slots_[slot].view.offset, job_.length)) { finish_job(false); return; }
             const auto &c = job_.cursor;
             if (!c.done) return;
             if (!source) { publish(); return; }
@@ -898,13 +1004,23 @@ private:
         case Phase::write: {
             // Renaming also walks records to rewrite setlist references.
             unsigned chunk = job_.edit == Edit::rename_song ? 128u : 256u;
-            unsigned n = std::min(chunk, job_.length - job_.position);
-            if (!stream(buffer, n)) { finish_job(false); return; }
+            unsigned end = job_.length + job_.extensions;
+            unsigned n = std::min(chunk, end - job_.position);
+            if (job_.position < job_.length) {
+                n = std::min(n, job_.length - job_.position);
+                if (!stream(buffer, n)) { finish_job(false); return; }
+            } else {
+                const auto &source = slots_[job_.source];
+                unsigned offset = source.base + source.view.offset + source.view.length + job_.position - job_.length;
+                if (!storage_.read(job_.source, offset, buffer, n)) { finish_job(false); return; }
+            }
             update_crc(job_.running_crc, buffer, n);
             if (phase_ == Phase::write && !storage_.write(buffer, n)) { finish_job(false); return; }
             job_.position += n;
-            if (job_.position != job_.length) return;
-            if (phase_ == Phase::hash) { job_.crc = ~job_.running_crc; phase_ = Phase::begin; }
+            if (job_.position != end) return;
+            if (phase_ == Phase::hash && !job_.sealed) {
+                put32(job_.prefix + 16, ~job_.running_crc); job_.sealed = true; start_hash();
+            } else if (phase_ == Phase::hash) { job_.crc = ~job_.running_crc; phase_ = Phase::begin; }
             else if (~job_.running_crc != job_.crc) finish_job(false);
             else phase_ = Phase::footer;
             return;
@@ -914,8 +1030,9 @@ private:
             job_.opened = true; phase_ = Phase::header; return;
         case Phase::header:
             header(buffer);
-            if (!storage_.write(buffer, 16)) { finish_job(false); return; }
-            job_.position = 0; job_.running_crc = 0xffffffff; job_.cursor = Cursor(); job_.cursor.verify_sources = false; phase_ = Phase::write; return;
+            if (!storage_.write(buffer, 24) || !storage_.write(job_.prefix, 28)) { finish_job(false); return; }
+            job_.position = 0; job_.running_crc = 0xffffffff; job_.cursor = Cursor(); job_.cursor.verify_sources = false;
+            update_crc(job_.running_crc, job_.prefix, 28); phase_ = Phase::write; return;
         case Phase::footer:
             if (!storage_.write(reinterpret_cast<const uint8_t *>("DONE"), 4)) { finish_job(false); return; }
             phase_ = Phase::close; return;
@@ -924,13 +1041,19 @@ private:
             if (!storage_.finish()) { finish_job(false); return; }
             phase_ = Phase::verify_header; return;
         case Phase::verify_header: {
-            uint8_t expected[16]; header(expected);
-            if (storage_.size(job_.destination) != job_.length + 20
-                || !storage_.read(job_.destination, 0, buffer, 16) || std::memcmp(buffer, expected, 16)
-                || !storage_.read(job_.destination, 16 + job_.length, buffer, 4) || std::memcmp(buffer, "DONE", 4)) {
+            uint8_t expected[24]; header(expected);
+            unsigned serialized = 28 + job_.length + job_.extensions;
+            if (storage_.size(job_.destination) != serialized + 28
+                || !storage_.read(job_.destination, 0, buffer, 24) || std::memcmp(buffer, expected, 24)
+                || !storage_.read(job_.destination, 24 + serialized, buffer, 4) || std::memcmp(buffer, "DONE", 4)) {
                 finish_job(false); return;
             }
-            job_.position = 0; job_.running_crc = 0xffffffff; phase_ = Phase::verify_hash; return;
+            slots_[job_.destination] = Slot{}; slots_[job_.destination].base = 24;
+            slots_[job_.destination].length = serialized;
+            slots_[job_.destination].generation = generation_ + 1;
+            slots_[job_.destination].previous = job_.undo ? 0 : generation_;
+            job_.inspector = binary::Inspector(serialized, binary::Kind::songs, true);
+            phase_ = Phase::verify_envelope; return;
         }
         }
     }

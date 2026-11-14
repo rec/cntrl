@@ -30,7 +30,7 @@ def test_static_table_is_sorted_and_offsets_address_every_setup() -> None:
     assert bundle.setup_sizes == [1, 2, 3]
     assert bundle.total_setup_ram == 6
     assert bundle.prefill == [0, 1, 2]
-    data = bundle.pack()
+    data = binary_format.core(bundle.pack(), binary_format.Kind.bundle)
     table = setup_bundle.HEADER.size + len(bundle.names) * setup_bundle.ENTRY.size
     assert struct.unpack_from('<HII', data, table) == (3, 1, 3)
     assert data[table + 10 :] == b'ammzzz'
@@ -75,7 +75,12 @@ def test_bundle_reader_rejects_corrupt_tables_before_returning_setups(
     damage: str,
 ) -> None:
     data = bytearray(
-        setup_bundle.build({'a': b'a', 'b': b'b'}, {'a': {}, 'b': {}}, MEMORY).pack()
+        binary_format.core(
+            setup_bundle.build(
+                {'a': b'a', 'b': b'b'}, {'a': {}, 'b': {}}, MEMORY
+            ).pack(),
+            binary_format.Kind.bundle,
+        )
     )
     table = setup_bundle.HEADER.size + 2 * setup_bundle.ENTRY.size
     if damage == 'empty':
@@ -124,6 +129,11 @@ def test_native_table_and_lru_preserve_pinned_views(
         else MEMORY.capacity - MEMORY.runtime - 825 - page_ram - size * 2
     )
     bundle = setup_bundle.build(setups, sources, MEMORY, margin)
+    bundle = bundle.model_copy(
+        update={
+            'metadata': [binary_format.Record(tag=399, data=b'future bundle metadata')]
+        }
+    )
     with TemporaryDirectory(prefix='cntrl-setup-table-test-') as directory:
         image = Path(directory) / 'setups.bin'
         image.write_bytes(bundle.pack())

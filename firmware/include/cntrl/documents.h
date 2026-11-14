@@ -750,7 +750,8 @@ private:
     void command(uint32_t now) {
         char hex[127] = {}, name[64] = {}; unsigned length = 0, overwrite = 0; unsigned long crc = 0, epoch = 0; int end = 0;
         if (!std::strcmp(line_, "CNTRL FORMAT")) {
-            char response[64]; std::snprintf(response, sizeof(response), "CNTRL FORMAT %u 1", binary::development_format);
+            char response[64]; std::snprintf(response, sizeof(response), "CNTRL FORMAT %u %u %u %u", binary::development_format,
+                unsigned(binary::Kind::setup), unsigned(binary::Kind::bundle), unsigned(binary::Kind::songs));
             replies_.reply(response); return;
         }
         if (!std::strcmp(line_, "CNTRL STATUS")) {

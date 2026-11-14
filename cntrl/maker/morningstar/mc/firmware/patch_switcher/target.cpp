@@ -599,6 +599,7 @@ public:
     bool reply_ready() const override { return usb_session.reply_ready(); }
     void reply(const char *text) override {
         if (!std::strncmp(text, "CNTRL READY ", 12)) {
+            if (!deployment.ready()) { usb_session.reply("CNTRL ERROR deployment-recovery"); return; }
             char status[192], response[256]; startup_counter.usb_status(text, status, sizeof(status));
             std::snprintf(response, sizeof(response), "%s persistent_format=%u persistent_root=%lu", status,
                 cntrl::binary::development_format, (unsigned long)deployment.root());
@@ -997,6 +998,19 @@ struct AssetServices {
     history_import, bundle_transfer, storage_listing, disk_speed_transfer, application.song_ui, songs_transfer,
     font_files, midi_asset_transfer, native_asset_command};
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
+FLASHMEM bool reload_collection(bool initialize_empty = false) {
+    patch_sources.release_all(); song_files.close();
+    if (!setup_storage.boot() || !deployment.stores_complete(setup_storage.bundle_size() != 0, true)
+        || !songs.boot(initialize_empty)) return false;
+    documents.boot();
+    return !setup_storage.setups().total_setup_ram() || documents.document().valid();
+}
+FLASHMEM bool abort_deployment() {
+    deployment.abort(); card.ready = deployment.ready() && setup_filesystem.available();
+    if (!card.ready) return false;
+    if (!deployment.prepare_runtime(reload_collection())) { card.ready = false; return false; }
+    return true;
+}
 FLASHMEM bool asset_command(const char *line) {
     if (state_transfer.command(line, board)) return true;
     if (!std::strncmp(line, "CNTRL DEPLOY ", 13)) {
@@ -1014,33 +1028,31 @@ FLASHMEM bool asset_command(const char *line) {
         if (std::sscanf(line, "CNTRL DEPLOY RECOVER %lx%n", &root, &end) == 1 && end && !line[end]) {
             card.ready = setup_filesystem.available();
             if (card.ready && deployment.recover(uint32_t(root))) {
-                patch_sources.release_all(); song_files.close();
-                if (setup_storage.boot() && songs.boot() && deployment.commit()) {
-                    documents.boot(); board.reply("CNTRL OK"); return true;
+                if (reload_collection() && deployment.commit()) {
+                    board.reply("CNTRL OK"); return true;
                 }
-                deployment.abort(); card.ready = deployment.ready();
+                abort_deployment();
             }
             board.reply("CNTRL ERROR deployment-recovery"); return true;
         }
         end = 0;
         if (std::sscanf(line, "CNTRL DEPLOY BEGIN %lx%n", &root, &end) == 1 && end && !line[end]) {
-            if (deployment.begin(uint32_t(root))) {
-                patch_sources.release_all(); song_files.close();
-                if (setup_storage.boot() && songs.boot()) { documents.boot(); board.reply("CNTRL OK"); return true; }
-                deployment.abort();
-                song_files.close(); setup_storage.boot(); songs.boot(); documents.boot();
+            card.ready = setup_filesystem.available();
+            if (card.ready && deployment.begin(uint32_t(root))) {
+                if (reload_collection(true)) { board.reply("CNTRL OK"); return true; }
+                abort_deployment();
             }
             board.reply("CNTRL ERROR deployment-begin"); return true;
         }
         if (!std::strcmp(line, "CNTRL DEPLOY ABORT")) {
-            deployment.abort(); patch_sources.release_all(); song_files.close();
-            if (setup_storage.boot() && songs.boot()) { documents.boot(); board.reply("CNTRL OK"); }
+            if (abort_deployment()) board.reply("CNTRL OK");
             else board.reply("CNTRL ERROR deployment-recovery");
             return true;
         }
         end = 0;
         if (std::sscanf(line, "CNTRL DEPLOY COMMIT %lx %lx%n", &bundle, &library, &end) == 2 && end && !line[end]) {
-            if (setup_storage.bundle_crc() == uint32_t(bundle) && songs.continuation().crc == uint32_t(library)
+            if ((!setup_storage.setups().total_setup_ram() || documents.document().valid())
+                && setup_storage.bundle_crc() == uint32_t(bundle) && songs.continuation().crc == uint32_t(library)
                 && deployment.commit()) board.reply("CNTRL OK");
             else board.reply("CNTRL ERROR deployment-commit");
             return true;
@@ -1104,11 +1116,20 @@ FLASHMEM void initialize_target() {
     randomSeed(Teensy3Clock.get() ^ ARM_DWT_CYCCNT);
     cntrl::device::heap_phase(cntrl::device::HeapPhase::setups);
     if (card.ready && !deployment.boot()) { card.ready = false; board.error("Deployment recovery required"); }
-    if (card.ready && !setup_storage.boot()) board.error("Setup bundle invalid");
+    bool setup_valid = !card.ready || (setup_storage.boot()
+        && deployment.stores_complete(setup_storage.bundle_size() != 0, true));
+    if (!setup_valid) {
+        deployment.prepare_runtime(false); card.ready = false; board.error("Setup bundle invalid");
+    }
     cntrl::device::heap_phase(cntrl::device::HeapPhase::documents);
     documents.boot();
     cntrl::device::heap_phase(cntrl::device::HeapPhase::songs);
-    if (card.ready && !songs.boot()) board.error("Song storage invalid");
+    bool songs_valid = !card.ready || songs.boot(deployment.root() == 0);
+    if (!songs_valid) board.error("Song storage invalid");
+    if (card.ready && !deployment.prepare_runtime(setup_valid && songs_valid
+            && (!setup_storage.setups().total_setup_ram() || documents.document().valid()))) {
+        card.ready = false; board.error("Deployment recovery required");
+    }
     cntrl::device::heap_phase(cntrl::device::HeapPhase::runtime);
 }
 

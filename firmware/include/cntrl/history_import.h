@@ -86,7 +86,7 @@ public:
         case Phase::existing_version:
             if (!storage_.read(1, existing_body_, block, 6)) { fail("history-import-read"); return; }
             if (!std::memcmp(block, "CNBF", 4)) {
-                if (u16(block + 4) != binary::development_format) { fail("history-import-format"); return; }
+                if (!binary::supported_format(u16(block + 4))) { fail("history-import-format"); return; }
             } else if (std::memcmp(block, "CSW1", 4) || u16(block + 4) != document_version) { phase_ = Phase::begin; return; }
             existing_offset_ = 88; existing_crc_ = 0xffffffff; phase_ = Phase::existing_payload; return;
         case Phase::existing_payload:

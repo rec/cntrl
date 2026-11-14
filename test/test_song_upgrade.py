@@ -40,19 +40,20 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     )
     library = prefix + (struct.pack('<I', len(source)) + source) * 2
     upgraded = songs.upgrade(library, {}, switches=True)
-    assert upgraded[: len(prefix)] == prefix
+    core = binary_format.core(upgraded, binary_format.Kind.songs)
+    assert core[: len(prefix)] == prefix
     expected = binary_format.wrap(
         resolved.refresh_memory(resolved.upgrade(source), {}, switches=True)
     )
     assert len(expected) > len(source)
     offset = len(prefix)
     for _ in range(2):
-        length = struct.unpack_from('<I', upgraded, offset)[0]
+        length = struct.unpack_from('<I', core, offset)[0]
         assert length == len(expected)
         offset += 4
-        assert upgraded[offset : offset + length] == expected
+        assert core[offset : offset + length] == expected
         offset += length
-    assert offset == len(upgraded)
+    assert offset == len(core)
     decoded = songs.decode(upgraded)
     assert decoded.songs[0].name == 'Saved'
     assert len(decoded.songs[0].patches) == 2
@@ -66,7 +67,11 @@ def test_empty_song_library_upgrade_preserves_its_bytes() -> None:
 
 
 def test_upgrade_rejects_truncated_embedded_sources() -> None:
-    source = songs.encode(songs.Library()) + struct.pack('<I', 10) + b'CSW1'
+    source = (
+        binary_format.core(songs.encode(songs.Library()), binary_format.Kind.songs)
+        + struct.pack('<I', 10)
+        + b'CSW1'
+    )
     with pytest.raises(ValueError, match='truncated song Patch source'):
         songs.upgrade(source, {}, switches=False)
 
@@ -87,6 +92,57 @@ def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
     upgraded = songs.upgrade(source, {}, switches=bool(target.max_switches))
     assert songs.decode(upgraded) == songs.decode(source)
     assert songs.upgrade(upgraded, {}, switches=bool(target.max_switches)) == upgraded
+
+
+def test_captured_references_follow_the_reordered_deployed_bundle() -> None:
+    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    document = {
+        'patches': {
+            'p': {
+                'type': 'control-change',
+                'output': 'din',
+                'channel': 1,
+                'controller': 7,
+                'value': 64,
+            }
+        }
+    }
+    library = songs.encode(
+        songs.Library(
+            songs=[
+                songs.Song(name='Saved', patches=[{'document': 'Zulu', 'patch': 'p'}])
+            ]
+        ),
+        target,
+        {'Zulu': document},
+    )
+    linked = songs.reindex(library, ['Aardvark', 'Zulu'])
+    assert songs.decode(linked) == songs.decode(library)
+    core = binary_format.core(linked, binary_format.Kind.songs)
+    captured = core[core.index(b'CSP5') + 8 :]
+    graph = resolved.graph_offset(captured)
+    core_source = binary_format.core(captured)
+    graph -= binary_format.core_offset(captured)
+    count = compiler.GRAPH.unpack_from(core_source, graph)[2]
+    references = [
+        graph
+        + struct.unpack_from('<I', core_source, graph + compiler.GRAPH.size + i * 4)[0]
+        for i in range(count)
+    ]
+    assert [
+        struct.unpack_from('<H', core_source, n + 4)[0]
+        for n in references
+        if core_source[n] == 6
+    ] == [1]
+    annotated = binary_format.Document(
+        kind=binary_format.Kind.songs,
+        records=[
+            *binary_format.unpack(library, binary_format.Kind.songs).records,
+            binary_format.Record(tag=399, data=b'opaque references'),
+        ],
+    ).pack()
+    with pytest.raises(ValueError, match='opaque metadata'):
+        songs.reindex(annotated, ['Aardvark', 'Zulu'])
 
 
 ROOT = Path(__file__).parents[1] / 'firmware/test'

@@ -456,7 +456,8 @@ values do not determine vertical spacing.
 
 ## Binary and transfer protocol
 
-Persistent setups now use the d44 envelope around the indexed schema-43 core.
+Persistent setups, bundles and song libraries use the d45 envelope; setups retain
+the indexed schema-45 core. d44 remains a supported development input.
 See [Persistent binary formats](../doc/binary-format.md) for its byte layout,
 development importers, editing rules, conversion and recovery commands. The
 development format is not a public f0 release. Historical versions below describe

@@ -511,7 +511,10 @@ private:
         std::ifstream stream(std::filesystem::u8path(setup),std::ios::binary);
         if (!stream) throw std::runtime_error("cannot read compiled emulator setup");
         std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(stream),{}};
-        if (bytes.size() < 40 || std::memcmp(bytes.data(),"CSTB",4)) throw std::runtime_error("emulator requires a compiled setup bundle");
+        binary::View envelope;
+        if (!binary::open(bytes.data(), unsigned(bytes.size()), binary::Kind::bundle, envelope)
+            || envelope.length < 40 || std::memcmp(bytes.data() + envelope.offset,"CSTB",4))
+            throw std::runtime_error("emulator requires a compiled setup bundle");
         if (!storage.boot() || !storage.upload_begin(unsigned(bytes.size()),checksum(bytes.data(),unsigned(bytes.size())),0)
             || !storage.upload_write(bytes.data(),unsigned(bytes.size())) || !storage.upload_finish())
             throw std::runtime_error("cannot initialize emulator session storage");

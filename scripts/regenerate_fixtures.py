@@ -9,11 +9,11 @@ from pathlib import Path
 import tyro
 from pydantic import BaseModel
 
-from cntrl.patch_switcher import compiler, models
+from cntrl.patch_switcher import compiler, models, setup_bundle, songs
 
 
 class RegenerateFixtures(BaseModel, frozen=True):
-    """Rebuild show.golden, display.golden and actions.golden."""
+    """Rebuild the shared setup, bundle and song wire fixtures."""
 
 
 def compile_switches(assignments: dict[str, object], capacity: int = 5) -> bytes:
@@ -97,6 +97,27 @@ def regenerate_fixtures() -> None:
         ]
     }
     fixtures['actions'] = compile_switches(fixture_assignments())
+    sources = {n: {'brightness': 100 + i} for i, n in enumerate(('a', 'b', 'c'))}
+    setups = {
+        n: compiler.compile_show(s, {}, [], target, documents=sources)
+        for n, s in sources.items()
+    }
+    fixtures['bundle'] = setup_bundle.build(setups, sources, target.memory).pack()
+    fixtures['songs'] = songs.encode(
+        songs.Library(
+            songs=[
+                songs.Song(
+                    name='Fixture',
+                    patches=[
+                        {'type': 'delay', 'duration': '1 ms'},
+                        {'type': 'delay', 'duration': '2 ms'},
+                    ],
+                )
+            ],
+            setlists=[songs.Setlist(name='Show', songs=['Fixture', 'Fixture'])],
+        ),
+        target,
+    )
     for name, data in fixtures.items():
         path = ROOT / f'{name}.golden'
         path.write_text(data.hex() + '\n')
