@@ -12,7 +12,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 41;
+constexpr unsigned document_version = 42;
 constexpr unsigned gesture_event_count = 12;
 constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
 constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
@@ -119,7 +119,7 @@ public:
                     || !output_valid(bytes + meta + trs_modes_offset, p, hardware)
                     || !transport_enabled(reinterpret_cast<const char *>(p), bytes[19], hardware)
                     || p[32] > 16 || p[33] > 127 || p[34] > p[35] || p[35] > 127
-                    || p[36] > 1 || p[37] > 2) return false;
+                    || p[36] > 1 || (p[37] & 3) > 2 || (p[37] >> 2) > 16) return false;
             }
             names += expression_section_size;
         }
@@ -228,7 +228,8 @@ public:
             unsigned expression = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
             for (unsigned i = 0; i < 4; ++i) {
                 const uint8_t *p = bytes + expression + i * expression_record_size;
-                if (p[32] && !output_valid(bytes + meta + trs_modes_offset, p, hardware, output_routes)) return false;
+                if (p[32] && (!output_valid(bytes + meta + trs_modes_offset, p, hardware, output_routes)
+                    || (p[37] >> 2 && !output_mask_valid(1u << ((p[37] >> 2) - 1), bytes + meta + trs_modes_offset, bytes[19], hardware)))) return false;
             }
         }
         names += 6 + endpoints * 68;
@@ -588,7 +589,8 @@ public:
             auto &a = settings.expression[i];
             std::memcpy(a.output, p, sizeof(a.output));
             a.channel = p[32]; a.controller = p[33]; a.minimum = p[34]; a.maximum = p[35];
-            a.reverse = p[36]; a.curve = ExpressionCurve(p[37]);
+            a.reverse = p[36]; a.curve = ExpressionCurve(p[37] & 3);
+            a.mirror_route = p[37] >> 2 ? (p[37] >> 2) - 1 : 255;
         }
         settings.words[PageSettings::slot1] = 120;
         if (data_[19] & 0x20) read_clock(settings, bank(patches()) + ((data_[19] & 0x80) ? expression_section_size : 0));
@@ -693,6 +695,26 @@ public:
     void page(Pane &view, unsigned index, unsigned slot, bool already_sent, const Counters *values = nullptr) const {
         unsigned page = u16(patch(index) + 76 + slot * 2);
         page_record(view, page, index, already_sent, "", values);
+    }
+    void counter_text(char *text, unsigned size, const char *source, const Counters &values) const {
+        unsigned used = 0;
+        while (*source && used + 1 < size) {
+            bool substituted = false;
+            if (!std::strncmp(source, "{counters.", 10)) {
+                const char *end = std::strchr(source + 10, '}');
+                if (end) for (unsigned i = 0; i < counters(); ++i) {
+                    const uint8_t *c = counter(i);
+                    if (std::strlen(reinterpret_cast<const char *>(c)) != unsigned(end - source - 10)
+                        || std::strncmp(reinterpret_cast<const char *>(c), source + 10, end - source - 10)) continue;
+                    char number[8];
+                    std::snprintf(number, sizeof(number), "%u", values.value(u32(data_ + 20), i, c[98]) + (c[96] >> 4 == 12));
+                    for (const char *p = number; *p && used + 1 < size; ++p) text[used++] = *p;
+                    source = end + 1; substituted = true; break;
+                }
+            }
+            if (!substituted) text[used++] = *source++;
+        }
+        if (size) text[used] = 0;
     }
     void page_record(Pane &view, unsigned page, unsigned index, bool already_sent, const char *state = "", const Counters *values = nullptr) const {
         const uint8_t *p = data_ + pages_;
@@ -840,9 +862,10 @@ private:
                 for (unsigned j = 0; j < 4; ++j) {
                     const uint8_t *e = p + 68 + j * expression_record_size;
                     if (!e[32]) continue;
-                    if (e[32] > 16 || e[33] > 127 || e[34] > e[35] || e[35] > 127 || e[36] > 1 || e[37] > 2
+                    if (e[32] > 16 || e[33] > 127 || e[34] > e[35] || e[35] > 127 || e[36] > 1 || (e[37] & 3) > 2 || (e[37] >> 2) > 16
                         || bytes[metadata + trs_modes_offset + j] != unsigned(midi::TrsMode::expression)
                         || !output_valid(bytes + metadata + trs_modes_offset, e, hardware, output_routes)) return false;
+                    if (e[37] >> 2 && !output_mask_valid(1u << ((e[37] >> 2) - 1), bytes + metadata + trs_modes_offset, bytes[19], hardware)) return false;
                 }
                 unsigned assigned = 0;
                 for (unsigned j = 0; j < p[66]; ++j) {
@@ -874,6 +897,11 @@ private:
                 break;
             case 14:
                 if (n[1] || length != 3 || u16(p) >= counter_count || p[2] > 1) return false;
+                break;
+            case 16:
+                if (n[1] || length != 37 || u16(p) >= counter_count || !text_valid(p + 2, 32)
+                    || !p[34] || p[34] > 16 || p[35] > 2 || p[36] > 1
+                    || !output_valid(bytes + metadata + trs_modes_offset, p + 2, hardware, output_routes)) return false;
                 break;
             case 7:
                 if (n[1] || length != 4 || !u32(p) || u32(p) > 65535) return false;

@@ -934,7 +934,26 @@ class PatchCompiler:
             self.children[index] = [child]
             return index
         flags = 0
-        if isinstance(value, models.ScrollCounter):
+        if isinstance(value, models.CounterMessage):
+            if value.counter not in self.counters:
+                self.errors.append(f'{path}: unknown counter {value.counter!r}')
+            if value.output not in self.target.outputs:
+                self.errors.append(f'{path}: unavailable output {value.output!r}')
+            assert value.output is not None and value.channel is not None
+            kind, payload = (
+                16,
+                struct.pack(
+                    '<H32sBBB',
+                    list(self.counters).index(value.counter)
+                    if value.counter in self.counters
+                    else 0,
+                    _text(value.output, 32, self.target, path + '.output', self.errors),
+                    value.channel,
+                    ('none', 'increase', 'decrease').index(value.change),
+                    value.wrap,
+                ),
+            )
+        elif isinstance(value, models.ScrollCounter):
             if value.counter not in self.counters:
                 self.errors.append(f'{path}: unknown counter {value.counter!r}')
             kind, payload = (
@@ -1827,7 +1846,7 @@ class PatchCompiler:
             self.paths.append(context.paths[node])
             self.labels.append(context.labels[node])
             data = bytearray(context.nodes[node])
-            if data[0] == 14:
+            if data[0] in (14, 16):
                 source_name = list(context.counters)[
                     struct.unpack_from('<H', data, 4)[0]
                 ]
@@ -2321,7 +2340,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 41
+DOCUMENT_VERSION = 42
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

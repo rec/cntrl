@@ -100,7 +100,9 @@ maximum = 127
 Use the actual jack ID from the target configuration. The jack must already
 have the `expression` TRS role in the active setup. `reverse` and `curve` work
 as in `page_settings.expression`. Calibration and input filtering are shared
-with the existing expression subsystem. A map owns all expression assignments;
+with the existing expression subsystem. Set `mirror_output` to a second enabled
+MIDI output to send each expression value there as well as to `output`.
+A map owns all expression assignments;
 unassigned pedals are inactive until another map or the normal setup restores
 their assignments.
 

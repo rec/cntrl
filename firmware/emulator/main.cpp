@@ -246,7 +246,18 @@ public:
     auto &runtime_midi_files() { return *files; }
     auto &runtime_pages() { return host->pages_; }
     unsigned midi_source_count() const { return unsigned(incoming.size()); }
-    void midi_switch_tick(uint32_t now) { switches->tick(now); }
+    void midi_switch_tick(uint32_t now) {
+        switches->tick(now, uint32_t(app->held));
+        if (switches->revision() == binding_revision) return;
+        binding_revision = switches->revision();
+        if (switches->performance()) {
+            app->bindings_enter();
+            ExpressionAssignment assignments[4];
+            for (unsigned i = 0; i < 4; ++i) assignments[i] = switches->expression(i);
+            expression->configure(assignments, midi_outputs());
+        } else if (documents->document().valid()) expression->configure(documents->document().page_settings().expression, midi_outputs());
+    }
+    unsigned binding_revision = 0;
     void midi_flush() {}
     bool midi_read_event(unsigned source,midi::InputEvent &event) {
         if (incoming[source].empty()) return false;

@@ -15,9 +15,9 @@ def current_setup() -> bytes:
     return bytes.fromhex((ROOT / 'show.golden').read_text())
 
 
-@pytest.mark.parametrize('version', [36, 38, 39, 40])
+@pytest.mark.parametrize('version', [36, 38, 39, 40, 41])
 def test_historical_setup_preserves_graph_assets_and_page_order(version: int) -> None:
-    # Actual outputs from a6916c8^, 1c8dd6b, c502794 and48fafdf respectively.
+    # Actual outputs from a6916c8^, 1c8dd6b, c502794, 48fafdf and 32bdbab.
     original = bytes.fromhex((ROOT / f'setup{version}.golden').read_text())
     assert struct.unpack_from('<H', original, 4)[0] == version
     upgraded = resolved.upgrade(original)
@@ -295,7 +295,7 @@ def test_legacy_gestures_shifted_actions_and_bound_nodes_keep_their_references(
     assert compiler.GESTURES.unpack_from(upgraded, gesture_offset) == fields
 
 
-@pytest.mark.parametrize('version', [0, 35, 37, 42, 65535])
+@pytest.mark.parametrize('version', [0, 35, 37, compiler.DOCUMENT_VERSION + 1, 65535])
 def test_unsupported_setup_versions_are_rejected(
     current_setup: bytes, version: int
 ) -> None:

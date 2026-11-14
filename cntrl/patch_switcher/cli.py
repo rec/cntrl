@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from .. import build, flash, qualify, upload
 from ..emulator.cli import Emulate, emulate
+from ..maker.morningstar.mc import import_backup
 from . import (
     backups,
     compiler,
@@ -604,11 +605,16 @@ def main() -> None:
         | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
         | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
         | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')]
-        | Annotated[Emulate, tyro.conf.subcommand(name='emulate')],
+        | Annotated[Emulate, tyro.conf.subcommand(name='emulate')]
+        | Annotated[
+            import_backup.ImportBackup, tyro.conf.subcommand(name='import-morningstar')
+        ],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
-        if isinstance(command, Emulate):
+        if isinstance(command, import_backup.ImportBackup):
+            import_backup.run(command)
+        elif isinstance(command, Emulate):
             emulate(command, compile_to_file)
         elif isinstance(command, qualify.Qualify):
             qualify.run(command)

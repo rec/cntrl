@@ -126,6 +126,13 @@ def upgrade(data: bytes) -> bytes:
     if version == DOCUMENT_VERSION:
         export(data)
         return data
+    if version == 41:
+        # Format 42 adds a node type without changing existing records.
+        converted = bytearray(data)
+        struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
+        result = bytes(converted)
+        export(result)
+        return result
     page, gestures, shifted = _page_offsets(data)
     gesture_size = _gesture_size(version)
     shifted_size = gesture_size + 4
@@ -171,7 +178,7 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
     magic, version, _, length, ni, nc, np, flags, crc, _ = HEADER.unpack_from(data)
     if (
         magic != b'CSW1'
-        or version not in (36, 38, 39, 40, DOCUMENT_VERSION)
+        or version not in (36, 38, 39, 40, 41, DOCUMENT_VERSION)
         or flags
         & ~(
             0x1FFF
@@ -408,7 +415,9 @@ def export(data: bytes) -> str:
     pages = page_settings.unpack(data, meta + 16)
     cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
     if flags & page_settings.EXPRESSION_FLAG:
-        pages['expression'] = page_settings.unpack_expression(data, cursor, jacks)
+        pages['expression'] = page_settings.unpack_expression(
+            data, cursor, jacks, names
+        )
         cursor += page_settings.EXPRESSION.size * 4
     if flags & page_settings.CLOCK_FLAG:
         pages.update(page_settings.unpack_clock(data, cursor, names))
@@ -722,7 +731,26 @@ def _patch(
         # Export the actual program when an edit changes its catalogue identity
         # or clears an inherited setting (TOML has no null override).
     value = {k: v for k, v in properties.items() if not k.startswith('_')}
-    if kind == 14:
+    if kind == 16:
+        counter, output, channel, change, wrap = struct.unpack_from(
+            '<H32sBBB', data, cursor
+        )
+        input_offset = _sections(data)[2]
+        relay_offset = (
+            input_offset + inputs.HEADER.size + len(labels) * inputs.RECORD.size
+        )
+        names = list(
+            counters.unpack(data, relay_outputs.section_end(data, relay_offset))
+        )
+        value.update(
+            type='counter-message',
+            counter=names[counter],
+            output=output.split(b'\0')[0].decode(),
+            channel=channel,
+            change=('none', 'increase', 'decrease')[change],
+            wrap=bool(wrap),
+        )
+    elif kind == 14:
         counter, backward = struct.unpack_from('<HB', data, cursor)
         input_offset = _sections(data)[2]
         relay_offset = (
@@ -846,7 +874,10 @@ def _patch(
             labels,
         )
         bindings = page_settings.unpack_expression(
-            data, cursor + 68, midi_endpoints.ports(endpoint_records(data))
+            data,
+            cursor + 68,
+            midi_endpoints.ports(endpoint_records(data)),
+            {e.route: e.name for e in endpoint_records(data)},
         )
         original = cast(dict[str, dict[str, object]], properties.get('bindings', {}))
         for slot in range(data[cursor + 66]):

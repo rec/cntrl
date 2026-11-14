@@ -341,6 +341,13 @@ class ScrollCounter(Presentation, frozen=True):
     direction: Literal['forward', 'backward'] = 'forward'
 
 
+class CounterMessage(ChannelMessage, frozen=True):
+    type: Literal['counter-message']
+    counter: str
+    change: Literal['none', 'increase', 'decrease'] = 'none'
+    wrap: bool = True
+
+
 class Brightness(Presentation, frozen=True):
     operation: Literal['brightness']
     value: Annotated[int, Field(strict=True, ge=0, le=255)]
@@ -533,6 +540,7 @@ ConcretePatch = (
             Discriminator(program_address),
         ]
         | ControlChange
+        | CounterMessage
         | PitchBend
         | Nrpn
         | Rpn
@@ -795,6 +803,7 @@ class NavigationSettings(BaseModel, frozen=True):
 
 class ExpressionAssignment(BaseModel, frozen=True):
     output: str
+    mirror_output: str | None = None
     channel: Annotated[int, Field(strict=True, ge=1, le=16)]
     controller: Annotated[int, Field(strict=True, ge=0, le=127)]
     minimum: Annotated[int, Field(strict=True, ge=0, le=127)] = 0

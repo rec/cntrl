@@ -105,7 +105,7 @@ def backup_pedal(
                 (directory / 'history.toml').write_bytes(
                     tomlkit.dumps({'revisions': snapshots}).encode()
                 )
-                if version in (36, 38, 39, 40, compiler.DOCUMENT_VERSION):
+                if version in (36, 38, 39, 40, 41, compiler.DOCUMENT_VERSION):
                     (folder / f'{revision.number}.toml').write_bytes(
                         resolved.export(data).encode()
                     )

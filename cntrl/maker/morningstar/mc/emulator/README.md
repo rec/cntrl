@@ -1,5 +1,7 @@
 # Morningstar emulator profiles
 
+For the saved VL70 bank, see [the import workflow](importing.md).
+
 The layouts reference `../mc.toml`; generic emulator code does not know about
 Morningstar hardware. `mc6-pro.toml` places six controls and three displays.
 `mc8-pro.toml` places eight controls and four displays and is explicitly

@@ -674,8 +674,8 @@ public:
             bridge_.configure(runtime.interface);
             cntrl::ExpressionAssignment assignments[4];
             for (unsigned i = 0; i < 4; ++i) assignments[i] = switches.expression(i);
-            expression_.controls().configure(assignments);
-        } else if (documents.document().valid()) expression_.controls().configure(documents.document().page_settings().expression);
+            expression_.controls().configure(assignments, midi_outputs());
+        } else if (documents.document().valid()) expression_.controls().configure(documents.document().page_settings().expression, midi_outputs());
     }
     unsigned binding_revision_ = 0;
     bool performance_switches_ = false;

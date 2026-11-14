@@ -19,7 +19,8 @@ struct ControlBindings {
         ExpressionAssignment result;
         std::memcpy(result.output, p, sizeof(result.output));
         result.channel = p[32]; result.controller = p[33]; result.minimum = p[34]; result.maximum = p[35];
-        result.reverse = p[36]; result.curve = ExpressionCurve(p[37]);
+        result.reverse = p[36]; result.curve = ExpressionCurve(p[37] & 3);
+        result.mirror_route = p[37] >> 2 ? (p[37] >> 2) - 1 : 255;
         return result;
     }
 };

@@ -262,7 +262,7 @@ public:
         pages_.outputs(platform_.midi_outputs());
         if (!configure_ports()) { error("Port memory unavailable"); return; }
         leave_page();
-        platform_.expression_controls().configure(settings.expression);
+        platform_.expression_controls().configure(settings.expression, platform_.midi_outputs());
         pages_.configure(settings);
         platform_.midi_bridge().clock_owner(pages_.clock_owner() | platform_.midi_file_clock_outputs());
     }

@@ -570,7 +570,9 @@ private:
                 auto &pane = panes[i % 3];
                 const unsigned row = 2 + i / 3;
                 const char *state = s.unknown ? "Unknown" : s.executor.busy() || s.queued ? "Pending" : s.record[1] ? (s.active ? "On" : "Off") : "";
-                std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", document_.input_label(s.record[0]), reinterpret_cast<const char *>(s.record + 6), state[0] ? " | " : "", state);
+                char label[64];
+                document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
+                std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", document_.input_label(s.record[0]), label, state[0] ? " | " : "", state);
             }
             ui::present(hardware_, panes, 1); dirty_ = false; return;
         }

@@ -37,6 +37,10 @@ class Emulate(BaseModel, frozen=True):
     source_root: Path = Field(default_factory=Path.cwd)
     scenario: Path | None = None
     output: Path | None = None
+    interactive: bool = Field(
+        default=False,
+        description='Open the window after replaying the optional startup scenario',
+    )
 
     @model_validator(mode='after')
     def profile_selection(self) -> Self:
@@ -164,7 +168,7 @@ def emulate(
         if command.scenario is not None:
             Scenario.load(command.scenario).run(session)
             save(session, command.output or storage / 'replay-output')
-        else:
+        if command.scenario is None or command.interactive:
             from .gui import run_window
 
             run_window(session)

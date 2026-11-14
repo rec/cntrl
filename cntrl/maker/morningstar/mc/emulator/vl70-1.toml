@@ -1,0 +1,507 @@
+fill_in_styles = false
+
+[patches.bank0]
+name = "VL70-1"
+patches = []
+
+[patches.bank0.bindings.configurable-1]
+output = "din"
+mirror_output = "usb-device"
+channel = 1
+controller = 13
+minimum = 0
+maximum = 127
+reverse = false
+curve = "linear"
+
+[patches.bank0.bindings.configurable-2]
+output = "din"
+mirror_output = "usb-device"
+channel = 1
+controller = 4
+minimum = 0
+maximum = 127
+reverse = false
+curve = "linear"
+
+[patches.bank0.bindings.a]
+name = "Flute: {counters.counter3}"
+
+[[patches.bank0.bindings.a.on.patches]]
+type = "counter-message"
+counter = "counter3"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank0.bindings.a.on.patches]]
+type = "counter-message"
+counter = "counter3"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.a.on.patches]]
+type = "counter-message"
+counter = "counter3"
+output = "din"
+channel = 2
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.a.on.patches]]
+type = "counter-message"
+counter = "counter3"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = true
+
+[patches.bank0.bindings.b]
+name = "World: {counters.counter4}"
+
+[[patches.bank0.bindings.b.on.patches]]
+type = "counter-message"
+counter = "counter4"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank0.bindings.b.on.patches]]
+type = "counter-message"
+counter = "counter4"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.b.on.patches]]
+type = "counter-message"
+counter = "counter4"
+output = "din"
+channel = 2
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.b.on.patches]]
+type = "counter-message"
+counter = "counter4"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = true
+
+[patches.bank0.bindings.c]
+name = "VL70: {counters.counter3} - {counters.counter2}"
+
+[[patches.bank0.bindings.c.on.patches]]
+operation = "next-patch-cycle"
+
+[[patches.bank0.bindings.c.on.patches]]
+operation = "activate-selection"
+
+[patches.bank0.bindings.d]
+name = "Bass {counters.counter0}"
+
+[[patches.bank0.bindings.d.on.patches]]
+type = "counter-message"
+counter = "counter0"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank0.bindings.d.on.patches]]
+type = "counter-message"
+counter = "counter0"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.d.on.patches]]
+type = "counter-message"
+counter = "counter0"
+output = "din"
+channel = 2
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.d.on.patches]]
+type = "counter-message"
+counter = "counter0"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = true
+
+[patches.bank0.bindings.e]
+name = "Sax: {counters.counter1}"
+
+[[patches.bank0.bindings.e.on.patches]]
+type = "counter-message"
+counter = "counter1"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank0.bindings.e.on.patches]]
+type = "counter-message"
+counter = "counter1"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.e.on.patches]]
+type = "counter-message"
+counter = "counter1"
+output = "din"
+channel = 2
+change = "none"
+wrap = false
+
+[[patches.bank0.bindings.e.on.patches]]
+type = "counter-message"
+counter = "counter1"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = false
+
+[patches.bank0.bindings.f]
+name = "Reeds {counters.counter2}"
+
+[[patches.bank0.bindings.f.on.patches]]
+type = "counter-message"
+counter = "counter2"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank0.bindings.f.on.patches]]
+type = "counter-message"
+counter = "counter2"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.f.on.patches]]
+type = "counter-message"
+counter = "counter2"
+output = "din"
+channel = 2
+change = "none"
+wrap = true
+
+[[patches.bank0.bindings.f.on.patches]]
+type = "counter-message"
+counter = "counter2"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = true
+
+[patches.bank1]
+name = "VL70-2"
+patches = []
+
+[patches.bank1.bindings.configurable-1]
+output = "din"
+mirror_output = "usb-device"
+channel = 1
+controller = 13
+minimum = 0
+maximum = 127
+reverse = false
+curve = "linear"
+
+[patches.bank1.bindings.configurable-2]
+output = "din"
+mirror_output = "usb-device"
+channel = 1
+controller = 4
+minimum = 0
+maximum = 127
+reverse = false
+curve = "linear"
+
+[patches.bank1.bindings.a]
+name = "Synth: {counters.counter8}"
+
+[[patches.bank1.bindings.a.on.patches]]
+type = "counter-message"
+counter = "counter8"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank1.bindings.a.on.patches]]
+type = "counter-message"
+counter = "counter8"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.a.on.patches]]
+type = "counter-message"
+counter = "counter3"
+output = "din"
+channel = 2
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.a.on.patches]]
+type = "counter-message"
+counter = "counter3"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = true
+
+[patches.bank1.bindings.b]
+name = "FX: {counters.counter9}"
+
+[[patches.bank1.bindings.b.on.patches]]
+type = "counter-message"
+counter = "counter9"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank1.bindings.b.on.patches]]
+type = "counter-message"
+counter = "counter9"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.b.on.patches]]
+type = "counter-message"
+counter = "counter4"
+output = "din"
+channel = 2
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.b.on.patches]]
+type = "counter-message"
+counter = "counter4"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = true
+
+[patches.bank1.bindings.c]
+name = "VL70: {counters.counter3} - {counters.counter2}"
+
+[[patches.bank1.bindings.c.on.patches]]
+operation = "previous-patch-cycle"
+
+[[patches.bank1.bindings.c.on.patches]]
+operation = "activate-selection"
+
+[patches.bank1.bindings.d]
+name = "Brass {counters.counter5}"
+
+[[patches.bank1.bindings.d.on.patches]]
+type = "counter-message"
+counter = "counter5"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank1.bindings.d.on.patches]]
+type = "counter-message"
+counter = "counter5"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.d.on.patches]]
+type = "counter-message"
+counter = "counter0"
+output = "din"
+channel = 2
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.d.on.patches]]
+type = "counter-message"
+counter = "counter0"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = true
+
+[patches.bank1.bindings.e]
+name = "Guitar: {counters.counter6}"
+
+[[patches.bank1.bindings.e.on.patches]]
+type = "counter-message"
+counter = "counter6"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank1.bindings.e.on.patches]]
+type = "counter-message"
+counter = "counter6"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.e.on.patches]]
+type = "counter-message"
+counter = "counter6"
+output = "din"
+channel = 2
+change = "none"
+wrap = false
+
+[[patches.bank1.bindings.e.on.patches]]
+type = "counter-message"
+counter = "counter6"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = false
+
+[patches.bank1.bindings.f]
+name = "String: {counters.counter7}"
+
+[[patches.bank1.bindings.f.on.patches]]
+type = "counter-message"
+counter = "counter7"
+output = "din"
+channel = 1
+change = "increase"
+wrap = true
+
+[[patches.bank1.bindings.f.on.patches]]
+type = "counter-message"
+counter = "counter7"
+output = "usb-device"
+channel = 1
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.f.on.patches]]
+type = "counter-message"
+counter = "counter7"
+output = "din"
+channel = 2
+change = "none"
+wrap = true
+
+[[patches.bank1.bindings.f.on.patches]]
+type = "counter-message"
+counter = "counter7"
+output = "usb-device"
+channel = 2
+change = "none"
+wrap = true
+
+[patch_cycles]
+bank0 = ["bank0"]
+bank1 = ["bank1"]
+
+[pages.performance]
+
+[trs_ports]
+configurable-1 = "expression"
+configurable-2 = "expression"
+
+[counters.counter3]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 22
+minimum = 22
+maximum = 26
+
+[counters.counter4]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 27
+minimum = 27
+maximum = 31
+
+[counters.counter0]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 6
+minimum = 6
+maximum = 10
+
+[counters.counter1]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 11
+minimum = 11
+maximum = 15
+
+[counters.counter2]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 16
+minimum = 16
+maximum = 21
+
+[counters.counter8]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 47
+minimum = 47
+maximum = 56
+
+[counters.counter9]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 57
+minimum = 57
+maximum = 64
+
+[counters.counter5]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 32
+minimum = 32
+maximum = 36
+
+[counters.counter6]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 37
+minimum = 37
+maximum = 41
+
+[counters.counter7]
+type = "program-change"
+output = "din"
+channel = 1
+initial = 42
+minimum = 42
+maximum = 46

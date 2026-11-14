@@ -1,0 +1,279 @@
+"""Import the MC6 Pro PC-scroll banks supported by the cntrl runtime."""
+
+import hashlib
+import json
+import re
+import struct
+from pathlib import Path
+from typing import Annotated
+from zlib import crc32
+
+import tomlkit
+import tyro
+from pydantic import BaseModel
+
+from ....patch_switcher import models
+
+
+class ImportBackup(BaseModel, frozen=True):
+    backup: Annotated[Path, tyro.conf.Positional]
+    bank: int
+    output: Path
+
+
+def convert(document: dict, bank: int) -> models.Setup:
+    """Convert a PC-scroll bank and the banks reached by its up/down actions."""
+    if (
+        document.get('schemaVersion'),
+        document.get('deviceModel'),
+        document.get('dumpType'),
+    ) != (1, 6, 'allBanks'):
+        raise ValueError('expected a schema-1 MC6 Pro all-banks backup')
+    data = document['data']
+    banks = {b['bankNumber']: b for b in data['bankArray']}
+    settings = data['controller_settings']['data']
+    arrangement = [b['data']['bankNum'] for b in settings['bank_arrangement']['data']]
+    channels = {
+        c['data']['channel']: c['data'] for c in settings['midi_channels']['data']
+    }
+    definitions = {
+        c['data']['index']: c['data'] for c in settings['scroll_counters']['data']
+    }
+    ports = {
+        p['data']['portNum']: p['data']['type'] for p in settings['omniports']['data']
+    }
+    if any(t not in (1, 12) for t in ports.values()):
+        raise ValueError('only expression or disabled Omniports are supported')
+    pending = [bank]
+    included: list[int] = []
+    counters: dict[str, object] = {}
+    patches: dict[str, object] = {}
+    cycles: dict[str, object] = {}
+
+    def label(text: str) -> str:
+        if re.search(r'%(?!F[0-9A-Fa-f])', text):
+            raise ValueError(f'unsupported name placeholder in {text!r}')
+        return re.sub(
+            r'%F([0-9A-Fa-f])',
+            lambda m: '{counters.counter' + str(int(m[1], 16)) + '}',
+            text,
+        )
+
+    while pending:
+        number = pending.pop(0)
+        if number in included:
+            continue
+        source = banks[number]
+        context = f'/data/bankArray/{number}'
+        if source['bankClearToggle'] or any(m['t'] for m in source['bankMsgArray']):
+            raise ValueError(
+                f'{context}: bank messages or clear-toggle are not supported yet'
+            )
+        included.append(number)
+        bindings: dict[str, object] = {}
+        for preset in source['expPresetArray']:
+            index = preset['presetNum']
+            if ports.get(index) != 1:
+                continue
+            messages = [m for m in preset['msgArray'] if m['t']]
+            if not messages:
+                continue
+            if (
+                len(messages) != 1
+                or messages[0]['t'] != 1
+                or messages[0]['a'] != 0
+                or messages[0]['tg'] != 2
+                or any(messages[0]['data'][3:])
+            ):
+                raise ValueError(
+                    f'{context}/expPresetArray/{index}: '
+                    'only one continuous CC assignment is supported'
+                )
+            message = messages[0]
+            channel = message['c']
+            if (
+                channels[channel]['sendToPort'] != 3
+                or channels[channel]['remap']
+                or channels[channel]['isMidiChannelOffset']
+            ):
+                raise ValueError(
+                    f'{context}/expPresetArray/{index}: unsupported expression routing'
+                )
+            controller, minimum, maximum = message['data'][:3]
+            bindings[f'configurable-{index + 1}'] = models.ExpressionAssignment(
+                output='din',
+                mirror_output='usb-device',
+                channel=channel,
+                controller=controller,
+                minimum=min(minimum, maximum),
+                maximum=max(minimum, maximum),
+                reverse=minimum > maximum,
+            ).model_dump(exclude_none=True)
+        for preset in source['presetArray']:
+            messages = [m for m in preset['msgArray'] if m['t']]
+            if not messages:
+                continue
+            index = preset['presetNum']
+            location = f'{context}/presetArray/{index}'
+            if index >= 6 or any(
+                preset[k] for k in ('toToggle', 'toBlink', 'toMsgScroll')
+            ):
+                raise ValueError(
+                    f'{location}: only first-page, non-toggle assignments are supported'
+                )
+            actions: list[dict[str, object]] = []
+            for message in messages:
+                pointer = f'{location}/msgArray/{message["m"]}'
+                if message['a'] != 1 or message['tg'] != 2:
+                    raise ValueError(
+                        f'{pointer}: unsupported trigger or toggle position'
+                    )
+                payload = message['data']
+                if message['t'] == 33:
+                    operation, counter = payload[0] >> 4, payload[0] & 15
+                    if operation not in (0, 1, 2):
+                        raise ValueError(
+                            f'{pointer}: unsupported PC-scroll opcode {operation}'
+                        )
+                    channel = message['c']
+                    routing = channels[channel]
+                    if (
+                        routing['sendToPort'] != 3
+                        or routing['remap']
+                        or routing['isMidiChannelOffset']
+                    ):
+                        raise ValueError(
+                            f'{pointer}: only unremapped DIN + USB routing is supported'
+                        )
+                    name = f'counter{counter}'
+                    definition = definitions[counter]
+                    counters[name] = models.Counter(
+                        type='program-change',
+                        output='din',
+                        channel=1,
+                        initial=definition['start'] + 1,
+                        minimum=definition['min'] + 1,
+                        maximum=definition['max'] + 1,
+                    ).model_dump(exclude_none=True)
+                    for output in ('din', 'usb-device'):
+                        actions.append(
+                            {
+                                'type': 'counter-message',
+                                'counter': name,
+                                'output': output,
+                                'channel': channel,
+                                'change': ('none', 'increase', 'decrease')[operation]
+                                if output == 'din'
+                                else 'none',
+                                'wrap': payload[2] == 0,
+                            }
+                        )
+                elif message['t'] in (10, 11):
+                    direction = 1 if message['t'] == 10 else -1
+                    destination = arrangement[
+                        (arrangement.index(number) + direction) % len(arrangement)
+                    ]
+                    pending.append(destination)
+                    actions.extend(
+                        [
+                            {
+                                'operation': 'next-patch-cycle'
+                                if direction > 0
+                                else 'previous-patch-cycle'
+                            },
+                            {'operation': 'activate-selection'},
+                        ]
+                    )
+                else:
+                    raise ValueError(
+                        f'{pointer}: unsupported message type {message["t"]}'
+                    )
+            bindings['abcdef'[index]] = {
+                'name': label(preset['longName'] or preset['shortName']),
+                'on': {'patches': actions},
+            }
+        key = f'bank{number}'
+        patches[key] = {
+            'name': source['bankName'] or key,
+            'patches': [],
+            'bindings': bindings,
+        }
+        cycles[key] = [key]
+    # Retain arrangement order among the reachable banks.
+    ordered = [n for n in arrangement if n in included]
+    selected = ordered.index(bank)
+    ordered = ordered[selected:] + ordered[:selected]
+    return models.Setup.model_validate(
+        {
+            'pages': {'performance': {'type': 'patch-switcher'}},
+            'fill_in_styles': False,
+            'fast_switches': True,
+            'counters': counters,
+            'trs_ports': {
+                f'configurable-{i + 1}': 'expression'
+                for i, t in ports.items()
+                if t == 1
+            },
+            'patches': patches,
+            'patch_cycles': {f'bank{n}': cycles[f'bank{n}'] for n in ordered},
+        }
+    )
+
+
+def run(command: ImportBackup) -> None:
+    content = command.backup.read_bytes()
+    setup = convert(json.loads(content), command.bank)
+    if command.output.exists() and any(command.output.iterdir()):
+        raise ValueError(f'import output directory must be empty: {command.output}')
+    command.output.mkdir(parents=True, exist_ok=True)
+    (command.output / 'setup.toml').write_text(
+        tomlkit.dumps(
+            setup.model_dump(mode='json', exclude_none=True, exclude_defaults=True)
+        )
+    )
+    report = {
+        'backup': str(command.backup.resolve()),
+        'sha256': hashlib.sha256(content).hexdigest(),
+        'selected_bank': command.bank,
+        'included_banks': list(setup.patch_cycles),
+        'scope': 'PC-scroll press assignments, continuous expression CCs '
+        'and reachable bank up/down transitions',
+        'presentation': 'cntrl switch view with live counter labels; '
+        'stock palette and enclosure UI are not reproduced',
+        'controller_settings': 'uses scroll counters, expression roles, bank '
+        'arrangement and channel routing; other global settings are not imported',
+    }
+    (command.output / 'import.toml').write_text(tomlkit.dumps(report))
+    # Virtual ADC inputs span 0..1023; these are not physical pedal calibration.
+    calibration = struct.pack('<IHH', 1, 0, 1023)
+    session = command.output / 'session' / 'cntrl'
+    session.mkdir(parents=True)
+    for jack in setup.trs_ports:
+        index = int(jack.rsplit('-', 1)[1])
+        (session / f'expression-{index}.cal').write_bytes(
+            calibration + struct.pack('<I', crc32(calibration))
+        )
+    (command.output / 'start.toml').write_text(
+        tomlkit.dumps(
+            {
+                'until': '100 milliseconds',
+                'events': [
+                    {
+                        'at': '20 milliseconds',
+                        'kind': 'button',
+                        'target': 'a',
+                        'value': 1,
+                    },
+                    {
+                        'at': '60 milliseconds',
+                        'kind': 'button',
+                        'target': 'a',
+                        'value': 0,
+                    },
+                ],
+            }
+        )
+    )
+    print(
+        f'Imported {len(setup.patch_cycles)} banks into {command.output / "setup.toml"}'
+    )
