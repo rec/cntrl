@@ -579,6 +579,19 @@ def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
     )
 
 
+def compile_to_file(command: data_files.Sources, output: Path) -> None:
+    assets: dict[str, dict[int, bytes]] = {}
+    movies: dict[int, bytes] = {}
+    bundle = compile_inputs(command, assets, movies)
+    for fonts in assets.values():
+        for key, font in fonts.items():
+            save_asset(output.parent / 'fonts' / f'{key:08x}.cfont', font)
+    for key, movie in movies.items():
+        save_asset(output.parent / 'movies' / f'{key:08x}.cnsa', movie)
+    output.write_bytes(bundle.pack())
+    report_bundle(bundle)
+
+
 def main() -> None:
     command = tyro.cli(
         Annotated[Compile, tyro.conf.subcommand(name='compile')]
@@ -594,7 +607,7 @@ def main() -> None:
     )
     try:
         if isinstance(command, Emulate):
-            emulate(command)
+            emulate(command, compile_to_file)
         elif isinstance(command, qualify.Qualify):
             qualify.run(command)
         elif isinstance(command, upload.Helper):
@@ -604,18 +617,7 @@ def main() -> None:
         elif isinstance(command, build.Build):
             build.run(command)
         elif isinstance(command, Compile):
-            assets: dict[str, dict[int, bytes]] = {}
-            movies: dict[int, bytes] = {}
-            bundle = compile_inputs(command, assets, movies)
-            for fonts in assets.values():
-                for key, font in fonts.items():
-                    save_asset(
-                        command.output.parent / 'fonts' / f'{key:08x}.cfont', font
-                    )
-            for key, movie in movies.items():
-                save_asset(command.output.parent / 'movies' / f'{key:08x}.cnsa', movie)
-            command.output.write_bytes(bundle.pack())
-            report_bundle(bundle)
+            compile_to_file(command, command.output)
         elif isinstance(command, Songs):
             songs.run(command.command)
         elif isinstance(command, SetupCLI):

@@ -28,15 +28,27 @@ compiler is required: `c++` on macOS/Linux or `cl` in a Windows developer shell.
   bindings, native viewports and exported fonts. Compile setups against that
   target. A catalogue entry alone does not supply an execution implementation.
 
-Start an interactive session with explicit layout, target, compiled CSTB setup
-bundle and mutable storage directory:
+Run commands from the source checkout with the environment activated, or prefix
+them with `uv run --no-sync`. Start a built-in controller directly from a setup
+source file using `cntrl emulate SETUP --controller PROFILE`; the command exports
+the controller target, compiles the setup and starts the native runtime.
+See the manufacturer profile guide below for the supported profile names.
+
+Generated files and saved pedal state live in `.cntrl-emulator/<profile>/` by
+default. This directory is ignored by Git. Repeated launches preserve the saved
+state. Use `--storage DIRECTORY` to select a different session, including a fresh
+one for an independent run. This changes only the emulated filesystem.
+
+For a custom controller, supply its layout and execution target explicitly.
+The positional input can be a setup source file or an already compiled CSTB
+bundle:
 
 ```sh
-uv run --no-sync cntrl emulate --layout controller-layout.toml --target target.toml --setup setup.bin --storage session --source-root .
+cntrl emulate setup.toml --layout controller-layout.toml --target target.toml
 ```
 
-The native executable and generated target/font headers are built under
-`session/.emulator-build`. Generated outputs can be recreated from the checkout
+The native executable and generated target/font headers are built under the
+session's `.emulator-build` directory. Generated outputs can be recreated from the checkout
 and execution target. The session directory supplies the emulated filesystem;
 no SD card, formatting operation or connected pedal is involved. Reopen the same
 directory to retain its saved data; choose a new directory for a fresh session.
@@ -112,7 +124,7 @@ warning). Input follows production debounce and scheduling;
 a press/release at one instant is not a debounced physical press.
 
 ```sh
-uv run --no-sync cntrl emulate --layout controller-layout.toml --target target.toml --setup setup.bin --storage replay-session --source-root . --scenario scenario.toml --output replay-results
+cntrl emulate setup.bin --layout controller-layout.toml --target target.toml --storage replay-session --scenario scenario.toml --output replay-results
 ```
 
 Replay exports a PNG for each display and an accepted-output/error trace in

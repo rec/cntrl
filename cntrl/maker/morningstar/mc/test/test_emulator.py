@@ -9,6 +9,7 @@ from cntrl.emulator.backend import bind_target
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator.profiles import adapt, export
 from cntrl.patch_switcher import compiler, data_files, models, setup_bundle
+from cntrl.patch_switcher.cli import compile_to_file
 
 
 @pytest.fixture
@@ -90,6 +91,58 @@ def test_exported_profile_keeps_font_paths_relocatable(tmp_path: Path) -> None:
 def test_unknown_profile_is_rejected(base: models.Target) -> None:
     with pytest.raises(ValueError, match='no Morningstar emulator profile'):
         adapt(base, 'other')
+
+
+@pytest.mark.parametrize('controller,count', [('mc6-pro', 6), ('mc8-pro', 8)])
+def test_short_command_compiles_a_setup_and_preserves_session_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, controller: str, count: int
+) -> None:
+    source = tmp_path / 'performance.toml'
+    source.write_text(
+        '[patch_cycles]\n'
+        'volume = [{type="control-change", output="din", channel=1, '
+        'controller=7, value=100}]\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    command = cli.Emulate(setup=source, controller=controller)
+    layout, target, setup, storage = cli.prepare(command, compile_to_file)
+    assert len(layout.controls) == len(target.buttons) == count
+    assert storage == Path('.cntrl-emulator') / controller
+    compiled = setup.read_bytes()
+    assert list(setup_bundle.unpack(compiled)) == ['performance']
+    assert all(Path(p).is_file() for p in target.font_sources.values())
+    saved = storage / 'saved-pedal-state'
+    saved.write_bytes(b'keep me')
+    _, _, second, _ = cli.prepare(command, compile_to_file)
+    assert second.read_bytes() == compiled
+    assert saved.read_bytes() == b'keep me'
+    assert source.read_text().startswith('[patch_cycles]')
+
+
+def test_custom_layout_accepts_a_compiled_bundle_and_explicit_storage(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[1]
+    target_path = export(None, 'mc6_pro', tmp_path / 'profile')
+    target = cli.load_target(target_path)
+    raw = compiler.compile_show({}, {}, [], target)
+    bundle = tmp_path / 'existing.bin'
+    bundle.write_bytes(
+        setup_bundle.build({'existing': raw}, {'existing': {}}, target.memory).pack()
+    )
+    layout, actual, setup, storage = cli.prepare(
+        cli.Emulate(
+            setup=bundle,
+            layout=root / 'emulator' / 'mc6-pro.toml',
+            target=target_path,
+            storage=tmp_path / 'saved-session',
+        ),
+        compile_to_file,
+    )
+    assert len(layout.controls) == len(actual.buttons) == 6
+    assert setup == bundle
+    assert storage == tmp_path / 'saved-session'
+    assert not (storage / '.emulator-build' / 'setup').exists()
 
 
 @pytest.mark.parametrize('controller', ['mc6_pro', 'mc8_pro'])
