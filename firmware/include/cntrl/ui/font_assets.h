@@ -1,5 +1,6 @@
 #pragma once
 #include <cntrl/document.h>
+#include <algorithm>
 #include <limits>
 #include <new>
 
@@ -90,13 +91,28 @@ struct View {
         }
         return false;
     }
-    void bounds(const char *text, int &left, int &width) const {
-        left = width = 0;
-        if (const auto *r = run(text)) { left = signed16(r + 2); width = signed16(r + 4); return; }
+    void bounds(const char *text, int &left, int &top, int &width, int &height, int origin) const {
+        left = top = width = height = 0;
+        bool first = true;
+        const auto include = [&](const uint8_t *g, int y) {
+            const unsigned w = cntrl::u16(g + 4), h = cntrl::u16(g + 6);
+            if (!w || !h) return;
+            const int t = y + origin - signed16(g + 10), bottom = t + int(h);
+            if (first) { top = t; height = int(h); first = false; }
+            else { const int end = std::max(top + height, bottom); top = std::min(top, t); height = end - top; }
+        };
+        if (const auto *r = run(text)) {
+            left = signed16(r + 2); width = signed16(r + 4);
+            const auto *p = r + 8 + cntrl::u16(r);
+            for (unsigned i = 0; i < cntrl::u16(r + 6); ++i, p += 6)
+                include(data + cntrl::u16(p) * 16, signed16(p + 4));
+            return;
+        }
         int cursor = 0, right = 0;
         for (unsigned i = 0; text[i]; ++i) {
             const auto *c = character(uint8_t(text[i])); if (!c) return;
             const auto *g = data + cntrl::u16(c + 4) * 16;
+            include(g, 0);
             int l = cursor + signed16(g + 8), r = l + cntrl::u16(g + 4);
             if (l < left) left = l;
             if (r > right) right = r;

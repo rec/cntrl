@@ -5,6 +5,8 @@ It retains the one-window tool pages, legacy layout/controls, cached Expression
 page and USB MIDI flush guard. It does not enable the bounded allocator or a
 watchdog or change the setup format. It includes the bridge fix accepting any
 unparsed MIDI byte in CIN `0xf`, rather than rejecting non-realtime bytes.
+Font bounds use one traversal of the glyphs, avoiding repeated prefix scans
+during page layout while preserving the existing measurements.
 
 The tracked build entry reconstructs baseline `d6c6d06` and the recorded UI and
 flush-guard overlays, applies `trace.patch`, and copies the pinned SDK into a

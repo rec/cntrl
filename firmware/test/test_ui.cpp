@@ -109,6 +109,8 @@ static void portable_font_bearings_and_character_advances() {
     cntrl::MemoryBuffer staged; assert(staged.resize(52)); std::memcpy(staged.data, data, 52);
     assert(font_assets::cache.begin(1)); assert(font_assets::cache.add(11, descriptor, std::move(staged))); font_assets::cache.finish(true);
     assert(fonts.glyph(255, 8, 11, "AB", 0, glyph)); assert(glyph.y == -2);
+    const auto asset_bounds = fonts.bounds(255, 8, 11, "AB");
+    assert(asset_bounds.left == 0 && asset_bounds.top == -2 && asset_bounds.width == 6 && asset_bounds.height == 2);
     const auto *active = font_assets::cache.get(11, 8);
     const unsigned budget = cntrl::memory_budget, used = cntrl::memory_used;
     cntrl::memory_budget = used;
@@ -126,6 +128,41 @@ static void portable_font_bearings_and_character_advances() {
     assert(!font_assets::cache.fits()); font_assets::cache.finish(true);
     assert(font_assets::cache.get(132, 8) && !font_assets::cache.get(11, 8));
     assert(font_assets::cache.begin(0)); font_assets::cache.finish(true); assert(cntrl::memory_used == 0);
+}
+static void font_bounds_preserve_bearings_spaces_and_shaped_offsets() {
+    std::vector<uint8_t> bytes(8 + 23 + 88 + 6);
+    std::memcpy(bytes.data(), "CFN2", 4); cntrl::put32(bytes.data() + 4, 1);
+    uint8_t *entry = bytes.data() + 8, *data = entry + 23;
+    entry[0] = 8; entry[1] = 2; entry[7] = 3; entry[9] = 1; entry[11] = 3; entry[13] = 8; entry[14] = 4;
+    cntrl::put32(entry + 15, 88); cntrl::put32(entry + 19, 6);
+    for (unsigned i = 0; i < 3; ++i) {
+        const unsigned code = i ? 64 + i : 32;
+        cntrl::put32(data + i * 16, code);
+        cntrl::put32(data + 48 + i * 8, code);
+        data[48 + i * 8 + 4] = uint8_t(i);
+        data[48 + i * 8 + 6] = uint8_t(i == 2 ? 5 : i + 2);
+    }
+    data[20] = data[22] = 2; data[24] = data[25] = 0xff; data[26] = 5;
+    data[36] = 3; data[38] = 4; data[40] = 1; data[42] = 1; cntrl::put32(data + 44, 2);
+    data[72] = 2; data[74] = 0xfe; data[75] = 0xff; data[76] = 9; data[78] = 1;
+    data[80] = 0xc3; data[81] = 0xa9; data[82] = 2;
+    data[84] = 0xfd; data[85] = 0xff; data[86] = 0xfe; data[87] = 0xff;
+    font_assets::Entry descriptor; std::memcpy(descriptor.bytes, entry, 23);
+    assert(font_assets::valid_pixels(descriptor, data));
+    const cntrl::ui::EmbeddedFont embedded{16, bytes.data(), unsigned(bytes.size())};
+    const cntrl::ui::AssetFonts fonts(&embedded, 1);
+    const auto check = [&](const char *text, int left, int top, int width, int height) {
+        const auto b = fonts.bounds(16, 8, 0, text);
+        assert(b.left == left && b.top == top && b.width == width && b.height == height);
+    };
+    check("AB ", -1, -1, 11, 8);
+    check(" BA", 0, -1, 10, 8);
+    check("", 0, 0, 0, 0); check("   ", 0, 0, 6, 0);
+    check("AB?", -1, -1, 0, 8);
+    check("\xc3\xa9", -2, 1, 9, 4);
+    std::string long_text;
+    for (unsigned i = 0; i < 100; ++i) long_text += "AB";
+    check(long_text.c_str(), -1, -1, 801, 8);
 }
 struct MixedDisplay final : cntrl::ui::Display {
     const cntrl::ui::Viewport views[5] = {{9, 13, 2, 0}, {17, 7, 0, 0}, {21, 11, 3, 0}, {7, 19, 0, 0}, {15, 5, 0, 0}};
@@ -314,6 +351,7 @@ int main() {
     circles_clip_before_iterating_and_do_not_overflow();
     distinct_geometries_and_reserved_windows();
     portable_font_bearings_and_character_advances();
+    font_bounds_preserve_bearings_spaces_and_shaped_offsets();
     ring_transition_preserves_hidden_columns_and_retries();
     Fonts fonts; Display display;
     uint16_t work[24 * 18] = {}, cache[24 * 18] = {}, previous[24 * 18] = {};
