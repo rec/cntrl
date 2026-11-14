@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1200" height="640" viewBox="0 0 1200 640">
+  <title>MC6 Pro front panel</title>
+  <desc>Original vector drawing based on Morningstar Engineering's front-on
+    MC6 Pro product photograph. Display openings contain live emulator pixels.</desc>
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#484c4c"/>
+      <stop offset=".025" stop-color="#252a2b"/>
+      <stop offset=".08" stop-color="#202526"/>
+      <stop offset=".85" stop-color="#24292a"/>
+      <stop offset=".97" stop-color="#202425"/>
+      <stop offset="1" stop-color="#090c0d"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4f3df"/>
+      <stop offset=".17" stop-color="#9da3a0"/>
+      <stop offset=".26" stop-color="#faf9ee"/>
+      <stop offset=".42" stop-color="#5b6463"/>
+      <stop offset=".57" stop-color="#e9ece5"/>
+      <stop offset=".75" stop-color="#737d7b"/>
+      <stop offset=".9" stop-color="#d5d8d0"/>
+      <stop offset="1" stop-color="#5b6260"/>
+    </linearGradient>
+    <linearGradient id="cap" x1="0" y1="0" x2=".7" y2="1">
+      <stop offset="0" stop-color="#cbd0c5"/>
+      <stop offset=".45" stop-color="#9da69e"/>
+      <stop offset="1" stop-color="#737e78"/>
+    </linearGradient>
+    <radialGradient id="shadow">
+      <stop offset="0" stop-color="#000" stop-opacity=".6"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grain" width="7" height="7" patternUnits="userSpaceOnUse">
+      <path d="M1 1h1 M5 3h1 M2 6h1" stroke="#d3dbd5" stroke-opacity=".055"/>
+      <path d="M4 1h1 M1 4h1 M6 6h1" stroke="#000" stroke-opacity=".15"/>
+    </pattern>
+    <g id="switch">
+      <ellipse cx="7" cy="9" rx="62" ry="53" fill="url(#shadow)"/>
+      <path d="M-24-43 25-43 49 0 24 43-25 43-49 0Z"
+            fill="url(#steel)" stroke="#aeb5ac" stroke-width="2"/>
+      <path d="M-21-37 21-37 42 0 21 37-21 37-42 0Z"
+            fill="#343c39" stroke="#d8ddd4" stroke-width="2"/>
+      <circle r="36" fill="url(#steel)" stroke="#131c19" stroke-width="2"/>
+      <circle cy="-3" r="31" fill="url(#steel)" stroke="#eceee2" stroke-width="2"/>
+      <circle cy="-5" r="27" fill="url(#cap)" stroke="#59635e" stroke-width="1.5"/>
+      <path d="M-22-19A27 27 0 0 1 17-26" fill="none" stroke="#f2f5e9"
+            stroke-opacity=".8" stroke-width="2"/>
+    </g>
+    <g id="bezel">
+      <rect x="-5" y="-5" width="240" height="194" rx="2" fill="#0c1011"
+            stroke="#41494a" stroke-width="2"/>
+      <rect x="-2" y="-2" width="234" height="188" fill="#030505"
+            stroke="#080b0c" stroke-width="2"/>
+    </g>
+  </defs>
+  <ellipse cx="600" cy="610" rx="594" ry="25" fill="url(#shadow)"/>
+  <rect x="16" y="20" width="1168" height="592" rx="8" fill="url(#body)"
+        stroke="#0a1012" stroke-width="2"/>
+  <rect x="18" y="23" width="1164" height="585" rx="6" fill="url(#grain)"/>
+  <path d="M24 23H1176" stroke="#737b7a" stroke-opacity=".4"/>
+  <path d="M21 606H1179" stroke="#030708" stroke-width="3"/>
+  <use xlink:href="#bezel" x="118" y="224"/>
+  <use xlink:href="#bezel" x="486" y="224"/>
+  <use xlink:href="#bezel" x="854" y="224"/>
+  <g fill="#c9d1cd" font-family="Arial, Helvetica, sans-serif" font-size="22">
+    <text x="180" y="130">D</text>
+    <text x="674" y="130">E</text>
+    <text x="1010" y="130">F</text>
+    <text x="180" y="505">A</text>
+    <text x="674" y="505">B</text>
+    <text x="1010" y="505">C</text>
+  </g>
+  <g fill="#cbd3cf" font-family="Arial, Helvetica, sans-serif" font-weight="bold">
+    <text x="110" y="443" font-size="34" letter-spacing="2">MORNINGSTAR</text>
+    <text x="977" y="443" font-size="30" letter-spacing="1">MC6</text>
+    <rect x="1061" y="420" width="31" height="13" rx="1"/>
+    <text x="1063" y="430" font-size="10" fill="#23292a">PRO</text>
+  </g>
+  <g stroke="#a6b3ae" stroke-width="1.5">
+    <path d="M180 536H294 M430 536H540 M660 536H775 M910 536H1025"/>
+  </g>
+  <g fill="#c4cec9" font-family="Arial, Helvetica, sans-serif" font-size="18"
+     text-anchor="middle">
+    <text x="362" y="542">BANK DOWN</text>
+    <text x="842" y="542">BANK UP</text>
+  </g>
+  <use xlink:href="#switch" x="104" y="96"/>
+  <use xlink:href="#switch" x="600" y="96"/>
+  <use xlink:href="#switch" x="1096" y="96"/>
+  <use xlink:href="#switch" x="104" y="536"/>
+  <use xlink:href="#switch" x="600" y="536"/>
+  <use xlink:href="#switch" x="1096" y="536"/>
+</svg>

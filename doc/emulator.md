@@ -21,6 +21,9 @@ compiler is required: `c++` on macOS/Linux or `cl` in a Windows developer shell.
 - An emulator layout TOML places catalogue components on a dimensionless canvas.
   It references controls and displays by their existing IDs. It does not assign
   MIDI actions or redefine native pixel resolution.
+  An optional `faceplate` image path, relative to the layout TOML, supplies the
+  enclosure artwork. It scales with the controls and live displays. With artwork,
+  buttons use a translucent pressed-state highlight over the pictured switches.
 - A cntrl execution target supplies supported application capabilities, input
   bindings, native viewports and exported fonts. Compile setups against that
   target. A catalogue entry alone does not supply an execution implementation.

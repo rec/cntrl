@@ -1,17 +1,18 @@
 catalogue = '../mc.toml'
 controller = 'mc6_pro'
-width = 100
-height = 70
+width = 1200
+height = 640
+faceplate = 'mc6-pro.svg'
 
 [controls]
-a = {x = 12, y = 54, width = 12, height = 12}
-b = {x = 44, y = 54, width = 12, height = 12}
-c = {x = 76, y = 54, width = 12, height = 12}
-d = {x = 12, y = 4, width = 12, height = 12}
-e = {x = 44, y = 4, width = 12, height = 12}
-f = {x = 76, y = 4, width = 12, height = 12}
+a = {x = 56, y = 488, width = 96, height = 96}
+b = {x = 552, y = 488, width = 96, height = 96}
+c = {x = 1048, y = 488, width = 96, height = 96}
+d = {x = 56, y = 48, width = 96, height = 96}
+e = {x = 552, y = 48, width = 96, height = 96}
+f = {x = 1048, y = 48, width = 96, height = 96}
 
 [displays]
-lcd-1 = {x = 4, y = 22, width = 28, height = 24}
-lcd-2 = {x = 36, y = 22, width = 28, height = 24}
-lcd-3 = {x = 68, y = 22, width = 28, height = 24}
+lcd-1 = {x = 118, y = 224, width = 230, height = 184}
+lcd-2 = {x = 486, y = 224, width = 230, height = 184}
+lcd-3 = {x = 854, y = 224, width = 230, height = 184}

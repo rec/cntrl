@@ -193,6 +193,43 @@ def test_frame_pixels_keep_native_aspect_ratio_and_correct_rgb565_byte_order(
     canvas.close()
 
 
+def test_faceplate_keeps_live_pixels_and_switch_feedback_aligned_when_resized(
+    application: QtWidgets.QApplication, tmp_path: Path
+) -> None:
+    artwork = tmp_path / 'faceplate.svg'
+    artwork.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'
+        '<rect width="100" height="100" fill="#243648"/></svg>'
+    )
+    session = CapturedSession()
+    session.layout = session.layout.model_copy(update={'faceplate': artwork})
+    canvas = ControllerCanvas(session, lambda message: None)
+    for width, height in [(600, 400), (400, 600)]:
+        canvas.resize(width, height)
+        image = canvas.grab().toImage()
+        switch = canvas.placement_rect(session.layout.controls['a']).center().toPoint()
+        screen = (
+            canvas.placement_rect(session.layout.displays['screen']).center().toPoint()
+        )
+        assert image.pixelColor(switch).name() == '#243648'
+        assert image.pixelColor(screen).name() == '#ff0000'
+        click(canvas, 'a', QtCore.Qt.MouseButton.RightButton)
+        assert canvas.grab().toImage().pixelColor(switch).name() != '#243648'
+        click(canvas, 'a', QtCore.Qt.MouseButton.RightButton)
+    assert session.inputs == [('a', True), ('a', False)] * 2
+    canvas.close()
+
+
+def test_unreadable_faceplate_reports_its_path(
+    application: QtWidgets.QApplication, tmp_path: Path
+) -> None:
+    session = CapturedSession()
+    path = tmp_path / 'missing.svg'
+    session.layout = session.layout.model_copy(update={'faceplate': path})
+    with pytest.raises(ValueError, match='cannot load emulator faceplate'):
+        ControllerCanvas(session, lambda message: None)
+
+
 def test_inspector_consumes_output_history_and_steps_the_same_clock(
     application: QtWidgets.QApplication,
 ) -> None:

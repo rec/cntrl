@@ -26,6 +26,15 @@ class ControllerCanvas(QtWidgets.QWidget):
         self.latched: set[str] = set()
         self.active: set[str] = set()
         self.widgets: dict[str, QtWidgets.QWidget] = {}
+        self.faceplate = (
+            QtGui.QPixmap(str(session.layout.faceplate))
+            if session.layout.faceplate is not None
+            else None
+        )
+        if self.faceplate is not None and self.faceplate.isNull():
+            raise ValueError(
+                f'cannot load emulator faceplate: {session.layout.faceplate}'
+            )
         self.setMinimumSize(400, 260)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         for c in session.controller.controls:
@@ -65,10 +74,33 @@ class ControllerCanvas(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
         painter.fillRect(self.rect(), QtGui.QColor('#17191e'))
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        if self.faceplate is not None:
+            painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform)
+            painter.drawPixmap(
+                self.placement_rect(
+                    Placement(
+                        x=0,
+                        y=0,
+                        width=self.session.layout.width,
+                        height=self.session.layout.height,
+                    )
+                ),
+                self.faceplate,
+                QtCore.QRectF(self.faceplate.rect()),
+            )
+            painter.setRenderHint(
+                QtGui.QPainter.RenderHint.SmoothPixmapTransform, False
+            )
         for c in self.session.controller.controls:
             if not isinstance(c, models.Button):
                 continue
             rectangle = self.placement_rect(self.session.layout.controls[c.id])
+            if self.faceplate is not None:
+                if c.id in self.active:
+                    painter.setBrush(QtGui.QColor(115, 199, 160, 85))
+                    painter.setPen(QtGui.QPen(QtGui.QColor('#73c7a0'), 3))
+                    painter.drawEllipse(rectangle)
+                continue
             painter.setBrush(
                 QtGui.QColor('#73c7a0' if c.id in self.active else '#535a66')
             )

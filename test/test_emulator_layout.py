@@ -17,6 +17,7 @@ def layout(tmp_path: Path) -> EmulatorLayout:
     path = tmp_path / 'layout.toml'
     path.write_text(
         "catalogue = 'catalogue.toml'\ncontroller = 'unit'\nwidth = 100\nheight = 50\n"
+        "faceplate = 'front.svg'\n"
         '[controls]\na = {x=10, y=10, width=20, height=10}\n'
         '[displays]\nlcd-1 = {x=40, y=5, width=40, height=20}\n'
     )
@@ -30,6 +31,7 @@ def test_layout_references_the_catalogue_relative_to_its_file(
     assert controller.name == 'Example controller'
     assert controller.controls[0].id == 'a'
     assert controller.displays[0].width == 20
+    assert layout.faceplate == layout.catalogue.parent / 'front.svg'
 
 
 def test_hit_testing_uses_uniform_scale_and_letterboxing(

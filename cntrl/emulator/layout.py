@@ -30,6 +30,7 @@ class EmulatorLayout(BaseModel, frozen=True):
     controller: str
     width: float = Field(gt=0, allow_inf_nan=False)
     height: float = Field(gt=0, allow_inf_nan=False)
+    faceplate: Path | None = None
     controls: dict[str, Placement] = Field(default_factory=dict)
     displays: dict[str, Placement] = Field(default_factory=dict)
     ports: list[PortPlacement] = Field(default_factory=list)
@@ -48,7 +49,12 @@ class EmulatorLayout(BaseModel, frozen=True):
     def load(cls, path: Path) -> 'EmulatorLayout':
         layout = cls.model_validate(tomlkit.loads(path.read_text()).unwrap())
         return layout.model_copy(
-            update={'catalogue': (path.parent / layout.catalogue).resolve()}
+            update={
+                'catalogue': (path.parent / layout.catalogue).resolve(),
+                'faceplate': (path.parent / layout.faceplate).resolve()
+                if layout.faceplate is not None
+                else None,
+            }
         )
 
     def hardware(self) -> models.Controller:

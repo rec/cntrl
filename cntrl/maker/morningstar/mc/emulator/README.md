@@ -9,7 +9,16 @@ the physical MC8 Pro display specifications.
 Switch rows and display placement follow the manufacturers' front-panel diagrams:
 [MC6 Pro manual](https://help.morningstar.io/en/article/mc6-pro-user-manual-psevjy/)
 and [MC8 Pro manual](https://help.morningstar.io/en/article/mc8-pro-user-manual-1yqqr1r/).
-The canvas coordinates are schematic, not measured enclosure dimensions.
+The MC6 Pro faceplate is an original SVG drawing referenced by `mc6-pro.toml`.
+Its enclosure proportions, chrome switches, recessed display bezels, lettering
+and bank markings follow the front-on photo in
+[Morningstar's product gallery](https://shop.morningstar.io/products/MC6-PRO-p531932004)
+([reference photograph](https://d2j6dbq0eux0bg.cloudfront.net/images/10246158/5342056496.jpg)).
+Coordinates align the clickable switches and live display pixels with this
+drawing; they are image coordinates, not measured enclosure dimensions.
+Pressed or latched switches gain a translucent green highlight so their state
+remains visible without replacing the metal switch drawing. The MC8 Pro layout
+remains schematic.
 
 An execution target is separate from the hardware catalogue and screen layout.
 Export a catalogue-bound virtual target from the checked-in target description.
