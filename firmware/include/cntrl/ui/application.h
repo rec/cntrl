@@ -27,7 +27,7 @@ struct ApplicationServices {
 class Application {
 public:
 #if UINTPTR_MAX == UINT32_MAX
-    static_assert(sizeof(Pages::ViewState) <= 272, "Update layout.estimate_ram for larger page state");
+    static_assert(sizeof(Pages::ViewState) <= 320, "Update layout.estimate_ram for larger page state");
     static_assert(sizeof(BankedPage) <= 1024, "Update banked.estimate_ram for larger banked page state");
 #endif
     Application(Hardware &hardware, Documents &documents, Controller &primary, PatchOutputs &outputs, PatchSources &sources,

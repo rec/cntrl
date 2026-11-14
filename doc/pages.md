@@ -4,7 +4,7 @@ A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
 `patch-switcher`, `status`, `tap-tempo`, `firmware`, `cable-test`, `panic`,
 `trs-ports`, `expression`, `clock-transport`, `clock-tempo`, `keyboard`,
-`midi-monitor`, `midi-looper`, `arpeggiator`, and `None`.
+`midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, and `None`.
 Select a region or a page in the Pages and tools menu. F and the existing
 reverse-page control cycle only the focused region. Page and region names
 contain 1 to 31 printable ASCII characters.
@@ -27,11 +27,36 @@ menu marks its region with `*`. Changing focus preserves all page selections.
 Selecting a page also focuses its region. Held gestures are cancelled when
 focus changes. Management and emergency controls remain global.
 
-When regions are omitted or empty, multi-display targets put Patch Switchers in a
+When regions are omitted or empty, multi-display targets put Patch Switchers, Banked and Pong pages in a
 `performance` region and other pages in a `tools` region, omitting empty groups.
 A single-display target uses one `main` region containing the entire catalogue.
 Omitting `pages` uses the built-in catalogue. These defaults focus the first
 physical region, usually the Patch Switcher on a multi-display target.
+
+## Pong
+
+`type = 'pong'` reserves three displays for one continuous court. Both paddles
+are controlled by players; matches end at 11 points. The serve control also
+pauses and resumes play, and starts a new match after a win. Leaving the page
+pauses the game and releases held paddle controls. Each named Pong page retains
+its own scores and positions until another setup is loaded.
+
+The previous/previous-section controls move the left paddle down/up;
+confirm/back move the right paddle down/up. Next serves or pauses, and
+next-section leaves for the next page in the region. Include another page in
+that region as an exit destination. Pong uses the existing page renderer and
+does not send MIDI.
+
+```toml
+[pages.Game]
+type = 'pong'
+
+[pages.Status]
+type = 'status'
+
+[regions.main]
+pages = ['Game', 'Status']
+```
 
 ```toml
 [layout]

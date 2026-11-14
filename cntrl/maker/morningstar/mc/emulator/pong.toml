@@ -1,0 +1,11 @@
+# cntrl emulate cntrl/maker/morningstar/mc/emulator/pong.toml --controller mc6-pro --source-root . --interactive
+fill_in_styles = false
+
+[pages.Pong]
+type = 'pong'
+
+[pages.Status]
+type = 'status'
+
+[regions.main]
+pages = ['Pong', 'Status']

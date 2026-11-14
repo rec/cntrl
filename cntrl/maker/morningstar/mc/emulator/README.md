@@ -2,6 +2,17 @@
 
 For the saved VL70 bank, see [the import workflow](importing.md).
 
+For three-screen Pong:
+
+```sh
+cntrl emulate cntrl/maker/morningstar/mc/emulator/pong.toml --controller mc6-pro --source-root . --interactive
+```
+
+D/A move the left paddle up/down; F/C move the right paddle up/down. Hold a
+button to move. B serves, pauses or resumes; E leaves for Status. F on Status
+returns to the paused game. The first player to 11 wins; B starts another match.
+The ball crosses all three displays as one continuous 480 x 128 court.
+
 The layouts reference `../mc.toml`; generic emulator code does not know about
 Morningstar hardware. `mc6-pro.toml` places six controls and three displays.
 `mc8-pro.toml` places eight controls and four displays and is explicitly

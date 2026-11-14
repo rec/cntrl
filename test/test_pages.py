@@ -30,6 +30,14 @@ def test_page_configurations_round_trip(pages: dict[str, object]) -> None:
     assert compiler.compile_show(exported, {}, [], target()) == data
 
 
+def test_pong_reserves_three_windows_and_round_trips() -> None:
+    source = {'pages': {'game': {'type': 'pong'}}, 'fill_in_styles': False}
+    data = compiler.compile_show(source, {}, [], target())
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['pages']['game']['min_windows'] == 3
+    assert compiler.compile_show(exported, {}, [], target()) == data
+
+
 def test_named_instances_and_order_survive_compilation() -> None:
     source = compiler.read_document(ROOT / 'pages.toml')
     data = compiler.compile_show(source, {}, [], target())
@@ -115,7 +123,11 @@ def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
 
 @pytest.mark.parametrize(
     'kind',
-    [t for t in layout.PAGE_TYPES if t not in ('None', 'patch-switcher', 'banked')],
+    [
+        t
+        for t in layout.PAGE_TYPES
+        if t not in ('None', 'patch-switcher', 'banked', 'pong')
+    ],
 )
 @pytest.mark.parametrize('count', [0, 1, 3])
 def test_tool_pages_always_compile_for_one_window(kind: str, count: int) -> None:

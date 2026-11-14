@@ -1111,6 +1111,7 @@ class Page(BaseModel, frozen=True):
         'midi-looper',
         'arpeggiator',
         'banked',
+        'pong',
         'None',
     ] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
@@ -1126,7 +1127,7 @@ class Page(BaseModel, frozen=True):
             if 'min_windows' in self.model_fields_set and self.min_windows:
                 raise ValueError('None must have zero minimum windows')
             object.__setattr__(self, 'min_windows', 0)
-        elif self.type == 'banked':
+        elif self.type in ('banked', 'pong'):
             object.__setattr__(self, 'min_windows', 3)
         elif self.type != 'patch-switcher':
             object.__setattr__(self, 'min_windows', 1)
@@ -1138,7 +1139,7 @@ class Page(BaseModel, frozen=True):
         return (
             available
             if self.type == 'patch-switcher'
-            else min(3 if self.type == 'banked' else 1, available)
+            else min(3 if self.type in ('banked', 'pong') else 1, available)
         )
 
     model_config = ConfigDict(extra='forbid')

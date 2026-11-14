@@ -11,6 +11,7 @@
 #include "fonts.h"
 #include "display.h"
 #include "controls.h"
+#include "pong.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -60,7 +61,7 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, confirm_firmware };
     struct ViewState {
         unsigned index = 0, jack = 0, shortcut = 0;
         Page page = Page::none;
@@ -69,6 +70,7 @@ public:
         bool port_available = false, shortcut_held = false, dirty = true, flashing = false, held = false;
         uint32_t refreshed = 0;
         char expression[3][40] = {}, looper_prompt[96] = {};
+        Pong pong;
     };
     ViewState save_view() const {
         ViewState view;
@@ -78,6 +80,7 @@ public:
         view.dirty = dirty_; view.flashing = flashing_; view.held = held_; view.refreshed = refreshed_;
         std::memcpy(view.expression,expression_lines_,sizeof(expression_lines_));
         std::memcpy(view.looper_prompt,looper_prompt,sizeof(looper_prompt));
+        view.pong = pong;
         return view;
     }
     void restore_view(const ViewState &view) {
@@ -87,8 +90,10 @@ public:
         dirty_ = view.dirty; flashing_ = view.flashing; held_ = view.held; refreshed_ = view.refreshed;
         std::memcpy(expression_lines_,view.expression,sizeof(expression_lines_));
         std::memcpy(looper_prompt,view.looper_prompt,sizeof(looper_prompt));
+        pong = view.pong;
     }
     midi::MidiArpeggiator *arpeggiator = nullptr;
+    Pong pong;
     midi::Monitor *monitor = nullptr;
     midi::MidiLooper *looper = nullptr;
     char looper_prompt[96] = {};
@@ -248,6 +253,7 @@ public:
     }
     bool due(uint32_t now) {
         using R = cntrl::PageSettings;
+        if (page_ == Page::pong) { pong.advance(now); return dirty_ || uint32_t(now - refreshed_) >= 20; }
         if (dirty_) return true;
         if (page_ == Page::midi_monitor) return uint32_t(now - refreshed_) >= midi::Monitor::refresh_ms;
         if (page_ == Page::midi_looper) return uint32_t(now - refreshed_) >= 50;
@@ -265,6 +271,7 @@ public:
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
+        if (page_ == Page::pong) { pong_view(pane, window); return pane; }
         if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
         if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
         if (page_ == Page::arpeggiator) { arpeggiator_view(pane); return pane; }
@@ -462,6 +469,33 @@ public:
         return pane;
     }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(pong_view)
+#endif
+    void pong_view(Pane &pane, unsigned window) {
+        pane.graphics.background = 0; pane.graphics.foreground = 0xffff; pane.graphics.pad = 0;
+        auto rectangle = [&](unsigned index, float x, float y, float width, float height, uint16_t color, bool stippled = false) {
+            pane.rectangles[index] = {int16_t((x - window * 160) * viewport_.width / 160), int16_t(y * viewport_.height / 128),
+                uint16_t(std::max(1, int(width * viewport_.width / 160))), uint16_t(std::max(1, int(height * viewport_.height / 128))), color, stippled};
+        };
+        rectangle(0, 7, pong.left - Pong::paddle_height / 2, 4, Pong::paddle_height, 0x07ff);
+        rectangle(1, 469, pong.right - Pong::paddle_height / 2, 4, Pong::paddle_height, 0xf81f);
+        rectangle(2, 240, Pong::top, 1, Pong::bottom - Pong::top, 0x4208, true);
+        rectangle(3, pong.x - 2, pong.y - 2, 4, 4, 0xffe0);
+        const unsigned font = settings_[cntrl::PageSettings::status_font];
+        char score[32];
+        std::snprintf(score, sizeof(score), "PLAYER %u   %u", window == 0 ? 1 : 2, window == 0 ? pong.left_score : pong.right_score);
+        line(pane, 0, window == 1 ? "PONG" : score, vertical(3), vertical(18), font, true, nullptr, 0, 0, 16);
+        pane.lines[0].graphics.foreground = window == 0 ? 0x07ff : window == 2 ? 0xf81f : 0xffff;
+        const char *hint = window == 0 ? prompt("%s Up / %s Down", controls_.previous_section, controls_.previous)
+            : window == 2 ? prompt("%s Up / %s Down", controls_.back, controls_.confirm)
+            : prompt("%s Serve/Pause  %s Exit", controls_.next, controls_.next_section);
+        line(pane, 1, hint, vertical(117), vertical(9), font, true, nullptr, 0, 0, 8);
+        if (window == 1 && pong.state != Pong::State::playing) {
+            const char *message = pong.state == Pong::State::paused ? "PAUSED" : pong.state == Pong::State::finished ? (pong.left_score == 11 ? "PLAYER 1 WINS" : "PLAYER 2 WINS") : "PRESS TO SERVE";
+            line(pane, 2, message, vertical(45), vertical(15), font, true, nullptr, 0, 0, 12);
+        }
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(arpeggiator_view)
 #endif

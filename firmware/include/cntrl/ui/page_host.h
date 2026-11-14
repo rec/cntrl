@@ -56,6 +56,15 @@ public:
     CNTRL_FLASH_ROUTINE(looper_button)
 #endif
     bool looper_button(unsigned input, bool pressed) {
+        if (pages_.page() == Pages::Page::pong) {
+            if (input == controls_.next_section) { if (pressed) browse_page(false); return true; }
+            if (input == controls_.previous_section) pages_.pong.button(Pong::Button::left_up, pressed);
+            else if (input == controls_.previous) pages_.pong.button(Pong::Button::left_down, pressed);
+            else if (input == controls_.back) pages_.pong.button(Pong::Button::right_up, pressed);
+            else if (input == controls_.confirm) pages_.pong.button(Pong::Button::right_down, pressed);
+            else if (input == controls_.next) pages_.pong.button(Pong::Button::serve, pressed);
+            pages_.revisit(); return true;
+        }
         if (auto *bank = application_.focused_bank()) {
             bank->button(input, pressed, platform_.milliseconds()); return true;
         }
@@ -232,6 +241,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_enter_page)
 #endif
     void enter_page() {
+        if (pages_.page() == Pages::Page::pong) pages_.pong.clock(platform_.milliseconds());
         expression_bank_ = nullptr;
         if (auto *bank = application_.focused_bank()) {
             if (!bank->activate(uint32_t(application_.held))) error("Banked patch memory unavailable");
@@ -260,6 +270,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_leave_page)
 #endif
     void leave_page() {
+        if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
         if (pages_.page() == Pages::Page::midi_looper && looper_files_) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; }
         if (pages_.page() == Pages::Page::midi_monitor && !other_selected(Pages::Page::midi_monitor)) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
         keyboard_.clear(); pages_.keyboard_held(false);
@@ -522,8 +533,8 @@ public:
 #endif
                 , i, region.count
             );
-                if (pages_.page() != Pages::Page::midi_monitor) content = Pages::window_view(content,i,region.count);
-                content.focused = r == application_.allocation.focus(); renderer_.show(screen,content);
+                if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong) content = Pages::window_view(content,i,region.count);
+                content.focused = r == application_.allocation.focus() && pages_.page() != Pages::Page::pong; renderer_.show(screen,content);
             }
             save_view();
           }
@@ -558,6 +569,7 @@ private:
         return false;
     }
     void cancel_focus() {
+        if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
         keyboard_.clear(); pages_.keyboard_held(false);
         application_.controller().cancel_gesture();
         if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();

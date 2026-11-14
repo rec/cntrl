@@ -12,7 +12,7 @@ namespace cntrl::ui {
 class Renderer {
 public:
 #if UINTPTR_MAX == UINT32_MAX
-    static_assert(sizeof(Pane) == 1752, "Update display.estimate_frame_ram for changed transition snapshots");
+    static_assert(sizeof(Pane) == 1800, "Update display.estimate_frame_ram for changed transition snapshots");
 #endif
     Renderer(Display &display, const Fonts &fonts, uint16_t *work, unsigned work_capacity)
         : display_(display), fonts_(fonts), raster_(fonts, work), screens_(display.count()) {
@@ -218,6 +218,7 @@ private:
         column_ = field_ = letter_ = 0;
         raster_.configure(screens_[screen].viewport, painting_.graphics); backgrounds();
         for (const auto &circle : painting_.circles) raster_.circle(circle);
+        for (const auto &r : painting_.rectangles) raster_.rectangle(r.x, r.y, r.width, r.height, r.color, r.stippled);
         raster_.toggle(painting_.toggle); rendering_ = true; incoming_screen_ = -1;
     }
 #ifdef CNTRL_FLASH_ROUTINE
