@@ -10,7 +10,7 @@ import cntrl
 from cntrl.animation import asset
 from cntrl.fonts import assets
 from cntrl.fonts.outline import Outline
-from cntrl.patch_switcher import compiler, models, resolved, setup_bundle
+from cntrl.patch_switcher import binary_format, compiler, models, resolved, setup_bundle
 
 
 class Smoke(BaseModel, frozen=True):
@@ -34,7 +34,9 @@ def run(options: Smoke) -> None:
     document = options.output / 'show.bin'
     document.write_bytes(data)
     bundle = setup_bundle.build({'show': data}, {'show': source}, target.memory).pack()
-    assert setup_bundle.unpack(bundle) == {'show': data}
+    assert {
+        n: binary_format.core(d) for n, d in setup_bundle.unpack(bundle).items()
+    } == {'show': data}
     (options.output / 'setups.bin').write_bytes(bundle)
     import tomlkit
 
