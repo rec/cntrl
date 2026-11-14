@@ -1080,9 +1080,10 @@ that 0.9.9 recognizes `16c0:0489` as Teensy, tag `14468280-Teensy`, with
 unique/run/reboot/serial capabilities. The executable SHA-256 is
 `2118d04e3bef846b6d7a6fca26e08a177e97f0458708da4a4013309d013b7246`.
 The retained capture is `build/pinned-updater-classification-20261114.toml`.
-This corrects the observed application classification. Physical upload/reset
-verification and the initial HID write failure remain open; the read-only check
-does not establish either result or explain runtime USB disappearances.
+This corrects the observed application classification. At this read-only
+checkpoint, physical upload/reset verification and the initial HID write failure
+remained open. The subsequent physical trial is recorded below; the read-only
+check alone does not establish either result or explain runtime USB disappearances.
 
 Another session installed newer RAM firmware during this investigation. The
 subsequent read-only inspection reports format 47, startup count 96, a valid heap
@@ -1097,6 +1098,71 @@ skipped and compiles an LFO setup from the relocated export without the adapter
 tree. An older frozen export's RAM accounting is incompatible with the newer
 frame-buffer model; the portable check uses a fresh export, without weakening
 the memory budget.
+
+### Pinned-uploader physical trial
+
+After the other flashing session finished, the user restarted the helper from
+the tested source. The approved `cntrl flash --skip-build` flow used the fresh
+production export `build/ci-production-current-export`, built from main through
+`3e3e31a`, retaining the newer RAM1 pool/RAM2 allocator and format-47
+implementation. Image SHA-256:
+`f47f3e49c5f31bd9342bf9b317afb5e648bd2adbe9b134e8be8ee5f7877d74cd`.
+The immutable pre-flash backup is that export's `before/` directory.
+
+TyTools 0.9.9 uploaded and reset successfully on the first attempt, returning
+status zero. Neither the initial HID write error nor the post-reset disappearance
+error occurred. Application startup advanced from 96 to 97. The flash flow
+restored and verified both setups, all 15 history revisions, assets, songs and
+`simple-setup` selection. The retained uploader transcript is
+`build/tytools099-flash-output.log`. This verifies one complete upload/reset with
+the pinned tool; it is not evidence that runtime USB stalls have the same cause.
+
+The existing `dynamic-memory-thru` fixture was then installed temporarily through
+`cntrl setup copy`, and all native MIDI trials ran through `cntrl qualify`:
+
+| Trial | Result |
+| --- | --- |
+| Serial plus paced/burst/SysEx/notes | Exact comparisons passed: 304, 304, 4099 and 396 bytes respectively. UART drops/overruns stayed zero; maximum service gap 8066 us. |
+| MIDI-only paced trial | Strict failure: extra `f0f7` precedes the otherwise complete 304-byte payload. The alignment report preserves the insertion; nothing is stripped. |
+| 20 bursts to six USB outputs | 36480 bytes submitted, 6082 DIN return bytes, maximum service gap 8164 us. No allocation failures, UART drops/overruns, quarantine or reboot. |
+| 200 bursts to six USB outputs | 364800 bytes submitted, 31018 DIN return bytes, maximum service gap 8392 us. Heap peak 675456 bytes, 32021 failed allocation attempts and 11721 dropped messages on route 0. Heap remains valid, UART drops/overruns and quarantine stay zero, and USB remains reachable. |
+| Notes after pressure and reselecting the fixture | All 396 bytes matched, including sustain and releases. |
+
+The load trials deliberately allow overload rejection and skip exact-transfer
+assertions. Their completion is recovery evidence, not lossless throughput
+qualification. Startup remains 97 throughout. This does not test preservation of
+already-held notes during exhaustion or qualify a dense processing graph.
+No runtime USB disappearance was reproduced in these bounded trials. The extra
+connection-time SysEx remains distinct from the fixed payload losses and the
+now-successful uploader reset path.
+
+Generated captures are `build/tytools099-{serial-midi,midi-only,midi-only-analysis,
+usb-stress,usb-pressure,post-pressure-notes}-20261114.toml`. Installing the fixture
+changed the compiled form of the existing setups, which the final verification
+detected. The fixture was deleted and the exact pre-test copies restored through
+`cntrl setup restore ... --preserve-memory-estimates`. Final verification against
+the flash flow's prepared `restore/` backup reports both setups identical and
+selection, history, assets and songs unchanged:
+`CNTRL READY 47 25507 aebffd80 starts=97 starts_status=ready`.
+The normal production image remains installed with `simple-setup` selected;
+there is no qualification watchdog.
+
+### Completed manual cross-platform qualification
+
+[Manual workflow 43628138697](https://github.com/rec/cntrl/actions/runs/43628138697)
+at `68dccd9` passes on Windows 2025, Ubuntu 24.04 and Intel macOS 15. Each job
+builds the production ARM export, runs the full suite, lint, typing and installed
+wheel smoke checks, then qualifies the isolated core and relocated export.
+The retained Windows and Linux logs each report 1660 tests passed with one skip;
+their portable runs report 1305 passed and 1304 passed with one skip respectively.
+
+The preceding run exposed main's shadowed banked-patch node variable, narrowing
+of the deployment store mask, and implicit fixture-size conversions. The
+separate compile-only fix names the patch node distinctly and makes the existing
+wire/API widths explicit. All 45 affected local native checks passed before the
+rerun; no warning was suppressed or data format changed. The importer dispatch,
+generator include correction and binary-envelope qualification fix also pass the
+matrix's adapter-free boundary. Workflows remain manually triggered only.
 
 ## Physical qualification procedure
 
