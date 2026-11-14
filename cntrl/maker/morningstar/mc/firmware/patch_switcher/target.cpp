@@ -662,7 +662,7 @@ public:
     unsigned midi_source_count() const { return 4; }
     cntrl::midi::MidiFiles &runtime_midi_files() { return midi_files; }
     cntrl::ui::Pages &runtime_pages() { return ui_.pages_; }
-    void midi_flush() { if (usb_configuration) usb_midi_flush_output(); }
+    void midi_flush() { cntrl::device::flush_usb_midi(); }
 #if CNTRL_SWITCHES
     void midi_switch_tick(uint32_t now) {
         switches.tick(now, uint32_t(application.held));

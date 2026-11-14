@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <usb_dev.h>
+#include <usb_midi.h>
 #include <cntrl/usb_midi_forward.h>
 #include "usb_forward_device.h"
 
@@ -15,6 +16,14 @@ bool visible = false;
 }
 
 namespace cntrl::device {
+void flush_usb_midi() {
+    // SOF calls the same SDK flush routine. Keep it out of this transfer update.
+    // Mask this IRQ: SDK helpers can re-enable the global interrupt flag.
+    const bool enabled = NVIC_IS_ENABLED(IRQ_USB1) != 0;
+    NVIC_DISABLE_IRQ(IRQ_USB1);
+    if (usb_configuration) usb_midi_flush_output();
+    if (enabled) NVIC_ENABLE_IRQ(IRQ_USB1);
+}
 void detach_usb_device() {
     NVIC_DISABLE_IRQ(IRQ_USB1);
     USB1_USBCMD &= ~USB_USBCMD_RS;
@@ -39,7 +48,7 @@ bool publish_hosted_midi(const char *name) {
     while (name[count] && count < 63) {
         product[2 + count * 2] = uint8_t(name[count]); product[3 + count * 2] = 0; ++count;
     }
-    product[0] = 2 + count * 2; product[1] = 3;
+    product[0] = uint8_t(2 + count * 2); product[1] = 3;
     visible = true;
     return true;
 }
@@ -53,6 +62,6 @@ extern "C" const uint8_t *cntrl_usb_descriptor(uint16_t value, uint16_t index, u
     const bool high = (usb_high_speed != 0) == (value == 0x0200);
     uint8_t *bytes = high ? high_speed : full_speed;
     bytes[1] = value >> 8;
-    *length = high ? high_length : full_length;
+    *length = uint16_t(high ? high_length : full_length);
     return bytes;
 }

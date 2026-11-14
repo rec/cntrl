@@ -48,6 +48,11 @@ def run(options: Tests) -> None:
 
 
 TESTS = [
+    (
+        'usb-midi-flush',
+        ['test_usb_midi_flush.cpp', 'patch_switcher/usb_forward_device.cpp'],
+        [],
+    ),
     ('bounded-heap', ['test_bounded_heap.cpp', 'patch_switcher/bounded_heap.cpp'], []),
     ('switch-gesture', ['test_switch_gesture.cpp'], []),
     ('boot-selection', ['test_boot_selection.cpp'], []),

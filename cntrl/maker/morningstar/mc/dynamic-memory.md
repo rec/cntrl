@@ -220,6 +220,47 @@ firmware build. This keeps the recorded accounting in setups, history and song
 sources, avoiding a dependency on an older host CLI when the current compiler's
 RAM estimates have changed. The default upgrade path still refreshes estimates.
 
+## USB MIDI flush overlap, 2026-11-14
+
+The pinned Teensy SDK calls `usb_midi_flush_output()` from its USB SOF interrupt.
+The board also called it from the main loop. The SDK flush updates the shared
+transfer descriptor, transmit head and available-byte count without excluding
+that interrupt. An interrupt during the main-loop flush can therefore enter the
+same update. This is a concrete overlap in the software path, but has not yet
+been established as the cause of the physical communication failures.
+
+The board now masks the USB1 interrupt around its main-loop flush and restores
+the previous mask afterward. Masking only the global interrupt flag would not
+hold across SDK helpers, which can unconditionally re-enable global interrupts.
+Other interrupts remain available during the flush.
+
+`firmware/test_usb_midi_flush.cpp` compiles the production board driver with SDK
+mocks that inject a pending SOF inside the flush. The unguarded implementation
+fails with `USB SOF interrupted the main-loop MIDI flush`; the guarded version
+passes, including initially masked IRQs and an unconfigured USB device. This
+test establishes interrupt exclusion at the SDK call boundary, not physical DMA
+or host-driver behavior. The adapter's nine native test programs pass with
+ASan/UBSan, and the Python suite passes all 1425 tests.
+
+For an isolated physical comparison, the working normal/newlib source export
+was copied to `build/usb-flush-control-source/` and only the guard's changes to
+`target.cpp`, `usb_forward_device.cpp` and `usb_forward_device.h` were applied.
+The existing pinned SDK was reused. Build through the application:
+
+```sh
+uv run --frozen --no-editable cntrl build --target-dir build/usb-flush-control-source/cntrl/maker/morningstar/mc --source-root build/usb-flush-control-source --output build/usb-flush-control-target
+```
+
+The resulting image SHA-256 is
+`5131ec97592d393d2eaa06e7ef4690a52c9ec2f9d42951e448936a18c53fce03`.
+Its linker totals are 306880 bytes of RAM1 variables, 195248 bytes of ITCM code,
+20800 bytes available for local variables, 90752 bytes of static RAM2 and
+433536 bytes available for allocation. Stack high-water remains unmeasured.
+The control image has not been flashed. The working image and verified original
+data remain on the pedal. Physical comparison must use a fresh backup and the
+`cntrl` flash, qualification and restore commands; keep the existing working
+image as the rollback.
+
 ## Physical qualification procedure
 
 Use `uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc`
