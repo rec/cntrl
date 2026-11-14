@@ -93,9 +93,9 @@ def split(directory: Path, source: str) -> None:
     };"""
     basic = (
         """#pragma once
-#include "midi_bridge.h"
-#include "checked_array.h"
-#include "checked_list.h"
+#include <cntrl/midi_bridge.h>
+#include <cntrl/checked_array.h>
+#include <cntrl/checked_list.h>
 #include <algorithm>
 #include <cstdint>
 
@@ -367,11 +367,11 @@ public:
     # State's parameter-independent records are defined in the shared header.
     advanced = (
         """#pragma once
-#include "midi_routing_types.h"
-#include "midi_file.h"
-#include "midi_stream_timeline.h"
-#include "midi_lfo.h"
-#include "numeric.h"
+#include <cntrl/midi_routing_types.h>
+#include <cntrl/midi_file.h>
+#include <cntrl/midi_stream_timeline.h>
+#include <cntrl/midi_lfo.h>
+#include <cntrl/numeric.h>
 #include <cmath>
 namespace cntrl::midi {
 class AdvancedProcessing {
@@ -385,7 +385,7 @@ public:
         + state
         + '    };\n'
         + '\n'.join(adapters + methods)
-        + '\n};\n} // namespace cntrl::midi\n#include "midi_routing.h"\n'
+        + '\n};\n} // namespace cntrl::midi\n#include <cntrl/midi_routing.h>\n'
         'namespace cntrl::midi { using Streams = Routing<AdvancedProcessing>; }\n'
     )
     # References in shared lifecycle are made dependent. Follow-up edits add

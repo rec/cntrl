@@ -33,7 +33,7 @@ From the repository root, with the non-editable project installation and
 `emulator` extra installed, use an empty output directory:
 
 ```sh
-cntrl import cntrl/maker/morningstar/mc/Morningstar_MC6PRO_All_Banks_Backup_20261021_135556.json --bank 0 --output cntrl/maker/morningstar/mc/firmware/build/vl70-1
+cntrl import --target-dir cntrl/maker/morningstar/mc -- cntrl/maker/morningstar/mc/Morningstar_MC6PRO_All_Banks_Backup_20261021_135556.json --bank 0 --output cntrl/maker/morningstar/mc/firmware/build/vl70-1
 cntrl emulate cntrl/maker/morningstar/mc/firmware/build/vl70-1/setup.toml --controller mc6-pro --storage cntrl/maker/morningstar/mc/firmware/build/vl70-1/session --source-root . --scenario cntrl/maker/morningstar/mc/firmware/build/vl70-1/start.toml --interactive
 ```
 

@@ -13,9 +13,8 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field
 
-from .. import build, flash, qualify, upload
+from .. import build, flash, importing, qualify, upload
 from ..emulator.cli import Emulate, emulate
-from ..maker.morningstar.mc import import_backup
 from . import (
     backups,
     binary_format,
@@ -628,12 +627,12 @@ def main() -> None:
         | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
         | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')]
         | Annotated[Emulate, tyro.conf.subcommand(name='emulate')]
-        | Annotated[import_backup.ImportBackup, tyro.conf.subcommand(name='import')],
+        | Annotated[importing.Import, tyro.conf.subcommand(name='import')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
-        if isinstance(command, import_backup.ImportBackup):
-            import_backup.run(command)
+        if isinstance(command, importing.Import):
+            importing.run(command)
         elif isinstance(command, Emulate):
             emulate(command, compile_to_file)
         elif isinstance(command, qualify.Qualify):

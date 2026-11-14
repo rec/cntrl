@@ -1,5 +1,7 @@
 import json
 import struct
+import subprocess
+import sys
 from pathlib import Path
 from zlib import crc32
 
@@ -90,6 +92,32 @@ def test_completely_empty_banked_patch_round_trips(tmp_path: Path) -> None:
     assert empty.bank_count == 128 and empty.page_count == 4
     assert empty.initial_bank == 127
     assert compiler.compile_show(restored, {}, [], target) == raw
+
+
+def test_selected_importer_creates_the_requested_initial_bank(tmp_path: Path) -> None:
+    output = tmp_path / 'import with spaces'
+    subprocess.run(
+        [
+            sys.executable,
+            '-m',
+            'cntrl.patch_switcher.cli',
+            'import',
+            '--target-dir',
+            str(BASE),
+            '--',
+            str(BACKUP),
+            '--bank',
+            '1',
+            '--output',
+            str(output),
+        ],
+        check=True,
+    )
+    setup = models.Setup.model_validate(
+        tomlkit.parse((output / 'setup.toml').read_text()).unwrap()
+    )
+    imported = models.Banked.model_validate(setup.patches['Banked'])
+    assert imported.initial_bank == 1 and imported.bank_count == 128
 
 
 def test_latched_switch_cannot_enter_a_banked_patch(tmp_path: Path) -> None:
