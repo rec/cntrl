@@ -229,8 +229,16 @@ unique/serial capabilities. The pinned official 0.9.9 executable recognizes
 the same application as Teensy, tag `14468280-Teensy`, with unique/run/reboot/serial
 capabilities. Its diagnostic warning about the custom `bcdDevice` value does not
 prevent that classification. This restores the application/bootloader identity
-needed for post-upload monitoring; a successful physical upload is still required
-to verify the reset path and investigate the initial HID write errors.
+needed for post-upload monitoring. After the user restarted the helper, the
+format-47 production image was uploaded through `cntrl flash --skip-build` on
+the first attempt, with uploader status zero and no HID write or disappearance
+error. Image SHA-256:
+`f47f3e49c5f31bd9342bf9b317afb5e648bd2adbe9b134e8be8ee5f7877d74cd`.
+The application returned at startup count 97, and the flow restored and verified
+both setups, all 15 history revisions, assets, songs and the original selection.
+This is one verified upload/reset trial; it does not establish the cause of
+runtime USB stalls. The capture and subsequent MIDI pressure results are recorded
+in [dynamic-memory.md](../dynamic-memory.md#pinned-uploader-physical-trial).
 
 Use `cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --updater-info
 --report PATH.toml` for a read-only comparison. It records the executable digest,
