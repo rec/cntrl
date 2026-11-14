@@ -1,6 +1,7 @@
 """Build MIDI transport instrumentation on the working normal/newlib control."""
 
 import hashlib
+import os
 import shutil
 import subprocess
 import tarfile
@@ -94,6 +95,7 @@ def run(command: Build) -> None:
     # Keep core patches isolated, but invoke the provisioned compiler in place:
     # the copied Windows compiler cannot resolve its multilib headers.
     compiler = toolchain.arm_tool(root / 'firmware', 'g++').parents[2]
+    os.environ['CNTRL_CONTROL_COMPILER'] = str(compiler)
     (
         firmware / '.tools/data/packages/teensy/hardware/avr/1.62.0/platform.local.txt'
     ).write_text(f'compiler.path={compiler.as_posix()}/\n')

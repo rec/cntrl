@@ -84,6 +84,13 @@ diff --git a/firmware/include/cntrl/midi_bridge.h b/firmware/include/cntrl/midi_
 diff --git a/cntrl/maker/morningstar/mc/toolchain.py b/cntrl/maker/morningstar/mc/toolchain.py
 --- a/cntrl/maker/morningstar/mc/toolchain.py
 +++ b/cntrl/maker/morningstar/mc/toolchain.py
+@@ -38,5 +38,4 @@
+     return executable(
+-        root
+-        / '.tools/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin'
++        Path(os.environ['CNTRL_CONTROL_COMPILER']) / 'arm/bin'
+         / f'arm-none-eabi-{name}'
+     )
 @@ -250,2 +250,3 @@
      'flex-serial-release',
 +    'serial-rx-diagnostics',

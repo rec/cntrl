@@ -9,7 +9,9 @@ The tracked build entry reconstructs baseline `d6c6d06` and the recorded UI and
 flush-guard overlays, applies `trace.patch`, and copies the pinned SDK into a
 separate source tree. A generated `platform.local.txt` invokes the original
 provisioned compiler in place because the copied Windows compiler cannot resolve
-its multilib headers. SDK core patches remain isolated in the copy. Existing
+its multilib headers. The generated toolchain's direct ARM-tool lookup uses that
+same location through `CNTRL_CONTROL_COMPILER`, set by this build entry, including
+for the boot-switch helper. SDK core patches remain isolated in the copy. Existing
 rollback SDKs and images are untouched. The
 repository must contain those commits; the manual CI workflow fetches history
 for this reason. No CI workflow is triggered by a push.
