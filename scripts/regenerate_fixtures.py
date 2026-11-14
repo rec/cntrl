@@ -1,6 +1,6 @@
 """Regenerate the shared Python/C++ setup fixtures from the repository root.
 
-Run with uv run scripts/regenerate_fixtures.py.
+Run with uv run --no-sync python -m scripts.regenerate_fixtures.
 """
 
 import sys

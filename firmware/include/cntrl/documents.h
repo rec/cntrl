@@ -527,6 +527,7 @@ private:
             || old.splash() != current.splash() || old.is_midi_interface() != current.is_midi_interface()
             || old.usb_device_midi() != current.usb_device_midi() || old.usb_host_midi() != current.usb_host_midi()
             || old.animation_color_cycle() != current.animation_color_cycle()
+            || old.frame_buffers() != current.frame_buffers() || old.use_animations() != current.use_animations()
             || old.fast_switches() != current.fast_switches()
             || old.forward_device_to_host() != current.forward_device_to_host()
             || old.page_ram2() != current.page_ram2()

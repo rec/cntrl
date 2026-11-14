@@ -1,5 +1,5 @@
 ui_fonts = ["classic", "CourierPrime", "AtkinsonNextSemiBold"]
-memory = {capacity = 400000, runtime = 240000}
+memory = {capacity = 645776, runtime = 240000}
 functions = ["stock-firmware", "usb-hid-keyboard"]
 buttons = ["A", "B", "C", "D", "E", "F"]
 default_midi_output = 'din'

@@ -48,7 +48,7 @@ def unpack(data: bytes, kind: Kind) -> Document:
     )
     if magic != MAGIC:
         raise ValueError('invalid persistent document magic')
-    if version not in (0x802C, DEVELOPMENT_FORMAT):
+    if version not in (0x802C, 0x802D, DEVELOPMENT_FORMAT):
         raise ValueError(f'unsupported persistent format {format_name(version)}')
     if actual_kind != kind:
         raise ValueError('persistent document artifact kind mismatch')
@@ -142,14 +142,14 @@ def identify(data: bytes) -> str:
 
 
 MAGIC = b'CNBF'
-DEVELOPMENT_FORMAT = 0x8000 | 45
+DEVELOPMENT_FORMAT = 0x8000 | 46
 HEADER = struct.Struct('<4sHHHHII')
 RECORD = struct.Struct('<HHI')
 CORE = 1
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096
-SETUP_VERSIONS = (36, 38, 39, 40, 41, 42, 43, 44, 45)
+SETUP_VERSIONS = (36, 38, 39, 40, 41, 42, 43, 44, 45, 46)
 ARCHIVE_KINDS = (
     (b'MThd', 'SMF'),
     (b'CFN2', 'CFN2'),

@@ -17,6 +17,20 @@ public:
              Display &display, const Fonts &fonts, Renderer &renderer, Controls controls)
         : pages_(fonts, display.viewport(display.count() - 1)), platform_(platform),
           application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) { pages_.controls(controls); pages_.monitor = &platform_.midi_monitor(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_prepare_display)
+#endif
+    bool prepare_display(const Document &document) {
+        pending_animations_ = !document.valid() || document.use_animations();
+        return renderer_.prepare(document.valid() ? document.frame_buffers() : 0, pending_animations_);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_finish_display)
+#endif
+    void finish_display(bool commit) {
+        renderer_.finish(commit);
+        if (commit) platform_.animation_session().allow(pending_animations_);
+    }
     void looper_files(midi::MidiFiles &files, midi::Sink &sink) { looper_files_ = &files; looper_sink_ = &sink; pages_.looper = &files.looper; }
     void arpeggiator(midi::MidiArpeggiator &engine) { pages_.arpeggiator = &engine; }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -154,6 +168,10 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_configure_pages)
 #endif
     void configure_pages(const cntrl::Document &document) {
+        if (!document.valid()) {
+            renderer_.prepare(0, true); renderer_.finish(true);
+            platform_.animation_session().allow(true);
+        }
         expression_bank_ = nullptr;
         keyboard_.clear(); platform_.midi_monitor().close(); monitor_unavailable_ = false;
         port_save_pending_ = management_visible_ = false;
@@ -623,6 +641,7 @@ private:
     unsigned port_save_page_ = PageLayout::max_pages;
     PixelThrob throb_;
     bool port_save_pending_ = false, splash_visible_ = false, management_visible_ = false;
+    bool pending_animations_ = true;
     int pending_patch_ = -1;
     bool brightness_feedback_ = false;
     bool monitor_unavailable_ = false;

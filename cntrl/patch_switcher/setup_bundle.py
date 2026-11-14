@@ -1,4 +1,4 @@
-"""Build the indexed setup image and its RAM2 residency plan."""
+"""Build the indexed setup image and its checked-memory residency plan."""
 
 import struct
 from functools import cached_property

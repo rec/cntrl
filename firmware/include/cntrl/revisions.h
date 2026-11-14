@@ -226,7 +226,7 @@ public:
             auto *p = buffer.data + (node - document.data()) + 4;
             p[0] = uint8_t(remap_[old]); p[1] = uint8_t(remap_[old] >> 8);
         }
-        put32(buffer.data + document.metadata() + scrolling_offset + 10, storage_.setup_names_signature());
+        put32(buffer.data + document.metadata() + scrolling_offset + 12, storage_.setup_names_signature());
         binary::seal_setup(buffer.data, document.length());
         return true;
     }

@@ -8,12 +8,21 @@ class Session {
 public:
     Session(Receiver &assets, Player &player, unsigned (*choose)(unsigned) = random_index)
         : assets_(assets), player_(player), choose_(choose) {}
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(animation_allow)
+#endif
+    void allow(bool enabled) {
+        allowed_ = enabled;
+        if (!enabled) {
+            stop(); idle_ms_ = 0; held_ = waking_gesture_ = pressed_ = false;
+        }
+    }
     void movies(const uint8_t *startup, unsigned startup_count, const uint8_t *idle, unsigned idle_count) {
         stop(); startup_ = startup; startup_count_ = startup_count;
         idle_ = idle; idle_count_ = idle_count;
     }
     void configure(bool enabled, uint32_t idle_ms, uint32_t now) {
-        stop(); pending_ = enabled && startup_count_; idle_ms_ = idle_count_ ? idle_ms : 0;
+        stop(); pending_ = allowed_ && enabled && startup_count_; idle_ms_ = allowed_ && idle_count_ ? idle_ms : 0;
         last_input_ = now; clock_started_ = true;
     }
     void stop() {
@@ -26,6 +35,7 @@ public:
     }
     bool management_allowed() const { return !waking_gesture_ && !held_; }
     bool controls(bool pressed, uint32_t now, bool perform_wake_action = false) {
+        if (!allowed_) return false;
         if (pressed && saver_) waking_gesture_ = true;
         if (!pressed) waking_gesture_ = false;
         if (pressed || pressed != pressed_) last_input_ = now;
@@ -51,6 +61,7 @@ public:
         return false; // Screensaver wake also performs the normal action.
     }
     bool poll(uint32_t now, bool ui_ready = false, bool transfer_busy = false) {
+        if (!allowed_) { if (ui_ready) first_image_ = true; return false; }
         bool busy = transfer_busy || assets_.busy();
         if (!clock_started_ || busy) {
             last_input_ = now; clock_started_ = true;
@@ -124,7 +135,7 @@ private:
     unsigned startup_count_ = 0, idle_count_ = 0;
     bool running_ = false, pending_ = false, held_ = false, redraw_ = false;
     bool saver_ = false, to_animation_ = false, clock_started_ = false;
-    bool first_image_ = false;
+    bool first_image_ = false, allowed_ = true;
     bool waking_gesture_ = false;
     bool pressed_ = false;
     Fade fade_ = Fade::none;

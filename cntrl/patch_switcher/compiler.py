@@ -678,7 +678,10 @@ def compile_show(
             for i, j in enumerate(jacks)
             if show.auxiliary_switches.get(j) == 'combined'
         ),
+        show.frame_buffers,
+        int(show.use_animations),
         sum(p.ram2_bytes for p in show.pages.values())
+        + display.estimate_frame_ram(show, target)
         + display.estimate_font_ram(screen_records, display_records, generated)
         + layout.estimate_ram(
             show.pages,
@@ -2525,8 +2528,8 @@ def _optional(value: int | None) -> int:
 
 
 HEADER = struct.Struct('<4sHHIHHHHII')
-METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 45
+METADATA = struct.Struct('<4sHHHBBHH23H4sH6BII')
+DOCUMENT_VERSION = 46
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

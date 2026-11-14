@@ -81,6 +81,29 @@ void test_independent_movie_lists(Receiver &assets, uint32_t first, uint32_t sec
     assert(!session.poll(10000, true) && choices == 3); // Empty idle is disabled.
 }
 
+void disabled_animations_block_startup_idle_and_fades(Receiver &assets, uint32_t key) {
+    Screen screen; Player player(assets, screen); Session session(assets, player);
+    uint8_t keys[4]; put32(keys, key);
+    session.movies(keys, 1, keys, 1);
+    session.allow(false);
+    session.configure(true, 1, 0);
+    for (uint32_t now : {0u, 1u, 5000u}) {
+        assert(!session.poll(now, true));
+        assert(session.brightness(192, now) == 192);
+        assert(!session.controls(true, now));
+        assert(!session.controls(false, now));
+    }
+    assert(screen.count == 0);
+    session.allow(true); session.configure(true, 1, 6000);
+    assert(session.poll(6000)); assert(screen.count == 1);
+    session.allow(false);
+    assert(session.take_redraw());
+    assert(!session.poll(6001, true));
+    assert(session.brightness(192, 6001) == 192);
+    assert(!session.controls(true, 6001));
+    assert(screen.count == 1);
+}
+
 // A logical surface wider than a transfer packet must retain its pending bytes.
 void test_bounded_async_packets() {
     struct Bytes : Source {
@@ -320,6 +343,7 @@ int main() {
     uint32_t idle_crc = ~crc_update(0xffffffff, idle.data(), unsigned(idle.size()));
     upload(receiver, idle, idle_crc);
     test_independent_movie_lists(receiver, crc, new_crc, idle_crc);
+    disabled_animations_block_startup_idle_and_fades(receiver, crc);
 
     auto two_frames = asset;
     two_frames.insert(two_frames.end(), asset.begin() + header_bytes, asset.end());

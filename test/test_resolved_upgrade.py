@@ -15,7 +15,7 @@ def current_setup() -> bytes:
     return bytes.fromhex((ROOT / 'show.golden').read_text())
 
 
-@pytest.mark.parametrize('version', [36, 38, 39, 40, 41, 42, 43, 44])
+@pytest.mark.parametrize('version', [36, 38, 39, 40, 41, 42, 43, 44, 45])
 def test_historical_setup_preserves_graph_assets_and_page_order(version: int) -> None:
     # Actual outputs from a6916c8^, 1c8dd6b, c502794, 48fafdf, 32bdbab and 109a9cb.
     original = bytes.fromhex((ROOT / f'setup{version}.golden').read_text())
@@ -30,7 +30,11 @@ def test_historical_setup_preserves_graph_assets_and_page_order(version: int) ->
         layout.section_end(original, old_page),
         layout.section_end(upgraded, new_page),
     )
-    assert upgraded[28:new_page] == original[28:old_page]
+    ni, nc, np = compiler.HEADER.unpack_from(original)[4:7]
+    settings = 76 + ni * 68 + nc * 68 + np * 82 + compiler.METADATA.size - 10
+    assert upgraded[28:settings] == original[28:settings]
+    assert upgraded[settings : settings + 2] == bytes([2, 1])
+    assert upgraded[settings + 2 : new_page] == original[settings:old_page]
     assert upgraded[new_end:] == original[old_end:]
     old_layout = layout.unpack(original, old_page)
     old_pages = old_layout['pages']
@@ -143,14 +147,9 @@ def test_memory_refresh_matches_compiler_and_changes_only_estimate_and_crc(
     stale = bytearray(compiled)
     struct.pack_into('<I', stale, address, 0)
     struct.pack_into('<I', stale, 20, crc32(stale[28:]))
-    refreshed = resolved.refresh_memory(
-        bytes(stale), {}, switches=bool(target.max_switches)
-    )
+    refreshed = resolved.refresh_memory(bytes(stale), {}, target=target)
     assert refreshed == compiled
-    assert (
-        resolved.refresh_memory(refreshed, {}, switches=bool(target.max_switches))
-        is refreshed
-    )
+    assert resolved.refresh_memory(refreshed, {}, target=target) is refreshed
 
 
 def test_historical_memory_estimate_uses_migrated_layout() -> None:
@@ -161,10 +160,8 @@ def test_historical_memory_estimate_uses_migrated_layout() -> None:
     rebuilt = compiler.compile_show(current_source, {}, [], target)
     ni, nc, np = compiler.HEADER.unpack_from(upgraded)[4:7]
     address = 76 + ni * 68 + nc * 68 + np * 82 + compiler.METADATA.size - 8
-    assert struct.unpack_from('<I', old, address)[0] == 0
-    refreshed = resolved.refresh_memory(
-        upgraded, {}, switches=bool(target.max_switches)
-    )
+    assert struct.unpack_from('<I', old, address - 2)[0] == 0
+    refreshed = resolved.refresh_memory(upgraded, {}, target=target)
     assert (
         struct.unpack_from('<I', refreshed, address)[0]
         == struct.unpack_from('<I', rebuilt, address)[0]
@@ -176,6 +173,7 @@ def test_historical_memory_estimate_uses_migrated_layout() -> None:
 
 
 def test_legacy_page_memory_allowance_survives_layout_source_normalization() -> None:
+    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
     old = bytes.fromhex((ROOT / 'setup36.golden').read_text())
     annotated = bytearray(old)
     position = old.index(b'ram2_bytes = 0') + len(b'ram2_bytes = ')
@@ -186,8 +184,8 @@ def test_legacy_page_memory_allowance_survives_layout_source_normalization() -> 
         tomlkit.parse(resolved.export(upgraded)).unwrap()
     )
     assert sum(p.ram2_bytes for p in source.pages.values()) == 7
-    baseline = resolved.refresh_memory(resolved.upgrade(old), {}, switches=True)
-    refreshed = resolved.refresh_memory(upgraded, {}, switches=True)
+    baseline = resolved.refresh_memory(resolved.upgrade(old), {}, target=target)
+    refreshed = resolved.refresh_memory(upgraded, {}, target=target)
     ni, nc, np = compiler.HEADER.unpack_from(upgraded)[4:7]
     address = 76 + ni * 68 + nc * 68 + np * 82 + compiler.METADATA.size - 8
     assert (

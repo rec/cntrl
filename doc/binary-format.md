@@ -1,6 +1,6 @@
 # Persistent binary formats
 
-The implementation is currently **development format d45**, encoded as `0x802d`.
+The implementation is currently **development format d46**, encoded as `0x802e`.
 It is not a release of f0. The high bit distinguishes development formats from
 released formats; f0 will have the numeric value zero. Change the development
 number when an incompatible development encoding is deployed or retained for use.
@@ -51,7 +51,7 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | Tag 1 | Required, first, singleton core snapshot |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
-The setup core snapshot uses the existing explicitly encoded `CSW1` schema 45,
+The setup core snapshot uses the explicitly encoded `CSW1` schema 46,
 including its indexed graph, fixed settings and retained source metadata. It is
 one record inside the authoritative document, not a separately editable cache.
 The inner body checksum and length are retained. Numeric edits update both the
@@ -133,10 +133,11 @@ to an older musical collection. Torn or corrupt uncommitted records may fall
 back to the previous complete record.
 
 `CSG5` journals and bare bundle/library cores remain development import inputs.
-d44 setup envelopes and activation records remain readable; new writes use d45.
-d45 prevents d44 firmware from silently selecting an older library after a
-new-format library save: after validating startup stores, the adapter publishes
-a d45 activation barrier before enabling ordinary runtime saves. A failed store
+d44 and d45 envelopes and activation records remain readable; new writes use d46.
+The activation barrier introduced in d45 prevents d44 firmware from silently
+selecting an older library after a new-format library save: after validating
+startup stores, the adapter publishes the current development-format activation
+barrier before enabling ordinary runtime saves. A failed store
 validation or barrier write enters recovery instead of enabling musical input.
 Setup journals use `CNST`, history uses `CREV`, and
 selection uses `CSEL`. The newest committed bundle is authoritative; raw older
@@ -145,7 +146,11 @@ competing overrides. Existing asset codecs `CFN2`,
 `CNSA` v2, Standard MIDI Files and TOML records retain their encodings. An
 envelope does not imply that firmware supports an asset's codec.
 
-Development setup importers cover 36, 38, 39, 40, 41, 42, 43, 44 and 45. Retired development
+Development setup importers cover 36, 38, 39, 40, 41, 42, 43, 44 and 45. The explicit
+upgrade path verifies supported d44, d45 and d46 envelopes and writes d46 output.
+Older setup cores acquire the display defaults of two frame buffers and enabled
+animations. Activation requires the current setup core version even when the
+outer envelope is a supported older development format. Retired development
 archives remain raw recovery material unless an importer is explicitly added.
 Unsupported or ambiguous input fails conversion; it is never relabeled as f0.
 

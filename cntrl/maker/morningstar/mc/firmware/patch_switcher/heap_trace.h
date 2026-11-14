@@ -21,8 +21,11 @@ struct HeapSnapshot {
     HeapTrace trace;
     unsigned actual_used = 0, checked_actual = 0, sdk_used = 0, sdk_growth = 0, boot_checked = 0;
     unsigned largest_free = 0, allocatable = 0, free_blocks = 0, unallocated = 0;
+    unsigned ram1_unallocated = 0, ram2_unallocated = 0;
     bool valid = false;
 };
+// Usage and capacity combine RAM2 with the reusable RAM1 display reservation.
+// SDK allocations are confined to RAM2; only checked storage can use RAM1.
 // Default snapshots read bounded counters/bitmaps. Inspecting the physical
 // block chain supplies exact largest_free and validates accounting; request
 // this only from the explicit idle diagnostic, never from performance service.

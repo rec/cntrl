@@ -6,7 +6,7 @@
 #include <cntrl/ui/display.h>
 #include <cntrl/ui/controls.h>
 namespace cntrl::target {
-inline constexpr unsigned memory_capacity = 524288;
+inline constexpr unsigned memory_capacity = 770064;
 inline constexpr unsigned memory_runtime = 294912;
 inline constexpr unsigned max_switches = 5;
 inline constexpr unsigned scan_interval_ms = 1;

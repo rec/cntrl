@@ -86,6 +86,7 @@ struct PagePlatform : Hardware {
     void displayed() {}
     void display_brightness(uint8_t) {}
     struct Animation {
+        void allow(bool) {}
         void stop() {}
         bool take_redraw() { return false; }
         bool poll(uint32_t,bool,bool) { return false; }
@@ -149,8 +150,8 @@ struct PageDisplay : cntrl::ui::Display {
 };
 static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Documents &documents, cntrl::ui::Application &app) {
     PagePlatform platform; PageFonts fonts; PageDisplay display;
-    uint16_t work[64 * 64] = {}, cache[64 * 64] = {}, previous[64 * 64] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64, cache, previous, 64 * 64);
+    uint16_t work[64 * 64] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64);
     constexpr cntrl::ui::ControlBinding bindings[] = {{0, "Previous"}, {1, "Next"}, {2, "Confirm"}};
     cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0, 1, 2, 0, 1, 2, 2, 0, 2, bindings, 3});
     cntrl::midi::OutputConnection endpoints[] = {
@@ -175,8 +176,8 @@ static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Doc
 }
 static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents &documents, cntrl::ui::Application &app) {
     PagePlatform platform; PageFonts fonts; PageDisplay display;
-    uint16_t work[64 * 64] = {}, cache[64 * 64] = {}, previous[64 * 64] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64, cache, previous, 64 * 64);
+    uint16_t work[64 * 64] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64);
     constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"},{3,"D"},{4,"E"},{5,"F"}};
     cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0,1,2,3,4,5,4,3,2,bindings,6});
     uint8_t layout[12 + 32 + 35] = {'C','P','A','G',1,1,2,0};
@@ -221,8 +222,8 @@ static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately
     VisitFile source, index, recording;
     cntrl::midi::MidiFiles files(filesystem,source,index,recording,directory,1,"/midi","/index");
     PagePlatform platform; PageFonts fonts; PageDisplay display;
-    uint16_t work[4096] = {}, cache[4096] = {}, previous[4096] = {};
-    cntrl::ui::Renderer renderer(display,fonts,work,4096,cache,previous,4096);
+    uint16_t work[4096] = {};
+    cntrl::ui::Renderer renderer(display,fonts,work,4096);
     constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"},{3,"D"},{4,"E"},{5,"F"}};
     cntrl::ui::PageHost<PagePlatform> host(platform,app,documents,display,fonts,renderer,{0,1,2,3,4,5,4,3,2,bindings,6});
     host.looper_files(files,sink);
@@ -301,8 +302,8 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
     assert(!documents.busy() && documents.select("Legacy"));
     PagePlatform platform; PageFonts fonts; PageDisplay display; display.windows = 3;
-    uint16_t work[4096] = {}, cache[3 * 4096] = {}, previous[3 * 4096] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 4096, cache, previous, 3 * 4096);
+    uint16_t work[4096] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 4096);
     constexpr cntrl::ui::ControlBinding bindings[] = {{2,"A"},{1,"B"},{0,"C"},{5,"D"},{4,"E"},{3,"F"}};
     const cntrl::ui::Controls controls{0,1,2,3,4,5,5,3,2,bindings,6};
     cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, controls);
@@ -462,8 +463,8 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         primary.activate(document); app.configure(document, hardware);
         PagePlatform platform; PageFonts fonts; PageDisplay display;
         display.windows = 3;
-        uint16_t work[4096] = {}, cache[3 * 4096] = {}, previous[3 * 4096] = {};
-        cntrl::ui::Renderer renderer(display, fonts, work, 4096, cache, previous, 3 * 4096);
+        uint16_t work[4096] = {};
+        cntrl::ui::Renderer renderer(display, fonts, work, 4096);
         cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {});
         host.configure_pages(document);
         host.select_page(5); assert(app.visible_index == 0 && app.allocation.region(0).count == 3);

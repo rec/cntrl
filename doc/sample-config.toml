@@ -8,6 +8,13 @@ foreground_brightness_limit = 0.5
 take_first_match = false
 fast_switches = true
 brightness = 192
+
+# Full-display buffers: 0 disables scrolling; 1 trades rendering work for RAM.
+frame_buffers = 2
+
+# Enable scrolling and movie playback; target_pulse remains independent.
+use_animations = true
+
 splash_movie = []
 idle_movie = []
 animation_color_cycle = false

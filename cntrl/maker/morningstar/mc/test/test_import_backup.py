@@ -76,7 +76,7 @@ def test_imported_bank_runs_counters_and_bank_transitions(
     bundle = tmp_path / 'setup.bin'
     planned = setup_bundle.build({'vl70-1': raw}, {'vl70-1': show}, target.memory)
     assert planned.prefill == [0]
-    assert resolved.refresh_memory(raw, {}, switches=True) == raw
+    assert resolved.refresh_memory(raw, {}, target=target) == raw
     bundle.write_bytes(planned.pack())
     executable = backend.build(target, tmp_path / 'native', BASE.parents[3])
     layout = EmulatorLayout.load(BASE / 'emulator' / 'mc6-pro.toml')

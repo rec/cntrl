@@ -5,13 +5,17 @@
 #include "heap_trace.h"
 #include "qualification.h"
 #include "bounded_heap.h"
+#include "target_capabilities.h"
 
 extern "C" {
 extern char _heap_start, _heap_end;
 }
 
 namespace {
-cntrl::device::BoundedHeap heap;
+cntrl::device::SharedHeap heap;
+// Two RGB565 frames plus their allocation headers. This RAM1 reservation is
+// reusable by checked MIDI/runtime storage whenever display frames release it.
+alignas(8) uint8_t frame_memory[cntrl::target::total_display_area * 4 + 16];
 cntrl::device::HeapTrace trace;
 unsigned depth = 0, boot_sdk = 0, boot_checked = 0;
 unsigned active_context = 0;
@@ -59,7 +63,7 @@ FLASHMEM unsigned chunk_bytes(const void *memory) {
 }
 FLASHMEM bool begin(_reent *context, size_t request) {
     if (!heap.capacity() && !heap.initialize(&_heap_start,
-        uintptr_t(&_heap_end) - uintptr_t(&_heap_start))) {
+        uintptr_t(&_heap_end) - uintptr_t(&_heap_start), frame_memory, sizeof(frame_memory))) {
         ++trace.failures; context->_errno = ENOMEM; return false;
     }
     ++trace.allocations;
@@ -92,7 +96,8 @@ extern "C" FLASHMEM void *__wrap__malloc_r(_reent *context, size_t size) {
     CNTRL_HEAP_QUALIFY(false, nullptr, size);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
     const bool admitted = begin(context, size);
-    void *result = admitted ? heap.allocate(size, 8, !active_context && cntrl::memory_checked_operations) : nullptr;
+    void *result = admitted ? heap.allocate(size, 8, !active_context && cntrl::memory_checked_operations,
+        !active_context && cntrl::memory_frame_operations) : nullptr;
     if (!result) context->_errno = ENOMEM;
     if (admitted) complete(result, started, size, reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
     return result;
@@ -121,7 +126,7 @@ extern "C" FLASHMEM void *__wrap__realloc_r(_reent *context, void *memory, size_
         const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
         const bool admitted = begin(context, size);
         result = admitted ? heap.allocate(size, 8, memory ? heap.checked(memory)
-            : !active_context && cntrl::memory_checked_operations) : nullptr;
+            : !active_context && cntrl::memory_checked_operations, !active_context && cntrl::memory_frame_operations) : nullptr;
         if (!result) context->_errno = ENOMEM;
         if (admitted) complete(result, started, size, reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
     }
@@ -137,7 +142,8 @@ extern "C" FLASHMEM void *__wrap__memalign_r(_reent *context, size_t alignment, 
     CNTRL_HEAP_QUALIFY(false, nullptr, size);
     const uint32_t started = timing ? ARM_DWT_CYCCNT : 0;
     const bool admitted = begin(context, size);
-    void *result = admitted ? heap.allocate(size, alignment, !active_context && cntrl::memory_checked_operations) : nullptr;
+    void *result = admitted ? heap.allocate(size, alignment, !active_context && cntrl::memory_checked_operations,
+        !active_context && cntrl::memory_frame_operations) : nullptr;
     if (!result) context->_errno = alignment && !(alignment & (alignment - 1)) ? ENOMEM : EINVAL;
     if (admitted) complete(result, started, size, reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
     return result;
@@ -173,6 +179,8 @@ FLASHMEM HeapSnapshot heap_snapshot(bool inspect_blocks) {
     if (trace.live != heap.used()
         || trace.checked > trace.live || trace.checked != memory_used) result.valid = false;
     result.unallocated = heap.capacity() - heap.used();
+    result.ram1_unallocated = heap.ram1_unallocated();
+    result.ram2_unallocated = heap.ram2_unallocated();
     result.allocatable = heap.largest_free(); result.free_blocks = heap.free_blocks();
     if (inspect_blocks && !heap.inspect(result.largest_free)) result.valid = false;
     return result;
@@ -185,7 +193,8 @@ FLASHMEM void initialize_heap_accounting(unsigned linked_capacity) {
     boot_checked = trace.checked;
     trace.sdk_peak = boot_sdk; trace.sdk_caller = 0; trace.sdk_request = 0; trace.sdk_phase = 0;
     const auto snapshot = heap_snapshot();
-    memory_budget = snapshot.valid && snapshot.sdk_used < linked_capacity ? linked_capacity - snapshot.sdk_used : 0;
+    const unsigned capacity = linked_capacity + sizeof(frame_memory);
+    memory_budget = snapshot.valid && snapshot.sdk_used < capacity ? capacity - snapshot.sdk_used : 0;
 }
 FLASHMEM void heap_fault_after(int successful_calls) { fault_after = successful_calls; }
 FLASHMEM void heap_phase(HeapPhase value) { InterruptLock lock; phase = unsigned(value); }

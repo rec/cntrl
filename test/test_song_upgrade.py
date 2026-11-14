@@ -8,9 +8,15 @@ import pytest
 from cntrl.patch_switcher import binary_format, compiler, models, resolved, songs
 
 
+@pytest.fixture
+def target() -> models.Target:
+    return models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+
+
 @pytest.mark.parametrize('version', [36, 38])
 def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     version: int,
+    target: models.Target,
 ) -> None:
     original = bytearray(bytes.fromhex((ROOT / 'setup36.golden').read_text()))
     # Formats 36 and 38 share these historical records; this setup has no looper.
@@ -39,11 +45,11 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
         + b'CSP5'
     )
     library = prefix + (struct.pack('<I', len(source)) + source) * 2
-    upgraded = songs.upgrade(library, {}, switches=True)
+    upgraded = songs.upgrade(library, {}, target=target)
     core = binary_format.core(upgraded, binary_format.Kind.songs)
     assert core[: len(prefix)] == prefix
     expected = binary_format.wrap(
-        resolved.refresh_memory(resolved.upgrade(source), {}, switches=True)
+        resolved.refresh_memory(resolved.upgrade(source), {}, target=target)
     )
     assert len(expected) > len(source)
     offset = len(prefix)
@@ -58,22 +64,22 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     assert decoded.songs[0].name == 'Saved'
     assert len(decoded.songs[0].patches) == 2
     assert decoded.setlists[0].songs == ['Saved', 'Saved']
-    assert songs.upgrade(upgraded, {}, switches=True) == upgraded
+    assert songs.upgrade(upgraded, {}, target=target) == upgraded
 
 
-def test_empty_song_library_upgrade_preserves_its_bytes() -> None:
+def test_empty_song_library_upgrade_preserves_its_bytes(target: models.Target) -> None:
     source = songs.encode(songs.Library())
-    assert songs.upgrade(source, {}, switches=False) == source
+    assert songs.upgrade(source, {}, target=target) == source
 
 
-def test_upgrade_rejects_truncated_embedded_sources() -> None:
+def test_upgrade_rejects_truncated_embedded_sources(target: models.Target) -> None:
     source = (
         binary_format.core(songs.encode(songs.Library()), binary_format.Kind.songs)
         + struct.pack('<I', 10)
         + b'CSW1'
     )
     with pytest.raises(ValueError, match='truncated song Patch source'):
-        songs.upgrade(source, {}, switches=False)
+        songs.upgrade(source, {}, target=target)
 
 
 def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
@@ -89,9 +95,9 @@ def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
         target,
     )
     assert source[source.index(b'CSP5') + 8 :].startswith(binary_format.MAGIC)
-    upgraded = songs.upgrade(source, {}, switches=bool(target.max_switches))
+    upgraded = songs.upgrade(source, {}, target=target)
     assert songs.decode(upgraded) == songs.decode(source)
-    assert songs.upgrade(upgraded, {}, switches=bool(target.max_switches)) == upgraded
+    assert songs.upgrade(upgraded, {}, target=target) == upgraded
 
 
 def test_captured_references_follow_the_reordered_deployed_bundle() -> None:

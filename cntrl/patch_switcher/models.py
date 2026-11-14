@@ -1197,6 +1197,27 @@ class Setup(BaseModel, frozen=True):
     take_first_match: Annotated[bool, Field(strict=True)] = False
     fast_switches: Annotated[bool, Field(strict=True)] = True
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
+    frame_buffers: Annotated[
+        int,
+        Field(
+            strict=True,
+            ge=0,
+            le=2,
+            description=(
+                'Full-display buffers: 0 disables scrolling; '
+                '1 trades rendering work for RAM.'
+            ),
+        ),
+    ] = 2
+    use_animations: Annotated[
+        bool,
+        Field(
+            strict=True,
+            description=(
+                'Enable scrolling and movie playback; target_pulse remains independent.'
+            ),
+        ),
+    ] = True
     scrolling: Scrolling = Field(default_factory=Scrolling)
     splash_movie: Annotated[
         list[Annotated[str, Field(strict=True, min_length=1)]],

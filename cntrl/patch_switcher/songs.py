@@ -246,7 +246,7 @@ def upgrade(
     data: bytes,
     fonts: dict[int, bytes],
     *,
-    switches: bool,
+    target: models.Target,
     preserve_memory_estimates: bool = False,
 ) -> bytes:
     """Upgrade embedded setups while preserving song and node selections."""
@@ -258,7 +258,7 @@ def upgrade(
         value = resolved.prepare_restore(
             source,
             fonts,
-            switches=switches,
+            target=target,
             preserve_memory_estimates=preserve_memory_estimates,
         )
         if not preserve_memory_estimates:

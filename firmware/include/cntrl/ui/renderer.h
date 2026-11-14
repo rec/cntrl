@@ -1,18 +1,21 @@
 #pragma once
 #include "raster.h"
 #include <cntrl/text_messages.h>
+#include <cntrl/checked_array.h>
 #include <optional>
 #include <vector>
 #include <cstdio>
 
 namespace cntrl::ui {
-// One glyph or a bounded region per poll. Pixel storage belongs to the target,
-// so memory placement does not leak into layout or rendering policy.
+// One glyph or a bounded region per poll. The target's checked allocator decides
+// where frame storage lives; DMA transfer storage remains separate.
 class Renderer {
 public:
-    Renderer(Display &display, const Fonts &fonts, uint16_t *work, unsigned work_capacity,
-             uint16_t *cache, uint16_t *previous, unsigned storage_capacity)
-        : display_(display), fonts_(fonts), raster_(fonts, work), cache_(cache), previous_(previous), screens_(display.count()) {
+#if UINTPTR_MAX == UINT32_MAX
+    static_assert(sizeof(Pane) == 1752, "Update display.estimate_frame_ram for changed transition snapshots");
+#endif
+    Renderer(Display &display, const Fonts &fonts, uint16_t *work, unsigned work_capacity)
+        : display_(display), fonts_(fonts), raster_(fonts, work), screens_(display.count()) {
         unsigned offset = 0, maximum = 0, transfer = 0;
         for (unsigned i = 0; i < display.count(); ++i) {
             const auto v = display.viewport(i); const unsigned area = v.width * v.height;
@@ -20,7 +23,45 @@ public:
             transfer = std::max(transfer, unsigned(v.height * 8 * 2));
         }
         transfer_.resize(transfer);
-        usable_ = maximum <= work_capacity && offset <= storage_capacity && !screens_.empty();
+        area_ = offset;
+        usable_ = maximum <= work_capacity && !screens_.empty();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_prepare)
+#endif
+    bool prepare(unsigned count, bool animations) {
+        finish(false);
+        if (count > 2 || !usable_) return false;
+        for (unsigned i = 0; i < count; ++i) if (!frames_[i].size) {
+            ++memory_frame_operations;
+            const bool ready = pending_frames_[i].resize(area_ * sizeof(uint16_t));
+            --memory_frame_operations;
+            if (!ready) { finish(false); return false; }
+        }
+        if (count == 1 && animations && incoming_.empty() && !pending_incoming_.resize(unsigned(screens_.size()))) {
+            finish(false); return false;
+        }
+        pending_count_ = count; pending_animations_ = animations; prepared_ = true;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_finish)
+#endif
+    void finish(bool commit) {
+        if (commit && prepared_) {
+            invalidate();
+            for (unsigned i = 0; i < 2; ++i) {
+                if (pending_frames_[i].size) frames_[i].swap(pending_frames_[i]);
+                if (i >= pending_count_) frames_[i].clear();
+            }
+            if (!pending_incoming_.empty()) incoming_.swap(pending_incoming_);
+            if (pending_count_ != 1 || !pending_animations_) incoming_.release();
+            frame_count_ = pending_count_; animations_ = pending_animations_;
+            cache_ = reinterpret_cast<uint16_t *>(frames_[0].data);
+            previous_ = frame_count_ == 2 ? reinterpret_cast<uint16_t *>(frames_[1].data) : cache_;
+        }
+        for (auto &frame : pending_frames_) frame.clear();
+        pending_incoming_.release(); prepared_ = false;
     }
     void target_brightness(uint8_t value,unsigned screen = 0) {
         requested_brightness_ = std::min(value,uint8_t(128));
@@ -76,6 +117,7 @@ public:
     }
     void invalidate() {
         drawing_ = -1; preparing_ = animating_ = false;
+        incoming_screen_ = -1;
         for (auto &screen : screens_) { screen.dirty = true; screen.valid = false; screen.ring = 0; }
         reset_scroll_ = true;
     }
@@ -98,9 +140,9 @@ public:
     }
     void transition(bool undo, std::optional<unsigned> duration, int pane = -1, unsigned reserved = 0, bool vertical = false, bool panorama = true, unsigned pane_count = 1) {
         if (message_) return;
-        if (!usable_ || preparing_ || animating_ || !display_.ready()) return;
+        if (!frame_count_ || !animations_ || !usable_ || preparing_ || animating_ || !display_.ready()) return;
         for (const auto &screen : screens_) if (!screen.valid) return;
-        for (const auto &screen : screens_) std::copy(cache_ + screen.offset, cache_ + screen.offset + screen.viewport.width * screen.viewport.height, previous_ + screen.offset);
+        if (frame_count_ == 2) for (const auto &screen : screens_) std::copy(cache_ + screen.offset, cache_ + screen.offset + screen.viewport.width * screen.viewport.height, previous_ + screen.offset);
         drawing_ = -1; undo_ = undo; selected_ = pane; reserved_ = std::min(reserved, unsigned(screens_.size())); vertical_ = vertical; panorama_ = panorama;
         selected_count_ = pane_count;
         duration_ = duration.value_or(vertical ? 200 : 75); preparing_ = true;
@@ -112,47 +154,34 @@ public:
         if (display_.failed()) { invalidate(); error("Display transfer failed"); }
         if (!display_.ready()) return;
         if (reset_scroll_) { display_.reset_scroll(); reset_scroll_ = false; }
-        if (animating_) { animate(now); return; }
+        if (preparing_ && frame_count_ == 1) {
+            for (unsigned i = 0; i < screens_.size(); ++i) { incoming_[i] = screens_[i].requested; screens_[i].dirty = false; }
+            start_animation(now); return;
+        }
+        if (animating_) {
+            if (frame_count_ == 1 && !prepare_incoming()) return;
+            animate(now); return;
+        }
         if (drawing_ < 0) {
             for (unsigned i = 0; i < screens_.size(); ++i) if (screens_[i].dirty) {
-                drawing_ = int(i); auto &screen = screens_[i]; screen.dirty = false;
-                painting_ = i == 0 && message_ ? *message_ : screen.requested; column_ = field_ = letter_ = 0;
-                raster_.configure(screen.viewport, painting_.graphics); backgrounds();
-                for (const auto &c : painting_.circles) raster_.circle(c);
-                raster_.toggle(painting_.toggle); rendering_ = true; break;
+                screens_[i].dirty = false;
+                begin_paint(i, i == 0 && message_ ? *message_ : screens_[i].requested); break;
             }
         }
         if (drawing_ < 0) {
-            if (preparing_) { preparing_ = false; animating_ = true; started_ = now; progress_ = 0; animation_screen_ = animation_column_ = 0;
-                ring_scroll_ = !vertical_; ring_step_ = false; reveal_ = settling_ = settle_anchor_ = false;
-                for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i) && (display_.scroll_columns(i) <= screens_[i].viewport.width || screens_[i].viewport.width != screens_[0].viewport.width || screens_[i].viewport.gap != screens_[0].viewport.gap)) ring_scroll_ = false; }
+            if (preparing_) start_animation(now);
             else dim();
             return;
         }
         auto &screen = screens_[unsigned(drawing_)];
-        if (rendering_) {
-            const auto &line = painting_.lines[field_];
-            if (raster_.letter(line, letter_, text_y(field_))) ++letter_;
-            else { letter_ = 0; if (++field_ == max_lines) {
-                backgrounds(true);
-                if (painting_.focused) {
-                    const auto viewport = screen.viewport;
-                    raster_.rectangle(0,0,viewport.width,1,painting_.graphics.foreground);
-                    raster_.rectangle(0,int(viewport.height) - 1,viewport.width,1,painting_.graphics.foreground);
-                    raster_.rectangle(0,0,1,viewport.height,painting_.graphics.foreground);
-                    raster_.rectangle(int(viewport.width) - 1,0,1,viewport.height,painting_.graphics.foreground);
-                }
-                raster_.corners(); rendering_ = false;
-            } }
-            return;
-        }
-        const auto v = screen.viewport; bool changed = !screen.valid;
-        for (unsigned y = 0; y < v.height; ++y) if (raster_.pixels()[y * v.width + column_] != cache_[screen.offset + y * v.width + column_]) changed = true;
+        if (rendering_) { paint_step(); return; }
+        const auto v = screen.viewport; bool changed = !screen.valid || !frame_count_;
+        if (frame_count_ && screen.valid) for (unsigned y = 0; y < v.height; ++y) if (raster_.pixels()[y * v.width + column_] != cache_[screen.offset + y * v.width + column_]) changed = true;
         if (changed && !preparing_) {
             for (unsigned y = 0; y < v.height; ++y) encode(y, dim_pixel(unsigned(drawing_), raster_.pixels()[y * v.width + column_]));
             if (!submit_column(unsigned(drawing_), column_, v.height)) return;
         }
-        for (unsigned y = 0; y < v.height; ++y) cache_[screen.offset + y * v.width + column_] = raster_.pixels()[y * v.width + column_];
+        if (frame_count_) for (unsigned y = 0; y < v.height; ++y) cache_[screen.offset + y * v.width + column_] = raster_.pixels()[y * v.width + column_];
         if (++column_ == v.width) { screen.valid = true; drawing_ = -1; }
     }
 private:
@@ -160,7 +189,12 @@ private:
     Display &display_;
     const Fonts &fonts_;
     Raster raster_;
-    uint16_t *cache_, *previous_;
+    uint16_t *cache_ = nullptr, *previous_ = nullptr;
+    MemoryBuffer frames_[2], pending_frames_[2];
+    CheckedArray<Pane> incoming_, pending_incoming_;
+    unsigned area_ = 0, frame_count_ = 0, pending_count_ = 0;
+    bool animations_ = true, pending_animations_ = true, prepared_ = false;
+    int incoming_screen_ = -1;
     std::vector<Screen> screens_;
     std::vector<uint8_t> transfer_;
     Pane painting_;
@@ -176,6 +210,69 @@ private:
     unsigned column_ = 0, field_ = 0, letter_ = 0, progress_ = 0, duration_ = 0, animation_screen_ = 0, animation_column_ = 0, dim_column_ = 0;
     uint32_t started_ = 0;
     uint8_t brightness_ = 128, requested_brightness_ = 128;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_begin_paint)
+#endif
+    void begin_paint(unsigned screen, const Pane &content) {
+        drawing_ = int(screen); painting_ = content;
+        column_ = field_ = letter_ = 0;
+        raster_.configure(screens_[screen].viewport, painting_.graphics); backgrounds();
+        for (const auto &circle : painting_.circles) raster_.circle(circle);
+        raster_.toggle(painting_.toggle); rendering_ = true; incoming_screen_ = -1;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_paint_step)
+#endif
+    void paint_step() {
+        const auto &line = painting_.lines[field_];
+        if (raster_.letter(line, letter_, text_y(field_))) ++letter_;
+        else { letter_ = 0; if (++field_ == max_lines) {
+            backgrounds(true);
+            if (painting_.focused) {
+                const auto viewport = screens_[unsigned(drawing_)].viewport;
+                raster_.rectangle(0,0,viewport.width,1,painting_.graphics.foreground);
+                raster_.rectangle(0,int(viewport.height) - 1,viewport.width,1,painting_.graphics.foreground);
+                raster_.rectangle(0,0,1,viewport.height,painting_.graphics.foreground);
+                raster_.rectangle(int(viewport.width) - 1,0,1,viewport.height,painting_.graphics.foreground);
+            }
+            raster_.corners(); rendering_ = false;
+        } }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_start_animation)
+#endif
+    void start_animation(uint32_t now) {
+        preparing_ = false; animating_ = true; started_ = now; progress_ = 0;
+        animation_screen_ = animation_column_ = 0; incoming_screen_ = -1;
+        ring_scroll_ = !vertical_; ring_step_ = false; reveal_ = settling_ = settle_anchor_ = false;
+        for (unsigned i = 0; i < screens_.size(); ++i)
+            if (moving(i) && (display_.scroll_columns(i) <= screens_[i].viewport.width
+                || screens_[i].viewport.width != screens_[0].viewport.width
+                || screens_[i].viewport.gap != screens_[0].viewport.gap)) ring_scroll_ = false;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_prepare_incoming)
+#endif
+    bool prepare_incoming() {
+        unsigned screen = animation_screen_;
+        while (screen < screens_.size() && !moving(screen)) ++screen;
+        if (screen == screens_.size()) return true;
+        if (!vertical_ && panoramic()) {
+            const unsigned first = selected_ >= 0 ? unsigned(selected_) : 0;
+            const unsigned end = selected_ >= 0 ? std::min(unsigned(screens_.size()), first + selected_count_)
+                : unsigned(screens_.size()) - reserved_;
+            screen = undo_ ? end - 1 : first;
+        }
+        if (incoming_screen_ == int(screen)) return true;
+        if (drawing_ < 0) begin_paint(screen, incoming_[screen]);
+        if (rendering_) { paint_step(); return false; }
+        incoming_screen_ = int(screen); drawing_ = -1; return true;
+    }
+    uint16_t incoming_pixel(unsigned screen, unsigned x, unsigned y) const {
+        const auto &s = screens_[screen];
+        return frame_count_ == 1 ? raster_.pixels()[y * s.viewport.width + x]
+            : cache_[s.offset + y * s.viewport.width + x];
+    }
     void encode(unsigned index, uint16_t pixel) { transfer_[2 * index] = uint8_t(pixel >> 8); transfer_[2 * index + 1] = uint8_t(pixel); }
     uint16_t dim_pixel(unsigned screen, uint16_t pixel) const {
         if (screen != brightness_screen_ || brightness_ == 128) return pixel;
@@ -184,6 +281,12 @@ private:
     }
     void dim() {
         auto &screen = screens_[brightness_screen_]; if (!screen.valid) return;
+        if (!frame_count_) {
+            if (brightness_ != requested_brightness_) {
+                brightness_ = requested_brightness_; screen.dirty = true;
+            }
+            return;
+        }
         if (!dim_column_) { if (brightness_ == requested_brightness_) return; brightness_ = requested_brightness_; }
         for (unsigned y = 0; y < screen.viewport.height; ++y) encode(y, dim_pixel(brightness_screen_, cache_[screen.offset + y * screen.viewport.width + dim_column_]));
         if (submit_column(brightness_screen_, dim_column_, screen.viewport.height)) dim_column_ = (dim_column_ + 1) % screen.viewport.width;
@@ -249,12 +352,12 @@ private:
         if (vertical_) {
             int source = int(y) + (undo_ ? -int(shift) : int(shift)); const bool incoming = source < 0 || source >= int(v.height);
             source = (source + int(v.height)) % int(v.height);
-            return (incoming ? cache_ : previous_)[s.offset + unsigned(source) * v.width + x];
+            return incoming ? incoming_pixel(screen, x, unsigned(source)) : previous_[s.offset + unsigned(source) * v.width + x];
         }
         int source = int(x) + (undo_ ? int(shift) : -int(shift));
         if (!panoramic()) {
             const bool incoming = source < 0 || source >= int(v.width); source = (source + int(v.width)) % int(v.width);
-            return (incoming ? cache_ : previous_)[s.offset + y * v.width + unsigned(source)];
+            return incoming ? incoming_pixel(screen, unsigned(source), y) : previous_[s.offset + y * v.width + unsigned(source)];
         }
         int pane = int(screen);
         int first = selected_ >= 0 ? selected_ : 0;
@@ -265,10 +368,10 @@ private:
         if (source < 0 || (pane + 1 == end && source >= int(p.viewport.width + p.viewport.gap))) {
             source += source < 0 ? int(p.viewport.width + p.viewport.gap) : -int(p.viewport.width + p.viewport.gap);
             if (source < 0 || source >= int(p.viewport.width)) return 0;
-            return cache_[p.offset + std::min(y, p.viewport.height - 1) * p.viewport.width + unsigned(source)];
+            return incoming_pixel(unsigned(pane), unsigned(source), std::min(y, p.viewport.height - 1));
         }
         if (source >= int(p.viewport.width) || y >= p.viewport.height) return 0;
-        if (reserved_ && undo_ && unsigned(pane) >= screens_.size() - reserved_ && screens_.size() > reserved_) { const auto &left = screens_[screens_.size() - reserved_ - 1]; return cache_[left.offset + std::min(y, left.viewport.height - 1) * left.viewport.width + std::min(unsigned(source), left.viewport.width - 1)]; }
+        if (reserved_ && undo_ && unsigned(pane) >= screens_.size() - reserved_ && screens_.size() > reserved_) { const auto &left = screens_[screens_.size() - reserved_ - 1]; return incoming_pixel(unsigned(screens_.size()) - reserved_ - 1, std::min(unsigned(source), left.viewport.width - 1), std::min(y, left.viewport.height - 1)); }
         return previous_[p.offset + y * p.viewport.width + unsigned(source)];
     }
     bool submit_column(unsigned screen, unsigned column, unsigned height) {
@@ -299,13 +402,18 @@ private:
         }
         if (!ring_step_) {
             if (progress_ == distance()) {
-                for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i)) {
+                if (frame_count_ == 2) for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i)) {
                     const auto &s = screens_[i];
                     for (unsigned y = 0; y < s.viewport.height; ++y) for (unsigned x = 0; x < s.viewport.width; ++x)
                         raster_.pixels()[y * s.viewport.width + x] = sample(i, x, y);
                     std::copy(raster_.pixels(), raster_.pixels() + s.viewport.width * s.viewport.height, cache_ + s.offset);
                 }
-                animating_ = false; for (auto &s : screens_) s.dirty = true; return;
+                animating_ = false;
+                for (unsigned i = 0; i < screens_.size(); ++i) {
+                    screens_[i].dirty = true;
+                    if (frame_count_ == 1 && moving(i)) screens_[i].valid = false;
+                }
+                return;
             }
             unsigned quantum = 1;
             for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i)) quantum = std::max(quantum, display_.scroll_quantum(i));

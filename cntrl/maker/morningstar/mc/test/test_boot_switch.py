@@ -121,6 +121,8 @@ def test_linker_places_only_cold_container_methods_in_flash() -> None:
         ('_ZN5cntrl10Deployment7recoverEm', True),
         ('_ZN5cntrl10Deployment6commitEv', True),
         ('_ZN5cntrl5SongsC2ERNS_7StorageERNS_12SongResolverE', True),
+        ('_ZN5cntrl6device10SharedHeap8allocateEjjbb', True),
+        ('_ZNK5cntrl6device10SharedHeap16ram1_unallocatedEv', True),
         (
             '_ZNK5cntrl4midi7Runtime6statusIN12_GLOBAL__N_15BoardEEEv'
             'RKNS0_6BridgeEjRKNS_8DocumentERT_.constprop.0',
