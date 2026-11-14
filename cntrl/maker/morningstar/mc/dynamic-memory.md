@@ -851,6 +851,93 @@ loss occurs during layout, independently of the now-fixed CIN rejection. The
 capture completed and its STOP response remained reachable; no MIDI-triggered
 USB disappearance occurred in this trial.
 
+### Single-pass font bounds and retest
+
+`AssetFonts::bounds()` previously called indexed glyph positioning for every
+glyph. Each position lookup scanned the text prefix again, making the height
+measurement quadratic in text length. Width and height now share one traversal
+in `font_assets::View::bounds()`. Shaped runs retain their stored horizontal
+bounds and positioned vertical offsets; character advances, bearings, spaces,
+unknown-character handling and embedded/asset origins are preserved. Native
+tests cover those measurements, including a 200-character string. No cache or
+heap allocation was added.
+
+The tested export is `build/midi-linear-layout-v2-control-20261114/`, recipe ID
+`1adc70cc178aa89a`, image SHA-256
+`41f668793377050e22f250ec75a06d54b84abc5def3ff502a555b0257df1ba9a`.
+Its linked code is 195,864 bytes of ITCM, with the same 306,880-byte RAM1 variable
+total and 90,752-byte RAM2 static allocation as the preceding phase control.
+This remains the normal/newlib control, not the bounded-allocator production
+candidate. The first upload again failed on a HalfKay HID write; the exact-image
+retry reached reset but reported "Board has disappeared". The application
+returned at startup count 94 and the expected trace ID, and backup restoration
+read back both setups and all 15 history revisions.
+
+| Capture | Maximum layout phase | Raw USB / accepted / DIN writes / DIN reads / USB returns | DIN software drops / overruns |
+| --- | ---: | --- | --- |
+| Before single-pass bounds, MIDI-only SysEx | 32,770 us | 4,101 / 4,101 / 4,101 / 4,094 / 4,094 | 7 / 0 |
+| After, MIDI-only SysEx | 7,080 us | 4,101 at every boundary | 0 / 0 |
+| After, serial plus SysEx | 7,036 us | 4,101 at every boundary | 0 / 0 |
+| After, serial plus all four probe trials | 7,018 us | 5,105 at every boundary | 0 / 0 |
+| After, MIDI-only notes/sustain/releases | 7,044 us | 398 at every boundary | 0 / 0 |
+
+CRCs match across all five boundaries in every post-fix capture. No USB packet
+was rejected, and TRS drop/overrun deltas were also zero. In the complete serial
+probe, paced messages (304 bytes), bursts (304), SysEx (4,099) and the note and
+sustain lifecycle (396) all passed strict byte comparisons. The 64 note onsets,
+64 releases and four sustain messages completed. The largest reported service
+gap in that sequence was 7,277 us. These are measurements of this setup and
+build, not a general worst-case execution-time guarantee.
+
+MIDI-only comparisons remain failures because they receive an extra `f0f7`
+before the otherwise complete payload. The new `--observe-seconds` mode then
+captured that empty SysEx after approximately 0.46 seconds while making no MIDI
+send calls and opening no serial client during the five-second observation.
+With optional `--trace-build`, its two bytes appear at raw USB input and every
+subsequent boundary with matching CRCs. This isolates the extra message to
+connection-time traffic reaching the USB receive path, rather than byte
+insertion by bridge forwarding. It does not establish which host component or
+USB-driver behavior produced it. The tool preserves the bytes and arrival times;
+it does not discard them or weaken exact comparisons.
+
+A separate bounded recovery run sent 20 bursts across six USB outputs: 36,480
+bytes submitted in 0.0243 seconds, followed by 10.479 seconds of observation.
+The DIN source received 6,082 bytes, including its two unsolicited bytes.
+Route counters showed no drops or quarantine and a 7,650 us maximum service gap.
+This stress mode intentionally skips exact byte checks, so completion is not
+an exact-transfer qualification. Serial inspection stayed reachable, startup
+count remained 94 and allocation-failure counters stayed zero. No application
+USB disappearance was reproduced in these post-fix trials.
+
+`--updater-info` captures the installed uploader's read-only board listing. While
+the application is reachable, it reports tag `14468280-cntrl`, description
+`cntrl experimental`, model `Generic` and capabilities `unique, serial`.
+Uploads explicitly target the HalfKay tag `14468280-Teensy`. This identity change
+is evidence for an uploader follow-up problem after reset, independently of the
+earlier application USB stalls. It does not explain the initial HID write error,
+and no uploader failure has been reclassified as a success.
+
+Generated captures are `build/linear-layout-{midi-sysex,serial-sysex,serial-all,
+midi-notes,usb-stress,passive-midi,passive-trace,updater-info}-20261114.toml`,
+plus trace captures' separate `.midi.toml` files and the SysEx alignment analysis.
+They and the generated build/source exports are disposable evidence; all code
+needed to reproduce them is tracked under the diagnostic target and MC qualifier.
+
+After testing, the temporary `dynamic-memory-thru` setup was deleted and the
+original `midi-phase-ui-control-20261114/before/` backup restored. Final verification
+reported both setups identical and selection, history, assets and songs unchanged:
+`CNTRL READY 41 25477 b32ccca8 starts=94 starts_status=ready`. `simple-setup` is
+selected; trace recording is stopped. The existing two unreadable, unreferenced
+movie files were left untouched. The previous working rollback image is retained.
+
+Local automated qualification finished with 1,617 tests passed and one skipped,
+including the shared sanitizer-enabled firmware programs. The focused diagnostic
+tests also passed after the final changes. Ruff checks/formatting, `ty check
+cntrl`, pyupgrade and both diagnostic ARM builds passed. Manual cross-platform
+workflow `43614299027` tests the pushed CIN and font changes at `222ca45`; its
+final result is recorded separately when available. Push-triggered workflows
+remain disabled.
+
 After the captures, trace collection was stopped, the temporary setup was
 deleted, and the original selection, both setups, all 15 history revisions,
 assets and songs were restored and verified unchanged at startup count 91.

@@ -49,6 +49,25 @@ to save their names and the serial ports' OS metadata, including USB IDs, serial
 numbers and locations. This distinguishes stock firmware enumeration from a
 missing device before attempting recovery or an upload.
 
+To isolate connection-time traffic, listen without sending MIDI or opening a
+serial client during the observation:
+
+```sh
+uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --observe-seconds '5s' --expect-enabled --trace-build build/sysex-transport-control --source 'cntrl experimental DIN' --report build/passive-midi-trace.toml
+```
+
+The report preserves all received bytes with host-relative arrival times. The
+optional trace closes serial before listening, then reads STOP after MIDI closes.
+It does not filter unsolicited messages. A completed observation is not an exact
+byte-transfer test.
+
+Capture the installed uploader's own board identity separately, without entering
+the bootloader or uploading:
+
+```sh
+uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --updater-info --report build/updater-info.toml
+```
+
 The control uses setup format 41. Use its retained source's existing setup CLI
 through this entry point when main's compiler has moved to a newer format:
 

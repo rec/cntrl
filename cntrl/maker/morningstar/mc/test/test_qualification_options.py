@@ -135,6 +135,31 @@ def test_single_trial_requires_the_explicit_probe_mode() -> None:
         Options(run=True, probe_trial=Trial.notes)
 
 
+def test_passive_observation_requires_a_source_and_excludes_active_modes(
+    tmp_path: Path,
+) -> None:
+    options = Options(observe_seconds=5, source='DIN')
+    assert not options.run and not options.inspect
+    assert (
+        Options(
+            observe_seconds=5,
+            source='DIN',
+            trace_build=tmp_path,
+            report=tmp_path / 'capture.toml',
+        ).trace_build
+        == tmp_path
+    )
+    for values in (
+        {'observe_seconds': -1, 'source': 'DIN'},
+        {'observe_seconds': 5},
+        {'observe_seconds': 5, 'source': 'DIN', 'run': True},
+        {'observe_seconds': 5, 'source': 'DIN', 'inspect': True},
+        {'observe_seconds': 5, 'source': 'DIN', 'updater_info': True},
+    ):
+        with pytest.raises(ValueError):
+            Options.model_validate(values)
+
+
 @pytest.mark.parametrize(
     'host_matches, drop, selected',
     [
