@@ -1234,23 +1234,23 @@ private:
                     pending_minimum_.erase(&*i);
                     i = items.erase(i);
                 } else i = erase_event(i);
-                continue;
+            } else {
+                if constexpr (std::is_same_v<T, Voice>) --output_counts_[i->output].voices;
+                if constexpr (std::is_same_v<T, Voice>) if (i == release_voice_cursor_) ++release_voice_cursor_;
+                if constexpr (std::is_same_v<T, Voice>) if (i == pressure_voice_cursor_) ++pressure_voice_cursor_;
+                if constexpr (std::is_same_v<T, Visit>) if (i == release_visit_cursor_) ++release_visit_cursor_;
+                if constexpr (std::is_same_v<T, Capture>) if (i == release_capture_cursor_) ++release_capture_cursor_;
+                if constexpr (std::is_same_v<T, Capture>) if (i == pressure_capture_cursor_) ++pressure_capture_cursor_;
+                if constexpr (std::is_same_v<T, Cleanup>) {
+                    --output_counts_[i->output].cleanup;
+                    if (i == cleanup_cursor_) ++cleanup_cursor_;
+                }
+                if constexpr (std::is_same_v<T, Processing>) {
+                    if (processing_active_ && i == processing_position_) { auto next = i; ++next; processing_position_ = next; }
+                    preparation_minimum_.erase(&*i);
+                }
+                i = items.erase(i);
             }
-            if constexpr (std::is_same_v<T, Voice>) --output_counts_[i->output].voices;
-            if constexpr (std::is_same_v<T, Voice>) if (i == release_voice_cursor_) ++release_voice_cursor_;
-            if constexpr (std::is_same_v<T, Voice>) if (i == pressure_voice_cursor_) ++pressure_voice_cursor_;
-            if constexpr (std::is_same_v<T, Visit>) if (i == release_visit_cursor_) ++release_visit_cursor_;
-            if constexpr (std::is_same_v<T, Capture>) if (i == release_capture_cursor_) ++release_capture_cursor_;
-            if constexpr (std::is_same_v<T, Capture>) if (i == pressure_capture_cursor_) ++pressure_capture_cursor_;
-            if constexpr (std::is_same_v<T, Cleanup>) {
-                --output_counts_[i->output].cleanup;
-                if (i == cleanup_cursor_) ++cleanup_cursor_;
-            }
-            if constexpr (std::is_same_v<T, Processing>) {
-                if (processing_active_ && i == processing_position_) { auto next = i; ++next; processing_position_ = next; }
-                preparation_minimum_.erase(&*i);
-            }
-            i = items.erase(i);
         }
     }
     CheckedList<Event>::iterator erase_event(CheckedList<Event>::iterator event) {

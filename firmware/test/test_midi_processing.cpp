@@ -66,7 +66,7 @@ void deferred_poly_pressure_stays_between_its_transformed_onset_and_release() {
 }
 void deferred_pedal_on_reserves_ingress_for_its_off() {
     auto data = compiled({Route{}});
-    for (uint8_t controller : {64, 66, 69}) {
+    for (uint8_t controller : {uint8_t(64), uint8_t(66), uint8_t(69)}) {
         Streams streams; Output output;
         assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
         streams.receive(0, {11, {0xb0, controller, 127}}, 10);
