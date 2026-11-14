@@ -3,7 +3,7 @@
 #define CNTRL_CABLE_TEST 0
 #define CNTRL_ORIGINAL_FIRMWARE 0
 #include "target_capabilities.h"
-#include "emulator_fonts.h"
+#include "fonts.h"
 #include "protocol.h"
 #include <cntrl/host/filesystem.h>
 #include <cntrl/setup_files.h>
@@ -84,6 +84,7 @@ public:
     ui::SongSources *song_sources = nullptr;
     ExpressionPedals *expression = nullptr;
     font_assets::Storage *font_storage = nullptr;
+    const ui::Fonts *fonts = nullptr;
     StoredPatchSources *sources = nullptr;
     animation::Session *animation = nullptr;
     animation::Player *movie_player = nullptr;
@@ -265,8 +266,7 @@ public:
     }
 };
 
-inline ui::AssetFonts fonts(embedded_fonts,unsigned(sizeof(embedded_fonts) / sizeof(*embedded_fonts)));
-bool Board::supports_font(unsigned face,unsigned size) const { return fonts.supports(face,size); }
+bool Board::supports_font(unsigned face,unsigned size) const { return fonts && fonts->supports(face,size); }
 
 struct NullJob {
     bool output_pending() const { return false; }
@@ -318,7 +318,7 @@ struct Actions {
 
 class Session {
 public:
-    explicit Session(const char *directory,const char *setup)
+    Session(const char *directory,const char *setup,const ui::Fonts &fonts,bool replace_setup)
         : filesystem(std::filesystem::u8path(directory)), movie_reader(filesystem), movie_writer(filesystem), movie_storage(filesystem,movie_reader,movie_writer),
           movie_assets(movie_storage,board), movie_output(display), movie_player(movie_assets,movie_output), movie_session(movie_assets,movie_player),
           reader(filesystem), writer(filesystem), history(filesystem),
@@ -336,6 +336,7 @@ public:
         board.app = &application; board.documents = &documents; board.host = &host;
         board.files = &midi_files; board.switches = &switches; board.song_sources = &song_sources; board.expression = &expression; board.font_storage = &font_storage;
         board.sources = &sources; card.ready = true;
+        board.fonts = &fonts;
         board.animation = &movie_session; board.movie_player = &movie_player; movie_storage.ready = true;
         movie_assets.boot();
         font_storage.ready = true;
@@ -343,7 +344,7 @@ public:
         board.bridge.prepare(); board.midi_runtime.prepare(board.midi_outputs());
         if (!auxiliary.prepare(board)) throw std::runtime_error("auxiliary switch memory unavailable");
         filesystem.make_directory("/cntrl"); filesystem.make_directory("/midi"); filesystem.make_directory("/index");
-        import(setup); import_movies(); expression.load_calibrations(); midi_files.boot();
+        import(setup,replace_setup); import_movies(); expression.load_calibrations(); midi_files.boot();
         if (!storage.boot()) throw std::runtime_error("emulator setup bundle failed validation");
         documents.boot(); songs.boot();
         if (!documents.document().valid()) throw std::runtime_error("emulator setup failed validation");
@@ -504,18 +505,14 @@ private:
             if (!movie_assets.choose(crc)) throw std::runtime_error("compiled movie asset failed validation");
         }
     }
-    void import(const char *setup) {
-        if (filesystem.exists("/cntrl/setups/.bundle/0.bin") || filesystem.exists("/cntrl/setups/.bundle/1.bin")) return;
+    void import(const char *setup,bool replace) {
+        if (!replace && (filesystem.exists("/cntrl/setups/.bundle/0.bin") || filesystem.exists("/cntrl/setups/.bundle/1.bin"))) return;
         std::ifstream stream(std::filesystem::u8path(setup),std::ios::binary);
         if (!stream) throw std::runtime_error("cannot read compiled emulator setup");
         std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(stream),{}};
         if (bytes.size() < 40 || std::memcmp(bytes.data(),"CSTB",4)) throw std::runtime_error("emulator requires a compiled setup bundle");
-        uint8_t header[96] = {}; std::memcpy(header,"CNST",4); put32(header + 4,1);
-        put32(header + 8,unsigned(bytes.size())); put32(header + 12,checksum(bytes.data(),unsigned(bytes.size())));
-        std::memcpy(header + 20,".bundle",8); put32(header + 92,checksum(header,92));
-        card.choose(".bundle");
-        if (!card.begin(0) || !card.write(header,96) || !card.write(bytes.data(),unsigned(bytes.size()))
-            || !card.write(reinterpret_cast<const uint8_t *>("DONE"),4) || !card.finish())
+        if (!storage.boot() || !storage.upload_begin(unsigned(bytes.size()),checksum(bytes.data(),unsigned(bytes.size())),0)
+            || !storage.upload_write(bytes.data(),unsigned(bytes.size())) || !storage.upload_finish())
             throw std::runtime_error("cannot initialize emulator session storage");
     }
 };
@@ -600,9 +597,11 @@ int main(int argc,char **argv) {
 #endif
     std::ios::sync_with_stdio(false);
     try {
-        if (argc != 3) throw std::runtime_error("usage: emulator SESSION_DIR COMPILED_SETUP");
+        if (argc < 6 || (argc - 4) % 2 || (std::strcmp(argv[3],"0") && std::strcmp(argv[3],"1")))
+            throw std::runtime_error("usage: emulator SESSION_DIR COMPILED_SETUP REPLACE_SETUP FONT_ID FONT_FILE [...]");
         cntrl::memory_budget = 32u * 1024 * 1024;
-        cntrl::emulator::Session session(argv[1],argv[2]); cntrl::emulator::ack();
+        cntrl::emulator::FontFiles fonts(argc - 4,argv + 4);
+        cntrl::emulator::Session session(argv[1],argv[2],*fonts.fonts,argv[3][0] == '1'); cntrl::emulator::ack();
         std::vector<uint8_t> bytes;
         while (cntrl::emulator::request(bytes)) {
             try { session.command(bytes); }

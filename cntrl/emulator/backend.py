@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from .. import models
 from ..firmware.capabilities import header
-from ..fonts.ui import embedded_header
+from ..fonts.catalogue import UI_FONTS
 from ..patch_switcher.models import Target
 from .layout import EmulatorLayout
 from .replay import Event
@@ -73,15 +73,7 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
         raise ValueError(
             'the emulator requires a cntrl source checkout; specify --source-root'
         )
-    fonts = {}
-    for name in target.ui_fonts:
-        if name not in target.font_sources:
-            raise ValueError(f'execution target lacks exported UI font source: {name}')
-        fonts[name] = Path(target.font_sources[name]).read_bytes()
-    generated = {
-        'target_capabilities.h': header(target),
-        'emulator_fonts.h': embedded_header(fonts),
-    }
+    generated = {'target_capabilities.h': header(target)}
     executable = directory / ('emulator.exe' if sys.platform == 'win32' else 'emulator')
     if sys.platform == 'win32':
         command = [
@@ -144,7 +136,6 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
         'LIBPATH',
     ):
         signature.update(repr((name, os.environ.get(name))).encode())
-    signature.update(target.model_dump_json().encode())
     for name, text in generated.items():
         signature.update(name.encode())
         signature.update(sha256(text.encode()).digest())
@@ -188,8 +179,28 @@ class Session:
         self.held: set[str] = set()
         self.messages: list[OutputEvent] = []
         self.frames = {d.id: bytes(d.width * d.height * 2) for d in target.displays}
+        source_hash = sha256(setup.read_bytes()).hexdigest()
+        source_record = storage / 'setup-source.sha256'
+        command = [
+            str(executable.resolve()),
+            str(storage.resolve()),
+            str(setup.resolve()),
+            '0'
+            if source_record.is_file() and source_record.read_text() == source_hash
+            else '1',
+        ]
+        for name in target.ui_fonts:
+            if name not in UI_FONTS:
+                raise ValueError(f'unknown UI font family: {name}')
+            if name not in target.font_sources:
+                raise ValueError(
+                    f'execution target lacks exported UI font source: {name}'
+                )
+            command.extend(
+                [str(UI_FONTS[name]), str(Path(target.font_sources[name]).resolve())]
+            )
         self.process = subprocess.Popen(
-            [str(executable.resolve()), str(storage.resolve()), str(setup.resolve())],
+            command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
         )
@@ -205,6 +216,7 @@ class Session:
             errors = [e.message for e in self.messages if e.kind == 'error']
             if errors:
                 raise ValueError('native emulator startup failed: ' + '; '.join(errors))
+            source_record.write_text(source_hash)
         except (OSError, ValueError):
             self.close()
             raise
