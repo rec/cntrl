@@ -14,6 +14,8 @@ import tomlkit
 import tyro
 from pydantic import BaseModel
 
+from ....firmware.build_info import commit_id
+
 
 class Provision(BaseModel, frozen=True):
     root: Path = Path(__file__).parent / 'firmware'
@@ -156,6 +158,8 @@ def compile_command(
     )
     if diagnostics:
         cpp += ' -DCNTRL_MEMORY_QUALIFICATION'
+    if commit := commit_id(source_root):
+        cpp += f' -DCNTRL_GIT_COMMIT=0x{commit}'
     properties = {
         'build.flags.ld': (
             '-Wl,--gc-sections,--relax,--no-warn-rwx-segments '

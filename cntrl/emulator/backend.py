@@ -17,6 +17,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from .. import models
+from ..firmware.build_info import commit_id
 from ..firmware.capabilities import header
 from ..fonts.catalogue import UI_FONTS
 from ..patch_switcher.models import Target
@@ -109,6 +110,10 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
             '-o',
             str(executable),
         ]
+    if commit := commit_id(source_root):
+        command.insert(
+            1, f'{"/D" if sys.platform == "win32" else "-D"}CNTRL_GIT_COMMIT=0x{commit}'
+        )
     compiler = which(command[0])
     if compiler is None:
         raise FileNotFoundError(f'emulator compiler not found: {command[0]}')

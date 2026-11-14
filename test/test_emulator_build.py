@@ -49,6 +49,8 @@ class BuildFiles:
     def run(
         self, command: list[str], *, check: bool, capture_output: bool = False
     ) -> subprocess.CompletedProcess[bytes]:
+        if command[0] == 'git':
+            return subprocess.CompletedProcess(command, 0, b'123456789abcdef\n', b'')
         if '--version' in command:
             return subprocess.CompletedProcess(command, 0, self.version, b'')
         self.compilations += 1
