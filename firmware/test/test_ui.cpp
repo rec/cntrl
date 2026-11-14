@@ -1,3 +1,4 @@
+#define CNTRL_GIT_COMMIT 0x000a1b2
 #include <cntrl/ui/renderer.h>
 #include <cntrl/ui/pages.h>
 #include <cntrl/ui/page_host.h>
@@ -516,6 +517,7 @@ int main() {
     const auto title_x = (24 - std::strlen(view.lines[0].text) * 2) / 2;
     assert(display.pixels[view.lines[0].graphics.top * 24 + title_x] == 0xffff);
     pages.viewport({200, 128, 0, 0});
+    assert(std::strcmp(pages.view(0, 0, status).lines[6].text, "Starts: 42 Git:000a1b2") == 0);
     uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0};
     layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::clock_tempo);
     layout[12 + 3 * 32 + 33] = 1;
