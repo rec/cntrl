@@ -628,9 +628,7 @@ def main() -> None:
         | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
         | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')]
         | Annotated[Emulate, tyro.conf.subcommand(name='emulate')]
-        | Annotated[
-            import_backup.ImportBackup, tyro.conf.subcommand(name='import-morningstar')
-        ],
+        | Annotated[import_backup.ImportBackup, tyro.conf.subcommand(name='import')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
     )
     try:
