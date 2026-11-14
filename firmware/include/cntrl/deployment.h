@@ -95,7 +95,7 @@ private:
         uint8_t bytes[24] = {};
         std::memcpy(bytes, "CDEP", 4); binary::write32(bytes + 4, sequence_ + 1);
         binary::write32(bytes + 8, root);
-        bytes[12] = uint8_t(binary::development_format); bytes[13] = uint8_t(binary::development_format >> 8);
+        bytes[12] = uint8_t(binary::development_format & 0xff); bytes[13] = uint8_t(binary::development_format >> 8);
         binary::write32(bytes + 16, binary::crc(bytes, 16)); std::memcpy(bytes + 20, "DONE", 4);
         // Retained roots need proof of a completed stage even after both
         // activation slots have advanced. Never recover an abandoned partial root.
