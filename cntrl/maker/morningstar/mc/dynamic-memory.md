@@ -917,6 +917,14 @@ is evidence for an uploader follow-up problem after reset, independently of the
 earlier application USB stalls. It does not explain the initial HID write error,
 and no uploader failure has been reclassified as a success.
 
+The inspected [upstream TyTools board-wait implementation](https://github.com/Koromix/rygel/blob/68a834a81bcf3c258c8fcff1fc2d98bcb28f5cfe/src/tytools/libty/board.c)
+emits that disappearance message when the watched board record becomes dropped.
+Its [generic classifier](https://github.com/Koromix/rygel/blob/68a834a81bcf3c258c8fcff1fc2d98bcb28f5cfe/src/tytools/libty/class_generic.c)
+constructs identity from serial number and manufacturer; the Teensy classifier
+uses a Teensy identity instead. This supports the identity-following explanation,
+but it is not a version match to the bundled uploader or a diagnosis of its
+initial HID write error. No updater dependency or matching behavior was changed.
+
 Generated captures are `build/linear-layout-{midi-sysex,serial-sysex,serial-all,
 midi-notes,usb-stress,passive-midi,passive-trace,updater-info}-20261114.toml`,
 plus trace captures' separate `.midi.toml` files and the SysEx alignment analysis.
@@ -932,11 +940,34 @@ movie files were left untouched. The previous working rollback image is retained
 
 Local automated qualification finished with 1,617 tests passed and one skipped,
 including the shared sanitizer-enabled firmware programs. The focused diagnostic
-tests also passed after the final changes. Ruff checks/formatting, `ty check
-cntrl`, pyupgrade and both diagnostic ARM builds passed. Manual cross-platform
-workflow `43614299027` tests the pushed CIN and font changes at `222ca45`; its
-final result is recorded separately when available. Push-triggered workflows
-remain disabled.
+tests also passed after the final changes. Ruff checks/formatting, type checking,
+pyupgrade and both diagnostic ARM builds passed. The final passive recorder uses
+one last receive snapshot for both chunk timestamps and the reported byte count;
+a two-second passive check on restored `simple-setup` sent and received no MIDI.
+The complete local suite passed again after that correction.
+
+The first manual workflow, `43614299027` at `222ca45`, found two portability
+mistakes in the new native regressions: a missing `<string>` include and an
+implicit integer-to-byte conversion. Those tests were corrected without changing
+firmware behavior. It also exposed a baseline MSVC warning when serializing the
+deployment format and a stale installed-wheel assertion after the binary-envelope
+change. With the user's approval, a separate commit explicitly masks the low
+format byte and compares unpacked setup payloads inside their envelopes. The
+local core CI flow passed its 1,270 tests, lint, typing and the actual installed
+wheel smoke check outside the checkout.
+
+The rerun [manual workflow 43616199242](https://github.com/rec/cntrl/actions/runs/43616199242)
+at `6f06f48` reports 1,617 passed and one skipped on each of Windows, Linux and
+Intel macOS. Diagnostic ARM builds, lint, typing and installed-wheel checks pass
+on all three. The overall workflow still fails at the pre-existing adapter-free
+dependency check: `cntrl/patch_switcher/cli.py:18` imports the Morningstar importer,
+and the include fragments in `scripts/split_midi_routing.py` are rejected by that
+checker. The same violations were reproduced locally. They were not changed or
+suppressed as part of the MIDI fix. CI artifacts are retained locally under
+`build/ci-6f06f48-{windows,linux,intel}/`. Push-triggered workflows remain disabled.
+The later importer update `9774127` was integrated cleanly; 39 focused transport,
+qualification, native MIDI/font and importer checks passed afterward. The matrix
+results above identify their tested revision explicitly.
 
 After the captures, trace collection was stopped, the temporary setup was
 deleted, and the original selection, both setups, all 15 history revisions,
