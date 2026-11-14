@@ -262,7 +262,6 @@ public:
         using Event = typename Core::Event;
         using Processing = typename Core::Processing;
         using Capture = typename Core::Capture;
-        constexpr auto max_routes = Core::max_routes;
         constexpr auto system_scope = Core::system_scope;
 
         bool synchronized = true;
@@ -289,7 +288,7 @@ public:
             if (lfo.generated && now > lfo.next) core.diagnostics_.skipped += uint32_t((now - lfo.next) / lfo.config.interval);
             Parameter value = lfo.config.target; value.value = lfo.sample(terminal);
             uint8_t bytes[3] = {}; value.message(0, bytes);
-            Work work{{uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}}, now, 0, max_routes + root, 0, value, lfo.id, sample};
+            Work work{{uint8_t(bytes[0] >> 4), {bytes[0], bytes[1], bytes[2]}}, now, 0, Core::max_routes + root, 0, value, lfo.id, sample};
             core.process(root, 1, work); ++used;
             lfo.generated = true; lfo.ended = terminal; lfo.next = now + lfo.config.interval;
         }
@@ -375,9 +374,7 @@ public:
     }
     template<class Core> static void generated(Core &core, unsigned route, const Packet &packet, uint64_t now) {
 
-        constexpr auto max_routes = Core::max_routes;
-
-        unsigned input = max_routes + route;
+        unsigned input = Core::max_routes + route;
         unsigned kind = packet.bytes[0] >> 4;
         uint64_t token = 0;
         if (kind == 9 && packet.bytes[2]) {
@@ -390,8 +387,6 @@ public:
     template<class Core> static void notify_release(Core &core, uint64_t token, uint8_t velocity, uint64_t now) {
         using Work = typename Core::Work;
         using Visit = typename Core::Visit;
-        constexpr auto max_routes = Core::max_routes;
-
         for (;;) {
             auto pending = std::find_if(core.extension_.visits_.begin(), core.extension_.visits_.end(), [token](const Visit &entry) { return entry.token == token; });
             if (pending == core.extension_.visits_.end()) break;
@@ -399,7 +394,7 @@ public:
             if (pending == core.extension_.release_visit_cursor_) ++core.extension_.release_visit_cursor_;
             core.extension_.visits_.erase(pending);
             Packet release{8, {uint8_t(0x80 | (visit.onset.bytes[0] & 15)), visit.onset.bytes[1], velocity}};
-            Work work{release, now, 0, max_routes * (visit.step + 1) + visit.route, visit.owner};
+            Work work{release, now, 0, Core::max_routes * (visit.step + 1) + visit.route, visit.owner};
             ProcessorOutput<Core> output(core, visit.route, visit.step + 1, work, core.preparation_emit_budget_);
             auto &processor = core.routes_[visit.route].steps[visit.step].processor;
             if (processor && !processor->push(release, visit.input, output)) { ++core.diagnostics_.failed; core.overload_route(visit.route); }
@@ -609,7 +604,6 @@ public:
     template<class Core> static void service_generators(Core &core, uint64_t now, unsigned &used, unsigned work_budget) {
         using Work = typename Core::Work;
         using Reader = typename Core::Reader;
-        constexpr auto max_routes = Core::max_routes;
         constexpr auto system_scope = Core::system_scope;
         for (unsigned i = 0; i < core.routes_.size(); ++i) if (core.active(i) && !core.routes_[i].steps.empty() && core.routes_[i].steps[0].kind == 8) {
             auto &route = core.routes_[i];
@@ -643,7 +637,7 @@ public:
                 else if (route.file->finished()) {
                     if (route.file_finished_at == UINT64_MAX) route.file_finished_at = now;
                     bool preparing = false;
-                    for (const auto &work : core.processing_) if (work.work.input == max_routes + i) preparing = true;
+                    for (const auto &work : core.processing_) if (work.work.input == Core::max_routes + i) preparing = true;
                     if (!preparing) { core.finish_reverse(i, route.file_finished_at); route.file.reset(); }
                 }
             }
@@ -652,7 +646,7 @@ public:
             for (unsigned position = 0; position < core.routes_[i].steps.size() && used < work_budget; ++position) {
                 auto &step = core.routes_[i].steps[position];
                 if (!step.processor) continue;
-                Work work{{}, now, 0, max_routes * (position + 1) + i, core.extend_owner(0, i)};
+                Work work{{}, now, 0, Core::max_routes * (position + 1) + i, core.extend_owner(0, i)};
                 ProcessorOutput<Core> output(core, i, position + 1, work, work_budget - used);
                 step.processor->service(now, work_budget - used, output); ++used;
             }
