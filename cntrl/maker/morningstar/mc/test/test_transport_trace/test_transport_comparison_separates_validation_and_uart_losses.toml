@@ -1,0 +1,62 @@
+scope = "All measured DIN-route bytes from TRACE RESET until TRACE STOP. Driver acceptance is not a wire acknowledgement."
+uart_interpretation = "Software drops count discarded ring-buffer bytes. Hardware overrun latches are observations, not an exact lost-byte count."
+rejections = 1
+
+[[boundaries]]
+input = "usb_raw"
+output = "usb_valid"
+input_bytes = 26
+output_bytes = 25
+counts_match = false
+crc_match = false
+
+[[boundaries]]
+input = "usb_valid"
+output = "din_tx"
+input_bytes = 25
+output_bytes = 25
+counts_match = true
+crc_match = true
+
+[[boundaries]]
+input = "din_tx"
+output = "din_rx"
+input_bytes = 25
+output_bytes = 18
+counts_match = false
+crc_match = false
+
+[[boundaries]]
+input = "din_rx"
+output = "usb_return"
+input_bytes = 18
+output_bytes = 18
+counts_match = true
+crc_match = true
+
+[uart_deltas]
+din_drops = 7
+din_overruns = 1
+trs_drops = 0
+trs_overruns = 0
+
+[first_uart_loss_observations]
+software_drop_poll_gap_us = 23000
+software_drop_available = 63
+software_drop_delta = 7
+overrun_poll_gap_us = 25000
+overrun_available = 63
+overrun_latch_delta = 1
+
+[first_rejection]
+usb_event_hex = "05f70000"
+cin = 5
+cable = 0
+source = 96
+output_route = 0
+parser_sysex = false
+parser_discarding = false
+milliseconds = 100
+raw_byte_offset = 2
+accepted_byte_offset = 2
+capture_limit = "Only the first rejected event is retained; rejections counts all events on the measured DIN route."

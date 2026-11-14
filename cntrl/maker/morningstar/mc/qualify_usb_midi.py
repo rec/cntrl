@@ -17,6 +17,7 @@ from reccy.configuration.units import Seconds
 from ....patch_switcher import devices
 from ....patch_switcher.core_midi import Midi, exchange
 from ....patch_switcher.transport import SerialConnection, SetupClient
+from . import transport_trace
 
 
 class Trial(StrEnum):
@@ -52,6 +53,12 @@ class Options(BaseModel, frozen=True):
     """Compare paced/burst messages, SysEx and notes with raw bytes and counters."""
     probe_trial: Trial | None = None
     """Run one probe trial instead of the complete probe sequence."""
+    trace_build: Path | None = None
+    """Capture transport/UART evidence matching this build export around a probe.
+
+    With --midi-only, serial is closed before MIDI opens and reopened after MIDI
+    closes. Requires --run --probe-short-messages and --report.
+    """
     midi_only: bool = False
     """Probe without opening serial. Requires already-enabled MIDI forwarding."""
     report: Path | None = None
@@ -59,6 +66,12 @@ class Options(BaseModel, frozen=True):
 
     @model_validator(mode='after')
     def stress_run(self) -> 'Options':
+        if self.trace_build is not None and not (
+            self.run and self.probe_short_messages and self.report is not None
+        ):
+            raise ValueError(
+                'trace-build requires --run --probe-short-messages --report'
+            )
         if self.probe_trial is not None and not self.probe_short_messages:
             raise ValueError('probe-trial requires --probe-short-messages')
         if self.probe_short_messages and (
@@ -163,7 +176,7 @@ def analyze_report(source: Path) -> dict[str, object]:
                 ],
             }
         )
-    return {
+    result: dict[str, object] = {
         'source': str(source),
         'interpretation': (
             'Byte alignment only; repeated payloads may have ambiguous offsets. '
@@ -171,6 +184,70 @@ def analyze_report(source: Path) -> dict[str, object]:
         ),
         'trials': trials,
     }
+    for name in ('transport_comparison', 'transport_error'):
+        if name in captured:
+            result[name] = captured[name]
+    return result
+
+
+def capture_transport(options: Options) -> None:
+    export, path = options.trace_build, options.report
+    if export is None or path is None:
+        raise ValueError('transport capture requires a trace build and report')
+    result: dict[str, object] = {
+        'success': False,
+        'options': options.model_dump(mode='json', exclude_none=True),
+    }
+    try:
+        expected = transport_trace.expected_build(export)
+        before = transport_trace.snapshot(options.port, expected.trace_id, 'RESET')
+        if before.din_route.split()[2] != str(int(options.expect_enabled)):
+            raise ValueError(
+                'bridge enabled state differs from requested qualification'
+            )
+        first = status_fields(before.device)
+        if first.get('starts_status') != 'ready':
+            raise ValueError('transport capture requires a ready startup counter')
+    except (OSError, ValueError) as error:
+        result['error'] = str(error)
+        save_report(path, result)
+        raise
+    result['expected_trace_build'] = expected.model_dump()
+    result['transport_before'] = before.model_dump()
+    save_report(path, result)
+    midi_path = path.with_name(path.stem + '.midi.toml')
+    child = options.model_copy(update={'trace_build': None, 'report': midi_path})
+    # Seed the child report so an early failure cannot reuse an older capture.
+    save_report(
+        midi_path, {'success': False, 'error': 'MIDI trial did not produce a report'}
+    )
+    try:
+        run(child)
+    finally:
+        result.update(tomlkit.parse(midi_path.read_text()).unwrap())
+        result['options'] = options.model_dump(mode='json', exclude_none=True)
+        result['midi_report'] = str(midi_path)
+        try:
+            after = transport_trace.snapshot(options.port, expected.trace_id, 'STOP')
+            result['transport_after'] = after.model_dump()
+            last = status_fields(after.device)
+            if last.get('starts_status') != 'ready' or first.get('starts') != last.get(
+                'starts'
+            ):
+                raise ValueError(
+                    'pedal rebooted or lost its startup counter '
+                    'during transport capture'
+                )
+            result['transport_comparison'] = transport_trace.compare_transport(
+                before, after
+            )
+            result['transport_captured'] = True
+        except (OSError, ValueError) as error:
+            result['transport_error'] = str(error)
+            result['success'] = False
+        save_report(path, result)
+    if 'transport_error' in result:
+        raise ValueError(str(result['transport_error']))
 
 
 def diagnostics(client: SetupClient) -> dict[str, str]:
@@ -181,6 +258,7 @@ def diagnostics(client: SetupClient) -> dict[str, str]:
         ('streams', 'CNTRL MIDI STREAMS'),
         ('looper', 'CNTRL MIDI LOOPER'),
         ('qualification', 'CNTRL QUAL STATUS'),
+        ('transport', 'CNTRL MIDI TRACE STATUS'),
     ):
         try:
             result[name] = client.request(command)
@@ -433,6 +511,11 @@ def run_message_probe(
 
 
 def run(options: Options) -> None:
+    if options.trace_build is not None:
+        if sys.platform != 'darwin':
+            sys.exit('This qualification uses macOS CoreMIDI.')
+        capture_transport(options)
+        return
     if options.analyze_report is not None:
         analysis = analyze_report(options.analyze_report)
         save_report(options.report, analysis)

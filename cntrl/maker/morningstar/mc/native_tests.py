@@ -48,6 +48,7 @@ def run(options: Tests) -> None:
 
 
 TESTS = [
+    ('midi-trace', ['test_midi_trace.cpp'], []),
     (
         'usb-midi-flush',
         ['test_usb_midi_flush.cpp', 'patch_switcher/usb_forward_device.cpp'],
