@@ -1,6 +1,7 @@
 """Explicit, macOS-only qualification of the MC USB-to-DIN MIDI path."""
 
 import ctypes
+import subprocess
 import sys
 import time
 from difflib import SequenceMatcher
@@ -18,7 +19,7 @@ from serial.tools.list_ports import comports
 from ....patch_switcher import devices
 from ....patch_switcher.core_midi import Midi, exchange
 from ....patch_switcher.transport import SerialConnection, SetupClient
-from . import transport_trace
+from . import transport_trace, upload_helper
 
 
 class Trial(StrEnum):
@@ -34,6 +35,10 @@ class Options(BaseModel, frozen=True):
     run: bool = False
     inspect: bool = False
     """Read serial diagnostics without opening MIDI endpoints or sending MIDI."""
+    observe_seconds: Annotated[Seconds, unit_spec(Seconds, 'DURATION')] = 0
+    """Listen to --source for this duration without sending MIDI or opening serial."""
+    updater_info: bool = False
+    """Read the uploader's board inventory without opening serial or uploading."""
     analyze_report: Path | None = None
     """Compare the saved trial bytes without opening MIDI or serial connections."""
     watchdog_test: bool = False
@@ -58,7 +63,8 @@ class Options(BaseModel, frozen=True):
     """Capture transport/UART evidence matching this build export around a probe.
 
     With --midi-only, serial is closed before MIDI opens and reopened after MIDI
-    closes. Requires --run --probe-short-messages and --report.
+    closes. Requires --report and either --run --probe-short-messages or
+    --observe-seconds.
     """
     midi_only: bool = False
     """Probe without opening serial. Requires already-enabled MIDI forwarding."""
@@ -67,11 +73,15 @@ class Options(BaseModel, frozen=True):
 
     @model_validator(mode='after')
     def stress_run(self) -> 'Options':
+        if self.observe_seconds < 0 or (self.observe_seconds and not self.source):
+            raise ValueError('observe-seconds requires a positive duration and source')
         if self.trace_build is not None and not (
-            self.run and self.probe_short_messages and self.report is not None
+            self.report is not None
+            and ((self.run and self.probe_short_messages) or self.observe_seconds)
         ):
             raise ValueError(
-                'trace-build requires --run --probe-short-messages --report'
+                'trace-build requires --report and either '
+                '--run --probe-short-messages or --observe-seconds'
             )
         if self.probe_trial is not None and not self.probe_short_messages:
             raise ValueError('probe-trial requires --probe-short-messages')
@@ -92,12 +102,15 @@ class Options(BaseModel, frozen=True):
                     self.run,
                     self.watchdog_test,
                     self.analyze_report is not None,
+                    bool(self.observe_seconds),
+                    self.updater_info,
                 )
             )
             > 1
         ):
             raise ValueError(
-                'inspect, run, watchdog-test and analyze-report are separate modes; '
+                'inspect, run, watchdog-test, analyze-report and observe-seconds '
+                'and updater-info are separate modes; '
                 'select only one'
             )
         if (
@@ -512,6 +525,26 @@ def run_message_probe(
 
 
 def run(options: Options) -> None:
+    if options.updater_info:
+        updater = upload_helper.updater_path()
+        result = subprocess.run(
+            [str(updater), 'list', '--verbose', '--output', 'json'],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        save_report(
+            options.report,
+            {
+                'mode': 'updater-info',
+                'updater': str(updater),
+                'returncode': result.returncode,
+                'output': result.stdout + result.stderr,
+            },
+        )
+        print(result.stdout + result.stderr, end='', flush=True)
+        result.check_returncode()
+        return
     if options.trace_build is not None:
         if sys.platform != 'darwin':
             sys.exit('This qualification uses macOS CoreMIDI.')
@@ -570,15 +603,45 @@ def run(options: Options) -> None:
             ]
             for p in ports:
                 print(f'Serial: {p}')
-            save_report(
-                options.report,
-                {
-                    'mode': 'endpoints',
-                    'midi_sources': list(sources),
-                    'midi_destinations': list(destinations),
-                    'serial_ports': ports,
-                },
-            )
+            report = {
+                'mode': 'observe' if options.observe_seconds else 'endpoints',
+                'midi_sources': list(sources),
+                'midi_destinations': list(destinations),
+                'serial_ports': ports,
+            }
+            save_report(options.report, report)
+            if options.observe_seconds:
+                if options.source not in sources:
+                    raise ValueError(f'MIDI source is absent: {options.source}')
+                report['source'] = options.source
+                report['sent_bytes'] = 0
+                chunks: list[dict[str, object]] = []
+                report['chunks'] = chunks
+                started, offset = time.monotonic(), 0
+                midi.check(
+                    midi.core.MIDIPortConnectSource(
+                        midi.input, sources[options.source], None
+                    )
+                )
+                while time.monotonic() - started < options.observe_seconds:
+                    data = bytes(midi.data)
+                    if len(data) > offset:
+                        chunks.append(
+                            {
+                                'elapsed_seconds': time.monotonic() - started,
+                                'received_hex': data[offset:].hex(),
+                            }
+                        )
+                        offset = len(data)
+                        save_report(options.report, report)
+                    time.sleep(0.01)
+                report['elapsed_seconds'] = time.monotonic() - started
+                report['received_hex'] = bytes(midi.data).hex()
+                report['success'] = True
+                save_report(options.report, report)
+                print(
+                    f'Observed {len(midi.data)} bytes without sending MIDI', flush=True
+                )
             return
         destination, source = destinations[options.destination], sources[options.source]
         midi.check(midi.core.MIDIPortConnectSource(midi.input, source, None))
