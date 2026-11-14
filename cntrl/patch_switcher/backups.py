@@ -202,7 +202,12 @@ def backup_pedal(
         else transport.SerialConnection(port, timeout=5) as connection
     ):
         client = transport.SetupClient(connection)
-        status = client.request('CNTRL STATUS')
+        try:
+            status = client.request('CNTRL STATUS')
+        except ValueError as error:
+            status = str(error)
+            if not status.startswith('CNTRL ERROR '):
+                raise
         recovery_only = status.startswith('CNTRL ERROR')
         if recovery_only:
             deployment = client.request('CNTRL DEPLOY STATUS').split()
@@ -539,14 +544,18 @@ def restore_setups(
     with transport.SerialConnection(port) as connection:
         client = transport.SetupClient(connection)
         active_ready = client.recover_deployment()
-        if not active_ready and not (directory / 'conversion.toml').exists():
-            raise ValueError(
-                'recovery installation requires an offline converted backup'
-            )
         recovery = (
             directory.parent / f'{directory.name}-before-restore-{uuid4().hex[:12]}'
         )
         backup_pedal(recovery, port, connection)
+        snapshot = BackupManifest.model_validate(
+            tomlkit.parse((recovery / 'backup.toml').read_text()).unwrap()
+        )
+        active_ready = active_ready and snapshot.complete
+        if not active_ready and not (directory / 'conversion.toml').exists():
+            raise ValueError(
+                'recovery installation requires an offline converted backup'
+            )
         check_conversion(recovery, raw_recovery=not active_ready)
         previous = {
             (n, r.number): (n, r, binary_format.wrap(resolved.upgrade(d)))
