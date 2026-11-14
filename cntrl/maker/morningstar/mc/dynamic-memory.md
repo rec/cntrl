@@ -4,7 +4,7 @@ Supporting hardware-specific audit for
 [the shared plan](../../../../plan/dynamic-memory.md).
 Original source baseline: `a32af63`, 2026-11-12. The original inventory is retained
 below; implementation checkpoints are recorded separately. Physical qualification
-is pending. Paths below are relative to this directory.
+is incomplete. Paths below are relative to this directory.
 
 ## Controller allocation implementation
 
@@ -256,10 +256,102 @@ The resulting image SHA-256 is
 Its linker totals are 306880 bytes of RAM1 variables, 195248 bytes of ITCM code,
 20800 bytes available for local variables, 90752 bytes of static RAM2 and
 433536 bytes available for allocation. Stack high-water remains unmeasured.
-The control image has not been flashed. The working image and verified original
-data remain on the pedal. Physical comparison must use a fresh backup and the
+This was the pre-flash checkpoint. Physical comparison must use a fresh backup and the
 `cntrl` flash, qualification and restore commands; keep the existing working
 image as the rollback.
+
+## Control USB comparison, 2026-11-14
+
+The approved comparison used `cntrl flash --skip-build` with the control source
+root and target directory above. Its fresh backup is
+`build/usb-flush-control-target/before/`: both setups, all 15 history revisions,
+readable assets, songs and the `simple-setup` selection. The two previously
+unreadable, unreferenced movie files were left untouched.
+
+The first upload returned a USB write error while in HalfKay, before any MIDI
+test. A deliberate retry through `cntrl upload-helper ... upload` reached the
+reset command, then returned status 1 when the board disappeared. Application
+USB returned with startup count 90. The uploader did not attest successful
+installation, so this comparison cannot prove that the guard caused a change
+in behavior. The expected control image hash remains `5131ec97592d393d2eaa06e7ef4690a52c9ec2f9d42951e448936a18c53fce03`.
+Restore and verification through the current `cntrl setup` commands with
+`--preserve-memory-estimates` passed before testing.
+
+With the temporary forwarding setup selected, the captured results were:
+
+| Trial | Sent | Received | Observation |
+| --- | ---: | ---: | --- |
+| MIDI-only paced short messages | 304 | 306 | Exact payload preceded by `f0f7`; strict mismatch. |
+| Serial plus MIDI, ordinary short-message check | 304 | 306 | Same extra prefix; stopped before notes. |
+| Serial plus MIDI, diagnostic paced trial | 304 | 304 | Exact match. |
+| Serial plus MIDI, diagnostic burst trial | 304 | 304 | Exact match. |
+| Serial plus MIDI, diagnostic SysEx trial | 4099 | 4092 | Missing bytes; strict mismatch. |
+
+The MIDI-only report is `build/usb-flush-control-midi-only-20261114.toml`;
+the ordinary combined report is `build/usb-flush-control-combined-20261114.toml`;
+the diagnostic trial report is
+`build/usb-flush-control-combined-probe-20261114.toml`. The virtual-source framing
+check passed where exercised. No bytes were filtered from these reports.
+
+`cntrl qualify --analyze-report` aligns the SysEx capture with five missing bytes
+`68696a6b6c` at sent offset 746 and two missing bytes `7778` at sent offset 3833.
+The first 746 bytes and final 264 bytes match exactly. This payload repeats every
+128 data bytes, so alignment positions can be ambiguous; these are byte-stream
+comparisons, not proof of where transport loss occurred.
+
+During this SysEx trial, route 0's drop counter rose from zero to one while its
+received and transmitted counters remained equal. In this target, route 0 is
+the DIN **output**, and route 6 is the USB-device output. The forwarding counters
+are charged to destinations, not to the input that supplied an event. The result
+is consistent with a USB packet rejected before the DIN output queue, rather
+than establishing a DIN receiver overflow. The actual rejected USB packet and
+UART timing were not captured by this normal build, so not all seven missing
+bytes have been localized. No allocation failure was reported.
+
+Serial diagnostics stayed reachable after these trials, and the startup count
+remained 90. The earlier USB stall was not reproduced in these bounded checks;
+the data path is nevertheless not qualified because the extra SysEx and missing
+bytes remain unresolved. `simple-setup` was reselected, the temporary setup was
+deleted, and restore/verification against the fresh backup passed again with
+`CNTRL READY 41 25477 b32ccca8 starts=90 starts_status=ready`.
+
+The qualifier was then extended with independent trial selection and read-only
+capture analysis. All 1499 tests passed after integrating main's test-runner and
+emulator changes; lint, formatting, typing and pyupgrade checks also passed.
+A second fresh backup, `build/usb-flush-targeted-backup-20261114/`, preceded the
+remaining tests. No additional firmware upload was performed.
+
+| Independent trial | Sent | Received | Observation |
+| --- | ---: | ---: | --- |
+| MIDI-only notes | 396 | 398 | Exact 396-byte payload after an extra `f0f7`; strict mismatch. |
+| Serial plus MIDI notes | 396 | 396 | Exact match, including all 64 note-ons, 64 note-offs and sustain changes. |
+| MIDI-only SysEx | 4099 | 4094 | Extra empty SysEx before the payload; payload length seven bytes short. |
+| Serial plus MIDI SysEx | 4099 | 4094 | Five bytes short; strict mismatch. |
+
+These captures are `build/usb-flush-targeted-{midi-only,serial}-{notes,sysex}-20261114.toml`.
+The MIDI-only note capture has an exact 396-byte common suffix: no note or sustain
+message was missing. The last serial SysEx capture aligns with byte `6c` missing
+at sent offset 750 and bytes `6768696a` missing at offset 1641, using zero-based
+offsets. Its first 750 bytes and final 2454 bytes match exactly. The repeating
+payload still limits interpretation of alignment positions. In particular, the
+generic alignment of the MIDI-only SysEx capture is not a minimal edit proof and
+must not be interpreted as the number of inserted or deleted wire bytes.
+
+Route 0's drop counter increased once during each independent SysEx trial, while
+route 6 reported no drop and both routes' received/transmitted totals matched.
+The rejected USB event could be separate from the payload gaps; its CIN and
+contents need capturing before attributing those gaps to validation. UART
+overrun/drop evidence is also still needed. Loss with no active serial client
+shows that host serial activity is not necessary for this failure; the composite
+USB serial interface was present in both modes.
+
+No MIDI trial caused a USB disappearance or reboot. Serial diagnostics stayed
+reachable with startup count 90 and no allocation failure. The temporary setup
+was deleted again, and the normal setup was restored and verified against the
+second backup. The original rollback image remains at
+`build/expression-dirty-normal-target/firmware.hex`. The transport is not yet
+qualified: the unexpected empty SysEx, long-message loss and uploader failure
+remain open, and bounded-allocator/continuation hardware stress has not resumed.
 
 ## Physical qualification procedure
 
@@ -274,12 +366,29 @@ already-enabled forwarding setup, close the setup command, then run:
 cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --run --expect-enabled --probe-short-messages --midi-only --destination 'cntrl experimental DIN' --source 'cntrl experimental DIN' --report build/midi-only-probe.toml
 ```
 
-This uses the same virtual-source check and paced/burst/SysEx payloads as the
+This uses the same virtual-source check and paced/burst/SysEx/note payloads as the
 combined probe, but opens no serial connection and records no serial counters.
 It saves the observed bytes and stops at the first mismatch. The firmware's
 serial interface remains part of its USB descriptor; this isolates the host
 serial client, not the presence of the composite interface. Inspect serial
 diagnostics separately after the MIDI client has closed.
+
+Use `--probe-trial paced`, `burst`, `sysex` or `notes` with
+`--probe-short-messages` to run one trial independently. This makes it possible
+to collect a note-lifecycle or SysEx capture when an earlier trial would stop
+the sequence. Notes include 64 onsets, their 64 releases and sustain on/off on
+two channels. Unexpected bytes still fail the strict comparison.
+
+Analyse saved probe trials without opening MIDI or serial connections:
+
+```sh
+cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --analyze-report build/usb-flush-control-combined-probe-20261114.toml --report build/usb-flush-control-combined-analysis-20261114.toml
+```
+
+The original capture is read only. The analysis reports exact lengths and common
+prefix/suffix sizes, plus an alignment of inserted, deleted or replaced spans.
+Repeated payloads can have several valid alignments. The result does not infer
+a transport stage or turn an unexpected byte stream into a passing result.
 
 For a crash or hang investigation, build with `cntrl build --diagnostics` using
 the same target and output options. This opt-in image reserves 128 bytes of RAM2

@@ -1,0 +1,16 @@
+interpretation = "Byte alignment only; repeated payloads may have ambiguous offsets. This does not identify the transport stage that changed bytes."
+
+[[trials]]
+name = "short"
+sent_bytes = 20
+received_bytes = 22
+matches = false
+common_prefix_bytes = 0
+common_suffix_bytes = 20
+
+[[trials.differences]]
+kind = "insert"
+sent_offset = 0
+received_offset = 0
+sent_hex = ""
+received_hex = "f0f7"

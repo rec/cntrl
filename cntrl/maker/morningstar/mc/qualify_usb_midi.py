@@ -3,6 +3,8 @@
 import ctypes
 import sys
 import time
+from difflib import SequenceMatcher
+from enum import StrEnum, auto
 from pathlib import Path
 from typing import Annotated
 
@@ -17,12 +19,21 @@ from ....patch_switcher.core_midi import Midi, exchange
 from ....patch_switcher.transport import SerialConnection, SetupClient
 
 
+class Trial(StrEnum):
+    paced = auto()
+    burst = auto()
+    sysex = auto()
+    notes = auto()
+
+
 class Options(BaseModel, frozen=True):
     """List endpoints by default; --run sends test traffic to the chosen output."""
 
     run: bool = False
     inspect: bool = False
     """Read serial diagnostics without opening MIDI endpoints or sending MIDI."""
+    analyze_report: Path | None = None
+    """Compare the saved trial bytes without opening MIDI or serial connections."""
     watchdog_test: bool = False
     """Intentionally hang diagnostic firmware and verify its watchdog warm reset."""
     destination: str = ''
@@ -38,7 +49,9 @@ class Options(BaseModel, frozen=True):
     stress_only: bool = False
     """Skip exact byte checks for transforming graphs; send only PC/modulation load."""
     probe_short_messages: bool = False
-    """Compare paced/burst short messages and SysEx with raw bytes and counters."""
+    """Compare paced/burst messages, SysEx and notes with raw bytes and counters."""
+    probe_trial: Trial | None = None
+    """Run one probe trial instead of the complete probe sequence."""
     midi_only: bool = False
     """Probe without opening serial. Requires already-enabled MIDI forwarding."""
     report: Path | None = None
@@ -46,6 +59,8 @@ class Options(BaseModel, frozen=True):
 
     @model_validator(mode='after')
     def stress_run(self) -> 'Options':
+        if self.probe_trial is not None and not self.probe_short_messages:
+            raise ValueError('probe-trial requires --probe-short-messages')
         if self.probe_short_messages and (
             not self.run or self.inspect or self.stress_only or self.stress_seconds
         ):
@@ -56,10 +71,27 @@ class Options(BaseModel, frozen=True):
             raise ValueError(
                 'midi-only requires --run --probe-short-messages --expect-enabled'
             )
-        if sum((self.inspect, self.run, self.watchdog_test)) > 1:
-            raise ValueError(
-                'inspect, run and watchdog-test are separate modes; select only one'
+        if (
+            sum(
+                (
+                    self.inspect,
+                    self.run,
+                    self.watchdog_test,
+                    self.analyze_report is not None,
+                )
             )
+            > 1
+        ):
+            raise ValueError(
+                'inspect, run, watchdog-test and analyze-report are separate modes; '
+                'select only one'
+            )
+        if (
+            self.analyze_report is not None
+            and self.report is not None
+            and self.analyze_report.resolve() == self.report.resolve()
+        ):
+            raise ValueError('analysis output must differ from the captured report')
         if self.stress_only and (not self.run or self.stress_seconds <= 0):
             raise ValueError('stress-only requires --run and positive --stress-seconds')
         if self.stress_bursts is not None and (
@@ -88,6 +120,57 @@ def note_lifecycle() -> bytes:
         + releases
         + b''.join(bytes((0xB0 | c, 64, 0)) for c in range(2))
     )
+
+
+def analyze_report(source: Path) -> dict[str, object]:
+    """Align captured bytes; repeated payloads can admit several valid alignments."""
+    captured = tomlkit.parse(source.read_text()).unwrap()
+    trials: list[dict[str, object]] = []
+    for trial in captured['trials']:
+        sent = bytes.fromhex(trial['sent_hex'])
+        received = bytes.fromhex(trial['received_hex'])
+        limit = min(len(sent), len(received))
+        prefix = suffix = 0
+        while prefix < limit and sent[prefix] == received[prefix]:
+            prefix += 1
+        while suffix < limit - prefix and sent[-suffix - 1] == received[-suffix - 1]:
+            suffix += 1
+        sent_end, received_end = len(sent) - suffix, len(received) - suffix
+        sent_middle, received_middle = (
+            sent[prefix:sent_end],
+            received[prefix:received_end],
+        )
+        trials.append(
+            {
+                'name': trial['name'],
+                'sent_bytes': len(sent),
+                'received_bytes': len(received),
+                'matches': sent == received,
+                'common_prefix_bytes': prefix,
+                'common_suffix_bytes': suffix,
+                'differences': [
+                    {
+                        'kind': k,
+                        'sent_offset': prefix + a,
+                        'received_offset': prefix + c,
+                        'sent_hex': sent_middle[a:b].hex(),
+                        'received_hex': received_middle[c:d].hex(),
+                    }
+                    for k, a, b, c, d in SequenceMatcher(
+                        None, sent_middle, received_middle, autojunk=False
+                    ).get_opcodes()
+                    if k != 'equal'
+                ],
+            }
+        )
+    return {
+        'source': str(source),
+        'interpretation': (
+            'Byte alignment only; repeated payloads may have ambiguous offsets. '
+            'This does not identify the transport stage that changed bytes.'
+        ),
+        'trials': trials,
+    }
 
 
 def diagnostics(client: SetupClient) -> dict[str, str]:
@@ -275,18 +358,23 @@ def probe_short_messages(
     client: SetupClient | None,
     report: dict[str, object],
     path: Path | None,
+    selected: Trial | None = None,
 ) -> list[dict[str, object]]:
     """Retain unsolicited traffic separately from each controlled wire trial."""
     messages = [bytes((0xC0 | i % 16, i)) for i in range(128)]
     messages.extend(bytes((0xB0 | i, 1, 0)) for i in range(16))
     sysex = b'\xf0\x7d' + bytes(i % 128 for i in range(4096)) + b'\xf7'
+    notes = note_lifecycle()
     trials: list[dict[str, object]] = []
     report['trials'] = trials
     for name, interval, chunks, settle in [
         ('paced', 0.002, messages, 0.5),
         ('burst', 0, [b''.join(messages)], 0.5),
         ('sysex', 0, [sysex], 2),
+        ('notes', 0.002, [notes[i : i + 3] for i in range(0, len(notes), 3)], 0.2),
     ]:
+        if selected is not None and name != selected:
+            continue
         payload = b''.join(chunks)
         before = diagnostics(client) if client is not None else None
         time.sleep(0.2)
@@ -329,13 +417,14 @@ def run_message_probe(
     client: SetupClient | None,
     report: dict[str, object],
     path: Path | None,
+    selected: Trial | None = None,
 ) -> None:
     report['host_loopback'] = host = probe_virtual_source(midi)
     if client is None and not host['matches']:
         save_report(path, report)
         raise ValueError('Host loopback mismatch; see the captured probe bytes')
     report['trials'] = trials = probe_short_messages(
-        midi, destination, client, report, path
+        midi, destination, client, report, path, selected
     )
     report['success'] = host['matches'] and all(t['matches'] for t in trials)
     save_report(path, report)
@@ -344,6 +433,11 @@ def run_message_probe(
 
 
 def run(options: Options) -> None:
+    if options.analyze_report is not None:
+        analysis = analyze_report(options.analyze_report)
+        save_report(options.report, analysis)
+        print(tomlkit.dumps(analysis), end='')
+        return
     if options.watchdog_test:
         watchdog_test(options)
         return
@@ -386,7 +480,9 @@ def run(options: Options) -> None:
         }
         save_report(options.report, report)
         if options.midi_only:
-            run_message_probe(midi, destination, None, report, options.report)
+            run_message_probe(
+                midi, destination, None, report, options.report, options.probe_trial
+            )
             return
         with SerialConnection(options.port, timeout=3, retry=False) as connection:
             client = SetupClient(connection)
@@ -407,7 +503,14 @@ def run(options: Options) -> None:
                     armed = True
                     client.ok('CNTRL QUAL START')
                 if options.probe_short_messages:
-                    run_message_probe(midi, destination, client, report, options.report)
+                    run_message_probe(
+                        midi,
+                        destination,
+                        client,
+                        report,
+                        options.report,
+                        options.probe_trial,
+                    )
                     return
                 # Program changes and benign modulation controls, not note events.
                 messages = b''.join(bytes((0xC0 | i % 16, i)) for i in range(128))

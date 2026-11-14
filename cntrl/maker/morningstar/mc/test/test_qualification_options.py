@@ -3,10 +3,12 @@ from pathlib import Path
 import pytest
 import tomlkit
 import tyro
+from pytest_regressions.file_regression import FileRegressionFixture
 
 from cntrl.maker.morningstar.mc import qualify_usb_midi
 from cntrl.maker.morningstar.mc.qualify_usb_midi import (
     Options,
+    Trial,
     note_lifecycle,
     save_report,
     watchdog_evidence,
@@ -124,11 +126,32 @@ def test_midi_only_probe_requires_enabled_forwarding_and_explicit_run() -> None:
             Options.model_validate({'midi_only': True, **values})
 
 
+def test_single_trial_requires_the_explicit_probe_mode() -> None:
+    options = tyro.cli(
+        Options, args=['--run', '--probe-short-messages', '--probe-trial', 'notes']
+    )
+    assert options.probe_trial == Trial.notes
+    with pytest.raises(ValueError, match='probe-trial requires'):
+        Options(run=True, probe_trial=Trial.notes)
+
+
 @pytest.mark.parametrize(
-    'host_matches, drop', [(True, False), (True, True), (False, False)]
+    'host_matches, drop, selected',
+    [
+        (True, False, None),
+        (True, True, None),
+        (False, False, None),
+        (True, False, Trial.sysex),
+        (True, False, Trial.notes),
+        (True, True, Trial.notes),
+    ],
 )
 def test_probe_without_serial_retains_bytes_and_stops_after_a_mismatch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, host_matches: bool, drop: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    host_matches: bool,
+    drop: bool,
+    selected: Trial | None,
 ) -> None:
     class Loopback(Midi):
         def __init__(self) -> None:
@@ -148,20 +171,25 @@ def test_probe_without_serial_retains_bytes_and_stops_after_a_mismatch(
     report: dict[str, object] = {'success': False}
     path = tmp_path / 'midi-only.toml'
     if host_matches and not drop:
-        qualify_usb_midi.run_message_probe(midi, 1, None, report, path)
+        qualify_usb_midi.run_message_probe(midi, 1, None, report, path, selected)
         assert report['success'] is True
     else:
         with pytest.raises(ValueError, match='mismatch'):
-            qualify_usb_midi.run_message_probe(midi, 1, None, report, path)
+            qualify_usb_midi.run_message_probe(midi, 1, None, report, path, selected)
     saved = tomlkit.parse(path.read_text()).unwrap()
     if not host_matches:
         assert not midi.sent and not saved['success']
         assert saved['host_loopback']['matches'] is False
         return
     trials = saved['trials']
-    assert [t['name'] for t in trials] == (
-        ['paced'] if drop else ['paced', 'burst', 'sysex']
+    expected = (
+        [selected.value]
+        if selected is not None
+        else ['paced']
+        if drop
+        else ['paced', 'burst', 'sysex', 'notes']
     )
+    assert [t['name'] for t in trials] == expected
     assert all(t['matches'] == (not drop) for t in trials)
     assert all('before' not in t and 'after' not in t for t in trials)
     if drop:
@@ -197,6 +225,66 @@ def test_failed_report_preserves_the_exact_observed_byte_trace(tmp_path: Path) -
     saved = tomlkit.parse(path.read_text()).unwrap()
     assert saved == report
     assert bytes.fromhex(saved['received_hex']) == received
+
+
+@pytest.mark.parametrize('change', ['identical', 'extra-prefix', 'missing-middle'])
+def test_capture_analysis_preserves_extra_and_missing_bytes(
+    tmp_path: Path, file_regression: FileRegressionFixture, change: str
+) -> None:
+    sent = b''.join(bytes((0xC0 | i, i)) for i in range(10))
+    received = sent
+    if change == 'extra-prefix':
+        received = b'\xf0\xf7' + sent
+    elif change == 'missing-middle':
+        received = sent[:5] + sent[12:]
+    source = tmp_path / 'capture.toml'
+    save_report(
+        source,
+        {
+            'trials': [
+                {
+                    'name': 'short',
+                    'sent_hex': sent.hex(),
+                    'received_hex': received.hex(),
+                }
+            ]
+        },
+    )
+    original = source.read_bytes()
+    result = qualify_usb_midi.analyze_report(source)
+    assert source.read_bytes() == original
+    assert result.pop('source') == str(source)
+    file_regression.check(tomlkit.dumps(result), extension='.toml')
+
+
+def test_saved_analysis_runs_without_opening_midi_or_serial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected_device(*args: object, **kwargs: object) -> None:
+        pytest.fail('saved analysis opened a device')
+
+    monkeypatch.setattr(qualify_usb_midi, 'Midi', unexpected_device)
+    monkeypatch.setattr(qualify_usb_midi, 'SerialConnection', unexpected_device)
+    source, output = tmp_path / 'capture.toml', tmp_path / 'analysis.toml'
+    save_report(
+        source,
+        {'trials': [{'name': 'short', 'sent_hex': 'c001', 'received_hex': 'c001'}]},
+    )
+    options = tyro.cli(
+        Options, args=['--analyze-report', str(source), '--report', str(output)]
+    )
+    qualify_usb_midi.run(options)
+    saved = tomlkit.parse(output.read_text()).unwrap()
+    assert saved['trials'][0]['matches'] is True
+
+
+def test_capture_analysis_cannot_run_hardware_or_overwrite_its_source() -> None:
+    source = Path('capture.toml')
+    for values in ({'run': True}, {'inspect': True}, {'watchdog_test': True}):
+        with pytest.raises(ValueError, match='select only one'):
+            Options.model_validate({'analyze_report': source, **values})
+    with pytest.raises(ValueError, match='must differ'):
+        Options(analyze_report=source, report=source)
 
 
 def test_note_trace_releases_every_channel_note_before_releasing_sustain() -> None:
