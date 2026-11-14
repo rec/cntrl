@@ -25,7 +25,9 @@ def run(command: Build) -> None:
     if command.diagnostics:
         raise ValueError('this MIDI control target does not enable the watchdog')
     repository, output = command.source_root.resolve(), command.output.resolve()
-    source = output.with_name(output.name + '-source')
+    # The Windows ARM compiler cannot locate its multilib headers when its
+    # installation directory contains spaces. The export may still contain them.
+    source = output.with_name(output.name.replace(' ', '_') + '-source')
     source.mkdir(parents=True)
     archive = subprocess.check_output(
         ['git', '-C', str(repository), 'archive', BASELINE]

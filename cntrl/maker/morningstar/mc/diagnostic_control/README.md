@@ -19,6 +19,10 @@ uv run --frozen --no-editable cntrl build --target-dir cntrl/maker/morningstar/m
 
 Keep the adjacent generated `build/sysex-transport-control-source/` directory
 with the export. The flash entry uses its matching compiler for backup/restore.
+Spaces in the export's directory name become underscores in the source directory
+name because the Windows ARM compiler cannot find its multilib headers when its
+installation directory contains spaces. Keep the checkout and output parent
+paths free of spaces for this diagnostic target.
 The export itself contains the ordinary portable artifacts and a build manifest
 with a trace ID and expected image SHA-256. The trace ID is a compiled source
 recipe label, not a cryptographic readback of every installed flash byte.

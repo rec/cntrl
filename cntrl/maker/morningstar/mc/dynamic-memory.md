@@ -384,6 +384,61 @@ These are static section sizes, not runtime free-space or stack high-water
 measurements. The adjacent generated source/SDK directory is retained so the
 existing flash flow uses the matching compiler for backup and restoration.
 
+### Captured validation and UART losses
+
+The fresh backup is `build/sysex-transport-control-main/before/`. The initial
+upload failed with a USB write error in HalfKay before MIDI testing. A deliberate
+second upload reached reset but returned status 1 with "Board has disappeared".
+The application returned with startup count 91 and independently reported the
+expected compiled trace ID. That identifies the source recipe running on the
+pedal, while preserving the uploader failure and lack of cryptographic flash
+readback as limits.
+
+Both 4,099-byte SysEx trials captured one rejection: USB event `0f 6c 00 00`,
+source 96, DIN output route 0, while the parser was in SysEx and not discarding.
+Its raw stream offset was 752, corresponding to payload offset 750 after the
+two extra pre-trial bytes. This is a validator bug: `Bridge::valid()` only accepts
+bytes at least `0xf8` for CIN 15. [USB MIDI 1.0 section 4, Table 4-1 Note 2](https://www.usb.org/sites/default/files/midi10.pdf)
+permits arbitrary unparsed MIDI bytes with CIN `0xf`, including this SysEx data
+byte. The event is not evidence of a malformed host packet.
+
+| Boundary / counter | MIDI only | Serial plus MIDI |
+| --- | ---: | ---: |
+| Raw USB input bytes over the whole capture | 4,101 | 4,101 |
+| USB bytes accepted by validation | 4,100 | 4,100 |
+| Successful DIN UART write bytes | 4,100 | 4,100 |
+| DIN UART read bytes | 4,095 | 4,096 |
+| Successful USB return bytes | 4,095 | 4,096 |
+| DIN receive software drops, delta | 5 | 4 |
+| DIN hardware overrun latches, delta | 0 | 0 |
+| TRS software drops / overrun latches, delta | 0 / 0 | 0 / 0 |
+| Receive polling gap at first observed drop | 33,008 us | 32,937 us |
+| Receive ring occupancy at that observation | 63 | 63 |
+
+Accepted USB input and DIN writes had identical counts and CRCs. DIN reads and
+USB return submissions also had identical counts and CRCs. The entire byte-count
+loss between DIN writes and reads equals the SDK receive-ring software-drop
+counter delta. These captures therefore localize two independent losses: the
+incorrect CIN 15 rejection and the full DIN receive ring while main-loop polling
+is delayed. They do not identify which main-loop function caused the delay, or
+establish that the USB disappearance has the same cause. No disappearance or
+reboot occurred during either capture, and no hardware overrun was observed.
+
+The generated evidence is retained in
+`build/sysex-{midi-only,serial}-transport-20261114.toml`, their separate `.midi.toml`
+raw reports and corresponding `-analysis-20261114.toml` reports. The comparison
+covers all traffic from RESET to STOP; the serial trial's host receive buffer was
+cleared after the two pre-trial bytes, so its 4,094 received payload bytes differ
+from the trace's 4,096 whole-capture return bytes. Strict byte mismatches remain
+failures. The existing empty SysEx remains a separate observation.
+
+After the captures, trace collection was stopped, the temporary setup was
+deleted, and the original selection, both setups, all 15 history revisions,
+assets and songs were restored and verified unchanged at startup count 91.
+The installed normal/newlib control retains the working UI and has no watchdog.
+These measurements diagnose the losses; they do not claim either bug is fixed
+or resume the bounded-allocator stress qualification.
+
 ## Physical qualification procedure
 
 Use `uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc`

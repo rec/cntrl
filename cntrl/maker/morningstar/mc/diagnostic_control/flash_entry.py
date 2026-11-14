@@ -17,7 +17,7 @@ class Flash(BaseModel, frozen=True):
 
 def run(command: Flash) -> None:
     directory = command.directory.resolve()
-    source = directory.with_name(directory.name + '-source')
+    source = directory.with_name(directory.name.replace(' ', '_') + '-source')
     subprocess.run(
         [
             sys.executable,
