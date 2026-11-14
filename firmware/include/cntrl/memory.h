@@ -25,7 +25,9 @@ inline unsigned (*memory_actual_charge)(const void *) = nullptr;
 constexpr uint64_t memory_charge(unsigned length) {
     return length ? ((uint64_t(length) + 7) & ~uint64_t(7)) + 8 : 0;
 }
-inline uint64_t memory_allocation_charge(const void *data, unsigned size) {
+// The allocation's payload can be uninitialized. A const parameter makes GCC
+// infer a payload read before inlining this metadata-only query.
+inline uint64_t memory_allocation_charge(void *data, unsigned size) {
     return data && memory_actual_charge ? memory_actual_charge(data) : memory_charge(size);
 }
 
