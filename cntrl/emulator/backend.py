@@ -6,8 +6,10 @@ import subprocess
 import sys
 import threading
 import time
+from hashlib import sha256
 from pathlib import Path
 from queue import Empty, Full, Queue
+from shutil import which
 from threading import Thread, Timer
 from types import TracebackType
 from typing import Literal
@@ -62,6 +64,8 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
         raise ValueError(
             'emulator animations require one matching-size stream per display'
         )
+    directory = directory.resolve()
+    source_root = source_root.resolve()
     directory.mkdir(parents=True, exist_ok=True)
     include = source_root / 'firmware/include'
     source = source_root / 'firmware/emulator/main.cpp'
@@ -74,8 +78,10 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
         if name not in target.font_sources:
             raise ValueError(f'execution target lacks exported UI font source: {name}')
         fonts[name] = Path(target.font_sources[name]).read_bytes()
-    (directory / 'target_capabilities.h').write_text(header(target))
-    (directory / 'emulator_fonts.h').write_text(embedded_header(fonts))
+    generated = {
+        'target_capabilities.h': header(target),
+        'emulator_fonts.h': embedded_header(fonts),
+    }
     executable = directory / ('emulator.exe' if sys.platform == 'win32' else 'emulator')
     if sys.platform == 'win32':
         command = [
@@ -111,7 +117,53 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
             '-o',
             str(executable),
         ]
+    compiler = which(command[0])
+    if compiler is None:
+        raise FileNotFoundError(f'emulator compiler not found: {command[0]}')
+    compiler_path = Path(compiler).resolve()
+    signature = sha256(repr(command).encode())
+    signature.update(str(compiler_path).encode())
+    if sys.platform == 'win32':
+        signature.update(sha256(compiler_path.read_bytes()).digest())
+    else:
+        version = subprocess.run(
+            [str(compiler_path), '--version'], check=True, capture_output=True
+        )
+        signature.update(version.stdout)
+        signature.update(version.stderr)
+    for name in (
+        'CPATH',
+        'CPLUS_INCLUDE_PATH',
+        'LIBRARY_PATH',
+        'SDKROOT',
+        'MACOSX_DEPLOYMENT_TARGET',
+        'CL',
+        '_CL_',
+        'INCLUDE',
+        'LIB',
+        'LIBPATH',
+    ):
+        signature.update(repr((name, os.environ.get(name))).encode())
+    signature.update(target.model_dump_json().encode())
+    for name, text in generated.items():
+        signature.update(name.encode())
+        signature.update(sha256(text.encode()).digest())
+    inputs = [source, *source.parent.rglob('*.h'), *include.rglob('*.h')]
+    if sys.platform == 'win32':
+        inputs.append(source_root / 'scripts/windows-native.manifest')
+    for path in sorted(inputs):
+        signature.update(path.relative_to(source_root).as_posix().encode() + b'\0')
+        signature.update(sha256(path.read_bytes()).digest())
+    key = signature.hexdigest()
+    record = directory / 'emulator.sha256'
+    if executable.is_file() and record.is_file() and record.read_text() == key:
+        return executable
+    # A failed compiler may truncate an old executable. Never reuse its old key.
+    record.write_text('')
+    for name, text in generated.items():
+        (directory / name).write_text(text)
     subprocess.run(command, check=True)
+    record.write_text(key)
     return executable
 
 

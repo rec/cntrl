@@ -130,6 +130,21 @@ def backend_files(
     )
 
 
+def test_native_build_reuses_the_compiled_executable(
+    backend_files: BackendFiles,
+) -> None:
+    executable = backend_files.executable
+    timestamp = executable.stat().st_mtime_ns
+    started = monotonic()
+    result = backend.build(
+        backend_files.target, executable.parent, Path(__file__).parents[1]
+    )
+    elapsed = monotonic() - started
+    assert result == executable
+    assert executable.stat().st_mtime_ns == timestamp
+    print(f'unchanged native build: {elapsed:.3f} s')
+
+
 def test_replay_drives_real_button_actions_and_draws_pages(
     backend_files: BackendFiles, tmp_path: Path
 ) -> None:
