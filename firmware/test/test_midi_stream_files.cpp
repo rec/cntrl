@@ -97,7 +97,7 @@ void independent_file_generators_do_not_share_position_or_indexes() {
     assert(!files.open_stream(settings, 2));
     assert(!storage.exists("/index.stream-2"));
 }
-void file_generator_runs_through_finite_reverse(bool defer_completion = false) {
+void file_generator_runs_through_finite_reverse(bool defer_completion = false, bool panic_stop = false) {
     Storage storage;
     storage.files["/midi/a.mid"] = {'M','T','h','d',0,0,0,6,0,0,0,1,1,0xe0,
         'M','T','r','k',0,0,0,13,0,0x90,60,97,0x83,0x60,0x80,60,0,0,0xff,0x2f,0};
@@ -108,7 +108,7 @@ void file_generator_runs_through_finite_reverse(bool defer_completion = false) {
     section.insert(section.end(), {9,0,126,0});
     const char filename[] = "a.mid";
     section.insert(section.end(), filename, filename + 5); section.insert(section.end(), 91, 0);
-    section.insert(section.end(), {1,0,0,0});
+    section.insert(section.end(), {uint8_t(panic_stop ? 0 : 1),0,0,0});
     section.insert(section.end(), 16, 0);
     double speed = 1; const auto *bytes = reinterpret_cast<const uint8_t *>(&speed);
     section.insert(section.end(), bytes, bytes + sizeof(speed));
@@ -128,6 +128,15 @@ void file_generator_runs_through_finite_reverse(bool defer_completion = false) {
         return;
     }
     for (unsigned i = 0; i < 32; ++i) streams.service(sink, 500000);
+    if (panic_stop) {
+        assert(streams.file_sources_open());
+        const auto note_ons = std::count(sink.bytes.begin(), sink.bytes.end(), uint8_t(0x90));
+        streams.stop_file_playback(); streams.stop_all();
+        for (unsigned i = 0; i < 128; ++i) streams.service(sink, 1000000 + i * 10000);
+        assert(std::count(sink.bytes.begin(), sink.bytes.end(), uint8_t(0x90)) == note_ons);
+        assert(!streams.voices() && !streams.file_sources_open());
+        return;
+    }
     assert((sink.bytes == Bytes{0x90,60,97}));
     for (unsigned i = 0; i < 32; ++i) streams.service(sink, 1000000);
     assert((sink.bytes == Bytes{0x90,60,97,0x80,60,0}));
@@ -213,6 +222,7 @@ int main() {
     independent_file_generators_do_not_share_position_or_indexes();
     file_generator_runs_through_finite_reverse();
     file_generator_runs_through_finite_reverse(true);
+    file_generator_runs_through_finite_reverse(false, true);
     loop_save_is_exclusive_bounded_and_load_never_autoplays();
     loop_capture_keeps_running_status_and_usb_cables_separate();
     assert(cntrl::memory_used == 0);

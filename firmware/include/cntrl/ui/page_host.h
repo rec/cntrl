@@ -385,11 +385,8 @@ public:
 #endif
 #if CNTRL_PANIC
         if (pages_.page() == Pages::Page::panic) {
-            if (!platform_.panic_owns_midi && (application_.patch_pending() || !platform_.output_idle() || documents_.busy() || !stop_clock())) return;
-            application_.controller().cancel_gesture();
-            if (!platform_.panic_owns_midi) platform_.midi_bridge().configure(false);
-            platform_.panic_owns_midi = true;
             platform_.panic.button(true, now);
+            start_panic();
             return;
         }
 #endif
@@ -448,6 +445,9 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
+#if CNTRL_PANIC
+        if (pages_.page() == Pages::Page::panic && platform_.panic.active() && !platform_.panic_owns_midi) start_panic();
+#endif
         if (auto *bank = application_.focused_bank()) {
             if (expression_bank_ != bank || expression_revision_ != bank->revision()) {
                 ExpressionAssignment assignments[4];
@@ -556,6 +556,19 @@ public:
     Pages pages_;
     Keyboard keyboard_;
 private:
+#if CNTRL_PANIC
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_start_panic)
+#endif
+    void start_panic() {
+        if (looper_files_) looper_files_->player.cancel();
+        if (!platform_.panic_owns_midi && (application_.patch_pending() || !platform_.output_idle()
+            || documents_.busy() || (looper_files_ && looper_files_->player.cleaning()) || !stop_clock())) return;
+        application_.controller().cancel_gesture();
+        if (!platform_.panic_owns_midi) platform_.midi_bridge().configure(false);
+        platform_.panic_owns_midi = true;
+    }
+#endif
     BankedPage *expression_bank_ = nullptr;
     unsigned expression_revision_ = 0;
     void save_view() { if (pages_.index() < application_.views.size()) application_.views[pages_.index()] = pages_.save_view(); }

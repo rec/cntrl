@@ -23,9 +23,11 @@ struct Recorder {
 };
 struct Player {
     std::vector<std::string> *log;
+    bool playing = false;
+    void cancel() { playing = false; log->push_back("cancel-play"); }
     unsigned clock_outputs() const { return 0; }
     unsigned sysex_outputs() const { return 0; }
-    template<class Sink> void poll(uint32_t, unsigned, Sink &) { log->push_back("play"); }
+    template<class Sink> void poll(uint32_t, unsigned, Sink &) { log->push_back(playing ? "playing" : "play"); }
 };
 struct Files {
     struct Looper {
@@ -174,8 +176,17 @@ void test_exclusive_utilities_and_diagnostics() {
     Services services;
     cntrl::midi::Runtime runtime(1, 180);
     services.panic_owns_midi = services.panic.running = true;
+    services.files.player.playing = true;
     runtime.poll(services);
+    assert(!services.files.player.playing);
+    assert(std::find(services.log.begin(), services.log.end(), "playing") == services.log.end());
     assert(services.writes.empty() && services.panic.ticks == 1 && !services.panic_owns_midi);
+    // A requested panic stops playback even while the page waits for handoff.
+    Services requested(0);
+    cntrl::midi::Runtime pending_runtime;
+    requested.panic.running = requested.files.player.playing = true;
+    pending_runtime.poll(requested);
+    assert(!requested.files.player.playing && requested.panic.running && !requested.panic.ticks);
     services.cable_test.running = true;
     services.sources[1].front().packetized = false;
     services.sources[1].front().byte = 0xb0;

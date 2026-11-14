@@ -8,6 +8,12 @@ Press C to start and temporarily set the screens to maximum brightness. Release
 C to restore the brightness that was active on entry. Browsing the page sends
 nothing and leaves normal MIDI routing unchanged.
 
+Triggering Panic also stops all MIDI-file playback, including infinite loops,
+stream file sources and the MIDI looper. Playback stays stopped after Panic
+finishes or you leave the page. A quick tap remains pending while playback and
+queued MIDI finish their cleanup, then sends the reset sequence without another
+press.
+
 A press starts this sequence on every available MIDI output, on channels 1..16:
 
 1. All Notes Off: CC 123, value 0.
@@ -48,5 +54,6 @@ accepted by a transmitter finish transmitting.
 
 Native tests cover the shared page layout, full controller and Note Off sequences on all
 outputs/channels, repetition, tap/hold/release, brightness restoration, retry,
-disconnection, cancellation and re-entry. Physical message capture and visible
+disconnection, cancellation, re-entry, playback cancellation and a quick tap
+waiting for MIDI cleanup. Physical message capture and visible
 hold feedback require pedal verification.

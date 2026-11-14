@@ -280,6 +280,13 @@ public:
         if (enabled) { routes_[route].failed = false; routes_[route].failed_outputs = 0; }
         if (enabled) { routes_[route].activated = true; routes_[route].note_admission_closed = false; activation_pending_ = true; }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_stop_file_playback)
+#endif
+    void stop_file_playback() {
+        for (unsigned i = 0; i < routes_.size(); ++i)
+            if (!routes_[i].steps.empty() && routes_[i].steps[0].kind == 9) gate(i, false);
+    }
     void stop_all() {
         retire(UINT32_MAX);
         for (auto &route : routes_) { if constexpr (ProcessingPolicy::advanced) route.file.reset(); route.started = false; }
