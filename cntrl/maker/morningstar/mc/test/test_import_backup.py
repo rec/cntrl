@@ -12,16 +12,18 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
 from cntrl.maker.morningstar.mc.import_backup import convert
-from cntrl.patch_switcher import compiler, resolved, setup_bundle
+from cntrl.patch_switcher import compiler, models, resolved, setup_bundle
 
 
 def test_saved_vl70_bank_converts_to_editable_toml(
     file_regression: FileRegressionFixture,
 ) -> None:
     setup = convert(json.loads(BACKUP.read_bytes()), 0)
-    assert len(setup.pages['performance'].banks) == 128
-    assert all(len(b) == 4 for b in setup.pages['performance'].banks)
-    assert not setup.patch_cycles
+    assert list(setup.patches) == ['Morningstar']
+    imported = models.Banked.model_validate(setup.patches['Morningstar'])
+    assert len(imported.banks) == 128
+    assert all(len(b) == 4 for b in imported.banks)
+    assert setup.patch_cycles == {'Imported': ['Morningstar']}
     file_regression.check(
         tomlkit.dumps(
             setup.model_dump(mode='json', exclude_none=True, exclude_defaults=True)
@@ -37,6 +39,25 @@ def test_unsupported_messages_are_reported_at_the_source_slot() -> None:
         ValueError, match='/presetArray/0/msgArray/0: unsupported message type 99'
     ):
         convert(document, 0)
+
+
+def test_latched_switch_cannot_enter_a_banked_patch(tmp_path: Path) -> None:
+    target = cli.load_target(
+        profiles.export(
+            BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+        )
+    )
+    show = convert(json.loads(BACKUP.read_bytes()), 0).model_dump(exclude_none=True)
+    show['switches'] = {
+        'open': {
+            'button': 'b',
+            'mode': 'latched',
+            'on': {'patch': 'Morningstar'},
+            'off': {'patches': []},
+        }
+    }
+    with pytest.raises(compiler.CompilationError, match='leaves the switch context'):
+        compiler.compile_show(show, {}, [], target)
 
 
 def test_imported_bank_runs_counters_and_bank_transitions(
@@ -88,7 +109,7 @@ def test_imported_bank_runs_counters_and_bank_transitions(
             now += 60000
             session.advance(now)
 
-        session.advance(20000)
+        press('a')  # Sending the one imported patch opens its Banked Page.
         assert not [e for e in session.messages if e.kind == 'midi']
         snapshot()
         press('a')  # Counter 3: 21 -> 22, on both channels and both outputs.
@@ -233,8 +254,17 @@ def test_banked_page_keeps_selection_and_runs_actions_while_hidden(
     )
     show = convert(json.loads(BACKUP.read_bytes()), 0).model_dump(exclude_none=True)
     show['pages']['status'] = {'type': 'status'}
-    show['regions'] = {'main': {'pages': ['performance', 'status']}}
-    actions = show['patches']['bank1_page0']['bindings']['a']['on']['patches']
+    show['regions'] = {'main': {'pages': ['performance', 'morningstar', 'status']}}
+    show['patches']['Plain'] = {
+        'type': 'program-change',
+        'output': 'din',
+        'channel': 1,
+        'program': 100,
+    }
+    show['patch_cycles']['Imported'].append('Plain')
+    actions = show['patches']['Morningstar']['patches']['bank1_page0']['bindings']['a'][
+        'on'
+    ]['patches']
     actions.insert(0, {'type': 'delay', 'duration': '400 milliseconds'})
     raw = compiler.compile_show(show, {}, [], target)
     bundle = tmp_path / 'setup.bin'
@@ -259,6 +289,7 @@ def test_banked_page_keeps_selection_and_runs_actions_while_hidden(
             now += 60000
             session.advance(now)
 
+        press('a')  # Enter the imported patch.
         press('c')  # Bank 1.
         press('a')  # A delayed program send.
         session.request(b'\x08\x00')  # The emulator's page selector chooses Status.
@@ -269,7 +300,16 @@ def test_banked_page_keeps_selection_and_runs_actions_while_hidden(
             for e in session.messages
             if e.kind == 'midi' and e.endpoint == 'din'
         ] == [[0xC0, 47], [0xC1, 21]]
-        session.request(b'\x08\x00')  # Return to the same bank.
+        session.request(b'\x08\x00')  # Return to the patch browser.
+        press('b')
+        press('a')  # Send an ordinary patch alongside the imported controller.
+        assert [
+            list(e.data)
+            for e in session.messages
+            if e.kind == 'midi' and e.endpoint == 'din'
+        ][-1] == [0xC0, 99]
+        press('b')
+        press('a')  # Re-sending the patch returns to its existing instance.
         press('c')  # Bank 1's C returns to bank 0.
         press('a')
         assert [

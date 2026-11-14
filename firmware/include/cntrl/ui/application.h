@@ -271,6 +271,16 @@ public:
         const unsigned page = allocation.selected();
         return page < banked_.size() ? banked_[page] : nullptr;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_activate_banked)
+#endif
+    bool activate_banked(const Document &document, unsigned node) {
+        for (unsigned i = 0; i < banked_.size(); ++i) if (banked_[i] && banked_[i]->matches(document, node)) {
+            if (!banked_[i]->activate(uint32_t(held))) return false;
+            pending_page = i; return true;
+        }
+        return false;
+    }
 private:
     std::array<const char *, 3> tool_names_{"Setups", "Songs and setlists", "Switches"};
     MemoryBuffer names_, pending_names_;

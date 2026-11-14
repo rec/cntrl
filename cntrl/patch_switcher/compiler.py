@@ -589,7 +589,7 @@ def compile_show(
         looper_settings = looper.pack(show, target)
         arpeggiator_settings = arpeggiator.pack(show, target)
         page_layout = layout.pack(show, [d.id for d in target.displays])
-        banked_pages = banked.pack(show, named, compiler.nodes, target)
+        banked_pages = banked.pack(show, named, compiler.nodes)
         relay_settings = relay_outputs.pack(show, target)
         counter_settings = counters.pack(compiler.counters, show, target)
         stream_settings = midi_processing.compile_routes(
@@ -958,7 +958,22 @@ class PatchCompiler:
             self.children[index] = [child]
             return index
         flags = 0
-        if isinstance(value, models.CounterMessage):
+        if isinstance(value, models.Banked):
+            local = {}
+            for key, raw in value.patches.items():
+                if (child := self.parse(raw, f'{path}.patches.{key}')) is not None:
+                    if self.nodes[child][0] != 10:
+                        self.errors.append(
+                            f'{path}.patches.{key}: bank preset pages need bindings'
+                        )
+                    local[key] = child
+            self.children[index] = list(local.values())
+            kind, payload = 17, b''
+            try:
+                payload = banked.definition(value, local, self.show, self.target)
+            except ValueError as error:
+                self.errors.append(f'{path}: {error}')
+        elif isinstance(value, models.CounterMessage):
             if value.counter not in self.counters:
                 self.errors.append(f'{path}: unknown counter {value.counter!r}')
             if value.output not in self.target.outputs:
@@ -1872,7 +1887,7 @@ class PatchCompiler:
                     or assignment.exit is not None
                     or assignment.shifted is not None
                 ) and (
-                    isinstance(value, models.StockFirmware)
+                    isinstance(value, (models.StockFirmware, models.Banked))
                     or getattr(value, 'bindings', None) is not None
                     or isinstance(value, models.Navigation)
                     and value.operation in ('menu', 'back', 'next-song-patch')
@@ -2511,7 +2526,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 44
+DOCUMENT_VERSION = 45
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

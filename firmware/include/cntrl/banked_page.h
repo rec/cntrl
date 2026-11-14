@@ -14,12 +14,25 @@ public:
         if (!storage_.resize(source.length())) return false;
         std::memcpy(storage_.data, source.data(), source.length());
         if (!document_.load(storage_.data, storage_.size, hardware_)) return false;
-        record_ = document_.banked_pages().find(page);
-        if (!record_) return false;
+        const uint8_t *view = document_.banked_pages().find(page);
+        if (!view) return false;
+        node_ = u16(view + 2);
+        record_ = document_.node(node_) + 4;
         bank_ = u16(record_ + 4);
-        return enter();
+        return true;
     }
-    void refresh() { switches_.refresh(); }
+    void refresh() { if (active_) switches_.refresh(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(banked_patch_activate)
+#endif
+    bool activate(uint32_t held) {
+        if (active_) return true;
+        held_ = held;
+        return active_ = enter();
+    }
+    bool matches(const Document &document, unsigned node) const {
+        return node_ == node && u32(document_.data() + document_.core_offset() + 20) == u32(document.data() + document.core_offset() + 20);
+    }
     unsigned revision() const { return switches_.revision(); }
     ExpressionAssignment expression(unsigned input) const { return switches_.expression(input); }
     bool navigate(unsigned operation) {
@@ -31,7 +44,7 @@ public:
     CNTRL_FLASH_ROUTINE(banked_page_button)
 #endif
     void button(unsigned input, bool down, uint32_t now) {
-        if (input >= 32) return;
+        if (!active_ || input >= 32) return;
         const uint32_t bit = 1u << input;
         held_ = down ? held_ | bit : held_ & ~bit;
         if (blocked_ & bit) { if (!down) blocked_ &= ~bit; return; }
@@ -58,6 +71,7 @@ public:
     CNTRL_FLASH_ROUTINE(banked_page_tick)
 #endif
     void tick(uint32_t now, uint32_t held) {
+        if (!active_) return;
         for (unsigned i = 0; i < 32; ++i) if ((held_ & ~held) & (1u << i)) button(i, false, now);
         for (unsigned i = 0; i < 32; ++i) if ((waiting_ & (1u << i)) && int32_t(now - deadlines_[i]) >= 0) {
             waiting_ &= ~(1u << i); switches_.button(i, true, now);
@@ -83,9 +97,9 @@ private:
     Document document_;
     Switches switches_;
     const uint8_t *record_ = nullptr;
-    unsigned bank_ = 0, page_ = 0, pending_ = 0;
+    unsigned bank_ = 0, page_ = 0, pending_ = 0, node_ = 0;
     uint32_t held_ = 0, blocked_ = 0, waiting_ = 0, deadlines_[32] = {};
-    bool leaving_ = false;
+    bool leaving_ = false, active_ = false;
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(banked_page_enter)
 #endif

@@ -14,7 +14,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 44;
+constexpr unsigned document_version = 45;
 constexpr unsigned gesture_event_count = 12;
 constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
 constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
@@ -370,8 +370,16 @@ public:
         unsigned graph = end;
         if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count,looper != 0)) return false;
         if (!std::memcmp(bytes + banked_offset, "CBPG", 4)) {
-            const uint8_t *p = bytes + banked_offset + 10;
-            for (unsigned i = 0; i < u16(bytes + banked_offset + 8); ++i) {
+            const unsigned views = u16(bytes + banked_offset + 8);
+            unsigned definitions = 0;
+            for (unsigned n = 0; n < u16(bytes + graph + 8); ++n) definitions += bytes[graph + u32(bytes + graph + 16 + n * 4)] == 17;
+            if (definitions != views) return false;
+            for (unsigned i = 0; i < views; ++i) {
+                const unsigned node = u16(bytes + banked_offset + 12 + i * 4);
+                if (node >= u16(bytes + graph + 8)) return false;
+                const uint8_t *n = bytes + graph + u32(bytes + graph + 16 + node * 4);
+                if (n[0] != 17) return false;
+                const uint8_t *p = n + 4;
                 for (unsigned b = 0; b < u16(p + 2); ++b) {
                     const uint8_t *bank = BankedPages::bank(p, b);
                     for (unsigned j = 0; j < u16(bank); ++j) {
@@ -379,9 +387,6 @@ public:
                         if (node >= u16(bytes + graph + 8) || bytes[graph + u32(bytes + graph + 16 + node * 4)] != 10) return false;
                     }
                 }
-                const uint8_t *chords = BankedPages::bank(p, u16(p + 2));
-                for (unsigned j = 0; j < u16(p + 6); ++j) if (u32(chords + j * 5 + 1) & ~(inputs >= 32 ? UINT32_MAX : (1u << inputs) - 1)) return false;
-                p = BankedPages::next(p);
             }
         }
         if (pickup && u16(bytes + pickup + 4) != u16(bytes + graph + 8)) return false;
@@ -962,6 +967,22 @@ private:
             case 14:
                 if (n[1] || length != 3 || u16(p) >= counter_count || p[2] > 1) return false;
                 break;
+            case 17: {
+                if (n[1] || length < 8 || !u16(p) || !u16(p + 2) || u16(p + 2) > 128 || u16(p + 4) >= u16(p + 2) || u16(p + 6) > 5) return false;
+                const uint8_t *r = p + 8, *end = p + length;
+                for (unsigned b = 0; b < u16(p + 2); ++b) {
+                    if (end - r < 2 || !u16(r) || u16(r) > 4 || end - r < 2 + 2 * u16(r)) return false;
+                    unsigned pages = u16(r); r += 2;
+                    for (unsigned j = 0; j < pages; ++j, r += 2) if (u16(r) >= count) return false;
+                }
+                if (end - r != 5 * u16(p + 6) + 66 * u16(p)) return false;
+                for (unsigned j = 0; j < u16(p + 6); ++j, r += 5) {
+                    const unsigned mask = u32(r + 1);
+                    if ((r[0] != 9 && (r[0] < 14 || r[0] > 17)) || !mask || !(mask & (mask - 1)) || (input_count < 32 && mask >> input_count)) return false;
+                }
+                for (unsigned j = 0; j < u16(p); ++j, r += 66) if (u16(r) >= count || !text_valid(r + 2, 64)) return false;
+                break;
+            }
             case 16:
                 if (n[1] || length != 37 || u16(p) >= counter_count || !text_valid(p + 2, 32)
                     || !p[34] || p[34] > 16 || p[35] > 2 || p[36] > 1

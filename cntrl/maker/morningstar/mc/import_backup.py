@@ -220,8 +220,15 @@ def convert(document: dict, bank: int) -> models.Setup:
     return models.Setup.model_validate(
         {
             'pages': {
-                'performance': {
+                'performance': {'type': 'patch-switcher', 'min_windows': 3},
+                'morningstar': {'type': 'banked', 'patch': 'Morningstar'},
+            },
+            'patch_cycles': {'Imported': ['Morningstar']},
+            'patches': {
+                'Morningstar': {
                     'type': 'banked',
+                    'name': 'Morningstar',
+                    'patches': patches,
                     'banks': bank_pages,
                     'initial_bank': bank,
                     'chords': {}
@@ -243,7 +250,6 @@ def convert(document: dict, bank: int) -> models.Setup:
                 for i, t in ports.items()
                 if t == 1
             },
-            'patches': patches,
         }
     )
 
@@ -251,6 +257,7 @@ def convert(document: dict, bank: int) -> models.Setup:
 def run(command: ImportBackup) -> None:
     content = command.backup.read_bytes()
     setup = convert(json.loads(content), command.bank)
+    imported = models.Banked.model_validate(setup.patches['Morningstar'])
     if command.output.exists() and any(command.output.iterdir()):
         raise ValueError(f'import output directory must be empty: {command.output}')
     command.output.mkdir(parents=True, exist_ok=True)
@@ -263,9 +270,9 @@ def run(command: ImportBackup) -> None:
         'backup': str(command.backup.resolve()),
         'sha256': hashlib.sha256(content).hexdigest(),
         'selected_bank': command.bank,
-        'included_banks': len(setup.pages['performance'].banks),
+        'included_banks': len(imported.banks),
         'scope': 'PC-scroll press assignments, continuous expression CCs '
-        'and all bank/preset-page slots in one Banked Page',
+        'and all bank/preset-page slots in one banked patch',
         'presentation': 'saved palette, switch alignment, short and long names, '
         'three display bands; photo-matched Atkinson Next SemiBold labels '
         'and Arial middle-band text substitute for the stock typeface',
@@ -287,12 +294,25 @@ def run(command: ImportBackup) -> None:
         tomlkit.dumps(
             {
                 'until': '100 milliseconds',
-                'events': [],
+                'events': [
+                    {
+                        'at': '20 milliseconds',
+                        'kind': 'button',
+                        'target': 'a',
+                        'value': 1,
+                    },
+                    {
+                        'at': '60 milliseconds',
+                        'kind': 'button',
+                        'target': 'a',
+                        'value': 0,
+                    },
+                ],
             }
         )
     )
     print(
-        f'Imported {len(setup.pages["performance"].banks)} banks into '
+        f'Imported {len(imported.banks)} banks as one patch into '
         f'{command.output / "setup.toml"}'
     )
 
