@@ -679,6 +679,53 @@ cleared after the two pre-trial bytes, so its 4,094 received payload bytes diffe
 from the trace's 4,096 whole-capture return bytes. Strict byte mismatches remain
 failures. The existing empty SysEx remains a separate observation.
 
+### CIN fix and phase diagnostics
+
+`Bridge::valid()` now accepts every single unparsed byte in CIN `0xf` and passes
+it through the existing MIDI parser. A regression sends raw channel messages,
+running status and system common messages, then reproduces the captured raw
+SysEx byte at payload offset 750 in a 4,099-byte mixed-packet message. It checks
+the complete output and zero bridge drops.
+
+Trace protocol 2 retains the longest named runtime phase within the DIN polling
+interval at the first software drop, together with the longest phase over the
+whole capture. Layout, rendering, animation, status collection and SDK yield
+have separate markers in the control image. This will identify the operation
+behind the measured 33 ms gap; font measurement's repeated prefix scans are a
+source-level suspect, not a confirmed cause.
+
+The prepared export `build/midi-phase-ui-control-20261114/` has recipe ID
+`c24ea3c509290457` and image SHA-256
+`b2cf9b4cea573f9455eaa3e3a685487e02067effc6c040260eac0b951972a05c`.
+It builds with 195,808 bytes of ITCM code, 32,448 bytes of `.data`, 274,432 bytes
+of `.bss` and 90,752 bytes of RAM2 `.bss.dma`.
+
+The next flash stopped at device identification, before backup or upload. A
+native `cntrl qualify` inventory found the same pedal serial `14468280` at
+`/dev/cu.usbmodem144682801`, USB VID/PID `13083:7`, with product
+`Morningstar MC6 Pro`, manufacturer `Morningstar Engineering` and four stock
+MIDI ports. No `cntrl` endpoint was present. The generated inventory is
+`build/usb-enumeration-before-phase-20261114.toml`. This is stock-mode
+enumeration, not evidence that the USB device disappeared. Return to cntrl mode
+before the pending flash and timing captures. No firmware or pedal data changed
+during this attempt.
+
+The user confirmed stock mode and switched back to cntrl. The fresh backup then
+completed with both setups and all 15 history revisions. The first upload again
+failed on a HalfKay HID write; the exact-image retry reached reset but returned
+status 1, "Board has disappeared". The application returned with startup count
+93 and the expected trace ID. Both setups and history were restored with
+read-back verification before selecting the temporary loopback setup.
+
+`build/cin-fixed-phase-sysex-20261114.toml` confirms zero CIN rejections: all
+4,101 raw bytes passed validation and DIN writes with matching CRCs. DIN reads
+and USB return submissions were 4,094 bytes, with seven software drops and zero
+hardware overruns. At the first five-byte drop, the DIN polling gap was
+35,190 us and its longest phase was `ui_layout`, 32,770 us. Thus the remaining
+loss occurs during layout, independently of the now-fixed CIN rejection. The
+capture completed and its STOP response remained reachable; no MIDI-triggered
+USB disappearance occurred in this trial.
+
 After the captures, trace collection was stopped, the temporary setup was
 deleted, and the original selection, both setups, all 15 history revisions,
 assets and songs were restored and verified unchanged at startup count 91.

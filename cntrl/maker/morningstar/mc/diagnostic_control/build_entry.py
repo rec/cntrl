@@ -73,6 +73,7 @@ def run(command: Build) -> None:
     identity = hashlib.sha256()
     identity.update(BASELINE.encode())
     identity.update(''.join(revisions).encode())
+    identity.update(Path(__file__).with_name('trace.patch').read_bytes())
     for path in (
         firmware / 'patch_switcher/target.cpp',
         firmware / 'patch_switcher/midi_trace.h',

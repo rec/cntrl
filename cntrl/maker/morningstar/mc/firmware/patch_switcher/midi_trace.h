@@ -5,7 +5,7 @@
 #include <cstdio>
 
 #ifndef CNTRL_MIDI_TRACE_COLD
-#define CNTRL_MIDI_TRACE_COLD
+#define CNTRL_MIDI_TRACE_COLD(name)
 #endif
 
 namespace cntrl::device {
@@ -29,23 +29,36 @@ struct MidiTrace {
     uint32_t last_poll = 0, last_drops = 0, last_overruns = 0;
     uint32_t drop_gap_us = 0, drop_available = 0, drop_delta = 0;
     uint32_t overrun_gap_us = 0, overrun_available = 0, overrun_delta = 0;
+    const char *current_phase = "none", *interval_phase = "none", *drop_phase = "none", *max_phase = "none";
+    uint32_t phase_started = 0, interval_us = 0, drop_phase_us = 0, max_phase_us = 0;
     bool active = false;
 
     void reset(uint32_t drops = 0, uint32_t overruns = 0, uint32_t now = 0) {
         *this = MidiTrace{}; active = true;
-        last_drops = drops; last_overruns = overruns; last_poll = now;
+        last_drops = drops; last_overruns = overruns; last_poll = phase_started = now;
+    }
+    CNTRL_MIDI_TRACE_COLD(midi_trace_phase)
+    void phase(const char *name, uint32_t now) {
+        if (!active) return;
+        const uint32_t elapsed = now - phase_started;
+        if (elapsed > interval_us) { interval_us = elapsed; interval_phase = current_phase; }
+        if (elapsed > max_phase_us) { max_phase_us = elapsed; max_phase = current_phase; }
+        current_phase = name; phase_started = now;
     }
     void poll(uint32_t now, uint32_t drops, uint32_t overruns, unsigned available) {
         if (!active) return;
+        phase(current_phase, now);
         if (drops != last_drops && !drop_delta) {
             drop_gap_us = now - last_poll; drop_available = available;
             drop_delta = drops - last_drops;
+            drop_phase = interval_phase; drop_phase_us = interval_us;
         }
         if (overruns != last_overruns && !overrun_delta) {
             overrun_gap_us = now - last_poll; overrun_available = available;
             overrun_delta = overruns - last_overruns;
         }
         last_poll = now; last_drops = drops; last_overruns = overruns;
+        interval_us = 0; interval_phase = current_phase;
     }
     void reject(unsigned route, const midi::Packet &packet, unsigned state, uint32_t now) {
         if (!active || route != 0) return;
@@ -56,12 +69,12 @@ struct MidiTrace {
             rejected_valid_offset = usb_valid.count;
         }
     }
-    CNTRL_MIDI_TRACE_COLD
+    CNTRL_MIDI_TRACE_COLD(midi_trace_format)
     int format(char *output, unsigned size, const char *build,
                uint32_t din_drops, uint32_t din_overruns,
                uint32_t trs_drops, uint32_t trs_overruns) const {
         return std::snprintf(output, size,
-            "CNTRL MIDI TRACE version=1 build=%s active=%u "
+            "CNTRL MIDI TRACE version=2 build=%s active=%u "
             "usb_raw_n=%lu usb_raw_crc=0x%lx usb_valid_n=%lu usb_valid_crc=0x%lx "
             "din_tx_n=%lu din_tx_crc=0x%lx din_rx_n=%lu din_rx_crc=0x%lx "
             "usb_return_n=%lu usb_return_crc=0x%lx rejects=%lu "
@@ -69,7 +82,8 @@ struct MidiTrace {
             "reject_offset=%lu reject_valid_offset=%lu "
             "din_drops=%lu din_overruns=%lu trs_drops=%lu trs_overruns=%lu "
             "drop_gap_us=%lu drop_available=%lu drop_delta=%lu "
-            "overrun_gap_us=%lu overrun_available=%lu overrun_delta=%lu",
+            "overrun_gap_us=%lu overrun_available=%lu overrun_delta=%lu "
+            "drop_phase=%s drop_phase_us=%lu max_phase=%s max_phase_us=%lu",
             build, unsigned(active),
             (unsigned long)usb_raw.count, (unsigned long)~usb_raw.checksum,
             (unsigned long)usb_valid.count, (unsigned long)~usb_valid.checksum,
@@ -83,7 +97,8 @@ struct MidiTrace {
             (unsigned long)din_drops, (unsigned long)din_overruns,
             (unsigned long)trs_drops, (unsigned long)trs_overruns,
             (unsigned long)drop_gap_us, (unsigned long)drop_available, (unsigned long)drop_delta,
-            (unsigned long)overrun_gap_us, (unsigned long)overrun_available, (unsigned long)overrun_delta);
+            (unsigned long)overrun_gap_us, (unsigned long)overrun_available, (unsigned long)overrun_delta,
+            drop_phase, (unsigned long)drop_phase_us, max_phase, (unsigned long)max_phase_us);
     }
 };
 }

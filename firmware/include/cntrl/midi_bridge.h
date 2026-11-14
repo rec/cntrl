@@ -912,7 +912,8 @@ private:
     static bool valid(const Packet &p, bool sysex) {
         unsigned n = p.size();
         if (!n) return false;
-        if (p.cin == 15) return p.bytes[0] >= 0xf8;
+        // USB MIDI 1.0 Table 4-1 Note 2 permits any unparsed byte here.
+        if (p.cin == 15) return true;
         if (p.cin >= 8 && p.cin <= 14) {
             if (p.bytes[0] >> 4 != p.cin) return false;
         } else if (p.cin == 2) {

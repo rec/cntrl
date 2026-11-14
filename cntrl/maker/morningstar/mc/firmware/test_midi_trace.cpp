@@ -49,11 +49,15 @@ int main() {
     trace.reset();
     assert(trace.active && trace.rejects == 0 && trace.usb_raw.count == 0 && ~trace.usb_valid.checksum == 0);
     trace.poll(100, 0, 0, 0);
+    trace.phase("display", 100);
+    trace.phase("yield", 23100);
     trace.poll(23100, 7, 1, 63);
     assert(trace.drop_delta == 7 && trace.drop_gap_us == 23000 && trace.drop_available == 63);
     assert(trace.overrun_delta == 1 && trace.overrun_gap_us == 23000);
+    assert(std::strcmp(trace.drop_phase, "display") == 0 && trace.drop_phase_us == 23000);
     trace.poll(50000, 9, 2, 63);
     assert(trace.drop_delta == 7 && trace.drop_gap_us == 23000); // Retain the first loss.
+    assert(std::strcmp(trace.drop_phase, "display") == 0 && trace.drop_phase_us == 23000);
     const auto maximum = std::numeric_limits<uint32_t>::max();
     trace.reset(maximum - 2, maximum, maximum - 15);
     trace.poll(32, 4, 0, 63);
@@ -65,6 +69,8 @@ int main() {
     trace.rejected_offset = trace.rejected_valid_offset = maximum;
     trace.drop_gap_us = trace.drop_available = trace.drop_delta = maximum;
     trace.overrun_gap_us = trace.overrun_available = trace.overrun_delta = maximum;
+    trace.drop_phase = trace.max_phase = "midi_reclaim";
+    trace.drop_phase_us = trace.max_phase_us = maximum;
     char response[1024];
     const int length = trace.format(response, sizeof(response), "0123456789abcdef", maximum, maximum, maximum, maximum);
     assert(length > 0 && unsigned(length) < sizeof(response));

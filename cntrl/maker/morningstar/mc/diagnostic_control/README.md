@@ -3,7 +3,8 @@
 This target adds transport measurements to the working normal/newlib firmware.
 It retains the one-window tool pages, legacy layout/controls, cached Expression
 page and USB MIDI flush guard. It does not enable the bounded allocator or a
-watchdog, change the setup format, or change forwarding decisions.
+watchdog or change the setup format. It includes the bridge fix accepting any
+unparsed MIDI byte in CIN `0xf`, rather than rejecting non-realtime bytes.
 
 The tracked build entry reconstructs baseline `d6c6d06` and the recorded UI and
 flush-guard overlays, applies `trace.patch`, and copies the pinned SDK into a
@@ -39,6 +40,25 @@ exit status and retains its fresh backup in `before/`, including after an upload
 error. Do not start another uploader while one is running.
 
 ## Captures
+
+Without `--run`, the ordinary MC qualification command lists MIDI and serial
+endpoints without opening the serial ports or sending MIDI. Add `--report PATH`
+to save their names and the serial ports' OS metadata, including USB IDs, serial
+numbers and locations. This distinguishes stock firmware enumeration from a
+missing device before attempting recovery or an upload.
+
+The control uses setup format 41. Use its retained source's existing setup CLI
+through this entry point when main's compiler has moved to a newer format:
+
+```sh
+uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc/diagnostic_control -- --directory build/sysex-transport-control -- copy cntrl/maker/morningstar/mc/qualification/dynamic-memory-thru.toml --target build/sysex-transport-control/target.toml --port /dev/cu.usbmodem144682801
+uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc/diagnostic_control -- --directory build/sysex-transport-control -- set dynamic-memory-thru --port /dev/cu.usbmodem144682801
+```
+
+Arguments after the second `--` are passed unchanged to that existing `setup`
+command. Paths remain relative to the caller's working directory. The retained
+source must exist; there is no fallback to the installed compiler. Use this same
+entry point for `backup`, `restore`, `verify`, `set` and `del` during qualification.
 
 Use the tracked `qualification/dynamic-memory-thru.toml` setup with the physical
 DIN output connected to DIN input. Back up the current pedal data before selecting
@@ -88,6 +108,13 @@ UART software drops count discarded receive-ring bytes. Hardware overrun latches
 count observations, not an exact number of lost bytes. The first observed change
 of each counter also records the gap since the previous receive poll and buffer
 occupancy. These are main-loop observations, not precise ISR timestamps.
+
+Trace protocol version 2 also records the longest named runtime phase between
+the DIN polls surrounding the first software drop, plus the longest phase over
+the complete capture. A phase ends when the next marker is reached. An explicit
+`yield` marker separates the end of application work from the SDK's outer loop.
+The measurements cover the entire RESET-to-STOP window, including serial setup
+and inspection; a long overall phase need not overlap active MIDI traffic.
 
 The diagnostic state has fixed semantic records for these transport boundaries
 and first failures. Recording allocates no memory and prints no serial data.

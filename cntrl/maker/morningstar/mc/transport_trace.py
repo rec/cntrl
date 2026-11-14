@@ -41,14 +41,14 @@ def parse_trace(response: str) -> dict[str, int | str]:
     fields = dict(p.split('=', 1) for p in response.split()[3:])
     if 'build' not in fields:
         raise ValueError('incomplete MIDI transport trace: build is missing')
-    build = fields.pop('build')
-    result: dict[str, int | str] = {k: int(v, 0) for k, v in fields.items()}
-    result['build'] = build
+    result: dict[str, int | str] = {
+        k: v if k in STRING_FIELDS else int(v, 0) for k, v in fields.items()
+    }
     if missing := REQUIRED_FIELDS - result.keys():
         raise ValueError(
             'incomplete MIDI transport trace: ' + ', '.join(sorted(missing))
         )
-    if result['version'] != 1:
+    if result['version'] != 2:
         raise ValueError('unsupported MIDI transport trace version')
     return result
 
@@ -105,10 +105,16 @@ def compare_transport(before: TraceSnapshot, after: TraceSnapshot) -> dict[str, 
             'latches are observations, not an exact lost-byte count.'
         ),
         'rejections': trace['rejects'],
+        'longest_runtime_phase': {
+            'name': trace['max_phase'],
+            'elapsed_us': trace['max_phase_us'],
+        },
         'first_uart_loss_observations': {
             'software_drop_poll_gap_us': trace['drop_gap_us'],
             'software_drop_available': trace['drop_available'],
             'software_drop_delta': trace['drop_delta'],
+            'software_drop_phase': trace['drop_phase'],
+            'software_drop_phase_us': trace['drop_phase_us'],
             'overrun_poll_gap_us': trace['overrun_gap_us'],
             'overrun_available': trace['overrun_available'],
             'overrun_latch_delta': trace['overrun_delta'],
@@ -141,13 +147,15 @@ BOUNDARIES = (
     ('din_tx', 'din_rx'),
     ('din_rx', 'usb_return'),
 )
+STRING_FIELDS = {'build', 'drop_phase', 'max_phase'}
 REQUIRED_FIELDS = set(
     (
         'version active rejects reject_packet reject_source reject_route '
         'reject_state reject_ms reject_offset reject_valid_offset '
         'din_drops din_overruns trs_drops trs_overruns '
         'drop_gap_us drop_available drop_delta '
-        'overrun_gap_us overrun_available overrun_delta'
+        'overrun_gap_us overrun_available overrun_delta '
+        'drop_phase drop_phase_us max_phase max_phase_us'
     ).split()
 ) | {
     f'{n}_{s}'
