@@ -1,0 +1,949 @@
+[[files]]
+source = 'jekku'
+profile = '6-pro'
+original = "Morningstar_MC6PRO_All_Banks_Backup_20260124_144538.json"
+path = "jekku/Morningstar_MC6PRO_All_Banks_Backup_20260124_144538.backup.gz"
+kind = "backup"
+bytes = 11663402
+sha256 = "a384d5969b79ad871057fc2dcd02bb83da9cb7af3a55c9156bee79b1ada6cf1d"
+git_blob = "8288c8b3806ea5da0143d09d31486e283de7c7f2"
+
+[[files]]
+source = 'bwanab'
+profile = '8'
+original = "Morningstar_MC8_All_Banks_Backup_20241209_165434.json"
+path = "bwanab/Morningstar_MC8_All_Banks_Backup_20241209_165434.backup.gz"
+kind = "backup"
+bytes = 1053734
+sha256 = "9f3ce4483645bdf35fa96debf5456e256f13791ad62c611382e20107e468e750"
+git_blob = "f354f7c0ef7b06069d54d8fa05b08180d7344cdf"
+
+[[files]]
+source = 'bwanab'
+profile = '8'
+original = "Morningstar_MC8_All_Banks_Backup_20241211_161044.json"
+path = "bwanab/Morningstar_MC8_All_Banks_Backup_20241211_161044.backup.gz"
+kind = "backup"
+bytes = 1053780
+sha256 = "85c38c2e70dc1dd28b534df366200d9172cbca47beb813244d6cd31c386a57a4"
+git_blob = "a79d3c9d3893dc2a118d3e361f45bf91cee7db61"
+
+[[files]]
+source = 'bwanab'
+profile = '8'
+original = "Morningstar_MC8_All_Banks_Backup_20250202_112454.json"
+path = "bwanab/Morningstar_MC8_All_Banks_Backup_20250202_112454.backup.gz"
+kind = "backup"
+bytes = 1053833
+sha256 = "d5edfe9f4a31a54725878e429db2be2dfcf451a12fc9eac389d6eb06b0f31bfc"
+git_blob = "83614f35e63ec355d014f88331e331aa0517ddd0"
+
+[[files]]
+source = 'bwanab'
+profile = '8'
+original = "Morningstar_MC8_Bank_Backup_Kemper Performance Selec_20250202_134520.json"
+path = "bwanab/Morningstar_MC8_Bank_Backup_Kemper Performance Selec_20250202_134520.backup.gz"
+kind = "backup"
+bytes = 35078
+sha256 = "7f2461101d3229c29a2bc6f85cc0aa2d0ad9fa1ac05bde16d189746d958927e4"
+git_blob = "cbd0e7a93d9611b9df151c730778c7fb7a66e636"
+
+[[files]]
+source = 'bwanab'
+profile = '8'
+original = "Morningstar_MC8_Bank_Backup_Live Loops Control_20250202_112529.json"
+path = "bwanab/Morningstar_MC8_Bank_Backup_Live Loops Control_20250202_112529.backup.gz"
+kind = "backup"
+bytes = 34907
+sha256 = "c67eee3b88c45c6d19e52b212dac8028606b7176d60655a8ef7047f2596f1eca"
+git_blob = "18043a7051e9ea513ff43d300c6d8336821f76c5"
+
+[[files]]
+source = 'bwanab'
+profile = '8'
+original = "Morningstar_MC8_Bank_Backup_Mainstage FX_20250202_112517.json"
+path = "bwanab/Morningstar_MC8_Bank_Backup_Mainstage FX_20250202_112517.backup.gz"
+kind = "backup"
+bytes = 35025
+sha256 = "76e0a584a8ed190be3c66786fb446fdeac41155a5fa2dc9fa0c00524670ae3dc"
+git_blob = "bdcb8ea8363c72af91eb1323fbdc0b478e1c4afa"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/Empty.json"
+path = "footsmart/Configs/Test/Empty.backup.gz"
+kind = "backup"
+bytes = 11662373
+sha256 = "80a78a3d3453b6a614dcd461f089199ce721b78b8bd99aeabe07962f433f8416"
+git_blob = "02c8d2822342d1d4d41e91cdbfa0b00f2e7732a8"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/ExtraBytes.json"
+path = "footsmart/Configs/Test/ExtraBytes.backup.gz"
+kind = "backup"
+bytes = 11662372
+sha256 = "c0964f3efea44e587b65e301849f9dbaabc0297ee8d02d821396e0d11d046adf"
+git_blob = "77db52f638646ad17e22342e9c1d31c494e70949"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/Features.json"
+path = "footsmart/Configs/Test/Features.backup.gz"
+kind = "backup"
+bytes = 11641160
+sha256 = "0b8b49e717a0fcba663249798075dee438cc452dd2556116691f1b7601b58548"
+git_blob = "8a033d54b1fbf8421da318990ee96497da88ba4c"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/MIDIClock.json"
+path = "footsmart/Configs/Test/MIDIClock.backup.gz"
+kind = "backup"
+bytes = 11659067
+sha256 = "7abda0c60a4514482461b595949376d1700b490d06f694c967cddb9a13252375"
+git_blob = "e5f4ca25d6511b8b1a286b49b9aaea2ca165f0e2"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/NewFields.json"
+path = "footsmart/Configs/Test/NewFields.backup.gz"
+kind = "backup"
+bytes = 11659073
+sha256 = "5a76761f5de64319262f9ccf81f1942b89f0590a646398b7bf187ac18ea157bc"
+git_blob = "4b7c5a9fe6e8e55a0c19019a5ec670fea70fad77"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/PCNumberScroll.json"
+path = "footsmart/Configs/Test/PCNumberScroll.backup.gz"
+kind = "backup"
+bytes = 11659082
+sha256 = "2059bc868f99ac24e23e5ca301861538c6007629a5de87a62b718dd7e0a0bb87"
+git_blob = "5d4f7d126fda76a12a77787cc5d3bdc8ffc3caab"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/SetToggle.json"
+path = "footsmart/Configs/Test/SetToggle.backup.gz"
+kind = "backup"
+bytes = 11613739
+sha256 = "d8239f9d7535e54c3bcce269151cac4cec07566e43bd03f26b5fe768185fe7d1"
+git_blob = "10dbbfbf80b1cebb7ea144695b9db5d04b20efdd"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/Utility.json"
+path = "footsmart/Configs/Test/Utility.backup.gz"
+kind = "backup"
+bytes = 11613592
+sha256 = "1f42732df73cdc94e9f30f1d6182b250e198f14ba6d6b38ac888aa66c03c6a61"
+git_blob = "f6999c36ec1b08f020b6b3b584b4759a03385ddc"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "Configs/Test/WaveformSequence.json"
+path = "footsmart/Configs/Test/WaveformSequence.backup.gz"
+kind = "backup"
+bytes = 11659243
+sha256 = "1a7c364d875a0ab65b3c1c49240055d1fa73acb2e6f0c416d676d20714fa451d"
+git_blob = "d41415c7fd787ae66472b17d62fe57d198b88d9e"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "LICENSE"
+path = "footsmart/LICENSE"
+kind = "license"
+bytes = 1065
+sha256 = "1253686bd20a8bfd054d07ebc40e269666a84f4b717c78cfd47d20b79831991c"
+git_blob = "0f5328ab9b496a0dc38d23833b6f5b449be10ca6"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "old/NavigatorTest_copy.json"
+path = "footsmart/old/NavigatorTest_copy.backup.gz"
+kind = "backup"
+bytes = 17834
+sha256 = "20695d91543e0aab83e1eb9b759aaa0e467fd6f2d5e7e19cf05defeba916ae76"
+git_blob = "77b742838e65446773dc82482c423afb2c101d2a"
+
+[[files]]
+source = 'footsmart'
+profile = '6-pro'
+original = "old/SelectExpMessage.json"
+path = "footsmart/old/SelectExpMessage.backup.gz"
+kind = "backup"
+bytes = 11612000
+sha256 = "12a1424ea8d1ac9098a76da67826ce84f2e0ca2046404cd7ab9e54c8b0d94e4d"
+git_blob = "dfeb9464c1bd39b61416c35b748e04869f6a037b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "LICENSE"
+path = "sdk/LICENSE"
+kind = "license"
+bytes = 11357
+sha256 = "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+git_blob = "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/all-banks.json"
+path = "sdk/pkg/mc8pro/testdata/all-banks.backup.gz"
+kind = "backup"
+bytes = 11662531
+sha256 = "e0421b7890ead3cb75788ad2e4700eb60cac1f29d79fbff9a8d0ed0e1e9675ce"
+git_blob = "6494a368d29bccf44a426ce5e4d9e4c65f164488"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/bank-guitar-live.json"
+path = "sdk/pkg/mc8pro/testdata/bank-guitar-live.backup.gz"
+kind = "backup"
+bytes = 91170
+sha256 = "ef847984e88166182e19a6e5c5a903d43eab8725c443cfc0be4be44c646be939"
+git_blob = "1cd2479c58846960f54ee6eec2cc4442dfa11e7b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/001_007D_len0018.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/001_007D_len0018.sysex.gz"
+kind = "sysex"
+bytes = 18
+sha256 = "36127929356281ad5c75a8937afbd89ae502cdecb7e8a0c5eafbb5c6cc2e8680"
+git_blob = "562ea65fc163274acf45707a58da56cdf7db34d7"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/002_0601_len1032.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/002_0601_len1032.sysex.gz"
+kind = "sysex"
+bytes = 1032
+sha256 = "5f92bc1b009dd6f8fcb7cdf97a48a79d2f03c273755dad60bff78e7820744003"
+git_blob = "a3e796c88d25ae6ea767adfdab24de89ff55e14a"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/003_0602_len0647.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/003_0602_len0647.sysex.gz"
+kind = "sysex"
+bytes = 647
+sha256 = "b4a9312022e7e0b94bf448fbef25c8419f4a6e6f2fa79d2fdfbbfc1e77ddcd2a"
+git_blob = "f3e925b13896264cba29cc25413239437940c8fe"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/004_0320_len0738.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/004_0320_len0738.sysex.gz"
+kind = "sysex"
+bytes = 738
+sha256 = "1c1debffb442e1f9c11a4847e533ad6cf6477c4df26c8792e485ec8ed115a6a3"
+git_blob = "17fe60f49ef0e10d98f79544326f488e3e34585b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/005_0321_len0050.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/005_0321_len0050.sysex.gz"
+kind = "sysex"
+bytes = 50
+sha256 = "eeae6bae1129754397b9d8a14680efcf57d6f6d658d467b917c50fa148513956"
+git_blob = "2ecb7f950112820bdf15a5d7ef843bff7bca235b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/006_0300_len0018.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/006_0300_len0018.sysex.gz"
+kind = "sysex"
+bytes = 18
+sha256 = "910aa90cbe323e464ffba992df597fa262a560ef92962c15eabad1d92aa15129"
+git_blob = "14f7e65ac4e3d30af6970e67450d2bae84229000"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/007_0324_len0051.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/007_0324_len0051.sysex.gz"
+kind = "sysex"
+bytes = 51
+sha256 = "db1a5bce870174a949b1c77356c864b353d7509fafe3a8d7e4df99630cb747ac"
+git_blob = "3038c77575dcf0900f5fc058083946b224857d9e"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/008_0301_len0018.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/008_0301_len0018.sysex.gz"
+kind = "sysex"
+bytes = 18
+sha256 = "08275e7a44e2b1b7ad64f6f14d513ceff66f39177f66f7bc4fe61cf4c795bfaf"
+git_blob = "fe0afc3427a432e21b550a405bcbb8cc2639266c"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/009_0325_len0163.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/009_0325_len0163.sysex.gz"
+kind = "sysex"
+bytes = 163
+sha256 = "74981e6af4dc68015e03eefd3ed52a77fdb9092d7fed3a73e4e92397d965100d"
+git_blob = "d8260f538b8f0757647e3c229a152528b24321a8"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/010_0326_len0067.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/010_0326_len0067.sysex.gz"
+kind = "sysex"
+bytes = 67
+sha256 = "ae88b8d2d32a4c0ecb74d6ad9b0c9ecf55bcc6d2da665d173ea14aa6cf78846f"
+git_blob = "91ed31108a01e7dc5d34a251f799d8f586062cbe"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/011_0320_len0738.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/011_0320_len0738.sysex.gz"
+kind = "sysex"
+bytes = 738
+sha256 = "1c1debffb442e1f9c11a4847e533ad6cf6477c4df26c8792e485ec8ed115a6a3"
+git_blob = "17fe60f49ef0e10d98f79544326f488e3e34585b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/012_0322_len0156.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/012_0322_len0156.sysex.gz"
+kind = "sysex"
+bytes = 156
+sha256 = "33fcf8544c2d3174e5454705ce313122697d364fa2048e9f729072a3f94ca2a9"
+git_blob = "686c8945f836e60e7a14d970e8665f8131ca7073"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/013_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/013_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "12a548397b79871c91b1fb428d938ce61c200404461457c5be208ce1fb3f84cc"
+git_blob = "a51c8a8b42bd05a683efa8468f33548301b5a830"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/014_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/014_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "537839d5f7b462e43b3916d48b092aeec96dca8f0e60982d980b199e3c8badbc"
+git_blob = "e213faa117f26326c092bd3a4f23ad952a744f7a"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/015_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/015_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "a02fe42cf76b2268b88ad9798b09d3c541178ba269016b112f81ba77b23cf7f3"
+git_blob = "f982f637370e5cc159e8f57ed07def6f1494ba5e"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/016_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/016_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "920b3cdf76b5cdd2a271a755cba2045ed05ec8140ddba44d746f78fea3ac57e7"
+git_blob = "d9063a707396410d5d28cf75a3b944e2ed64a551"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/017_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/017_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "249a13d1d885b2b4538e35589f264f3b1565774352185a6040962f46c4ddb679"
+git_blob = "23dd6b4698d70a9e4131864f09aa276db2f971ff"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/018_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/018_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "92206f651a1a2107724c17eb9f6df3db3da7f7a5630b0cf6c63506238c709265"
+git_blob = "2298981b5d354bcf2f122ada426856da4346a78d"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/019_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/019_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "142d783a2746c81000d09f2a8664f73a63f9bf064db0589c168d2434c2b108cc"
+git_blob = "d49a02330f7d3d9599d5f41869a8479621393140"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/020_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/020_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "2c7f37ba30d1f7e34b557336c3c07795bedb08be92e266158b05d9c3d7822fda"
+git_blob = "6614cab2494d3ade94c0ea03cae1d9c448369493"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/021_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/021_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "ad37ac9a0440437dd930482def209a59a90b10f2d07287446c93201b8f00cc27"
+git_blob = "8151f6bd93cc0b5cc077bf0b4760abb34500d022"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/022_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/022_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "1d3155de061c4512aada0257bf4423bcc3b6288a1eadf58f12720fb8f8b352b8"
+git_blob = "30192aa3308b2b09c24043006af2e7351e1276c3"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/023_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/023_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "2179634d9f5d555e68853884c4f45d7192e90c6269131e66a30942c205409c5e"
+git_blob = "67167b5b102193a9c18c2f77ecdffa04513cadba"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/024_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/024_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "d73c8993a202a03d20e2568d37920fbae315b8d4286f242b132d3bc99f11e720"
+git_blob = "99be2d0e67f4585647173a08a00c5f5aeb2af44b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/025_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/025_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "c0af057497ce40bc5f06bc022f3157caff0602a6a33a3f82ecd143e4bb96e13a"
+git_blob = "e7d4e62597112ec4dd18d111469e314af18c4bb2"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/026_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/026_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "a70528597ff27cb7d25cfa2c924de234522b3f947d093158dcf754d72c780172"
+git_blob = "1fcde8283fda2d7854748f2d3a599440861639d1"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/027_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/027_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "a9f48203fd8a852952cf4f17892a8d1ce6572778b4a96f49682a7db4a3a24ea8"
+git_blob = "8878906bff5b46339027a72b81cfa75dc5714cfb"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/028_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/028_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "4d44d273fa873314805e1fa9523a1132670eb8c589bb8c488e581d441f20282f"
+git_blob = "85cd9993c5d41344026a9b36e3e9aac03c94b047"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/029_0323_len0082.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/029_0323_len0082.sysex.gz"
+kind = "sysex"
+bytes = 82
+sha256 = "aea22f2b8b644b053456715c014480ab036008b4076206cd4e9b9553d4676b0c"
+git_blob = "c161bf8f6b6a5ccd6e774d3af109f35cc9dac875"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/030_0327_len0242.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/030_0327_len0242.sysex.gz"
+kind = "sysex"
+bytes = 242
+sha256 = "c2638cad34977aefdad6a0df6fb621a7692e35f8671134bce279b2a8eed72b5b"
+git_blob = "5f78339161916be5db6636084d88398535cc2603"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/031_0328_len0082.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/031_0328_len0082.sysex.gz"
+kind = "sysex"
+bytes = 82
+sha256 = "09aab3456be956cd757675f36be7fc549dafc585fbfbb5379e8d62102b81fe92"
+git_blob = "0308ee3c10dac25dcd46462083823b81cd1ff671"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/032_1103_len0037.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/032_1103_len0037.sysex.gz"
+kind = "sysex"
+bytes = 37
+sha256 = "9d8c4ae60ac6e5f4b605b45138de20a83ea5e8633542a02c699b6004d0c84981"
+git_blob = "fdd0f17c1c7821a6e6504b0b4f9fa792ae00c766"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/033_0329_len0052.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/033_0329_len0052.sysex.gz"
+kind = "sysex"
+bytes = 52
+sha256 = "2bd3cebb1a9b184315df6cb9be1b7d8aa27705a86d88f05cc35948984ca98cac"
+git_blob = "743569d89481182196b8d65c3557442c706e17db"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/034_1104_len0858.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/034_1104_len0858.sysex.gz"
+kind = "sysex"
+bytes = 858
+sha256 = "c2476c6b24b4e15f3ca4d63960964258e187cd722fd398cbed1c1afc1ad8130f"
+git_blob = "ff9fb7132578db32ef9401bd2efc472c8ade6d4a"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/035_1100_len0050.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/035_1100_len0050.sysex.gz"
+kind = "sysex"
+bytes = 50
+sha256 = "1d8abcae85a76d95719b6ba3a00a4570c1b87ee0fc7a7225a64a1d240ac52345"
+git_blob = "ae7983a9cd39271fcb4b051791ebf5e495f2aec9"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/036_0601_len1032.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/036_0601_len1032.sysex.gz"
+kind = "sysex"
+bytes = 1032
+sha256 = "5f92bc1b009dd6f8fcb7cdf97a48a79d2f03c273755dad60bff78e7820744003"
+git_blob = "a3e796c88d25ae6ea767adfdab24de89ff55e14a"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/037_0602_len0647.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/037_0602_len0647.sysex.gz"
+kind = "sysex"
+bytes = 647
+sha256 = "b4a9312022e7e0b94bf448fbef25c8419f4a6e6f2fa79d2fdfbbfc1e77ddcd2a"
+git_blob = "f3e925b13896264cba29cc25413239437940c8fe"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/038_0901_len0858.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/038_0901_len0858.sysex.gz"
+kind = "sysex"
+bytes = 858
+sha256 = "cdfa5d4c600117366eedca3d808d4e1d2ef7d725cf1aa78caf941090333d475e"
+git_blob = "f7506a879897d1b5e0d25c4e011de8737245b112"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/039_1100_len0050.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/039_1100_len0050.sysex.gz"
+kind = "sysex"
+bytes = 50
+sha256 = "1d8abcae85a76d95719b6ba3a00a4570c1b87ee0fc7a7225a64a1d240ac52345"
+git_blob = "ae7983a9cd39271fcb4b051791ebf5e495f2aec9"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/040_1103_len0037.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/040_1103_len0037.sysex.gz"
+kind = "sysex"
+bytes = 37
+sha256 = "9d8c4ae60ac6e5f4b605b45138de20a83ea5e8633542a02c699b6004d0c84981"
+git_blob = "fdd0f17c1c7821a6e6504b0b4f9fa792ae00c766"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/041_0322_len0156.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/041_0322_len0156.sysex.gz"
+kind = "sysex"
+bytes = 156
+sha256 = "33fcf8544c2d3174e5454705ce313122697d364fa2048e9f729072a3f94ca2a9"
+git_blob = "686c8945f836e60e7a14d970e8665f8131ca7073"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/042_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/042_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "12a548397b79871c91b1fb428d938ce61c200404461457c5be208ce1fb3f84cc"
+git_blob = "a51c8a8b42bd05a683efa8468f33548301b5a830"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/043_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/043_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "537839d5f7b462e43b3916d48b092aeec96dca8f0e60982d980b199e3c8badbc"
+git_blob = "e213faa117f26326c092bd3a4f23ad952a744f7a"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/044_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/044_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "a02fe42cf76b2268b88ad9798b09d3c541178ba269016b112f81ba77b23cf7f3"
+git_blob = "f982f637370e5cc159e8f57ed07def6f1494ba5e"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/045_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/045_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "920b3cdf76b5cdd2a271a755cba2045ed05ec8140ddba44d746f78fea3ac57e7"
+git_blob = "d9063a707396410d5d28cf75a3b944e2ed64a551"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/046_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/046_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "249a13d1d885b2b4538e35589f264f3b1565774352185a6040962f46c4ddb679"
+git_blob = "23dd6b4698d70a9e4131864f09aa276db2f971ff"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/047_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/047_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "92206f651a1a2107724c17eb9f6df3db3da7f7a5630b0cf6c63506238c709265"
+git_blob = "2298981b5d354bcf2f122ada426856da4346a78d"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/048_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/048_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "142d783a2746c81000d09f2a8664f73a63f9bf064db0589c168d2434c2b108cc"
+git_blob = "d49a02330f7d3d9599d5f41869a8479621393140"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/049_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/049_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "2c7f37ba30d1f7e34b557336c3c07795bedb08be92e266158b05d9c3d7822fda"
+git_blob = "6614cab2494d3ade94c0ea03cae1d9c448369493"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/050_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/050_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "ad37ac9a0440437dd930482def209a59a90b10f2d07287446c93201b8f00cc27"
+git_blob = "8151f6bd93cc0b5cc077bf0b4760abb34500d022"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/051_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/051_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "1d3155de061c4512aada0257bf4423bcc3b6288a1eadf58f12720fb8f8b352b8"
+git_blob = "30192aa3308b2b09c24043006af2e7351e1276c3"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/052_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/052_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "2179634d9f5d555e68853884c4f45d7192e90c6269131e66a30942c205409c5e"
+git_blob = "67167b5b102193a9c18c2f77ecdffa04513cadba"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/053_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/053_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "d73c8993a202a03d20e2568d37920fbae315b8d4286f242b132d3bc99f11e720"
+git_blob = "99be2d0e67f4585647173a08a00c5f5aeb2af44b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/054_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/054_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "c0af057497ce40bc5f06bc022f3157caff0602a6a33a3f82ecd143e4bb96e13a"
+git_blob = "e7d4e62597112ec4dd18d111469e314af18c4bb2"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/055_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/055_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "a70528597ff27cb7d25cfa2c924de234522b3f947d093158dcf754d72c780172"
+git_blob = "1fcde8283fda2d7854748f2d3a599440861639d1"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/056_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/056_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "a9f48203fd8a852952cf4f17892a8d1ce6572778b4a96f49682a7db4a3a24ea8"
+git_blob = "8878906bff5b46339027a72b81cfa75dc5714cfb"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/057_1105_len0298.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/057_1105_len0298.sysex.gz"
+kind = "sysex"
+bytes = 298
+sha256 = "4d44d273fa873314805e1fa9523a1132670eb8c589bb8c488e581d441f20282f"
+git_blob = "85cd9993c5d41344026a9b36e3e9aac03c94b047"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/058_0327_len0242.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/058_0327_len0242.sysex.gz"
+kind = "sysex"
+bytes = 242
+sha256 = "c2638cad34977aefdad6a0df6fb621a7692e35f8671134bce279b2a8eed72b5b"
+git_blob = "5f78339161916be5db6636084d88398535cc2603"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/059_0321_len0050.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/059_0321_len0050.sysex.gz"
+kind = "sysex"
+bytes = 50
+sha256 = "eeae6bae1129754397b9d8a14680efcf57d6f6d658d467b917c50fa148513956"
+git_blob = "2ecb7f950112820bdf15a5d7ef843bff7bca235b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/060_0323_len0082.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/060_0323_len0082.sysex.gz"
+kind = "sysex"
+bytes = 82
+sha256 = "aea22f2b8b644b053456715c014480ab036008b4076206cd4e9b9553d4676b0c"
+git_blob = "c161bf8f6b6a5ccd6e774d3af109f35cc9dac875"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/061_0328_len0082.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/061_0328_len0082.sysex.gz"
+kind = "sysex"
+bytes = 82
+sha256 = "09aab3456be956cd757675f36be7fc549dafc585fbfbb5379e8d62102b81fe92"
+git_blob = "0308ee3c10dac25dcd46462083823b81cd1ff671"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/062_0300_len0018.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/062_0300_len0018.sysex.gz"
+kind = "sysex"
+bytes = 18
+sha256 = "910aa90cbe323e464ffba992df597fa262a560ef92962c15eabad1d92aa15129"
+git_blob = "14f7e65ac4e3d30af6970e67450d2bae84229000"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/063_0324_len0051.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/063_0324_len0051.sysex.gz"
+kind = "sysex"
+bytes = 51
+sha256 = "db1a5bce870174a949b1c77356c864b353d7509fafe3a8d7e4df99630cb747ac"
+git_blob = "3038c77575dcf0900f5fc058083946b224857d9e"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/064_0301_len0018.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/064_0301_len0018.sysex.gz"
+kind = "sysex"
+bytes = 18
+sha256 = "08275e7a44e2b1b7ad64f6f14d513ceff66f39177f66f7bc4fe61cf4c795bfaf"
+git_blob = "fe0afc3427a432e21b550a405bcbb8cc2639266c"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/065_0326_len0067.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/065_0326_len0067.sysex.gz"
+kind = "sysex"
+bytes = 67
+sha256 = "ae88b8d2d32a4c0ecb74d6ad9b0c9ecf55bcc6d2da665d173ea14aa6cf78846f"
+git_blob = "91ed31108a01e7dc5d34a251f799d8f586062cbe"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/066_0325_len0163.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/066_0325_len0163.sysex.gz"
+kind = "sysex"
+bytes = 163
+sha256 = "74981e6af4dc68015e03eefd3ed52a77fdb9092d7fed3a73e4e92397d965100d"
+git_blob = "d8260f538b8f0757647e3c229a152528b24321a8"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/067_0320_len0738.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/067_0320_len0738.sysex.gz"
+kind = "sysex"
+bytes = 738
+sha256 = "1c1debffb442e1f9c11a4847e533ad6cf6477c4df26c8792e485ec8ed115a6a3"
+git_blob = "17fe60f49ef0e10d98f79544326f488e3e34585b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/068_1104_len0858.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/068_1104_len0858.sysex.gz"
+kind = "sysex"
+bytes = 858
+sha256 = "c2476c6b24b4e15f3ca4d63960964258e187cd722fd398cbed1c1afc1ad8130f"
+git_blob = "ff9fb7132578db32ef9401bd2efc472c8ade6d4a"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/069_0320_len0738.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/069_0320_len0738.sysex.gz"
+kind = "sysex"
+bytes = 738
+sha256 = "1c1debffb442e1f9c11a4847e533ad6cf6477c4df26c8792e485ec8ed115a6a3"
+git_blob = "17fe60f49ef0e10d98f79544326f488e3e34585b"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/070_0901_len0858.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/070_0901_len0858.sysex.gz"
+kind = "sysex"
+bytes = 858
+sha256 = "cdfa5d4c600117366eedca3d808d4e1d2ef7d725cf1aa78caf941090333d475e"
+git_blob = "f7506a879897d1b5e0d25c4e011de8737245b112"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/071_0329_len0052.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/071_0329_len0052.sysex.gz"
+kind = "sysex"
+bytes = 52
+sha256 = "2bd3cebb1a9b184315df6cb9be1b7d8aa27705a86d88f05cc35948984ca98cac"
+git_blob = "743569d89481182196b8d65c3557442c706e17db"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/072_007D_len0018.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/072_007D_len0018.sysex.gz"
+kind = "sysex"
+bytes = 18
+sha256 = "422cfc9d215567d5795ae2efad07e8107b10273b5b6d29c5411201b5dcc99227"
+git_blob = "e57d654f54139617f4ec4f94bd677fe306c688ee"
+
+[[files]]
+source = 'sdk'
+profile = '8-pro'
+original = "pkg/mc8pro/testdata/raw/073_007D_len0018.sysex"
+path = "sdk/pkg/mc8pro/testdata/raw/073_007D_len0018.sysex.gz"
+kind = "sysex"
+bytes = 18
+sha256 = "422cfc9d215567d5795ae2efad07e8107b10273b5b6d29c5411201b5dcc99227"
+git_blob = "e57d654f54139617f4ec4f94bd677fe306c688ee"

@@ -1,0 +1,86 @@
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "singleBank"
+body_sha256 = "8975d7e73bcea01a1705fd1724a8850576b7d310e45f46644c6dfc6d075df1ce"
+data_sections = ["bank"]
+controller_settings_fields = []
+bank_count = 1
+bank_names = ["Example"]
+
+[field_names]
+bank = ["bankMsgArray", "bankName", "bankNumber", "expPresetArray", "presetArray"]
+expression = ["isExp", "msgArray", "presetNum"]
+preset = ["isExp", "msgArray", "presetNum", "shortName", "toToggle"]
+
+[message_slots]
+bank = 1
+expression = 1
+preset = 3
+
+[enabled_flags]
+toToggle = 1
+
+[display_tokens]
+"%F3" = 1
+
+[[messages]]
+context = "bank"
+type = 1
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bank/bankMsgArray/0"
+first_payload = "[0,127]"
+
+[messages.actions]
+1 = 1
+
+[messages.toggle_positions]
+absent = 1
+
+[messages.channels]
+absent = 1
+
+[messages.layouts]
+"data[2]" = 1
+
+[[messages]]
+context = "expression"
+type = 1
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bank/expPresetArray/0/msgArray/0"
+first_payload = "[9,127]"
+
+[messages.actions]
+0 = 1
+
+[messages.toggle_positions]
+absent = 1
+
+[messages.channels]
+absent = 1
+
+[messages.layouts]
+"data[2]" = 1
+
+[[messages]]
+context = "preset"
+type = 1
+count = 2
+distinct_payloads = 2
+first_pointer = "/data/bank/presetArray/0/msgArray/1"
+first_payload = "{\"d1\":7,\"d2\":0,\"d3\":0,\"d4\":0}"
+
+[messages.actions]
+1 = 1
+2 = 1
+
+[messages.toggle_positions]
+absent = 2
+
+[messages.channels]
+absent = 2
+
+[messages.layouts]
+d-fields = 2

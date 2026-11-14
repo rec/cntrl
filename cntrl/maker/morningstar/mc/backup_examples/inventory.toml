@@ -1,0 +1,2308 @@
+[[backups]]
+path = "jekku/Morningstar_MC6PRO_All_Banks_Backup_20260124_144538.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "57975af0f14eee7e51b55cabbc4d4d5dde574841a533e16d624f2427ad5fe0cc"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 128
+bank_names = ["Rockerverb 100", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "bank"
+type = 1
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/0/bankMsgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,127,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+3 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "bank"
+type = 15
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/0/bankMsgArray/1"
+first_payload = "[0,0,1,0,0,0,0,0,0,127,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 52
+distinct_payloads = 13
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[37,127,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 48
+2 = 4
+
+[backups.messages.toggle_positions]
+0 = 3
+1 = 2
+2 = 47
+
+[backups.messages.channels]
+1 = 52
+
+[backups.messages.layouts]
+"data[18]" = 52
+
+[[backups.messages]]
+context = "preset"
+type = 13
+count = 2
+distinct_payloads = 1
+first_pointer = "/data/bankArray/0/presetArray/2/msgArray/3"
+first_payload = "[0,0,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+3 = 2
+
+[backups.messages.toggle_positions]
+2 = 2
+
+[backups.messages.channels]
+1 = 2
+
+[backups.messages.layouts]
+"data[18]" = 2
+
+[[backups.messages]]
+context = "preset"
+type = 14
+count = 2
+distinct_payloads = 1
+first_pointer = "/data/bankArray/0/presetArray/5/msgArray/0"
+first_payload = "[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+2 = 2
+
+[backups.messages.toggle_positions]
+2 = 2
+
+[backups.messages.channels]
+1 = 2
+
+[backups.messages.layouts]
+"data[18]" = 2
+
+[[backups.messages]]
+context = "preset"
+type = 22
+count = 10
+distinct_payloads = 3
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/6"
+first_payload = "[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 8
+2 = 2
+
+[backups.messages.toggle_positions]
+0 = 8
+2 = 2
+
+[backups.messages.channels]
+1 = 7
+2 = 3
+
+[backups.messages.layouts]
+"data[18]" = 10
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "bwanab/Morningstar_MC8_All_Banks_Backup_20241209_165434.backup.gz"
+profile = '8'
+format = "native"
+schema_version = 1
+device_model = 4
+dump_type = "allBanks"
+body_sha256 = "621b3dced5743dd31bdafd82dd2b97e98b073ffa751ce2032d7cc5e9333fc2ea"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 30
+bank_names = ["Indy Clean/Edge", "Indy Crunch/Lead", "LDW Clean/Edge", "LDW Crunch/Lead", "Acoustic", "Bass", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "preset"
+type = 1
+count = 39
+distinct_payloads = 37
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "{\"d1\":25,\"d2\":0,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+1 = 37
+3 = 1
+5 = 1
+
+[backups.messages.toggle_positions]
+2 = 39
+
+[backups.messages.channels]
+1 = 39
+
+[backups.messages.layouts]
+d-fields = 39
+
+[backups.field_names]
+bank = ["bankClearToggle", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "presetArray"]
+expression = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+preset = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 480
+expression = 1920
+preset = 10560
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "bwanab/Morningstar_MC8_All_Banks_Backup_20241211_161044.backup.gz"
+profile = '8'
+format = "native"
+schema_version = 1
+device_model = 4
+dump_type = "allBanks"
+body_sha256 = "a668963bf34769edbb21984d9439533d85001b11729f00af5860558b5a74044a"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 30
+bank_names = ["Indy Clean/Edge", "Indy Crunch/Lead", "LDW Clean/Edge", "LDW Crunch/Lead", "Acoustic", "Bass", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Live Loops Control"]
+
+[[backups.messages]]
+context = "preset"
+type = 1
+count = 39
+distinct_payloads = 37
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "{\"d1\":25,\"d2\":0,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+1 = 37
+3 = 1
+5 = 1
+
+[backups.messages.toggle_positions]
+2 = 39
+
+[backups.messages.channels]
+1 = 39
+
+[backups.messages.layouts]
+d-fields = 39
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 8
+distinct_payloads = 8
+first_pointer = "/data/bankArray/29/presetArray/0/msgArray/0"
+first_payload = "{\"d1\":2,\"d2\":1,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+1 = 8
+
+[backups.messages.toggle_positions]
+0 = 1
+1 = 1
+2 = 6
+
+[backups.messages.channels]
+1 = 8
+
+[backups.messages.layouts]
+d-fields = 8
+
+[backups.field_names]
+bank = ["bankClearToggle", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "presetArray"]
+expression = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+preset = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 480
+expression = 1920
+preset = 10560
+
+[backups.enabled_flags]
+toToggle = 1
+
+[backups.display_tokens]
+
+[[backups]]
+path = "bwanab/Morningstar_MC8_All_Banks_Backup_20250202_112454.backup.gz"
+profile = '8'
+format = "native"
+schema_version = 1
+device_model = 4
+dump_type = "allBanks"
+body_sha256 = "f241c670b0b8d9928c28d3ec3252bf88ebbc363fe7ec30c2a0d94afdadbf5124"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 30
+bank_names = ["Mainstage FX", "Live Loops Control", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Mainstage Select", "Mainstage FX", "Live Loops Control"]
+
+[[backups.messages]]
+context = "preset"
+type = 1
+count = 13
+distinct_payloads = 12
+first_pointer = "/data/bankArray/28/presetArray/0/msgArray/0"
+first_payload = "{\"d1\":0,\"d2\":0,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+0 = 2
+1 = 9
+3 = 1
+5 = 1
+
+[backups.messages.toggle_positions]
+2 = 13
+
+[backups.messages.channels]
+1 = 13
+
+[backups.messages.layouts]
+d-fields = 13
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 50
+distinct_payloads = 23
+first_pointer = "/data/bankArray/0/presetArray/1/msgArray/0"
+first_payload = "{\"d1\":25,\"d2\":0,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+0 = 2
+1 = 44
+5 = 4
+
+[backups.messages.toggle_positions]
+0 = 2
+2 = 48
+
+[backups.messages.channels]
+1 = 50
+
+[backups.messages.layouts]
+d-fields = 50
+
+[backups.field_names]
+bank = ["bankClearToggle", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "presetArray"]
+expression = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+preset = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 480
+expression = 1920
+preset = 10560
+
+[backups.enabled_flags]
+toToggle = 16
+
+[backups.display_tokens]
+
+[[backups]]
+path = "bwanab/Morningstar_MC8_Bank_Backup_Kemper Performance Selec_20250202_134520.backup.gz"
+profile = '8'
+format = "native"
+schema_version = 1
+device_model = 4
+dump_type = "singleBank"
+body_sha256 = "2a841c58e81ce54257204cee684daf2f666ab086cc21efa374148828e16d37ed"
+data_sections = ["bank"]
+controller_settings_fields = []
+bank_count = 1
+bank_names = ["Kemper Performance Selec"]
+
+[[backups.messages]]
+context = "preset"
+type = 1
+count = 5
+distinct_payloads = 1
+first_pointer = "/data/bank/presetArray/8/msgArray/2"
+first_payload = "{\"d1\":27,\"d2\":0,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+5 = 5
+
+[backups.messages.toggle_positions]
+2 = 5
+
+[backups.messages.channels]
+1 = 5
+
+[backups.messages.layouts]
+d-fields = 5
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 25
+distinct_payloads = 23
+first_pointer = "/data/bank/presetArray/0/msgArray/0"
+first_payload = "{\"d1\":49,\"d2\":0,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+1 = 24
+5 = 1
+
+[backups.messages.toggle_positions]
+0 = 9
+1 = 8
+2 = 8
+
+[backups.messages.channels]
+1 = 25
+
+[backups.messages.layouts]
+d-fields = 25
+
+[backups.field_names]
+bank = ["bankClearToggle", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "presetArray"]
+expression = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+preset = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 16
+expression = 64
+preset = 352
+
+[backups.enabled_flags]
+toToggle = 8
+
+[backups.display_tokens]
+
+[[backups]]
+path = "bwanab/Morningstar_MC8_Bank_Backup_Live Loops Control_20250202_112529.backup.gz"
+profile = '8'
+format = "native"
+schema_version = 1
+device_model = 4
+dump_type = "singleBank"
+body_sha256 = "8c3e8836ea9a59170928d55d9df5d1e8252714e5b815bd3e913356bff1eddf55"
+data_sections = ["bank"]
+controller_settings_fields = []
+bank_count = 1
+bank_names = ["Live Loops Control"]
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 11
+distinct_payloads = 11
+first_pointer = "/data/bank/presetArray/0/msgArray/0"
+first_payload = "{\"d1\":2,\"d2\":1,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+1 = 10
+5 = 1
+
+[backups.messages.toggle_positions]
+0 = 1
+2 = 10
+
+[backups.messages.channels]
+1 = 11
+
+[backups.messages.layouts]
+d-fields = 11
+
+[backups.field_names]
+bank = ["bankClearToggle", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "presetArray"]
+expression = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+preset = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 16
+expression = 64
+preset = 352
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "bwanab/Morningstar_MC8_Bank_Backup_Mainstage FX_20250202_112517.backup.gz"
+profile = '8'
+format = "native"
+schema_version = 1
+device_model = 4
+dump_type = "singleBank"
+body_sha256 = "eed65682c0676cde7d575d4ded711cf68b0edcc5ea0754bd5a8e1fbfd0206759"
+data_sections = ["bank"]
+controller_settings_fields = []
+bank_count = 1
+bank_names = ["Mainstage FX"]
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 15
+distinct_payloads = 14
+first_pointer = "/data/bank/presetArray/1/msgArray/0"
+first_payload = "{\"d1\":25,\"d2\":0,\"d3\":0,\"d4\":0}"
+
+[backups.messages.actions]
+0 = 1
+1 = 13
+5 = 1
+
+[backups.messages.toggle_positions]
+2 = 15
+
+[backups.messages.channels]
+1 = 15
+
+[backups.messages.layouts]
+d-fields = 15
+
+[backups.field_names]
+bank = ["bankClearToggle", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "presetArray"]
+expression = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+preset = ["bankNum", "isExp", "longName", "msgArray", "presetNum", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 16
+expression = 64
+preset = 352
+
+[backups.enabled_flags]
+toToggle = 8
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/Configs/Test/Empty.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "9403aca5ae564b57b7947a6f88187e2bc2b55e2887c56d04f7d9af5d5fe52c80"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+messages = []
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/Configs/Test/ExtraBytes.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "2b2c51e996abf4deed20d827b45602bb0b57c241d172034b50397a8a930075c8"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "bank"
+type = 6
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/0/bankMsgArray/0"
+first_payload = "[1,0,0,0,0,0,0,9,0,127,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+4 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "bank"
+type = 18
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/0/bankMsgArray/1"
+first_payload = "[0,90,0,0,0,0,0,9,0,127,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 1
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[10,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+3 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/Configs/Test/Features.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "8ee7aaae5ee3187ff30cb8dc6449bc2b320f060848e8fa8987ad88e3def80fe1"
+data_sections = ["bankArray"]
+controller_settings_fields = []
+bank_count = 128
+bank_names = ["Sample MIDI messages", "Bank Jumps", "", "Jump to Page", "Test Bank Message", "Message Scrolling", "Other Message Types", "More Message Types", "MIDI Clock PC Scroll CC Scroll", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "bank"
+type = 1
+count = 4
+distinct_payloads = 4
+first_pointer = "/data/bankArray/4/bankMsgArray/0"
+first_payload = "[0,0,0,0,0,0,0,6,0,127,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+2 = 1
+5 = 1
+7 = 1
+
+[backups.messages.toggle_positions]
+2 = 4
+
+[backups.messages.channels]
+1 = 4
+
+[backups.messages.layouts]
+"data[18]" = 4
+
+[[backups.messages]]
+context = "preset"
+type = 1
+count = 7
+distinct_payloads = 3
+first_pointer = "/data/bankArray/0/presetArray/1/msgArray/1"
+first_payload = "[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+2 = 6
+3 = 1
+
+[backups.messages.toggle_positions]
+2 = 7
+
+[backups.messages.channels]
+1 = 7
+
+[backups.messages.layouts]
+"data[18]" = 7
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 4
+distinct_payloads = 4
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[34,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 3
+2 = 1
+
+[backups.messages.toggle_positions]
+0 = 1
+1 = 1
+2 = 2
+
+[backups.messages.channels]
+1 = 3
+6 = 1
+
+[backups.messages.layouts]
+"data[18]" = 4
+
+[[backups.messages]]
+context = "preset"
+type = 3
+count = 3
+distinct_payloads = 3
+first_pointer = "/data/bankArray/6/presetArray/1/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 3
+
+[backups.messages.toggle_positions]
+2 = 3
+
+[backups.messages.channels]
+1 = 2
+2 = 1
+
+[backups.messages.layouts]
+"data[18]" = 3
+
+[[backups.messages]]
+context = "preset"
+type = 4
+count = 3
+distinct_payloads = 3
+first_pointer = "/data/bankArray/6/presetArray/2/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 3
+
+[backups.messages.toggle_positions]
+2 = 3
+
+[backups.messages.channels]
+1 = 2
+2 = 1
+
+[backups.messages.layouts]
+"data[18]" = 3
+
+[[backups.messages]]
+context = "preset"
+type = 5
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/3/msgArray/0"
+first_payload = "[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 6
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/5/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 7
+count = 11
+distinct_payloads = 8
+first_pointer = "/data/bankArray/6/presetArray/7/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 11
+
+[backups.messages.toggle_positions]
+2 = 11
+
+[backups.messages.channels]
+1 = 11
+
+[backups.messages.layouts]
+"data[18]" = 11
+
+[[backups.messages]]
+context = "preset"
+type = 10
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/15/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 11
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/16/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 12
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/17/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 13
+count = 4
+distinct_payloads = 4
+first_pointer = "/data/bankArray/1/presetArray/0/msgArray/0"
+first_payload = "[0,0,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 4
+
+[backups.messages.toggle_positions]
+2 = 4
+
+[backups.messages.channels]
+1 = 4
+
+[backups.messages.layouts]
+"data[18]" = 4
+
+[[backups.messages]]
+context = "preset"
+type = 14
+count = 6
+distinct_payloads = 6
+first_pointer = "/data/bankArray/3/presetArray/0/msgArray/0"
+first_payload = "[3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 5
+2 = 1
+
+[backups.messages.toggle_positions]
+2 = 6
+
+[backups.messages.channels]
+1 = 6
+
+[backups.messages.layouts]
+"data[18]" = 6
+
+[[backups.messages]]
+context = "preset"
+type = 15
+count = 2
+distinct_payloads = 2
+first_pointer = "/data/bankArray/6/presetArray/19/msgArray/0"
+first_payload = "[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 2
+
+[backups.messages.toggle_positions]
+2 = 2
+
+[backups.messages.channels]
+1 = 1
+4 = 1
+
+[backups.messages.layouts]
+"data[18]" = 2
+
+[[backups.messages]]
+context = "preset"
+type = 16
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/20/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 18
+count = 3
+distinct_payloads = 3
+first_pointer = "/data/bankArray/6/presetArray/22/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 3
+
+[backups.messages.toggle_positions]
+2 = 3
+
+[backups.messages.channels]
+1 = 3
+
+[backups.messages.layouts]
+"data[18]" = 3
+
+[[backups.messages]]
+context = "preset"
+type = 22
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/18/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 23
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/23/msgArray/0"
+first_payload = "[3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 24
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/8/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 25
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/4/msgArray/0"
+first_payload = "[0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 26
+count = 3
+distinct_payloads = 3
+first_pointer = "/data/bankArray/6/presetArray/11/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 3
+
+[backups.messages.toggle_positions]
+2 = 3
+
+[backups.messages.channels]
+1 = 2
+4 = 1
+
+[backups.messages.layouts]
+"data[18]" = 3
+
+[[backups.messages]]
+context = "preset"
+type = 27
+count = 2
+distinct_payloads = 2
+first_pointer = "/data/bankArray/6/presetArray/13/msgArray/0"
+first_payload = "[0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 2
+
+[backups.messages.toggle_positions]
+2 = 2
+
+[backups.messages.channels]
+1 = 2
+
+[backups.messages.layouts]
+"data[18]" = 2
+
+[[backups.messages]]
+context = "preset"
+type = 31
+count = 4
+distinct_payloads = 4
+first_pointer = "/data/bankArray/6/presetArray/12/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 4
+
+[backups.messages.toggle_positions]
+2 = 4
+
+[backups.messages.channels]
+1 = 2
+5 = 2
+
+[backups.messages.layouts]
+"data[18]" = 4
+
+[[backups.messages]]
+context = "preset"
+type = 32
+count = 6
+distinct_payloads = 6
+first_pointer = "/data/bankArray/6/presetArray/10/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 6
+
+[backups.messages.toggle_positions]
+2 = 6
+
+[backups.messages.channels]
+1 = 4
+3 = 2
+
+[backups.messages.layouts]
+"data[18]" = 6
+
+[[backups.messages]]
+context = "preset"
+type = 33
+count = 11
+distinct_payloads = 10
+first_pointer = "/data/bankArray/6/presetArray/9/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 11
+
+[backups.messages.toggle_positions]
+2 = 11
+
+[backups.messages.channels]
+1 = 11
+
+[backups.messages.layouts]
+"data[18]" = 11
+
+[[backups.messages]]
+context = "preset"
+type = 34
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/0/msgArray/0"
+first_payload = "[0,33,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 36
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/5/presetArray/1/msgArray/6"
+first_payload = "[6,4,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 40
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/7/presetArray/0/msgArray/0"
+first_payload = "[0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+0 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 41
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/6/presetArray/6/msgArray/0"
+first_payload = "[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+1 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[[backups.messages]]
+context = "preset"
+type = 44
+count = 3
+distinct_payloads = 3
+first_pointer = "/data/bankArray/5/presetArray/1/msgArray/1"
+first_payload = "[79,110,101,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+2 = 3
+
+[backups.messages.toggle_positions]
+2 = 3
+
+[backups.messages.channels]
+1 = 3
+
+[backups.messages.layouts]
+"data[18]" = 3
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+toMsgScroll = 2
+toToggle = 1
+
+[backups.display_tokens]
+"%G" = 1
+
+[[backups]]
+path = "footsmart/Configs/Test/MIDIClock.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "fcd816bd9da18ac1285bdb8c039f0d8fcb539fe939a979fb991f04b49b05605d"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "preset"
+type = 7
+count = 21
+distinct_payloads = 17
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 21
+
+[backups.messages.toggle_positions]
+2 = 21
+
+[backups.messages.channels]
+1 = 21
+
+[backups.messages.layouts]
+"data[18]" = 21
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/Configs/Test/NewFields.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "18c9a774e5dca3ae07ab97d764ec339f8ffca4e4e09a78e309f3a45d5458c9ad"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+messages = []
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/Configs/Test/PCNumberScroll.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "649af9e6bd91cba0642e24d12f8c82f1f96126d17396c67f4d6fd989bdc6699e"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "preset"
+type = 32
+count = 11
+distinct_payloads = 11
+first_pointer = "/data/bankArray/0/presetArray/1/msgArray/0"
+first_payload = "[1,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 11
+
+[backups.messages.toggle_positions]
+2 = 11
+
+[backups.messages.channels]
+1 = 6
+2 = 1
+3 = 3
+4 = 1
+
+[backups.messages.layouts]
+"data[18]" = 11
+
+[[backups.messages]]
+context = "preset"
+type = 33
+count = 13
+distinct_payloads = 13
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 13
+
+[backups.messages.toggle_positions]
+2 = 13
+
+[backups.messages.channels]
+1 = 7
+2 = 3
+3 = 3
+
+[backups.messages.layouts]
+"data[18]" = 13
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/Configs/Test/SetToggle.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "e4e117ead6603908a1ac3715318cfc5094ca3e41e15d576e47c772e2aff37789"
+data_sections = ["bankArray"]
+controller_settings_fields = []
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "preset"
+type = 15
+count = 9
+distinct_payloads = 9
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 9
+
+[backups.messages.toggle_positions]
+2 = 9
+
+[backups.messages.channels]
+1 = 4
+2 = 1
+3 = 1
+4 = 1
+5 = 1
+6 = 1
+
+[backups.messages.layouts]
+"data[18]" = 9
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/Configs/Test/Utility.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "5ab702bbcbd42a80db680f26a7ea7a39a150092a6cb28967c60ad438b36c8b1a"
+data_sections = ["bankArray"]
+controller_settings_fields = []
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "preset"
+type = 36
+count = 33
+distinct_payloads = 33
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[0,2,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 32
+2 = 1
+
+[backups.messages.toggle_positions]
+2 = 33
+
+[backups.messages.channels]
+1 = 33
+
+[backups.messages.layouts]
+"data[18]" = 33
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/Configs/Test/WaveformSequence.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "88cae925d850af688b89d25ab261a4100ccaf1e429bdb521f3782ace72de6915"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "preset"
+type = 26
+count = 32
+distinct_payloads = 27
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 29
+2 = 2
+3 = 1
+
+[backups.messages.toggle_positions]
+2 = 32
+
+[backups.messages.channels]
+1 = 31
+4 = 1
+
+[backups.messages.layouts]
+"data[18]" = 32
+
+[[backups.messages]]
+context = "preset"
+type = 31
+count = 8
+distinct_payloads = 8
+first_pointer = "/data/bankArray/0/presetArray/1/msgArray/0"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 3
+2 = 2
+3 = 2
+4 = 1
+
+[backups.messages.toggle_positions]
+2 = 8
+
+[backups.messages.channels]
+1 = 8
+
+[backups.messages.layouts]
+"data[18]" = 8
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/old/NavigatorTest_copy.backup.gz"
+profile = '6-pro'
+format = "supplementary-authoring"
+schema_version = "absent"
+device_model = "absent"
+dump_type = "absent"
+body_sha256 = "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+data_sections = []
+controller_settings_fields = []
+bank_count = 0
+bank_names = []
+messages = []
+
+[backups.field_names]
+
+[backups.message_slots]
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "footsmart/old/SelectExpMessage.backup.gz"
+profile = '6-pro'
+format = "native"
+schema_version = 1
+device_model = 6
+dump_type = "allBanks"
+body_sha256 = "6f67f176afa85ae9a88e47e40e2d746c69845ebdd73d039cbb970f829ea4df1f"
+data_sections = ["bankArray"]
+controller_settings_fields = []
+bank_count = 128
+bank_names = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "preset"
+type = 4
+count = 93
+distinct_payloads = 31
+first_pointer = "/data/bankArray/0/presetArray/1/msgArray/1"
+first_payload = "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 93
+
+[backups.messages.toggle_positions]
+2 = 93
+
+[backups.messages.channels]
+1 = 93
+
+[backups.messages.layouts]
+"data[18]" = 93
+
+[[backups.messages]]
+context = "preset"
+type = 17
+count = 4
+distinct_payloads = 4
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 4
+
+[backups.messages.toggle_positions]
+2 = 4
+
+[backups.messages.channels]
+1 = 4
+
+[backups.messages.layouts]
+"data[18]" = 4
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+
+[backups.display_tokens]
+
+[[backups]]
+path = "sdk/pkg/mc8pro/testdata/all-banks.backup.gz"
+profile = '8-pro'
+format = "native"
+schema_version = 1
+device_model = 8
+dump_type = "allBanks"
+body_sha256 = "cbc21bff6f667e960e7dd8f228679494248513e6c7dcfd41fe4aff21e11f100b"
+data_sections = ["bankArray", "controller_settings"]
+controller_settings_fields = ["data", "type"]
+bank_count = 128
+bank_names = ["Guitar - Live", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 8
+distinct_payloads = 8
+first_pointer = "/data/bankArray/0/presetArray/0/msgArray/0"
+first_payload = "[39,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 6
+3 = 2
+
+[backups.messages.toggle_positions]
+0 = 1
+1 = 1
+2 = 6
+
+[backups.messages.channels]
+2 = 8
+
+[backups.messages.layouts]
+"data[18]" = 8
+
+[[backups.messages]]
+context = "preset"
+type = 15
+count = 4
+distinct_payloads = 2
+first_pointer = "/data/bankArray/0/presetArray/4/msgArray/1"
+first_payload = "[16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 4
+
+[backups.messages.toggle_positions]
+2 = 4
+
+[backups.messages.channels]
+1 = 2
+2 = 2
+
+[backups.messages.layouts]
+"data[18]" = 4
+
+[[backups.messages]]
+context = "preset"
+type = 24
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bankArray/0/presetArray/7/msgArray/0"
+first_payload = "[44,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+2 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 4096
+expression = 16384
+preset = 98304
+
+[backups.enabled_flags]
+toToggle = 5
+
+[backups.display_tokens]
+
+[[backups]]
+path = "sdk/pkg/mc8pro/testdata/bank-guitar-live.backup.gz"
+profile = '8-pro'
+format = "native"
+schema_version = 1
+device_model = 8
+dump_type = "singleBank"
+body_sha256 = "d1f37d0471e0ed3bbd0630582f71a2214be3e7410f60defe2383d8a2c1acb236"
+data_sections = ["bank"]
+controller_settings_fields = []
+bank_count = 1
+bank_names = ["Guitar - Live"]
+
+[[backups.messages]]
+context = "preset"
+type = 2
+count = 8
+distinct_payloads = 8
+first_pointer = "/data/bank/presetArray/0/msgArray/0"
+first_payload = "[39,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 6
+3 = 2
+
+[backups.messages.toggle_positions]
+0 = 1
+1 = 1
+2 = 6
+
+[backups.messages.channels]
+2 = 8
+
+[backups.messages.layouts]
+"data[18]" = 8
+
+[[backups.messages]]
+context = "preset"
+type = 15
+count = 4
+distinct_payloads = 2
+first_pointer = "/data/bank/presetArray/4/msgArray/1"
+first_payload = "[16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 4
+
+[backups.messages.toggle_positions]
+2 = 4
+
+[backups.messages.channels]
+1 = 2
+2 = 2
+
+[backups.messages.layouts]
+"data[18]" = 4
+
+[[backups.messages]]
+context = "preset"
+type = 24
+count = 1
+distinct_payloads = 1
+first_pointer = "/data/bank/presetArray/7/msgArray/0"
+first_payload = "[44,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+
+[backups.messages.actions]
+1 = 1
+
+[backups.messages.toggle_positions]
+2 = 1
+
+[backups.messages.channels]
+2 = 1
+
+[backups.messages.layouts]
+"data[18]" = 1
+
+[backups.field_names]
+bank = ["backgroundColor", "bankClearToggle", "bankDescription", "bankMsgArray", "bankName", "bankNumber", "expPresetArray", "isColorEnabled", "pageLimit", "presetArray", "textColor", "toDisplay"]
+expression = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+preset = ["backgroundColor", "bankNum", "isExp", "ledColor", "ledShiftColor", "ledToggleColor", "longName", "msgArray", "nameColor", "nameShiftColor", "nameToggleColor", "presetNum", "shiftBackgroundColor", "shiftName", "shortName", "toBlink", "toMsgScroll", "toToggle", "toggleBackgroundColor", "toggleGroup", "toggleName"]
+
+[backups.message_slots]
+bank = 32
+expression = 128
+preset = 768
+
+[backups.enabled_flags]
+toToggle = 5
+
+[backups.display_tokens]
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/001_007D_len0018.sysex.gz"
+bytes = 18
+prefix_hex = "f00021240804007d"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/002_0601_len1032.sysex.gz"
+bytes = 1032
+prefix_hex = "f000212408040601"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/003_0602_len0647.sysex.gz"
+bytes = 647
+prefix_hex = "f000212408040602"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/004_0320_len0738.sysex.gz"
+bytes = 738
+prefix_hex = "f000212408040320"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/005_0321_len0050.sysex.gz"
+bytes = 50
+prefix_hex = "f000212408040321"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/006_0300_len0018.sysex.gz"
+bytes = 18
+prefix_hex = "f000212408040300"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/007_0324_len0051.sysex.gz"
+bytes = 51
+prefix_hex = "f000212408040324"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/008_0301_len0018.sysex.gz"
+bytes = 18
+prefix_hex = "f000212408040301"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/009_0325_len0163.sysex.gz"
+bytes = 163
+prefix_hex = "f000212408040325"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/010_0326_len0067.sysex.gz"
+bytes = 67
+prefix_hex = "f000212408040326"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/011_0320_len0738.sysex.gz"
+bytes = 738
+prefix_hex = "f000212408040320"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/012_0322_len0156.sysex.gz"
+bytes = 156
+prefix_hex = "f000212408040322"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/013_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/014_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/015_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/016_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/017_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/018_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/019_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/020_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/021_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/022_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/023_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/024_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/025_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/026_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/027_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/028_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/029_0323_len0082.sysex.gz"
+bytes = 82
+prefix_hex = "f000212408040323"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/030_0327_len0242.sysex.gz"
+bytes = 242
+prefix_hex = "f000212408040327"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/031_0328_len0082.sysex.gz"
+bytes = 82
+prefix_hex = "f000212408040328"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/032_1103_len0037.sysex.gz"
+bytes = 37
+prefix_hex = "f000212408041103"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/033_0329_len0052.sysex.gz"
+bytes = 52
+prefix_hex = "f000212408040329"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/034_1104_len0858.sysex.gz"
+bytes = 858
+prefix_hex = "f000212408041104"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/035_1100_len0050.sysex.gz"
+bytes = 50
+prefix_hex = "f000212408041100"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/036_0601_len1032.sysex.gz"
+bytes = 1032
+prefix_hex = "f000212408040601"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/037_0602_len0647.sysex.gz"
+bytes = 647
+prefix_hex = "f000212408040602"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/038_0901_len0858.sysex.gz"
+bytes = 858
+prefix_hex = "f000212408040901"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/039_1100_len0050.sysex.gz"
+bytes = 50
+prefix_hex = "f000212408041100"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/040_1103_len0037.sysex.gz"
+bytes = 37
+prefix_hex = "f000212408041103"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/041_0322_len0156.sysex.gz"
+bytes = 156
+prefix_hex = "f000212408040322"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/042_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/043_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/044_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/045_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/046_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/047_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/048_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/049_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/050_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/051_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/052_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/053_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/054_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/055_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/056_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/057_1105_len0298.sysex.gz"
+bytes = 298
+prefix_hex = "f000212408041105"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/058_0327_len0242.sysex.gz"
+bytes = 242
+prefix_hex = "f000212408040327"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/059_0321_len0050.sysex.gz"
+bytes = 50
+prefix_hex = "f000212408040321"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/060_0323_len0082.sysex.gz"
+bytes = 82
+prefix_hex = "f000212408040323"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/061_0328_len0082.sysex.gz"
+bytes = 82
+prefix_hex = "f000212408040328"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/062_0300_len0018.sysex.gz"
+bytes = 18
+prefix_hex = "f000212408040300"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/063_0324_len0051.sysex.gz"
+bytes = 51
+prefix_hex = "f000212408040324"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/064_0301_len0018.sysex.gz"
+bytes = 18
+prefix_hex = "f000212408040301"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/065_0326_len0067.sysex.gz"
+bytes = 67
+prefix_hex = "f000212408040326"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/066_0325_len0163.sysex.gz"
+bytes = 163
+prefix_hex = "f000212408040325"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/067_0320_len0738.sysex.gz"
+bytes = 738
+prefix_hex = "f000212408040320"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/068_1104_len0858.sysex.gz"
+bytes = 858
+prefix_hex = "f000212408041104"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/069_0320_len0738.sysex.gz"
+bytes = 738
+prefix_hex = "f000212408040320"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/070_0901_len0858.sysex.gz"
+bytes = 858
+prefix_hex = "f000212408040901"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/071_0329_len0052.sysex.gz"
+bytes = 52
+prefix_hex = "f000212408040329"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/072_007D_len0018.sysex.gz"
+bytes = 18
+prefix_hex = "f00021240804007d"
+framed = true
+
+[[captures]]
+path = "sdk/pkg/mc8pro/testdata/raw/073_007D_len0018.sysex.gz"
+bytes = 18
+prefix_hex = "f00021240804007d"
+framed = true
