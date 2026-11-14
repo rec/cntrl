@@ -35,9 +35,13 @@ the controller target, compiles the setup and starts the native runtime.
 See the manufacturer profile guide below for the supported profile names.
 
 Generated files and saved pedal state live in `.cntrl-emulator/<profile>/` by
-default. This directory is ignored by Git. Repeated launches preserve the saved
-state. Use `--storage DIRECTORY` to select a different session, including a fresh
-one for an independent run. This changes only the emulated filesystem.
+default. This directory is ignored by Git. Repeated launches preserve saved edits
+when the supplied compiled bundle is unchanged. A changed bundle replaces the
+saved setups on launch while retaining unrelated session files. The first launch
+after upgrading to runtime font loading also applies the supplied bundle to
+establish this baseline. Use `--storage DIRECTORY` to select a different session,
+including a fresh one for an independent run. This changes only the emulated
+filesystem.
 
 For a custom controller, supply its layout and execution target explicitly.
 The positional input can be a setup source file or an already compiled CSTB
@@ -47,19 +51,27 @@ bundle:
 cntrl emulate setup.toml --layout controller-layout.toml --target target.toml
 ```
 
-The native executable and generated target/font headers are built under the
+The native executable and generated target header are built under the
 session's `.emulator-build` directory. Generated outputs can be recreated from the checkout
 and execution target. The session directory supplies the emulated filesystem;
 no SD card, formatting operation or connected pedal is involved. Reopen the same
 directory to retain its saved data; choose a new directory for a fresh session.
 
-The native executable is reused when its source and header contents, target,
-exported fonts, compiler identity, options and compiler environment are unchanged.
-Changes to these inputs rebuild it automatically. Re-exporting identical font
-files does not rebuild it. Setup compilation still runs when a source setup is
-supplied. A failed build is never recorded as reusable.
+The native executable is reused when its source and header contents, compiled
+target capabilities, compiler identity, options and compiler environment are
+unchanged. Changes to these inputs rebuild it automatically. Fonts and target
+font metrics are runtime data and never trigger a native rebuild. Setup compilation
+still runs when a source setup is supplied. A failed build is never recorded as
+reusable.
 
-Fonts and movies exported beside the compiled bundle are imported into the
+All fonts load from `.cfont` files when the emulator starts. UI font files come
+from the execution target's `font_sources`; their existing family identities and
+utility-page choices are preserved. Custom patch fonts use the existing setup
+asset files. Missing or malformed UI font files stop startup with an error naming
+the file. Replacing a font takes effect at the next launch; live reload is not
+performed. Font bytes are rendered by the same rasterizer as the pedal.
+
+Patch fonts and movies exported beside the compiled bundle are imported into the
 session through the existing asset formats. Put referenced MIDI files under
 the session's `midi/` directory before playing them.
 

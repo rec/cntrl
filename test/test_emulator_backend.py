@@ -1,5 +1,6 @@
 """Native controller scenarios use the production compiler, renderer and MIDI."""
 
+from hashlib import sha256
 from pathlib import Path
 from time import monotonic
 
@@ -12,7 +13,7 @@ from cntrl.animation import asset
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.emulator.replay import Scenario
-from cntrl.fonts import catalogue, ui
+from cntrl.fonts import assets, catalogue, ui
 from cntrl.patch_switcher import compiler, models, setup_bundle
 
 
@@ -143,6 +144,117 @@ def test_native_build_reuses_the_compiled_executable(
     assert result == executable
     assert executable.stat().st_mtime_ns == timestamp
     print(f'unchanged native build: {elapsed:.3f} s')
+
+
+def test_font_replacement_changes_rendering_without_recompiling(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    original = backend_files.target
+    executable = backend_files.executable
+    timestamp = executable.stat().st_mtime_ns
+    with backend.Session(
+        backend_files.layout,
+        original,
+        executable,
+        tmp_path / 'before',
+        backend_files.setup,
+    ) as session:
+        session.advance(20000)
+        before = dict(session.frames)
+    font = tmp_path / 'replacement.cfont'
+    font.write_bytes(
+        ui.prepare(
+            'classic',
+            [8, 12, 16, 20, 24, 32, 48, 64, 96],
+            catalogue.bundled_sources()['AtkinsonNextSemiBold'],
+        )
+    )
+    target = original.model_copy(
+        update={'font_sources': {n: str(font) for n in original.ui_fonts}}
+    )
+    assert (
+        backend.build(target, executable.parent, Path(__file__).parents[1])
+        == executable
+    )
+    assert executable.stat().st_mtime_ns == timestamp
+    with backend.Session(
+        backend_files.layout,
+        target,
+        executable,
+        tmp_path / 'after',
+        backend_files.setup,
+    ) as session:
+        session.advance(20000)
+        assert (
+            session.frames[original.displays[0].id] != before[original.displays[0].id]
+        )
+
+
+def test_new_patch_font_loads_without_recompiling(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    target = backend_files.target
+    show = control_setup(100)
+    show.update(
+        fill_in_styles=False,
+        fonts={'AddedFont': str(catalogue.bundled_sources()['AtkinsonNextSemiBold'])},
+        style={'font_name': 'AddedFont'},
+    )
+    fonts: dict[int, bytes] = {}
+    raw = compiler.compile_show(show, {}, [], target, assets=fonts)
+    assert fonts
+    setup = tmp_path / 'setup.bin'
+    setup.write_bytes(
+        setup_bundle.build(
+            {'added-font': raw}, {'added-font': show}, target.memory
+        ).pack()
+    )
+    storage = tmp_path / 'session'
+    directory = storage / 'cntrl/fonts'
+    directory.mkdir(parents=True)
+    for key, data in fonts.items():
+        (directory / f'{key:08x}.cfont').write_bytes(data)
+    executable = backend_files.executable
+    timestamp = executable.stat().st_mtime_ns
+    assert (
+        backend.build(target, executable.parent, Path(__file__).parents[1])
+        == executable
+    )
+    assert executable.stat().st_mtime_ns == timestamp
+    with backend.Session(
+        backend_files.layout, target, executable, storage, setup
+    ) as session:
+        session.advance(20000)
+        assert any(session.frames[target.displays[0].id])
+
+
+@pytest.mark.parametrize('problem', ['missing', 'header', 'pixels', 'trailing'])
+def test_unreadable_runtime_font_reports_the_file(
+    backend_files: BackendFiles, tmp_path: Path, problem: str
+) -> None:
+    font = tmp_path / 'runtime-font.cfont'
+    if problem == 'header':
+        font.write_bytes(b'invalid font')
+    elif problem != 'missing':
+        data = bytearray(
+            Path(next(iter(backend_files.target.font_sources.values()))).read_bytes()
+        )
+        if problem == 'pixels':
+            data[8 + assets.ENTRY.size + 12] ^= 1
+        else:
+            data.extend(b'trailing bytes')
+        font.write_bytes(data)
+    target = backend_files.target.model_copy(
+        update={'font_sources': {n: str(font) for n in backend_files.target.ui_fonts}}
+    )
+    with pytest.raises(ValueError, match='UI font.*runtime-font'):
+        backend.Session(
+            backend_files.layout,
+            target,
+            backend_files.executable,
+            tmp_path / 'session',
+            backend_files.setup,
+        )
 
 
 def test_replay_drives_real_button_actions_and_draws_pages(
@@ -291,8 +403,9 @@ def test_bundle_references_execute_the_other_setup(
         ), session.messages
 
 
-def test_reopening_storage_preserves_the_installed_bundle(
-    backend_files: BackendFiles, tmp_path: Path
+@pytest.mark.parametrize('changed_source', [False, True])
+def test_reopening_storage_applies_only_changed_source(
+    backend_files: BackendFiles, tmp_path: Path, changed_source: bool
 ) -> None:
     files = backend_files
     storage = tmp_path / 'session'
@@ -306,17 +419,37 @@ def test_reopening_storage_preserves_the_installed_bundle(
         files.layout, files.target, files.executable, storage, replacement
     ) as session:
         session.advance(20000)
+    # Simulate saved edits by retaining the installed replacement while restoring
+    # the record of the original supplied source.
+    (storage / 'setup-source.sha256').write_text(
+        sha256(files.setup.read_bytes()).hexdigest()
+    )
+    unrelated = storage / 'notes.txt'
+    unrelated.write_text('retain this session file')
+    if changed_source:
+        write_bundle({'emulator': control_setup(102)}, files.target, replacement)
+    with backend.Session(
+        files.layout,
+        files.target,
+        files.executable,
+        storage,
+        replacement if changed_source else files.setup,
+    ) as session:
+        session.advance(20000)
         session.button('a', True)
         session.advance(40000)
         session.button('a', False)
         session.advance(60000)
         assert any(
-            e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xb0\x07\x64'
+            e.kind == 'midi'
+            and e.endpoint == 'din'
+            and e.data == bytes((0xB0, 7, 102 if changed_source else 101))
             for e in session.messages
         ), session.messages
         assert not any(
-            e.kind == 'midi' and e.data == b'\xb0\x07\x65' for e in session.messages
+            e.kind == 'midi' and e.data == b'\xb0\x07\x64' for e in session.messages
         )
+    assert unrelated.read_text() == 'retain this session file'
 
 
 def test_startup_animation_uses_the_shared_asset_player(

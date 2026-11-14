@@ -88,7 +88,6 @@ def test_identical_reexported_inputs_reuse_the_executable(files: BuildFiles) -> 
         'added_header',
         'removed_header',
         'target',
-        'font',
         'compiler',
         'options',
         'generated_header',
@@ -114,10 +113,6 @@ def test_changed_build_inputs_recompile(
         files.target = files.target.model_copy(
             update={'memory': files.target.memory.model_copy(update={'runtime': 1})}
         )
-    elif changed == 'font':
-        files.font.write_bytes(
-            ui.prepare('classic', [8, 12], catalogue.bundled_sources()['CourierPrime'])
-        )
     elif changed == 'compiler':
         files.compiler.write_bytes(b'changed compiler')
         files.version = b'test compiler 2'
@@ -132,6 +127,25 @@ def test_changed_build_inputs_recompile(
         monkeypatch.setenv('CL', '/Od')
     backend.build(files.target, files.output, files.root)
     assert executable.read_text() == 'build 2'
+
+
+def test_font_content_and_target_font_metadata_do_not_recompile(
+    files: BuildFiles,
+) -> None:
+    executable = backend.build(files.target, files.output, files.root)
+    files.font.write_bytes(
+        ui.prepare('classic', [8, 12], catalogue.bundled_sources()['CourierPrime'])
+    )
+    face = files.target.fonts[0]
+    sizes = dict(face.sizes)
+    sizes[100] = next(iter(sizes.values()))
+    files.target = files.target.model_copy(
+        update={
+            'fonts': [face.model_copy(update={'sizes': sizes}), *files.target.fonts[1:]]
+        }
+    )
+    backend.build(files.target, files.output, files.root)
+    assert executable.read_text() == 'build 1'
 
 
 def test_changed_compiler_location_recompiles(
