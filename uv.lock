@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.13"
 
 [options]
-exclude-newer = "2026-11-06T16:22:41.86455Z"
+exclude-newer = "2026-11-07T10:05:31.296372Z"
 exclude-newer-span = "P1W"
 
 [manifest]
@@ -55,7 +55,7 @@ dev = [
 requires-dist = [
     { name = "fonttools", specifier = ">=4.67.0" },
     { name = "freetype-py", specifier = ">=2.5.1" },
-    { name = "middy", marker = "extra == 'emulator'", git = "https://github.com/rec/middy.git?rev=6c064b8e692b7b2fddfcdef779a86930cd1df676" },
+    { name = "middy", marker = "extra == 'emulator'", git = "https://github.com/rec/middy.git?rev=a78ac236d1849a43fc6018c3410674ad6e47c2e9" },
     { name = "pillow", specifier = ">=13.0.0" },
     { name = "pydantic", specifier = ">=2,<3" },
     { name = "pyserial", specifier = ">=3.5" },
@@ -195,7 +195,7 @@ wheels = [
 [[package]]
 name = "middy"
 version = "0.2.0"
-source = { git = "https://github.com/rec/middy.git?rev=6c064b8e692b7b2fddfcdef779a86930cd1df676#6c064b8e692b7b2fddfcdef779a86930cd1df676" }
+source = { git = "https://github.com/rec/middy.git?rev=a78ac236d1849a43fc6018c3410674ad6e47c2e9#a78ac236d1849a43fc6018c3410674ad6e47c2e9" }
 dependencies = [
     { name = "pydantic" },
     { name = "reccy" },

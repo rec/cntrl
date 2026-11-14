@@ -48,7 +48,7 @@ quote-style = "single"
 
 [tool.uv.sources]
 reccy = { git = "https://github.com/rec/reccy.git", rev = "a2bbdc5daadcbf18660f2f184e2a38ea1903c6a0" }
-middy = { git = "https://github.com/rec/middy.git", rev = "6c064b8e692b7b2fddfcdef779a86930cd1df676" }
+middy = { git = "https://github.com/rec/middy.git", rev = "a78ac236d1849a43fc6018c3410674ad6e47c2e9" }
 
 [tool.uv]
 # middy's declared Git source is replaced by the same root-pinned reccy source.
