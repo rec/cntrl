@@ -101,30 +101,30 @@ public:
         if constexpr (ProcessingPolicy::advanced) return ProcessingPolicy::clock_outputs(*this);
         else { return {}; }
     }
-    static bool valid(const uint8_t *data, unsigned size, Outputs outputs, unsigned nodes) {
+    static bool valid(const uint8_t *data, unsigned size, Outputs output_connections, unsigned nodes) {
         Routing candidate;
-        return candidate.decode(data, size, outputs, nodes);
+        return candidate.decode(data, size, output_connections, nodes);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_load)
 #endif
-    bool load(const uint8_t *data, unsigned size, Outputs outputs, unsigned nodes, uint64_t now = 0) {
-        if (!prepare_load(data, size, outputs, nodes, now)) return false;
+    bool load(const uint8_t *data, unsigned size, Outputs output_connections, unsigned nodes, uint64_t now = 0) {
+        if (!prepare_load(data, size, output_connections, nodes, now)) return false;
         finish_load(true);
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_prepare_load)
 #endif
-    bool prepare_load(const uint8_t *data, unsigned size, Outputs outputs, unsigned nodes, uint64_t now = 0) {
+    bool prepare_load(const uint8_t *data, unsigned size, Outputs output_connections, unsigned nodes, uint64_t now = 0) {
         finish_load(false);
         if (!prepared_.create()) return false;
         auto &candidate = *prepared_;
         candidate.limits_ = limits_;
-        if (!candidate.decode(data, size, outputs, nodes)) { prepared_.reset(); return false; }
-        if (!candidate.parsers_.resize(outputs.route_count()) || !candidate.inputs_.resize(outputs.route_count())
-            || !candidate.outputs_.resize(outputs.route_count()) || !candidate.prepare_output_state(outputs.route_count())
-            || !candidate.input_notes_.configure(outputs.route_count())) { prepared_.reset(); return false; }
+        if (!candidate.decode(data, size, output_connections, nodes)) { prepared_.reset(); return false; }
+        if (!candidate.parsers_.resize(output_connections.route_count()) || !candidate.inputs_.resize(output_connections.route_count())
+            || !candidate.outputs_.resize(output_connections.route_count()) || !candidate.prepare_output_state(output_connections.route_count())
+            || !candidate.input_notes_.configure(output_connections.route_count())) { prepared_.reset(); return false; }
         if (candidate.owner_generation_) {
             prepared_paths_ = owner_generations_.append(std::move(*candidate.owner_generation_));
             if (!prepared_paths_) { prepared_.reset(); return false; }
@@ -202,13 +202,13 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_select_external)
 #endif
-    bool select_external(const uint8_t *data, unsigned size, Outputs outputs, unsigned nodes, unsigned scope, uint64_t now = 0) {
+    bool select_external(const uint8_t *data, unsigned size, Outputs output_connections, unsigned nodes, unsigned scope, uint64_t now = 0) {
         if (scope == system_scope) { select(system_scope, now); return true; }
         uint64_t signature = 14695981039346656037ull;
         for (unsigned i = 0; i < size; ++i) { signature ^= data[i]; signature *= 1099511628211ull; }
         if (external_selected_ && foreign_signature_ == signature && foreign_scope_ == scope) return true;
         Routing candidate(limits_);
-        if (!candidate.decode(data, size, outputs, nodes)) return false;
+        if (!candidate.decode(data, size, output_connections, nodes)) return false;
         unsigned local_count = 0;
         for (const auto &route : candidate.routes_) if (route.scope == scope) ++local_count;
         if (base_routes_ + local_count > max_routes) return false;
@@ -901,12 +901,12 @@ private:
         return entry.enabled && !entry.failed && (entry.scope == system_scope || (entry.scope == selected_ && entry.foreign == external_selected_));
     }
     unsigned downstream_outputs(unsigned route) const {
-        unsigned outputs = routes_[route].outputs;
+        unsigned output_mask = routes_[route].outputs;
         std::fill(extension_.downstream_reached_.begin(), extension_.downstream_reached_.end(), uint8_t(0));
         auto &reached = extension_.downstream_reached_; reached[route] = 1;
         for (unsigned i = route + 1; i < routes_.size(); ++i) if (active(i))
-            for (const auto &input : routes_[i].inputs) if (input.kind && reached[input.index]) { outputs |= routes_[i].outputs; reached[i] = 1; break; }
-        return outputs;
+            for (const auto &input : routes_[i].inputs) if (input.kind && reached[input.index]) { output_mask |= routes_[i].outputs; reached[i] = 1; break; }
+        return output_mask;
     }
     bool recovering(unsigned output) const {
         return output_counts_[output].cleanup != 0;
@@ -1444,8 +1444,8 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_decode)
 #endif
-    bool decode(const uint8_t *data, unsigned size, Outputs outputs, unsigned nodes) {
-        outputs_count_ = outputs.route_count();
+    bool decode(const uint8_t *data, unsigned size, Outputs output_connections, unsigned nodes) {
+        outputs_count_ = output_connections.route_count();
         if (!data && !size) return true;
         if (!data || size < 12 || std::memcmp(data, "CSTR", 4)) return false;
         Reader reader{data + 4, data + size};
@@ -1457,16 +1457,16 @@ private:
         for (unsigned i = 0; i < count; ++i) {
             Route route; route.scope = uint16_t(reader.integer(2)); unsigned inputs = unsigned(reader.integer(2));
             route.outputs = uint16_t(reader.integer(2)); unsigned steps = unsigned(reader.integer(2));
-            if ((route.scope != system_scope && route.scope >= nodes) || (route.outputs & ~outputs.mask())) return false;
+            if ((route.scope != system_scope && route.scope >= nodes) || (route.outputs & ~output_connections.mask())) return false;
             if (!route.inputs.reserve(inputs) || !route.steps.reserve(steps)) return false;
             bool name_end = false;
             for (unsigned j = 0; j < 64; ++j) { unsigned c = reader.byte(); route.name[j] = char(c); if (!c) name_end = true; else if (name_end || c < 32 || c == '/') return false; }
             if (!name_end) return false;
-            if (outputs.find(route.name)) return false;
+            if (output_connections.find(route.name)) return false;
             for (const auto &existing : routes_) if (existing.scope == route.scope && !std::strcmp(existing.name, route.name)) return false;
             for (unsigned j = 0; j < inputs; ++j) {
                 Input input; input.kind = uint8_t(reader.byte()); input.index = uint16_t(reader.integer(2));
-                if (input.kind > 1 || (input.kind ? input.index >= i : input.index >= 16 || !(outputs.mask(true) & (1u << input.index)))) return false;
+                if (input.kind > 1 || (input.kind ? input.index >= i : input.index >= 16 || !(output_connections.mask(true) & (1u << input.index)))) return false;
                 if (input.kind && routes_[input.index].scope != system_scope && routes_[input.index].scope != route.scope) return false;
                 if (!route.inputs.append(input)) return false;
             }

@@ -204,17 +204,17 @@ public:
         unsigned generators = 0;
         for (const auto &route : core.routes_) generators += bool(route.lfo);
         (void)generators;
-        CheckedList<ParameterBinding> all;
+        CheckedList<ParameterBinding> context_bindings;
         for (unsigned context = 0; context <= core.routes_.size(); ++context) {
             core.selected_ = context == core.routes_.size() ? system_scope : core.routes_[context].scope;
-            all.clear();
+            context_bindings.clear();
             for (unsigned root = 0; root < core.routes_.size(); ++root) if (core.routes_[root].lfo && core.active(root)) {
                 if (!core.parameter_bindings(root)) return false;
                 for (const auto &binding : core.extension_.bindings_) {
                     if (core.routes_[root].lfo->config.off == 1 && (core.routes_[root].lfo->config.final_value < binding.target.minimum()
                         || core.routes_[root].lfo->config.final_value > binding.target.maximum())) return false;
-                    for (const auto &other : all) if (binding.output == other.output && binding.target.overlaps(other.target)) return false;
-                    if (!all.append(binding)) return false;
+                    for (const auto &other : context_bindings) if (binding.output == other.output && binding.target.overlaps(other.target)) return false;
+                    if (!context_bindings.append(binding)) return false;
                 }
             }
         }
