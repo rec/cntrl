@@ -7,7 +7,10 @@ watchdog, change the setup format, or change forwarding decisions.
 
 The tracked build entry reconstructs baseline `d6c6d06` and the recorded UI and
 flush-guard overlays, applies `trace.patch`, and copies the pinned SDK into a
-separate source tree. Existing rollback SDKs and images are untouched. The
+separate source tree. A generated `platform.local.txt` invokes the original
+provisioned compiler in place because the copied Windows compiler cannot resolve
+its multilib headers. SDK core patches remain isolated in the copy. Existing
+rollback SDKs and images are untouched. The
 repository must contain those commits; the manual CI workflow fetches history
 for this reason. No CI workflow is triggered by a push.
 
@@ -19,10 +22,6 @@ uv run --frozen --no-editable cntrl build --target-dir cntrl/maker/morningstar/m
 
 Keep the adjacent generated `build/sysex-transport-control-source/` directory
 with the export. The flash entry uses its matching compiler for backup/restore.
-Spaces in the export's directory name become underscores in the source directory
-name because the Windows ARM compiler cannot find its multilib headers when its
-installation directory contains spaces. Keep the checkout and output parent
-paths free of spaces for this diagnostic target.
 The export itself contains the ordinary portable artifacts and a build manifest
 with a trace ID and expected image SHA-256. The trace ID is a compiled source
 recipe label, not a cryptographic readback of every installed flash byte.

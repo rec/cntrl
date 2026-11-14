@@ -25,9 +25,7 @@ def run(command: Build) -> None:
     if command.diagnostics:
         raise ValueError('this MIDI control target does not enable the watchdog')
     repository, output = command.source_root.resolve(), command.output.resolve()
-    # The Windows ARM compiler cannot locate its multilib headers when its
-    # installation directory contains spaces. The export may still contain them.
-    source = output.with_name(output.name.replace(' ', '_') + '-source')
+    source = output.with_name(output.name + '-source')
     source.mkdir(parents=True)
     archive = subprocess.check_output(
         ['git', '-C', str(repository), 'archive', BASELINE]
@@ -93,6 +91,12 @@ def run(command: Build) -> None:
         firmware / '.tools',
         ignore=shutil.ignore_patterns('downloads'),
     )
+    # Keep core patches isolated, but invoke the provisioned compiler in place:
+    # the copied Windows compiler cannot resolve its multilib headers.
+    compiler = toolchain.arm_tool(root / 'firmware', 'g++').parents[2]
+    (
+        firmware / '.tools/data/packages/teensy/hardware/avr/1.62.0/platform.local.txt'
+    ).write_text(f'compiler.path={compiler.as_posix()}/\n')
     build.run(build.Build(target_dir=target, source_root=source, output=output))
     manifest = tomlkit.parse((output / 'build.toml').read_text())
     manifest['trace_id'] = trace_id
