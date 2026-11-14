@@ -1,23 +1,23 @@
 fill_in_styles = false
 
-[patches.Morningstar]
+[patches.Banked]
 type = "banked"
-name = "Morningstar"
+name = "Banked"
 bank_count = 128
 page_count = 4
 initial_bank = 0
 
-[patches.Morningstar.banks]
+[patches.Banked.banks]
 0 = {0 = "VL70-1"}
 1 = {0 = "VL70-2"}
 2 = {0 = "VL70-1"}
 
 
-[patches.Morningstar.patches.VL70-1]
+[patches.Banked.patches.VL70-1]
 name = "VL70-1"
 patches = []
 
-[patches.Morningstar.patches.VL70-1.bindings.configurable-1]
+[patches.Banked.patches.VL70-1.bindings.configurable-1]
 output = "din"
 mirror_output = "usb-device"
 channel = 1
@@ -27,7 +27,7 @@ maximum = 127
 reverse = false
 curve = "linear"
 
-[patches.Morningstar.patches.VL70-1.bindings.configurable-2]
+[patches.Banked.patches.VL70-1.bindings.configurable-2]
 output = "din"
 mirror_output = "usb-device"
 channel = 1
@@ -37,16 +37,16 @@ maximum = 127
 reverse = false
 curve = "linear"
 
-[patches.Morningstar.patches.VL70-1.bindings.a]
+[patches.Banked.patches.VL70-1.bindings.a]
 name = "Flutes"
 display_name = "Flute: {counters.counter3}"
 
-[patches.Morningstar.patches.VL70-1.bindings.a.style]
+[patches.Banked.patches.VL70-1.bindings.a.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FFFF"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-1.bindings.a.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "din"
@@ -54,7 +54,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.a.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "usb-device"
@@ -62,7 +62,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.a.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "din"
@@ -70,7 +70,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.a.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "usb-device"
@@ -78,16 +78,16 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.VL70-1.bindings.b]
+[patches.Banked.patches.VL70-1.bindings.b]
 name = "World"
 display_name = "World: {counters.counter4}"
 
-[patches.Morningstar.patches.VL70-1.bindings.b.style]
+[patches.Banked.patches.VL70-1.bindings.b.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFFA500"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-1.bindings.b.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "din"
@@ -95,7 +95,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.b.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "usb-device"
@@ -103,7 +103,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.b.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "din"
@@ -111,7 +111,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.b.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "usb-device"
@@ -119,28 +119,28 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.VL70-1.bindings.c]
+[patches.Banked.patches.VL70-1.bindings.c]
 name = ">"
 display_name = "VL70: {counters.counter3} - {counters.counter2}"
 
-[patches.Morningstar.patches.VL70-1.bindings.c.style]
+[patches.Banked.patches.VL70-1.bindings.c.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFA8072"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-1.bindings.c.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.c.on.patches]]
 operation = "next-bank"
 
-[patches.Morningstar.patches.VL70-1.bindings.d]
+[patches.Banked.patches.VL70-1.bindings.d]
 name = "Bass"
 display_name = "Bass {counters.counter0}"
 
-[patches.Morningstar.patches.VL70-1.bindings.d.style]
+[patches.Banked.patches.VL70-1.bindings.d.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FF00"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-1.bindings.d.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "din"
@@ -148,7 +148,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.d.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "usb-device"
@@ -156,7 +156,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.d.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "din"
@@ -164,7 +164,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.d.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "usb-device"
@@ -172,16 +172,16 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.VL70-1.bindings.e]
+[patches.Banked.patches.VL70-1.bindings.e]
 name = "Sax"
 display_name = "Sax: {counters.counter1}"
 
-[patches.Morningstar.patches.VL70-1.bindings.e.style]
+[patches.Banked.patches.VL70-1.bindings.e.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFF8C00"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-1.bindings.e.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter1"
 output = "din"
@@ -189,7 +189,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.e.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter1"
 output = "usb-device"
@@ -197,7 +197,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.e.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter1"
 output = "din"
@@ -205,7 +205,7 @@ channel = 2
 change = "none"
 wrap = false
 
-[[patches.Morningstar.patches.VL70-1.bindings.e.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter1"
 output = "usb-device"
@@ -213,16 +213,16 @@ channel = 2
 change = "none"
 wrap = false
 
-[patches.Morningstar.patches.VL70-1.bindings.f]
+[patches.Banked.patches.VL70-1.bindings.f]
 name = "Reeds"
 display_name = "Reeds {counters.counter2}"
 
-[patches.Morningstar.patches.VL70-1.bindings.f.style]
+[patches.Banked.patches.VL70-1.bindings.f.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xF0E68C"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-1.bindings.f.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter2"
 output = "din"
@@ -230,7 +230,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.f.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter2"
 output = "usb-device"
@@ -238,7 +238,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.f.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter2"
 output = "din"
@@ -246,7 +246,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-1.bindings.f.on.patches]]
+[[patches.Banked.patches.VL70-1.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter2"
 output = "usb-device"
@@ -254,11 +254,11 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.VL70-2]
+[patches.Banked.patches.VL70-2]
 name = "VL70-2"
 patches = []
 
-[patches.Morningstar.patches.VL70-2.bindings.configurable-1]
+[patches.Banked.patches.VL70-2.bindings.configurable-1]
 output = "din"
 mirror_output = "usb-device"
 channel = 1
@@ -268,7 +268,7 @@ maximum = 127
 reverse = false
 curve = "linear"
 
-[patches.Morningstar.patches.VL70-2.bindings.configurable-2]
+[patches.Banked.patches.VL70-2.bindings.configurable-2]
 output = "din"
 mirror_output = "usb-device"
 channel = 1
@@ -278,16 +278,16 @@ maximum = 127
 reverse = false
 curve = "linear"
 
-[patches.Morningstar.patches.VL70-2.bindings.a]
+[patches.Banked.patches.VL70-2.bindings.a]
 name = "Synth"
 display_name = "Synth: {counters.counter8}"
 
-[patches.Morningstar.patches.VL70-2.bindings.a.style]
+[patches.Banked.patches.VL70-2.bindings.a.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FFFF"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-2.bindings.a.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter8"
 output = "din"
@@ -295,7 +295,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.a.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter8"
 output = "usb-device"
@@ -303,7 +303,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.a.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "din"
@@ -311,7 +311,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.a.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.a.on.patches]]
 type = "counter-message"
 counter = "counter3"
 output = "usb-device"
@@ -319,16 +319,16 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.VL70-2.bindings.b]
+[patches.Banked.patches.VL70-2.bindings.b]
 name = "FX"
 display_name = "FX: {counters.counter9}"
 
-[patches.Morningstar.patches.VL70-2.bindings.b.style]
+[patches.Banked.patches.VL70-2.bindings.b.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFFA500"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-2.bindings.b.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter9"
 output = "din"
@@ -336,7 +336,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.b.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter9"
 output = "usb-device"
@@ -344,7 +344,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.b.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "din"
@@ -352,7 +352,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.b.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.b.on.patches]]
 type = "counter-message"
 counter = "counter4"
 output = "usb-device"
@@ -360,28 +360,28 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.VL70-2.bindings.c]
+[patches.Banked.patches.VL70-2.bindings.c]
 name = "<"
 display_name = "VL70: {counters.counter3} - {counters.counter2}"
 
-[patches.Morningstar.patches.VL70-2.bindings.c.style]
+[patches.Banked.patches.VL70-2.bindings.c.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFA8072"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-2.bindings.c.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.c.on.patches]]
 operation = "previous-bank"
 
-[patches.Morningstar.patches.VL70-2.bindings.d]
+[patches.Banked.patches.VL70-2.bindings.d]
 name = "Brass"
 display_name = "Brass {counters.counter5}"
 
-[patches.Morningstar.patches.VL70-2.bindings.d.style]
+[patches.Banked.patches.VL70-2.bindings.d.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FF00"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-2.bindings.d.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter5"
 output = "din"
@@ -389,7 +389,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.d.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter5"
 output = "usb-device"
@@ -397,7 +397,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.d.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "din"
@@ -405,7 +405,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.d.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.d.on.patches]]
 type = "counter-message"
 counter = "counter0"
 output = "usb-device"
@@ -413,16 +413,16 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.patches.VL70-2.bindings.e]
+[patches.Banked.patches.VL70-2.bindings.e]
 name = "Guitar"
 display_name = "Guitar: {counters.counter6}"
 
-[patches.Morningstar.patches.VL70-2.bindings.e.style]
+[patches.Banked.patches.VL70-2.bindings.e.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFF8C00"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-2.bindings.e.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter6"
 output = "din"
@@ -430,7 +430,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.e.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter6"
 output = "usb-device"
@@ -438,7 +438,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.e.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter6"
 output = "din"
@@ -446,7 +446,7 @@ channel = 2
 change = "none"
 wrap = false
 
-[[patches.Morningstar.patches.VL70-2.bindings.e.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.e.on.patches]]
 type = "counter-message"
 counter = "counter6"
 output = "usb-device"
@@ -454,16 +454,16 @@ channel = 2
 change = "none"
 wrap = false
 
-[patches.Morningstar.patches.VL70-2.bindings.f]
+[patches.Banked.patches.VL70-2.bindings.f]
 name = "String"
 display_name = "String: {counters.counter7}"
 
-[patches.Morningstar.patches.VL70-2.bindings.f.style]
+[patches.Banked.patches.VL70-2.bindings.f.style]
 font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xF0E68C"
 background_color = "0x000000"
 
-[[patches.Morningstar.patches.VL70-2.bindings.f.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter7"
 output = "din"
@@ -471,7 +471,7 @@ channel = 1
 change = "increase"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.f.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter7"
 output = "usb-device"
@@ -479,7 +479,7 @@ channel = 1
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.f.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter7"
 output = "din"
@@ -487,7 +487,7 @@ channel = 2
 change = "none"
 wrap = true
 
-[[patches.Morningstar.patches.VL70-2.bindings.f.on.patches]]
+[[patches.Banked.patches.VL70-2.bindings.f.on.patches]]
 type = "counter-message"
 counter = "counter7"
 output = "usb-device"
@@ -495,11 +495,11 @@ channel = 2
 change = "none"
 wrap = true
 
-[patches.Morningstar.style]
+[patches.Banked.style]
 foreground_color = "0x800080"
 background_color = "0xFFFFFF"
 
-[patches.Morningstar.binding_view]
+[patches.Banked.binding_view]
 maximum_size = 36
 detail_size = 18
 status_size = 12
@@ -507,10 +507,10 @@ align = "switch"
 show_labels = false
 status = "B{bank:03d} PG{page}"
 
-[patches.Morningstar.binding_view.status_style]
+[patches.Banked.binding_view.status_style]
 foreground_color = "blue"
 
-[patches.Morningstar.chords]
+[patches.Banked.chords]
 next-bank = ["b", "c"]
 previous-bank = ["a", "b"]
 next-bank-page = ["e", "f"]
@@ -518,15 +518,15 @@ previous-bank-page = ["d", "e"]
 menu = ["d", "f"]
 
 [patch_cycles]
-Imported = ["Morningstar"]
+Imported = ["Banked"]
 
 [pages.performance]
 min_windows = 3
 
-[pages.morningstar]
+[pages.banked]
 type = "banked"
 min_windows = 3
-patch = "Morningstar"
+patch = "Banked"
 
 [trs_ports]
 configurable-1 = "expression"

@@ -250,13 +250,13 @@ def convert(document: dict, bank: int) -> models.Setup:
         {
             'pages': {
                 'performance': {'type': 'patch-switcher', 'min_windows': 3},
-                'morningstar': {'type': 'banked', 'patch': 'Morningstar'},
+                'banked': {'type': 'banked', 'patch': 'Banked'},
             },
-            'patch_cycles': {'Imported': ['Morningstar']},
+            'patch_cycles': {'Imported': ['Banked']},
             'patches': {
-                'Morningstar': {
+                'Banked': {
                     'type': 'banked',
-                    'name': 'Morningstar',
+                    'name': 'Banked',
                     'banks': bank_pages,
                     'patches': patches,
                     'bank_count': len(banks),
@@ -299,7 +299,7 @@ def convert(document: dict, bank: int) -> models.Setup:
 def run(command: ImportBackup) -> None:
     content = command.backup.read_bytes()
     setup = convert(json.loads(content), command.bank)
-    imported = models.Banked.model_validate(setup.patches['Morningstar'])
+    imported = models.Banked.model_validate(setup.patches['Banked'])
     if command.output.exists() and any(command.output.iterdir()):
         raise ValueError(f'import output directory must be empty: {command.output}')
     command.output.mkdir(parents=True, exist_ok=True)
@@ -312,7 +312,7 @@ def run(command: ImportBackup) -> None:
         pages = tomlkit.inline_table()
         pages.update({str(j): n for j, n in b.items()})
         banks.add(str(i), pages)
-    document['patches']['Morningstar']['banks'] = banks
+    document['patches']['Banked']['banks'] = banks
     (command.output / 'setup.toml').write_text(tomlkit.dumps(document))
     report = {
         'backup': str(command.backup.resolve()),

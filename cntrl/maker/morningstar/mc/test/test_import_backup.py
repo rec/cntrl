@@ -20,12 +20,12 @@ def test_saved_vl70_bank_converts_to_editable_toml(
     file_regression: FileRegressionFixture,
 ) -> None:
     setup = convert(json.loads(BACKUP.read_bytes()), 0)
-    assert list(setup.patches) == ['Morningstar']
-    imported = models.Banked.model_validate(setup.patches['Morningstar'])
+    assert list(setup.patches) == ['Banked']
+    imported = models.Banked.model_validate(setup.patches['Banked'])
     assert imported.bank_count == 128 and imported.page_count == 4
     assert imported.banks == {0: {0: 'VL70-1'}, 1: {0: 'VL70-2'}, 2: {0: 'VL70-1'}}
     assert list(imported.patches) == ['VL70-1', 'VL70-2']
-    assert setup.patch_cycles == {'Imported': ['Morningstar']}
+    assert setup.patch_cycles == {'Imported': ['Banked']}
     run(ImportBackup(backup=BACKUP, output=tmp_path))
     text = (tmp_path / 'setup.toml').read_text()
     assert models.Setup.model_validate(tomlkit.parse(text).unwrap()).model_dump(
@@ -55,7 +55,7 @@ def test_sparse_slots_preserve_customisation_and_page_limits(tmp_path: Path) -> 
     banks[5]['pageLimit'] = 2
     banks[6]['bankName'] = 'VL70-1'
     setup = convert(document, 3)
-    imported = models.Banked.model_validate(setup.patches['Morningstar'])
+    imported = models.Banked.model_validate(setup.patches['Banked'])
     assert imported.banks[3] == {3: 'Ambient (4)'}
     assert imported.banks[4] == {0: 'Quiet'}
     assert imported.banks[6] == {0: 'VL70-1 (2)'}
@@ -74,10 +74,10 @@ def test_sparse_slots_preserve_customisation_and_page_limits(tmp_path: Path) -> 
 
 def test_completely_empty_banked_patch_round_trips(tmp_path: Path) -> None:
     setup = convert(json.loads(BACKUP.read_bytes()), 127)
-    patch = models.Banked.model_validate(setup.patches['Morningstar']).model_copy(
+    patch = models.Banked.model_validate(setup.patches['Banked']).model_copy(
         update={'banks': {}, 'patches': {}}
     )
-    setup.patches['Morningstar'] = patch.model_dump(exclude_none=True)
+    setup.patches['Banked'] = patch.model_dump(exclude_none=True)
     target = cli.load_target(
         profiles.export(
             BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
@@ -85,7 +85,7 @@ def test_completely_empty_banked_patch_round_trips(tmp_path: Path) -> None:
     )
     raw = compiler.compile_show(setup.model_dump(exclude_none=True), {}, [], target)
     restored = tomlkit.parse(resolved.export(raw)).unwrap()
-    empty = models.Banked.model_validate(restored['patches']['Morningstar'])
+    empty = models.Banked.model_validate(restored['patches']['Banked'])
     assert empty.banks == empty.patches == {}
     assert empty.bank_count == 128 and empty.page_count == 4
     assert empty.initial_bank == 127
@@ -103,7 +103,7 @@ def test_latched_switch_cannot_enter_a_banked_patch(tmp_path: Path) -> None:
         'open': {
             'button': 'b',
             'mode': 'latched',
-            'on': {'patch': 'Morningstar'},
+            'on': {'patch': 'Banked'},
             'off': {'patches': []},
         }
     }
@@ -312,7 +312,7 @@ def test_banked_page_keeps_selection_and_runs_actions_while_hidden(
     )
     show = convert(json.loads(BACKUP.read_bytes()), 0).model_dump(exclude_none=True)
     show['pages']['status'] = {'type': 'status'}
-    show['regions'] = {'main': {'pages': ['performance', 'morningstar', 'status']}}
+    show['regions'] = {'main': {'pages': ['performance', 'banked', 'status']}}
     show['patches']['Plain'] = {
         'type': 'program-change',
         'output': 'din',
@@ -320,9 +320,9 @@ def test_banked_page_keeps_selection_and_runs_actions_while_hidden(
         'program': 100,
     }
     show['patch_cycles']['Imported'].append('Plain')
-    actions = show['patches']['Morningstar']['patches']['VL70-2']['bindings']['a'][
-        'on'
-    ]['patches']
+    actions = show['patches']['Banked']['patches']['VL70-2']['bindings']['a']['on'][
+        'patches'
+    ]
     actions.insert(0, {'type': 'delay', 'duration': '400 milliseconds'})
     raw = compiler.compile_show(show, {}, [], target)
     bundle = tmp_path / 'setup.bin'
