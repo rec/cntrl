@@ -9,7 +9,22 @@ it does not change Codex permissions or expose general HID access.
 
 ## Start once in Terminal
 
-Review `cntrl/maker/morningstar/mc/upload_helper.py`, then run:
+Review `cntrl/maker/morningstar/mc/upload_helper.py` and `updater_provision.py`.
+Provision the pinned official TyTools 0.9.9 uploader once, without accessing the
+pedal:
+
+```bash
+cntrl upload-helper --target-dir cntrl/maker/morningstar/mc provision
+```
+
+On macOS this verifies the release DMG, mounts it read-only, and copies the
+verified executable into `~/Library/Caches/cntrl-upload/tytools-0.9.9/tycmd`.
+Windows uses the official ZIP and installs `tycmd.exe` under
+`%LOCALAPPDATA%/cntrl-upload/tytools-0.9.9/`. Both the archive and executable
+have pinned SHA-256 checksums. A matching installation is left untouched.
+The Morningstar updater application is not changed.
+
+Then run in Terminal:
 
 ```bash
 cd /Users/tom/code/cntrl
@@ -18,11 +33,11 @@ cntrl upload-helper --target-dir cntrl/maker/morningstar/mc serve
 
 Keep that Terminal open. Do not use `sudo`. The helper must be launched by you,
 not inside Codex's sandbox, otherwise it will inherit the same HID restriction.
-On macOS, the default updater is
-`/Applications/Morningstar Firmware Updater.app/Contents/Resources/extraResources/tycmd`.
-Set `CNTRL_TYCMD` to override it. Other operating systems currently require that
-override; without it, the helper reports an error before starting. An unset or
-empty `CNTRL_TYCMD` selects the platform default.
+The default updater is the provisioned executable, whose checksum is verified
+before use. Set `CNTRL_TYCMD` to select an explicitly managed executable instead.
+Linux requires this override because the pinned release has no Linux archive.
+An unset or empty `CNTRL_TYCMD` selects the pinned installation. Missing or
+modified installations stop the helper before device access.
 No HID operation occurs at startup. On macOS it listens on the owner-only Unix
 socket `~/Library/Caches/cntrl-upload/helper.sock`. The manually launched server
 creates an authentication key there; clients only read it. Linux uses
@@ -136,7 +151,7 @@ The helper then:
    MC6 Pro flash configuration, boot header, Thumb reset entry and zero CSF.
    Images cannot extend into the reserved `0x607c0000` flash tail.
 3. Calls only the server's updater executable, using `CNTRL_TYCMD` when set or
-   the installed Morningstar updater path on macOS.
+   the checksum-verified, provisioned TyTools executable.
    A read-only listing must identify exactly the expected board tag, serial
    `14468280`, HalfKay description, Teensy 4.1 model and upload capability.
 4. Uploads with compatibility checks enabled and the fixed board selector.
@@ -205,3 +220,19 @@ Check that application USB returns, query `CNTRL STATUS`, and verify the saved
 selection and setup bytes. USB enumeration alone does not verify setup data or
 physical MIDI behavior. Recompile and restore valid saved setups if their compiled
 format changed, preserving backups and already-invalid documents.
+
+## Uploader identity investigation: 2026-11-14
+
+The bundled `0.9.0-9-g058715b` executable classified the running pedal
+(`16c0:0489`, serial `14468280`) as Generic, with tag `14468280-cntrl` and only
+unique/serial capabilities. The pinned official 0.9.9 executable recognizes
+the same application as Teensy, tag `14468280-Teensy`, with unique/run/reboot/serial
+capabilities. Its diagnostic warning about the custom `bcdDevice` value does not
+prevent that classification. This restores the application/bootloader identity
+needed for post-upload monitoring; a successful physical upload is still required
+to verify the reset path and investigate the initial HID write errors.
+
+Use `cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --updater-info
+--report PATH.toml` for a read-only comparison. It records the executable digest,
+version, upload/reset help, debug enumeration, relevant raw USB match records and
+existing TyTools configuration files. It neither resets nor flashes the pedal.

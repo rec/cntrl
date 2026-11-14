@@ -16,7 +16,8 @@ from serial import Serial
 
 from ....firmware.intel_hex import FirmwareImage, read_hex
 from ....patch_switcher.devices import connected
-from ....upload import Bootloader, Serve, Upload
+from ....upload import Bootloader, Provision, Serve, Upload
+from . import updater_provision
 
 
 class UploadResult(BaseModel, frozen=True):
@@ -90,17 +91,10 @@ def validate_firmware(image: FirmwareImage) -> None:
 
 
 def updater_path() -> Path:
-    """Use the explicit updater, or the installed macOS application."""
+    """Use the explicit updater, or the checksum-pinned private installation."""
     if executable := os.environ.get('CNTRL_TYCMD'):
         return Path(executable)
-    if sys.platform != 'darwin':
-        raise ValueError(
-            f'no default updater for {sys.platform}; set CNTRL_TYCMD explicitly'
-        )
-    return (
-        Path('/Applications/Morningstar Firmware Updater.app')
-        / 'Contents/Resources/extraResources/tycmd'
-    )
+    return updater_provision.installed(CACHE_DIRECTORY / 'tytools-0.9.9')
 
 
 def upload_image(request: Upload) -> UploadResult:
@@ -220,9 +214,11 @@ def authentication_key() -> bytes:
     return path.read_bytes()
 
 
-def run(options: Serve | Upload | Bootloader) -> None:
+def run(options: Serve | Upload | Bootloader | Provision) -> None:
     try:
-        if isinstance(options, Serve):
+        if isinstance(options, Provision):
+            updater_provision.provision(CACHE_DIRECTORY / 'tytools-0.9.9')
+        elif isinstance(options, Serve):
             serve()
         elif isinstance(options, Bootloader):
             request_bootloader()
@@ -243,7 +239,7 @@ def run(options: Serve | Upload | Bootloader) -> None:
 
 
 def main() -> None:
-    run(tyro.cli(Serve | Upload | Bootloader))
+    run(tyro.cli(Serve | Upload | Bootloader | Provision))
 
 
 ROOT = Path(__file__).resolve().parent

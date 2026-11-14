@@ -27,12 +27,17 @@ class Bootloader(BaseModel, frozen=True):
     """Enter the selected target's bootloader without uploading."""
 
 
+class Provision(BaseModel, frozen=True):
+    """Install the selected target's pinned uploader without accessing a device."""
+
+
 class Helper(BaseModel, frozen=True):
     target_dir: Path
     command: (
         Annotated[Serve, tyro.conf.subcommand(name='serve')]
         | Annotated[Upload, tyro.conf.subcommand(name='upload')]
         | Annotated[Bootloader, tyro.conf.subcommand(name='bootloader')]
+        | Annotated[Provision, tyro.conf.subcommand(name='provision')]
     )
 
 
@@ -48,6 +53,8 @@ def run(command: Helper) -> None:
         if isinstance(options, Serve)
         else ['bootloader']
         if isinstance(options, Bootloader)
+        else ['provision']
+        if isinstance(options, Provision)
         else ['upload', '--image', str(options.image), '--sha256', options.sha256]
     )
     result = subprocess.run(

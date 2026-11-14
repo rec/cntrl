@@ -349,20 +349,20 @@ def test_explicit_updater_overrides_platform_default(
 
 
 @pytest.mark.parametrize('override', [None, ''])
-def test_macos_defaults_to_installed_morningstar_updater(
-    override: str | None, monkeypatch: pytest.MonkeyPatch
+def test_default_requires_provisioning_before_serving(
+    override: str | None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('CNTRL_TYCMD', raising=False)
     if override is not None:
         monkeypatch.setenv('CNTRL_TYCMD', override)
     monkeypatch.setattr(sys, 'platform', 'darwin')
-    assert upload_helper.updater_path() == Path(
-        '/Applications/Morningstar Firmware Updater.app/'
-        'Contents/Resources/extraResources/tycmd'
-    )
+    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path / 'cache')
+    with pytest.raises(ValueError, match='provision before starting the helper'):
+        upload_helper.serve()
+    assert not (tmp_path / 'cache').exists()
 
 
-@pytest.mark.parametrize('platform', ['linux', 'win32'])
+@pytest.mark.parametrize('platform', ['linux', 'freebsd'])
 def test_unsupported_platform_requires_explicit_updater_before_serving(
     platform: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
