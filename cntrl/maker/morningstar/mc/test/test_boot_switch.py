@@ -56,9 +56,30 @@ def test_linker_places_only_cold_container_methods_in_flash() -> None:
         '_ZN5cntrl11CheckedListI*7releaseEv*',
         '_ZN5cntrl12CheckedArrayI*7reserveEj*',
         '_ZN5cntrl4midi16reverse_sequenceI*',
+        '_ZN5cntrl4midi7RoutingI*EC[12]E*',
+        '_ZN5cntrl4midi7RoutingI*ED[12]Ev*',
+        '_ZN5cntrl4midi18AdvancedProcessing5StateI*EC[12]E*',
+        '_ZN5cntrl4midi18AdvancedProcessing5StateI*ED[12]Ev*',
     ):
         assert f'*(.text.{section})' in flash
+    for name in (
+        'lfo_status',
+        'parameter_bindings',
+        'validate_lfos',
+        'bind_lfo',
+        'service_lfos',
+        'service_parameters',
+        'numeric_fields',
+        'reverse_group',
+        'process_step',
+        'service_generators',
+        'finish_parameters',
+    ):
+        assert (
+            f'*(.text._ZN5cntrl4midi18AdvancedProcessing{len(name)}{name}I*)' in flash
+        )
     assert 'append' not in flash and 'erase' not in flash
+    assert 'generated' not in flash and 'notify_release' not in flash
     assert '*(.text.startup._GLOBAL__sub_I__Z15switch_scan_duev)' in flash
     assert '*(.text*)' in itcm
     with pytest.raises(ValueError, match='linker script'):
