@@ -1,5 +1,7 @@
 import struct
+from fnmatch import fnmatchcase
 from pathlib import Path
+from re import findall
 
 import pytest
 
@@ -84,6 +86,36 @@ def test_linker_places_only_cold_container_methods_in_flash() -> None:
     assert '*(.text*)' in itcm
     with pytest.raises(ValueError, match='linker script'):
         boot_switch.linker_script(original.replace('*(.flashmem*)', ''))
+
+
+@pytest.mark.parametrize(
+    ('suffix', 'in_flash'),
+    [
+        (
+            '12build_ownersIZNS3_6decodeEPKhjNS0_7OutputsEjEUljE_EEbjT_',
+            True,
+        ),
+        ('20prepare_output_stateEj', True),
+        ('6Reader5matchERNS2_4StepE', True),
+        ('7receiveEjNS0_6PacketEy', False),
+        ('7enqueueENS3_5EventE', False),
+        ('15prepare_releaseENS3_10ProcessingE', False),
+        ('16prepare_pressureENS3_10ProcessingE', False),
+    ],
+)
+def test_graph_configuration_placement_excludes_live_midi(
+    suffix: str, in_flash: bool
+) -> None:
+    original = (
+        'FLASH (rx): ORIGIN = 0x60000000, LENGTH = 7936K\n'
+        '.text.code : { *(.flashmem*) } > FLASH\n'
+        '.text.itcm : { *(.text*) } > ITCM\n'
+    )
+    flash = boot_switch.linker_script(original).split('.text.itcm')[0]
+    patterns = findall(r'\*\((\.text\.[^)]*)\)', flash)
+    # These are emitted ARM section names, including template substitutions.
+    section = f'.text._ZN5cntrl4midi7RoutingINS0_18AdvancedProcessingEE{suffix}'
+    assert any(fnmatchcase(section, p) for p in patterns) is in_flash
 
 
 def test_switch_window_configuration() -> None:

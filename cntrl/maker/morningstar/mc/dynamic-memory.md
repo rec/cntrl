@@ -6,13 +6,72 @@ Original source baseline: `a32af63`, 2026-11-12. The original inventory is retai
 below; implementation checkpoints are recorded separately. Physical qualification
 is incomplete. Paths below are relative to this directory.
 
+## Diagnostic cold-placement repair, 2026-11-14
+
+Starting from `d8c5b86`, three narrowly matched linker rules move only routing
+configuration work to flash:
+
+- `Routing::build_owners`, including the local and external-graph instantiations,
+  constructs ownership paths during graph decoding or patch graph preparation.
+- `Routing::prepare_output_state` allocates endpoint bookkeeping for a candidate
+  graph in `prepare_load`.
+- `Routing::Reader::match` decodes configured predicates while validating a graph.
+
+These are preparation paths, not live ownership lookup or MIDI delivery. Their
+template COMDAT sections are selected explicitly in `boot_switch.linker_script`;
+the change does not rely on shared section attributes for different template
+instantiations and does not add a broad rule for all routing code.
+
+| Diagnostic measurement | Before | After |
+| --- | ---: | ---: |
+| `.text.itcm` bytes | 197344 | 196048 |
+| Instruction banks | 7 | 6 |
+| RAM1 static variables | 312672 | 312672 |
+| RAM1 left for stack/local variables | -17760 | 15008 |
+| RAM2 arena capacity before bootstrap allocations | 433536 | 433536 |
+| Build result | Failed size check | Passed |
+
+Instruction-RAM code falls by 1296 bytes, including linker veneer/alignment
+effects. The image no longer claims the seventh 32768-byte bank. The size tool
+reports 196056 instruction bytes including trailing sections, leaving 552 bytes
+before another bank is needed. This repairs the diagnostic build; it does not
+increase the RAM2 heap or establish stack high-water.
+
+The normal build also passes. Its `.text.itcm` falls from 196464 to 195168 bytes;
+the size tool reports 1432 bytes before another instruction bank, up from 136.
+It retains 19200 bytes for stack/local variables and the same 433536-byte RAM2
+arena. Both images use the same narrow placement rules.
+
+Revalidation after integrating main through `3eeb5fd` also passes both builds.
+The intervening UI changes leave normal `.text.itcm` at 195136 bytes and
+diagnostic `.text.itcm` at 196032 bytes, with 1464 and 568 bytes respectively
+before another instruction bank. Stack/local allowances and RAM2 capacity are
+unchanged. The selected configuration symbols remain in flash and the checked
+live MIDI symbols remain in instruction RAM.
+
+The diagnostic ELF places both `build_owners` instantiations, endpoint preparation
+and predicate decoding at flash addresses beginning `0x601...`. The live
+`receive`, `enqueue`, `prepare_pressure` and `prepare_release` symbols remain
+at instruction-RAM addresses beginning `0x000...`, with unchanged function sizes.
+The linker changes select no interrupt handler or live queue/ownership routine;
+existing placement elsewhere is preserved. The linker regression checks actual
+emitted section-name examples against the cold rules and excludes those live
+entry points.
+
+Reproduce with the build commands in the refresh below, using fresh output
+directories. The initial local repair exports are
+`/private/tmp/cntrl-cold-routing-diagnostic` and
+`/private/tmp/cntrl-cold-routing-normal`; final integration exports add `final-`
+before `diagnostic` and `normal`. Their binaries and logs are disposable
+generated outputs. No pedal was flashed or exercised.
+
 ## Post-routing-split refresh, 2026-11-14
 
 Measured production source: `84b7a08`, including `4f3b1f4`'s routing split.
-This section supersedes earlier statements about the current build fitting both
-normal and diagnostic configurations. Earlier checkpoints and physical incident
-reports below remain historical evidence. No pedal was flashed or contacted for
-this refresh.
+This section records the failure before the cold-placement repair above and
+supersedes still older statements about both configurations fitting. Earlier
+checkpoints and physical incident reports below remain historical evidence.
+No pedal was flashed or contacted for this refresh.
 
 ### Linked memory and the instruction-bank boundary
 

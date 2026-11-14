@@ -96,6 +96,11 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             '*(.text._ZN5cntrl4midi16reverse_sequenceI*)',
             '*(.text._ZN5cntrl4midi7RoutingI*EC[12]E*)',
             '*(.text._ZN5cntrl4midi7RoutingI*ED[12]Ev*)',
+            # Graph preparation only: never the live owner lookup, MIDI
+            # admission, queue publication or note/pedal release paths.
+            '*(.text._ZN5cntrl4midi7RoutingI*E12build_ownersI*)',
+            '*(.text._ZN5cntrl4midi7RoutingI*E20prepare_output_stateE*)',
+            '*(.text._ZN5cntrl4midi7RoutingI*E6Reader5matchE*)',
             # These policy templates were cold methods of Streams before the
             # routing/processing split. Keep their original placement.
             '*(.text._ZN5cntrl4midi18AdvancedProcessing10lfo_statusI*)',
