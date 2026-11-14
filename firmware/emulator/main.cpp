@@ -203,6 +203,7 @@ public:
     void cancel_patch(unsigned owner) override { bridge.cancel_owner(owner); }
     const midi::MidiState *midi_state() const override { return &midi::Sink::state(); }
     bool state(unsigned operation,uint32_t value) override { return app->state(operation,value,*this); }
+    bool banked(const Document &document,unsigned node) override { return app->activate_banked(document,node); }
     bool preview_state(unsigned operation,uint32_t value) override { return app->controller().preview_state(operation,value); }
     bool selection(unsigned operation,const Document *&document,unsigned &node) override { return app->controller().selection(operation,document,node); }
     void selection_complete(unsigned operation) override { app->controller().selection_complete(operation); }

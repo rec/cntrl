@@ -25,6 +25,7 @@ struct PatchOutputs {
     virtual void cancel_patch(unsigned owner) = 0;
     virtual const midi::MidiState *midi_state() const { return nullptr; }
     virtual bool state(unsigned operation, uint32_t value) = 0;
+    virtual bool banked(const Document &, unsigned) { return false; }
     virtual bool play_midi_file(unsigned, const midi::PlayMidiFilePatch &) { return false; }
     virtual midi::Bridge::Delivery midi_file_delivery(unsigned) const { return midi::Bridge::Delivery::cancelled; }
     virtual void cancel_midi_file(unsigned) {}
@@ -116,7 +117,7 @@ public:
         while (depth_) {
             const uint8_t *n = next_leaf(true);
             if (!n) { if (status_ == Status::failed) return false; break; }
-            if (persistent && (n[0] == 4 || n[0] == 10 || n[0] == 12 || (n[0] == 3 && (n[4] == 9 || n[4] == 10 || n[4] == 13))))
+            if (persistent && (n[0] == 4 || n[0] == 10 || n[0] == 12 || n[0] == 17 || (n[0] == 3 && (n[4] == 9 || n[4] == 10 || n[4] == 13))))
                 return fail("Persistent switches cannot leave their context");
             if (!collect(n, *frames_[depth_ - 1].document)) return false;
             ++leaves; advance_leaf();
@@ -172,6 +173,12 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 17: {
+            if (!leaving()) return;
+            const auto &frame = frames_[depth_ - 1];
+            if (!outputs_.banked(*frame.document, frame.node)) { fail("Banked patch has no page in this setup"); return; }
+            started_ = true; complete_leaf(); return;
+        }
         case 16: {
             const auto &document = *frames_[depth_ - 1].document;
             const uint8_t *definition = document.counter(u16(p));

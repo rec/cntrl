@@ -1,6 +1,10 @@
 # Run the saved banks in the emulator
 
-The importer puts all 128 MC6 Pro banks into one setup with a Banked Page.
+The importer puts all 128 MC6 Pro banks into one named `Morningstar` patch,
+inside an editable setup. The patch owns its bank collection, preset-page
+definitions, initial bank and navigation chords. A Banked Page displays the
+running patch; the ordinary patch switcher selects and sends it alongside
+other patches.
 The three populated bank slots and all empty slots retain their original order,
 including duplicate names. Each bank contains its enabled preset pages, up to
 four. Identical empty definitions share storage. Counters belong to the setup
@@ -18,7 +22,8 @@ cntrl emulate cntrl/maker/morningstar/mc/firmware/build/vl70-1/setup.toml --cont
 Import creates TOML, a source-hash/scope report,
 a startup scenario and ideal 0..1023 calibration for virtual expression inputs.
 These calibration files describe sliders, not connected pedals. The startup
-scenario starts on bank 0 without sending MIDI. `--bank` chooses the initial
+scenario sends the `Morningstar` patch to open its Banked Page on bank 0,
+without sending MIDI. `--bank` chooses the initial
 zero-based bank slot. `--interactive` opens the window
 after replay; omit it for headless replay with display and trace exports.
 The emulator exports the virtual target and fonts and compiles the setup.
@@ -26,7 +31,11 @@ The emulator exports the virtual target and fonts and compiles the setup.
 A/B/D/E/F run program actions in the populated banks; C follows the saved
 bank-up/down action. B+C advances banks and A+B goes back, wrapping at the ends.
 E+F advances preset pages; D+E goes back. D+F opens the cntrl menu, where other
-configured pages can be selected. Returning retains the bank and preset page.
+configured pages can be selected. The Banked Page keeps its selected bank,
+preset page, switch state and pending actions while another page is selected.
+Sending `Morningstar` again returns to that instance. Loading a different setup
+ends the instance. It starts when the patch is sent or its Banked Page is first
+visited. Counters and port roles remain shared setup configuration.
 Chord members are deferred for 30 ms to recognize the pair without sending
 their individual actions. These chords are omitted when the source dual-lock
 setting is enabled.
@@ -91,22 +100,30 @@ the first program send, in the second bank and after returning to the first.
 Native tests execute compiler output in the production C++ emulator, checking
 ordered PC messages, first-send stepping, send-only on another channel, both
 outputs, wrap, retained values on bank return, and expression sweeps to CC 127.
-Editable export recompiles to identical bytes. Format 44 adds a CBPG section
-between page layout and movie references. It maps bank/preset-page slots to
-ordinary binding nodes and records navigation chords. Banked Pages use the
-existing switch executor, each with independent selection and background
-execution. Existing format-41/42/43 records upgrade without changes to
-their body. Older supported upgrades remain available.
+Editable export recompiles to identical bytes. Format 45 stores each banked
+patch in a type-17 graph node containing its bank/preset-page references,
+local definition names and navigation chords. CBPG maps Banked Pages to patch
+nodes. Each banked patch needs one view, for example:
 
-For this saved backup, the compiled core is 44,325 bytes, or 44,353 bytes with
-its persistence envelope. The capacity test requires the entire setup to remain
+```toml
+[pages.morningstar]
+type = 'banked'
+patch = 'Morningstar'
+```
+
+Each instance uses the existing switch executor for independent selection and
+background execution. Existing format-41/42/43 records, and format-44 setups
+without legacy Banked Pages, upgrade without changes to their body. Re-import
+the original backup to replace a legacy format-44 Banked Page. Older supported
+upgrades remain available.
+
+The capacity test requires the entire imported setup to remain
 resident and measures the native checked heap while exercising bank changes,
-chords, the menu and expression inputs. Its measured peak is 177,216 bytes,
-with no allocation failures, against the target profile's 213,184-byte allowance
+chords, the menu and expression inputs, with no allocation failures against
+the target profile's 213,184-byte allowance
 after its runtime reserve and safety margin. Native object sizes differ from
 the MCU; the embedded build separately checks Cortex-M7 object size bounds.
-That build fits with 19,008 bytes for RAM1 stack/local variables and 433,504
-bytes of RAM2 heap before runtime allocations. These are build/emulator checks;
+The embedded build also enforces the ITCM reserve. These are build/emulator checks;
 physical timing and stack high-water use still need hardware qualification.
 
 Global MIDI thru/events, clock settings, auxiliary modes and active custom bank arrangements

@@ -287,6 +287,7 @@ public:
     bool looper_action(unsigned action, const char *filename) override { return ui_.looper_action(action,filename); }
     bool looper_storage_ready() const { return midi_storage_idle(); }
     FLASHMEM bool state(unsigned operation, uint32_t value) override { return application.state(operation, value, *this); }
+    FLASHMEM bool banked(const cntrl::Document &document, unsigned node) override { return application.activate_banked(document, node); }
     cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &document, unsigned node, cntrl::PatchExecutor &invocation) override {
 #if CNTRL_SWITCHES
         cntrl::ControlBindings bindings{document.node(node) + 4};

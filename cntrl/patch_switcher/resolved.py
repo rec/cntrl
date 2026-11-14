@@ -139,7 +139,12 @@ def upgrade(data: bytes) -> bytes:
     if version == DOCUMENT_VERSION:
         export(data)
         return data
-    if version in (41, 42, 43):
+    if version in (41, 42, 43, 44):
+        if (
+            version == 44
+            and data[layout.section_end(data, _page_offsets(data)[0]) :][:4] == b'CBPG'
+        ):
+            raise ValueError('re-import the backup to replace its legacy Banked Page')
         # New node and presentation options preserve existing records.
         converted = bytearray(data)
         struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
@@ -578,7 +583,7 @@ def export(data: bytes) -> str:
     banked_offset = layout.section_end(data, _page_offsets(data)[0])
     pages = cast(dict[str, dict[str, object]], result['pages'])
     for page, settings in banked.unpack(
-        data, banked_offset, {v: k for k, v in named_nodes.items()}, labels
+        data, banked_offset, {v: k for k, v in named_nodes.items()}
     ).items():
         pages[list(pages)[page]].update(settings)
     patch_cycles: dict[str, object] = {}
@@ -765,7 +770,42 @@ def _patch(
         # Export the actual program when an edit changes its catalogue identity
         # or clears an inherited setting (TOML has no null override).
     value = {k: v for k, v in properties.items() if not k.startswith('_')}
-    if kind == 16:
+    if kind == 17:
+        definitions, count, initial, chord_count = struct.unpack_from(
+            '<HHHH', data, cursor
+        )
+        cursor += 8
+        banks = []
+        for _ in range(count):
+            length = struct.unpack_from('<H', data, cursor)[0]
+            cursor += 2
+            banks.append(list(struct.unpack_from(f'<{length}H', data, cursor)))
+            cursor += length * 2
+        chords = {}
+        for _ in range(chord_count):
+            operation, mask = struct.unpack_from('<BI', data, cursor)
+            cursor += 5
+            chords[next(n for n, v in banked.OPERATIONS.items() if v == operation)] = [
+                n for i, n in enumerate(labels) if mask & (1 << i)
+            ]
+        names = {}
+        patches = {}
+        for _ in range(definitions):
+            node, name = struct.unpack_from('<H64s', data, cursor)
+            cursor += 66
+            key = name.split(b'\0')[0].decode()
+            names[node] = key
+            patches[key] = _patch(
+                data, offset, node, metadata, ancestors | {index}, labels
+            )
+        value.update(
+            type='banked',
+            banks=[[names[n] for n in b] for b in banks],
+            initial_bank=initial,
+            chords=chords,
+            patches=patches,
+        )
+    elif kind == 16:
         counter, output, channel, change, wrap = struct.unpack_from(
             '<H32sBBB', data, cursor
         )

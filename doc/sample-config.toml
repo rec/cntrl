@@ -129,10 +129,7 @@ type = "status"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.status.chords]
+patch = "sample"
 
 [pages.firmware]
 
@@ -140,10 +137,7 @@ type = "firmware"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.firmware.chords]
+patch = "sample"
 
 [pages.cable-test]
 
@@ -151,10 +145,7 @@ type = "cable-test"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.cable-test.chords]
+patch = "sample"
 
 [pages.panic]
 
@@ -162,10 +153,7 @@ type = "panic"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.panic.chords]
+patch = "sample"
 
 [pages.trs-ports]
 
@@ -173,10 +161,7 @@ type = "trs-ports"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.trs-ports.chords]
+patch = "sample"
 
 [pages.expression]
 
@@ -184,10 +169,7 @@ type = "expression"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.expression.chords]
+patch = "sample"
 
 [pages.clock-transport]
 
@@ -195,10 +177,7 @@ type = "clock-transport"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.clock-transport.chords]
+patch = "sample"
 
 [pages.clock-tempo]
 
@@ -206,10 +185,7 @@ type = "clock-tempo"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.clock-tempo.chords]
+patch = "sample"
 
 [pages.keyboard]
 
@@ -217,10 +193,7 @@ type = "keyboard"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.keyboard.chords]
+patch = "sample"
 
 [pages.tap-tempo]
 
@@ -228,10 +201,7 @@ type = "tap-tempo"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.tap-tempo.chords]
+patch = "sample"
 
 [pages.patch-switcher]
 
@@ -239,10 +209,7 @@ type = "patch-switcher"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
-banks = []
-initial_bank = 0
-
-[pages.patch-switcher.chords]
+patch = "sample"
 
 [scrolling]
 

@@ -215,7 +215,10 @@ public:
 #endif
     void enter_page() {
         expression_bank_ = nullptr;
-        if (auto *bank = application_.focused_bank()) bank->refresh();
+        if (auto *bank = application_.focused_bank()) {
+            if (!bank->activate(uint32_t(application_.held))) error("Banked patch memory unavailable");
+            else bank->refresh();
+        }
         if (pages_.page() == Pages::Page::midi_monitor) {
             if (!platform_.midi_monitor().active()) {
                 monitor_unavailable_ = !platform_.midi_monitor().open(platform_.microseconds());

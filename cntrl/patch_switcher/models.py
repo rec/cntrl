@@ -526,6 +526,14 @@ class Delay(Presentation, frozen=True):
     ]
 
 
+class Banked(Presentation, frozen=True):
+    type: Literal['banked'] = 'banked'
+    patches: dict[str, object]
+    banks: list[list[str]] = Field(min_length=1, max_length=128)
+    initial_bank: Annotated[int, Field(strict=True, ge=0, le=127)] = 0
+    chords: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class Derived(BaseModel, frozen=True):
     parent: str
     type: Literal['derived'] = 'derived'
@@ -559,6 +567,7 @@ ConcretePatch = (
         ]
         | ControlChange
         | CounterMessage
+        | Banked
         | PitchBend
         | Nrpn
         | Rpn
@@ -1098,9 +1107,7 @@ class Page(BaseModel, frozen=True):
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
     min_windows: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
     give_up_windows: list[str] = Field(default_factory=list, max_length=255)
-    banks: list[list[str]] = Field(default_factory=list, max_length=128)
-    initial_bank: Annotated[int, Field(strict=True, ge=0, le=127)] = 0
-    chords: dict[str, list[str]] = Field(default_factory=dict)
+    patch: str | None = None
 
     @model_validator(mode='after')
     def window_allocation(self) -> 'Page':
