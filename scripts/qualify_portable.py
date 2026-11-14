@@ -131,10 +131,11 @@ def qualify(options: Qualification) -> None:
         if not compiled.is_file() or not list((root / 'fonts').glob('*.cfont')):
             raise ValueError('export qualification did not prepare native font assets')
         data = compiled.read_bytes()
+        setups = setup_bundle.unpack(data)
         bundle = setup_bundle.build(
-            {'qualified': data}, {'qualified': source}, target.memory
+            setups, {n: source for n in setups}, target.memory
         ).pack()
-        if setup_bundle.unpack(bundle) != {'qualified': data}:
+        if setup_bundle.unpack(bundle) != setups:
             raise ValueError('relocated LFO bundle did not round-trip')
         (options.output / 'lfo-setups.bin').write_bytes(bundle)
         (options.output / 'result.toml').write_text(
@@ -230,6 +231,14 @@ def check_dependencies(source_root: Path) -> None:
                 f'{relative}: linker/assembly source belongs to an implementation'
             )
         if path in python:
+            search_patterns = {
+                id(n.args[0])
+                for n in ast.walk(python[path])
+                if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute)
+                and n.func.attr == 'replace'
+                and n.args
+            }
             for node in ast.walk(python[path]):
                 modules = (
                     [n.name for n in node.names]
@@ -256,7 +265,11 @@ def check_dependencies(source_root: Path) -> None:
                         errors.append(
                             f'{relative}:{node.lineno}: processor/toolchain command'
                         )
-                    if production and CPP_FRAGMENT.search(node.value):
+                    if (
+                        production
+                        and id(node) not in search_patterns
+                        and CPP_FRAGMENT.search(node.value)
+                    ):
                         errors.extend(
                             check_cpp(
                                 node.value, path, source_root, generated_headers, False
