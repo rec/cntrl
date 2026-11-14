@@ -202,6 +202,24 @@ establishes that the communication failure also occurs on the previous allocator
 and firmware, but does not establish its cause. Neither continuation image was
 installed for this trial.
 
+The user confirmed that the Status page's `Up:` timer kept advancing during the
+communication failure. The main loop was therefore still servicing the display;
+this occurrence was not a complete firmware freeze. USB endpoint progress and
+the location of the missing messages remain unmeasured.
+
+After reconnecting the hub, the normal `simple-setup` selection was restored and
+the temporary qualification setup was deleted. On 2026-11-14, recovery verification
+through `cntrl setup verify --preserve-memory-estimates` confirmed both setups,
+all 15 history revisions, backed-up assets, songs and selection against the
+pre-test backup. The reported status was `CNTRL READY 41 25477 b32ccca8 starts=89
+starts_status=ready`. The firmware image was unchanged.
+
+Use the existing `cntrl setup restore` and `cntrl setup verify` commands with
+`--preserve-memory-estimates` when returning a current-format backup to the same
+firmware build. This keeps the recorded accounting in setups, history and song
+sources, avoiding a dependency on an older host CLI when the current compiler's
+RAM estimates have changed. The default upgrade path still refreshes estimates.
+
 ## Physical qualification procedure
 
 Use `uv run --frozen cntrl qualify --target-dir cntrl/maker/morningstar/mc`

@@ -97,6 +97,24 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, switches: bool) -> b
     return bytes(refreshed)
 
 
+def prepare_restore(
+    data: bytes,
+    fonts: dict[int, bytes],
+    *,
+    switches: bool,
+    preserve_memory_estimates: bool = False,
+) -> bytes:
+    """Prepare a backup for current firmware or retain same-format accounting."""
+    upgraded = upgrade(data)
+    if preserve_memory_estimates:
+        if upgraded != data:
+            raise ValueError(
+                'preserving memory estimates requires current-format setups'
+            )
+        return data
+    return refresh_memory(upgraded, fonts, switches=switches)
+
+
 def upgrade(data: bytes) -> bytes:
     """Decode a supported setup and upgrade its format without recompilation.
 

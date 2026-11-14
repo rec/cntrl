@@ -232,13 +232,22 @@ def encode(
     return payload
 
 
-def upgrade(data: bytes, fonts: dict[int, bytes], *, switches: bool) -> bytes:
+def upgrade(
+    data: bytes,
+    fonts: dict[int, bytes],
+    *,
+    switches: bool,
+    preserve_memory_estimates: bool = False,
+) -> bytes:
     """Upgrade embedded setups while preserving song and node selections."""
     prefix, _, _, _, sources = _parse(data)
     result = bytearray(data[:prefix])
     for source in sources:
-        value = resolved.refresh_memory(
-            resolved.upgrade(source), fonts, switches=switches
+        value = resolved.prepare_restore(
+            source,
+            fonts,
+            switches=switches,
+            preserve_memory_estimates=preserve_memory_estimates,
         )
         result += struct.pack('<I', len(value)) + value
     upgraded = bytes(result)

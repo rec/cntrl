@@ -24,6 +24,18 @@ replace those files; unrelated files are retained. `-o`/`--output` selects the
 destination. The existing `setup restore` command still restores a host backup
 to the pedal.
 
+For a backup made on the same firmware build, retain its recorded RAM estimates
+with `--preserve-memory-estimates`:
+
+```sh
+cntrl setup restore backups/before-test --port PORT --target target.toml --preserve-memory-estimates
+cntrl setup verify backups/before-test --port PORT --target target.toml --preserve-memory-estimates
+```
+
+This applies to setups, history revisions and setup sources inside the song
+library. It requires current-format data. The default restore upgrades supported
+older formats and recalculates memory estimates for the current compiler.
+
 For source synchronization, use the same document expressions, target,
 definitions and tables as for copying:
 

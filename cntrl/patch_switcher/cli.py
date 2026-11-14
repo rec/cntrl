@@ -289,6 +289,7 @@ def run_setup(
             command.directory,
             command.port,
             models.Target.model_validate(compiler.read_document(command.target)),
+            preserve_memory_estimates=command.preserve_memory_estimates,
         )
         return
     if isinstance(command, backups.Verify):
@@ -296,6 +297,7 @@ def run_setup(
             command.directory,
             command.port,
             models.Target.model_validate(compiler.read_document(command.target)),
+            preserve_memory_estimates=command.preserve_memory_estimates,
         )
         return
     if isinstance(command, history.History):

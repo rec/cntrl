@@ -1,8 +1,11 @@
 """Backup binaries stay authoritative and must match the current format."""
 
+import struct
 from pathlib import Path
+from zlib import crc32
 
 import pytest
+import tomlkit
 import tyro
 
 from cntrl.patch_switcher import (
@@ -12,6 +15,7 @@ from cntrl.patch_switcher import (
     history,
     models,
     resolved,
+    setup_bundle,
     songs,
 )
 
@@ -55,6 +59,54 @@ def test_backup_command_accepts_a_destination_and_port() -> None:
     assert isinstance(options.command, backups.Backup)
     assert options.command.directory == Path('backups/before-flash')
     assert options.command.port == Path('/unused')
+
+
+@pytest.mark.parametrize('command', ['restore', 'verify'])
+def test_same_firmware_recovery_accepts_preserved_memory_estimates(
+    command: str,
+) -> None:
+    options = tyro.cli(
+        cli.SetupCLI,
+        args=[
+            command,
+            'backups/before-test',
+            '--port',
+            '/unused',
+            '--target',
+            'target.toml',
+            '--preserve-memory-estimates',
+        ],
+        config=(tyro.conf.OmitSubcommandPrefixes,),
+    )
+    assert isinstance(options.command, (backups.Restore, backups.Verify))
+    assert options.command.preserve_memory_estimates
+
+
+def test_preserving_memory_estimates_rejects_a_format_upgrade(
+    target: models.Target,
+) -> None:
+    data = bytes.fromhex(
+        (Path(__file__).parents[1] / 'firmware/test/setup36.golden').read_text()
+    )
+    with pytest.raises(ValueError, match='requires current-format setups'):
+        resolved.prepare_restore(
+            data, {}, switches=bool(target.max_switches), preserve_memory_estimates=True
+        )
+
+
+def test_song_restore_preserves_recorded_source_memory_estimates(
+    target: models.Target,
+) -> None:
+    library = bytearray(songs.encode(songs.Library(midi={}), target))
+    source = library.index(b'CSP5') + 8
+    metadata = library.index(b'CMTA') + compiler.METADATA.size - 8
+    struct.pack_into('<I', library, metadata, 1)
+    struct.pack_into('<I', library, source + 20, crc32(library[source + 28 :]))
+    data = bytes(library)
+    assert (
+        songs.upgrade(data, {}, switches=False, preserve_memory_estimates=True) == data
+    )
+    assert songs.upgrade(data, {}, switches=False) != data
 
 
 def test_backup_refuses_to_overwrite_an_existing_directory(tmp_path: Path) -> None:
@@ -239,24 +291,60 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
     }
 
 
-def test_restore_uploads_saved_song_library_before_restoring_selection(
+@pytest.mark.parametrize('preserve', [False, True])
+def test_restore_uploads_saved_data_before_restoring_selection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    preserve: bool,
 ) -> None:
     from contextlib import nullcontext
-    from zlib import crc32
 
     from cntrl.patch_switcher import models, songs, transport
 
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
     )
-    setup = compiler.compile_show({}, {}, [], target)
+    recorded = bytearray(compiler.compile_show({}, {}, [], target))
+    metadata = recorded.index(b'CMTA') + compiler.METADATA.size - 8
+    struct.pack_into('<I', recorded, metadata, 1)
+    struct.pack_into('<I', recorded, 20, crc32(recorded[28:]))
+    setup = setup_bundle.reindex({'Evening': bytes(recorded)})['Evening']
+    expected = (
+        setup
+        if preserve
+        else resolved.refresh_memory(setup, {}, switches=bool(target.max_switches))
+    )
     library = songs.encode(songs.Library(setlists=[songs.Setlist(name='Encore')]))
     (tmp_path / 'setups').mkdir()
     (tmp_path / 'setups/Evening.bin').write_bytes(setup)
     (tmp_path / 'selected.txt').write_text('Evening')
     (tmp_path / 'songs.bin').write_bytes(library)
+    revision = history.Revision(
+        number=3, modified=12345, length=len(setup), label='Take'
+    )
+    (tmp_path / 'history/Evening').mkdir(parents=True)
+    (tmp_path / 'history/Evening/3.bin').write_bytes(setup)
+    (tmp_path / 'history.toml').write_text(
+        tomlkit.dumps(
+            {
+                'revisions': [
+                    revision.model_dump()
+                    | {
+                        'name': 'Evening',
+                        'number': '3',
+                        'version': compiler.DOCUMENT_VERSION,
+                    }
+                ]
+            }
+        )
+    )
+    imported: dict[str, bytes] = {}
+
+    def import_revision(
+        client: transport.SetupClient, name: str, record: history.Revision, data: bytes
+    ) -> None:
+        assert record == revision
+        imported[name] = data
 
     class Client(transport.SetupClient):
         def __init__(self) -> None:
@@ -264,6 +352,7 @@ def test_restore_uploads_saved_song_library_before_restoring_selection(
             self.uploaded = bytearray()
             self.saved = b''
             self.selected = ''
+            self.bundle = b''
 
         def download_bundle(self) -> bytes:
             return b''
@@ -273,6 +362,7 @@ def test_restore_uploads_saved_song_library_before_restoring_selection(
 
         def copy_bundle(self, data: bytes, overwrite: bool) -> None:
             assert data.startswith(b'CSTB') and overwrite
+            self.bundle = data
 
         def request(self, command: str) -> str:
             if command == 'CNTRL SONGS END':
@@ -297,6 +387,7 @@ def test_restore_uploads_saved_song_library_before_restoring_selection(
 
         def select(self, name: str) -> None:
             assert self.saved == library
+            assert imported == {'Evening': expected}
             self.selected = name
 
         def current(self) -> str:
@@ -307,5 +398,9 @@ def test_restore_uploads_saved_song_library_before_restoring_selection(
         transport, 'SerialConnection', lambda *a, **k: nullcontext(None)
     )
     monkeypatch.setattr(transport, 'SetupClient', lambda connection: client)
-    backups.restore_setups(tmp_path, Path('/unused'), target)
+    monkeypatch.setattr(history, 'import_revision', import_revision)
+    backups.restore_setups(
+        tmp_path, Path('/unused'), target, preserve_memory_estimates=preserve
+    )
     assert client.saved == library and client.selected == 'Evening'
+    assert setup_bundle.unpack(client.bundle) == {'Evening': expected}

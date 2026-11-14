@@ -40,6 +40,8 @@ class Restore(BaseModel, frozen=True):
     port: Path
     target: Path
     """Current target description, used to refresh RAM estimates."""
+    preserve_memory_estimates: bool = False
+    """Keep recorded RAM estimates for the same firmware and current data format."""
 
 
 class Verify(BaseModel, frozen=True):
@@ -48,6 +50,8 @@ class Verify(BaseModel, frozen=True):
     directory: Annotated[Path, tyro.conf.Positional]
     port: Path
     target: Path
+    preserve_memory_estimates: bool = False
+    """Compare recorded RAM estimates when verifying a same-firmware restore."""
 
 
 def backup_pedal(
@@ -198,7 +202,13 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
         )
 
 
-def restore_setups(directory: Path, port: Path, target: models.Target) -> None:
+def restore_setups(
+    directory: Path,
+    port: Path,
+    target: models.Target,
+    *,
+    preserve_memory_estimates: bool = False,
+) -> None:
     folder = directory / 'setups'
     selected = (directory / 'selected.txt').read_bytes().decode()
     fonts = {
@@ -206,8 +216,11 @@ def restore_setups(directory: Path, port: Path, target: models.Target) -> None:
         for f in sorted((folder / 'fonts').glob('*.cfont'))
     }
     setups = {
-        n: resolved.refresh_memory(
-            resolved.upgrade(d), fonts, switches=bool(target.max_switches)
+        n: resolved.prepare_restore(
+            d,
+            fonts,
+            switches=bool(target.max_switches),
+            preserve_memory_estimates=preserve_memory_estimates,
         )
         for n, d in read_setup_binaries(directory).items()
     }
@@ -215,8 +228,11 @@ def restore_setups(directory: Path, port: Path, target: models.Target) -> None:
         (
             n,
             r,
-            resolved.refresh_memory(
-                resolved.upgrade(d), fonts, switches=bool(target.max_switches)
+            resolved.prepare_restore(
+                d,
+                fonts,
+                switches=bool(target.max_switches),
+                preserve_memory_estimates=preserve_memory_estimates,
             ),
         )
         for n, r, d in read_history_binaries(directory)
@@ -225,6 +241,7 @@ def restore_setups(directory: Path, port: Path, target: models.Target) -> None:
         (directory / 'songs.bin').read_bytes(),
         fonts,
         switches=bool(target.max_switches),
+        preserve_memory_estimates=preserve_memory_estimates,
     )
     if selected and selected not in setups:
         raise ValueError(f'{selected}: saved selection is absent from the backup')
@@ -283,7 +300,13 @@ def restore_setups(directory: Path, port: Path, target: models.Target) -> None:
             print(f'Selected: {selected}', flush=True)
 
 
-def verify_after_flashing(directory: Path, port: Path, target: models.Target) -> None:
+def verify_after_flashing(
+    directory: Path,
+    port: Path,
+    target: models.Target,
+    *,
+    preserve_memory_estimates: bool = False,
+) -> None:
     selected = (directory / 'selected.txt').read_bytes().decode()
     catalogue = (directory / 'catalogue.txt').read_bytes().decode()
     fonts = {
@@ -291,8 +314,11 @@ def verify_after_flashing(directory: Path, port: Path, target: models.Target) ->
         for f in sorted((directory / 'setups/fonts').glob('*.cfont'))
     }
     setups = {
-        n: resolved.refresh_memory(
-            resolved.upgrade(d), fonts, switches=bool(target.max_switches)
+        n: resolved.prepare_restore(
+            d,
+            fonts,
+            switches=bool(target.max_switches),
+            preserve_memory_estimates=preserve_memory_estimates,
         )
         for n, d in read_setup_binaries(directory).items()
     }
@@ -300,6 +326,7 @@ def verify_after_flashing(directory: Path, port: Path, target: models.Target) ->
         (directory / 'songs.bin').read_bytes(),
         fonts,
         switches=bool(target.max_switches),
+        preserve_memory_estimates=preserve_memory_estimates,
     )
     with transport.SerialConnection(port) as connection:
         client = transport.SetupClient(connection)
@@ -341,8 +368,11 @@ def verify_after_flashing(directory: Path, port: Path, target: models.Target) ->
         for name, revision, data in read_history_binaries(directory):
             _, expected = history.normalize_revision(
                 name,
-                resolved.refresh_memory(
-                    resolved.upgrade(data), fonts, switches=bool(target.max_switches)
+                resolved.prepare_restore(
+                    data,
+                    fonts,
+                    switches=bool(target.max_switches),
+                    preserve_memory_estimates=preserve_memory_estimates,
                 ),
             )
             if name not in listed:
@@ -394,18 +424,14 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
     if selected and selected not in setups:
         raise ValueError(f'{selected}: saved selection is absent from the backup')
     upgraded = {
-        n: resolved.refresh_memory(
-            resolved.upgrade(d), fonts, switches=bool(target.max_switches)
-        )
+        n: resolved.prepare_restore(d, fonts, switches=bool(target.max_switches))
         for n, d in setups.items()
     }
     revisions = [
         (
             n,
             r,
-            resolved.refresh_memory(
-                resolved.upgrade(d), fonts, switches=bool(target.max_switches)
-            ),
+            resolved.prepare_restore(d, fonts, switches=bool(target.max_switches)),
         )
         for n, r, d in snapshots
     ]
