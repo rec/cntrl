@@ -239,7 +239,7 @@ def encode(
         payload += struct.pack('<I', len(source)) + source
     if len(payload) > 0xFFFFFFFF - 20:
         raise ValueError('song library exceeds the SD file format size')
-    return payload
+    return binary_format.wrap(payload, binary_format.Kind.songs)
 
 
 def upgrade(
@@ -250,6 +250,8 @@ def upgrade(
     preserve_memory_estimates: bool = False,
 ) -> bytes:
     """Upgrade embedded setups while preserving song and node selections."""
+    original = data
+    data = binary_format.core(data, binary_format.Kind.songs)
     prefix, _, _, _, sources = _parse(data)
     result = bytearray(data[:prefix])
     for source in sources:
@@ -261,8 +263,13 @@ def upgrade(
         )
         if not preserve_memory_estimates:
             value = binary_format.wrap(value)
+        if len(value) != len(source):
+            binary_format.require_structural_edit(original, binary_format.Kind.songs)
         result += struct.pack('<I', len(value)) + value
-    upgraded = bytes(result)
+    upgraded = binary_format.wrap(
+        binary_format.replace_core(original, bytes(result), binary_format.Kind.songs),
+        binary_format.Kind.songs,
+    )
     decode(upgraded)
     return upgraded
 
@@ -346,6 +353,22 @@ def decode(data: bytes) -> Library:
     return result
 
 
+def reindex(data: bytes, names: list[str]) -> bytes:
+    """Relink captured setup references to the deployed bundle's sorted table."""
+    core = binary_format.core(data, binary_format.Kind.songs)
+    prefix, _, _, _, sources = _parse(core)
+    result = bytearray(core[:prefix])
+    for source in sources:
+        value = setup_bundle.reindex({'captured': source}, names)['captured']
+        if value != source:
+            binary_format.require_structural_edit(data, binary_format.Kind.songs)
+        result += struct.pack('<I', len(value)) + value
+    return binary_format.wrap(
+        binary_format.replace_core(data, bytes(result), binary_format.Kind.songs),
+        binary_format.Kind.songs,
+    )
+
+
 def _parse(
     data: bytes,
 ) -> tuple[
@@ -355,6 +378,7 @@ def _parse(
     list[Setlist],
     list[bytes],
 ]:
+    data = binary_format.core(data, binary_format.Kind.songs)
     if len(data) < 12:
         raise ValueError('invalid song library size')
     ns, nl = struct.unpack_from('<II', data)
@@ -545,6 +569,9 @@ def download(client: transport.SetupClient, *, undo: bool = False) -> bytes:
 def upload(client: transport.SetupClient, data: bytes, overwrite: bool) -> None:
     """Upload an exact current-format library and verify the stored bytes."""
     decode(data)
+    data = binary_format.wrap(data, binary_format.Kind.songs)
+    if data.startswith(binary_format.MAGIC):
+        client.require_format(binary_format.Kind.songs)
     client.ok(f'CNTRL SONGS BEGIN {len(data)} {crc32(data):08x} {int(overwrite)}')
     for offset in range(0, len(data), client.connection.usb_block_size):
         client.send_data(
@@ -612,7 +639,9 @@ def run(command: Copy | Download) -> None:
                     for n, d in combined.items()
                 }
                 margin = (
-                    setup_bundle.HEADER.unpack_from(current_bundle)[5]
+                    setup_bundle.HEADER.unpack_from(
+                        binary_format.core(current_bundle, binary_format.Kind.bundle)
+                    )[5]
                     if current_bundle
                     else 16192
                 )
@@ -623,6 +652,7 @@ def run(command: Copy | Download) -> None:
                     if current_bundle
                     else client.memory(),
                     margin,
+                    previous=current_bundle or None,
                 )
             for key, font in assets.items():
                 client.copy_font(key, font)

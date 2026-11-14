@@ -10,7 +10,7 @@ from zlib import crc32
 import pytest
 from native_peer import NativePeer
 
-from cntrl.patch_switcher import compiler, models, songs, transport
+from cntrl.patch_switcher import binary_format, compiler, models, songs, transport
 from scripts import native_tests
 
 
@@ -145,7 +145,10 @@ def test_captured_sources_with_colliding_instrument_aliases_export_independently
             ],
         }
     )
-    left, right = songs.encode(first, target), songs.encode(second, target)
+    left, right = (
+        binary_format.core(songs.encode(v, target), binary_format.Kind.songs)
+        for v in (first, second)
+    )
     end = 8 + songs.SELECTION.size + songs.SONG.size
     position = list(songs.SELECTION.unpack_from(right, 8))
     position[3] = 1

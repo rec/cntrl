@@ -199,7 +199,49 @@ void test_names_and_positions_survive_edits() {
     assert(completed(storage, songs, songs.insert(sets[0], 3, "Missing")));
     assert(!songs.next() && !std::strcmp(songs.last_error(), "Song missing") && board.sends == sends);
 }
+void test_envelope_metadata_and_recovery() {
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board);
+    assert(songs.boot()); auto original = snapshot(songs);
+    auto annotated = original;
+    const uint8_t extension[] = {44, 1, 0, 0, 3, 0, 0, 0, 'n', 'e', 'w'};
+    annotated.insert(annotated.end(), extension, extension + sizeof(extension));
+    cntrl::put32(annotated.data() + 12, annotated.size() - 20);
+    cntrl::binary::seal(annotated.data(), annotated.size());
+    auto upload = [&](cntrl::Songs &target, const std::vector<uint8_t> &bytes) {
+        assert(target.import_begin(bytes.size()));
+        assert(target.import_write(bytes.data(), bytes.size()));
+        assert(target.import_finish(bytes.size(), cntrl::checksum(bytes.data(), bytes.size())));
+        completed(storage, target, true);
+    };
+    upload(songs, annotated);
+    assert(songs.success() && snapshot(songs) == annotated);
+    char name[64]; assert(!songs.new_setlist(name) && snapshot(songs) == annotated);
+    cntrl::Songs reboot(storage, board); assert(reboot.boot() && snapshot(reboot) == annotated);
+    unsigned length = 0; uint32_t crc = 0;
+    assert(reboot.undo_source(length, crc) && length == original.size());
+    assert(completed(storage, reboot, reboot.undo()) && snapshot(reboot) == original);
+    cntrl::Songs after_undo(storage, board); assert(after_undo.boot());
+    assert(after_undo.undo_source(length, crc) && length == 0);
+    auto required = annotated; required[original.size() + 2] = 1;
+    cntrl::binary::seal(required.data(), required.size());
+    upload(after_undo, required);
+    assert(!after_undo.success() && snapshot(after_undo) == original && board.sends == 0);
+    std::vector<uint8_t> record(24);
+    std::memcpy(record.data(), "CSG6", 4);
+    cntrl::put32(record.data() + 4, after_undo.generation() + 1);
+    cntrl::put32(record.data() + 8, required.size());
+    cntrl::put32(record.data() + 12, cntrl::checksum(required.data(), required.size()));
+    cntrl::put32(record.data() + 20, cntrl::checksum(record.data(), 20));
+    record.insert(record.end(), required.begin(), required.end());
+    record.insert(record.end(), {'D', 'O', 'N', 'E'});
+    storage.files[""][2] = record;
+    cntrl::Songs incompatible(storage, board);
+    assert(!incompatible.boot() && incompatible.invalid() && board.sends == 0);
+    assert(storage.files[""][2] == record);
+}
+
 int main() {
+    test_envelope_metadata_and_recovery();
     test_names_and_positions_survive_edits();
     test_import_progress_and_failure_keep_the_active_generation();
     test_abandoned_imports_close_without_changing_library();

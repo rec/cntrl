@@ -394,13 +394,7 @@ class SetupClient:
     def copy(self, name: str, data: bytes, overwrite: bool) -> None:
         if data.startswith(binary_format.MAGIC):
             binary_format.unpack(data, binary_format.Kind.setup)
-            if (
-                self.request('CNTRL FORMAT')
-                != f'CNTRL FORMAT {binary_format.DEVELOPMENT_FORMAT} 1'
-            ):
-                raise ValueError(
-                    'firmware does not support the persistent document format'
-                )
+            self.require_format(binary_format.Kind.setup)
         hex_name = validate_name(name).encode('ascii').hex()
         command = (
             f'CNTRL SETUP PUT {hex_name} {len(data)} {crc32(data):08x} {int(overwrite)}'
@@ -417,14 +411,10 @@ class SetupClient:
     def copy_bundle(self, data: bytes, overwrite: bool) -> None:
         from .setup_bundle import unpack
 
+        if data.startswith(binary_format.MAGIC):
+            self.require_format(binary_format.Kind.bundle)
         if any(d.startswith(binary_format.MAGIC) for d in unpack(data).values()):
-            if (
-                self.request('CNTRL FORMAT')
-                != f'CNTRL FORMAT {binary_format.DEVELOPMENT_FORMAT} 1'
-            ):
-                raise ValueError(
-                    'firmware does not support the persistent document format'
-                )
+            self.require_format(binary_format.Kind.setup)
         response = self.request(
             f'CNTRL BUNDLE BEGIN {len(data)} {crc32(data):08x} {int(overwrite)}'
         )
@@ -436,12 +426,23 @@ class SetupClient:
         if self.download_bundle() != data:
             raise ValueError('bundle read-back verification failed')
 
-    def begin_deployment(self) -> int:
+    def require_format(self, kind: binary_format.Kind) -> None:
+        response = self.request('CNTRL FORMAT').split()
+        if (
+            len(response) < 4
+            or response[:3]
+            != ['CNTRL', 'FORMAT', str(binary_format.DEVELOPMENT_FORMAT)]
+            or str(int(kind)) not in response[3:]
+        ):
+            raise ValueError('firmware does not support the persistent document format')
+
+    def begin_deployment(self, *, recovery: bool = False) -> int:
         state = self.request('CNTRL DEPLOY STATUS').split()
         if (
             len(state) != 5
             or state[:2] != ['CNTRL', 'DEPLOY']
-            or state[3:] != ['0', '1']
+            or state[3] != '0'
+            or state[4] not in (['0', '1'] if recovery else ['1'])
         ):
             raise ValueError(
                 'device requires deployment recovery before another update'
@@ -450,14 +451,28 @@ class SetupClient:
         self.ok(f'CNTRL DEPLOY BEGIN {root:08x}')
         return root
 
-    def recover_deployment(self) -> None:
+    def recover_deployment(self) -> bool:
         state = self.request('CNTRL DEPLOY STATUS').split()
-        if len(state) != 5 or state[:2] != ['CNTRL', 'DEPLOY'] or state[4] != '1':
-            raise ValueError(
-                'select a known-good root with cntrl setup recover before restoring'
-            )
+        if (
+            len(state) != 5
+            or state[:2] != ['CNTRL', 'DEPLOY']
+            or state[3] not in ('0', '1')
+            or state[4] not in ('0', '1')
+        ):
+            raise ValueError('firmware does not provide deployment recovery status')
         if state[3] == '1':
-            self.ok('CNTRL DEPLOY ABORT')
+            response = self.request('CNTRL DEPLOY ABORT')
+            if response not in ('CNTRL OK', 'CNTRL ERROR deployment-recovery'):
+                raise ValueError(response)
+            state = self.request('CNTRL DEPLOY STATUS').split()
+            if (
+                len(state) != 5
+                or state[:2] != ['CNTRL', 'DEPLOY']
+                or state[3] != '0'
+                or state[4] not in ('0', '1')
+            ):
+                raise ValueError('deployment remains unresolved after abort')
+        return state[4] == '1'
 
     def commit_deployment(self, bundle: bytes, library: bytes) -> None:
         self.ok(f'CNTRL DEPLOY COMMIT {crc32(bundle):08x} {crc32(library):08x}')

@@ -101,7 +101,8 @@ def test_preserving_memory_estimates_rejects_a_format_upgrade(
 def test_song_restore_preserves_recorded_source_memory_estimates(
     target: models.Target,
 ) -> None:
-    library = bytearray(songs.encode(songs.Library(midi={}), target))
+    original_library = songs.encode(songs.Library(midi={}), target)
+    library = bytearray(binary_format.core(original_library, binary_format.Kind.songs))
     offset = library.index(b'CSP5') + 8
     original = bytes(library[offset:])
     source = bytearray(binary_format.core(original))
@@ -109,7 +110,9 @@ def test_song_restore_preserves_recorded_source_memory_estimates(
     struct.pack_into('<I', source, metadata, 1)
     struct.pack_into('<I', source, 20, crc32(source[28:]))
     library[offset:] = binary_format.replace_core(original, bytes(source))
-    data = bytes(library)
+    data = binary_format.replace_core(
+        original_library, bytes(library), binary_format.Kind.songs
+    )
     assert (
         songs.upgrade(data, {}, switches=False, preserve_memory_estimates=True) == data
     )
@@ -205,6 +208,58 @@ def test_restore_preparation_rejects_incomplete_backup_before_creating_output(
     with pytest.raises(ValueError, match='saved selection is absent'):
         backups.prepare_restore(original, tmp_path / 'restore', target)
     assert not (tmp_path / 'restore').exists()
+
+
+@pytest.mark.parametrize('empty', [False, True])
+def test_conversion_preserves_container_metadata_and_keeps_original_bytes(
+    tmp_path: Path, target: models.Target, empty: bool
+) -> None:
+    original = tmp_path / 'original'
+    (original / 'setups').mkdir(parents=True)
+    source = {'a': {}}
+    data = binary_format.wrap(
+        compiler.compile_show({}, {}, [], target, documents=source)
+    )
+    metadata = [binary_format.Record(tag=399, data=b'future nested metadata')]
+    bundle = (
+        setup_bundle.build({'a': data}, source, target.memory)
+        .model_copy(update={'metadata': metadata})
+        .pack()
+    )
+    if empty:
+        bundle = setup_bundle.SetupBundle(
+            setups={'a': b''}, page_ram2=[0], memory=target.memory, metadata=metadata
+        ).pack()
+    library = songs.encode(songs.Library())
+    library = binary_format.Document(
+        kind=binary_format.Kind.songs,
+        records=[
+            *binary_format.unpack(library, binary_format.Kind.songs).records,
+            *metadata,
+        ],
+    ).pack()
+    files = [
+        ('bundle.bin', bundle),
+        ('songs.bin', library),
+        ('songs-undo.bin', library),
+        ('selected.txt', b'' if empty else b'a'),
+    ]
+    if not empty:
+        files.append(('setups/a.bin', data))
+    for name, content in files:
+        (original / name).write_bytes(content)
+    converted = backups.prepare_restore(original, tmp_path / 'converted', target)
+    assert (original / 'bundle.bin').read_bytes() == bundle
+    for name, kind in [
+        ('bundle.bin', binary_format.Kind.bundle),
+        ('songs.bin', binary_format.Kind.songs),
+        ('songs-undo.bin', binary_format.Kind.songs),
+    ]:
+        assert (
+            binary_format.unpack((converted / name).read_bytes(), kind).records[1:]
+            == metadata
+        )
+    backups.check_conversion(converted)
 
 
 def test_recording_high_water_uses_valid_sectors_and_preserves_newer_recordings(
@@ -522,10 +577,15 @@ def test_restore_uploads_saved_data_before_restoring_selection(
             return target.memory
 
         def copy_bundle(self, data: bytes, overwrite: bool) -> None:
-            assert data.startswith(b'CSTB') and overwrite
+            assert (
+                binary_format.core(data, binary_format.Kind.bundle).startswith(b'CSTB')
+                and overwrite
+            )
             self.bundle = data
 
         def request(self, command: str) -> str:
+            if command == 'CNTRL FORMAT':
+                return f'CNTRL FORMAT {binary_format.DEVELOPMENT_FORMAT} 1 2 3'
             if command == 'CNTRL SONGS END':
                 self.saved = bytes(self.uploaded)
             elif command == 'CNTRL SONGS SIZE':
@@ -558,8 +618,9 @@ def test_restore_uploads_saved_data_before_restoring_selection(
             assert not self.saved
             return 1
 
-        def recover_deployment(self) -> None:
+        def recover_deployment(self) -> bool:
             assert not self.saved
+            return True
 
         def commit_deployment(self, bundle: bytes, songs: bytes) -> None:
             assert bundle == self.bundle and songs == self.saved
@@ -591,6 +652,108 @@ def test_restore_uploads_saved_data_before_restoring_selection(
         )
         assert restored['Aardvark'] != existing['Aardvark']
         assert restored['Evening'] != expected
+
+
+@pytest.mark.parametrize('converted', [False, True])
+def test_installing_a_converted_collection_retains_an_unreadable_active_root(
+    tmp_path: Path,
+    target: models.Target,
+    monkeypatch: pytest.MonkeyPatch,
+    converted: bool,
+) -> None:
+    from cntrl.patch_switcher.setup_sync import write_record
+
+    original = tmp_path / 'original'
+    (original / 'setups').mkdir(parents=True)
+    setup = binary_format.wrap(compiler.compile_show({}, {}, [], target))
+    library = songs.encode(songs.Library())
+    (original / 'setups/a.bin').write_bytes(setup)
+    (original / 'songs.bin').write_bytes(library)
+    (original / 'selected.txt').write_text('a')
+    directory = (
+        backups.prepare_restore(original, tmp_path / 'converted', target)
+        if converted
+        else original
+    )
+    operations: list[str] = []
+    recovery_backups: list[Path] = []
+
+    class Client(transport.SetupClient):
+        bundle: bytes = b''
+        selected: str = ''
+
+        def recover_deployment(self) -> bool:
+            return False
+
+        def download_bundle(self) -> bytes:
+            pytest.fail('an unreadable active bundle must not be merged')
+
+        def memory(self) -> models.TargetMemory:
+            return target.memory
+
+        def begin_deployment(self, *, recovery: bool = False) -> int:
+            assert recovery and operations == ['backup']
+            operations.append('begin')
+            return 123
+
+        def copy_bundle(self, data: bytes, overwrite: bool) -> None:
+            assert overwrite and list(setup_bundle.unpack(data)) == ['a']
+            self.bundle = data
+            operations.append('bundle')
+
+        def ok(self, command: str) -> None:
+            assert command == 'CNTRL SETUP FINISH'
+
+        def select(self, name: str) -> None:
+            self.selected = name
+            operations.append('select')
+
+        def current(self) -> str:
+            return self.selected
+
+        def commit_deployment(self, bundle: bytes, data: bytes) -> None:
+            assert bundle == self.bundle and data == library and self.selected == 'a'
+            operations.append('commit')
+
+    client = Client(transport.SerialConnection(Path('/unused')))
+
+    def snapshot(folder: Path, port: Path, connection: object) -> None:
+        operations.append('backup')
+        recovery_backups.append(folder)
+        folder.mkdir()
+        (folder / 'backup-pending.toml').write_text('complete = false')
+        (folder / 'original.raw').write_bytes(b'unsupported original journal')
+        report = storage_info.parse_storage_info(
+            'CNTRL STORAGE 2097152 2097152 1048576 4096'
+        )
+        write_record(folder / 'storage.toml', report.model_dump(exclude_none=True))
+        backups.write_backup_manifest(folder, complete=False, raw_state=True)
+
+    def upload(receiver: transport.SetupClient, data: bytes, overwrite: bool) -> None:
+        assert receiver is client and data == library and overwrite
+        operations.append('songs')
+
+    monkeypatch.setattr(backups, 'backup_pedal', snapshot)
+    monkeypatch.setattr(
+        transport, 'SerialConnection', lambda *a, **k: nullcontext(None)
+    )
+    monkeypatch.setattr(transport, 'SetupClient', lambda connection: client)
+    monkeypatch.setattr(songs, 'upload', upload)
+    if not converted:
+        with pytest.raises(ValueError, match='offline converted backup'):
+            backups.restore_setups(directory, Path('/unused'), target)
+        assert not operations
+        return
+    backups.restore_setups(directory, Path('/unused'), target)
+    assert operations == ['backup', 'begin', 'bundle', 'songs', 'select', 'commit']
+    backup = recovery_backups[0]
+    assert (backup / 'original.raw').read_bytes() == b'unsupported original journal'
+    backups.check_conversion(backup, raw_recovery=True)
+    with pytest.raises(ValueError, match='incomplete backup'):
+        backups.check_conversion(backup)
+    (backup / 'original.raw').write_bytes(b'damaged')
+    with pytest.raises(ValueError, match='checksum differs'):
+        backups.check_conversion(backup, raw_recovery=True)
 
 
 class SavedPedal(transport.SetupClient):

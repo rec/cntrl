@@ -127,7 +127,8 @@ public:
         writing_ = false;
         unsigned old_slot = image_.slot, old_length = image_.length;
         if (failed_ || incoming_ != 100 || consumed_ != replacement_length_
-            || !copy(table_.offset(unsigned(index_)) + table_.length(unsigned(index_)), image_.length)
+            || !copy(table_.offset(unsigned(index_)) + table_.length(unsigned(index_)), table_.envelope().offset + table_.envelope().length)
+            || !copy_extensions()
             || !commit_image()) {
             disk_.finish(); image_.slot = old_slot; image_.length = old_length;
             if (!table_.pinned()) table_.open(image_, hardware_);
@@ -236,6 +237,7 @@ private:
         if (table_.pinned()) return false;
         if (std::memcmp(incoming_header_, "CNST", 4) || checksum(incoming_header_, 92) != u32(incoming_header_ + 92)) return false;
         replacement_length_ = u32(incoming_header_ + 8); replacement_modified_ = u32(incoming_header_ + 16);
+        if (table_.envelope().opaque && !replacement_length_) return false;
         unsigned count = table_.count(), active = 0;
         if (!count) return false;
         const unsigned prefix = 2 + 4 * (count - 1);
@@ -269,15 +271,19 @@ private:
         std::memset(bundle_header_, 0, sizeof(bundle_header_));
         std::memcpy(bundle_header_, "CSTB", 4); bundle_header_[4] = 1;
         bundle_header_[6] = uint8_t(count); bundle_header_[7] = uint8_t(count >> 8);
-        upload_length_ = 40 + manifest.size + unsigned(total);
-        put32(bundle_header_ + 8, upload_length_); put32(bundle_header_ + 16, table_.memory_margin());
+        unsigned core_length = 40 + manifest.size + unsigned(total);
+        unsigned extensions = image_.length - table_.envelope().offset - table_.envelope().length;
+        uint8_t envelope[28];
+        if (!binary::prefix(envelope, binary::Kind::bundle, core_length, extensions)) return false;
+        upload_length_ = 28 + core_length + extensions;
+        put32(bundle_header_ + 8, core_length); put32(bundle_header_ + 16, table_.memory_margin());
         put32(bundle_header_ + 20, table_.cntrl_ram2()); put32(bundle_header_ + 24, active);
         put32(bundle_header_ + 28, unsigned(needs)); put32(bundle_header_ + 32, unsigned(total)); put32(bundle_header_ + 36, capacity);
         output_slot_ = 1 - image_.slot; disk_.choose(bundle_name); uint8_t blank[96] = {};
         body_crc_ = 0xffffffff;
-        return disk_.begin(output_slot_) && disk_.write(blank, 96) && disk_.write(bundle_header_, 40)
+        return disk_.begin(output_slot_) && disk_.write(blank, 96) && disk_.write(envelope, 28) && disk_.write(bundle_header_, 40)
             && append(manifest.data, manifest.size)
-            && copy(40 + count * 76 + prefix, table_.offset(unsigned(index_)));
+            && copy(table_.envelope().offset + 40 + count * 76 + prefix, table_.offset(unsigned(index_)));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(bundle_prefill)
@@ -314,10 +320,30 @@ private:
     bool commit_image() {
         if (table_.pinned()) return false;
         put32(bundle_header_ + 12, ~body_crc_);
-        if (!disk_.patch(96, bundle_header_, 40) || !disk_.flush()) return false;
+        if (!disk_.patch(96 + 28, bundle_header_, 40) || !disk_.flush()) return false;
         image_.slot = output_slot_; image_.length = upload_length_;
+        uint32_t envelope_crc = 0xffffffff;
+        uint8_t block[512];
+        for (unsigned offset = 0; offset < image_.length;) {
+            unsigned n = std::min(512u, image_.length - offset);
+            if (!image_.read(offset, block, n)) return false;
+            for (unsigned i = 0; i < n; ++i) if (offset + i >= 16 && offset + i < 20) block[i] = 0;
+            update(envelope_crc, block, n); offset += n;
+        }
+        put32(block, ~envelope_crc);
+        if (!disk_.patch(96 + 16, block, 4) || !disk_.flush()) return false;
         uint32_t crc = 0xffffffff;
         return hash_record(output_slot_, upload_length_, crc) && table_.open(image_, hardware_) && finish_record(~crc);
+    }
+    bool copy_extensions() {
+        uint8_t bytes[512];
+        unsigned offset = table_.envelope().offset + table_.envelope().length;
+        while (offset < image_.length) {
+            unsigned n = std::min(512u, image_.length - offset);
+            if (!image_.read(offset, bytes, n) || !disk_.write(bytes, n)) return false;
+            offset += n;
+        }
+        return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(bundle_finish_record)

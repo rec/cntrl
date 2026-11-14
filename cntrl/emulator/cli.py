@@ -23,7 +23,7 @@ class Emulate(BaseModel, frozen=True):
     """Compile and open a setup on a built-in or explicitly configured controller."""
 
     setup: Annotated[Path, tyro.conf.Positional] = Field(
-        description='Setup source file or compiled CSTB bundle'
+        description='Setup source file or compiled setup bundle'
     )
     controller: str | None = Field(
         default=None, description='Built-in controller profile name'
@@ -92,7 +92,7 @@ def prepare(
     storage.mkdir(parents=True, exist_ok=True)
     setup = command.setup
     with setup.open('rb') as source:
-        compiled = source.read(4) == b'CSTB'
+        compiled = source.read(4) in (b'CSTB', b'CNBF')
     if not compiled:
         setup = storage / '.emulator-build' / 'setup' / 'setup.bin'
         setup.parent.mkdir(parents=True, exist_ok=True)

@@ -48,7 +48,7 @@ def unpack(data: bytes, kind: Kind) -> Document:
     )
     if magic != MAGIC:
         raise ValueError('invalid persistent document magic')
-    if version != DEVELOPMENT_FORMAT:
+    if version not in (0x802C, DEVELOPMENT_FORMAT):
         raise ValueError(f'unsupported persistent format {format_name(version)}')
     if actual_kind != kind:
         raise ValueError('persistent document artifact kind mismatch')
@@ -87,8 +87,7 @@ def unpack(data: bytes, kind: Kind) -> Document:
 
 def wrap(data: bytes, kind: Kind = Kind.setup) -> bytes:
     if data.startswith(MAGIC):
-        unpack(data, kind)
-        return data
+        return unpack(data, kind).pack()
     return Document(
         kind=kind, records=[Record(tag=CORE, required=True, data=data)]
     ).pack()
@@ -143,7 +142,7 @@ def identify(data: bytes) -> str:
 
 
 MAGIC = b'CNBF'
-DEVELOPMENT_FORMAT = 0x8000 | 44
+DEVELOPMENT_FORMAT = 0x8000 | 45
 HEADER = struct.Struct('<4sHHHHII')
 RECORD = struct.Struct('<HHI')
 CORE = 1
@@ -156,6 +155,7 @@ ARCHIVE_KINDS = (
     (b'CFN2', 'CFN2'),
     (b'CNSA', 'CNSA'),
     (b'CSG5', 'song-journal-5'),
+    (b'CSG6', 'song-journal-6'),
     (b'CREV', 'revision-journal'),
     (b'CNST', 'setup-journal'),
     (b'CSEL', 'selection-journal'),

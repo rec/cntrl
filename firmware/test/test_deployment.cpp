@@ -10,6 +10,10 @@ struct Faults : TestFileSystem {
     using TestFileSystem::TestFileSystem;
     int remaining = -1;
     bool sync_ok = true;
+    bool hide_songs = false;
+    bool exists(const char *path) override {
+        return !(hide_songs && !std::strncmp(path, "/cntrl/songs/", 13)) && TestFileSystem::exists(path);
+    }
     struct Handle : TestFile {
         Faults &owner;
         bool activation = false;
@@ -34,6 +38,15 @@ int main(int argc, char **argv) {
     assert(argc == 2); cntrl::memory_budget = 1024 * 1024;
     Faults disk(argv[1]); cntrl::Deployment initial(disk);
     assert(initial.boot() && initial.root() == 0 && !initial.pending());
+    assert(disk.make_directory("/cntrl/songs"));
+    auto library = disk.file(); assert(library->open("/cntrl/songs/0.bin", cntrl::files::Mode::truncate));
+    const uint8_t content[] = {'l', 'i', 'b'};
+    assert(library->write(0, content, sizeof(content)) && library->sync()); library->close();
+    assert(initial.prepare_runtime(true));
+    assert(!initial.stores_complete(true, false));
+    disk.hide_songs = true;
+    cntrl::Deployment missing_library(disk); assert(!missing_library.boot() && !missing_library.ready());
+    disk.hide_songs = false;
     assert(initial.begin(1));
     char path[224];
     assert(cntrl::persistent_path("/cntrl/setups/.bundle/0.bin", path));
@@ -91,6 +104,11 @@ int main(int argc, char **argv) {
     assert(file->open("/cntrl/.deploy/0.bin", cntrl::files::Mode::truncate));
     assert(file->write(0, record, 24) && file->sync()); file->close();
     cntrl::Deployment unsupported(disk); assert(!unsupported.boot() && !unsupported.ready());
+    assert(unsupported.begin(300) && unsupported.pending());
+    cntrl::Deployment interrupted_recovery(disk);
+    assert(!interrupted_recovery.boot() && !interrupted_recovery.ready());
+    unsupported.abort(); assert(!unsupported.ready());
     assert(unsupported.recover(2) && unsupported.pending() && unsupported.commit());
     cntrl::Deployment repaired(disk); assert(repaired.boot() && repaired.root() == 2);
+    assert(!repaired.prepare_runtime(false) && !repaired.ready());
 }

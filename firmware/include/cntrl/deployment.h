@@ -30,11 +30,22 @@ public:
     bool pending() const { return pending_; }
     bool ready() const { return ready_; }
     uint32_t root() const { return active_; }
+    bool stores_complete(bool bundle, bool library) const {
+        return (!(required_ & 1) || bundle) && (!(required_ & 2) || library);
+    }
+    // Block older firmware before new-format ordinary saves can advance a
+    // journal whose old generations that firmware might otherwise select.
+    bool prepare_runtime(bool compatible) {
+        if (!ready_ || pending_ || !compatible) { ready_ = false; return false; }
+        if ((!sequence_ || format_ != binary::development_format || required_ != present_stores()) && !publish(active_)) { ready_ = false; return false; }
+        return true;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(deployment_boot)
 #endif
     bool boot() {
         pending_ = false; ready_ = false; active_ = sequence_ = persistent_root = 0;
+        format_ = required_ = 0;
         bool found = false, present = false;
         for (unsigned slot = 0; slot < 2; ++slot) {
             char path[64]; filename(slot, path);
@@ -46,19 +57,26 @@ public:
             if (std::memcmp(bytes, "CDEP", 4) || std::memcmp(bytes + 20, "DONE", 4)
                 || binary::crc(bytes, 16) != binary::read32(bytes + 16)) continue;
             const uint32_t sequence = binary::read32(bytes + 4), root = binary::read32(bytes + 8);
-            if (!sequence || binary::read16(bytes + 14)) continue;
+            if (!sequence || (binary::read16(bytes + 14) & ~3u)) continue;
             if (!found || sequence > sequence_) {
                 sequence_ = sequence; active_ = root; format_ = binary::read16(bytes + 12); found = true;
+                required_ = binary::read16(bytes + 14);
             }
         }
-        if ((present && !found) || (found && format_ != binary::development_format)) return false;
-        persistent_root = active_; ready_ = true; return true;
+        if ((present && !found) || (found && !binary::supported_format(format_))) return false;
+        persistent_root = active_;
+        if (active_) {
+            char completed[96]; completion_path(active_, completed);
+            if (!filesystem_.exists(completed)) return false;
+        }
+        if ((present_stores() & required_) != required_) return false;
+        ready_ = true; return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(deployment_begin)
 #endif
     bool begin(uint32_t root) {
-        if (!ready_ || pending_ || !root || root == active_ || sequence_ == std::numeric_limits<uint32_t>::max()) return false;
+        if (pending_ || !filesystem_.available() || !root || root == active_ || sequence_ == std::numeric_limits<uint32_t>::max()) return false;
         // Give the legacy root its own committed record before staging starts.
         if (!sequence_ && !publish(active_)) return false;
         char path[96]; std::snprintf(path, sizeof(path), "/cntrl/.generations/%08lx", (unsigned long)root);
@@ -67,7 +85,7 @@ public:
             std::snprintf(path, sizeof(path), "/cntrl/.generations/%08lx/%s", (unsigned long)root, store);
             if (!filesystem_.make_directory(path)) return false;
         }
-        staged_ = root; persistent_root = root; pending_ = true; return true;
+        staged_ = root; persistent_root = root; required_ = 0; pending_ = ready_ = true; return true;
     }
     bool commit() {
         if (!pending_ || !ready_ || !publish(staged_)) return false;
@@ -80,9 +98,10 @@ public:
         if (!file || !file->open(path, files::Mode::read) || file->size() != sizeof(record)
             || !file->read(0, record, sizeof(record)) || std::memcmp(record, "CDEP", 4)
             || std::memcmp(record + 20, "DONE", 4) || binary::read32(record + 8) != root
-            || binary::read16(record + 12) != binary::development_format || binary::read16(record + 14)
+            || !binary::supported_format(binary::read16(record + 12)) || (binary::read16(record + 14) & ~3u)
             || !binary::read32(record + 4) || binary::crc(record, 16) != binary::read32(record + 16)) return false;
         file->close();
+        required_ = binary::read16(record + 14);
         staged_ = persistent_root = root; pending_ = ready_ = true; return true;
     }
     void abort() { boot(); }
@@ -96,6 +115,7 @@ private:
         std::memcpy(bytes, "CDEP", 4); binary::write32(bytes + 4, sequence_ + 1);
         binary::write32(bytes + 8, root);
         bytes[12] = uint8_t(binary::development_format & 0xff); bytes[13] = uint8_t(binary::development_format >> 8);
+        unsigned required = present_stores(); bytes[14] = uint8_t(required);
         binary::write32(bytes + 16, binary::crc(bytes, 16)); std::memcpy(bytes + 20, "DONE", 4);
         // Retained roots need proof of a completed stage even after both
         // activation slots have advanced. Never recover an abandoned partial root.
@@ -107,7 +127,7 @@ private:
         }
         char path[64]; filename((sequence_ + 1) % 2, path);
         if (!write_record(path, bytes)) return false;
-        active_ = root; ++sequence_; return true;
+        active_ = root; required_ = required; format_ = binary::development_format; ++sequence_; return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(deployment_write_record)
@@ -122,8 +142,20 @@ private:
     }
     files::FileSystem &filesystem_;
     uint32_t active_ = 0, staged_ = 0, sequence_ = 0;
-    uint16_t format_ = 0;
+    uint16_t format_ = 0, required_ = 0;
     bool pending_ = false, ready_ = false;
+    unsigned present_stores() {
+        unsigned result = 0;
+        for (unsigned slot = 0; slot < 2; ++slot) {
+            char path[64]; std::snprintf(path, sizeof(path), "/cntrl/setups/.bundle/%u.bin", slot);
+            if (filesystem_.exists(path)) result |= 1;
+        }
+        for (unsigned slot = 0; slot < 3; ++slot) {
+            char path[64]; std::snprintf(path, sizeof(path), "/cntrl/songs/%u.bin", slot);
+            if (filesystem_.exists(path)) result |= 2;
+        }
+        return result;
+    }
     static void filename(unsigned slot, char (&path)[64]) {
         std::snprintf(path, sizeof(path), "/cntrl/.deploy/%u.bin", slot);
     }

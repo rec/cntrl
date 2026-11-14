@@ -788,11 +788,14 @@ def prepare_upload(
     client: transport.SetupClient,
 ) -> tuple[setup_bundle.SetupBundle, Path]:
     """Archive all current setups and retain independent, unreplaced pedal data."""
+    current_bundle = client.download_bundle()
     root = store(inputs)
     check_pending(root)
     migrate_baselines(root)
     existing: dict[str, bytes] = {}
     folder = snapshot(root, 'upload-', existing, trace, inputs)
+    if current_bundle:
+        (folder / 'bundle.before').write_bytes(current_bundle)
     for e in client.catalogue():
         existing[e.name] = client.download(e.name)
         save_setup(folder, e.name, existing[e.name])
@@ -830,7 +833,13 @@ def prepare_upload(
     sources: dict[str, object] = {
         n: tomlkit.parse(resolved.export(v)).unwrap() for n, v in combined.items()
     }
-    result = setup_bundle.build(combined, sources, bundle.memory, bundle.memory_margin)
+    result = setup_bundle.build(
+        combined,
+        sources,
+        bundle.memory,
+        bundle.memory_margin,
+        previous=current_bundle or None,
+    )
     uploaded = folder / 'uploaded'
     uploaded.mkdir()
     for n in bundle.names:

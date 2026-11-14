@@ -40,9 +40,11 @@ private:
 #endif
     bool read(SetupBundleFile &file, const Hardware &hardware) {
         clear(); file_ = &file; hardware_ = &hardware;
+        if (!binary::open_reader(file, file.size(), binary::Kind::bundle, envelope_)) return false;
+        const unsigned origin = envelope_.offset, end = origin + envelope_.length;
         uint8_t header[40];
-        if (!file.read(0, header, sizeof(header)) || std::memcmp(header, "CSTB", 4)
-            || u16(header + 4) != 1 || !u16(header + 6) || u32(header + 8) != file.size()) return false;
+        if (envelope_.length < sizeof(header) || !file.read(origin, header, sizeof(header)) || std::memcmp(header, "CSTB", 4)
+            || u16(header + 4) != 1 || !u16(header + 6) || u32(header + 8) != envelope_.length) return false;
         count_ = u16(header + 6); margin_ = u32(header + 16); general_ = u32(header + 20);
         active_ = u32(header + 24); total_setup_ram_ = u32(header + 32);
         unsigned prefix = 2 + 4 * (count_ - 1);
@@ -50,8 +52,8 @@ private:
         if (general_ != hardware.memory_runtime() || needs + margin_ >= hardware.memory_capacity() || needs != u32(header + 28)
             || hardware.memory_capacity() - needs - margin_ != u32(header + 36)) return false;
         uint32_t crc = 0xffffffff;
-        for (unsigned offset = 40; offset < file.size();) {
-            uint8_t block[512]; unsigned n = std::min(uint32_t(512), file.size() - offset);
+        for (unsigned offset = origin + 40; offset < end;) {
+            uint8_t block[512]; unsigned n = std::min(512u, end - offset);
             if (!file.read(offset, block, n)) return false;
             for (unsigned i = 0; i < n; ++i) {
                 crc ^= block[i];
@@ -61,25 +63,25 @@ private:
         }
         if (~crc != u32(header + 12)) return false;
         if (!entries_.resize(count_) || !names_.resize(count_ * 64) || !setup_names_.resize(count_)) return false;
-        unsigned table = 40 + count_ * 76;
+        unsigned table = origin + 40 + count_ * 76;
         uint64_t position = uint64_t(table) + prefix;
         unsigned peak = 0;
         uint8_t record[76], word[4];
         if (!file.read(table, word, 2) || u16(word) != count_) return false;
         for (unsigned i = 0; i < count_; ++i) {
-            if (!file.read(40 + i * 76, record, sizeof(record)) || !text_valid(record, 64)
+            if (!file.read(origin + 40 + i * 76, record, sizeof(record)) || !text_valid(record, 64)
                 || !setup_name(reinterpret_cast<const char *>(record)) || record[72] > 1) return false;
             std::memcpy(names_.data() + i * 64, record, 64);
             setup_names_[i] = names_.data() + i * 64;
             if (i && name_compare(setup_names_[i - 1], setup_names_[i]) >= 0) return false;
             auto &entry = entries_[i]; entry.length = u32(record + 64); entry.prefill = record[72]; entry.ram2 = u32(record + 68);
             peak = std::max(peak, entry.ram2);
-            if ((entry.length && entry.length < 116) || entry.length > memory_budget || position + entry.length > file.size()) return false;
+            if ((entry.length && entry.length < 116) || entry.length > memory_budget || position + entry.length > end) return false;
             entry.offset = uint32_t(position); position += entry.length;
             if (i + 1 < count_ && (!file.read(table + 2 + i * 4, word, 4)
                 || u32(word) != position - table - prefix)) return false;
         }
-        if (position != file.size() || position - table - prefix != total_setup_ram_ || peak != active_) return false;
+        if (position != end || position - table - prefix != total_setup_ram_ || peak != active_) return false;
         uint32_t signature = 0xffffffff;
         for (char c : names_) {
             uint8_t byte = uint8_t(c); if (byte >= 'A' && byte <= 'Z') byte += 32;
@@ -146,6 +148,7 @@ public:
     void unpin(uint16_t index) { assert(index < count_ && entries_[index].pins); --entries_[index].pins; }
     bool pinned() const { for (const auto &entry : entries_) if (entry.pins) return true; return false; }
     unsigned count() const { return count_; }
+    const binary::View &envelope() const { return envelope_; }
     const char *name(uint16_t index) const { assert(index < count_); return setup_names_[index]; }
     int index(const char *name) const {
         unsigned begin = 0, end = count_;
@@ -199,8 +202,10 @@ private:
     unsigned count_ = 0, resident_ = 0, total_setup_ram_ = 0;
     unsigned margin_ = 0, general_ = 0, active_ = 0, head_ = none, tail_ = none;
     uint32_t signature_ = 0;
+    binary::View envelope_;
     void swap(SetupTable &other) {
         std::swap(file_, other.file_); std::swap(hardware_, other.hardware_);
+        std::swap(envelope_, other.envelope_);
         entries_.swap(other.entries_); names_.swap(other.names_); setup_names_.swap(other.setup_names_);
         static_setups_.swap(other.static_setups_);
         std::swap(count_, other.count_); std::swap(resident_, other.resident_);

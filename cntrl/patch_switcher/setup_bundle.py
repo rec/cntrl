@@ -16,6 +16,7 @@ class SetupBundle(BaseModel, frozen=True):
     page_ram2: list[int]
     memory: models.TargetMemory
     memory_margin: units.Bytes = Field(default=16192, ge=0)
+    metadata: list[binary_format.Record] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def feasible(self) -> 'SetupBundle':
@@ -92,7 +93,7 @@ class SetupBundle(BaseModel, frozen=True):
             for i, (n, s) in enumerate(zip(self.names, self.setup_sizes, strict=True))
         )
         body = entries + payload
-        return (
+        core = (
             HEADER.pack(
                 b'CSTB',
                 1,
@@ -108,6 +109,13 @@ class SetupBundle(BaseModel, frozen=True):
             )
             + body
         )
+        return binary_format.Document(
+            kind=binary_format.Kind.bundle,
+            records=[
+                binary_format.Record(tag=1, required=True, data=core),
+                *self.metadata,
+            ],
+        ).pack()
 
 
 def build(
@@ -115,6 +123,7 @@ def build(
     sources: dict[str, object],
     memory: models.TargetMemory,
     memory_margin: int = 16192,
+    previous: bytes | None = None,
 ) -> SetupBundle:
     ordered = sorted(setups, key=str.lower)
     page_ram2: list[int] = []
@@ -127,10 +136,48 @@ def build(
             page_ram2.append(sum(p.ram2_bytes for p in settings.pages.values()))
             continue
         instruments, cycles, patches = struct.unpack_from('<HHH', data, 12)
-        metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
+        metadata_offset = 76 + instruments * 68 + cycles * 68 + patches * 82
         page_ram2.append(
-            struct.unpack_from('<I', data, metadata + compiler.METADATA.size - 8)[0]
+            struct.unpack_from(
+                '<I', data, metadata_offset + compiler.METADATA.size - 8
+            )[0]
         )
+    metadata: list[binary_format.Record] = []
+    if previous and previous.startswith(binary_format.MAGIC):
+        metadata = binary_format.unpack(previous, binary_format.Kind.bundle).records[1:]
+        if metadata:
+            saved = unpack(previous)
+            count = HEADER.unpack_from(
+                binary_format.core(previous, binary_format.Kind.bundle)
+            )[2]
+            if saved.keys() != setups.keys() or count != len(setups):
+                binary_format.require_structural_edit(
+                    previous, binary_format.Kind.bundle
+                )
+            for name, data in setups.items():
+                before, after = (
+                    bytearray(binary_format.core(d)) for d in (saved[name], data)
+                )
+                # RAM estimates and the development schema identifier do not
+                # change references. Recompilation or reindexing may do so.
+                for value in (before, after):
+                    if value.startswith(b'CSW1'):
+                        ni, nc, np = compiler.HEADER.unpack_from(value)[4:7]
+                        at = (
+                            76
+                            + ni * 68
+                            + nc * 68
+                            + np * 82
+                            + compiler.METADATA.size
+                            - 8
+                        )
+                        value[at : at + 4] = bytes(4)
+                        value[4:6] = bytes(2)
+                        value[20:24] = bytes(4)
+                if before != after:
+                    binary_format.require_structural_edit(
+                        previous, binary_format.Kind.bundle
+                    )
     return SetupBundle(
         setups={
             n: binary_format.wrap(d) if binary_format.core(d).startswith(b'CSW1') else d
@@ -139,12 +186,18 @@ def build(
         page_ram2=page_ram2,
         memory=memory,
         memory_margin=memory_margin,
+        metadata=metadata,
     )
 
 
-def reindex(setups: dict[str, bytes]) -> dict[str, bytes]:
+def reindex(
+    setups: dict[str, bytes], names: list[str] | None = None
+) -> dict[str, bytes]:
     """Relink downloaded/history images when their sorted bundle table changes."""
-    indices = {n.lower(): i for i, n in enumerate(sorted(setups, key=str.lower))}
+    indices = {
+        n.lower(): i
+        for i, n in enumerate(sorted(setups if names is None else names, key=str.lower))
+    }
     signature = crc32(b''.join(n.encode('ascii').ljust(64, b'\0') for n in indices))
     result: dict[str, bytes] = {}
     for name, original in setups.items():
@@ -182,6 +235,7 @@ def reindex(setups: dict[str, bytes]) -> dict[str, bytes]:
 
 
 def unpack(data: bytes) -> dict[str, bytes]:
+    data = binary_format.core(data, binary_format.Kind.bundle)
     if len(data) < HEADER.size:
         raise ValueError('truncated setup bundle')
     magic, version, count, length, checksum, *_ = HEADER.unpack_from(data)
@@ -232,6 +286,7 @@ def unpack(data: bytes) -> dict[str, bytes]:
 def memory_from_bundle(data: bytes) -> models.TargetMemory:
     """Recover the target memory descriptor encoded in an existing bundle."""
     unpack(data)
+    data = binary_format.core(data, binary_format.Kind.bundle)
     header = HEADER.unpack_from(data)
     return models.TargetMemory(
         capacity=header[5] + header[8] + header[10], runtime=header[6]
