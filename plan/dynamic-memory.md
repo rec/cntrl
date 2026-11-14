@@ -1,15 +1,29 @@
 # Demand-sized firmware memory
 
-Status: host analysis refreshed after the routing split, 2026-11-14;
-physical qualification remains incomplete. The normal target builds, but the
-diagnostic target currently exceeds RAM1. See the target appendix for measurements.
+Status: diagnostic instruction-RAM overflow repaired through cold configuration
+code placement, 2026-11-14. Physical qualification remains incomplete.
+See the target appendix for measured build totals.
 The inventory below records the original audit; implementation results and
 outstanding qualification gates are tracked here and in the target appendix.
 
+## Cold configuration placement, 2026-11-14
+
+The diagnostic overflow found in the refresh below is repaired by moving graph
+ownership construction, candidate endpoint-state allocation and predicate
+decoding into flash. The rules select those configuration helpers individually;
+they do not move the live receive, enqueue, pressure or note-release paths out of
+instruction RAM. The target appendix records the linked-symbol verification and
+[before/after results](../cntrl/maker/morningstar/mc/dynamic-memory.md#diagnostic-cold-placement-repair-2026-11-14).
+
+This changes code placement only. Allocation policy, MIDI behavior, configuration
+and stored formats are unchanged. Physical timing and stack high-water remain
+qualification gates.
+
 ## Current source review, 2026-11-14
 
-This review supersedes the descriptions of *present* storage in the original
-F/A inventories below. Those tables remain the historical audit and rationale.
+This review predates the cold-placement repair above and supersedes the
+descriptions of *present* storage in the original F/A inventories below.
+Those tables remain the historical audit and rationale.
 The measured source is `84b7a08`, including the routing split in `4f3b1f4`.
 Hardware measurements and reproduction commands are in the
 [target refresh](../cntrl/maker/morningstar/mc/dynamic-memory.md#post-routing-split-refresh-2026-11-14).
@@ -37,8 +51,9 @@ the original `std::stable_sort` temporary-allocation concern is no longer an
 accurate description of those paths. SDK and filesystem boundaries still need
 their own evidence.
 
-The immediate priority is instruction/data RAM placement: a small instruction
-increase can claim another whole RAM bank and reduce stack space abruptly. Next,
+The review identified instruction/data RAM placement as the immediate priority:
+a small instruction increase can claim another whole RAM bank and reduce stack
+space abruptly. Next,
 review the physical rendering buffers and transient setup/font/recording peaks.
 Automatically choosing the smaller routing policy could save configuration RAM,
 but would require an implementation decision about active engine ownership and
