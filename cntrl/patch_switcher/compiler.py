@@ -963,17 +963,46 @@ class PatchCompiler:
         flags = 0
         if isinstance(value, models.Banked):
             local = {}
+            templates = {}
             for key, raw in value.patches.items():
-                if (child := self.parse(raw, f'{path}.patches.{key}')) is not None:
-                    if self.nodes[child][0] != 10:
-                        self.errors.append(
-                            f'{path}.patches.{key}: bank preset pages need bindings'
-                        )
-                    local[key] = child
-            self.children[index] = list(local.values())
+                context = f'{path}.patches.{key}'
+                try:
+                    page = resolve_derivation(
+                        normalize_patch(raw), self.show.patches, context
+                    )
+                except ValidationError as error:
+                    self.errors.extend(_validation_errors(context, error))
+                    continue
+                page = page.model_copy(
+                    update={
+                        'style': page.style or value.style,
+                        'binding_view': page.binding_view or value.binding_view,
+                    }
+                )
+                child = self.add(page, context)
+                if self.nodes[child][0] != 10:
+                    self.errors.append(f'{context}: bank preset pages need bindings')
+                local[key] = child
+                templates[key] = page
+            empty: dict[str | None, int] = {}
+            for number in range(value.bank_count):
+                bank = value.banks.get(number, {})
+                if all(
+                    p in bank
+                    for p in range(value.page_counts.get(number, value.page_count))
+                ):
+                    continue
+                key = bank[min(bank)] if bank else None
+                if key not in empty and (key is None or key in templates):
+                    empty[key] = self.add(
+                        banked.empty_page(value, templates.get(key), self.target),
+                        f'{path}.empty.{number}',
+                    )
+            self.children[index] = list(local.values()) + list(empty.values())
+            flags = value.page_count
             kind, payload = 17, b''
             try:
-                payload = banked.definition(value, local, self.show, self.target)
+                payload = banked.definition(value, local, empty, self.show, self.target)
             except ValueError as error:
                 self.errors.append(f'{path}: {error}')
         elif isinstance(value, models.CounterMessage):
@@ -2529,7 +2558,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH6BII')
-DOCUMENT_VERSION = 46
+DOCUMENT_VERSION = 47
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

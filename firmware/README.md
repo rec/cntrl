@@ -457,12 +457,16 @@ values do not determine vertical spacing.
 ## Binary and transfer protocol
 
 Persistent setups, bundles and song libraries use the d46 envelope; setups retain
-the indexed schema-46 core. d44 and d45 remain supported envelope inputs, with
+the indexed schema-47 core. d44 and d45 remain supported envelope inputs, with
 older setup cores upgraded explicitly before activation.
 See [Persistent binary formats](../doc/binary-format.md) for its byte layout,
 development importers, editing rules, conversion and recovery commands. The
 development format is not a public f0 release. Historical versions below describe
 the inner setup schema rather than the envelope's release identifier.
+
+Schema 47 retains the default bank page count in type-17 node flags. Implicit
+empty pages have compiled nodes but no local definition names, so editable
+export preserves the sparse bank and page mappings.
 
 Schema 46 adds per-setup `frame_buffers` (integer 0 through 2, default 2) and
 `use_animations` (boolean, default true). Zero buffers disables scrolling while

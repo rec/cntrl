@@ -44,24 +44,33 @@ def section_end(data: bytes, offset: int) -> int:
 def definition(
     value: models.Banked,
     nodes: dict[str, int],
+    empty: dict[str | None, int],
     show: models.Setup,
     target: models.Target,
 ) -> bytes:
-    if value.initial_bank >= len(value.banks):
+    if value.initial_bank >= value.bank_count or any(
+        n >= value.bank_count for n in value.banks | value.page_counts
+    ):
         raise ValueError('banked patch initial_bank is outside its bank collection')
     result = bytearray(
         struct.pack(
-            '<HHHH', len(nodes), len(value.banks), value.initial_bank, len(value.chords)
+            '<HHHH', len(nodes), value.bank_count, value.initial_bank, len(value.chords)
         )
     )
-    for bank in value.banks:
-        if not 1 <= len(bank) <= 4:
-            raise ValueError('banks must have one to four preset pages')
-        result.extend(struct.pack('<H', len(bank)))
-        for name in bank:
-            if name not in nodes:
-                raise ValueError(f'unknown bank preset page {name!r}')
-            result.extend(struct.pack('<H', nodes[name]))
+    for number in range(value.bank_count):
+        bank = value.banks.get(number, {})
+        count = value.page_counts.get(number, value.page_count)
+        if any(n >= count for n in bank):
+            raise ValueError('preset-page number is outside the bank page count')
+        if any(n not in nodes for n in bank.values()):
+            raise ValueError('bank references an unknown preset-page definition')
+        result.extend(struct.pack('<H', count))
+        template = bank[min(bank)] if bank else None
+        for page in range(count):
+            name = bank.get(page)
+            result.extend(
+                struct.pack('<H', empty[template] if name is None else nodes[name])
+            )
     for operation, buttons in value.chords.items():
         if operation not in OPERATIONS or len(buttons) < 2:
             raise ValueError(
@@ -79,6 +88,40 @@ def definition(
             )
         result.extend(struct.pack('<H64s', node, encoded))
     return bytes(result)
+
+
+def empty_page(
+    value: models.Banked, template: models.Presentation | None, target: models.Target
+) -> models.Sequence:
+    """Empty buttons retain a configured bank's title, theme and expressions."""
+    source = template or value
+    bindings = (
+        {k: v for k, v in (template.bindings or {}).items() if k not in target.buttons}
+        if template is not None
+        else {}
+    )
+    bindings.update(
+        {
+            b: {
+                'name': 'EMPTY',
+                'display_name': 'EMPTY',
+                'style': {
+                    'font_name': 'AtkinsonNextSemiBold',
+                    'foreground_color': '0xFFFFFF',
+                    'background_color': '0x000000',
+                },
+                'on': {'patches': []},
+            }
+            for b in target.buttons
+        }
+    )
+    return models.Sequence(
+        name=template.name if template is not None else ' ',
+        patches=[],
+        bindings=bindings,
+        style=source.style,
+        binding_view=source.binding_view,
+    )
 
 
 def estimate_ram(pages: dict[str, models.Page], document_bytes: int) -> int:
