@@ -96,18 +96,24 @@ status in the middle bands. It supports up to six switches.
 font_name = 'Arial'
 maximum_size = 18
 detail_size = 18
-status_size = 18
+status_size = 12
 align = 'switch'
 show_labels = false
-status = 'Bank 1 Page 1'
+status = 'B001 PG1'
+
+[patches.verse.binding_view.status_style]
+foreground_color = 'blue'
 ```
 
-`align = 'switch'` aligns left, centre and right toward the corresponding
-switch; `'left'` left-aligns all short names. Sizes are upper limits in the
-target's native UI font sizes; the compiler fits each label within its band.
-Choose an embedded UI font with target metrics. A binding's `name` supplies
-the short label, `display_name` its detail, and `style` its foreground and
-background colors. The patch's style supplies the bank title colors.
+`align = 'switch'` centres each short name in the display between its pair of
+switches; `'left'` left-aligns all short names. Sizes are upper limits in the
+target's native UI font sizes; the compiler fits each label's actual glyph bounds
+within its band. Choose an embedded UI font with exported glyphs. A binding's
+`name` supplies the short label, `display_name` its detail, and `style` its
+foreground and background colors. The patch's style supplies the colors for
+all three middle bands, including the long name. `binding_view.status_style` can override the
+indicator's colors and font; the indicator is left-aligned at the bottom of its
+band. Empty middle bands retain their background color.
 
 ## Expression pedals
 

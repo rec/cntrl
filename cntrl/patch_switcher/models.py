@@ -160,6 +160,7 @@ class BindingView(BaseModel, frozen=True):
     maximum_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
     detail_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
     status_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
+    status_style: Style | None = None
     align: Literal['switch', 'left'] = 'switch'
     show_labels: bool = False
     status: Annotated[str, Field(max_length=63)] = ''

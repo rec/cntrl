@@ -29,6 +29,7 @@ name = "Flutes"
 display_name = "Flute: {counters.counter3}"
 
 [patches.bank0.bindings.a.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FFFF"
 background_color = "0x000000"
 
@@ -69,6 +70,7 @@ name = "World"
 display_name = "World: {counters.counter4}"
 
 [patches.bank0.bindings.b.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFFA500"
 background_color = "0x000000"
 
@@ -109,6 +111,7 @@ name = ">"
 display_name = "VL70: {counters.counter3} - {counters.counter2}"
 
 [patches.bank0.bindings.c.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFA8072"
 background_color = "0x000000"
 
@@ -123,6 +126,7 @@ name = "Bass"
 display_name = "Bass {counters.counter0}"
 
 [patches.bank0.bindings.d.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FF00"
 background_color = "0x000000"
 
@@ -163,6 +167,7 @@ name = "Sax"
 display_name = "Sax: {counters.counter1}"
 
 [patches.bank0.bindings.e.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFF8C00"
 background_color = "0x000000"
 
@@ -203,6 +208,7 @@ name = "Reeds"
 display_name = "Reeds {counters.counter2}"
 
 [patches.bank0.bindings.f.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xF0E68C"
 background_color = "0x000000"
 
@@ -243,12 +249,15 @@ foreground_color = "0x800080"
 background_color = "0xFFFFFF"
 
 [patches.bank0.binding_view]
-maximum_size = 18
+maximum_size = 36
 detail_size = 18
-status_size = 18
+status_size = 12
 align = "switch"
 show_labels = false
-status = "Bank 1 Page 1"
+status = "B001 PG1"
+
+[patches.bank0.binding_view.status_style]
+foreground_color = "blue"
 
 [patches.bank1]
 name = "VL70-2"
@@ -279,6 +288,7 @@ name = "Synth"
 display_name = "Synth: {counters.counter8}"
 
 [patches.bank1.bindings.a.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FFFF"
 background_color = "0x000000"
 
@@ -319,6 +329,7 @@ name = "FX"
 display_name = "FX: {counters.counter9}"
 
 [patches.bank1.bindings.b.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFFA500"
 background_color = "0x000000"
 
@@ -359,6 +370,7 @@ name = "<"
 display_name = "VL70: {counters.counter3} - {counters.counter2}"
 
 [patches.bank1.bindings.c.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFA8072"
 background_color = "0x000000"
 
@@ -373,6 +385,7 @@ name = "Brass"
 display_name = "Brass {counters.counter5}"
 
 [patches.bank1.bindings.d.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0x00FF00"
 background_color = "0x000000"
 
@@ -413,6 +426,7 @@ name = "Guitar"
 display_name = "Guitar: {counters.counter6}"
 
 [patches.bank1.bindings.e.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xFF8C00"
 background_color = "0x000000"
 
@@ -453,6 +467,7 @@ name = "String"
 display_name = "String: {counters.counter7}"
 
 [patches.bank1.bindings.f.style]
+font_name = "AtkinsonNextSemiBold"
 foreground_color = "0xF0E68C"
 background_color = "0x000000"
 
@@ -493,12 +508,15 @@ foreground_color = "0x800080"
 background_color = "0xFFFFFF"
 
 [patches.bank1.binding_view]
-maximum_size = 18
+maximum_size = 36
 detail_size = 18
-status_size = 18
+status_size = 12
 align = "switch"
 show_labels = false
-status = "Bank 2 Page 1"
+status = "B002 PG1"
+
+[patches.bank1.binding_view.status_style]
+foreground_color = "blue"
 
 [patch_cycles]
 bank0 = ["bank0"]

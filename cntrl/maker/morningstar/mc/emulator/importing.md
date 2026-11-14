@@ -52,20 +52,26 @@ controller settings. cntrl authoring adds one to PC values, matching `%F` names.
 ## Display conversion
 
 The imported view puts D/E/F in the top bands and A/B/C in the bottom bands,
-with short names aligned toward their switches when `lcdAlign` is enabled.
+with short names centred above/below their switches when `lcdAlign` is enabled.
 The saved setting hides switch-letter prefixes. The middle bands show the
 last pressed preset's long name on the left, the bank name in the centre, and
-the bank/page indication on the right. Long-name counter tokens stay live.
+the bank/page indication on the right. The indicator uses compact blue text
+(`B001 PG1`) at the lower left of its band.
+All three middle bands use the saved bank background and foreground colors;
+the blue indicator overrides the foreground. Long-name counter tokens stay live.
 
 Preset and bank foreground/background indices are translated using the official
 editor's `AQ` palette. This first importer supports the colors used by these
 two banks, including dim black (64); other dim/mesh colors are not implemented.
 The editor's icon 46 (`\.`) becomes a right chevron. The size settings encode
-18 down to 8, with 0 meaning 18. Text uses the existing Arial bitmap face as a
-substitute, fitting down from the saved size limit to the available band.
-Bank/page sizes Large/Medium/Small map to maximum sizes 18/14/10; Hidden omits
-the indication. These font and band metrics approximate the stock display;
-they are not a pixel-exact reproduction of its typeface or fitting algorithm.
+18 down to 8, with 0 meaning 18. Switch labels use Atkinson Next SemiBold at
+twice that size limit, fitted to the band using actual exported glyph bounds.
+The middle text uses Arial at the saved size limit. These choices follow the
+original-pedal photo supplied on 2026-11-14, using the existing bundled fonts.
+Bank/page sizes Large/Medium/Small map to maximum sizes 12/10/8; Hidden omits
+the indication but preserves its background. These font and band metrics
+approximate the stock display; they are not a pixel-exact reproduction of its
+typeface or fitting algorithm.
 
 See the [official display and preset description](https://help.morningstar.io/en/article/mc6-pro-user-manual-psevjy/).
 The native visual regression records all three displays at bank entry, after

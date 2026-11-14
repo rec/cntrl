@@ -1298,7 +1298,7 @@ class PatchCompiler:
                     self.binding_graphics(short, action.style, view, view.maximum_size)
                     + self.binding_graphics(
                         action.display_name or label,
-                        action.style,
+                        value.style,
                         view,
                         view.detail_size,
                     )
@@ -1329,7 +1329,12 @@ class PatchCompiler:
                 self.binding_graphics(
                     self.labels[child], value.style, view, view.detail_size
                 )
-                + self.binding_graphics(view.status, None, view, view.status_size)
+                + self.binding_graphics(
+                    view.status,
+                    display.merge_style(value.style, view.status_style),
+                    view,
+                    view.status_size,
+                )
                 + bytes([int(view.align == 'switch') | int(view.show_labels) << 1])
                 + _text(
                     view.status,
@@ -1368,6 +1373,10 @@ class PatchCompiler:
         view: models.BindingView,
         maximum: int,
     ) -> bytes:
+        from ..fonts import assets
+        from ..fonts.catalogue import UI_FONTS
+        from ..fonts.outline import GLYPH
+
         style = display.merge_style(
             models.Style(
                 font_name=view.font_name,
@@ -1378,9 +1387,14 @@ class PatchCompiler:
         )
         if style.font_name not in self.target.ui_fonts:
             raise ValueError('binding views require an embedded UI font')
-        face = next((f for f in self.target.fonts if f.name == style.font_name), None)
-        if face is None:
-            raise ValueError(f'binding view font lacks metrics: {style.font_name}')
+        assert style.font_name is not None
+        if style.font_name not in self.target.font_sources:
+            raise ValueError(
+                f'binding view font lacks exported glyphs: {style.font_name}'
+            )
+        data = Path(self.target.font_sources[style.font_name]).read_bytes()
+        face = assets.decode(data, style.font_name, 0)
+        entries = assets.entries(data)
         samples = [
             re.sub(
                 r'\{counters\.([^}]+)\}',
@@ -1389,12 +1403,44 @@ class PatchCompiler:
             )
             for d in '0123456789'
         ]
+        used = {c for t in samples for c in t}
+
+        def vertical_bounds(size: int) -> tuple[int, int]:
+            # Embedded glyph positions use cap height minus the stored glyph top.
+            fields, index, _ = entries[size]
+            glyph_count, _, _ = struct.unpack('<HHH', bytes(fields[7:13]))
+            glyphs = [
+                GLYPH.unpack_from(index, i * GLYPH.size) for i in range(glyph_count)
+            ]
+            top = min(
+                [
+                    0,
+                    *(
+                        fields[14] - g[4]
+                        for g in glyphs
+                        if chr(g[0]) in used and g[1] and g[2]
+                    ),
+                ]
+            )
+            bottom = max(
+                [
+                    1,
+                    *(
+                        fields[14] - g[4] + g[2]
+                        for g in glyphs
+                        if chr(g[0]) in used and g[1] and g[2]
+                    ),
+                ]
+            )
+            return top, bottom
+
         size = next(
             (
                 s
                 for s in sorted(face.sizes, reverse=True)
                 if s <= maximum
-                and face.sizes[s].line_height <= self.target.display_height // 3 - 4
+                and vertical_bounds(s)[1] - vertical_bounds(s)[0]
+                <= self.target.display_height // 3 - 4
                 and max(graphics.bounds(t, face.sizes[s])[1] for t in samples)
                 <= self.target.display_width - 8
             ),
@@ -1403,15 +1449,16 @@ class PatchCompiler:
         if size is None:
             raise ValueError(f'binding text does not fit: {text!r}')
         foreground, background = graphics.colors(style, 0)
+        top, bottom = vertical_bounds(size)
         return graphics.SCREEN.pack(
-            face.id,
+            UI_FONTS[style.font_name],
             size,
             0,
             0,
             foreground,
             background,
-            face.sizes[size].line_height,
-            face.sizes[size].top,
+            bottom - top,
+            -top,
         )
 
     def program(self, patch: models.ProgramChange, index: int, path: str) -> bytes:

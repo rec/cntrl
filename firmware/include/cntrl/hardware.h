@@ -26,7 +26,6 @@ struct TextLine {
     uint16_t x = 4;
     int16_t y = -1; // Negative uses the normal vertical distribution.
     bool centered = false;
-    bool right_aligned = false;
     bool wrap = false;
     bool stippled = false;
     uint64_t color_mask = 0; // Characters using alternate_color instead of foreground.

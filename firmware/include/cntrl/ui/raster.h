@@ -35,9 +35,9 @@ public:
         Glyph glyph;
         if (!fonts_.glyph(line.graphics.font, line.graphics.size, line.graphics.asset, line.text, index, glyph)) return false;
         int x = line.x;
-        if (line.centered || line.right_aligned) {
+        if (line.centered) {
             const auto b = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);
-            x = (line.centered ? (int(viewport_.width) - b.width) / 2 : int(viewport_.width) - int(line.x) - b.width) - b.left;
+            x = (int(viewport_.width) - b.width) / 2 - b.left;
         }
         if (line.wrap) { const auto p = position(line, index); x += p.x - glyph.x; y += p.row * line.graphics.line_height; }
         const auto color = index < 64 && (line.color_mask & (uint64_t(1) << index)) ? line.alternate_color : line.graphics.foreground;

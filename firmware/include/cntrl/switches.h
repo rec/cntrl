@@ -570,6 +570,8 @@ private:
                     pane.three_bands = true;
                     pane.graphics.background = 0;
                     pane.graphics.pad = 0;
+                    pane.lines[1].graphics = Document::read_graphics(view);
+                    std::strcpy(pane.lines[1].text, " ");
                 }
                 auto &title = panes[1].lines[1];
                 title.graphics = Document::read_graphics(view);
@@ -577,16 +579,16 @@ private:
                 std::snprintf(title.text, sizeof(title.text), "%s", bindings_.title());
                 auto &status = panes[2].lines[1];
                 status.graphics = Document::read_graphics(view + 16);
-                status.centered = true;
-                std::snprintf(status.text, sizeof(status.text), "%s", reinterpret_cast<const char *>(view + 33));
+                status.x = 2;
+                status.y = int16_t(hardware_.display_height() * 2 / 3 - status.graphics.line_height);
+                std::snprintf(status.text, sizeof(status.text), "%s", view[33] ? reinterpret_cast<const char *>(view + 33) : " ");
                 for (unsigned i = 0; i < count_; ++i) {
                     const auto &s = states_[i];
                     const uint8_t *visual = view + binding_view_header_size + i * binding_view_record_size;
                     auto &line = panes[i % 3].lines[i < 3 ? 2 : 0];
                     line.graphics = Document::read_graphics(visual);
                     line.x = 4;
-                    line.centered = (view[32] & 1) && i % 3 == 1;
-                    line.right_aligned = (view[32] & 1) && i % 3 == 2;
+                    line.centered = view[32] & 1;
                     char label[64];
                     document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
                     if (view[32] & 2) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", document_.input_label(s.record[0]), label);

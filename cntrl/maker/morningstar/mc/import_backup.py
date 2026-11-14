@@ -195,6 +195,7 @@ def convert(document: dict, bank: int) -> models.Setup:
                 'name': label(preset['shortName']),
                 'display_name': label(preset['longName'] or preset['shortName']),
                 'style': {
+                    'font_name': 'AtkinsonNextSemiBold',
                     'foreground_color': palette_color(preset['nameColor']),
                     'background_color': palette_color(preset['backgroundColor']),
                 },
@@ -214,12 +215,13 @@ def convert(document: dict, bank: int) -> models.Setup:
                 else 'black',
             },
             'binding_view': {
-                'maximum_size': 18 - general['presetMaxFontSize'],
+                'maximum_size': 2 * (18 - general['presetMaxFontSize']),
                 'detail_size': 18 - general['middleLayerFontSize'],
-                'status_size': (18, 14, 10, 8)[general['bankPageFontSize']],
+                'status_size': (12, 10, 8, 8)[general['bankPageFontSize']],
+                'status_style': {'foreground_color': 'blue'},
                 'align': 'switch' if general['lcdAlign'] else 'left',
                 'show_labels': general['showPresetLabels'],
-                'status': f'Bank {number + 1} Page 1'
+                'status': f'B{number + 1:03d} PG1'
                 if general['bankPageFontSize'] != 3
                 else '',
             },
@@ -265,8 +267,8 @@ def run(command: ImportBackup) -> None:
         'scope': 'PC-scroll press assignments, continuous expression CCs '
         'and reachable bank up/down transitions',
         'presentation': 'saved palette, switch alignment, short and long names, '
-        'three display bands and saved font size limits; Arial '
-        'substitutes for the stock typeface',
+        'three display bands; photo-matched Atkinson Next SemiBold labels '
+        'and Arial middle-band text substitute for the stock typeface',
         'controller_settings': 'uses scroll counters, expression roles, bank '
         'arrangement, channel routing and display settings; '
         'other global settings are not imported',
