@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <memory>
 
 namespace cntrl::midi {
 struct StreamFileProvider;
