@@ -147,6 +147,26 @@ def pack_expression(
         name = assignment.output.encode('ascii')
         if not name or len(name) >= 32:
             raise ValueError('expression output name must fit the MIDI output record')
+        mirror = 0
+        if assignment.mirror_output is not None:
+            endpoint = next(
+                (
+                    e
+                    for e in target.midi_endpoints
+                    if e.name == assignment.mirror_output
+                ),
+                None,
+            )
+            if (
+                endpoint is None
+                or not midi_endpoints.enabled(endpoint, show)
+                or endpoint.name == assignment.output
+            ):
+                raise ValueError(
+                    f'expression jack {jack}: mirror requires '
+                    'a distinct enabled MIDI output'
+                )
+            mirror = endpoint.route + 1
         EXPRESSION.pack_into(
             data,
             EXPRESSION.size * jacks.index(jack),
@@ -156,27 +176,32 @@ def pack_expression(
             assignment.minimum,
             assignment.maximum,
             assignment.reverse,
-            CURVES.index(assignment.curve),
+            CURVES.index(assignment.curve) | mirror << 2,
         )
     return bytes(data)
 
 
-def unpack_expression(data: bytes, offset: int, jacks: list[str]) -> dict[str, object]:
+def unpack_expression(
+    data: bytes, offset: int, jacks: list[str], outputs: dict[int, str]
+) -> dict[str, object]:
     result: dict[str, object] = {}
     for i in range(4):
         output, channel, cc, low, high, reverse, curve = EXPRESSION.unpack_from(
             data, offset + i * EXPRESSION.size
         )
         if channel:
-            result[jacks[i]] = dict(
+            assignment: dict[str, object] = dict(
                 output=output.split(b'\0')[0].decode('ascii'),
                 channel=channel,
                 controller=cc,
                 minimum=low,
                 maximum=high,
                 reverse=bool(reverse),
-                curve=CURVES[curve],
+                curve=CURVES[curve & 3],
             )
+            if curve >> 2:
+                assignment['mirror_output'] = outputs[(curve >> 2) - 1]
+            result[jacks[i]] = assignment
     return result
 
 

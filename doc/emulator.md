@@ -130,6 +130,9 @@ cntrl emulate setup.bin --layout controller-layout.toml --target target.toml --s
 Replay exports a PNG for each display and an accepted-output/error trace in
 `trace.toml`. Use a fresh session directory when comparing independent scenarios.
 
+Add `--interactive` to run the scenario as startup input and then open the
+window in that resulting state. Without a scenario, the window opens normally.
+
 ## Evidence limits
 
 Native operation can reproduce application behavior, rendering, messages,

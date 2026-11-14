@@ -14,6 +14,7 @@ from . import (
     arpeggiator,
     counters,
     display,
+    graphics,
     inputs,
     layout,
     looper,
@@ -927,14 +928,35 @@ class PatchCompiler:
             if not self.target.max_switches:
                 self.errors.append(f'{path}.bindings: target has no switch engine')
             child = self.add(
-                value.model_copy(update={'bindings': None}), path + '.entry', name
+                value.model_copy(update={'bindings': None, 'binding_view': None}),
+                path + '.entry',
+                name,
             )
             payload = self.compile_bindings(value, child, path)
             self.nodes[index] = struct.pack('<BBH', 10, 0, len(payload)) + payload
             self.children[index] = [child]
             return index
         flags = 0
-        if isinstance(value, models.ScrollCounter):
+        if isinstance(value, models.CounterMessage):
+            if value.counter not in self.counters:
+                self.errors.append(f'{path}: unknown counter {value.counter!r}')
+            if value.output not in self.target.outputs:
+                self.errors.append(f'{path}: unavailable output {value.output!r}')
+            assert value.output is not None and value.channel is not None
+            kind, payload = (
+                16,
+                struct.pack(
+                    '<H32sBBB',
+                    list(self.counters).index(value.counter)
+                    if value.counter in self.counters
+                    else 0,
+                    _text(value.output, 32, self.target, path + '.output', self.errors),
+                    value.channel,
+                    ('none', 'increase', 'decrease').index(value.change),
+                    value.wrap,
+                ),
+            )
+        elif isinstance(value, models.ScrollCounter):
             if value.counter not in self.counters:
                 self.errors.append(f'{path}: unknown counter {value.counter!r}')
             kind, payload = (
@@ -1154,6 +1176,7 @@ class PatchCompiler:
         self, value: models.ConcretePatch, child: int, path: str
     ) -> bytes:
         records: list[bytes] = []
+        visuals: list[bytes] = []
         expressions: dict[str, models.ExpressionAssignment] = {}
         assert value.bindings is not None
 
@@ -1269,6 +1292,25 @@ class PatchCompiler:
                     )
                 )
             )
+            if view := value.binding_view:
+                short = f'{key}: {label}' if view.show_labels else label
+                visuals.append(
+                    self.binding_graphics(short, action.style, view, view.maximum_size)
+                    + self.binding_graphics(
+                        action.display_name or label,
+                        value.style,
+                        view,
+                        view.detail_size,
+                    )
+                    + _text(
+                        action.display_name or label,
+                        64,
+                        self.target,
+                        context + '.display_name',
+                        self.errors,
+                        unicode=True,
+                    ).ljust(64, b'\0')
+                )
         settings = self.show.page_settings.model_copy(
             update={'expression': expressions}
         )
@@ -1277,6 +1319,33 @@ class PatchCompiler:
             self.target,
             midi_endpoints.ports(self.target.midi_endpoints),
         )
+        visual = b''
+        if view := value.binding_view:
+            if len(records) > 6:
+                raise ValueError(
+                    f'{path}.binding_view: at most six switches are supported'
+                )
+            visual = (
+                self.binding_graphics(
+                    self.labels[child], value.style, view, view.detail_size
+                )
+                + self.binding_graphics(
+                    view.status,
+                    display.merge_style(value.style, view.status_style),
+                    view,
+                    view.status_size,
+                )
+                + bytes([int(view.align == 'switch') | int(view.show_labels) << 1])
+                + _text(
+                    view.status,
+                    64,
+                    self.target,
+                    path + '.binding_view.status',
+                    self.errors,
+                    unicode=True,
+                ).ljust(64, b'\0')
+                + b''.join(visuals)
+            )
         return (
             struct.pack(
                 '<H64sBB',
@@ -1290,10 +1359,106 @@ class PatchCompiler:
                     unicode=True,
                 ),
                 len(records),
-                0,
+                int(value.binding_view is not None),
             )
             + (expression or bytes(4 * page_settings.EXPRESSION.size))
             + b''.join(records)
+            + visual
+        )
+
+    def binding_graphics(
+        self,
+        text: str,
+        style: models.Style | None,
+        view: models.BindingView,
+        maximum: int,
+    ) -> bytes:
+        from ..fonts import assets
+        from ..fonts.catalogue import UI_FONTS
+        from ..fonts.outline import GLYPH
+
+        style = display.merge_style(
+            models.Style(
+                font_name=view.font_name,
+                foreground_color='white',
+                background_color='black',
+            ),
+            style,
+        )
+        if style.font_name not in self.target.ui_fonts:
+            raise ValueError('binding views require an embedded UI font')
+        assert style.font_name is not None
+        if style.font_name not in self.target.font_sources:
+            raise ValueError(
+                f'binding view font lacks exported glyphs: {style.font_name}'
+            )
+        data = Path(self.target.font_sources[style.font_name]).read_bytes()
+        face = assets.decode(data, style.font_name, 0)
+        entries = assets.entries(data)
+        samples = [
+            re.sub(
+                r'\{counters\.([^}]+)\}',
+                lambda m, d=d: d * len(str(self.counters[m[1]].maximum)),
+                text,
+            )
+            for d in '0123456789'
+        ]
+        used = {c for t in samples for c in t}
+
+        def vertical_bounds(size: int) -> tuple[int, int]:
+            # Embedded glyph positions use cap height minus the stored glyph top.
+            fields, index, _ = entries[size]
+            glyph_count, _, _ = struct.unpack('<HHH', bytes(fields[7:13]))
+            glyphs = [
+                GLYPH.unpack_from(index, i * GLYPH.size) for i in range(glyph_count)
+            ]
+            top = min(
+                [
+                    0,
+                    *(
+                        fields[14] - g[4]
+                        for g in glyphs
+                        if chr(g[0]) in used and g[1] and g[2]
+                    ),
+                ]
+            )
+            bottom = max(
+                [
+                    1,
+                    *(
+                        fields[14] - g[4] + g[2]
+                        for g in glyphs
+                        if chr(g[0]) in used and g[1] and g[2]
+                    ),
+                ]
+            )
+            return top, bottom
+
+        size = next(
+            (
+                s
+                for s in sorted(face.sizes, reverse=True)
+                if s <= maximum
+                and vertical_bounds(s)[1] - vertical_bounds(s)[0]
+                <= self.target.display_height // 3 - 4
+                and max(graphics.bounds(t, face.sizes[s])[1] for t in samples)
+                <= self.target.display_width - 8
+            ),
+            None,
+        )
+        if size is None:
+            raise ValueError(f'binding text does not fit: {text!r}')
+        foreground, background = graphics.colors(style, 0)
+        top, bottom = vertical_bounds(size)
+        return graphics.SCREEN.pack(
+            UI_FONTS[style.font_name],
+            size,
+            0,
+            0,
+            foreground,
+            background,
+            bottom - top,
+            -top,
         )
 
     def program(self, patch: models.ProgramChange, index: int, path: str) -> bytes:
@@ -1827,7 +1992,7 @@ class PatchCompiler:
             self.paths.append(context.paths[node])
             self.labels.append(context.labels[node])
             data = bytearray(context.nodes[node])
-            if data[0] == 14:
+            if data[0] in (14, 16):
                 source_name = list(context.counters)[
                     struct.unpack_from('<H', data, 4)[0]
                 ]
@@ -2321,7 +2486,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 41
+DOCUMENT_VERSION = 43
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

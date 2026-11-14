@@ -44,6 +44,15 @@ int main() {
     }
     assert(input.position() == 0);
     input.reset();
+    a.minimum = 0; a.maximum = 127;
+    for (unsigned i = 0; i < 10; ++i) { input.sample(0, 0, {0, 1023}); (void)input.pending(a); }
+    for (unsigned i = 0; i < 100; ++i) {
+        input.sample(1023, 1023, {0, 1023});
+        int value = input.pending(a);
+        if (value >= 0) input.sent(value);
+    }
+    assert(input.position() == 1023);
+    input.reset();
     // One ADC count near a calibrated endpoint can span several CC steps.
     for (int n = 0; n < 8; ++n) {
         input.sample(101, 101, {100, 164}); assert(input.pending(a) < 0);

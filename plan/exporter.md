@@ -3,8 +3,8 @@
 ## Goal and present status
 
 Import stock Morningstar configurations into editable cntrl TOML, preserving
-the MIDI output and control behavior that cntrl can express. This is a plan
-for later implementation, not an implemented converter. Despite this document's
+the MIDI output and control behavior that cntrl can express. The first importer
+now handles the saved VL70 banks; broader conversion remains planned. Despite this document's
 requested name, the direction is Morningstar backup to cntrl authoring files.
 Writing stock-firmware backups, uploading, and flashing are outside its scope.
 
@@ -24,6 +24,12 @@ records each original filename, local path, byte count, SHA-256 and Git blob.
 records per-file message counts, trigger/toggle/channel codes, payload layouts
 and distinct payload counts, representative JSON pointers, field names and
 selected flags. It is reproducible offline using the tracked inventory script.
+
+The first executable milestone is now implemented for the user's bank 0,
+including reachable bank 1, shared PC counters and continuous expression CCs.
+See [the import workflow](../cntrl/maker/morningstar/mc/emulator/importing.md)
+for scope, commands and remaining qualification limits. The broader decoder and
+conversion stages below remain planned.
 
 ## Sources and model boundaries
 

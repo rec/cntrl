@@ -155,6 +155,19 @@ class Style(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class BindingView(BaseModel, frozen=True):
+    font_name: str = 'Arial'
+    maximum_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
+    detail_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
+    status_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
+    status_style: Style | None = None
+    align: Literal['switch', 'left'] = 'switch'
+    show_labels: bool = False
+    status: Annotated[str, Field(max_length=63)] = ''
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Presentation(BaseModel, frozen=True):
     pickup: Annotated[
         Annotated[bool, Field(strict=True)] | None, BeforeValidator(parse_pickup)
@@ -166,6 +179,7 @@ class Presentation(BaseModel, frozen=True):
         default_factory=list
     )
     bindings: dict[str, object] | None = None
+    binding_view: BindingView | None = None
     midi: dict[str, object] | None = None
 
     @field_validator('bindings')
@@ -339,6 +353,13 @@ class ScrollCounter(Presentation, frozen=True):
     operation: Literal['scroll-counter']
     counter: str
     direction: Literal['forward', 'backward'] = 'forward'
+
+
+class CounterMessage(ChannelMessage, frozen=True):
+    type: Literal['counter-message']
+    counter: str
+    change: Literal['none', 'increase', 'decrease'] = 'none'
+    wrap: bool = True
 
 
 class Brightness(Presentation, frozen=True):
@@ -533,6 +554,7 @@ ConcretePatch = (
             Discriminator(program_address),
         ]
         | ControlChange
+        | CounterMessage
         | PitchBend
         | Nrpn
         | Rpn
@@ -722,6 +744,8 @@ class ShiftedActions(BaseModel, frozen=True):
 
 class SwitchBinding(BaseModel, frozen=True):
     name: str | None = None
+    display_name: str | None = None
+    style: Style | None = None
     mode: Literal['press', 'momentary', 'latched'] = 'press'
     on: Patch
     off: Patch | None = None
@@ -748,7 +772,6 @@ class SwitchBinding(BaseModel, frozen=True):
 
 class SwitchAssignment(SwitchBinding, frozen=True):
     button: Annotated[str, Field(min_length=1, max_length=31)]
-    style: Style | None = None
 
 
 class TargetPulse(BaseModel, frozen=True):
@@ -795,6 +818,7 @@ class NavigationSettings(BaseModel, frozen=True):
 
 class ExpressionAssignment(BaseModel, frozen=True):
     output: str
+    mirror_output: str | None = None
     channel: Annotated[int, Field(strict=True, ge=1, le=16)]
     controller: Annotated[int, Field(strict=True, ge=0, le=127)]
     minimum: Annotated[int, Field(strict=True, ge=0, le=127)] = 0

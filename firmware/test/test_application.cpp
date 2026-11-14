@@ -104,7 +104,7 @@ struct PagePlatform : Hardware {
     struct Expression {
         unsigned index = 0;
         const char *position_text = "50%";
-        void configure(const cntrl::ExpressionAssignment *) {}
+        void configure(const cntrl::ExpressionAssignment *, cntrl::midi::Outputs) {}
         void cancel() {}
         void select(unsigned value) { index = value; }
         unsigned selected() const { return index; }

@@ -19,6 +19,7 @@ struct ExpressionAssignment {
     uint8_t channel = 0, controller = 0, minimum = 0, maximum = 127;
     bool reverse = false;
     ExpressionCurve curve = ExpressionCurve::linear;
+    uint8_t mirror_route = 255;
 
     int value(unsigned position) const {
         unsigned x = reverse ? 1023 - position : position;
@@ -40,6 +41,7 @@ public:
         if (low < 0 || high < 0 || low > 1023 || high > 1023 || std::abs(high - low) > 256) { reset(); return; }
         const int raw = (low + high + 1) / 2;
         filtered_ = samples_ ? (3 * filtered_ + raw + 2) / 4 : raw;
+        if ((raw == cal.heel || raw == cal.toe) && std::abs(filtered_ - raw) <= 2) filtered_ = raw;
         if (samples_ < 3) ++samples_;
         if (samples_ < 3 || !cal.valid()) { position_ = -1; return; }
         position_ = std::clamp((filtered_ - int(cal.heel)) * 1023 / (int(cal.toe) - int(cal.heel)), 0, 1023);

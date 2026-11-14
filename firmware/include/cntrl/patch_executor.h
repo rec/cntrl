@@ -172,6 +172,25 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 16: {
+            const auto &document = *frames_[depth_ - 1].document;
+            const uint8_t *definition = document.counter(u16(p));
+            output = reinterpret_cast<const char *>(p + 2);
+            if (!outputs_.available(output)) { fail("MIDI output unavailable"); return; }
+            auto *state = hardware_.counters.state(u32(document.data() + 20), u16(p));
+            if (!state) { fail("Counter memory unavailable"); return; }
+            int value = state->value + (p[35] == 1 ? 1 : p[35] == 2 ? -1 : 0);
+            const int minimum = definition[99], maximum = definition[100];
+            if (p[35]) value = p[36] ? (value > maximum ? minimum : value < minimum ? maximum : value) : std::clamp(value, minimum, maximum);
+            program_[0] = (definition[96] & 0xf0) | (p[34] - 1);
+            length = definition[96] >> 4 == 12 ? 2 : 3;
+            program_[1] = length == 2 ? uint8_t(value) : definition[97]; program_[2] = uint8_t(value);
+            if (outputs_.send_patch(owner_, output, program_, length)) {
+                hardware_.counters.accepted(*state, {uint8_t(value), state->reversed});
+                waiting_ = started_ = true; waiting_output_ = output;
+            }
+            return;
+        }
         case 14: {
             const auto &document = *frames_[depth_ - 1].document;
             const uint8_t *definition = document.counter(u16(p));
@@ -458,10 +477,12 @@ private:
                 if ((control == 6 || control == 38 || control >= 96) && status >> 4 == 11) state_complete_ = false;
                 if (!resource(output, status & 15, control, expected)) return false;
             }
-        } else if (node[0] == 14) {
+        } else if (node[0] == 14 || node[0] == 16) {
             const uint8_t *definition = document.counter(u16(p));
-            const uint8_t message[] = {definition[96], uint8_t(definition[96] >> 4 == 12 ? 0 : definition[97]), 0};
-            if (!prepare_message(reinterpret_cast<const char *>(definition + 64), message, definition[96] >> 4 == 12 ? 2 : 3)) return false;
+            const char *output = reinterpret_cast<const char *>(node[0] == 16 ? p + 2 : definition + 64);
+            const uint8_t status = node[0] == 16 ? uint8_t((definition[96] & 0xf0) | (p[34] - 1)) : definition[96];
+            const uint8_t message[] = {status, uint8_t(definition[96] >> 4 == 12 ? 0 : definition[97]), 0};
+            if (!prepare_message(output, message, definition[96] >> 4 == 12 ? 2 : 3)) return false;
             const auto generation = hardware_.counters.generation();
             if (!counter_pins_.empty() && counter_pins_[0].generation != generation) counter_pins_.clear();
             auto *state = hardware_.counters.state(u32(document.data() + 20), u16(p));
@@ -472,7 +493,7 @@ private:
                 counter_pins_.back() = {state, generation};
             }
             state_complete_ = false;
-            return resource(reinterpret_cast<const char *>(definition + 64), definition[96] & 15,
+            return resource(output, status & 15,
                 definition[96] >> 4 == 12 ? 128 : definition[97]);
         } else if (node[0] == 8) {
             state_complete_ = false;

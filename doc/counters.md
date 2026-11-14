@@ -73,6 +73,25 @@ another setup keep that setup's counters separate; inlined references carry
 their definitions into the compiled setup. They share values within the
 current setup session and reset along with the active setup.
 
+For independent stepping and destinations, use a `counter-message` patch:
+
+```toml
+type = 'counter-message'
+counter = 'programs'
+output = 'din'
+channel = 1
+change = 'increase'
+wrap = true
+```
+
+The counter supplies its message kind, CC controller, initial value and bounds.
+The action supplies the destination and channel. `change` is `'none'` (send
+the current value), `'increase'` or `'decrease'` by one. Unlike `scroll-counter`,
+these changes apply before the first send too. `wrap = false` clamps at a bound.
+Only accepted messages commit the new value. Actions can therefore advance once
+and send the shared value on other channels or outputs. A binding name can use
+`{counters.programs}` to display the live authoring value.
+
 Python tests cover authoring validation, compilation and export. Native tests
 cover transmitted values, shared state and displays, endpoint behavior,
 backpressure, cancellation and setup reset. Physical MIDI timing and receiver

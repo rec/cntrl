@@ -2,6 +2,7 @@
 #include <cntrl/document.h>
 #include <cntrl/filesystem.h>
 #include <vector>
+#include <array>
 #include <cstdio>
 
 namespace cntrl {
@@ -14,7 +15,7 @@ public:
     ExpressionPedals(unsigned count, files::File &calibrations,
                      void (*filename)(unsigned, char *, unsigned), const char *confirm,
                      uint32_t rest_ms, uint32_t bias_ms)
-        : inputs_(count), assignments_(count), saved_(count), low_(count),
+        : inputs_(count), assignments_(count), mirrors_(count), delivered_(count), saved_(count), low_(count),
           calibrations_(calibrations), filename_(filename), confirm_(confirm),
           rest_ms_(rest_ms), bias_ms_(bias_ms) {}
     void load_calibrations() {
@@ -30,16 +31,19 @@ public:
             calibrations_.close();
         }
     }
-    void configure(const cntrl::ExpressionAssignment *assignments) {
+    void configure(const cntrl::ExpressionAssignment *assignments, midi::Outputs outputs = {}) {
         for (unsigned i = 0; i < inputs_.size(); ++i) {
             assignments_[i] = assignments[i];
+            const auto *mirror = outputs.route(assignments[i].mirror_route);
+            std::snprintf(mirrors_[i].data(), mirrors_[i].size(), "%s", mirror ? mirror->name : "");
+            delivered_[i] = {-1, -1};
             inputs_[i].reset();
         }
         phase_ = 0;
         cancel();
     }
     void cancel() {
-        if (stage_ != Capture::idle) inputs_[selected_].disarm();
+        if (stage_ != Capture::idle) { inputs_[selected_].disarm(); delivered_[selected_] = {-1, -1}; }
         stage_ = Capture::idle;
         message_ = nullptr;
     }
@@ -75,12 +79,14 @@ public:
             const unsigned i = (first_ + slot) % inputs_.size();
             if (!enabled(i)) {
                 inputs_[i].reset();
+                delivered_[i] = {-1, -1};
                 if (selected_ == i && stage_ != Capture::idle) cancel();
                 continue;
             }
             if (phase_ == 0) { sample(i, phase_); continue; }
             if (phase_ == 1) { low_[i] = sample(i, phase_); continue; }
             inputs_[i].sample(low_[i], sample(i, phase_), saved_[i].cal);
+            if (inputs_[i].position() < 0) delivered_[i] = {-1, -1};
             if (stage_ != Capture::idle && i == selected_) {
                 if (inputs_[i].reading() < 0 && stage_ == Capture::toe) {
                     stage_ = Capture::heel;
@@ -90,11 +96,14 @@ public:
             }
             const auto &a = assignments_[i];
             if (!a.channel) continue;
-            if (!available(a.output)) { inputs_[i].disarm(); continue; }
+            if (!available(a.output) || (mirrors_[i][0] && !available(mirrors_[i].data()))) { inputs_[i].disarm(); delivered_[i] = {-1, -1}; continue; }
             int value = inputs_[i].pending(a);
             if (value >= 0) {
                 uint8_t data[] = {uint8_t(0xb0 | (a.channel - 1)), a.controller, uint8_t(value)};
-                if (send(i, a.output, data)) inputs_[i].sent(value);
+                auto &delivered = delivered_[i];
+                if (delivered[0] != value && send(i, a.output, data)) delivered[0] = value;
+                if (mirrors_[i][0] && delivered[1] != value && send(i, mirrors_[i].data(), data)) delivered[1] = value;
+                if (delivered[0] == value && (!mirrors_[i][0] || delivered[1] == value)) inputs_[i].sent(value);
             }
         }
         phase_ = (phase_ + 1) % 3;
@@ -153,6 +162,8 @@ private:
     }
     std::vector<cntrl::ExpressionInput> inputs_;
     std::vector<cntrl::ExpressionAssignment> assignments_;
+    std::vector<std::array<char, 32>> mirrors_;
+    std::vector<std::array<int, 2>> delivered_;
     std::vector<Record> saved_;
     std::vector<int> low_;
     files::File &calibrations_;
