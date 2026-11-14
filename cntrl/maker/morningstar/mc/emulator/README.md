@@ -20,20 +20,28 @@ Pressed or latched switches gain a translucent green highlight so their state
 remains visible without replacing the metal switch drawing. The MC8 Pro layout
 remains schematic.
 
-An execution target is separate from the hardware catalogue and screen layout.
-Export a catalogue-bound virtual target from the checked-in target description.
-The exporter copies the neutral font sources and prepares the bundled UI faces;
-no connected pedal or ARM firmware build is required:
+From the source checkout, launch either controller directly with a real setup:
 
 ```sh
-uv run --no-sync python -m cntrl.maker.morningstar.mc.emulator.profiles --target cntrl/maker/morningstar/mc/patch-switcher-target.json --controller mc6_pro --output build/virtual-mc6
-uv run --no-sync python -m cntrl.maker.morningstar.mc.emulator.profiles --target cntrl/maker/morningstar/mc/patch-switcher-target.json --controller mc8_pro --output build/virtual-mc8
+cntrl emulate simple-setup.toml --controller mc6-pro
+cntrl emulate simple-setup.toml --controller mc8-pro
 ```
 
-The exported targets use catalogue control IDs `a` through `f`/`h`, and display
-IDs `lcd-1` through `lcd-3`/`lcd-4`. Compile the desired setup against that
-exported `target.toml`, not the original physical target. The normal compiler
-continues to enforce its format and resource constraints.
+Activate the project's environment first, or prefix the commands with
+`uv run --no-sync`. Each command exports the matching virtual target from the
+checked-in target description, prepares its bundled UI fonts, compiles the
+setup and opens the emulator. No connected pedal or ARM SDK is required.
+Real MIDI ports remain disconnected until selected explicitly in the UI.
+
+Saved pedal state and generated outputs are kept separately in
+`.cntrl-emulator/mc6-pro/` and `.cntrl-emulator/mc8-pro/`. Add `--storage PATH`
+to choose another session directory. The positional input also accepts an
+existing CSTB bundle compiled for the same controller.
+
+An execution target remains separate from the hardware catalogue and layout.
+The generated targets use catalogue control IDs `a` through `f`/`h`, and display
+IDs `lcd-1` through `lcd-3`/`lcd-4`. The normal compiler enforces its format and
+resource constraints.
 
 The source MC6 Pro target supplies A–F action bindings and usable display
 viewports. The catalogue's 200×200 declaration is not used to override the
@@ -44,12 +52,6 @@ five configurable patch-slot limit. Physical firmware handoff and unsupported
 diagnostic/USB-keyboard functions are excluded from these desktop targets.
 Animations use one stream per virtual display, so compile their assets for the
 exported target rather than copying the physical adapter's two-stream movies.
-
-Launch either layout with its matching target and compiled CSTB setup bundle:
-
-```sh
-uv run --no-sync cntrl emulate --layout cntrl/maker/morningstar/mc/emulator/mc8-pro.toml --target build/virtual-mc8/target.toml --setup setup.bin --storage build/mc8-session --source-root .
-```
 
 Session directories are independent. Switching profiles does not overwrite the
 other controller's data. See the [generic emulator guide](../../../../../doc/emulator.md)

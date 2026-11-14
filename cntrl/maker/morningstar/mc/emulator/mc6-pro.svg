@@ -63,7 +63,7 @@
   <use xlink:href="#bezel" x="118" y="224"/>
   <use xlink:href="#bezel" x="486" y="224"/>
   <use xlink:href="#bezel" x="854" y="224"/>
-  <g fill="#c9d1cd" font-family="Arial, Helvetica, sans-serif" font-size="22">
+  <g fill="#c9d1cd" font-family="Arial" font-size="22">
     <text x="180" y="130">D</text>
     <text x="674" y="130">E</text>
     <text x="1010" y="130">F</text>
@@ -71,7 +71,7 @@
     <text x="674" y="505">B</text>
     <text x="1010" y="505">C</text>
   </g>
-  <g fill="#cbd3cf" font-family="Arial, Helvetica, sans-serif" font-weight="bold">
+  <g fill="#cbd3cf" font-family="Arial" font-weight="bold">
     <text x="110" y="443" font-size="34" letter-spacing="2">MORNINGSTAR</text>
     <text x="977" y="443" font-size="30" letter-spacing="1">MC6</text>
     <rect x="1061" y="420" width="31" height="13" rx="1"/>
@@ -80,7 +80,7 @@
   <g stroke="#a6b3ae" stroke-width="1.5">
     <path d="M180 536H294 M430 536H540 M660 536H775 M910 536H1025"/>
   </g>
-  <g fill="#c4cec9" font-family="Arial, Helvetica, sans-serif" font-size="18"
+  <g fill="#c4cec9" font-family="Arial" font-size="18"
      text-anchor="middle">
     <text x="362" y="542">BANK DOWN</text>
     <text x="842" y="542">BANK UP</text>

@@ -77,7 +77,9 @@ def adapt(base: models.Target, controller: str) -> models.Target:
     return models.Target.model_validate(data)
 
 
-def export(target: Path, controller: str, output: Path) -> Path:
+def export(target: Path | None, controller: str, output: Path) -> Path:
+    if target is None:
+        target = Path(__file__).parents[1] / 'patch-switcher-target.json'
     errors: list[str] = []
     data = data_files.load_target(
         data_files.DataFile(name=target.stem, paths=[target]), True, errors

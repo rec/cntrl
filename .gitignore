@@ -10,3 +10,4 @@ dist/
 build/
 *.hex
 /.cache/reccy-docs/
+/.cntrl-emulator/

@@ -22,11 +22,18 @@ def cycle_styles(
         if 299 * c[0] + 587 * c[1] + 114 * c[2]
         < show.foreground_brightness_limit * 255_000
     ]
+    random.shuffle(candidates)
+    # Preserve the random state used for font selection when filtering colors.
+    candidates = [
+        c
+        for c in candidates
+        if graphics.distance((c[0], c[1], c[2]), background) > show.contrast
+    ]
     if len(candidates) < len(names):
         raise ValueError(
-            'foreground brightness limit leaves too few distinct cycle colors'
+            'foreground brightness limit and contrast leave too few '
+            'distinct cycle colors'
         )
-    random.shuffle(candidates)
     distances = [
         sum((a - b) ** 2 for a, b in zip(c, background, strict=True))
         for c in candidates
