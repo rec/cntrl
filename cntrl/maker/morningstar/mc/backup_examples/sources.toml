@@ -1,0 +1,34 @@
+# Pinned public research examples. Original JSON bytes are stored in .backup.gz.
+# A missing upstream license is recorded, not treated as a redistribution grant.
+
+[[sources]]
+name = 'jekku'
+repository = 'jekku/mc6-pro-collection'
+revision = 'c0807f26079b1c129c04ff47b9ccab4579df3e76'
+profile = '6-pro'
+license = 'not_declared'
+include = ['*.json']
+
+[[sources]]
+name = 'bwanab'
+repository = 'bwanab/MC8_setups'
+revision = 'd4f7e4a340dd210e3b7cc3b3ce483384595971a0'
+profile = '8'
+license = 'not_declared'
+include = ['*.json']
+
+[[sources]]
+name = 'footsmart'
+repository = 'jgateley/FootSmart'
+revision = 'c1245fe93f50625063e9782dc1ae9029b2f437b9'
+profile = '6-pro'
+license = 'MIT'
+include = ['Configs/Test/*.json', 'old/SelectExpMessage.json', 'old/NavigatorTest_copy.json', 'LICENSE']
+
+[[sources]]
+name = 'sdk'
+repository = 'benemon/morningstar-sdk'
+revision = '38b271ebfa259f59118442f0983ee223c068a1fc'
+profile = '8-pro'
+license = 'Apache-2.0'
+include = ['pkg/mc8pro/testdata/*.json', 'pkg/mc8pro/testdata/raw/*.sysex', 'LICENSE']
