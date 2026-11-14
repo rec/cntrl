@@ -11,11 +11,12 @@ using cntrl::midi::Packet;
 
 struct Output : cntrl::midi::Sink {
     std::vector<Packet> packets;
+    std::vector<unsigned> destinations;
     unsigned allowance = 10000;
     bool fail_allocations_after_write = false;
-    bool write_packet(unsigned, const Packet &p) override {
+    bool write_packet(unsigned destination, const Packet &p) override {
         if (!allowance) return false;
-        --allowance; packets.push_back(p);
+        --allowance; packets.push_back(p); destinations.push_back(destination);
         if (fail_allocations_after_write) { cntrl::memory_fail_after = 0; fail_allocations_after_write = false; }
         return true;
     }
@@ -225,9 +226,55 @@ void test_pickup_parameter_admits_every_selector_and_data_message_before_output(
     assert(out.packets[before].bytes[1] == 99 && out.packets[before + 1].bytes[1] == 98);
     assert(out.packets[before + 2].bytes[1] == 6 && out.packets[before + 3].bytes[1] == 38);
 }
+void pickup_crossings_are_independent_for_each_output_and_channel() {
+    Output out; out.pickup(true,0);
+    auto channel_one = [](unsigned value) { Packet packet = cc(74,value,7); packet.bytes[0] = 0xb1; return packet; };
+    assert(out.submit(0,cc(74,64)) && out.submit(1,cc(74,96)) && out.submit(0,channel_one(32)));
+    assert(out.submit_live(0,cc(74,20,7)) && out.submit_live(1,cc(74,80,7)) && out.submit_live(0,channel_one(50)));
+    assert(out.packets.size() == 3);
+    assert(out.submit_live(0,cc(74,70,7)));
+    assert(out.submit_live(1,cc(74,90,7)) && out.submit_live(0,channel_one(40)));
+    assert(out.packets.size() == 4 && out.destinations.back() == 0 && out.packets.back().bytes[2] == 70);
+    assert(out.state().value(0,0,74) == 70 && out.state().value(1,0,74) == 96 && out.state().value(0,1,74) == 32);
+    assert(out.submit_live(1,cc(74,100,7)) && out.submit_live(0,channel_one(20)));
+    assert(out.packets.size() == 6 && out.destinations[4] == 1 && out.destinations[5] == 0);
+    assert(out.packets[4].bytes[0] == 0xb0 && out.packets[4].bytes[2] == 100);
+    assert(out.packets[5].bytes[0] == 0xb1 && out.packets[5].bytes[2] == 20);
+    assert(out.state().value(0,0,74) == 70 && out.state().value(1,0,74) == 100 && out.state().value(0,1,74) == 20);
+}
+void interleaved_sources_cannot_borrow_each_others_parameter_crossings() {
+    Output out; out.pickup(true,0); assert(out.submit(0,cc(74,64)));
+    assert(out.submit_live(0,cc(74,10,1)) && out.submit_live(0,cc(74,100,2)));
+    assert(out.submit_live(0,cc(74,20,1)) && out.submit_live(0,cc(74,90,2)));
+    assert(out.packets.size() == 1 && out.state().value(0,0,74) == 64);
+    assert(out.submit_live(0,cc(74,70,1)) && out.submit_live(0,cc(74,80,2)));
+    assert(out.packets.size() == 2 && out.packets.back().bytes[2] == 70);
+    assert(out.submit_live(0,cc(74,60,1)) && out.submit_live(0,cc(74,50,2)));
+    assert(out.packets.size() == 4 && out.state().value(0,0,74) == 50);
+    assert(out.submit_live(0,cc(74,55,1)));
+    assert(out.packets.size() == 4 && out.state().value(0,0,74) == 50);
+    assert(out.submit_live(0,cc(74,45,1)));
+    assert(out.packets.size() == 5 && out.packets.back().bytes[2] == 45 && out.state().value(0,0,74) == 45);
+}
+void interleaved_parameters_keep_separate_crossing_histories() {
+    Output out; out.pickup(true,0);
+    assert(out.submit(0,cc(74,64)) && out.submit(0,cc(75,32)));
+    assert(out.submit_live(0,cc(74,10,7)) && out.submit_live(0,cc(75,90,7)));
+    assert(out.submit_live(0,cc(74,20,7)) && out.submit_live(0,cc(75,80,7)));
+    assert(out.packets.size() == 2 && out.state().value(0,0,74) == 64 && out.state().value(0,0,75) == 32);
+    assert(out.submit_live(0,cc(74,70,7)) && out.submit_live(0,cc(75,20,7)));
+    assert(out.packets.size() == 4 && out.packets[2].bytes[1] == 74 && out.packets[2].bytes[2] == 70);
+    assert(out.packets[3].bytes[1] == 75 && out.packets[3].bytes[2] == 20);
+    assert(out.state().value(0,0,74) == 70 && out.state().value(0,0,75) == 20);
+}
 
 int main(int argc, char **argv) {
     cntrl::memory_budget = 524288;
+    if (argc == 3) { test_compiled_policy(argv[1], argv[2][0] == '1'); return 0; }
+    assert(argc == 1);
+    pickup_crossings_are_independent_for_each_output_and_channel();
+    interleaved_sources_cannot_borrow_each_others_parameter_crossings();
+    interleaved_parameters_keep_separate_crossing_histories();
     test_pickup_parameter_admits_every_selector_and_data_message_before_output();
     test_crossing_rearms_on_other_sources();
     test_unknown_disabled_and_discrete_controls();
@@ -238,5 +285,4 @@ int main(int argc, char **argv) {
     test_forwarded_and_expression_samples_share_pickup_and_diagnostics();
     test_parameter_transactions_establish_targets_and_lock_out_live_writes();
     test_disconnected_sources_drop_unsent_values_and_reacquire();
-    if (argc == 3) test_compiled_policy(argv[1], argv[2][0] == '1');
 }

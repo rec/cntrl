@@ -45,13 +45,19 @@ Run common checks from the repository root:
 uv run --no-sync python -m scripts.ci --profile core
 ```
 
+The ordinary `uv run --no-sync pytest` run includes the shared native C++ suite.
+Native programs are collected as pytest cases or run by their authoring-fixture
+tests. A session-scoped builder compiles each shared source once with the same
+strict compiler flags; core LFO, pickup and application scenarios are not rerun
+for every compiled configuration. There is no separate shared native test runner.
+
 Type checking can target another host without that operating system installed,
 for example `uv run --no-sync ty check --python-platform win32 cntrl`. This checks
 platform-specific Python APIs; native execution still requires the matrix.
 
 The full profile additionally requires `--target-dir path/to/implementation`.
-It runs the complete Python suite, native suite, installed-wheel smoke check,
-the selected implementation's build and relocated export qualification.
+It runs the complete pytest suite, including native programs, the installed-wheel
+smoke check, the selected implementation's build and relocated export qualification.
 Reports, logs, JUnit output, wheels and fixture artifacts go into `reports/`.
 The export check copies shared sources without implementation directories or SDKs
 and recompiles from that copy. See [the build contract](porting.md).

@@ -9,26 +9,9 @@ from cntrl.patch_switcher import compiler, models, resolved
 from scripts import native_tests
 
 
-@pytest.fixture
-def gesture_runner(tmp_path: Path) -> Path:
-    root = Path(__file__).parents[1]
-    executable = tmp_path / 'gestures'
-    native_tests.compile_native(
-        [
-            'c++',
-            '-std=c++17',
-            '-Wall',
-            '-Wextra',
-            '-Werror',
-            '-fsanitize=address,undefined',
-            f'-I{root / "firmware/include"}',
-            str(root / 'firmware/test/test_switch_gestures.cpp'),
-            '-o',
-            str(executable),
-        ],
-        check=True,
-    )
-    return executable
+@pytest.fixture(scope='session')
+def gesture_runner(native_programs: native_tests.NativePrograms) -> Path:
+    return native_programs.build('test/test_switch_gestures.cpp')
 
 
 @pytest.mark.parametrize('fast_switches', [True, False])

@@ -1281,7 +1281,7 @@ private:
         return output_counts_[output].cleanup != 0;
     }
     static bool is_hold(const Packet &packet) {
-        return packet.bytes[0] >> 4 == 11 && (packet.bytes[1] == 64 || packet.bytes[1] == 66 || packet.bytes[1] == 69);
+        return packet.bytes[0] >> 4 == 11 && packet.bytes[1] >= 64 && packet.bytes[1] <= 69;
     }
     bool release_credit(const Event &event) const {
         const bool note = event.packet.bytes[0] >> 4 == 8;
@@ -1963,7 +1963,22 @@ private:
         for (auto capture = captures_.begin(); capture != captures_.end();) {
             if (!eligible(*capture)) { ++capture; continue; }
             bool note = capture->work.packet.bytes[0] >> 4 == 9 && capture->work.token;
-            if (note && !finite && (!capture->closed || capture->end > boundary)) {
+            // Carry only the last held value into the next capture window.
+            bool pedal = is_hold(capture->work.packet) && capture->work.packet.bytes[2] >= 64;
+            bool following = false;
+            if (pedal) for (const auto &later : captures_) {
+                if (&later == &*capture) { following = true; continue; }
+                if (eligible(later) && is_hold(later.work.packet)
+                    && later.work.input == capture->work.input
+                    && same_owner(later.work.owner, capture->work.owner)
+                    && later.work.packet.source == capture->work.packet.source
+                    && later.work.packet.bytes[0] == capture->work.packet.bytes[0]
+                    && later.work.packet.bytes[1] == capture->work.packet.bytes[1]
+                    && (later.start > capture->start || (later.start == capture->start && following))) {
+                    pedal = false; break;
+                }
+            }
+            if (!finite && ((note && (!capture->closed || capture->end > boundary)) || pedal)) {
                 capture->start = boundary; ++capture;
             } else {
                 if (capture == release_capture_cursor_) ++release_capture_cursor_;

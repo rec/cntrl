@@ -38,6 +38,7 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["test", "cntrl"]
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py313"

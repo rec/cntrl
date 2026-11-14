@@ -52,6 +52,53 @@ void controls_are_emitted_once_at_mirrored_time() {
     poll(streams, output, 180000); assert(output.packets.size() == 1);
     poll(streams, output, 300000); assert(output.packets.size() == 1);
 }
+void pedals_split_at_window_boundaries_and_finish_released() {
+    for (uint8_t control = 64; control <= 69; ++control) {
+        auto data = compiled(100000); Streams streams; Output output;
+        assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+        note(streams, 0xb0, control, 96, 20000);
+        poll(streams, output, 100000);
+        assert(output.packets.size() == 1 && output.packets[0].bytes[2] == 96);
+        note(streams, 0xb0, control, 0, 150000);
+        poll(streams, output, 179999); assert(output.packets.size() == 1);
+        poll(streams, output, 180000); assert(output.packets.size() == 2 && !output.packets.back().bytes[2]);
+        poll(streams, output, 200000); assert(output.packets.size() == 2);
+        poll(streams, output, 250000); assert(output.packets.size() == 3 && output.packets.back().bytes[2] == 96);
+        poll(streams, output, 300000); assert(output.packets.size() == 4 && !output.packets.back().bytes[2]);
+        poll(streams, output, 400000); assert(output.packets.size() == 4);
+    }
+}
+void finite_reverse_and_disconnect_release_pedals() {
+    for (uint8_t control = 64; control <= 69; ++control) {
+        auto data = compiled(0); Streams streams; Output output;
+        assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+        note(streams, 0xb0, control, 96, 20000);
+        note(streams, 0xb0, control, 0, 80000);
+        poll(streams, output, 100000); assert(output.packets.empty());
+        streams.finish_reverse(0, 100000);
+        poll(streams, output, 119999); assert(output.packets.empty());
+        poll(streams, output, 120000); assert(output.packets.size() == 1 && output.packets[0].bytes[2] == 96);
+        streams.connection(0, false, 2);
+        poll(streams, output, 130000);
+        assert(output.packets.size() == 2 && !output.packets.back().bytes[2]);
+        poll(streams, output, 200000); assert(output.packets.size() == 2);
+    }
+}
+void one_usb_cables_release_does_not_discard_another_cables_capture() {
+    auto data = compiled(100000); Streams streams; Output output;
+    assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
+    streams.receive(0, {11,{0xb0,64,96},0}, 10000);
+    streams.receive(0, {11,{0xb0,64,80},1}, 20000);
+    streams.receive(0, {11,{0xb0,64,0},0}, 30000);
+    poll(streams, output, 100000);
+    assert(output.packets.size() == 1 && output.packets[0].bytes[2] == 80);
+    poll(streams, output, 190000);
+    unsigned before = unsigned(output.packets.size());
+    poll(streams, output, 200000);
+    assert(output.packets.size() == before + 1 && output.packets.back().bytes[2] == 80);
+    streams.connection(0, false, 2); poll(streams, output, 210000);
+    assert(!output.packets.back().bytes[2]);
+}
 void sysex_crossing_boundary_stays_complete_and_ordered() {
     auto data = compiled(100000); Streams streams; Output output;
     assert(streams.load(data.data(), unsigned(data.size()), outputs, 1));
@@ -86,6 +133,9 @@ void disconnect_and_late_service_discard_captured_traffic() {
 int main() {
     cntrl::memory_budget = 524288;
     held_notes_split_and_use_original_velocity(); controls_are_emitted_once_at_mirrored_time();
+    pedals_split_at_window_boundaries_and_finish_released();
+    finite_reverse_and_disconnect_release_pedals();
+    one_usb_cables_release_does_not_discard_another_cables_capture();
     sysex_crossing_boundary_stays_complete_and_ordered(); finite_reverse_waits_for_clip_end();
     disconnect_and_late_service_discard_captured_traffic();
 }

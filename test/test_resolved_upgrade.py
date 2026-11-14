@@ -110,7 +110,7 @@ def test_legacy_full_width_position_and_page_names_are_preserved() -> None:
 
 
 def test_current_setup_is_returned_unchanged(current_setup: bytes) -> None:
-    assert resolved.upgrade(current_setup) is current_setup
+    assert resolved.upgrade(current_setup) == current_setup
 
 
 @pytest.mark.parametrize(

@@ -169,8 +169,7 @@ def migrate(options: Options) -> None:
             '.DEFAULT_GOAL := test\n'
             'ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))\n'
             'PYTHON ?= python3\n.PHONY: test\ntest:\n'
-            '\t$(PYTHON) "$(ROOT)/../scripts/native_tests.py" '
-            '--source-root "$(ROOT)/.."\n'
+            '\tcd "$(ROOT)/.." && $(PYTHON) -m pytest -q test\n'
         )
 
 

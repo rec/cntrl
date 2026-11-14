@@ -351,6 +351,29 @@ void backward_playback_preserves_fine_and_parameter_transaction_order() {
     for (unsigned i = 0; i < 8; ++i) assert(s.sink.sent[0][i + 1].bytes[1] == controls[i]);
     assert(!s.sink.parameter_locked(0));
 }
+void pedal_intervals_survive_reverse_edits_and_backward_playback() {
+    for (uint8_t control = 64; control <= 69; ++control) for (bool edit : {false,true}) {
+        Session s; constexpr uint64_t beat = MidiLooper::beat;
+        assert(s.loop.record(s.clock(),500000)); s.poll(beat);
+        s.poll(beat + beat / 4); s.loop.receive(0,0,{11,{0xb0,control,96}},s.clock());
+        s.poll(beat + beat / 2); s.loop.receive(0,0,{11,{0xb0,control,0}},s.clock());
+        assert(s.loop.record(s.clock(),500000)); s.poll(beat * 2);
+        s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
+        if (edit) {
+            assert(s.loop.reverse({0,1,false}));
+            for (unsigned i = 0; i < 128; ++i) s.loop.poll({0,1,false},true,3,s.sink);
+        } else assert(s.loop.direction({0,1,false}));
+        s.sink.sent[0].clear();
+        assert(s.loop.play_stop(s.clock())); s.poll(beat * 3);
+        s.poll(beat * 3 + beat / 2 - 1); assert(s.sink.sent[0].empty());
+        s.poll(beat * 3 + beat / 2);
+        assert(s.sink.sent[0].size() == 1 && s.sink.sent[0][0].bytes[1] == control && s.sink.sent[0][0].bytes[2] == 96);
+        s.poll(beat * 3 + beat * 3 / 4);
+        assert(s.sink.sent[0].size() == 2 && !s.sink.sent[0].back().bytes[2]);
+        s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
+        assert(!s.sink.loop_cleaning());
+    }
+}
 void direction_switches_retire_blocked_outputs_and_stop_cancels_reverse_edits() {
     Session s(512,3); s.take(); assert(s.loop.direction(s.clock()));
     s.sink.blocked = 2;
@@ -419,6 +442,7 @@ void armed_capacity_survives_exhaustion_through_the_first_wrap() {
 }
 int main() {
     cntrl::memory_budget = 524288;
+    pedal_intervals_survive_reverse_edits_and_backward_playback();
     status_preserves_long_duration_and_following_fields();
     idle_configuration_and_failed_arm_preserve_available_memory();
     failed_reverse_preparation_preserves_the_take_and_undo();

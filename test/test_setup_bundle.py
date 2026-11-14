@@ -69,7 +69,9 @@ def test_setup_fit_is_decided_by_the_linked_firmware_budget() -> None:
 
 
 @pytest.mark.parametrize('all_resident', [True, False])
-def test_native_table_and_lru_preserve_pinned_views(all_resident: bool) -> None:
+def test_native_table_and_lru_preserve_pinned_views(
+    all_resident: bool, native_programs: native_tests.NativePrograms
+) -> None:
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
         compiler.read_document(root / 'firmware/test/target.json')
@@ -87,28 +89,15 @@ def test_native_table_and_lru_preserve_pinned_views(all_resident: bool) -> None:
     with TemporaryDirectory(prefix='cntrl-setup-table-test-') as directory:
         image = Path(directory) / 'setups.bin'
         image.write_bytes(bundle.pack())
-        program = Path(directory) / 'table'
-        native_tests.compile_native(
-            [
-                'c++',
-                '-std=c++17',
-                '-Wall',
-                '-Wextra',
-                '-Werror',
-                '-fsanitize=address,undefined',
-                '-I' + str(root / 'firmware/include'),
-                str(root / 'firmware/test/test_setup_table.cpp'),
-                '-o',
-                str(program),
-            ],
-            check=True,
-        )
+        program = native_programs.build('test/test_setup_table.cpp')
         native_tests.run_native(
             [str(program), str(image), str(int(all_resident))], check=True
         )
 
 
-def test_history_translates_indices_after_the_bundle_name_table_changes() -> None:
+def test_history_translates_indices_after_the_bundle_name_table_changes(
+    native_programs: native_tests.NativePrograms,
+) -> None:
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
         compiler.read_document(root / 'firmware/test/target.json')
@@ -142,26 +131,10 @@ def test_history_translates_indices_after_the_bundle_name_table_changes() -> Non
     linked = setup_bundle.reindex({'0': second['0'], **first})
     assert linked['a'] == second['a']
     with TemporaryDirectory(prefix='cntrl-bundle-history-test-') as directory:
-        old, new, program = (
-            Path(directory) / n for n in ('old.bin', 'new.bin', 'test')
-        )
+        old, new = (Path(directory) / n for n in ('old.bin', 'new.bin'))
         old.write_bytes(setup_bundle.build(first, sources, memory=MEMORY).pack())
         new.write_bytes(setup_bundle.build(second, expanded, memory=MEMORY).pack())
-        native_tests.compile_native(
-            [
-                'c++',
-                '-std=c++17',
-                '-Wall',
-                '-Wextra',
-                '-Werror',
-                '-fsanitize=address,undefined',
-                '-I' + str(root / 'firmware/include'),
-                str(root / 'firmware/test/test_setup_table.cpp'),
-                '-o',
-                str(program),
-            ],
-            check=True,
-        )
+        program = native_programs.build('test/test_setup_table.cpp')
         native_tests.run_native(
             [str(program), str(old), 'history', str(new)], check=True
         )

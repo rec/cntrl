@@ -87,8 +87,10 @@ bool reverse_sequence(Events &events, uint64_t duration,
     struct Voice { unsigned source; uint8_t channel, note, velocity; unsigned index; };
     struct Frame { unsigned source, group; bool open; };
     struct Ordered { TimelinePacket event; unsigned group, part, priority; };
+    struct Pedal { TimelinePacket last; unsigned group; uint8_t value; };
     CheckedList<Voice> voices;
     CheckedList<Frame> frames;
+    CheckedList<Pedal> pedals;
     CheckedArray<Ordered> result;
     const unsigned count = unsigned(events.size());
     if (!voices.reserve(count) || !frames.reserve(count) || !result.reserve(count)) return false;
@@ -118,6 +120,22 @@ bool reverse_sequence(Events &events, uint64_t duration,
         reversed.time = duration - event.time;
         unsigned group = next_group++, part = 0;
         unsigned priority = reversed.packet.bytes[0] >> 4 == 8 ? 0 : 2;
+        if (kind == 11 && event.packet.bytes[1] >= 64 && event.packet.bytes[1] <= 69) {
+            // Walking backward across a pedal change restores the value before it.
+            auto position = std::find_if(pedals.begin(), pedals.end(), [&](const Pedal &p) {
+                return p.last.source == event.source && p.last.packet.bytes[0] == event.packet.bytes[0]
+                    && p.last.packet.bytes[1] == event.packet.bytes[1]
+                    && p.last.owner == event.owner && p.last.packet.source == event.packet.source;
+            });
+            Pedal *pedal = position == pedals.end() ? pedals.append({event, group, 0}) : &*position;
+            if (!pedal) return false;
+            if (position != pedals.end() && pedal->last.time == event.time) {
+                group = pedal->group;
+                for (auto &previous : result) if (previous.group == group) ++previous.part;
+            }
+            reversed.packet.bytes[2] = pedal->value;
+            pedal->last = event; pedal->group = group; pedal->value = event.packet.bytes[2];
+        }
         if (paired_index != unsigned(-1)) {
             priority = 1;
             auto &release = result[paired_index];
@@ -146,6 +164,19 @@ bool reverse_sequence(Events &events, uint64_t duration,
         if (!result.append({reversed, group, part, priority})) return false;
     }
     if (!voices.empty() || std::any_of(frames.begin(), frames.end(), [](const Frame &f) { return f.open; })) return false;
+    unsigned held = 0;
+    for (const auto &pedal : pedals) if (pedal.value >= 64) ++held;
+    if (held > limit - result.size() || !result.reserve(result.size() + held)) return false;
+    for (const auto &pedal : pedals) if (pedal.value >= 64) {
+        // A pedal held at clip end begins the reversed clip already pressed.
+        auto boundary = pedal.last; boundary.time = 0;
+        unsigned group = next_group++;
+        if (pedal.last.time == duration) {
+            group = pedal.group;
+            for (auto &previous : result) if (previous.group == group) ++previous.part;
+        }
+        if (!result.append({boundary, group, 0, 2})) return false;
+    }
     std::sort(result.begin(), result.end(), [](const Ordered &a, const Ordered &b) {
         if (a.event.time != b.event.time) return a.event.time < b.event.time;
         if (a.priority != b.priority) return a.priority < b.priority;
@@ -155,6 +186,7 @@ bool reverse_sequence(Events &events, uint64_t duration,
         return a.group < b.group;
     });
     events.resize(result.size());
+    if (events.size() != result.size()) return false;
     for (unsigned i = 0; i < result.size(); ++i) events[i] = result[i].event;
     return true;
 }

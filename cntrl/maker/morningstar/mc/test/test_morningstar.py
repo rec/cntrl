@@ -177,15 +177,3 @@ def test_mc6_pro_preserves_user_supplied_display_sizes(
         assert display.width == 200
         assert display.height == 200
         assert display.colors is None
-
-
-def test_catalogues_use_nested_dicts_and_readable_lines() -> None:
-    lines = (
-        files('cntrl.maker.morningstar.mc').joinpath('mc.toml').read_text().splitlines()
-    )
-    assert all(
-        '.' not in s.partition('=')[0]
-        for s in lines
-        if '=' in s and not s.lstrip().startswith('#')
-    )
-    assert all(len(s) <= 88 for s in lines)

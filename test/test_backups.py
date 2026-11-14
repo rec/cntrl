@@ -1,6 +1,7 @@
 """Backup binaries stay authoritative and must match the current format."""
 
 import struct
+from contextlib import nullcontext
 from pathlib import Path
 from zlib import crc32
 
@@ -17,6 +18,7 @@ from cntrl.patch_switcher import (
     resolved,
     setup_bundle,
     songs,
+    transport,
 )
 
 
@@ -292,10 +294,12 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
 
 
 @pytest.mark.parametrize('preserve', [False, True])
+@pytest.mark.parametrize('nonempty', [False, True])
 def test_restore_uploads_saved_data_before_restoring_selection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     preserve: bool,
+    nonempty: bool,
 ) -> None:
     from contextlib import nullcontext
 
@@ -304,11 +308,45 @@ def test_restore_uploads_saved_data_before_restoring_selection(
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
     )
-    recorded = bytearray(compiler.compile_show({}, {}, [], target))
+    sources: dict[str, object] = {
+        'Aardvark': {
+            'inline_patches': False,
+            'patches': {'borrowed': {'document': 'Zulu', 'patch': 'p'}},
+        },
+        'Evening': {
+            'inline_patches': False,
+            'patches': {'borrowed': {'document': 'Zulu', 'patch': 'p'}},
+        },
+        'Zulu': {
+            'patches': {
+                'p': {
+                    'type': 'control-change',
+                    'output': 'din',
+                    'channel': 1,
+                    'controller': 7,
+                    'value': 77,
+                }
+            }
+        },
+    }
+    backup_sources = (
+        {n: s for n, s in sources.items() if n != 'Aardvark'}
+        if nonempty
+        else {'Evening': {}}
+    )
+    recorded = bytearray(
+        compiler.compile_show(
+            backup_sources['Evening'], {}, [], target, documents=backup_sources
+        )
+    )
     metadata = recorded.index(b'CMTA') + compiler.METADATA.size - 8
     struct.pack_into('<I', recorded, metadata, 1)
     struct.pack_into('<I', recorded, 20, crc32(recorded[28:]))
-    setup = setup_bundle.reindex({'Evening': bytes(recorded)})['Evening']
+    compiled = {
+        n: compiler.compile_show(s, {}, [], target, documents=backup_sources)
+        for n, s in backup_sources.items()
+    }
+    setup = setup_bundle.reindex(compiled | {'Evening': bytes(recorded)})['Evening']
     expected = (
         setup
         if preserve
@@ -339,6 +377,20 @@ def test_restore_uploads_saved_data_before_restoring_selection(
         )
     )
     imported: dict[str, bytes] = {}
+    current_sources = {n: s for n, s in sources.items() if n != 'Evening'}
+    existing = (
+        {
+            n: compiler.compile_show(s, {}, [], target, documents=current_sources)
+            for n, s in current_sources.items()
+        }
+        if nonempty
+        else {}
+    )
+    current_bundle = (
+        setup_bundle.build(existing, current_sources, target.memory).pack()
+        if nonempty
+        else b''
+    )
 
     def import_revision(
         client: transport.SetupClient, name: str, record: history.Revision, data: bytes
@@ -355,7 +407,7 @@ def test_restore_uploads_saved_data_before_restoring_selection(
             self.bundle = b''
 
         def download_bundle(self) -> bytes:
-            return b''
+            return current_bundle
 
         def memory(self) -> models.TargetMemory:
             return target.memory
@@ -403,4 +455,192 @@ def test_restore_uploads_saved_data_before_restoring_selection(
         tmp_path, Path('/unused'), target, preserve_memory_estimates=preserve
     )
     assert client.saved == library and client.selected == 'Evening'
-    assert setup_bundle.unpack(client.bundle) == {'Evening': expected}
+    restored = setup_bundle.unpack(client.bundle)
+    assert restored == setup_bundle.reindex(existing | {'Evening': expected})
+    if nonempty:
+        assert resolved.export(restored['Aardvark']) == resolved.export(
+            existing['Aardvark']
+        )
+        assert restored['Aardvark'] != existing['Aardvark']
+        assert restored['Evening'] != expected
+
+
+class SavedPedal(transport.SetupClient):
+    def __init__(
+        self, setup: bytes, revision: history.Revision, library: bytes
+    ) -> None:
+        super().__init__(transport.SerialConnection(Path('/unused')))
+        self.status = f'CNTRL READY {compiler.DOCUMENT_VERSION} 0 00000000'
+        self.selected = 'Evening'
+        self.valid = True
+        self.revision = revision
+        self.blobs = {
+            'setup': setup,
+            'font': b'font',
+            'movie': b'movie',
+            'midi': (
+                b'MThd\x00\x00\x00\x06\x00\x00\x00\x01\x01\xe0'
+                b'MTrk\x00\x00\x00\x04\x00\xff\x2f\x00'
+            ),
+            'history': history.normalize_revision('Evening', setup)[1],
+            'songs': library,
+        }
+
+    def current(self) -> str:
+        return self.selected
+
+    def catalogue(self) -> list[transport.SetupEntry]:
+        data = self.blobs['setup']
+        return [
+            transport.SetupEntry(
+                name='Evening',
+                modified=0,
+                length=len(data),
+                checksum=crc32(data),
+                valid=self.valid,
+            )
+        ]
+
+    def request(self, command: str) -> str:
+        if command == 'CNTRL STATUS':
+            return self.status
+        if command.startswith('CNTRL HISTORY LIST '):
+            before = int(command.rsplit(' ', 1)[1])
+            revision = self.revision
+            if revision.number >= before:
+                return 'CNTRL END'
+            return (
+                f'CNTRL REVISION {revision.number} {revision.modified} '
+                f'{revision.length} {revision.label.encode().hex()}'
+            )
+        assert command == 'CNTRL SONGS SIZE'
+        data = self.blobs['songs']
+        return f'CNTRL SONGS {len(data)} {crc32(data):08x}'
+
+    def request_data(self, command: str) -> bytes:
+        assert command.startswith('CNTRL SONGS READ ')
+        offset = int(command.rsplit(' ', 1)[1])
+        return self.blobs['songs'][offset : offset + self.connection.usb_block_size]
+
+    def download(self, name: str, revision: int | None = None) -> bytes:
+        assert name == 'Evening'
+        if revision is not None:
+            assert revision == self.revision.number
+        return self.blobs['setup' if revision is None else 'history']
+
+    def download_font(self, key: int) -> bytes:
+        assert key == 0x12345678
+        return self.blobs['font']
+
+    def download_movie(self, key: int) -> bytes:
+        assert key == 0x87654321
+        return self.blobs['movie']
+
+    def download_midi(self, name: str) -> bytes:
+        assert name == 'take.mid'
+        return self.blobs['midi']
+
+
+@pytest.fixture
+def saved_pedal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: models.Target
+) -> SavedPedal:
+    setup = setup_bundle.reindex(
+        {'Evening': compiler.compile_show({}, {}, [], target)}
+    )['Evening']
+    revision = history.Revision(
+        number=3, modified=12345, length=len(setup), label='Take'
+    )
+    client = SavedPedal(
+        setup,
+        revision,
+        songs.encode(songs.Library(setlists=[songs.Setlist(name='Encore')])),
+    )
+    for directory in (
+        'setups/fonts',
+        'setups/movies',
+        'setups/midi',
+        'history/Evening',
+    ):
+        (tmp_path / directory).mkdir(parents=True)
+    (tmp_path / 'selected.txt').write_text('Evening')
+    (tmp_path / 'catalogue.txt').write_text('Evening True')
+    for name, field in {
+        'setups/Evening.bin': 'setup',
+        'setups/fonts/12345678.cfont': 'font',
+        'setups/movies/87654321.cnsa': 'movie',
+        'setups/midi/take.mid': 'midi',
+        'history/Evening/3.bin': 'history',
+        'songs.bin': 'songs',
+    }.items():
+        (tmp_path / name).write_bytes(client.blobs[field])
+    (tmp_path / 'history.toml').write_text(
+        tomlkit.dumps(
+            {
+                'revisions': [
+                    revision.model_dump()
+                    | {
+                        'name': 'Evening',
+                        'number': '3',
+                        'version': compiler.DOCUMENT_VERSION,
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(
+        transport, 'SerialConnection', lambda *a, **k: nullcontext(None)
+    )
+    monkeypatch.setattr(transport, 'SetupClient', lambda connection: client)
+    return client
+
+
+def test_post_flash_verification_accepts_all_saved_data(
+    tmp_path: Path,
+    target: models.Target,
+    saved_pedal: SavedPedal,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    backups.verify_after_flashing(tmp_path, Path('/unused'), target)
+    assert (
+        'Selection, setups, history, assets and songs verified unchanged.'
+        in capsys.readouterr().out
+    )
+
+
+@pytest.mark.parametrize(
+    'mismatch,expected',
+    [
+        ('status', 'expected READY format'),
+        ('selection', 'selection differs'),
+        ('catalogue', 'setup catalogue differs'),
+        ('setup', 'setup binary differs'),
+        ('font', 'font differs'),
+        ('movie', 'movie differs'),
+        ('midi', 'MIDI file differs'),
+        ('history-metadata', 'history metadata differs'),
+        ('history', 'history differs'),
+        ('songs', 'song library differs'),
+    ],
+)
+def test_post_flash_verification_identifies_each_isolated_mismatch(
+    tmp_path: Path,
+    target: models.Target,
+    saved_pedal: SavedPedal,
+    mismatch: str,
+    expected: str,
+) -> None:
+    if mismatch == 'status':
+        saved_pedal.status = f'CNTRL READY {compiler.DOCUMENT_VERSION - 1} 0 00000000'
+    elif mismatch == 'selection':
+        saved_pedal.selected = 'Other'
+    elif mismatch == 'catalogue':
+        saved_pedal.valid = False
+    elif mismatch == 'history-metadata':
+        saved_pedal.revision = saved_pedal.revision.model_copy(
+            update={'label': 'Changed'}
+        )
+    else:
+        saved_pedal.blobs[mismatch] += b'changed'
+    with pytest.raises(ValueError, match=expected):
+        backups.verify_after_flashing(tmp_path, Path('/unused'), target)

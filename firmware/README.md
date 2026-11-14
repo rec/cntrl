@@ -9,12 +9,17 @@ and source pinning. Switch timing, browser activation and songs all use it.
 The controller owns navigation, gestures, known program Undo and layout. A board adapter owns
 scanning, electrical debounce, pixels, output queues and storage access.
 
-Run host tests, including address and undefined-behavior sanitizers:
+Run host tests, including shared native programs with address and
+undefined-behavior sanitizers, through pytest:
 
 ```bash
-make -C firmware test
-uv run --frozen pytest
+uv run --no-sync pytest
 ```
+
+`make -C firmware test` runs the core `test/` pytest suite as a convenience.
+The complete invocation above also includes manufacturer-specific tests. Shared
+native tests have no separate runner, and fixture programs are built once per
+pytest session.
 
 The Python transport tests compile `test/document_server.cpp` and connect the
 Python sender to the actual C++ receiver through a pseudo-terminal. They never

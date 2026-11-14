@@ -38,7 +38,6 @@ void selectors_visit_the_requested_ranks() {
     order.reset({5,4,2,0,1,1,42}); assert((trace(3,4) == std::vector<unsigned>{0,2,1,0}));
     order.reset({5,0,2,0,0,1,42}); assert((trace(3,4) == std::vector<unsigned>{0,0,0,0}));
     order.reset({8}); assert((trace(5,5) == std::vector<unsigned>{0,4,1,3,2}));
-    order.reset({7}); auto shuffle = trace(5,5); std::sort(shuffle.begin(),shuffle.end()); assert((shuffle == std::vector<unsigned>{0,1,2,3,4}));
     for (unsigned kind = 0; kind < 9; ++kind) { order.reset({kind}); assert((trace(1,3) == std::vector<unsigned>{0,0,0})); assert(order.next(0) == 0); }
 }
 void held_notes_are_replaced_and_restored() {
@@ -98,19 +97,6 @@ void tempo_changes_preserve_the_grid_and_external_start_can_be_armed() {
     sink.sent.clear(); arp.toggle({0,3,false}); arp.poll({0,3,false},1,0,sink);
     arp.poll({0,4,true},1,0,sink); assert(sink.sent.empty());
     arp.poll({beat / 4,4,true},1,0,sink); assert(sink.sent.size() == 1);
-}
-void external_clock_dropout_continues_until_an_explicit_stop() {
-    cntrl::ClockTempo clock;
-    clock.configure(24,1,100000);
-    clock.transport(0,0xfa,0);
-    for (unsigned i = 0; i <= 24; ++i) clock.transport(0,0xf8,i * 20000);
-    auto first = clock.holdover_position(480000);
-    assert(first.running);
-    clock.poll(980000);
-    auto continuing = clock.holdover_position(980000);
-    assert(continuing.running && continuing.value > first.value + beat);
-    clock.transport(0,0xfc,980000);
-    assert(!clock.holdover_position(1000000).running);
 }
 void one_blocked_output_does_not_stall_the_other_output() {
     Sink sink; cntrl::midi::MidiArpeggiator arp;
@@ -221,8 +207,108 @@ void pending_batches_keep_their_routing_slots_until_delivery_finishes() {
     cntrl::memory_fail_after = -1;
     sink.release_owner_state(&identity);
 }
+std::vector<uint8_t> choice_bank_trace(uint32_t seed) {
+    Sink sink; cntrl::midi::MidiArpeggiator arp;
+    auto p = settings(false,4); cntrl::put32(p.data() + 46,seed);
+    arp.configure(p.data()); arp.poll({0,1,true},1,0,sink);
+    for (unsigned pitch : {60u,62u,65u,67u,71u}) arp.receive(0,0,{9,{0x90,uint8_t(pitch),100}},{0,1,true});
+    arp.toggle({0,1,true});
+    for (unsigned i = 1; i <= 24; ++i) arp.poll({i * beat / 4,1,true},1,0,sink);
+    std::vector<uint8_t> result;
+    for (const auto &packet : sink.sent) if (packet.cin == 9 && packet.bytes[2]) result.push_back(packet.bytes[1]);
+    return result;
+}
+void random_choice_repeats_a_seed_across_a_nontrivial_bank() {
+    const auto first = choice_bank_trace(42), repeated = choice_bank_trace(42), other = choice_bank_trace(43);
+    assert(first.size() == 24 && first == repeated && first != other);
+    auto pitches = first; std::sort(pitches.begin(),pitches.end());
+    assert(std::unique(pitches.begin(),pitches.end()) - pitches.begin() >= 3);
+    for (uint8_t pitch : first) assert(pitch == 60 || pitch == 62 || pitch == 65 || pitch == 67 || pitch == 71);
+}
+void seeded_walk_preserves_stays_and_direction_probabilities() {
+    cntrl::midi::ArpeggiatorOrder order;
+    auto trace = [&]() { std::vector<unsigned> result; for (unsigned i = 0; i < 32; ++i) result.push_back(order.next(7)); return result; };
+    order.reset({5,4,2,1,1,4,42}); auto walk = trace();
+    order.reset({5,4,2,1,1,4,42}); assert(trace() == walk);
+    order.reset({5,4,2,1,1,4,43}); assert(trace() != walk);
+    bool stayed = false, went_up = false, went_down = false;
+    for (unsigned i = 1; i < walk.size(); ++i) {
+        assert(walk[i] < 7);
+        if (walk[i] == walk[i - 1]) stayed = true;
+        else if (walk[i] == (walk[i - 1] + 1) % 7) went_up = true;
+        else { assert(walk[i] == (walk[i - 1] + 6) % 7); went_down = true; }
+    }
+    assert(stayed && went_up && went_down);
+}
+void shuffle_reshuffles_complete_cycles_and_mod_visits_uneven_groups() {
+    cntrl::midi::ArpeggiatorOrder order; assert(order.reserve(7));
+    auto trace = [&](unsigned size,unsigned count) { std::vector<unsigned> result; for (unsigned i = 0; i < count; ++i) result.push_back(order.next(size)); return result; };
+    order.reset({7,0,2,1,1,2,42}); auto shuffled = trace(7,21);
+    for (unsigned i = 0; i < 3; ++i) {
+        std::vector<unsigned> cycle(shuffled.begin() + i * 7,shuffled.begin() + (i + 1) * 7);
+        std::sort(cycle.begin(),cycle.end()); assert((cycle == std::vector<unsigned>{0,1,2,3,4,5,6}));
+    }
+    assert(!std::equal(shuffled.begin(),shuffled.begin() + 7,shuffled.begin() + 7));
+    order.reset({7,0,2,1,1,2,42}); assert(trace(7,21) == shuffled);
+    order.reset({7,0,2,1,1,2,43}); assert(trace(7,21) != shuffled);
+    order.reset({6,0,2}); assert((trace(5,6) == std::vector<unsigned>{0,2,4,1,3,0}));
+    order.reset({6,0,3}); assert((trace(8,9) == std::vector<unsigned>{0,3,6,1,4,7,2,5,0}));
+    order.reset({6,0,7}); assert((trace(3,6) == std::vector<unsigned>{0,1,2,0,1,2}));
+}
+void poly_triad_updates_follow_the_current_held_bank() {
+    Sink sink; cntrl::midi::MidiArpeggiator arp;
+    auto p = settings(); arp.configure(p.data()); arp.poll({0,1,true},1,0,sink); sink.note_routing = &arp;
+    auto input = [&](uint8_t pitch,bool down,uint64_t time) {
+        cntrl::midi::Packet packet{uint8_t(down ? 9 : 8),{uint8_t(down ? 0x90 : 0x80),pitch,uint8_t(down ? 100 : 0)},0};
+        arp.receive(0,0,packet,{time,1,true}); assert(sink.submit(0,packet));
+    };
+    input(60,true,0); input(64,true,0); input(67,true,0); assert(arp.size() == 3);
+    sink.sent.clear(); arp.toggle({0,1,true}); arp.poll({beat / 4,1,true},1,0,sink);
+    input(67,false,beat / 4 + 1); input(72,true,beat / 4 + 2); assert(arp.size() == 3);
+    for (unsigned i = 2; i <= 4; ++i) arp.poll({i * beat / 4,1,true},1,0,sink);
+    input(60,false,beat + 1); input(55,true,beat + 2); assert(arp.size() == 3);
+    for (unsigned i = 5; i <= 7; ++i) arp.poll({i * beat / 4,1,true},1,0,sink);
+    std::vector<uint8_t> attacks;
+    for (const auto &packet : sink.sent) if (packet.cin == 9 && packet.bytes[2]) attacks.push_back(packet.bytes[1]);
+    assert((attacks == std::vector<uint8_t>{60,64,72,60,55,64,72}));
+    unsigned before = unsigned(sink.sent.size()); arp.stop(); arp.poll({2 * beat,1,true},1,0,sink);
+    std::vector<uint8_t> restored;
+    for (unsigned i = before; i < sink.sent.size(); ++i) if (sink.sent[i].cin == 9 && sink.sent[i].bytes[2]) restored.push_back(sink.sent[i].bytes[1]);
+    std::sort(restored.begin(),restored.end()); assert((restored == std::vector<uint8_t>{55,64,72}));
+}
+void external_stop_restores_the_chord_but_clock_dropout_keeps_arpeggiating() {
+    cntrl::ClockTempo clock; clock.configure(24,1,100000); assert(clock.transport(0,0xfa,0));
+    for (unsigned i = 0; i <= 24; ++i) assert(clock.transport(0,0xf8,i * 20000));
+    const auto position = clock.holdover_position(480000); assert(position.running);
+    Sink sink; cntrl::midi::MidiArpeggiator arp; auto p = settings();
+    arp.configure(p.data()); arp.poll(position,1,0,sink); sink.note_routing = &arp;
+    for (unsigned pitch : {60u,64u,67u}) {
+        cntrl::midi::Packet note{9,{0x90,uint8_t(pitch),100},0}; arp.receive(0,0,note,position); assert(sink.submit(0,note));
+    }
+    sink.sent.clear(); arp.toggle(position);
+    for (unsigned i = 1; i <= 18; ++i) {
+        uint32_t now = 480000 + i * 20000; clock.poll(now); arp.poll(clock.holdover_position(now),1,0,sink);
+    }
+    assert(!clock.active() && arp.state() == cntrl::midi::MidiArpeggiator::State::playing);
+    std::vector<uint8_t> attacks;
+    for (const auto &packet : sink.sent) if (packet.cin == 9 && packet.bytes[2]) attacks.push_back(packet.bytes[1]);
+    assert((attacks == std::vector<uint8_t>{60,64,67}));
+    unsigned before = unsigned(sink.sent.size()); assert(clock.transport(0,0xfc,840001));
+    auto stopped = clock.holdover_position(840001); assert(!stopped.running);
+    arp.poll(stopped,1,0,sink); arp.poll(stopped,1,0,sink);
+    assert(arp.state() == cntrl::midi::MidiArpeggiator::State::stopped && arp.size() == 3);
+    std::vector<uint8_t> restored;
+    for (unsigned i = before; i < sink.sent.size(); ++i) if (sink.sent[i].cin == 9 && sink.sent[i].bytes[2]) restored.push_back(sink.sent[i].bytes[1]);
+    std::sort(restored.begin(),restored.end()); assert((restored == std::vector<uint8_t>{60,64,67}));
+    before = unsigned(sink.sent.size()); clock.poll(2000000); arp.poll(clock.holdover_position(2000000),1,0,sink); assert(sink.sent.size() == before);
+}
 int main() {
     cntrl::memory_budget = 524288;
+    random_choice_repeats_a_seed_across_a_nontrivial_bank();
+    seeded_walk_preserves_stays_and_direction_probabilities();
+    shuffle_reshuffles_complete_cycles_and_mod_visits_uneven_groups();
+    poly_triad_updates_follow_the_current_held_bank();
+    external_stop_restores_the_chord_but_clock_dropout_keeps_arpeggiating();
     selectors_visit_the_requested_ranks();
     capture_and_first_playback_use_only_admitted_storage();
     failed_configuration_keeps_the_playing_bank();
@@ -233,6 +319,5 @@ int main() {
     mono_finish_closes_the_final_note_and_plays_it();
     mono_reorders_complete_gestures_and_pairs_repeated_pitches();
     tempo_changes_preserve_the_grid_and_external_start_can_be_armed();
-    external_clock_dropout_continues_until_an_explicit_stop();
     one_blocked_output_does_not_stall_the_other_output();
 }

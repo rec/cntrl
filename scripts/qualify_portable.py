@@ -41,7 +41,6 @@ def qualify(options: Qualification) -> None:
         environment = dict(os.environ, PYTHONPATH=str(root))
         commands = {
             'python': [sys.executable, '-m', 'pytest', '-q', 'test'],
-            'native': [sys.executable, 'scripts/native_tests.py'],
         }
         for name, command in commands.items():
             with (options.output / f'{name}.log').open('w') as log:

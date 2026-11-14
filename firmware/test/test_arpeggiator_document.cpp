@@ -19,13 +19,18 @@ struct Hardware : TestPatchHardware {
 };
 
 int main(int argc,char **argv) {
-    assert(argc == 2);
+    assert(argc == 2 || argc == 3);
     std::ifstream file(argv[1],std::ios::binary);
     std::vector<uint8_t> data{std::istreambuf_iterator<char>(file),std::istreambuf_iterator<char>()};
     Hardware hardware; cntrl::Document document;
     assert(document.load(data.data(),unsigned(data.size()),hardware));
     const auto *settings = document.arpeggiator_settings();
     assert(settings && !std::memcmp(settings,"CARP",4));
+    if (argc == 3) {
+        std::ifstream profile(argv[2],std::ios::binary);
+        std::vector<uint8_t> expected{std::istreambuf_iterator<char>(profile),std::istreambuf_iterator<char>()};
+        assert(expected.size() == 50 && !std::memcmp(settings,expected.data(),expected.size()));
+    }
     assert(document.page_layout().page(0)[0] == cntrl::PageLayout::arpeggiator);
     unsigned offset = unsigned(settings - data.data());
     for (unsigned field : {4u,5u,6u,7u}) {

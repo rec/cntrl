@@ -28,24 +28,10 @@ def test_pickup_rejects_implicit_boolean_coercion(value: object) -> None:
         compiler.normalize_patch({'patches': [], 'pickup': value})
 
 
-def test_pickup_policy_round_trips(tmp_path: Path) -> None:
-    root = Path(__file__).parents[1]
-    executable = tmp_path / 'pickup'
-    native_tests.compile_native(
-        [
-            'c++',
-            '-std=c++17',
-            '-Wall',
-            '-Wextra',
-            '-Werror',
-            '-pedantic',
-            '-fsanitize=address,undefined',
-            f'-I{root / "firmware/include"}',
-            str(root / 'firmware/test/test_midi_pickup.cpp'),
-            '-o',
-            str(executable),
-        ]
-    )
+def test_pickup_policy_round_trips(
+    tmp_path: Path, native_programs: native_tests.NativePrograms
+) -> None:
+    executable = native_programs.build('test/test_midi_pickup.cpp')
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
     )

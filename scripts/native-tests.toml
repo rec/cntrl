@@ -1,15 +1,15 @@
 [tests]
+# LFO core scenarios and application scenarios run through test_lfos.py and
+# test_pages.py, which also supply their compiled authoring fixtures.
 "test/test_numeric.cpp" = []
 "test/test_arpeggiator.cpp" = []
 "test/test_text_messages.cpp" = []
 "test/test_midi_pickup.cpp" = []
 "test/test_midi_monitor.cpp" = []
-"test/test_lfos.cpp" = []
 "test/test_counters.cpp" = ["test/counters.golden"]
 "test/test_buttons.cpp" = []
 "test/test_input_pipeline.cpp" = ["test/show.golden"]
 "test/test_runtime.cpp" = []
-"test/test_application.cpp" = ["test/pages.golden"]
 "test/test_page_layout.cpp" = []
 "test/test_presentation.cpp" = []
 "test/test_pixel_throb.cpp" = []

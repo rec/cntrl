@@ -50,6 +50,7 @@ def test_named_instances_and_order_survive_compilation() -> None:
 
 def test_migrated_legacy_setup_keeps_live_patch_state_while_cycling_tools(
     tmp_path: Path,
+    native_programs: native_tests.NativePrograms,
 ) -> None:
     original = bytes.fromhex((ROOT / 'setup36.golden').read_text())
     legacy = models.Setup.model_validate(
@@ -58,17 +59,7 @@ def test_migrated_legacy_setup_keeps_live_patch_state_while_cycling_tools(
     assert sum(p.type == 'patch-switcher' for p in legacy.pages.values()) == 1
     migrated = tmp_path / 'legacy.golden'
     migrated.write_text(resolved.upgrade(original).hex())
-    program = tmp_path / 'application'
-    native_tests.compile_native(
-        [
-            'c++',
-            '-std=c++17',
-            f'-I{ROOT.parent / "include"}',
-            str(ROOT / 'test_application.cpp'),
-            '-o',
-            str(program),
-        ]
-    )
+    program = native_programs.build('test/test_application.cpp')
     native_tests.run_native([str(program), str(ROOT / 'pages.golden'), str(migrated)])
 
 
@@ -248,18 +239,10 @@ def test_later_selection_cannot_overcommit_minimums() -> None:
         layout.pack(show, ['one', 'two', 'three'])
 
 
-def test_firmware_and_authoring_agree_on_page_capabilities(tmp_path: Path) -> None:
-    program = tmp_path / 'page-layout'
-    native_tests.compile_native(
-        [
-            'c++',
-            '-std=c++17',
-            f'-I{ROOT.parent / "include"}',
-            str(ROOT / 'test_page_layout.cpp'),
-            '-o',
-            str(program),
-        ]
-    )
+def test_firmware_and_authoring_agree_on_page_capabilities(
+    native_programs: native_tests.NativePrograms,
+) -> None:
+    program = native_programs.build('test/test_page_layout.cpp')
     result = native_tests.run_native(
         [str(program), 'caps'], capture_output=True, text=True
     )

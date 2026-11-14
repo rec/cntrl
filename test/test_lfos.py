@@ -43,26 +43,9 @@ def compile_lfo(
     )
 
 
-@pytest.fixture(scope='module')
-def runner(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    root = Path(__file__).parents[1]
-    binary = tmp_path_factory.mktemp('lfos') / 'test-lfos'
-    native_tests.compile_native(
-        [
-            'c++',
-            '-std=c++17',
-            '-Wall',
-            '-Wextra',
-            '-Werror',
-            '-pedantic',
-            '-fsanitize=address,undefined',
-            f'-I{root / "firmware/include"}',
-            str(root / 'firmware/test/test_lfos.cpp'),
-            '-o',
-            str(binary),
-        ]
-    )
-    return binary
+@pytest.fixture(scope='session')
+def runner(native_programs: native_tests.NativePrograms) -> Path:
+    return native_programs.build('test/test_lfos.cpp')
 
 
 def test_shapes_and_parameter_transactions(

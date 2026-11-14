@@ -1,4 +1,4 @@
-"""Build and run the shared C++ tests with the host's native C++17 compiler."""
+"""Shared native compilation and execution for the ordinary pytest suite."""
 
 import os
 import subprocess
@@ -6,19 +6,51 @@ import sys
 from pathlib import Path
 
 import tomlkit
-import tyro
-from pydantic import BaseModel, Field
-
-
-class Run(BaseModel, frozen=True):
-    source_root: Path = Field(
-        default_factory=lambda: Path(__file__).resolve().parents[1]
-    )
-    output: Path | None = None
+from pydantic import BaseModel
 
 
 class Suite(BaseModel, frozen=True):
     tests: dict[str, list[str]]
+
+
+class NativePrograms:
+    """Compile each shared source once with the suite's strict native flags."""
+
+    def __init__(self, source_root: Path, output: Path) -> None:
+        self.source_root = source_root
+        self.output = output
+        self.programs: dict[str, Path] = {}
+
+    def build(self, source: str) -> Path:
+        if source not in self.programs:
+            root = self.source_root / 'firmware'
+            binary = self.output / Path(source).with_suffix('')
+            compile_native(
+                [
+                    'c++',
+                    '-std=c++17',
+                    '-Wall',
+                    '-Wextra',
+                    '-Werror',
+                    '-pedantic',
+                    '-fsanitize=address,undefined',
+                    '-fno-omit-frame-pointer',
+                    f'-I{root / "include"}',
+                    str(root / source),
+                    '-o',
+                    str(binary),
+                ]
+            )
+            self.programs[source] = executable(binary)
+        return self.programs[source]
+
+
+def cases() -> dict[str, list[str]]:
+    return Suite.model_validate(
+        tomlkit.parse(
+            Path(__file__).with_name('native-tests.toml').read_text()
+        ).unwrap()
+    ).tests
 
 
 def executable(path: Path) -> Path:
@@ -88,45 +120,3 @@ def run_native(
         text=text,
         timeout=180,
     )
-
-
-def run(options: Run) -> None:
-    root = options.source_root.resolve() / 'firmware'
-    output = options.output or root / 'build'
-    suite = Suite.model_validate(
-        tomlkit.parse(
-            Path(__file__).with_name('native-tests.toml').read_text()
-        ).unwrap()
-    )
-    failures: list[str] = []
-    for source, arguments in suite.tests.items():
-        binary = output / Path(source).with_suffix('')
-        result = compile_native(
-            [
-                'c++',
-                '-std=c++17',
-                '-Wall',
-                '-Wextra',
-                '-Werror',
-                '-pedantic',
-                '-fsanitize=address,undefined',
-                '-fno-omit-frame-pointer',
-                f'-I{root / "include"}',
-                str(root / source),
-                '-o',
-                str(binary),
-            ],
-            check=False,
-        )
-        if result.returncode:
-            failures.append(source)
-        elif run_native(
-            [str(binary), *(str(root / a) for a in arguments)], check=False
-        ).returncode:
-            failures.append(source)
-    if failures:
-        sys.exit('Native tests failed: ' + ', '.join(failures))
-
-
-if __name__ == '__main__':
-    run(tyro.cli(Run))

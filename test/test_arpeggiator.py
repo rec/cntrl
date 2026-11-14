@@ -54,16 +54,21 @@ def test_compiled_profiles_load_in_the_firmware(
     native_tests.run_native([str(document_receiver), str(image)])
 
 
-@pytest.mark.parametrize('mode', ['poly', 'mono'])
-@pytest.mark.parametrize('kind', arpeggiator.KINDS)
+@pytest.mark.parametrize(
+    'mode,kind',
+    [
+        (m, k)
+        for m in ('poly', 'mono')
+        for k in arpeggiator.KINDS
+        if not (
+            k == 'played'
+            and m != 'mono'
+            or k in ('ascending', 'descending')
+            and m != 'poly'
+        )
+    ],
+)
 def test_profiles_round_trip(mode: str, kind: str, target: models.Target) -> None:
-    if (
-        kind == 'played'
-        and mode != 'mono'
-        or kind in ('ascending', 'descending')
-        and mode != 'poly'
-    ):
-        return
     source = dict(
         pages={'arp': {'type': 'arpeggiator'}},
         page_settings={
@@ -79,6 +84,90 @@ def test_profiles_round_trip(mode: str, kind: str, target: models.Target) -> Non
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert compiler.compile_show(exported, {}, [], target) == data
     assert exported['page_settings']['arpeggiator']['selection']['kind'] == kind
+
+
+@pytest.mark.parametrize(
+    'mode,kind', [('poly', 'played'), ('mono', 'ascending'), ('mono', 'descending')]
+)
+def test_selection_rejects_an_incompatible_bank_mode(
+    mode: str, kind: str, target: models.Target
+) -> None:
+    with pytest.raises(ValueError, match='selection does not match its bank mode'):
+        compiler.compile_show(
+            {
+                'pages': {'arp': {'type': 'arpeggiator'}},
+                'page_settings': {
+                    'arpeggiator': {'mode': mode, 'selection': {'kind': kind}}
+                },
+            },
+            {},
+            [],
+            target,
+        )
+
+
+@pytest.mark.parametrize(
+    'selection,expected_kind',
+    [
+        ({'kind': 'alternating', 'repeat_begin': True, 'repeat_end': True}, 3),
+        ({'kind': 'walk', 'cycle': True, 'prob_up': '1/4', 'prob_down': '1/8'}, 5),
+        ({'kind': 'played', 'direction': 'reverse'}, 2),
+        ({'kind': 'mod', 'modulus': 5}, 6),
+        ({'kind': 'shuffle'}, 7),
+    ],
+)
+def test_nondefault_settings_survive_compilation_and_editable_export(
+    selection: dict[str, object],
+    expected_kind: int,
+    target: models.Target,
+    document_receiver: Path,
+    tmp_path: Path,
+) -> None:
+    settings = {
+        'mode': 'mono' if selection['kind'] == 'played' else 'poly',
+        'selection': selection,
+        'gate': '5/8',
+        'rhythm': {'step': '3/8 beat'},
+        'seed': 8675309,
+        'events': 73,
+        'inputs': ['din'],
+        'outputs': ['din'],
+    }
+    source = {
+        'pages': {'arp': {'type': 'arpeggiator'}},
+        'page_settings': {'arpeggiator': settings},
+    }
+    data = compiler.compile_show(source, {}, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    expected_settings = models.ArpeggiatorSettings.model_validate(settings).model_dump(
+        mode='json', exclude_none=True
+    )
+    assert exported['page_settings']['arpeggiator'] == expected_settings
+    assert compiler.compile_show(exported, {}, [], target) == data
+    kind = str(selection['kind'])
+    up, down, denominator = (2, 1, 8) if kind == 'walk' else (1, 1, 2)
+    expected = arpeggiator.CONFIG.pack(
+        b'CARP',
+        1,
+        kind == 'played',
+        expected_kind,
+        {'alternating': 3, 'walk': 4, 'played': 8}.get(kind, 0),
+        65535,
+        1,
+        1,
+        73,
+        5 if kind == 'mod' else 2,
+        1610612736,
+        1006632960,
+        up,
+        down,
+        denominator,
+        8675309,
+    )
+    image, profile = tmp_path / 'setup.bin', tmp_path / 'expected.carp'
+    image.write_bytes(data)
+    profile.write_bytes(expected)
+    native_tests.run_native([str(document_receiver), str(image), str(profile)])
 
 
 @pytest.mark.parametrize(
