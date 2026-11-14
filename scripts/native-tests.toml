@@ -14,6 +14,7 @@
 "test/test_presentation.cpp" = []
 "test/test_pixel_throb.cpp" = []
 "test/test_ui.cpp" = []
+"test/test_pong.cpp" = []
 "test/test_startup_counter.cpp" = []
 "test/test_startup_protocol.cpp" = []
 "test/test_asset_commands.cpp" = []

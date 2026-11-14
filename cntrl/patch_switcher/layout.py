@@ -11,12 +11,14 @@ def pack(show: models.Setup, windows: list[str]) -> bytes:
             regions = {'main': models.PageRegion(pages=list(pages))}
         else:
             performance = [
-                n for n, p in pages.items() if p.type in ('patch-switcher', 'banked')
+                n
+                for n, p in pages.items()
+                if p.type in ('patch-switcher', 'banked', 'pong')
             ]
             tools = [
                 n
                 for n, p in pages.items()
-                if p.type not in ('patch-switcher', 'banked')
+                if p.type not in ('patch-switcher', 'banked', 'pong')
             ]
             regions = {
                 n: models.PageRegion(pages=p)
@@ -196,7 +198,7 @@ def estimate_ram(
         + charge((controllers - 1) * 388)
         + charge((labels + (3 if switches else 2)) * 4 if pages else 0)
         + charge(labels * 96)
-        + charge(len(pages) * 272)
+        + charge(len(pages) * 320)
         + charge(regions * 12)
     )
 
@@ -229,7 +231,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             'min_windows': data[cursor + 33],
             'give_up_windows': [windows[i] for i in priority],
         }
-        if pages[name]['type'] not in ('None', 'patch-switcher', 'banked'):
+        if pages[name]['type'] not in ('None', 'patch-switcher', 'banked', 'pong'):
             # Stored minima remain readable, but tool pages now have fixed width.
             pages[name]['min_windows'] = 1
             canonical[cursor - offset + 33] = 1
@@ -286,4 +288,5 @@ PAGE_TYPES = (
     'midi-looper',
     'arpeggiator',
     'banked',
+    'pong',
 )

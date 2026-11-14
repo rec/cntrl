@@ -12,7 +12,7 @@ namespace cntrl::ui {
 class Renderer {
 public:
 #if UINTPTR_MAX == UINT32_MAX
-    static_assert(sizeof(Pane) == 1752, "Update display.estimate_frame_ram for changed transition snapshots");
+    static_assert(sizeof(Pane) == 1800, "Update display.estimate_frame_ram for changed transition snapshots");
 #endif
     Renderer(Display &display, const Fonts &fonts, uint16_t *work, unsigned work_capacity)
         : display_(display), fonts_(fonts), raster_(fonts, work), screens_(display.count()) {
@@ -163,9 +163,12 @@ public:
             animate(now); return;
         }
         if (drawing_ < 0) {
-            for (unsigned i = 0; i < screens_.size(); ++i) if (screens_[i].dirty) {
-                screens_[i].dirty = false;
-                begin_paint(i, i == 0 && message_ ? *message_ : screens_[i].requested); break;
+            for (unsigned i = 0; i < screens_.size(); ++i) {
+                const unsigned screen = (next_screen_ + i) % screens_.size();
+                if (!screens_[screen].dirty) continue;
+                screens_[screen].dirty = false;
+                next_screen_ = (screen + 1) % screens_.size();
+                begin_paint(screen, screen == 0 && message_ ? *message_ : screens_[screen].requested); break;
             }
         }
         if (drawing_ < 0) {
@@ -205,7 +208,7 @@ private:
     unsigned reveal_screen_ = 0;
     uint32_t settled_ = 0;
     unsigned reserved_ = 0;
-    unsigned selected_count_ = 1, brightness_screen_ = 0;
+    unsigned selected_count_ = 1, brightness_screen_ = 0, next_screen_ = 0;
     int drawing_ = -1, selected_ = -1;
     unsigned column_ = 0, field_ = 0, letter_ = 0, progress_ = 0, duration_ = 0, animation_screen_ = 0, animation_column_ = 0, dim_column_ = 0;
     uint32_t started_ = 0;
@@ -218,6 +221,7 @@ private:
         column_ = field_ = letter_ = 0;
         raster_.configure(screens_[screen].viewport, painting_.graphics); backgrounds();
         for (const auto &circle : painting_.circles) raster_.circle(circle);
+        for (const auto &r : painting_.rectangles) raster_.rectangle(r.x, r.y, r.width, r.height, r.color, r.stippled);
         raster_.toggle(painting_.toggle); rendering_ = true; incoming_screen_ = -1;
     }
 #ifdef CNTRL_FLASH_ROUTINE

@@ -41,6 +41,12 @@ struct ToggleIcon {
     bool visible = false, enabled = false, disabled = false;
 };
 
+struct Rectangle {
+    int16_t x = 0, y = 0;
+    uint16_t width = 0, height = 0, color = 0;
+    bool stippled = false;
+};
+
 struct Pane {
     unsigned page = ~0u;
     bool performance = false;
@@ -51,6 +57,7 @@ struct Pane {
     ScreenGraphics graphics;
     TextLine lines[max_lines];
     Circle circles[4];
+    Rectangle rectangles[4];
     ToggleIcon toggle;
 };
 

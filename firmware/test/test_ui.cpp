@@ -190,6 +190,38 @@ struct MixedDisplay final : cntrl::ui::Display {
         return true;
     }
 };
+static void pong_motion_only_changes_intersecting_windows() {
+    Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
+    uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0};
+    layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::pong);
+    pages.layout(cntrl::PageLayout{layout});
+    cntrl::Pane before[3];
+    for (unsigned i = 0; i < 3; ++i) before[i] = pages.view(0, 0, {}, {}, {}, i, 3);
+    pages.pong.x += 5;
+    for (unsigned i = 0; i < 3; ++i) {
+        const auto after = pages.view(0, 0, {}, {}, {}, i, 3);
+        assert((std::memcmp(&before[i], &after, sizeof(after)) != 0) == (i == 1));
+    }
+}
+static void updating_one_window_does_not_starve_the_others() {
+    for (unsigned frames : {0u, 1u, 2u}) {
+        Fonts fonts; MixedDisplay display;
+        uint16_t work[231] = {};
+        cntrl::ui::Renderer renderer(display, fonts, work, 231);
+        assert(renderer.prepare(frames, true)); renderer.finish(true);
+        for (unsigned screen = 0; screen < display.count(); ++screen) {
+            cntrl::Pane pane; pane.graphics.background = uint16_t(screen + 1);
+            renderer.show(screen, pane);
+        }
+        for (unsigned i = 0; i < 2000; ++i) {
+            cntrl::Pane pane; pane.graphics.background = uint16_t(10 + i % 2);
+            renderer.show(0, pane);
+            renderer.draw(i * 1000);
+        }
+        for (unsigned screen = 1; screen < display.count(); ++screen)
+            for (auto pixel : display.pixels[screen]) assert(pixel == screen + 1);
+    }
+}
 static void distinct_geometries_and_reserved_windows() {
     for (unsigned frames : {0u, 1u, 2u}) {
     Fonts fonts; MixedDisplay display;
@@ -463,6 +495,8 @@ static void expression_reuses_its_initial_layout_and_redraws_only_changed_conten
 
 int main() {
     cntrl::memory_budget = 192 * 1024;
+    pong_motion_only_changes_intersecting_windows();
+    updating_one_window_does_not_starve_the_others();
     frame_preparation_failure_and_rollback_preserve_active_storage();
     one_frame_scrolls_match_two_frame_pixels_in_both_axes_and_directions();
     animations_can_be_disabled_without_disabling_brightness();

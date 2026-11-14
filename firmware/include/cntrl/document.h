@@ -183,7 +183,7 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!PageLayout::valid_name(p) || p[32] > PageLayout::banked
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::pong
                 || p[33] > windows || (p[32] == 10 && p[33])) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < windows; ++j) {

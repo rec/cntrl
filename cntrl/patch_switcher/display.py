@@ -347,8 +347,8 @@ def estimate_frame_ram(setup: models.Setup, target: models.Target) -> int:
     pixels = 2 * sum(d.width * d.height for d in target.displays)
     total = setup.frame_buffers * (((pixels + 7) & ~7) + 8)
     if setup.frame_buffers == 1 and setup.use_animations:
-        # ARM Pane is 1752 bytes; Renderer checks this against sizeof(Pane).
-        total += ((len(target.displays) * 1752 + 7) & ~7) + 8
+        # ARM Pane is 1800 bytes; Renderer checks this against sizeof(Pane).
+        total += ((len(target.displays) * 1800 + 7) & ~7) + 8
     return total
 
 
