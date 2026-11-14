@@ -29,15 +29,7 @@ public:
     Bounds bounds(unsigned face, unsigned size, uint32_t asset, const char *text) const override {
         font_assets::View view; Bounds result;
         if (!find(face, size, asset, view)) return result;
-        int left, width; view.bounds(text, left, width);
-        result.left = left; result.width = width;
-        bool first = true; Glyph g;
-        for (unsigned i = 0; make_glyph(view, text, i, g, face == 255); ++i) {
-            if (!g.width || !g.height) continue;
-            const int bottom = g.y + int(g.height);
-            if (first) { result.top = g.y; result.height = g.height; first = false; }
-            else { const int end = std::max(result.top + result.height, bottom); result.top = std::min(result.top, g.y); result.height = end - result.top; }
-        }
+        view.bounds(text, result.left, result.top, result.width, result.height, face == 255 ? 0 : view.entry.bytes[14]);
         return result;
     }
     bool glyph(unsigned face, unsigned size, uint32_t asset, const char *text, unsigned index, Glyph &result) const override {
