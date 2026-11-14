@@ -52,6 +52,21 @@ public:
             }
             return true;
         }
+        if (!std::strncmp(line, "CNTRL STARTS ENSURE ", 20)) {
+            uint64_t minimum = 0;
+            const char *text = line + 20, *end = text + std::strlen(text);
+            auto parsed = std::from_chars(text, end, minimum);
+            if (parsed.ec != std::errc{} || parsed.ptr != end || minimum >= INT64_MAX
+                || s.recorder.active() || s.hardware.configuration_locked()) {
+                s.replies.reply("CNTRL ERROR starts-ensure"); return true;
+            }
+            if (s.counter.status != StartupCounter::Status::ready || minimum > s.counter.count) {
+                s.counter_file.open(StartupCounter::path, files::Mode::create);
+                s.counter.start(s.counter_file, minimum); s.counter_file.close();
+            }
+            s.replies.reply(s.counter.status == StartupCounter::Status::ready ? "CNTRL OK" : "CNTRL ERROR starts-ensure");
+            return true;
+        }
         if (!std::strncmp(line, "CNTRL STARTS ", 13)) {
             s.counter_file.open(StartupCounter::path, files::Mode::read);
             StartupCounter::read_command(line, s.counter_file, s.replies);

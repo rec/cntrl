@@ -7,6 +7,33 @@ import tomlkit
 from cntrl.patch_switcher import compiler, history, models, resolved
 
 
+def test_reserved_revisions_follow_the_selected_storage_root(tmp_path: Path) -> None:
+    (tmp_path / 'status.txt').write_text('CNTRL READY 41 0 00000000 persistent_root=42')
+    (tmp_path / 'storage.toml').write_text(
+        tomlkit.dumps(
+            {
+                'entries': [
+                    {
+                        'directory': True,
+                        'path': '/cntrl/.generations/0000002a/history/Evening/'
+                        '0000000000000003',
+                    },
+                    {
+                        'directory': True,
+                        'path': '/cntrl/.generations/00000029/history/Evening/'
+                        '0000000000000004',
+                    },
+                    {
+                        'directory': True,
+                        'path': '/cntrl/history/Evening/0000000000000005',
+                    },
+                ]
+            }
+        )
+    )
+    assert history.reserved_numbers(tmp_path) == [('Evening', 3)]
+
+
 def test_comparison_reports_configuration_paths_and_preserves_order() -> None:
     root = Path(__file__).parents[1] / 'firmware/test'
     before = bytes.fromhex((root / 'show.golden').read_text())

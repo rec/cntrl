@@ -75,6 +75,7 @@ extern "C" char cntrl_memory_budget;
 #endif
 #include <cntrl/storage_listing.h>
 #include <cntrl/slot_storage.h>
+#include <cntrl/state_transfer.h>
 #include "font_storage.h"
 #include "../../splash/board.h"
 #include <cntrl/animation/router.h>
@@ -109,6 +110,7 @@ protected:
     }
 } host_midi(host);
 extern cntrl::StoredPatchSources patch_sources;
+extern cntrl::Deployment deployment;
 using UiOperation = cntrl::ui::Operation;
 extern cntrl::ui::Application application;
 PerformanceStatus performance_status();
@@ -594,7 +596,14 @@ public:
         if (!splash_player.set_color_cycle(enabled)) error("Animation color memory unavailable");
     }
     bool reply_ready() const override { return usb_session.reply_ready(); }
-    void reply(const char *text) override { startup_counter.reply(text, usb_session); }
+    void reply(const char *text) override {
+        if (!std::strncmp(text, "CNTRL READY ", 12)) {
+            char status[192], response[256]; startup_counter.usb_status(text, status, sizeof(status));
+            std::snprintf(response, sizeof(response), "%s persistent_format=%u persistent_root=%lu", status,
+                cntrl::binary::development_format, (unsigned long)deployment.root());
+            usb_session.reply(response);
+        } else usb_session.reply(text);
+    }
     void data(const uint8_t *bytes, unsigned length) override { usb_session.data(bytes, length); }
     void detach() {
         cntrl::device::detach_usb_device();
@@ -658,7 +667,7 @@ public:
         if (!endpoint || endpoint->transport == cntrl::midi::OutputTransport::physical) return 0;
         return endpoint->transport == cntrl::midi::OutputTransport::usb_host ? host_midi.generation : stream_device_generation_;
     }
-    bool midi_document_valid() const { return documents.document().valid(); }
+    bool midi_document_valid() const { return !deployment.pending() && deployment.ready() && documents.document().valid(); }
     unsigned midi_source_count() const { return 4; }
     cntrl::midi::MidiFiles &runtime_midi_files() { return midi_files; }
     cntrl::ui::Pages &runtime_pages() { return ui_.pages_; }
@@ -730,7 +739,18 @@ public:
         return true;
     }
     void poll() {
-        midi_runtime_.poll(*this);
+        if (deployment.pending() || !deployment.ready()) {
+            // Keep recovery USB commands responsive without queuing musical
+            // input to replay against the newly selected collection.
+            host.Task();
+            const uint32_t begin = micros();
+            for (unsigned source = 0; source < midi_source_count(); ++source) {
+                for (unsigned i = 0; i < 64 && uint32_t(micros() - begin) < 250; ++i) {
+                    cntrl::midi::InputEvent ignored;
+                    if (!midi_read_event(source, ignored)) break;
+                }
+            }
+        } else midi_runtime_.poll(*this);
         if (usb_session.output_pending() && Serial.availableForWrite() > 0) {
             unsigned n = usb_session.output_size();
             unsigned room = Serial.availableForWrite();
@@ -780,6 +800,8 @@ private:
 
 Board board;
 cntrl::device::SdFileSystem setup_filesystem;
+cntrl::Deployment deployment(setup_filesystem);
+cntrl::StateTransfer state_transfer(setup_filesystem);
 cntrl::device::SdFile setup_reader, setup_writer;
 cntrl::device::SdDirectory setup_history;
 cntrl::SetupFiles card(setup_filesystem, setup_reader, setup_writer, setup_history);
@@ -823,7 +845,8 @@ cntrl::animation::Session splash_session(splash_assets, splash_player, random_mo
 
 cntrl::StorageListing storage_listing(setup_filesystem);
 FLASHMEM void storage_info(bool scan) {
-    if (!card.ready) { board.reply("CNTRL ERROR storage-unavailable"); return; }
+    // Recovery still needs a physical listing when the selected format cannot run.
+    if (!setup_filesystem.available()) { board.reply("CNTRL ERROR storage-unavailable"); return; }
     auto *device = SD.sdfs.card();
     cid_t cid;
     uint32_t sectors = device->sectorCount();
@@ -974,6 +997,55 @@ struct AssetServices {
     font_files, midi_asset_transfer, native_asset_command};
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
 FLASHMEM bool asset_command(const char *line) {
+    if (state_transfer.command(line, board)) return true;
+    if (!std::strncmp(line, "CNTRL DEPLOY ", 13)) {
+        unsigned long root = 0, bundle = 0, library = 0; int end = 0;
+        if (!std::strcmp(line, "CNTRL DEPLOY STATUS")) {
+            char response[96]; std::snprintf(response, sizeof(response), "CNTRL DEPLOY %lu %u %u",
+                (unsigned long)deployment.root(), unsigned(deployment.pending()), unsigned(deployment.ready()));
+            board.reply(response); return true;
+        }
+        if (documents.busy() || documents.dirty() || songs.busy() || songs.executing()
+            || songs_transfer.busy() || history_import.busy() || midi_files.storage_busy()
+            || board.midi_file_assets_busy() || application.busy() || !board.configuration_handoff()) {
+            board.reply("CNTRL ERROR deployment-busy"); return true;
+        }
+        if (std::sscanf(line, "CNTRL DEPLOY RECOVER %lx%n", &root, &end) == 1 && end && !line[end]) {
+            card.ready = setup_filesystem.available();
+            if (card.ready && deployment.recover(uint32_t(root))) {
+                patch_sources.release_all(); song_files.close();
+                if (setup_storage.boot() && songs.boot() && deployment.commit()) {
+                    documents.boot(); board.reply("CNTRL OK"); return true;
+                }
+                deployment.abort(); card.ready = deployment.ready();
+            }
+            board.reply("CNTRL ERROR deployment-recovery"); return true;
+        }
+        end = 0;
+        if (std::sscanf(line, "CNTRL DEPLOY BEGIN %lx%n", &root, &end) == 1 && end && !line[end]) {
+            if (deployment.begin(uint32_t(root))) {
+                patch_sources.release_all(); song_files.close();
+                if (setup_storage.boot() && songs.boot()) { documents.boot(); board.reply("CNTRL OK"); return true; }
+                deployment.abort();
+                song_files.close(); setup_storage.boot(); songs.boot(); documents.boot();
+            }
+            board.reply("CNTRL ERROR deployment-begin"); return true;
+        }
+        if (!std::strcmp(line, "CNTRL DEPLOY ABORT")) {
+            deployment.abort(); patch_sources.release_all(); song_files.close();
+            if (setup_storage.boot() && songs.boot()) { documents.boot(); board.reply("CNTRL OK"); }
+            else board.reply("CNTRL ERROR deployment-recovery");
+            return true;
+        }
+        end = 0;
+        if (std::sscanf(line, "CNTRL DEPLOY COMMIT %lx %lx%n", &bundle, &library, &end) == 2 && end && !line[end]) {
+            if (setup_storage.bundle_crc() == uint32_t(bundle) && songs.continuation().crc == uint32_t(library)
+                && deployment.commit()) board.reply("CNTRL OK");
+            else board.reply("CNTRL ERROR deployment-commit");
+            return true;
+        }
+        board.reply("CNTRL ERROR deployment-command"); return true;
+    }
     if (midi_files.storage_busy()) { board.reply("CNTRL ERROR midi-storage-busy"); return true; }
     if (!std::strncmp(line, "CNTRL MIDI_FILE ", 16)
         && board.midi_file_assets_busy()) {
@@ -1030,6 +1102,7 @@ FLASHMEM void initialize_target() {
     cntrl::device::initialize_heap_accounting(unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget)));
     randomSeed(Teensy3Clock.get() ^ ARM_DWT_CYCCNT);
     cntrl::device::heap_phase(cntrl::device::HeapPhase::setups);
+    if (card.ready && !deployment.boot()) { card.ready = false; board.error("Deployment recovery required"); }
     if (card.ready && !setup_storage.boot()) board.error("Setup bundle invalid");
     cntrl::device::heap_phase(cntrl::device::HeapPhase::documents);
     documents.boot();
@@ -1106,6 +1179,7 @@ public:
     void keyboard() { CNTRL_RUNTIME_TRACE(keyboard); board.poll_keyboard(); }
     bool scan_available() const { return !display_spi_busy(); }
     void scan(uint32_t now, uint32_t gap) {
+        if (deployment.pending() || !deployment.ready()) return;
         CNTRL_RUNTIME_TRACE(scan);
         if (gap) board.scanned(gap);
         const uint8_t raw = read_buttons();
@@ -1165,7 +1239,7 @@ public:
 #endif
     }
     TargetControls &actions() { return target_controls; }
-    void pages(uint32_t now) { CNTRL_RUNTIME_TRACE(pages); if (application.feature_open(board) || history_import.busy()) application.controller().cancel_gesture(); application.tick(now); }
+    void pages(uint32_t now) { if (deployment.pending() || !deployment.ready()) return; CNTRL_RUNTIME_TRACE(pages); if (application.feature_open(board) || history_import.busy()) application.controller().cancel_gesture(); application.tick(now); }
     void midi() { CNTRL_RUNTIME_TRACE(midi); board.poll(); }
     auto &session() { return usb_session; }
     auto &commands() { return serial_router; }
@@ -1194,9 +1268,9 @@ public:
         return true;
 #endif
     }
-    bool expression_allowed() const { return commands_allowed(); }
+    bool expression_allowed() const { return !deployment.pending() && deployment.ready() && commands_allowed(); }
     void expression(uint32_t now) { CNTRL_RUNTIME_TRACE(expression); board.poll_expression(now); }
-    void navigation() { CNTRL_RUNTIME_TRACE(navigation); if (!history_import.busy()) input_coordinator.finish(target_controls); }
+    void navigation() { if (deployment.pending() || !deployment.ready()) return; CNTRL_RUNTIME_TRACE(navigation); if (!history_import.busy()) input_coordinator.finish(target_controls); }
     void display(uint32_t now) { CNTRL_RUNTIME_TRACE(display); board.display(now, documents.busy() || application.feature_open(board) || application.patch_pending()); }
 };
 TargetRuntime target_runtime;

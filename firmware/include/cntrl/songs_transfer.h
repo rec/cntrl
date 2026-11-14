@@ -38,6 +38,22 @@ public:
         if (std::strncmp(line, "CNTRL SONGS ", 12)) return false;
         if (processing_) { replies_.reply("CNTRL ERROR songs-busy"); return true; }
         unsigned length = 0, overwrite = 0; unsigned long crc = 0; int end = 0;
+        if (!std::strcmp(line, "CNTRL SONGS UNDO SIZE")) {
+            uint32_t check = 0;
+            if (!songs_.undo_source(length, check)) return error();
+            if (!length) { replies_.reply("CNTRL SONGS UNDO NONE"); return true; }
+            char response[64]; std::snprintf(response, sizeof(response), "CNTRL SONGS %u %08lx", length, (unsigned long)check);
+            replies_.reply(response); return true;
+        }
+        if (std::sscanf(line, "CNTRL SONGS UNDO READ %u%n", &length, &end) == 1 && end && !line[end]) {
+            unsigned size = 0; uint32_t check = 0;
+            if (!songs_.undo_source(size, check) || length >= size) return error();
+            unsigned n = std::min(usb_block_size, size - length);
+            MemoryBuffer buffer;
+            if (!buffer.resize(n) || !songs_.read_undo_payload(length, buffer.data, n)) return error();
+            replies_.data(buffer.data, n); return true;
+        }
+        end = 0;
         if (std::sscanf(line, "CNTRL SONGS BEGIN %u %lx %u%n", &length, &crc, &overwrite, &end) == 3
             && end && !line[end] && length >= 12 && length <= 0xffffffffu - 20 && crc <= 0xfffffffful && overwrite <= 1) {
             if (receiving_) { songs_.import_abort(); receiving_ = false; }

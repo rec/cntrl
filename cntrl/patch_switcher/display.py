@@ -398,6 +398,11 @@ def field_value(
 
 
 def read_source(data: bytes, offset: int) -> dict[str, object]:
+    from . import binary_format
+
+    if data.startswith(binary_format.MAGIC):
+        offset -= binary_format.core_offset(data)
+        data = binary_format.core(data)
     if data[offset : offset + 4] != b'CPAT' or offset + 16 > len(data):
         raise ValueError('missing patch graph')
     offset += struct.unpack_from('<I', data, offset + 4)[0]

@@ -14,7 +14,7 @@ public:
     CNTRL_FLASH_ROUTINE(bundle_boot)
 #endif
     bool boot() {
-        table_.clear(); generation_ = modified_ = 0; image_.length = 0;
+        table_.clear(); generation_ = modified_ = bundle_crc_ = 0; image_.length = 0;
         for (unsigned slot = 0; slot < 2; ++slot) {
             uint8_t header[96], end[4]; disk_.choose(bundle_name);
             unsigned size = disk_.size(slot);

@@ -8,7 +8,7 @@ from zlib import crc32
 from pydantic import BaseModel, Field, model_validator
 from reccy.configuration import units
 
-from . import compiler, data_files, display, models, resolved
+from . import binary_format, compiler, data_files, display, models, resolved
 
 
 class SetupBundle(BaseModel, frozen=True):
@@ -46,7 +46,7 @@ class SetupBundle(BaseModel, frozen=True):
         # movies stay on SD; there is no size-dependent RAM2 allocation.
         # Names/pointers, validated views/cache entries, and packed-table prefix.
         metadata = (
-            len(self.names) * (64 + 4 + 92 + 85) + 2 + 4 * (len(self.names) - 1) + 32
+            len(self.names) * (64 + 4 + 108 + 85) + 2 + 4 * (len(self.names) - 1) + 32
         )
         active = max(self.page_ram2)
         return self.memory.runtime + metadata + active
@@ -120,7 +120,7 @@ def build(
     page_ram2: list[int] = []
     for name in ordered:
         settings = models.Setup.model_validate(sources[name])
-        data = setups[name]
+        data = binary_format.core(setups[name])
         # Size-only callers can supply opaque payloads. Compiled setups carry
         # the authoritative estimate, including imported routing graphs.
         if not data.startswith(b'CSW1'):
@@ -132,7 +132,10 @@ def build(
             struct.unpack_from('<I', data, metadata + compiler.METADATA.size - 8)[0]
         )
     return SetupBundle(
-        setups=setups,
+        setups={
+            n: binary_format.wrap(d) if binary_format.core(d).startswith(b'CSW1') else d
+            for n, d in setups.items()
+        },
         page_ram2=page_ram2,
         memory=memory,
         memory_margin=memory_margin,
@@ -145,9 +148,10 @@ def reindex(setups: dict[str, bytes]) -> dict[str, bytes]:
     signature = crc32(b''.join(n.encode('ascii').ljust(64, b'\0') for n in indices))
     result: dict[str, bytes] = {}
     for name, original in setups.items():
-        data = bytearray(original)
-        graph = resolved.graph_offset(original)
-        source = display.read_source(original, graph)
+        core = binary_format.core(original)
+        data = bytearray(core)
+        graph = resolved.graph_offset(core)
+        source = display.read_source(core, graph)
         metadata = cast(dict[str, dict[str, object]], source['patch_metadata'])
         count = struct.unpack_from('<H', data, graph + 8)[0]
         for i in range(count):
@@ -160,12 +164,20 @@ def reindex(setups: dict[str, bytes]) -> dict[str, bytes]:
             document = str(metadata[str(i)]['_document'])
             if document.lower() not in indices:
                 raise ValueError(f'{name}: referenced setup {document!r} is absent')
-            struct.pack_into('<H', data, at + 4, indices[document.lower()])
+            destination = indices[document.lower()]
+            if struct.unpack_from('<H', data, at + 4)[0] != destination:
+                binary_format.require_structural_edit(original)
+            struct.pack_into('<H', data, at + 4, destination)
         ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
         meta = 76 + ni * 68 + nc * 68 + np * 82
+        if (
+            struct.unpack_from('<I', data, meta + compiler.METADATA.size - 4)[0]
+            != signature
+        ):
+            binary_format.require_structural_edit(original)
         struct.pack_into('<I', data, meta + compiler.METADATA.size - 4, signature)
         struct.pack_into('<I', data, 20, crc32(data[28:]))
-        result[name] = bytes(data)
+        result[name] = binary_format.replace_core(original, bytes(data))
     return result
 
 
@@ -176,18 +188,43 @@ def unpack(data: bytes) -> dict[str, bytes]:
     if (
         magic != b'CSTB'
         or version != 1
+        or not count
         or length != len(data)
         or crc32(data[HEADER.size :]) != checksum
     ):
         raise ValueError('invalid setup bundle')
-    cursor = HEADER.size + count * ENTRY.size + 2 + 4 * (count - 1)
+    table = HEADER.size + count * ENTRY.size
+    cursor = table + 2 + 4 * (count - 1)
+    if cursor > len(data) or struct.unpack_from('<H', data, table)[0] != count:
+        raise ValueError('invalid setup bundle table')
+    start = cursor
     result: dict[str, bytes] = {}
+    previous = ''
     for i in range(count):
-        name, size, _, _ = ENTRY.unpack_from(data, HEADER.size + i * ENTRY.size)
+        record = HEADER.size + i * ENTRY.size
+        encoded, size, _, prefill = ENTRY.unpack_from(data, record)
+        name, separator, padding = encoded.partition(b'\0')
+        if (
+            not separator
+            or padding.strip(b'\0')
+            or prefill > 1
+            or any(data[record + 73 : record + 76])
+        ):
+            raise ValueError('invalid setup bundle entry')
+        name = data_files.validate_name(name.decode('ascii'))
+        if name.lower() <= previous or size > len(data) - cursor:
+            raise ValueError('invalid setup bundle names or lengths')
+        previous = name.lower()
+        if (
+            i
+            and struct.unpack_from('<I', data, table + 2 + (i - 1) * 4)[0]
+            != cursor - start
+        ):
+            raise ValueError('invalid setup bundle offsets')
         if size:
-            result[name.split(b'\0')[0].decode('ascii')] = data[cursor : cursor + size]
+            result[name] = data[cursor : cursor + size]
         cursor += size
-    if cursor != len(data):
+    if cursor != len(data) or cursor - start != HEADER.unpack_from(data)[9]:
         raise ValueError('invalid setup bundle offsets')
     return result
 

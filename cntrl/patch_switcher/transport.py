@@ -9,6 +9,7 @@ from zlib import crc32
 from pydantic import BaseModel
 from serial import Serial, SerialTimeoutException
 
+from . import binary_format
 from .data_files import validate_name
 from .models import PlayMidiFile, TargetMemory
 from .usb_frames import HEADER, MAGIC, Frame, Kind, Status
@@ -391,6 +392,15 @@ class SetupClient:
         self.ok('CNTRL SETUP SET ' + validate_name(name).encode('ascii').hex())
 
     def copy(self, name: str, data: bytes, overwrite: bool) -> None:
+        if data.startswith(binary_format.MAGIC):
+            binary_format.unpack(data, binary_format.Kind.setup)
+            if (
+                self.request('CNTRL FORMAT')
+                != f'CNTRL FORMAT {binary_format.DEVELOPMENT_FORMAT} 1'
+            ):
+                raise ValueError(
+                    'firmware does not support the persistent document format'
+                )
         hex_name = validate_name(name).encode('ascii').hex()
         command = (
             f'CNTRL SETUP PUT {hex_name} {len(data)} {crc32(data):08x} {int(overwrite)}'
@@ -405,6 +415,16 @@ class SetupClient:
             raise ValueError(f'{name}: read-back verification failed')
 
     def copy_bundle(self, data: bytes, overwrite: bool) -> None:
+        from .setup_bundle import unpack
+
+        if any(d.startswith(binary_format.MAGIC) for d in unpack(data).values()):
+            if (
+                self.request('CNTRL FORMAT')
+                != f'CNTRL FORMAT {binary_format.DEVELOPMENT_FORMAT} 1'
+            ):
+                raise ValueError(
+                    'firmware does not support the persistent document format'
+                )
         response = self.request(
             f'CNTRL BUNDLE BEGIN {len(data)} {crc32(data):08x} {int(overwrite)}'
         )
@@ -415,6 +435,70 @@ class SetupClient:
         self.ok('CNTRL BUNDLE END')
         if self.download_bundle() != data:
             raise ValueError('bundle read-back verification failed')
+
+    def begin_deployment(self) -> int:
+        state = self.request('CNTRL DEPLOY STATUS').split()
+        if (
+            len(state) != 5
+            or state[:2] != ['CNTRL', 'DEPLOY']
+            or state[3:] != ['0', '1']
+        ):
+            raise ValueError(
+                'device requires deployment recovery before another update'
+            )
+        root = secrets.randbelow(0xFFFFFFFF) + 1
+        self.ok(f'CNTRL DEPLOY BEGIN {root:08x}')
+        return root
+
+    def recover_deployment(self) -> None:
+        state = self.request('CNTRL DEPLOY STATUS').split()
+        if len(state) != 5 or state[:2] != ['CNTRL', 'DEPLOY'] or state[4] != '1':
+            raise ValueError(
+                'select a known-good root with cntrl setup recover before restoring'
+            )
+        if state[3] == '1':
+            self.ok('CNTRL DEPLOY ABORT')
+
+    def commit_deployment(self, bundle: bytes, library: bytes) -> None:
+        self.ok(f'CNTRL DEPLOY COMMIT {crc32(bundle):08x} {crc32(library):08x}')
+
+    def download_starts(self) -> bytes:
+        response = self.request('CNTRL STARTS SIZE').split()
+        if len(response) != 4 or response[:3] != ['CNTRL', 'STARTS', 'SIZE']:
+            raise ValueError('invalid startup counter size response')
+        size = int(response[3])
+        if not 0 < size <= 1024:
+            raise ValueError('invalid startup counter size')
+        data = bytearray()
+        while len(data) < size:
+            part = self.request_data(f'CNTRL STARTS READ {len(data)}')
+            if not 0 < len(part) <= size - len(data):
+                raise ValueError('invalid startup counter read')
+            data.extend(part)
+        return bytes(data)
+
+    def download_state(self, path: str) -> bytes:
+        encoded = path.encode('ascii').hex()
+        response = self.request(f'CNTRL STATE SIZE {encoded}')
+        if response == 'CNTRL STATE MISSING':
+            raise FileNotFoundError(f'{path}: device state is missing')
+        fields = response.split()
+        if len(fields) != 3 or fields[:2] != ['CNTRL', 'STATE']:
+            raise ValueError(f'{path}: invalid device state size response')
+        size = int(fields[2])
+        if not 0 <= size <= 0xFFFFFFFF:
+            raise ValueError(f'{path}: invalid device state size')
+        result = bytearray()
+        while len(result) < size:
+            part = self.request_data(f'CNTRL STATE READ {encoded} {len(result)}')
+            if (
+                not 0
+                < len(part)
+                <= min(self.connection.usb_block_size, size - len(result))
+            ):
+                raise ValueError(f'{path}: invalid device state read')
+            result.extend(part)
+        return bytes(result)
 
     def download_bundle(self) -> bytes:
         parts = self.request('CNTRL BUNDLE SIZE').split()

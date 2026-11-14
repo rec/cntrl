@@ -3,16 +3,18 @@
 #include <SD.h>
 #include <cntrl/filesystem.h>
 #include <cntrl/memory.h>
+#include <cntrl/deployment.h>
 
 namespace cntrl::device {
 class SdFile : public files::File, public CheckedHeapAllocation {
 public:
     bool open(const char *path, files::Mode mode) override {
         close();
+        char mapped[224]; if (!persistent_path(path, mapped)) return false;
         oflag_t flags = mode == files::Mode::read ? O_RDONLY : O_CREAT | O_RDWR;
         if (mode == files::Mode::exclusive) flags |= O_EXCL;
         if (mode == files::Mode::truncate) flags |= O_TRUNC;
-        file_ = SD.sdfs.open(path, flags);
+        file_ = SD.sdfs.open(mapped, flags);
         return bool(file_);
     }
     void close() override { file_.close(); }
@@ -42,7 +44,8 @@ private:
 class SdDirectory : public files::Directory, public CheckedHeapAllocation {
 public:
     bool open(const char *path) override {
-        close(); failed_ = false; directory_ = SD.sdfs.open(path, O_RDONLY);
+        char mapped[224]; if (!persistent_path(path, mapped)) return false;
+        close(); failed_ = false; directory_ = SD.sdfs.open(mapped, O_RDONLY);
         return directory_ && directory_.isDirectory();
     }
     bool next(char *name, unsigned capacity, bool &is_directory) override {
@@ -63,10 +66,19 @@ private:
 };
 class SdFileSystem : public files::FileSystem {
 public:
-    bool exists(const char *path) override { return SD.sdfs.exists(path); }
-    bool make_directory(const char *path) override { return SD.sdfs.mkdir(path, true); }
-    bool rename(const char *from, const char *to) override { return SD.sdfs.rename(from, to); }
-    bool remove(const char *path) override { return SD.sdfs.remove(path); }
+    bool exists(const char *path) override {
+        char mapped[224]; return persistent_path(path, mapped) && SD.sdfs.exists(mapped);
+    }
+    bool make_directory(const char *path) override {
+        char mapped[224]; return persistent_path(path, mapped) && SD.sdfs.mkdir(mapped, true);
+    }
+    bool rename(const char *from, const char *to) override {
+        char first[224], second[224];
+        return persistent_path(from, first) && persistent_path(to, second) && SD.sdfs.rename(first, second);
+    }
+    bool remove(const char *path) override {
+        char mapped[224]; return persistent_path(path, mapped) && SD.sdfs.remove(mapped);
+    }
     bool available() const override { return SD.sdfs.card() && !SD.sdfs.card()->errorCode(); }
     std::unique_ptr<files::Directory> directory() override { return std::unique_ptr<files::Directory>(new (std::nothrow) SdDirectory); }
     std::unique_ptr<files::File> file() override { return std::unique_ptr<files::File>(new (std::nothrow) SdFile); }

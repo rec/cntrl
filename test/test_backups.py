@@ -11,6 +11,7 @@ import tyro
 
 from cntrl.patch_switcher import (
     backups,
+    binary_format,
     cli,
     compiler,
     history,
@@ -18,6 +19,7 @@ from cntrl.patch_switcher import (
     resolved,
     setup_bundle,
     songs,
+    storage_info,
     transport,
 )
 
@@ -100,10 +102,13 @@ def test_song_restore_preserves_recorded_source_memory_estimates(
     target: models.Target,
 ) -> None:
     library = bytearray(songs.encode(songs.Library(midi={}), target))
-    source = library.index(b'CSP5') + 8
-    metadata = library.index(b'CMTA') + compiler.METADATA.size - 8
-    struct.pack_into('<I', library, metadata, 1)
-    struct.pack_into('<I', library, source + 20, crc32(library[source + 28 :]))
+    offset = library.index(b'CSP5') + 8
+    original = bytes(library[offset:])
+    source = bytearray(binary_format.core(original))
+    metadata = source.index(b'CMTA') + compiler.METADATA.size - 8
+    struct.pack_into('<I', source, metadata, 1)
+    struct.pack_into('<I', source, 20, crc32(source[28:]))
+    library[offset:] = binary_format.replace_core(original, bytes(source))
     data = bytes(library)
     assert (
         songs.upgrade(data, {}, switches=False, preserve_memory_estimates=True) == data
@@ -150,6 +155,8 @@ def test_restore_preparation_upgrades_setups_and_history_without_changing_backup
     )
     (original / 'selected.txt').write_text('Evening')
     (original / 'songs.bin').write_bytes(songs.encode(songs.Library()))
+    undo = songs.encode(songs.Library(midi={}), target)
+    (original / 'songs-undo.bin').write_bytes(undo)
     saved = {
         p.relative_to(original): p.read_bytes()
         for p in original.rglob('*')
@@ -161,8 +168,10 @@ def test_restore_preparation_upgrades_setups_and_history_without_changing_backup
         for p in original.rglob('*')
         if p.is_file()
     } == saved
-    expected = resolved.refresh_memory(
-        resolved.upgrade(data), {}, switches=bool(target.max_switches)
+    expected = binary_format.wrap(
+        resolved.refresh_memory(
+            resolved.upgrade(data), {}, switches=bool(target.max_switches)
+        )
     )
     assert backups.read_setup_binaries(prepared) == {'Evening': expected}
     assert backups.read_history_binaries(prepared) == [
@@ -174,6 +183,13 @@ def test_restore_preparation_upgrades_setups_and_history_without_changing_backup
     ]
     assert (prepared / 'setups/fonts/12345678.cfont').read_bytes() == b'font'
     assert (prepared / 'songs.bin').read_bytes() == saved[Path('songs.bin')]
+    assert (prepared / 'songs-undo.bin').read_bytes() == songs.upgrade(
+        undo, {}, switches=bool(target.max_switches)
+    )
+    backups.check_conversion(prepared)
+    (prepared / 'setups/fonts/12345678.cfont').write_bytes(b'changed')
+    with pytest.raises(ValueError, match='checksum differs'):
+        backups.check_conversion(prepared)
     with pytest.raises(FileExistsError):
         backups.prepare_restore(original, prepared, target)
 
@@ -191,9 +207,59 @@ def test_restore_preparation_rejects_incomplete_backup_before_creating_output(
     assert not (tmp_path / 'restore').exists()
 
 
+def test_recording_high_water_uses_valid_sectors_and_preserves_newer_recordings(
+    tmp_path: Path,
+) -> None:
+    good = b'[slot1]\nstarts = 255\ncheck = "ffffffffffffff00"\n'
+    (tmp_path / 'starts.toml').write_bytes(
+        b'corrupt'.ljust(512, b'!') + good.ljust(511, b' ') + b'\n'
+    )
+    assert backups.recording_high_water(tmp_path) == 255
+    midi = tmp_path / 'setups/midi'
+    midi.mkdir(parents=True)
+    (midi / '300-3.mid').write_bytes(b'preserved')
+    assert backups.recording_high_water(tmp_path) == 300
+    (tmp_path / 'starts.toml').write_bytes(b'corrupt')
+    with pytest.raises(ValueError, match='no valid startup counter'):
+        backups.recording_high_water(tmp_path)
+
+
+def test_deployment_budget_includes_allocation_and_retained_recovery_space() -> None:
+    report = storage_info.parse_storage_info('CNTRL STORAGE 65536 65536 8192 4096')
+    backups.check_deployment_space(report, [4096], 1)
+    with pytest.raises(ValueError, match='needs 12288 free bytes'):
+        backups.check_deployment_space(report, [4097], 1)
+    with pytest.raises(ValueError, match='storage scan'):
+        backups.check_deployment_space(
+            report.model_copy(update={'free_bytes': None}), [1], 0
+        )
+
+
+def test_conversion_checks_undo_source_assets_before_creating_destination(
+    tmp_path: Path, target: models.Target
+) -> None:
+    original = tmp_path / 'before'
+    (original / 'setups').mkdir(parents=True)
+    (original / 'songs.bin').write_bytes(songs.encode(songs.Library()))
+    (original / 'selected.txt').write_text('')
+    (original / 'songs-undo.bin').write_bytes(
+        songs.encode(
+            songs.Library(
+                patches={'p': {'operation': 'play-midi-file', 'filename': 'take.mid'}}
+            ),
+            target,
+        )
+    )
+    with pytest.raises(ValueError, match='midi/take.mid: required asset'):
+        backups.prepare_restore(original, tmp_path / 'converted', target)
+    assert not (tmp_path / 'converted').exists()
+
+
+@pytest.mark.parametrize('deleted_setup', [False, True])
 def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    deleted_setup: bool,
 ) -> None:
     import struct
     from contextlib import nullcontext
@@ -230,6 +296,8 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
             return 'Evening'
 
         def catalogue(self) -> list[transport.SetupEntry]:
+            if deleted_setup:
+                return []
             return [
                 transport.SetupEntry(
                     name='Evening', modified=0, length=0, checksum=0, valid=False
@@ -291,6 +359,47 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
     assert '/cntrl/history/Evening/0000000000000063' in {
         e['path'] for e in storage['entries']
     }
+
+
+def test_failed_startup_still_allows_an_incomplete_raw_recovery_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Client(transport.SetupClient):
+        def __init__(self) -> None:
+            super().__init__(transport.SerialConnection(Path('/unused')))
+            self.storage = iter(
+                [
+                    'CNTRL STORAGE 65536 65536 32768 4096',
+                    'CNTRL ENTRY 1 0 D 0 636e74726c',
+                    'CNTRL ENTRY 2 1 D 0 736574757073',
+                    'CNTRL ENTRY 3 2 F 8 302e62696e',
+                    'CNTRL STORAGE END 3',
+                ]
+            )
+
+        def request(self, command: str) -> str:
+            if command == 'CNTRL STATUS':
+                return 'CNTRL ERROR incompatible-format'
+            if command == 'CNTRL DEPLOY STATUS':
+                return 'CNTRL DEPLOY 0 0 0'
+            assert command.startswith('CNTRL STORAGE')
+            return next(self.storage)
+
+        def download_state(self, path: str) -> bytes:
+            assert path == '/cntrl/setups/0.bin'
+            return b'original'
+
+    client = Client()
+    monkeypatch.setattr(
+        transport, 'SerialConnection', lambda *a, **k: nullcontext(None)
+    )
+    monkeypatch.setattr(transport, 'SetupClient', lambda connection: client)
+    saved = tmp_path / 'recovery'
+    backups.backup_pedal(saved, Path('/unused'))
+    assert (saved / 'raw/cntrl/setups/0.bin').read_bytes() == b'original'
+    with pytest.raises(ValueError, match='incomplete'):
+        backups.check_conversion(saved)
+    assert not (saved / 'backup-pending.toml').exists()
 
 
 @pytest.mark.parametrize('preserve', [False, True])
@@ -445,7 +554,23 @@ def test_restore_uploads_saved_data_before_restoring_selection(
         def current(self) -> str:
             return self.selected
 
+        def begin_deployment(self) -> int:
+            assert not self.saved
+            return 1
+
+        def recover_deployment(self) -> None:
+            assert not self.saved
+
+        def commit_deployment(self, bundle: bytes, songs: bytes) -> None:
+            assert bundle == self.bundle and songs == self.saved
+            assert self.selected == 'Evening'
+
     client = Client()
+
+    def snapshot(directory: Path, port: Path, connection: object) -> None:
+        directory.mkdir()
+
+    monkeypatch.setattr(backups, 'backup_pedal', snapshot)
     monkeypatch.setattr(
         transport, 'SerialConnection', lambda *a, **k: nullcontext(None)
     )
@@ -456,7 +581,10 @@ def test_restore_uploads_saved_data_before_restoring_selection(
     )
     assert client.saved == library and client.selected == 'Evening'
     restored = setup_bundle.unpack(client.bundle)
-    assert restored == setup_bundle.reindex(existing | {'Evening': expected})
+    assert restored == {
+        n: binary_format.wrap(d)
+        for n, d in setup_bundle.reindex(existing | {'Evening': expected}).items()
+    }
     if nonempty:
         assert resolved.export(restored['Aardvark']) == resolved.export(
             existing['Aardvark']

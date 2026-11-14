@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_switcher import compiler, models, resolved, songs
+from cntrl.patch_switcher import binary_format, compiler, models, resolved, songs
 
 
 @pytest.mark.parametrize('version', [36, 38])
@@ -41,7 +41,9 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     library = prefix + (struct.pack('<I', len(source)) + source) * 2
     upgraded = songs.upgrade(library, {}, switches=True)
     assert upgraded[: len(prefix)] == prefix
-    expected = resolved.refresh_memory(resolved.upgrade(source), {}, switches=True)
+    expected = binary_format.wrap(
+        resolved.refresh_memory(resolved.upgrade(source), {}, switches=True)
+    )
     assert len(expected) > len(source)
     offset = len(prefix)
     for _ in range(2):
@@ -81,7 +83,10 @@ def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
         ),
         target,
     )
-    assert songs.upgrade(source, {}, switches=bool(target.max_switches)) == source
+    assert source[source.index(b'CSP5') + 8 :].startswith(binary_format.MAGIC)
+    upgraded = songs.upgrade(source, {}, switches=bool(target.max_switches))
+    assert songs.decode(upgraded) == songs.decode(source)
+    assert songs.upgrade(upgraded, {}, switches=bool(target.max_switches)) == upgraded
 
 
 ROOT = Path(__file__).parents[1] / 'firmware/test'

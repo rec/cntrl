@@ -135,7 +135,11 @@ public:
         case Phase::read_end:
             if (!storage_.read(slot_, body_offset_ + info_.length, block, 4)
                 || std::memcmp(block, "DONE", 4) || (crc_ ^ 0xffffffff) != expected_crc_) { invalid(); return; }
-            if (operation_ != Operation::current && (info_.length < 6 || u16(buffer_->data + 4) != document_version)) { invalid(); return; }
+            if (operation_ != Operation::current) {
+                binary::View view;
+                if (!binary::open(buffer_->data, info_.length, binary::Kind::setup, view)
+                    || view.length < 6 || u16(buffer_->data + view.offset + 4) != document_version) { invalid(); return; }
+            }
             finish(true); return;
         case Phase::hash_names: {
             uint8_t name[64] = {};
@@ -212,16 +216,18 @@ public:
 #endif
     bool remap(MemoryBuffer &buffer, const Document &document) const {
         if (!names_count_) return true;
+        if (document.has_opaque_metadata() && document.names_signature() != storage_.setup_names_signature()) return false;
         for (unsigned i = 0; i < document.nodes(); ++i) {
             const auto *node = document.node(i);
             if (node[0] != 6 || u16(node + 4) == 65535) continue;
             unsigned old = u16(node + 4);
             if (old >= remap_.size() || remap_[old] == 65535) return false;
+            if (old != remap_[old] && document.has_opaque_metadata()) return false;
             auto *p = buffer.data + (node - document.data()) + 4;
             p[0] = uint8_t(remap_[old]); p[1] = uint8_t(remap_[old] >> 8);
         }
         put32(buffer.data + document.metadata() + scrolling_offset + 10, storage_.setup_names_signature());
-        put32(buffer.data + 20, checksum(buffer.data + 28, document.length() - 28));
+        binary::seal_setup(buffer.data, document.length());
         return true;
     }
 private:

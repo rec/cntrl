@@ -187,7 +187,7 @@ def estimate_ram(
     labels = len(pages) + regions
     return (
         controllers * charge(instruments * 8 + cycles * 4)
-        + charge((controllers - 1) * 364)
+        + charge((controllers - 1) * 388)
         + charge((labels + (3 if switches else 2)) * 4 if pages else 0)
         + charge(labels * 96)
         + charge(len(pages) * 272)

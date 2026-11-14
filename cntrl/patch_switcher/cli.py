@@ -18,6 +18,7 @@ from ..emulator.cli import Emulate, emulate
 from ..maker.morningstar.mc import import_backup
 from . import (
     backups,
+    binary_format,
     compiler,
     data_files,
     devices,
@@ -96,6 +97,8 @@ class SetupCLI(BaseModel, frozen=True):
         | Annotated[backups.Backup, tyro.conf.subcommand(name='backup')]
         | Annotated[backups.Restore, tyro.conf.subcommand(name='restore')]
         | Annotated[backups.Verify, tyro.conf.subcommand(name='verify')]
+        | Annotated[backups.Convert, tyro.conf.subcommand(name='convert')]
+        | Annotated[backups.Recover, tyro.conf.subcommand(name='recover')]
     )
 
 
@@ -277,6 +280,8 @@ def run_setup(
     | backups.Backup
     | backups.Restore
     | backups.Verify
+    | backups.Convert
+    | backups.Recover
     | setup_sync.Sync,
 ) -> None:
     if isinstance(command, setup_sync.Sync):
@@ -284,6 +289,22 @@ def run_setup(
         return
     if isinstance(command, backups.Backup):
         backups.backup_pedal(command.directory, command.port)
+        return
+    if isinstance(command, backups.Convert):
+        backups.prepare_restore(
+            command.directory,
+            command.destination,
+            models.Target.model_validate(compiler.read_document(command.target)),
+        )
+        print(f'Converted backup: {command.destination}')
+        return
+    if isinstance(command, backups.Recover):
+        if not 0 <= command.root <= 0xFFFFFFFF:
+            raise ValueError('root must be between 0 and 4294967295')
+        with transport.SerialConnection(command.port) as connection:
+            client = transport.SetupClient(connection)
+            client.ok(f'CNTRL DEPLOY RECOVER {command.root:08x}')
+            print(client.request('CNTRL STATUS'))
         return
     if isinstance(command, backups.Restore):
         backups.restore_setups(
@@ -550,6 +571,7 @@ def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
         zip(bundle.names, bundle.setup_sizes, strict=True)
     ):
         data = bundle.setups[name]
+        data = binary_format.core(data)
         ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
         print(
             f'{i}: {name}: {size} RAM bytes; {ni} instruments, '

@@ -177,7 +177,7 @@ public:
             const uint8_t *definition = document.counter(u16(p));
             output = reinterpret_cast<const char *>(p + 2);
             if (!outputs_.available(output)) { fail("MIDI output unavailable"); return; }
-            auto *state = hardware_.counters.state(u32(document.data() + 20), u16(p));
+            auto *state = hardware_.counters.state(u32(document.data() + document.core_offset() + 20), u16(p));
             if (!state) { fail("Counter memory unavailable"); return; }
             int value = state->value + (p[35] == 1 ? 1 : p[35] == 2 ? -1 : 0);
             const int minimum = definition[99], maximum = definition[100];
@@ -196,7 +196,7 @@ public:
             const uint8_t *definition = document.counter(u16(p));
             output = reinterpret_cast<const char *>(definition + 64);
             if (!outputs_.available(output)) { fail("MIDI output unavailable"); return; }
-            auto *state = hardware_.counters.state(u32(document.data() + 20), u16(p));
+            auto *state = hardware_.counters.state(u32(document.data() + document.core_offset() + 20), u16(p));
             if (!state) { fail("Counter memory unavailable"); return; }
             auto step = Counters::next(*state, definition, p[2]);
             program_[0] = definition[96];
@@ -344,7 +344,7 @@ private:
             Frame &f = frames_[depth_ - 1];
             const Document *document = f.document;
             const uint8_t *n = document->node(f.node), *p = n + 4;
-            if (!f.child && validating) { hash(u32(document->data() + 20)); hash(f.node); }
+            if (!f.child && validating) { hash(u32(document->data() + document->core_offset() + 20)); hash(f.node); }
             if (n[0] == 3 && (p[0] == 7 || p[0] == 8)) {
                 if (f.child) { if (!validating) outputs_.selection_complete(p[0]); --depth_; continue; }
                 ++f.child; unsigned node = 0;
@@ -485,10 +485,10 @@ private:
             if (!prepare_message(output, message, definition[96] >> 4 == 12 ? 2 : 3)) return false;
             const auto generation = hardware_.counters.generation();
             if (!counter_pins_.empty() && counter_pins_[0].generation != generation) counter_pins_.clear();
-            auto *state = hardware_.counters.state(u32(document.data() + 20), u16(p));
+            auto *state = hardware_.counters.state(u32(document.data() + document.core_offset() + 20), u16(p));
             if (!state || std::none_of(counter_pins_.begin(), counter_pins_.end(), [state](const CounterPin &pin) { return pin.state == state; })) {
                 if (!counter_pins_.resize(counter_pins_.size() + 1)) return fail("Counter reservation memory unavailable");
-                state = hardware_.counters.acquire(u32(document.data() + 20), u16(p), definition[98]);
+                state = hardware_.counters.acquire(u32(document.data() + document.core_offset() + 20), u16(p), definition[98]);
                 if (!state) { counter_pins_.resize(counter_pins_.size() - 1); return fail("Counter memory unavailable"); }
                 counter_pins_.back() = {state, generation};
             }

@@ -13,6 +13,7 @@ import tomlkit
 from native_peer import NativePeer
 
 from cntrl.patch_switcher import (
+    binary_format,
     cli,
     compiler,
     data_files,
@@ -133,6 +134,42 @@ def test_cpp_receiver_rejects_corrupt_document(peer: Path) -> None:
             transport.device_status(port)
             == f'CNTRL READY {compiler.DOCUMENT_VERSION} 0 00000000'
         )
+
+
+def test_cpp_receiver_preserves_optional_records_and_rejects_required_ones(
+    peer: Path,
+) -> None:
+    core = bytes.fromhex((ROOT / 'firmware/test/show.golden').read_text())
+    document = binary_format.Document(
+        kind=binary_format.Kind.setup,
+        records=[
+            binary_format.Record(tag=1, required=True, data=core),
+            binary_format.Record(tag=500, data=b'future metadata'),
+        ],
+    )
+    data = document.pack()
+    with NativePeer([str(peer)]) as port:
+        with transport.SerialConnection(port) as connection:
+            client = transport.SetupClient(connection)
+            client.copy('Extended', data, False)
+            client.select('Extended')
+            assert client.download('Extended') == data
+            damaged = bytearray(data)
+            struct.pack_into('<H', damaged, 28 + len(core) + 2, 1)
+            struct.pack_into('<I', damaged, 16, 0)
+            struct.pack_into('<I', damaged, 16, crc32(damaged))
+            with pytest.raises(ValueError, match='required persistent record'):
+                client.copy('Unsupported', bytes(damaged), False)
+            assert (
+                client.request(
+                    f'CNTRL SETUP PUT {b"Unsupported".hex()} '
+                    f'{len(damaged)} {crc32(damaged):08x} 0'
+                )
+                == 'CNTRL SEND'
+            )
+            connection.write(bytes(damaged), transport.Kind.setup)
+            assert connection.line() == 'CNTRL ERROR invalid-document'
+            assert client.download('Extended') == data
 
 
 def test_large_setup_uses_the_shared_document_budget(peer: Path) -> None:
@@ -292,7 +329,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
         assert set(setup_sync.baseline(root)) == {'Show', 'Other'}
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
-            original = client.download('Show')
+            original = binary_format.core(client.download('Show'))
             edited = bytearray(original)
             # Pedal settings mutate the authoritative binary, leaving embedded
             # authoring metadata unchanged.
@@ -309,7 +346,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
             struct.pack_into('<I', edited, 20, crc32(edited[28:]))
             client.copy('Show', bytes(edited), True)
             client.ok('CNTRL SETUP FINISH')
-            independent = bytearray(client.download('Other'))
+            independent = bytearray(binary_format.core(client.download('Other')))
             struct.pack_into('<H', independent, 18, 44)
             struct.pack_into('<I', independent, 20, crc32(independent[28:]))
             client.copy('Other', bytes(independent), True)
@@ -387,7 +424,7 @@ def test_source_sync_retains_pedal_editable_fields(
         cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
-            original = client.download('Show')
+            original = binary_format.core(client.download('Show'))
             edited = bytearray(original)
             graph = resolved.graph_offset(original)
             node = (
@@ -449,7 +486,7 @@ def test_shared_sync_requires_review_and_recovers_interrupted_apply(
         cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
-            original = client.download('One')
+            original = binary_format.core(client.download('One'))
             edited = bytearray(original)
             edited[18] = 75
             struct.pack_into('<I', edited, 24, 45000)
@@ -517,7 +554,7 @@ def test_shared_sync_refuses_incompatible_accepted_values(
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             for name, brightness in [('One', 75), ('Two', 25)]:
-                edited = bytearray(client.download(name))
+                edited = bytearray(binary_format.core(client.download(name)))
                 edited[18] = brightness
                 struct.pack_into('<I', edited, 20, crc32(edited[28:]))
                 client.copy(name, bytes(edited), True)
@@ -548,7 +585,7 @@ def test_sync_materializes_an_integer_patch_without_rewriting_other_fields(
         cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
-            edited = bytearray(client.download('show'))
+            edited = bytearray(binary_format.core(client.download('show')))
             graph = resolved.graph_offset(bytes(edited))
             node = (
                 graph + struct.unpack_from('<I', edited, graph + compiler.GRAPH.size)[0]
@@ -579,7 +616,7 @@ def test_sync_without_baseline_requires_explicit_two_way_choices(
         document=[str(source)], target=[str(ROOT / 'firmware/test/target.json')]
     )
     bundle = cli.compile_inputs(inputs)
-    original = bundle.setups['setup']
+    original = binary_format.core(bundle.setups['setup'])
     edited = bytearray(original)
     edited[18] = 75
     struct.pack_into('<I', edited, 20, crc32(edited[28:]))
@@ -951,8 +988,10 @@ def test_midi_file_operations_survive_cpp_storage(peer: Path) -> None:
             assert client.download('Files') == data
 
 
+@pytest.mark.parametrize('enveloped', [False, True])
 def test_history_import_preserves_metadata_and_refuses_conflicting_retries(
     bundle_peer: Path,
+    enveloped: bool,
 ) -> None:
     from cntrl.patch_switcher import history
 
@@ -960,6 +999,8 @@ def test_history_import_preserves_metadata_and_refuses_conflicting_retries(
         compiler.read_document(ROOT / 'firmware/test/target.json')
     )
     data = compiler.compile_show({}, {}, [], target)
+    if enveloped:
+        data = binary_format.wrap(data)
     revision = history.Revision(
         number=42, modified=1234567890, length=len(data), label='Before soundcheck'
     )

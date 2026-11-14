@@ -29,6 +29,10 @@ public:
     bool finish() override {
         bool good = writer_.opened() && writer_.sync(); writer_.close(); return good;
     }
+    void close() {
+        writer_.close();
+        for (auto &reader : readers_) reader.file->close();
+    }
 private:
     files::FileSystem &filesystem_; files::File &writer_;
     struct Reader { unsigned slot; std::unique_ptr<files::File> file; };
@@ -40,6 +44,9 @@ private:
         int n = std::snprintf(path, sizeof(path), "%s/%u.bin", directory_, slot);
         return n > 0 && unsigned(n) < sizeof(path);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(slot_storage_open)
+#endif
     files::File *open(unsigned slot) {
         if (slot >= count_ || !ready_ || !filesystem_.available()) return nullptr;
         for (auto &reader : readers_) if (reader.slot == slot) {

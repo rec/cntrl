@@ -107,25 +107,31 @@ count and CRC32. Recheck status after a power cycle to verify persistence.
 
 `setup backup` reads the pedal without changing its saved data. The destination
 must not exist. It receives `selected.txt`, `catalogue.txt`, `status.txt`,
-`songs.bin`, and a `setups/` directory containing every valid current setup as
-binary and editable TOML, with referenced fonts under `setups/fonts/` and
-splash/idle animations under `setups/movies/`. Invalid setups are listed in the
-catalogue and skipped. Revision history, firmware and
-other SD-card files are outside its scope. An interrupted backup leaves partial
-files in the destination; use a new destination when trying again.
+`songs.bin`, retained song undo data, history snapshots and reservations, and a
+`setups/` directory containing current setup binaries and editable TOML exports.
+Fonts, movies and MIDI recordings are included. Current firmware also provides
+raw journal/adapter recovery data. `backup.toml` records file digests and whether
+the capture is complete. Invalid content is retained raw where possible and
+prevents the backup from being accepted as complete. Interrupted backups remain
+marked incomplete; use a new destination when trying again. Firmware images
+must be retained separately using the existing build/flash tools.
 
-`setup restore` reads these backup directories. It uploads `setups/fonts/*.cfont`
-and `setups/movies/*.cnsa`, overwrites the saved `setups/*.bin` with
-read-back verification, and restores a nonempty `selected.txt` selection.
-Binaries must already use the current document format. Songs and unrelated
-setups are retained. An empty saved selection leaves the current selection alone.
+`setup convert` upgrades a supported development backup offline into a separate
+directory and records its digests in `conversion.toml`. `setup restore` first
+retains a recovery backup of the pedal, then stages the merged setup bundle,
+history, song library and selection for one journaled activation. Referenced
+assets must be present, space for staging is checked, unrelated setups and
+history are retained, and recording-name collisions with different bytes fail.
+See [Persistent binary formats](../doc/binary-format.md) for recovery commands
+and compatibility limits.
 
 After flashing, `setup verify` requires a READY response for the document version
 used by the installed host code, the same selection and catalogue, and identical
 setup binaries, font and animation assets, and song-library bytes. It reports the first mismatch
 as an error and never restores or recompiles data. A backup from an older format
-must be updated separately before it can pass verification against new-format
-firmware.
+must be converted separately before it can pass verification against new-format
+firmware. Verification compares normalized supported documents while retaining
+opaque records; it does not recompile musical operations from current defaults.
 
 Data files can be combined using a standalone ` + ` argument wherever the CLI
 accepts them. Put positional expressions before options, for example
@@ -449,6 +455,12 @@ The renderer computes these positions from the complete pane; compiled row-y
 values do not determine vertical spacing.
 
 ## Binary and transfer protocol
+
+Persistent setups now use the d44 envelope around the indexed schema-43 core.
+See [Persistent binary formats](../doc/binary-format.md) for its byte layout,
+development importers, editing rules, conversion and recovery commands. The
+development format is not a public f0 release. Historical versions below describe
+the inner setup schema rather than the envelope's release identifier.
 
 Format 30 adds independent horizontal and vertical scroll durations and the
 send, patch-browsing, and cycle-browsing directions.

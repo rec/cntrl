@@ -42,6 +42,13 @@ void test_explicit_reset_replaces_both_slots_and_restarts_at_one() {
 }
 
 int main() {
+    {
+        CounterFile restored; StartupCounter counter;
+        counter.start(restored, 255);
+        assert(counter.status == StartupCounter::Status::ready && counter.count == 256);
+        StartupCounter restarted; restarted.start(restored);
+        assert(restarted.status == StartupCounter::Status::ready && restarted.count == 257);
+    }
     test_counter_text_preserves_values_above_32_bits();
     test_explicit_reset_replaces_both_slots_and_restarts_at_one();
     struct Replies { std::string value; void reply(const char *text) { value = text; } } replies;

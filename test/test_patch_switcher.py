@@ -8,7 +8,14 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import cli, compiler, models, resolved, setup_bundle
+from cntrl.patch_switcher import (
+    binary_format,
+    cli,
+    compiler,
+    models,
+    resolved,
+    setup_bundle,
+)
 
 
 @pytest.fixture
@@ -874,7 +881,7 @@ def test_cli_compiles_and_reports_counts_and_routes(
     cli.main()
     expected = bytes.fromhex((FIXTURES / 'show.golden').read_text())
     assert (
-        setup_bundle.unpack(output.read_bytes())['show'].hex()
+        binary_format.core(setup_bundle.unpack(output.read_bytes())['show']).hex()
         == setup_bundle.reindex({'show': expected})['show'].hex()
     )
     report = capsys.readouterr().out
@@ -939,7 +946,7 @@ def test_cli_preserves_repeated_table_inputs(
     )
     cli.main()
     assert compiler.HEADER.unpack_from(
-        setup_bundle.unpack(output.read_bytes())['patches']
+        binary_format.core(setup_bundle.unpack(output.read_bytes())['patches'])
     )[4:7] == (1, 2, 3)
 
 

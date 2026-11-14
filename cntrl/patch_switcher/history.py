@@ -137,11 +137,30 @@ def reserved_numbers(directory: Path) -> list[tuple[str, int]]:
     if not path.exists():
         return []
     report = tomlkit.parse(path.read_bytes().decode()).unwrap()
+    status = directory / 'status.txt'
+    root = (
+        next(
+            (
+                int(v.split('=', 1)[1])
+                for v in status.read_text().split()
+                if v.startswith('persistent_root=')
+            ),
+            0,
+        )
+        if status.exists()
+        else 0
+    )
+    prefix = f'/cntrl/.generations/{root:08x}/' if root else ''
     result: set[tuple[str, int]] = set()
     for entry in report.get('entries', []):
         if not isinstance(entry, dict) or not entry.get('directory'):
             continue
-        parts = str(entry['path']).split('/')
+        value = str(entry['path'])
+        if root:
+            if not value.startswith(prefix):
+                continue
+            value = '/cntrl/' + value[len(prefix) :]
+        parts = value.split('/')
         if len(parts) != 5 or parts[:3] != ['', 'cntrl', 'history']:
             continue
         if len(parts[4]) != 16 or any(

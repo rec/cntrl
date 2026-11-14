@@ -76,6 +76,9 @@ public:
         }
     }
     bool boot() {
+        if (busy()) return false;
+        counts_ = {}; active_ = length_ = source_count_ = 0;
+        can_undo_ = invalid_ = false;
         bool found = false; uint32_t best = 0;
         for (unsigned i = 0; i < 3; ++i) {
             uint32_t generation, crc; unsigned length; SongCounts counts;
@@ -219,6 +222,18 @@ public:
         if (!prepare(Edit::move, set)) return false;
         job_.at = from; job_.to = to; return true;
     }
+    bool undo_source(unsigned &length, uint32_t &crc) {
+        if (!can_undo_) { length = 0; crc = 0; return true; }
+        uint8_t header[16];
+        if (!storage_.read(undo_slot_, 0, header, 16) || std::memcmp(header, "CSG5", 4)) return false;
+        length = u32(header + 8); crc = u32(header + 12);
+        return length >= 12 && length <= 0xffffffffu - 20 && storage_.size(undo_slot_) == length + 20;
+    }
+    bool read_undo_payload(unsigned offset, uint8_t *data, unsigned length) {
+        unsigned size = 0; uint32_t crc = 0;
+        return undo_source(size, crc) && offset <= size && length <= size - offset
+            && storage_.read(undo_slot_, 16 + offset, data, length);
+    }
     bool undo() {
         if (busy() || !can_undo_) return false;
         uint8_t header[16];
@@ -343,7 +358,9 @@ private:
         unsigned set_count = 0;
         unsigned patches = 0, patch_index = 0;
         unsigned sources = 0, source_remaining = 0, greatest_source = 0, records_end = 8;
+        unsigned source_start = 0, source_hashed = 0, extension = 0, extension_end = 0, extension_count = 0;
         uint32_t source_crc = 0xffffffff, source_expected = 0;
+        bool source_envelope = false;
         bool graph_started = false, inline_source = false, verify_sources = true;
         bool first_selection = false;
         bool done = false, item = false, is_song = false, is_selection = false, is_entry = false;
@@ -403,9 +420,21 @@ private:
             if (source_remaining) {
                 uint8_t bytes[256]; unsigned n = std::min(256u, source_remaining);
                 if (!storage.read(slot, base + position, bytes, n)) return false;
+                if (source_envelope) {
+                    for (unsigned i = 0; i < n; ++i)
+                        if (source_hashed + i >= 16 && source_hashed + i < 20) bytes[i] = 0;
+                    source_hashed += n;
+                }
                 update_crc(source_crc, bytes, n); position += n; source_remaining -= n;
                 if (!source_remaining && ~source_crc != source_expected) return false;
                 return true;
+            }
+            if (extension < extension_end) {
+                uint8_t record[8];
+                if (++extension_count >= 4096 || extension_end - extension < 8 || !storage.read(slot, base + extension, record, 8)
+                    || !u16(record) || u16(record) == 1 || u16(record + 2)
+                    || u32(record + 4) > extension_end - extension - 8) return false;
+                extension += 8 + u32(record + 4); return true;
             }
             if (position == length) {
                 done = true; return !inline_source || greatest_source < sources;
@@ -413,9 +442,29 @@ private:
             uint8_t header[32];
             if (position > length || 32 > length - position || !storage.read(slot, base + position, header, 32)) return false;
             unsigned n = u32(header);
+            if (n >= 56 && !std::memcmp(header + 4, "CNBF", 4)) {
+                uint8_t prefix[56];
+                if (n > memory_budget || n > length - position - 4
+                    || !storage.read(slot, base + position + 4, prefix, 56)
+                    || u16(prefix + 4) != binary::development_format
+                    || u16(prefix + 6) != unsigned(binary::Kind::setup)
+                    || u16(prefix + 8) != 20 || u16(prefix + 10) || u32(prefix + 12) != n - 20
+                    || u16(prefix + 20) != 1 || u16(prefix + 22) != 1
+                    || u32(prefix + 24) < 76 || u32(prefix + 24) > n - 28
+                    || std::memcmp(prefix + 28, "CSW1", 4) || u16(prefix + 32) != document_version
+                    || u32(prefix + 36) != u32(prefix + 24)) return false;
+                source_start = position + 4; source_hashed = 0; source_envelope = true;
+                extension = source_start + 28 + u32(prefix + 24); extension_end = source_start + n;
+                extension_count = 0;
+                source_expected = u32(prefix + 16); source_crc = 0xffffffff;
+                source_remaining = n; position += 4; ++sources;
+                if (!verify_sources) { position += source_remaining; source_remaining = 0; }
+                return true;
+            }
             if (n < 76 || n > memory_budget || n > length - position - 4 || std::memcmp(header + 4, "CSW1", 4)
                 || u16(header + 8) != document_version || u32(header + 12) != n) return false;
             source_expected = u32(header + 24); source_crc = 0xffffffff;
+            source_envelope = false; extension = extension_end = 0;
             source_remaining = n - 28; position += 32; ++sources;
             if (!verify_sources) { position += source_remaining; source_remaining = 0; }
             return true;

@@ -11,6 +11,7 @@ from native_peer import NativePeer
 from cntrl.fonts import assets
 from cntrl.fonts.outline import Outline
 from cntrl.patch_switcher import (
+    binary_format,
     cli,
     compiler,
     data_files,
@@ -164,7 +165,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     data = cli.compile_inputs(command, font_data).setups['show']
     assert font_data['show']
     key, bitmap = next(iter(font_data['show'].items()))
-    assert data[28] == 0  # Window records only paint backgrounds.
+    assert binary_format.core(data)[28] == 0  # Window records only paint backgrounds.
     assert struct.pack('<I', key) in data
     exported = resolved.export(data)
     assert tomlkit.parse(exported).unwrap()['fonts'] == {
@@ -388,7 +389,7 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
         document=[str(path)], target=[str(ROOT / 'test/data/font-target.toml')]
     )
     assert (
-        cli.compile_inputs(command).setups['exported']
+        binary_format.core(cli.compile_inputs(command).setups['exported'])
         == setup_bundle.reindex({'exported': data})['exported']
     )
 
