@@ -6,6 +6,131 @@ Original source baseline: `a32af63`, 2026-11-12. The original inventory is retai
 below; implementation checkpoints are recorded separately. Physical qualification
 is incomplete. Paths below are relative to this directory.
 
+## Enforced four-KiB instruction reserve, 2026-11-14
+
+The initial controlled comparison below uses `7aa54ee` and the first ten
+targeted placement rules in this checkpoint. Final integration measurements
+after subsequent main changes are recorded separately below. The same pinned
+SDK and compiler were used for both builds.
+
+| Measurement | Normal before | Normal after | Diagnostic before | Diagnostic after |
+| --- | ---: | ---: | ---: | ---: |
+| `.text.itcm` bytes | 195136 | 190768 | 196032 | 191664 |
+| ITCM used, including `.ARM.exidx` | 195144 | 190776 | 196040 | 191672 |
+| Spare bytes within six banks | 1464 | **5832** | 568 | **4936** |
+| RAM1 static variables | 308480 | 308480 | 312672 | 312672 |
+| RAM1 available for stack/local variables | 19200 | 19200 | 15008 | 15008 |
+| Linker RAM2 heap budget | 433536 | 433536 | 433408 | 433408 |
+
+Both builds pass the minimum 4096-byte reserve. The additional placement rules
+remove 4368 bytes from ITCM in each build, including alignment/veneer effects.
+Both still reserve six instruction banks, so today's stack allowance does not
+change; the reserve protects it from the next bank jump. This is code placement,
+not removal of features or evidence of physical stack high-water.
+
+### Final integration measurements
+
+Main advanced through `99dae1e` (persistent development envelopes and recovery)
+and `d9b172a` (Banked Pages) during this work. The new budget correctly rejected
+the intermediate diagnostic image after the persistence update. Nine additional
+narrow selectors cover the validation, import/recovery and constructor helpers
+listed below; no threshold was relaxed. Both final images include all changes
+through `74f36dc`, including the USB-MIDI validation fix in `10714db`, and all
+nineteen selectors:
+
+| Measurement | Normal | Diagnostic |
+| --- | ---: | ---: |
+| `.text.itcm` bytes | 191568 | 192432 |
+| ITCM used, including `.ARM.exidx` | 191576 | 192440 |
+| Spare bytes within six banks | **5032** | **4168** |
+| Margin above the 4096-byte minimum | 936 | 72 |
+| RAM1 static variables | 308672 | 312864 |
+| RAM1 available for stack/local variables | 19008 | 14816 |
+| RAM2 static variables | 90784 | 90784 |
+| Linker RAM2 heap budget | 433504 | 433376 |
+
+The diagnostic reserve meets the requested target with only 72 bytes beyond
+the enforced minimum. Future growth must pass the same gate. These totals are
+not a controlled before/after comparison with the earlier baseline because main
+added features and persistent state in between.
+
+Final exports are `/private/tmp/cntrl-itcm-budget-current-normal` and
+`/private/tmp/cntrl-itcm-budget-current-diagnostic`. The `cntrl_itcm_*` and
+`cntrl_memory_budget` ELF symbols provide the counted instruction and actual
+heap budgets; `teensy_size` provides RAM1 static and stack/local allowances.
+The final ELF audit confirms that the newly selected helpers execute from flash
+while the live paths listed below remain in instruction RAM.
+The 43 focused placement and real-linker boundary cases pass. Physical timing
+and stack high-water remain unqualified; no image was flashed for this pass.
+The full suite passed with 1616 tests and one skip on the Banked Pages baseline.
+After integrating the subsequent USB-MIDI/trace changes and CLI rename, 52
+focused tests pass, including the native bridge and target adapter suites.
+Ruff, formatting, type checking and pyupgrade checks also pass.
+
+### Audited cold routines
+
+The rules name individual functions, not entire drivers or processing classes:
+
+| Functions moved to flash | Why they are cold |
+| --- | --- |
+| `initialize_displays`, `SPIClass::begin`, `HardwareSerialIMXRT::begin`, `Renderer` constructors | Hardware/display startup. The board calls UART initialization from `Board::begin`; SPI initialization is separate from transfer and interrupt routines. Renderer construction precedes frame rendering. |
+| `TrsPorts::configure`, `Application::prepare_layout` | Explicit port or setup reconfiguration. Layout preparation stages candidate controllers; it does not handle MIDI packets or rendering. |
+| `Controller::NavigationState::decode` | Decodes persisted firmware-visit navigation. Live navigation and snapshot capture retain their placement. |
+| `Document::prepare_fonts`, `font_assets::valid_pixels` | Setup font staging and pixel validation before publication. Glyph lookup and drawing retain their placement. |
+| `midi::Runtime::status` | Formats an explicit MIDI status reply. Counter capture, input processing and service are not selected by this rule. |
+| `Document::gestures_valid`, `output_valid`, `output_mask_valid`, `graphics_valid` | Called only by document loading and graph validation, before publishing a setup. Live getters and patch execution retain their placement. |
+| `HistoryImport::decode_name`, `valid_record`, `Deployment::recover`, `commit` | Explicit history-import and deployment commands. Their callers already execute from flash; these rules cover remaining out-of-line helpers. |
+| `Songs` constructors | Startup object construction, including member initialization. Song selection, cursor movement and patch dispatch retain their placement. |
+
+The linked diagnostic ELF places these routines at flash addresses beginning
+`0x601...`. `Routing::receive`, `enqueue`, `prepare_pressure`, `prepare_release`,
+UART writes, both SPI transfer overloads and `usb_isr` remain at instruction-RAM
+addresses beginning `0x000...`, with unchanged function sizes. Placement tests
+match emitted section-name examples and explicitly exclude those live paths,
+along with drawing. No broad SPI, UART, renderer or MIDI-class rule was added.
+
+### Mandatory build budget
+
+`firmware/memory.ld`, already included by the application linker command, now
+exports `cntrl_itcm_capacity`, `cntrl_itcm_used` and `cntrl_itcm_headroom` and
+asserts:
+
+```text
+SIZEOF(.text.itcm) + SIZEOF(.ARM.exidx) + 4096 <= 6 * 32768
+```
+
+This counts exactly the sections used by the SDK's `_itcm_block_count`
+expression, including its reserved/aligned instruction bytes. It applies to
+normal and diagnostic images alike. A violation stops linking with
+`ITCM budget exceeded: require 4096 bytes spare within six 32 KiB banks`, before
+the build exports a new image. The existing RAM2 heap assertion remains.
+
+`test/test_memory_budget.py` links controlled section sizes through the real
+production `memory.ld`: 192504 instruction bytes plus eight unwind bytes pass
+at exactly 4096 bytes spare; increasing instruction bytes to 192508 fails. The
+failing case would fit if unwind bytes were incorrectly omitted. The tracked
+`.s` and `.ld` fixtures are never executed. These tests use an already provisioned
+pinned ARM toolchain and skip when it is absent; they do not install an SDK.
+
+Reproduce through the ordinary normal/diagnostic build commands below and run:
+
+```sh
+uv run --no-sync pytest -q cntrl/maker/morningstar/mc/test/test_memory_budget.py \
+  cntrl/maker/morningstar/mc/test/test_boot_switch.py
+```
+
+The local exports are `/private/tmp/cntrl-itcm-budget-normal` and
+`/private/tmp/cntrl-itcm-budget-diagnostic`. Inspect their `firmware.elf`,
+`memory.txt` and the `cntrl_itcm_*` symbols to reproduce the totals. Images,
+objects and logs are disposable generated outputs; the linker policy, fixtures
+and test procedure are tracked. No pedal was flashed or exercised.
+
+The RAM2 figures above use the actual ELF `cntrl_memory_budget` symbol. Earlier
+checkpoints called the size utility's 433536-byte raw RAM2 free-space figure the
+diagnostic arena capacity. The existing diagnostic linker reserves the top
+128 bytes for SDK crash data, making its actual budget 433408 bytes. This is an
+accounting clarification, not a new reservation or a change in available memory.
+
 ## Diagnostic cold-placement repair, 2026-11-14
 
 Starting from `d8c5b86`, three narrowly matched linker rules move only routing
