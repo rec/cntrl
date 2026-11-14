@@ -63,6 +63,14 @@ def test_seeded_cycles_balance_fonts_and_keep_unique_colors(
         s.background_color == show.background_color == '0xFFF8D8'
         for s in styles.values()
     )
+    assert all(
+        s.foreground_color is not None
+        and graphics.distance(
+            graphics.color(s.foreground_color), graphics.color(show.background_color)
+        )
+        > show.contrast
+        for s in styles.values()
+    )
     assert styles != formatting.cycle_styles(models.Setup(seed=1), names, target)
 
 
@@ -74,6 +82,11 @@ def test_background_anchor_excludes_its_color(
     )
     assert all(s.background_color == 'black' for s in styles.values())
     assert all(s.foreground_color != '0x000000' for s in styles.values())
+
+
+def test_impossible_generated_contrast_is_reported(target: models.Target) -> None:
+    with pytest.raises(ValueError, match='brightness limit and contrast'):
+        formatting.cycle_styles(models.Setup(contrast=1), ['a'], target)
 
 
 @pytest.mark.parametrize('seed', [0, 1, 42])

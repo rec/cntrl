@@ -95,7 +95,11 @@ def test_unknown_profile_is_rejected(base: models.Target) -> None:
 
 @pytest.mark.parametrize('controller,count', [('mc6-pro', 6), ('mc8-pro', 8)])
 def test_short_command_compiles_a_setup_and_preserves_session_data(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, controller: str, count: int
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    controller: str,
+    count: int,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     source = tmp_path / 'performance.toml'
     source.write_text(
@@ -117,6 +121,7 @@ def test_short_command_compiles_a_setup_and_preserves_session_data(
     assert second.read_bytes() == compiled
     assert saved.read_bytes() == b'keep me'
     assert source.read_text().startswith('[patch_cycles]')
+    assert capsys.readouterr().out == ''
 
 
 def test_custom_layout_accepts_a_compiled_bundle_and_explicit_storage(
@@ -143,6 +148,20 @@ def test_custom_layout_accepts_a_compiled_bundle_and_explicit_storage(
     assert setup == bundle
     assert storage == tmp_path / 'saved-session'
     assert not (storage / '.emulator-build' / 'setup').exists()
+
+
+@pytest.mark.filterwarnings('error:foreground/background distance')
+def test_real_setup_preparation_is_quiet(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = Path(__file__).parents[5] / 'simple-setup.toml'
+    _, _, setup, _ = cli.prepare(
+        cli.Emulate(setup=source, controller='mc6-pro', storage=tmp_path / 'session'),
+        compile_to_file,
+    )
+    assert 'simple-setup' in setup_bundle.unpack(setup.read_bytes())
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ''
 
 
 @pytest.mark.parametrize('controller', ['mc6_pro', 'mc8_pro'])

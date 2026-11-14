@@ -579,7 +579,9 @@ def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
     )
 
 
-def compile_to_file(command: data_files.Sources, output: Path) -> None:
+def compile_to_file(
+    command: data_files.Sources, output: Path
+) -> setup_bundle.SetupBundle:
     assets: dict[str, dict[int, bytes]] = {}
     movies: dict[int, bytes] = {}
     bundle = compile_inputs(command, assets, movies)
@@ -589,7 +591,7 @@ def compile_to_file(command: data_files.Sources, output: Path) -> None:
     for key, movie in movies.items():
         save_asset(output.parent / 'movies' / f'{key:08x}.cnsa', movie)
     output.write_bytes(bundle.pack())
-    report_bundle(bundle)
+    return bundle
 
 
 def main() -> None:
@@ -617,7 +619,7 @@ def main() -> None:
         elif isinstance(command, build.Build):
             build.run(command)
         elif isinstance(command, Compile):
-            compile_to_file(command, command.output)
+            report_bundle(compile_to_file(command, command.output))
         elif isinstance(command, Songs):
             songs.run(command.command)
         elif isinstance(command, SetupCLI):

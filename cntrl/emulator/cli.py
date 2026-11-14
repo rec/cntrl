@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from ..patch_switcher import data_files
 from ..patch_switcher.models import Target
+from ..patch_switcher.setup_bundle import SetupBundle
 from .backend import Session, bind_target, build
 from .layout import EmulatorLayout
 from .replay import Scenario
@@ -48,7 +49,7 @@ class Emulate(BaseModel, frozen=True):
 
 
 def prepare(
-    command: Emulate, compile_setup: Callable[[data_files.Sources, Path], None]
+    command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
 ) -> tuple[EmulatorLayout, Target, Path, Path]:
     """Resolve a profile and compile source inputs without starting the runtime."""
     if command.controller is None:
@@ -144,7 +145,7 @@ def save(session: Session, directory: Path) -> None:
 
 
 def emulate(
-    command: Emulate, compile_setup: Callable[[data_files.Sources, Path], None]
+    command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
 ) -> None:
     layout, target, setup, storage = prepare(command, compile_setup)
     for kind, suffix in [('fonts', '.cfont'), ('movies', '.cnsa')]:

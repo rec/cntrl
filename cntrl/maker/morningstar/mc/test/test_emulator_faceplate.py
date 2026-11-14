@@ -43,7 +43,9 @@ class FaceplateSession(Session):
         self.inputs.append((control_id, pressed))
 
 
-def test_mc6_faceplate_keeps_display_and_switch_positions(tmp_path: Path) -> None:
+def test_mc6_faceplate_keeps_display_and_switch_positions(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
     os.environ['QT_QPA_PLATFORM'] = 'offscreen'
     existing = QtWidgets.QApplication.instance()
     assert existing is None or isinstance(existing, QtWidgets.QApplication)
@@ -77,6 +79,7 @@ def test_mc6_faceplate_keeps_display_and_switch_positions(tmp_path: Path) -> Non
             assert canvas.grab().toImage().pixelColor(
                 point.toPoint()
             ) != image.pixelColor(point.toPoint())
+        assert 'missing font family' not in capfd.readouterr().err
     finally:
         canvas.close()
         canvas.deleteLater()
