@@ -128,7 +128,8 @@ public:
         unsigned available = s.clock_available();
         bool reserved = false;
 #if CNTRL_PANIC
-        reserved = s.panic_owns_midi;
+        reserved = s.panic_owns_midi || s.panic.active();
+        if (reserved) { files.player.cancel(); streams_.stop_file_playback(); streams_.stop_all(); }
 #endif
 #if CNTRL_CABLE_TEST
         reserved = reserved || s.cable_test.enabled();

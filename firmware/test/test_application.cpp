@@ -1,3 +1,5 @@
+#define CNTRL_PANIC 1
+#include <cntrl/panic.h>
 #include <cntrl/ui/application.h>
 #include <cntrl/ui/song_sources.h>
 #include <cntrl/ui/firmware_visit.h>
@@ -77,7 +79,13 @@ struct VisitFile : cntrl::files::File {
     }
     bool sync() override { return true; }
 };
-struct PagePlatform : Hardware {
+struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink {
+    cntrl::Panic panic{*this, *this};
+    bool panic_owns_midi = false;
+    bool available(const char *output) const override { return Hardware::available(output); }
+    bool transmit(const char *, const uint8_t *) override { return true; }
+    bool write_packet(unsigned, const cntrl::midi::Packet &) override { return true; }
+    void leave_panic() { panic.leave(); panic_owns_midi = false; }
     uint32_t now = 0;
     uint32_t milliseconds() const { return now / 1000; }
     uint32_t microseconds() const { return now; }
@@ -114,7 +122,7 @@ struct PagePlatform : Hardware {
             std::strcpy(title,"Expression"); std::strcpy(position,position_text); std::strcpy(prompt,"Calibrate");
         }
     } expression;
-    struct Bridge { void clock_owner(unsigned) {} } bridge;
+    struct Bridge { void clock_owner(unsigned) {} void configure(bool) {} } bridge;
     cntrl::midi::Outputs endpoints;
     cntrl::midi::Outputs midi_outputs() const override { return endpoints; }
     cntrl::midi::TrsMode port_mode(unsigned) const { return cntrl::midi::TrsMode::off; }
@@ -401,7 +409,19 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
         }
         assert(false);
     };
+    select_tool(cntrl::ui::Pages::Page::panic);
+    platform.idle = false;
+    app.held |= uint64_t(1) << controls.confirm;
+    host.tap_tempo(4050);
+    assert(platform.panic.active() && !platform.panic_owns_midi);
+    // A quick tap must still fire once the pending MIDI cleanup finishes.
+    app.held &= ~(uint64_t(1) << controls.confirm);
+    platform.panic.button(false, 4051);
+    platform.idle = true;
+    host.display(4052, false);
+    assert(platform.panic.active() && platform.panic_owns_midi);
     select_tool(cntrl::ui::Pages::Page::tap);
+    assert(!platform.panic.open() && !platform.panic_owns_midi);
     const unsigned before_tap = hardware.sent, tap_callbacks = hardware.taps;
     click(2, 4100); assert(hardware.taps == tap_callbacks + 1 && hardware.sent == before_tap);
     edge(2, true, 4200); click(5, 4300); edge(2, false, 4400);
