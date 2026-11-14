@@ -295,9 +295,8 @@ def backup_pedal(
             (directory / 'bundle.bin').write_bytes(bundle)
         if raw_state and (undo := songs.download(client, undo=True)):
             (directory / 'songs-undo.bin').write_bytes(undo)
-        complete = healthy and not (directory / 'unavailable-assets.txt').exists()
-        write_backup_manifest(directory, complete=complete, raw_state=raw_state)
-    result = 'complete' if complete else 'incomplete; raw recovery data retained'
+        write_backup_manifest(directory, complete=healthy, raw_state=raw_state)
+    result = 'complete' if healthy else 'incomplete; raw recovery data retained'
     print(f'Selected: {selected}\n{status}\nBackup {result}.', flush=True)
 
 
