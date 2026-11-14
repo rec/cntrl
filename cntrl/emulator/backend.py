@@ -178,6 +178,7 @@ class Session:
         self.failed = False
         self.held: set[str] = set()
         self.messages: list[OutputEvent] = []
+        self.memory_usage: dict[str, int] = {}
         self.frames = {d.id: bytes(d.width * d.height * 2) for d in target.displays}
         source_hash = sha256(setup.read_bytes()).hexdigest()
         source_record = storage / 'setup-source.sha256'
@@ -362,6 +363,14 @@ class Session:
                         time_us=self.time_us,
                     )
                 )
+            elif payload[0] == 5 and len(payload) == 13:
+                self.memory_usage = dict(
+                    zip(
+                        ('used', 'peak', 'failures'),
+                        struct.unpack('<III', payload[1:]),
+                        strict=True,
+                    )
+                )
             else:
                 raise ValueError('unknown native emulator response')
 
@@ -393,6 +402,11 @@ class Session:
             raise ValueError('virtual time must advance monotonically within uint64')
         self.time_us = time_us
         self.request(b'\x01' + struct.pack('<Q', time_us))
+
+    def memory(self) -> dict[str, int]:
+        """Read the checked heap, charged using the target allocator's alignment."""
+        self.request(b'\x0c')
+        return self.memory_usage
 
     def button(self, control_id: str, pressed: bool) -> None:
         if control_id not in self.target.buttons:

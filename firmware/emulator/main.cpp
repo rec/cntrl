@@ -587,6 +587,10 @@ void Session::command(const std::vector<uint8_t> &bytes) {
         if (!board.supports_trs_mode(p[1],midi::TrsMode::aux)) throw std::runtime_error("port does not support auxiliary contacts");
         board.contacts[p[1]] = p[2]; tick(); settle();
     }
+    else if (p[0] == 12 && length == 1) {
+        std::vector<uint8_t> result{5};
+        integer(result,memory_used,4); integer(result,memory_peak,4); integer(result,memory_failures,4); frame(result);
+    }
     else throw std::runtime_error("unsupported or malformed emulator command");
 }
 } // namespace cntrl::emulator

@@ -11,13 +11,15 @@ namespace cntrl {
 class Switches : public CheckedHeapAllocation {
 public:
     static constexpr unsigned capacity = 8;
-    Switches(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources)
-        : hardware_(hardware), outputs_(outputs), sources_(sources) {}
+    Switches(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned page = ~0u, unsigned owner = 0)
+        : hardware_(hardware), outputs_(outputs), sources_(sources), page_(page), owner_(owner), rendering_(page == ~0u) {}
     ~Switches() { destroy_states(); unpin(); if (pending_invocation_) sources_.end(); }
     bool open() const { return open_ || pending_invocation_; }
     bool performance() const { return bool(bindings_); }
     unsigned revision() const { return revision_; }
     ExpressionAssignment expression(unsigned input) const { return bindings_.expression(input); }
+    void refresh() { rendering_ = dirty_ = true; }
+    void bank_context(unsigned bank, unsigned page) { bank_ = int(bank); bank_page_ = int(page); dirty_ = true; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_bind_controls)
 #endif
@@ -28,7 +30,7 @@ public:
             if (!pending_.resize(document.length())) return midi::Bridge::Delivery::cancelled;
             std::memcpy(pending_.data, document.data(), document.length());
             if (!pending_document_.load(pending_.data, pending_.size, hardware_)) { pending_.clear(); return midi::Bridge::Delivery::cancelled; }
-            prepared_controls_.reset(new (std::nothrow) Switches(hardware_, outputs_, sources_));
+            prepared_controls_.reset(new (std::nothrow) Switches(hardware_, outputs_, sources_, page_, owner_));
             if (!prepared_controls_) { pending_.clear(); return midi::Bridge::Delivery::cancelled; }
             prepared_controls_->initialize(pending_document_, held_, ControlBindings{pending_document_.node(node) + 4});
             if (!prepared_controls_->open_) { prepared_controls_.reset(); pending_.clear(); return midi::Bridge::Delivery::cancelled; }
@@ -93,12 +95,15 @@ public:
     CNTRL_FLASH_ROUTINE(switches_enter)
 #endif
     bool enter(const Document &document, uint32_t held, ControlBindings bindings = {}) {
-        Switches candidate(hardware_, outputs_, sources_);
+        Switches candidate(hardware_, outputs_, sources_, page_, owner_);
         candidate.initialize(document, held, bindings);
         if (!candidate.open_) return false;
         adopt(candidate); return true;
     }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_adopt)
+#endif
     void adopt(Switches &candidate) {
         destroy_states(); unpin();
         state_storage_.swap(candidate.state_storage_); states_ = candidate.states_; candidate.states_ = nullptr;
@@ -116,7 +121,7 @@ private:
         const unsigned count = bindings ? bindings.count() : document.switches();
         if (!state_storage_.resize(count * sizeof(State))) { hardware_.error("Switch state memory exhausted"); return; }
         states_ = reinterpret_cast<State *>(state_storage_.data);
-        for (unsigned i = 0; i < count; ++i) new (states_ + i) State(hardware_, outputs_, sources_, i);
+        for (unsigned i = 0; i < count; ++i) new (states_ + i) State(hardware_, outputs_, sources_, owner_ + i);
         count_ = count;
         unpin(); sources_.begin(); pinned_ = true;
         document_ = document; bindings_ = bindings; ++revision_;
@@ -364,9 +369,15 @@ private:
         unsigned queued = 0;
         bool requested = false, active = false, unknown = false, failed = false, owned = false;
     };
+#if UINTPTR_MAX == UINT32_MAX
+    static_assert(sizeof(State) <= 512, "Update banked.estimate_ram for larger switch state");
+#endif
     Hardware &hardware_; PatchOutputs &outputs_; PatchSources &sources_; Document document_;
     MemoryBuffer state_storage_;
     State *states_ = nullptr;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_destroy_states)
+#endif
     void destroy_states() {
         for (unsigned i = count_; i--;) states_[i].~State();
         count_ = 0; states_ = nullptr; state_storage_.clear();
@@ -387,6 +398,9 @@ private:
     unsigned count_ = 0, held_ = 0, disarmed_ = 0;
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
     bool shifted_ = false;
+    unsigned page_, owner_;
+    bool rendering_;
+    int bank_ = -1, bank_page_ = -1;
     void clear_events() { events_.clear(); event_count_ = 0; }
     static void clear_queue(State &state) { state.queue.clear(); state.queued = 0; }
     bool queue_node(State &state, unsigned node) {
@@ -563,6 +577,7 @@ private:
     CNTRL_FLASH_ROUTINE(switches_render)
 #endif
     void render() {
+        if (!rendering_) return;
         if (bindings_) {
             Pane panes[3];
             if (const uint8_t *view = bindings_.view()) {
@@ -581,7 +596,7 @@ private:
                 status.graphics = Document::read_graphics(view + 16);
                 status.x = 2;
                 status.y = int16_t(hardware_.display_height() * 2 / 3 - status.graphics.line_height);
-                std::snprintf(status.text, sizeof(status.text), "%s", view[33] ? reinterpret_cast<const char *>(view + 33) : " ");
+                document_.counter_text(status.text, sizeof(status.text), view[33] ? reinterpret_cast<const char *>(view + 33) : " ", hardware_.counters, bank_, bank_page_);
                 for (unsigned i = 0; i < count_; ++i) {
                     const auto &s = states_[i];
                     const uint8_t *visual = view + binding_view_header_size + i * binding_view_record_size;
@@ -600,7 +615,7 @@ private:
                         document_.counter_text(detail.text, sizeof(detail.text), reinterpret_cast<const char *>(visual + 32), hardware_.counters);
                     }
                 }
-                ui::present(hardware_, panes, 1); dirty_ = false; return;
+                present(panes); dirty_ = false; return;
             }
             for (auto &pane : panes) pane.graphics = document_.graphics(1);
             std::snprintf(panes[1].lines[0].text, 64, "%s", bindings_.title());
@@ -613,7 +628,7 @@ private:
                 document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
                 std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", document_.input_label(s.record[0]), label, state[0] ? " | " : "", state);
             }
-            ui::present(hardware_, panes, 1); dirty_ = false; return;
+            present(panes); dirty_ = false; return;
         }
         ui::Prompt prompt(hardware_);
         using Role = ControlRole;
@@ -639,8 +654,15 @@ private:
         back.y = int16_t(hardware_.display_height() - 12);
         std::snprintf(back.text, 64, "%s%.52s", closing_ ? "Closing: " : shifted_ ? "Shifted | " : "", prompt.add(Role::back, closing_ ? "abandon" : "Back").text());
         if (!count_) std::snprintf(panes[1].lines[0].text, 64, "No switches");
-        ui::present(hardware_, panes, 1);
+        present(panes);
         dirty_ = false;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_present)
+#endif
+    void present(Pane (&panes)[3]) {
+        if (page_ == ~0u) ui::present(hardware_, panes, 1);
+        else for (unsigned i = 0; i < 3; ++i) { panes[i].page = page_; hardware_.show(i, panes[i]); }
     }
 };
 } // namespace cntrl

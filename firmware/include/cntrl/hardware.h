@@ -42,6 +42,7 @@ struct ToggleIcon {
 };
 
 struct Pane {
+    unsigned page = ~0u;
     bool performance = false;
     bool three_bands = false;
     bool heading_band = false;

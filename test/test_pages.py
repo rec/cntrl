@@ -114,7 +114,8 @@ def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
 
 
 @pytest.mark.parametrize(
-    'kind', [t for t in layout.PAGE_TYPES if t not in ('None', 'patch-switcher')]
+    'kind',
+    [t for t in layout.PAGE_TYPES if t not in ('None', 'patch-switcher', 'banked')],
 )
 @pytest.mark.parametrize('count', [0, 1, 3])
 def test_tool_pages_always_compile_for_one_window(kind: str, count: int) -> None:

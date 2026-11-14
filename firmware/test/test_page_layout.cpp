@@ -7,7 +7,7 @@
 int main(int argc,char **argv) {
     cntrl::memory_budget = 1024 * 1024;
     if (argc == 2 && !std::strcmp(argv[1],"caps")) {
-        for (unsigned type = 0; type <= cntrl::PageLayout::arpeggiator; ++type) {
+        for (unsigned type = 0; type <= cntrl::PageLayout::banked; ++type) {
             for (unsigned windows : {1u,3u,5u}) std::printf("%u ",cntrl::PageLayout::maximum_windows(type,windows));
             std::puts("");
         }

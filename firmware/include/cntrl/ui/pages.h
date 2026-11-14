@@ -60,7 +60,7 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, confirm_firmware };
     struct ViewState {
         unsigned index = 0, jack = 0, shortcut = 0;
         Page page = Page::none;

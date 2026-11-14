@@ -129,6 +129,10 @@ type = "status"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.status.chords]
 
 [pages.firmware]
 
@@ -136,6 +140,10 @@ type = "firmware"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.firmware.chords]
 
 [pages.cable-test]
 
@@ -143,6 +151,10 @@ type = "cable-test"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.cable-test.chords]
 
 [pages.panic]
 
@@ -150,6 +162,10 @@ type = "panic"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.panic.chords]
 
 [pages.trs-ports]
 
@@ -157,6 +173,10 @@ type = "trs-ports"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.trs-ports.chords]
 
 [pages.expression]
 
@@ -164,6 +184,10 @@ type = "expression"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.expression.chords]
 
 [pages.clock-transport]
 
@@ -171,6 +195,10 @@ type = "clock-transport"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.clock-transport.chords]
 
 [pages.clock-tempo]
 
@@ -178,6 +206,10 @@ type = "clock-tempo"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.clock-tempo.chords]
 
 [pages.keyboard]
 
@@ -185,6 +217,10 @@ type = "keyboard"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.keyboard.chords]
 
 [pages.tap-tempo]
 
@@ -192,6 +228,10 @@ type = "tap-tempo"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.tap-tempo.chords]
 
 [pages.patch-switcher]
 
@@ -199,6 +239,10 @@ type = "patch-switcher"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []
+banks = []
+initial_bank = 0
+
+[pages.patch-switcher.chords]
 
 [scrolling]
 

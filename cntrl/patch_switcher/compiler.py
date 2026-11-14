@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from . import (
     arpeggiator,
+    banked,
     counters,
     display,
     graphics,
@@ -588,6 +589,7 @@ def compile_show(
         looper_settings = looper.pack(show, target)
         arpeggiator_settings = arpeggiator.pack(show, target)
         page_layout = layout.pack(show, [d.id for d in target.displays])
+        banked_pages = banked.pack(show, named, compiler.nodes, target)
         relay_settings = relay_outputs.pack(show, target)
         counter_settings = counters.pack(compiler.counters, show, target)
         stream_settings = midi_processing.compile_routes(
@@ -721,6 +723,7 @@ def compile_show(
             else b''
         )
         + page_layout
+        + banked_pages
         + movie_records
         + midi_endpoints.pack(target)
         + inputs.pack(target)
@@ -741,7 +744,7 @@ def compile_show(
     )
     if errors:
         raise CompilationError(errors)
-    return (
+    result = (
         HEADER.pack(
             b'CSW1',
             DOCUMENT_VERSION,
@@ -764,6 +767,24 @@ def compile_show(
         )
         + body
     )
+    if extra_ram := banked.estimate_ram(show.pages, len(result)):
+        result = bytearray(result)
+        address = (
+            76
+            + len(instruments) * 68
+            + len(patch_cycles) * 68
+            + len(roots) * 82
+            + METADATA.size
+            - 8
+        )
+        struct.pack_into(
+            '<I',
+            result,
+            address,
+            struct.unpack_from('<I', result, address)[0] + extra_ram,
+        )
+        struct.pack_into('<I', result, 20, crc32(result[28:]))
+    return bytes(result)
 
 
 class PatchCompiler:
@@ -1399,7 +1420,7 @@ class PatchCompiler:
             re.sub(
                 r'\{counters\.([^}]+)\}',
                 lambda m, d=d: d * len(str(self.counters[m[1]].maximum)),
-                text,
+                text.replace('{bank:03d}', '999').replace('{page}', '4'),
             )
             for d in '0123456789'
         ]
@@ -2211,6 +2232,10 @@ STATE_OPERATIONS = {
             'shift',
             'unshift',
             'next-song-patch',
+            'next-bank',
+            'previous-bank',
+            'next-bank-page',
+            'previous-bank-page',
         )
     )
 }
@@ -2486,7 +2511,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 43
+DOCUMENT_VERSION = 44
 LOOPER_ACTIONS = (
     'record',
     'play-stop',
