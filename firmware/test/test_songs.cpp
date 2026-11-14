@@ -205,12 +205,13 @@ void test_envelope_metadata_and_recovery() {
     auto annotated = original;
     const uint8_t extension[] = {44, 1, 0, 0, 3, 0, 0, 0, 'n', 'e', 'w'};
     annotated.insert(annotated.end(), extension, extension + sizeof(extension));
-    cntrl::put32(annotated.data() + 12, annotated.size() - 20);
-    cntrl::binary::seal(annotated.data(), annotated.size());
+    cntrl::put32(annotated.data() + 12, unsigned(annotated.size() - 20));
+    cntrl::binary::seal(annotated.data(), unsigned(annotated.size()));
     auto upload = [&](cntrl::Songs &target, const std::vector<uint8_t> &bytes) {
-        assert(target.import_begin(bytes.size()));
-        assert(target.import_write(bytes.data(), bytes.size()));
-        assert(target.import_finish(bytes.size(), cntrl::checksum(bytes.data(), bytes.size())));
+        const unsigned size = unsigned(bytes.size());
+        assert(target.import_begin(size));
+        assert(target.import_write(bytes.data(), size));
+        assert(target.import_finish(size, cntrl::checksum(bytes.data(), size)));
         completed(storage, target, true);
     };
     upload(songs, annotated);
@@ -223,14 +224,14 @@ void test_envelope_metadata_and_recovery() {
     cntrl::Songs after_undo(storage, board); assert(after_undo.boot());
     assert(after_undo.undo_source(length, crc) && length == 0);
     auto required = annotated; required[original.size() + 2] = 1;
-    cntrl::binary::seal(required.data(), required.size());
+    cntrl::binary::seal(required.data(), unsigned(required.size()));
     upload(after_undo, required);
     assert(!after_undo.success() && snapshot(after_undo) == original && board.sends == 0);
     std::vector<uint8_t> record(24);
     std::memcpy(record.data(), "CSG6", 4);
     cntrl::put32(record.data() + 4, after_undo.generation() + 1);
-    cntrl::put32(record.data() + 8, required.size());
-    cntrl::put32(record.data() + 12, cntrl::checksum(required.data(), required.size()));
+    cntrl::put32(record.data() + 8, unsigned(required.size()));
+    cntrl::put32(record.data() + 12, cntrl::checksum(required.data(), unsigned(required.size())));
     cntrl::put32(record.data() + 20, cntrl::checksum(record.data(), 20));
     record.insert(record.end(), required.begin(), required.end());
     record.insert(record.end(), {'D', 'O', 'N', 'E'});

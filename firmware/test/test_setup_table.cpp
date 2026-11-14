@@ -72,9 +72,9 @@ void test_saving_and_history(File &file, Board &board) {
     assert(cntrl::binary::open(file.bytes.data(), file.size(), cntrl::binary::Kind::bundle, original));
     unsigned extension = original.offset + original.length;
     std::vector<uint8_t> saved(storage.bundle_size());
-    assert(storage.bundle_read(0, saved.data(), saved.size()));
+    assert(storage.bundle_read(0, saved.data(), unsigned(saved.size())));
     cntrl::binary::View edited;
-    assert(cntrl::binary::open(saved.data(), saved.size(), cntrl::binary::Kind::bundle, edited));
+    assert(cntrl::binary::open(saved.data(), unsigned(saved.size()), cntrl::binary::Kind::bundle, edited));
     assert(saved.size() - edited.offset - edited.length == file.size() - extension);
     assert(std::equal(file.bytes.begin() + extension, file.bytes.end(), saved.begin() + edited.offset + edited.length));
     assert(documents.history_restore("a", 1, 0));
@@ -118,7 +118,7 @@ void test_history_after_reindex(File &first, File &second, Board &board) {
     assert(executor.status() == cntrl::PatchExecutor::Status::completed);
     // An old captured source must not reinterpret index 1 as the new setup 'a'.
     cntrl::binary::View view;
-    assert(cntrl::binary::open(first.bytes.data(), first.bytes.size(), cntrl::binary::Kind::bundle, view));
+    assert(cntrl::binary::open(first.bytes.data(), first.size(), cntrl::binary::Kind::bundle, view));
     unsigned start = view.offset + 40 + 2 * 76 + 6, length = cntrl::u32(first.bytes.data() + view.offset + 40 + 64);
     cntrl::Document stale; assert(stale.load(first.bytes.data() + start, length, board));
     cntrl::PatchExecutor blocked(board, board, sources, 1); unsigned sent = board.sent;
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
     unsigned initial_budget = cntrl::memory_budget;
     assert(cntrl::memory_used == 0);
     cntrl::binary::View view;
-    assert(cntrl::binary::open(file.bytes.data(), file.bytes.size(), cntrl::binary::Kind::bundle, view));
+    assert(cntrl::binary::open(file.bytes.data(), file.size(), cntrl::binary::Kind::bundle, view));
     unsigned setup_length = cntrl::u32(file.bytes.data() + view.offset + 40 + 64);
     if (argv[2][0] == '0') {
         cntrl::memory_peak = cntrl::memory_used;

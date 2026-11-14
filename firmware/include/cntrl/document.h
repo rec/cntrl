@@ -384,8 +384,8 @@ public:
                 for (unsigned b = 0; b < u16(p + 2); ++b) {
                     const uint8_t *bank = BankedPages::bank(p, b);
                     for (unsigned j = 0; j < u16(bank); ++j) {
-                        unsigned node = u16(bank + 2 + j * 2);
-                        if (node >= u16(bytes + graph + 8) || bytes[graph + u32(bytes + graph + 16 + node * 4)] != 10) return false;
+                        unsigned patch_node = u16(bank + 2 + j * 2);
+                        if (patch_node >= u16(bytes + graph + 8) || bytes[graph + u32(bytes + graph + 16 + patch_node * 4)] != 10) return false;
                     }
                 }
             }
