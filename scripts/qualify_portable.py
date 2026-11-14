@@ -320,7 +320,7 @@ def check_cpp(
             standard = header in CPP_HEADERS or header in C_HEADERS
             if not (
                 standard
-                or host_fixture
+                or (host_fixture or relative.parts[:2] == ('firmware', 'emulator'))
                 and header in HOST_HEADERS
                 or header.startswith('cntrl/')
                 and (source_root / 'firmware/include' / header).is_file()
@@ -396,7 +396,7 @@ C_HEADERS = set(
         'string.h tgmath.h threads.h time.h uchar.h wchar.h wctype.h'
     ).split()
 )
-HOST_HEADERS = {'poll.h', 'unistd.h', 'windows.h'}
+HOST_HEADERS = {'fcntl.h', 'io.h', 'poll.h', 'unistd.h', 'windows.h'}
 CPP_HEADERS = set(
     (
         'algorithm any array atomic barrier bit bitset cassert cctype cerrno '
