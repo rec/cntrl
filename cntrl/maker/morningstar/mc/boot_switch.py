@@ -125,6 +125,29 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             '*(.text._ZN5cntrl10ModuleMenu6renderEv*)',
             '*(.text._ZN5cntrl14StorageListing4nextE*)',
             '*(.text._ZN5cntrl2ui19FirmwareVisitRecord6decodeE*)',
+            # Startup and explicit reconfiguration, not drawing, MIDI I/O,
+            # UART interrupts or SPI transfers.
+            '*(.text._Z19initialize_displaysb*)',
+            '*(.text._ZN8SPIClass5beginEv*)',
+            '*(.text._ZN19HardwareSerialIMXRT5beginEmt*)',
+            '*(.text._ZN8TrsPorts9configureE*)',
+            '*(.text._ZN5cntrl2ui8RendererC[12]E*)',
+            '*(.text._ZN5cntrl2ui11Application14prepare_layoutE*)',
+            '*(.text._ZN5cntrl10Controller15NavigationState6decodeE*)',
+            '*(.text._ZNK5cntrl8Document13prepare_fontsE*)',
+            '*(.text._ZN11font_assets12valid_pixelsE*)',
+            # Only the explicit MIDI status reply, never Runtime::poll.
+            '*(.text._ZNK5cntrl4midi7Runtime6statusI*)',
+            # Document validation, history import and explicit deployment recovery.
+            '*(.text._ZN5cntrl8Document14gestures_validE*)',
+            '*(.text._ZN5cntrl8Document12output_validE*)',
+            '*(.text._ZN5cntrl8Document17output_mask_validE*)',
+            '*(.text._ZN5cntrl8Document14graphics_validE*)',
+            '*(.text._ZN5cntrl13HistoryImport11decode_nameE*)',
+            '*(.text._ZNK5cntrl13HistoryImport12valid_recordE*)',
+            '*(.text._ZN5cntrl10Deployment7recoverE*)',
+            '*(.text._ZN5cntrl10Deployment6commitE*)',
+            '*(.text._ZN5cntrl5SongsC[12]E*)',
             # target.cpp's static Board/runtime construction runs only at boot.
             '*(.text.startup._GLOBAL__sub_I__Z15switch_scan_duev)',
         )

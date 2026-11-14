@@ -89,22 +89,52 @@ def test_linker_places_only_cold_container_methods_in_flash() -> None:
 
 
 @pytest.mark.parametrize(
-    ('suffix', 'in_flash'),
+    ('symbol', 'in_flash'),
     [
+        *[
+            (f'_ZN5cntrl4midi7RoutingINS0_18AdvancedProcessingEE{s}', c)
+            for s, c in [
+                ('12build_ownersIZNS3_6decodeEPKhjNS0_7OutputsEjEUljE_EEbjT_', True),
+                ('20prepare_output_stateEj', True),
+                ('6Reader5matchERNS2_4StepE', True),
+                ('7receiveEjNS0_6PacketEy', False),
+                ('7enqueueENS3_5EventE', False),
+                ('15prepare_releaseENS3_10ProcessingE', False),
+                ('16prepare_pressureENS3_10ProcessingE', False),
+            ]
+        ],
+        ('_Z19initialize_displaysb', True),
+        ('_ZN8SPIClass5beginEv', True),
+        ('_ZN19HardwareSerialIMXRT5beginEmt', True),
+        ('_ZN8TrsPorts9configureEPKh', True),
+        ('_ZN5cntrl2ui8RendererC2ERNS0_7DisplayERKNS0_5FontsEPtjS7_S7_j', True),
+        ('_ZN5cntrl2ui11Application14prepare_layoutENS_10PageLayoutE', True),
+        ('_ZN5cntrl10Controller15NavigationState6decodeEPKhj', True),
+        ('_ZNK5cntrl8Document13prepare_fontsERNS_8HardwareE', True),
+        ('_ZN11font_assets12valid_pixelsERKNS_5EntryEPKh', True),
+        ('_ZN5cntrl8Document14gestures_validEPKhjb', True),
+        ('_ZN5cntrl8Document12output_validEPKhS2_RKNS_8HardwareEj', True),
+        ('_ZN5cntrl8Document17output_mask_validEjPKhhRKNS_8HardwareE', True),
+        ('_ZN5cntrl8Document14graphics_validEPKhRKNS_8HardwareE', True),
+        ('_ZN5cntrl13HistoryImport11decode_nameEPKc', True),
+        ('_ZNK5cntrl13HistoryImport12valid_recordEv', True),
+        ('_ZN5cntrl10Deployment7recoverEm', True),
+        ('_ZN5cntrl10Deployment6commitEv', True),
+        ('_ZN5cntrl5SongsC2ERNS_7StorageERNS_12SongResolverE', True),
         (
-            '12build_ownersIZNS3_6decodeEPKhjNS0_7OutputsEjEUljE_EEbjT_',
+            '_ZNK5cntrl4midi7Runtime6statusIN12_GLOBAL__N_15BoardEEEv'
+            'RKNS0_6BridgeEjRKNS_8DocumentERT_.constprop.0',
             True,
         ),
-        ('20prepare_output_stateEj', True),
-        ('6Reader5matchERNS2_4StepE', True),
-        ('7receiveEjNS0_6PacketEy', False),
-        ('7enqueueENS3_5EventE', False),
-        ('15prepare_releaseENS3_10ProcessingE', False),
-        ('16prepare_pressureENS3_10ProcessingE', False),
+        ('_ZN8SPIClass8transferEPKvPvj', False),
+        ('_ZN19HardwareSerialIMXRT5writeEh', False),
+        ('_ZN19HardwareSerialIMXRT9write9bitEm', False),
+        ('_ZN5cntrl2ui8Renderer4drawEm', False),
+        ('usb_isr', False),
     ],
 )
-def test_graph_configuration_placement_excludes_live_midi(
-    suffix: str, in_flash: bool
+def test_cold_placement_excludes_live_midi_and_data_transfer(
+    symbol: str, in_flash: bool
 ) -> None:
     original = (
         'FLASH (rx): ORIGIN = 0x60000000, LENGTH = 7936K\n'
@@ -114,7 +144,7 @@ def test_graph_configuration_placement_excludes_live_midi(
     flash = boot_switch.linker_script(original).split('.text.itcm')[0]
     patterns = findall(r'\*\((\.text\.[^)]*)\)', flash)
     # These are emitted ARM section names, including template substitutions.
-    section = f'.text._ZN5cntrl4midi7RoutingINS0_18AdvancedProcessingEE{suffix}'
+    section = f'.text.{symbol}'
     assert any(fnmatchcase(section, p) for p in patterns) is in_flash
 
 

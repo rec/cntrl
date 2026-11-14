@@ -1,10 +1,25 @@
 # Demand-sized firmware memory
 
-Status: diagnostic instruction-RAM overflow repaired through cold configuration
-code placement, 2026-11-14. Physical qualification remains incomplete.
-See the target appendix for measured build totals.
+Status: targeted cold-code placement and a mandatory instruction-growth reserve
+are validated for normal and diagnostic builds, 2026-11-14. Physical
+qualification remains incomplete. See the target appendix for measured totals.
 The inventory below records the original audit; implementation results and
 outstanding qualification gates are tracked here and in the target appendix.
+
+## Enforced instruction-growth reserve, 2026-11-14
+
+The target linker now checks its instruction-growth reserve for every normal
+and diagnostic application build. The targeted cold pass covers startup,
+candidate setup/port preparation, saved-navigation decoding, document/font
+validation, explicit history/deployment commands and status formatting. It does
+not select live MIDI, UART writes, SPI transfer or interrupt handling.
+Linked-symbol checks verify the placement.
+
+Real-linker boundary tests count unwind-table bytes and distinguish an image
+exactly at the allowed boundary from one just beyond it. The target appendix
+records the policy, before/after totals, actual linker heap budgets and
+[reproduction commands](../cntrl/maker/morningstar/mc/dynamic-memory.md#enforced-four-kib-instruction-reserve-2026-11-14).
+This reserve is a build constraint, not a measured stack or timing bound.
 
 ## Cold configuration placement, 2026-11-14
 
