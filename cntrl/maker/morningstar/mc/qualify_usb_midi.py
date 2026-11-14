@@ -1,6 +1,9 @@
 """Explicit, macOS-only qualification of the MC USB-to-DIN MIDI path."""
 
 import ctypes
+import hashlib
+import os
+import struct
 import subprocess
 import sys
 import time
@@ -532,18 +535,78 @@ def run(options: Options) -> None:
             capture_output=True,
             text=True,
             check=False,
+            env=dict(os.environ, TYTOOLS_DEBUG='1', LIBHS_DEBUG='1'),
         )
+        details: dict[str, dict[str, int | str]] = {}
+        commands: list[subprocess.CompletedProcess[str]] = []
+        for name, arguments in (
+            ('version', ['--version']),
+            ('upload_help', ['upload', '--help']),
+            ('reset_help', ['reset', '--help']),
+        ):
+            command = subprocess.run(
+                [str(updater), *arguments], capture_output=True, text=True, check=False
+            )
+            details[name] = {
+                'returncode': command.returncode,
+                'output': command.stdout + command.stderr,
+            }
+            commands.append(command)
+        with updater.open('rb') as executable:
+            checksum = hashlib.file_digest(executable, 'sha256').hexdigest()
+        binary = updater.read_bytes()
+        match_records: dict[str, list[dict[str, int | str]]] = {}
+        # hs_match_spec in the reported 0.9.0 revision: type, VID, PID, userdata.
+        # Keep raw matches as evidence, not a reconstructed or modified table.
+        for product in (0x0478, 0x0483, 0x0489):
+            prefix = struct.pack('<IHH', 0, 0x16C0, product)
+            records: list[dict[str, int | str]] = []
+            offset = binary.find(prefix)
+            while offset >= 0:
+                records.append(
+                    {'offset': offset, 'bytes': binary[offset : offset + 16].hex()}
+                )
+                offset = binary.find(prefix, offset + 1)
+            match_records[f'16c0:{product:04x}'] = records
+        directories = [updater.parent]
+        if sys.platform == 'darwin':
+            directories.extend(
+                [
+                    Path('/Library/Preferences/TyTools'),
+                    Path.home() / 'Library/Preferences/TyTools',
+                ]
+            )
+        configuration = []
+        for directory in directories:
+            for name in ('tytools.ini', 'TyTools.ini'):
+                path = directory / name
+                if path.is_file():
+                    configuration.append({'path': str(path), 'text': path.read_text()})
+                    break
         save_report(
             options.report,
             {
                 'mode': 'updater-info',
                 'updater': str(updater),
+                'updater_sha256': checksum,
+                'debug': True,
+                'binary_magic': binary[:4].hex(),
+                'usb_match_records': match_records,
+                'details': details,
+                'configuration_files': configuration,
                 'returncode': result.returncode,
                 'output': result.stdout + result.stderr,
             },
         )
         print(result.stdout + result.stderr, end='', flush=True)
+        for name, detail in details.items():
+            print(f'{name}:\n{detail["output"]}', end='', flush=True)
+        for config in configuration:
+            print(f'{config["path"]}:\n{config["text"]}', flush=True)
+        print(f'USB match records: {match_records}', flush=True)
         result.check_returncode()
+        for command in commands:
+            command.check_returncode()
         return
     if options.trace_build is not None:
         if sys.platform != 'darwin':

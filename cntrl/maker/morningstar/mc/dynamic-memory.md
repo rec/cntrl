@@ -1058,6 +1058,46 @@ The installed normal/newlib control retains the working UI and has no watchdog.
 These measurements diagnose the losses; they do not claim either bug is fixed
 or resume the bounded-allocator stress qualification.
 
+## Pinned uploader investigation, 2026-11-14
+
+The bundled executable reports `0.9.0-9-g058715b`. Its reported revision resolves
+to [TyTools 058715ba55fcf662e053b9f0d29772a39c67ce62](https://github.com/Koromix/tytools/tree/058715ba55fcf662e053b9f0d29772a39c67ce62).
+The board-wait path at that revision waits for the application's run capability
+after reset. The bundled binary's read-only inventory instead classified the
+application as Generic, tag `14468280-cntrl`, with only unique/serial capabilities.
+No active `tytools.ini` was found in the executable directory or the macOS
+system/user TyTools preference directories.
+
+With approval, `cntrl upload-helper ... provision` now installs the official
+TyTools 0.9.9 release in a private cache, independently of the Morningstar app.
+Both release-archive and executable checksums are pinned; the default helper
+verifies the executable before use. The IPC upload request and target restrictions
+are unchanged. Linux retains the explicit `CNTRL_TYCMD` selection because this
+release has no Linux binary archive.
+
+Read-only `cntrl qualify ... --updater-info` on the connected pedal confirms
+that 0.9.9 recognizes `16c0:0489` as Teensy, tag `14468280-Teensy`, with
+unique/run/reboot/serial capabilities. The executable SHA-256 is
+`2118d04e3bef846b6d7a6fca26e08a177e97f0458708da4a4013309d013b7246`.
+The retained capture is `build/pinned-updater-classification-20261114.toml`.
+This corrects the observed application classification. Physical upload/reset
+verification and the initial HID write failure remain open; the read-only check
+does not establish either result or explain runtime USB disappearances.
+
+Another session installed newer RAM firmware during this investigation. The
+subsequent read-only inspection reports format 47, startup count 96, a valid heap
+and zero UART drop/overrun counters. No old control firmware or format-41 backup
+has been restored over it. Hardware tests must coordinate exclusive pedal access
+and use its matching image/data rather than the frozen older control export.
+
+Local qualification after integration with main passed 1,660 tests, with one
+skipped, plus Ruff, formatting, type checking and pyupgrade. The fresh production
+ARM export builds successfully. Portable isolation passes 1,304 tests with one
+skipped and compiles an LFO setup from the relocated export without the adapter
+tree. An older frozen export's RAM accounting is incompatible with the newer
+frame-buffer model; the portable check uses a fresh export, without weakening
+the memory budget.
+
 ## Physical qualification procedure
 
 Use `uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc`
