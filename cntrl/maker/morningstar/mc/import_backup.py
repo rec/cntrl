@@ -32,6 +32,7 @@ def convert(document: dict, bank: int) -> models.Setup:
     data = document['data']
     banks = {b['bankNumber']: b for b in data['bankArray']}
     settings = data['controller_settings']['data']
+    general = settings['controller_settings']['data']
     arrangement = [b['data']['bankNum'] for b in settings['bank_arrangement']['data']]
     channels = {
         c['data']['channel']: c['data'] for c in settings['midi_channels']['data']
@@ -51,6 +52,8 @@ def convert(document: dict, bank: int) -> models.Setup:
     cycles: dict[str, object] = {}
 
     def label(text: str) -> str:
+        # Official editor icon 46 ('.') is the right chevron.
+        text = text.replace('\\.', '>')
         if re.search(r'%(?!F[0-9A-Fa-f])', text):
             raise ValueError(f'unsupported name placeholder in {text!r}')
         return re.sub(
@@ -189,7 +192,12 @@ def convert(document: dict, bank: int) -> models.Setup:
                         f'{pointer}: unsupported message type {message["t"]}'
                     )
             bindings['abcdef'[index]] = {
-                'name': label(preset['longName'] or preset['shortName']),
+                'name': label(preset['shortName']),
+                'display_name': label(preset['longName'] or preset['shortName']),
+                'style': {
+                    'foreground_color': palette_color(preset['nameColor']),
+                    'background_color': palette_color(preset['backgroundColor']),
+                },
                 'on': {'patches': actions},
             }
         key = f'bank{number}'
@@ -197,6 +205,24 @@ def convert(document: dict, bank: int) -> models.Setup:
             'name': source['bankName'] or key,
             'patches': [],
             'bindings': bindings,
+            'style': {
+                'foreground_color': palette_color(source['textColor'])
+                if source['isColorEnabled']
+                else 'white',
+                'background_color': palette_color(source['backgroundColor'])
+                if source['isColorEnabled']
+                else 'black',
+            },
+            'binding_view': {
+                'maximum_size': 18 - general['presetMaxFontSize'],
+                'detail_size': 18 - general['middleLayerFontSize'],
+                'status_size': (18, 14, 10, 8)[general['bankPageFontSize']],
+                'align': 'switch' if general['lcdAlign'] else 'left',
+                'show_labels': general['showPresetLabels'],
+                'status': f'Bank {number + 1} Page 1'
+                if general['bankPageFontSize'] != 3
+                else '',
+            },
         }
         cycles[key] = [key]
     # Retain arrangement order among the reachable banks.
@@ -238,10 +264,12 @@ def run(command: ImportBackup) -> None:
         'included_banks': list(setup.patch_cycles),
         'scope': 'PC-scroll press assignments, continuous expression CCs '
         'and reachable bank up/down transitions',
-        'presentation': 'cntrl switch view with live counter labels; '
-        'stock palette and enclosure UI are not reproduced',
+        'presentation': 'saved palette, switch alignment, short and long names, '
+        'three display bands and saved font size limits; Arial '
+        'substitutes for the stock typeface',
         'controller_settings': 'uses scroll counters, expression roles, bank '
-        'arrangement and channel routing; other global settings are not imported',
+        'arrangement, channel routing and display settings; '
+        'other global settings are not imported',
     }
     (command.output / 'import.toml').write_text(tomlkit.dumps(report))
     # Virtual ADC inputs span 0..1023; these are not physical pedal calibration.
@@ -277,3 +305,25 @@ def run(command: ImportBackup) -> None:
     print(
         f'Imported {len(setup.patch_cycles)} banks into {command.output / "setup.toml"}'
     )
+
+
+def palette_color(index: int) -> str:
+    """Decode the solid colors used by the saved VL70 banks (editor AQ table)."""
+    # Dim black (64) is still black. Other dim colors need mesh rendering.
+    if index not in PALETTE:
+        raise ValueError(f'unsupported presentation palette color {index}')
+    return PALETTE[index]
+
+
+PALETTE = {
+    0: '0x000000',
+    1: '0x00FF00',
+    3: '0x800080',
+    7: '0xFFFFFF',
+    8: '0xFFA500',
+    29: '0x00FFFF',
+    48: '0xF0E68C',
+    54: '0xFF8C00',
+    56: '0xFA8072',
+    64: '0x000000',
+}

@@ -14,6 +14,7 @@ from . import (
     arpeggiator,
     counters,
     display,
+    graphics,
     inputs,
     layout,
     looper,
@@ -927,7 +928,9 @@ class PatchCompiler:
             if not self.target.max_switches:
                 self.errors.append(f'{path}.bindings: target has no switch engine')
             child = self.add(
-                value.model_copy(update={'bindings': None}), path + '.entry', name
+                value.model_copy(update={'bindings': None, 'binding_view': None}),
+                path + '.entry',
+                name,
             )
             payload = self.compile_bindings(value, child, path)
             self.nodes[index] = struct.pack('<BBH', 10, 0, len(payload)) + payload
@@ -1173,6 +1176,7 @@ class PatchCompiler:
         self, value: models.ConcretePatch, child: int, path: str
     ) -> bytes:
         records: list[bytes] = []
+        visuals: list[bytes] = []
         expressions: dict[str, models.ExpressionAssignment] = {}
         assert value.bindings is not None
 
@@ -1288,6 +1292,25 @@ class PatchCompiler:
                     )
                 )
             )
+            if view := value.binding_view:
+                short = f'{key}: {label}' if view.show_labels else label
+                visuals.append(
+                    self.binding_graphics(short, action.style, view, view.maximum_size)
+                    + self.binding_graphics(
+                        action.display_name or label,
+                        action.style,
+                        view,
+                        view.detail_size,
+                    )
+                    + _text(
+                        action.display_name or label,
+                        64,
+                        self.target,
+                        context + '.display_name',
+                        self.errors,
+                        unicode=True,
+                    ).ljust(64, b'\0')
+                )
         settings = self.show.page_settings.model_copy(
             update={'expression': expressions}
         )
@@ -1296,6 +1319,28 @@ class PatchCompiler:
             self.target,
             midi_endpoints.ports(self.target.midi_endpoints),
         )
+        visual = b''
+        if view := value.binding_view:
+            if len(records) > 6:
+                raise ValueError(
+                    f'{path}.binding_view: at most six switches are supported'
+                )
+            visual = (
+                self.binding_graphics(
+                    self.labels[child], value.style, view, view.detail_size
+                )
+                + self.binding_graphics(view.status, None, view, view.status_size)
+                + bytes([int(view.align == 'switch') | int(view.show_labels) << 1])
+                + _text(
+                    view.status,
+                    64,
+                    self.target,
+                    path + '.binding_view.status',
+                    self.errors,
+                    unicode=True,
+                ).ljust(64, b'\0')
+                + b''.join(visuals)
+            )
         return (
             struct.pack(
                 '<H64sBB',
@@ -1309,10 +1354,64 @@ class PatchCompiler:
                     unicode=True,
                 ),
                 len(records),
-                0,
+                int(value.binding_view is not None),
             )
             + (expression or bytes(4 * page_settings.EXPRESSION.size))
             + b''.join(records)
+            + visual
+        )
+
+    def binding_graphics(
+        self,
+        text: str,
+        style: models.Style | None,
+        view: models.BindingView,
+        maximum: int,
+    ) -> bytes:
+        style = display.merge_style(
+            models.Style(
+                font_name=view.font_name,
+                foreground_color='white',
+                background_color='black',
+            ),
+            style,
+        )
+        if style.font_name not in self.target.ui_fonts:
+            raise ValueError('binding views require an embedded UI font')
+        face = next((f for f in self.target.fonts if f.name == style.font_name), None)
+        if face is None:
+            raise ValueError(f'binding view font lacks metrics: {style.font_name}')
+        samples = [
+            re.sub(
+                r'\{counters\.([^}]+)\}',
+                lambda m, d=d: d * len(str(self.counters[m[1]].maximum)),
+                text,
+            )
+            for d in '0123456789'
+        ]
+        size = next(
+            (
+                s
+                for s in sorted(face.sizes, reverse=True)
+                if s <= maximum
+                and face.sizes[s].line_height <= self.target.display_height // 3 - 4
+                and max(graphics.bounds(t, face.sizes[s])[1] for t in samples)
+                <= self.target.display_width - 8
+            ),
+            None,
+        )
+        if size is None:
+            raise ValueError(f'binding text does not fit: {text!r}')
+        foreground, background = graphics.colors(style, 0)
+        return graphics.SCREEN.pack(
+            face.id,
+            size,
+            0,
+            0,
+            foreground,
+            background,
+            face.sizes[size].line_height,
+            face.sizes[size].top,
         )
 
     def program(self, patch: models.ProgramChange, index: int, path: str) -> bytes:
@@ -2340,7 +2439,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH4BII')
-DOCUMENT_VERSION = 42
+DOCUMENT_VERSION = 43
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

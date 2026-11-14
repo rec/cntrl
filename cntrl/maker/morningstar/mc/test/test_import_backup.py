@@ -5,6 +5,7 @@ from zlib import crc32
 
 import pytest
 import tomlkit
+from PIL import Image
 from pytest_regressions.file_regression import FileRegressionFixture
 
 from cntrl.emulator import backend, cli
@@ -61,6 +62,16 @@ def test_imported_bank_runs_counters_and_bank_transitions(
         )
     with backend.Session(layout, target, executable, storage, bundle) as session:
         now = 0
+        frames: list[Image.Image] = []
+
+        def snapshot() -> None:
+            directory = tmp_path / 'rendered'
+            cli.save(session, directory)
+            frame = Image.new('RGB', (target.display_width * 3, target.display_height))
+            for i in range(3):
+                with Image.open(directory / f'lcd-{i + 1}.png') as panel:
+                    frame.paste(panel, (i * target.display_width, 0))
+            frames.append(frame)
 
         def press(button: str) -> None:
             nonlocal now
@@ -75,18 +86,22 @@ def test_imported_bank_runs_counters_and_bank_transitions(
 
         press('a')  # Activate the imported bank; no MIDI on bank entry.
         assert not [e for e in session.messages if e.kind == 'midi']
+        snapshot()
         press('a')  # Counter 3: 21 -> 22, on both channels and both outputs.
+        snapshot()
         press('a')
         for button in 'bdef':
             press(button)
         press('c')  # Enter VL70-2.
         press('a')  # Counter 8: 46 -> 47.
+        snapshot()
         for button in 'bdef':
             press(button)
         press('c')  # Return to VL70-1 without resetting its counters.
         press('a')  # Counter 3: 23 -> 24.
         press('a')  # 25.
         press('a')  # Wrap to 21.
+        snapshot()
         din = [
             list(e.data)
             for e in session.messages
@@ -126,6 +141,26 @@ def test_imported_bank_runs_counters_and_bank_transitions(
             assert mirror == primary
         assert not [e.message for e in session.messages if e.kind == 'error']
         cli.save(session, tmp_path / 'rendered')
+        comparison = Image.new(
+            'RGB', (target.display_width * 3, target.display_height * len(frames))
+        )
+        for i, frame in enumerate(frames):
+            comparison.paste(frame, (0, i * target.display_height))
+        destination = tmp_path / 'appearance.png'
+        comparison.save(destination)
+
+        def compare_pixels(obtained: Path, expected: Path) -> None:
+            with Image.open(obtained) as first, Image.open(expected) as second:
+                assert first.size == second.size
+                assert first.convert('RGB').tobytes() == second.convert('RGB').tobytes()
+
+        file_regression.check(
+            destination.read_bytes(),
+            binary=True,
+            extension='.png',
+            basename='vl70-appearance',
+            check_fn=compare_pixels,
+        )
 
 
 BASE = Path(__file__).parents[1]

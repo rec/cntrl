@@ -126,8 +126,8 @@ def upgrade(data: bytes) -> bytes:
     if version == DOCUMENT_VERSION:
         export(data)
         return data
-    if version == 41:
-        # Format 42 adds a node type without changing existing records.
+    if version in (41, 42):
+        # New node and presentation options preserve existing records.
         converted = bytearray(data)
         struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
         result = bytes(converted)
@@ -178,7 +178,7 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
     magic, version, _, length, ni, nc, np, flags, crc, _ = HEADER.unpack_from(data)
     if (
         magic != b'CSW1'
-        or version not in (36, 38, 39, 40, 41, DOCUMENT_VERSION)
+        or version not in (36, 38, 39, 40, 41, 42, DOCUMENT_VERSION)
         or flags
         & ~(
             0x1FFF
@@ -901,7 +901,11 @@ def _patch(
 
             authored = original.get(key, {})
             action: dict[str, object] = (
-                {k: v for k, v in authored.items() if k in ('name', 'style')}
+                {
+                    k: v
+                    for k, v in authored.items()
+                    if k in ('name', 'display_name', 'style')
+                }
                 if isinstance(authored, dict)
                 else {}
             )

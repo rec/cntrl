@@ -106,7 +106,7 @@ private:
         document_ = candidate.document_; bindings_ = candidate.bindings_; ++revision_;
         pinned_ = candidate.pinned_; candidate.pinned_ = false;
         held_ = disarmed_ = candidate.held_; open_ = dirty_ = true; closing_ = abandoned_ = shifted_ = false;
-        selected_ = -1; clear_events(); transition_ = 0; hooks_enabled_ = candidate.hooks_enabled_; exit_started_ = false;
+        selected_ = last_pressed_ = -1; clear_events(); transition_ = 0; hooks_enabled_ = candidate.hooks_enabled_; exit_started_ = false;
         render();
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -382,6 +382,7 @@ private:
     CheckedList<Event> events_;
     unsigned event_count_ = 0, transition_ = 0, state_revision_ = 0;
     int selected_ = -1;
+    int last_pressed_ = -1;
     bool hooks_enabled_ = false, exit_started_ = false;
     unsigned count_ = 0, held_ = 0, disarmed_ = 0;
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
@@ -441,6 +442,7 @@ private:
     }
     void action(unsigned index, unsigned node, unsigned kind) {
         Event event{index, node, kind, states_[index].input_layer};
+        if (kind != 2) last_pressed_ = int(index);
         if (!hooks_enabled_) {
             auto &s = states_[index];
             if (kind == 0 && !s.settings && node == u16(s.record + 2)) { ++s.presses; dirty_ = true; }
@@ -563,6 +565,41 @@ private:
     void render() {
         if (bindings_) {
             Pane panes[3];
+            if (const uint8_t *view = bindings_.view()) {
+                for (auto &pane : panes) {
+                    pane.three_bands = true;
+                    pane.graphics.background = 0;
+                    pane.graphics.pad = 0;
+                }
+                auto &title = panes[1].lines[1];
+                title.graphics = Document::read_graphics(view);
+                title.centered = true;
+                std::snprintf(title.text, sizeof(title.text), "%s", bindings_.title());
+                auto &status = panes[2].lines[1];
+                status.graphics = Document::read_graphics(view + 16);
+                status.centered = true;
+                std::snprintf(status.text, sizeof(status.text), "%s", reinterpret_cast<const char *>(view + 33));
+                for (unsigned i = 0; i < count_; ++i) {
+                    const auto &s = states_[i];
+                    const uint8_t *visual = view + binding_view_header_size + i * binding_view_record_size;
+                    auto &line = panes[i % 3].lines[i < 3 ? 2 : 0];
+                    line.graphics = Document::read_graphics(visual);
+                    line.x = 4;
+                    line.centered = (view[32] & 1) && i % 3 == 1;
+                    line.right_aligned = (view[32] & 1) && i % 3 == 2;
+                    char label[64];
+                    document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
+                    if (view[32] & 2) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", document_.input_label(s.record[0]), label);
+                    else std::snprintf(line.text, sizeof(line.text), "%s", label);
+                    if (last_pressed_ == int(i)) {
+                        auto &detail = panes[0].lines[1];
+                        detail.graphics = Document::read_graphics(visual + 16);
+                        detail.centered = true;
+                        document_.counter_text(detail.text, sizeof(detail.text), reinterpret_cast<const char *>(visual + 32), hardware_.counters);
+                    }
+                }
+                ui::present(hardware_, panes, 1); dirty_ = false; return;
+            }
             for (auto &pane : panes) pane.graphics = document_.graphics(1);
             std::snprintf(panes[1].lines[0].text, 64, "%s", bindings_.title());
             for (unsigned i = 0; i < count_; ++i) {

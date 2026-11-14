@@ -49,16 +49,37 @@ controller settings. cntrl authoring adds one to PC values, matching `%F` names.
   uses controller/minimum/maximum in its first three data fields. Expression
   action 0 means Expression, rather than No Action.
 
+## Display conversion
+
+The imported view puts D/E/F in the top bands and A/B/C in the bottom bands,
+with short names aligned toward their switches when `lcdAlign` is enabled.
+The saved setting hides switch-letter prefixes. The middle bands show the
+last pressed preset's long name on the left, the bank name in the centre, and
+the bank/page indication on the right. Long-name counter tokens stay live.
+
+Preset and bank foreground/background indices are translated using the official
+editor's `AQ` palette. This first importer supports the colors used by these
+two banks, including dim black (64); other dim/mesh colors are not implemented.
+The editor's icon 46 (`\.`) becomes a right chevron. The size settings encode
+18 down to 8, with 0 meaning 18. Text uses the existing Arial bitmap face as a
+substitute, fitting down from the saved size limit to the available band.
+Bank/page sizes Large/Medium/Small map to maximum sizes 18/14/10; Hidden omits
+the indication. These font and band metrics approximate the stock display;
+they are not a pixel-exact reproduction of its typeface or fitting algorithm.
+
+See the [official display and preset description](https://help.morningstar.io/en/article/mc6-pro-user-manual-psevjy/).
+The native visual regression records all three displays at bank entry, after
+the first program send, in the second bank and after returning to the first.
+
 Native tests execute compiler output in the production C++ emulator, checking
 ordered PC messages, first-send stepping, send-only on another channel, both
 outputs, wrap, retained values on bank return, and expression sweeps to CC 127.
-Editable export recompiles to identical bytes. Format 42 adds counter messages
-and expression mirroring; existing format-41 records upgrade without changes
-to their body. Older supported upgrades remain available.
+Editable export recompiles to identical bytes. Format 43 adds optional binding
+presentation records; existing format-41/42 records upgrade without changes to
+their body. Older supported upgrades remain available.
 
-The view uses cntrl's layout and live counter labels, rather than the stock
-palette and exact display arrangement. Global MIDI thru/events, clock settings,
-auxiliary modes and unrelated banks are outside this import. This is limited
+Global MIDI thru/events, clock settings, auxiliary modes and unrelated banks
+are outside this import. This is limited
 support for the decoded message families, not every MC6/MC8 backup. Stock-firmware
 traces and physical qualification remain necessary for timing and behavioral
 equivalence claims.

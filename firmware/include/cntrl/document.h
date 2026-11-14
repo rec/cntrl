@@ -12,7 +12,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 14;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 42;
+constexpr unsigned document_version = 43;
 constexpr unsigned gesture_event_count = 12;
 constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
 constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
@@ -20,6 +20,10 @@ constexpr unsigned shifted_action_size = 4 + gesture_record_size;
 constexpr unsigned binding_hooks_offset = 72 + gesture_record_size;
 constexpr unsigned binding_shifted_offset = binding_hooks_offset + 5;
 constexpr unsigned binding_record_size = binding_shifted_offset + shifted_action_size;
+// Optional binding view: title/status graphics, flags and status text;
+// then short/detail graphics and detail text for each switch.
+constexpr unsigned binding_view_header_size = 2 * 16 + 1 + 64;
+constexpr unsigned binding_view_record_size = 2 * 16 + 64;
 inline uint16_t u16(const uint8_t *p) { return p[0] | uint16_t(p[1]) << 8; }
 inline uint32_t u32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
@@ -716,6 +720,9 @@ public:
         }
         if (size) text[used] = 0;
     }
+    static ScreenGraphics read_graphics(const uint8_t *p) {
+        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u32(p + 12)};
+    }
     void page_record(Pane &view, unsigned page, unsigned index, bool already_sent, const char *state = "", const Counters *values = nullptr) const {
         const uint8_t *p = data_ + pages_;
         while (page--) p += 1 + p[0] * 8;
@@ -858,7 +865,17 @@ private:
                 break;
             case 10: {
                 if (!hardware.switch_capacity() || n[1] || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
-                    || p[66] > 8 || p[66] > input_count || p[67] || length != 220u + binding_record_size * p[66]) return false;
+                    || p[66] > 8 || p[66] > input_count || p[67] > 1
+                    || length != 220u + binding_record_size * p[66] + (p[67] ? binding_view_header_size + binding_view_record_size * p[66] : 0)) return false;
+                if (p[67]) {
+                    const uint8_t *v = p + 220 + binding_record_size * p[66];
+                    if (p[66] > 6 || v[32] > 3 || !label_valid(v + 33, 64)
+                        || !graphics_valid(v, hardware) || !graphics_valid(v + 16, hardware)) return false;
+                    for (unsigned j = 0; j < p[66]; ++j) {
+                        const uint8_t *s = v + binding_view_header_size + j * binding_view_record_size;
+                        if (!graphics_valid(s, hardware) || !graphics_valid(s + 16, hardware) || !label_valid(s + 32, 64)) return false;
+                    }
+                }
                 for (unsigned j = 0; j < 4; ++j) {
                     const uint8_t *e = p + 68 + j * expression_record_size;
                     if (!e[32]) continue;
@@ -971,9 +988,6 @@ private:
             && 2u * p[2] < hardware.display_width()
             && 2u * p[2] + u16(p + 8) <= hardware.display_height()
             && u16(p + 8) && u16(p + 10) < u16(p + 8);
-    }
-    static ScreenGraphics read_graphics(const uint8_t *p) {
-        return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u32(p + 12)};
     }
     void field_text(char *text, unsigned size, unsigned code, unsigned index, unsigned literal, const Counters *values) const {
         const uint8_t *p = patch(index);

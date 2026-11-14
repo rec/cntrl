@@ -84,6 +84,31 @@ actions, and recognized gestures finish their matching releases. Undecided
 taps and queued gestures are cancelled. Held switches are disarmed in the new
 map until released. Background MIDI, clocks, playback and recording continue.
 
+## Performance display
+
+A patch with bindings can also specify a `binding_view` for a three-display
+performance view. It places the first three switches along the bottom and the
+next three along the top, with a bank title, last pressed control's detail and
+status in the middle bands. It supports up to six switches.
+
+```toml
+[patches.verse.binding_view]
+font_name = 'Arial'
+maximum_size = 18
+detail_size = 18
+status_size = 18
+align = 'switch'
+show_labels = false
+status = 'Bank 1 Page 1'
+```
+
+`align = 'switch'` aligns left, centre and right toward the corresponding
+switch; `'left'` left-aligns all short names. Sizes are upper limits in the
+target's native UI font sizes; the compiler fits each label within its band.
+Choose an embedded UI font with target metrics. A binding's `name` supplies
+the short label, `display_name` its detail, and `style` its foreground and
+background colors. The patch's style supplies the bank title colors.
+
 ## Expression pedals
 
 Expression assignments share the same table, keyed by the configured jack name:

@@ -10,6 +10,7 @@ struct ControlBindings {
     unsigned count() const { return data[66]; }
     const char *title() const { return reinterpret_cast<const char *>(data + 2); }
     const uint8_t *record(unsigned slot) const { return data + 220 + slot * binding_record_size; }
+    const uint8_t *view() const { return data[67] ? record(count()) : nullptr; }
     const uint8_t *find(unsigned input) const {
         for (unsigned i = 0; i < count(); ++i) if (record(i)[0] == input) return record(i);
         return nullptr;
