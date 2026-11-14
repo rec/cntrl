@@ -111,3 +111,19 @@ Compiled extensions register a configuration model and encoder on the host and
 a matching processor factory in the firmware. The same registration can declare
 a generator. Setups requiring a missing extension or mismatched parameter
 version fail validation before activation.
+
+## Firmware organization
+
+`midi_routing.h` provides `BasicRouting` for pass-through routes, channel-only
+`keep` and `drop` filters, and constant channel remapping. It supports the same
+endpoint connections, route graph and patch scopes as the full engine. It
+rejects processing outside that subset before replacing an active configuration.
+
+`midi_processing.h` provides the full `Streams` engine, including transformations,
+delays, reversal, generators and registered processors. Both engines use one
+`Routing<Processing>` implementation for queues, scheduling, output delivery,
+note ownership and cleanup. Advanced processing builds on the basic operations.
+
+The application continues to use `Streams` for every setup. This split does not
+change configuration or the compiled MIDI format, select firmware variants, or
+load executable code from storage.
