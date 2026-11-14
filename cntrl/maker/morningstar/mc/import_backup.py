@@ -261,11 +261,18 @@ def run(command: ImportBackup) -> None:
     if command.output.exists() and any(command.output.iterdir()):
         raise ValueError(f'import output directory must be empty: {command.output}')
     command.output.mkdir(parents=True, exist_ok=True)
-    (command.output / 'setup.toml').write_text(
-        tomlkit.dumps(
-            setup.model_dump(mode='json', exclude_none=True, exclude_defaults=True)
-        )
+    document = tomlkit.document()
+    document.update(
+        setup.model_dump(mode='json', exclude_none=True, exclude_defaults=True)
     )
+    banks = tomlkit.array()
+    for i, b in enumerate(imported.banks):
+        name = models.Sequence.model_validate(imported.patches[b[0]]).name or ''
+        label = ' '.join(name.split()) or 'unnamed'
+        banks.add_line(b, comment=f'Bank {i}: {label}')
+    banks.add_line(indent='')
+    document['patches']['Morningstar']['banks'] = banks
+    (command.output / 'setup.toml').write_text(tomlkit.dumps(document))
     report = {
         'backup': str(command.backup.resolve()),
         'sha256': hashlib.sha256(content).hexdigest(),

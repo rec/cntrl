@@ -11,11 +11,12 @@ from pytest_regressions.file_regression import FileRegressionFixture
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.maker.morningstar.mc.import_backup import convert
+from cntrl.maker.morningstar.mc.import_backup import ImportBackup, convert, run
 from cntrl.patch_switcher import compiler, models, resolved, setup_bundle
 
 
 def test_saved_vl70_bank_converts_to_editable_toml(
+    tmp_path: Path,
     file_regression: FileRegressionFixture,
 ) -> None:
     setup = convert(json.loads(BACKUP.read_bytes()), 0)
@@ -24,10 +25,11 @@ def test_saved_vl70_bank_converts_to_editable_toml(
     assert len(imported.banks) == 128
     assert all(len(b) == 4 for b in imported.banks)
     assert setup.patch_cycles == {'Imported': ['Morningstar']}
+    run(ImportBackup(backup=BACKUP, output=tmp_path))
+    text = (tmp_path / 'setup.toml').read_text()
+    assert models.Setup.model_validate(tomlkit.parse(text).unwrap()) == setup
     file_regression.check(
-        tomlkit.dumps(
-            setup.model_dump(mode='json', exclude_none=True, exclude_defaults=True)
-        ),
+        text,
         fullpath=BASE / 'emulator' / 'vl70-1.toml',
     )
 
