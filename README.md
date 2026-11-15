@@ -67,7 +67,7 @@ it is offered!
 * Fast response to button presses: usually 1 ms, always below 3.5ms from button
   down to first MIDI byte
 
-* Many pages to choose from
+* Many pages to choose from in your setup, add one, several or all:
   * Patch switcher
   * MIDI recorder/playback
   * MIDI looper
@@ -78,8 +78,14 @@ it is offered!
   * USB host and device services
   * Panic
   * MIDI monitor
+  * Boring general status page
+  * Exciting Pong!
+  * Setup page
+  * Song page (in progress)
+  * Set list page (in progress)
   * More to come
-  * One setup might have all of these; another might have two - and you can switch live.
+
+* An emulator, so you can experiment with patches when the pedal is elsewhere.
 
 * Graphics
  * Use any fonts
