@@ -345,7 +345,8 @@ private:
             }
             finish_resources(true); std::snprintf(selected_, 64, "%s", record_name_);
             activate(candidate); browse_phase_ = BrowsePhase::idle;
-            if (!quiet_) replies_.reply("CNTRL OK"); quiet_ = false; return;
+            if (!quiet_) replies_.reply("CNTRL OK");
+            quiet_ = false; return;
         }
         }
     }

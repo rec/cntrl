@@ -233,9 +233,7 @@ def wheel_smoke(root: Path, output: Path) -> None:
             directory,
             environment,
         )
-        for manifest in sorted(
-            (root / 'cntrl/maker').glob('**/distribution/manifest.toml')
-        ):
+        for manifest in sorted((root / 'cntrl').glob('**/distribution/manifest.toml')):
             module = '.'.join(
                 [*manifest.parent.parent.relative_to(root).parts, 'check_package']
             )
@@ -246,7 +244,12 @@ def wheel_smoke(root: Path, output: Path) -> None:
                     '-m',
                     module,
                     '--artifacts',
-                    *(str(p) for p in sorted(wheels.iterdir())),
+                    *(
+                        str(p)
+                        for p in sorted(
+                            [*wheels.glob('*.whl'), *wheels.glob('*.tar.gz')]
+                        )
+                    ),
                     '--installation',
                     str(directory / str(controller)),
                 ],

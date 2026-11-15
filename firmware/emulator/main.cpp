@@ -475,9 +475,9 @@ public:
         board.blocked = 0;
         for (unsigned i = 0; i < 64; ++i) board.midi_runtime.poll(board);
         // Snapshot source IDs: accepted releases mutate the shared ledger.
-        std::vector<unsigned> sources;
-        board.each_source([&](unsigned source) { sources.push_back(source); });
-        for (unsigned source : sources) while (board.source_cleaning(source)) {
+        std::vector<unsigned> cleanup_sources;
+        board.each_source([&](unsigned source) { cleanup_sources.push_back(source); });
+        for (unsigned source : cleanup_sources) while (board.source_cleaning(source)) {
             if (!board.release_source(source)) break;
             board.midi_runtime.poll(board);
         }

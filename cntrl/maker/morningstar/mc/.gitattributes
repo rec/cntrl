@@ -1,0 +1,2 @@
+# Release resource hashes cover exact bytes, including text line endings.
+distribution/** -text

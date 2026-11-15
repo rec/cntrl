@@ -213,7 +213,7 @@ public:
     void input_connection(unsigned input) {
         if (!configured_) return;
         if (state_ == State::recording || state_ == State::overdubbing)
-            for (unsigned i = 0; i < held_count_; ++i) if (held(i).source / 16 == input) { abort_candidate(Error::input); break; }
+            for (unsigned i = 0; i < held_count_; ++i) if (held(i).source / 16u == input) { abort_candidate(Error::input); break; }
         capture_.forget_input(input);
     }
 #ifdef CNTRL_FLASH_ROUTINE

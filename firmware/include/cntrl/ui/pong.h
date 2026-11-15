@@ -45,7 +45,7 @@ private:
     uint8_t held_ = 0;
     void round(float direction) {
         x = width / 2; y = (top + bottom) / 2;
-        vx = direction * 150; vy = (left_score + right_score) % 2 ? -45 : 45;
+        vx = direction * 150; vy = (left_score + right_score) % 2 ? -45.0f : 45.0f;
         state = left_score == 11 || right_score == 11 ? State::finished : State::ready;
     }
     void bounce(float paddle, float direction) {
