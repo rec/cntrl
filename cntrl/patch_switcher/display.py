@@ -2,6 +2,7 @@
 
 import struct
 from functools import cached_property
+from pathlib import Path
 from random import Random
 
 import tomlkit
@@ -29,6 +30,7 @@ def compile_display(
     target: models.Target,
     assets: dict[int, bytes] | None = None,
     patch_metadata: dict[str, object] | None = None,
+    source_snapshots: dict[Path, bytes] | None = None,
 ) -> tuple[list[bytes], list[list[int]], bytes]:
     if show.fill_in_styles and show.seed is None:
         # Persist the one-time choice so downloaded configurations recompile to
@@ -193,7 +195,7 @@ def compile_display(
                 )
     from ..fonts.assets import SWITCH_STATES, Preparation
 
-    prepared = Preparation(show, target, requests, contexts)
+    prepared = Preparation(show, target, requests, contexts, source_snapshots)
     target = prepared.target
     choices = [
         graphics.font_choice(

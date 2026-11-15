@@ -50,7 +50,7 @@ struct Services {
     CounterFile counter_file;
     Recorder recorder;
     History history;
-    Transfer bundle, disk, midi_assets;
+    Transfer bundle, disk, midi_assets, sources;
     Listing listing;
     Editor song_editor;
     Transfer songs;

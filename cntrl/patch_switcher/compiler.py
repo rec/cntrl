@@ -1,15 +1,19 @@
 """Compile a complete show, accumulating errors before producing any binary."""
 
 import json
+import ntpath
+import posixpath
 import re
 import struct
 from collections.abc import Mapping
+from hashlib import sha256
 from pathlib import Path
 from zlib import crc32
 
 import tomlkit
 from pydantic import ValidationError
 
+from .. import source_files
 from . import (
     arpeggiator,
     banked,
@@ -44,21 +48,29 @@ def read_document(
     _ancestors: tuple[Path, ...] = (),
     snapshots: dict[Path, bytes] | None = None,
     overrides: dict[Path, bytes] | None = None,
+    defer_references: bool = False,
+    relocations: dict[Path, Path] | None = None,
 ) -> object:
     resolved = path.resolve()
+    if relocations is not None:
+        resolved = relocations.get(path, relocations.get(resolved, resolved))
+    origin = next(
+        (k for k, v in (relocations or {}).items() if v.resolve() == resolved),
+        path,
+    )
     if resolved in _ancestors:
         raise ValueError(f'{path}: catalogue reference cycle')
     content = (
         overrides[resolved]
         if overrides is not None and resolved in overrides
-        else path.read_bytes()
+        else source_files.read(resolved, snapshots)
     )
     if snapshots is not None:
         snapshots[resolved] = content
     source = content.decode()
-    if path.suffix == '.json':
+    if resolved.suffix == '.json':
         document = json.loads(source)
-    elif path.suffix == '.toml':
+    elif resolved.suffix == '.toml':
         document = tomlkit.parse(source).unwrap()
     else:
         raise ValueError(f'{path}: expected .toml or .json')
@@ -67,22 +79,79 @@ def read_document(
     ):
         for p in patches:
             if isinstance(p, dict):
-                p.setdefault('instrument', path.stem)
-    if isinstance(document, dict) and isinstance(fonts := document.get('fonts'), dict):
-        for n, f in fonts.items():
-            if isinstance(f, str):
-                fonts[n] = str((path.parent / f).resolve())
-    if isinstance(document, dict):
-        for n in ('splash_movie', 'idle_movie'):
-            if n in document:
-                movies = models.parse_movies(document[n])
-                if isinstance(movies, list) and all(
-                    isinstance(m, str) and m for m in movies
-                ):
-                    document[n] = [str((path.parent / m).resolve()) for m in movies]
-    if isinstance(document, dict) and isinstance(
-        instruments := document.get('instruments'), dict
-    ):
+                p.setdefault('instrument', Path(ntpath.basename(str(origin))).stem)
+    if not defer_references and isinstance(document, dict):
+        normalize_references(document, path, relocations=relocations)
+        expand_catalogues(
+            document,
+            path,
+            snapshots=snapshots,
+            overrides=overrides,
+            ancestors=_ancestors + (resolved,),
+            relocations=relocations,
+        )
+    return document
+
+
+def normalize_references(
+    document: dict[str, object],
+    path: Path,
+    *,
+    relocations: dict[Path, Path] | None = None,
+    origins: dict[tuple[str | int, ...], Path] | None = None,
+) -> None:
+    def reference(value: str, context: tuple[str | int, ...]) -> str:
+        while origins is not None and context not in origins and context:
+            context = context[:-1]
+        source = (origins or {}).get(context, path)
+        origin = next(
+            (
+                k
+                for k, v in (relocations or {}).items()
+                if v.resolve() == source.resolve()
+            ),
+            source,
+        )
+        return str(source_reference(origin, value, relocations))
+
+    for field in ('fonts', 'font_sources'):
+        if isinstance(fonts := document.get(field), dict):
+            for n, f in fonts.items():
+                if isinstance(f, str):
+                    fonts[n] = reference(f, (field, n))
+    for field in ('splash_movie', 'idle_movie'):
+        if field in document:
+            movies = models.parse_movies(document[field])
+            if isinstance(movies, list) and all(
+                isinstance(m, str) and m for m in movies
+            ):
+                document[field] = [
+                    reference(m, (field, i)) for i, m in enumerate(movies)
+                ]
+    if isinstance(instruments := document.get('instruments'), dict):
+        for n, instrument in instruments.items():
+            if not isinstance(instrument, dict):
+                continue
+            references = instrument.get('catalogues')
+            if isinstance(references, list) and all(
+                isinstance(r, str) for r in references
+            ):
+                instrument['catalogues'] = [
+                    reference(r, ('instruments', n, 'catalogues', i))
+                    for i, r in enumerate(references)
+                ]
+
+
+def expand_catalogues(
+    document: dict[str, object],
+    path: Path,
+    *,
+    snapshots: dict[Path, bytes] | None = None,
+    overrides: dict[Path, bytes] | None = None,
+    ancestors: tuple[Path, ...] = (),
+    relocations: dict[Path, Path] | None = None,
+) -> None:
+    if isinstance(instruments := document.get('instruments'), dict):
         for alias, instrument in instruments.items():
             if not isinstance(instrument, dict) or 'catalogues' not in instrument:
                 continue
@@ -93,11 +162,41 @@ def read_document(
             instrument['programs'] = _shared_programs(
                 instrument.pop('catalogues'),
                 path,
-                _ancestors + (resolved,),
+                ancestors or (path.resolve(),),
                 snapshots,
                 overrides,
+                relocations,
             )
-    return document
+
+
+def source_reference(
+    origin: Path, reference: str, relocations: dict[Path, Path] | None = None
+) -> Path:
+    """Resolve source-relative paths, including recovered foreign-platform rigs."""
+    if not relocations or origin not in relocations:
+        return (origin.parent / reference).resolve()
+    if Path(reference) in relocations.values():
+        return Path(reference)
+    original = str(origin)
+    if ntpath.splitdrive(original)[0] or '\\' in original:
+        key = Path(ntpath.normpath(ntpath.join(ntpath.dirname(original), reference)))
+        folded = ntpath.normcase(str(key))
+        for source, target in relocations.items():
+            if ntpath.normcase(str(source)) == folded:
+                return target
+    else:
+        key = Path(
+            posixpath.normpath(posixpath.join(posixpath.dirname(original), reference))
+        )
+    if key not in relocations:
+        actual = relocations[origin]
+        return (
+            actual.parent
+            / '.cntrl-unavailable-source'
+            / sha256(str(key).encode()).hexdigest()
+            / (ntpath.basename(reference) or 'source')
+        )
+    return relocations[key]
 
 
 def normalize_patch(value: object) -> models.Patch:
@@ -187,6 +286,8 @@ def compile_show(
     assets: dict[int, bytes] | None = None,
     documents: dict[str, object] | None = None,
     movie_assets: dict[int, bytes] | None = None,
+    *,
+    source_snapshots: dict[Path, bytes] | None = None,
 ) -> bytes:
     errors: list[str] = []
     generated: dict[int, bytes] = {}
@@ -275,7 +376,14 @@ def compile_show(
             )
         instruments[alias] = instrument
     compiler = PatchCompiler(
-        show, profiles, entries, instruments, target, errors, documents or {}
+        show,
+        profiles,
+        entries,
+        instruments,
+        target,
+        errors,
+        documents or {},
+        source_snapshots=source_snapshots,
     )
     named: dict[str, int] = {}
     for key, raw in show.patches.items():
@@ -543,7 +651,10 @@ def compile_show(
         from ..animation.movies import prepare
 
         show, movie_records = prepare(
-            show, movie_assets if movie_assets is not None else {}, target.animation
+            show,
+            movie_assets if movie_assets is not None else {},
+            target.animation,
+            source_snapshots=source_snapshots,
         )
         screen_records, references, display_records = display.compile_display(
             show,
@@ -586,6 +697,7 @@ def compile_show(
                 )
                 for i, p in enumerate(compiler.values)
             },
+            source_snapshots=source_snapshots,
         )
         packed_pages = page_settings.pack(show, target)
         clock = page_settings.pack_clock(show, target)
@@ -808,6 +920,8 @@ class PatchCompiler:
         target: models.Target,
         errors: list[str],
         documents: dict[str, object],
+        *,
+        source_snapshots: dict[Path, bytes] | None = None,
     ) -> None:
         self.show, self.profiles, self.entries, self.instruments = (
             show,
@@ -816,6 +930,7 @@ class PatchCompiler:
             instruments,
         )
         self.target, self.errors, self.documents = target, errors, documents
+        self.source_snapshots = source_snapshots
         self.counters = dict(show.counters)
         self.values: list[models.ConcretePatch] = []
         self.nodes: list[bytes] = []
@@ -1466,7 +1581,9 @@ class PatchCompiler:
             raise ValueError(
                 f'binding view font lacks exported glyphs: {style.font_name}'
             )
-        data = Path(self.target.font_sources[style.font_name]).read_bytes()
+        data = source_files.read(
+            Path(self.target.font_sources[style.font_name]), self.source_snapshots
+        )
         face = assets.decode(data, style.font_name, 0)
         entries = assets.entries(data)
         samples = [
@@ -2416,6 +2533,7 @@ def _shared_programs(
     ancestors: tuple[Path, ...],
     snapshots: dict[Path, bytes] | None = None,
     overrides: dict[Path, bytes] | None = None,
+    relocations: dict[Path, Path] | None = None,
 ) -> list[object]:
     if (
         not isinstance(references, list)
@@ -2427,7 +2545,11 @@ def _shared_programs(
     for reference in references:
         path = source.parent / reference
         document = read_document(
-            path, _ancestors=ancestors, snapshots=snapshots, overrides=overrides
+            path,
+            _ancestors=ancestors,
+            snapshots=snapshots,
+            overrides=overrides,
+            relocations=relocations,
         )
         if (
             not isinstance(document, dict)

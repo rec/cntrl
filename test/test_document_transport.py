@@ -399,6 +399,145 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
             assert result['screensaver_timeout'] == 60
 
 
+@pytest.mark.parametrize('field', ['brightness', 'clear-volume', 'changed-defaults'])
+def test_source_sync_keeps_inherited_edits_local_and_checks_shared_defaults(
+    bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
+    from cntrl.patch_switcher import global_config
+
+    defaults = tmp_path / 'global.toml'
+    original_defaults = (
+        'brightness=100\n'
+        '[instruments.piano]\noutput="din"\nchannel=1\n'
+        '[patches.A]\ninstrument="piano"\nprogram=7\nvolume=80\n'
+        '[patch_cycles]\nmain=["A"]\n'
+    )
+    defaults.write_text(original_defaults)
+    monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
+    source = tmp_path / 'show.toml'
+    source.write_text('# My setup overrides\n')
+    other = tmp_path / 'other.toml'
+    other.write_text('# Independent setup\n')
+    inputs = data_files.Sources(
+        document=[f'Show={source}'],
+        target=[str(ROOT / 'firmware/test/target.json')],
+    )
+    with NativePeer([str(bundle_peer)]) as port:
+        cli.run_setup(
+            cli.Copy(
+                **inputs.model_dump(exclude={'document'}),
+                document=[*inputs.document, f'Other={other}'],
+                port=Path(port),
+            )
+        )
+        with transport.SerialConnection(Path(port)) as connection:
+            client = transport.SetupClient(connection)
+            edited = bytearray(binary_format.core(client.download('Show')))
+            if field == 'clear-volume':
+                graph = resolved.graph_offset(edited)
+                count = compiler.GRAPH.unpack_from(edited, graph)[2]
+                node = next(
+                    n + 4
+                    for i in range(count)
+                    if edited[
+                        n := graph
+                        + struct.unpack_from(
+                            '<I', edited, graph + compiler.GRAPH.size + i * 4
+                        )[0]
+                    ]
+                    == 1
+                )
+                edited[node + 5] = edited[76 + 68 + 68 + 7] = 255
+            else:
+                edited[18] = 75
+            struct.pack_into('<I', edited, 20, crc32(edited[28:]))
+            client.copy('Show', bytes(edited), True)
+            client.ok('CNTRL SETUP FINISH')
+            report = setup_sync.preview(inputs, client)
+        review = setup_sync.Review.model_validate(
+            tomlkit.parse(report.read_text()).unwrap()
+        )
+        assert review.changes and all(
+            c.destination.file == source for c in review.changes
+        )
+        assert all(
+            c.affects == ['Show'] and c.choice == 'pedal' for c in review.changes
+        )
+        assert review.recipe.global_defaults == {'Show': defaults}
+        if field == 'changed-defaults':
+            defaults.write_text(
+                original_defaults.replace('brightness=100', 'brightness=120')
+            )
+            with pytest.raises(ValueError, match='source changed since review'):
+                setup_sync.apply_review(report)
+            assert source.read_text() == '# My setup overrides\n'
+        else:
+            setup_sync.apply_review(report)
+            assert defaults.read_text() == original_defaults
+            assert other.read_text() == '# Independent setup\n'
+            authored = tomlkit.parse(source.read_text()).unwrap()
+            if field == 'clear-volume':
+                assert authored['inheritance']['remove'] == [['patches', 'A', 'volume']]
+            else:
+                assert authored == {'brightness': 75}
+            assert setup_sync.canonical(
+                cli.compile_inputs(inputs).setups['Show']
+            ) == setup_sync.canonical(bytes(edited))
+
+
+def test_song_authoring_recovers_its_global_rig_and_original_sources(
+    bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cntrl.patch_switcher import global_config, songs, source_archive
+
+    defaults = tmp_path / 'global.toml'
+    original_defaults = (
+        '[instruments.piano]\noutput="din"\nchannel=3\n'
+        '[patch_cycles]\nEarlier=[{instrument="piano",program=12}]\n'
+    )
+    defaults.write_text(original_defaults)
+    monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
+    source = tmp_path / 'songs.toml'
+    original_source = (
+        '[[songs]]\nname="Live"\n'
+        'patches=[{instrument="piano",program=34,display_name="Chosen"}]\n'
+    )
+    source.write_text(original_source)
+    with NativePeer([str(bundle_peer)]) as port:
+        songs.run(
+            songs.Copy(
+                document=source,
+                target=ROOT / 'firmware/test/target.json',
+                port=Path(port),
+            )
+        )
+        with transport.SerialConnection(Path(port)) as connection:
+            data = songs.download(transport.SetupClient(connection))
+        assert len(songs.source_snapshots(data)) == 1
+        value = songs.decode(data)
+        assert value.songs[0].patches[0]['program'] == 34
+        assert value.instruments['piano']['channel'] == 3
+        output = tmp_path / 'recovered'
+        songs.run(songs.Download(directory=output, port=Path(port)))
+        manifest = next((output / 'sessions').glob('*/cntrl-session.toml'))
+        recovered = source_archive.recovered_recipe(manifest.parent)
+        root = data_files.expressions(recovered.document)[0].paths[0]
+        assert root.read_text() == original_source
+        recovered_global = recovered.global_defaults['Songs']
+        assert recovered_global.read_text() == original_defaults
+        assert (
+            data_files.expressions(recovered.target)[0].paths[0].is_relative_to(output)
+        )
+        source.write_text('original source unavailable')
+        defaults.write_text('different computer defaults unavailable')
+        songs.run(songs.Copy(document=root, port=Path(port), overwrite=True))
+        with transport.SerialConnection(Path(port)) as connection:
+            rebuilt = songs.decode(songs.download(transport.SetupClient(connection)))
+        assert rebuilt.songs[0].patches[0]['program'] == 34
+        assert rebuilt.instruments['piano']['channel'] == 3
+        assert defaults.read_text() == 'different computer defaults unavailable'
+
+
 @pytest.mark.parametrize(
     'field', ['program', 'bank', 'volume', 'pan', 'timeout', 'midi', 'trs']
 )
@@ -723,8 +862,17 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         assert sorted(p.name for p in output.iterdir()) == [
             'Other.toml',
             'Show.toml',
+            'sessions',
             'song.mid',
         ]
+        manifests = list((output / 'sessions').glob('*/cntrl-session.toml'))
+        assert len(manifests) == 1
+        manifest = tomlkit.parse(manifests[0].read_text()).unwrap()
+        assert manifest['defaults'] == {'Show': '', 'Other': ''}
+        assert set(manifest['baselines']) == {'Show', 'Other'}
+        assert all(
+            (manifests[0].parent / p).is_file() for p in manifest['baselines'].values()
+        )
         assert (output / 'song.mid').read_bytes() == midi
         rebuilt = cli.compile_inputs(
             data_files.Sources(document=[str(output / 'Show.toml')], target=target)
@@ -739,6 +887,7 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         assert sorted(p.name for p in selected.iterdir()) == [
             'Other.toml',
             'Show.toml',
+            'sessions',
             'song.mid',
         ]
         blocked = tmp_path / 'blocked'

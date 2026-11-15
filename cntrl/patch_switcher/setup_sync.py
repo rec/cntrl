@@ -19,6 +19,7 @@ from . import (
     binary_format,
     compiler,
     data_files,
+    global_config,
     resolved,
     setup_bundle,
     transport,
@@ -62,6 +63,7 @@ class Change(BaseModel, frozen=True):
     destination: data_files.Location | None = None
     affects: list[str] = Field(default_factory=list)
     note: str = ''
+    remove_inherited: bool = False
 
 
 class Source(BaseModel, frozen=True):
@@ -167,21 +169,18 @@ def store(command: data_files.Sources) -> Path:
     return expressions[0].paths[0].resolve().parent / 'setup-sync'
 
 
-def recipe(command: data_files.Sources) -> data_files.Sources:
+def recipe(
+    command: data_files.Sources, trace: data_files.Trace | None = None
+) -> data_files.Sources:
+    command = global_config.resolve_inputs(command, trace=trace)
+
     def absolute(arguments: list[str]) -> list[str]:
         return [
             a
             for e in data_files.expressions(arguments)
-            for a in [
-                e.name.replace('=', '==')
-                + '='
-                + str(e.paths[0].resolve()).replace('=', '=='),
-                *[
-                    a
-                    for p in e.paths[1:]
-                    for a in ['+', str(p.resolve()).replace('=', '==')]
-                ],
-            ]
+            for a in global_config.expression_arguments(
+                data_files.DataFile(name=e.name, paths=[p.resolve() for p in e.paths])
+            )
         ]
 
     return data_files.Sources(
@@ -191,6 +190,11 @@ def recipe(command: data_files.Sources) -> data_files.Sources:
         table=[absolute(t) for t in command.table],
         avoid_confict=command.avoid_confict,
         memory_margin=command.memory_margin,
+        global_defaults=(
+            trace.defaults
+            if trace is not None and trace.defaults
+            else command.global_defaults
+        ),
     )
 
 
@@ -326,7 +330,9 @@ def snapshot(
         {
             'document_version': compiler.DOCUMENT_VERSION,
             'compiler_checksum': digest(Path(compiler.__file__).read_bytes()),
-            'recipe': recipe(inputs).model_dump(mode='json'),
+            'recipe': recipe(inputs, sources).model_dump(
+                mode='json', exclude_none=True
+            ),
             'sources': records,
         },
     )
@@ -381,6 +387,8 @@ def destination(
 ) -> Change:
     path = change.path
     locations = trace.locations.get(change.setup, {})
+    if (inherited := inherited_destination(change, trace, host, pedal)) is not None:
+        return inherited
     # Only the fields currently editable on the pedal may be placed automatically.
     editable = bool(path) and (
         path[0]
@@ -444,6 +452,114 @@ def destination(
             'note': 'No unambiguous TOML destination; place manually, then preview.',
         }
     )
+
+
+def inherited_destination(
+    change: Change,
+    trace: data_files.Trace,
+    host: dict[str, object],
+    pedal: dict[str, object],
+) -> Change | None:
+    """Keep inherited edits local, replacing whole inherited lists when necessary."""
+    inherited = trace.inherited.get(change.setup, {})
+    root = trace.roots.get(change.setup)
+    path = change.path
+    if root is None or not path or not inherited:
+        return None
+    locations = trace.locations.get(change.setup, {})
+    inherited_path: tuple[str | int, ...] | None = None
+    materialize = change.note.startswith('Materialize')
+    for length in range(len(path), 0, -1):
+        prefix = tuple(path[:length])
+        if prefix not in inherited:
+            continue
+        source = locations.get(prefix)
+        if source == inherited[prefix] or not change.pedal.present or materialize:
+            inherited_path = prefix
+            break
+        if source is not None:
+            return None
+    if inherited_path is None:
+        return None
+    if root.suffix != '.toml':
+        return change.model_copy(
+            update={
+                'choice': Choice.unresolved,
+                'note': 'An inherited edit requires a setup-local TOML source.',
+            }
+        )
+    # An inherited list is replaced by the setup layer. Its changed element
+    # cannot be written alone without dropping the unchanged elements.
+    for index, key in enumerate(path):
+        if isinstance(key, int):
+            path = path[:index]
+            change = change.model_copy(
+                update={
+                    'path': path,
+                    'host': lookup(host, path),
+                    'pedal': lookup(pedal, path),
+                }
+            )
+            break
+    source = inherited[inherited_path]
+    raw = tomlkit.parse(trace.files[source.file].decode()).unwrap()
+    value = lookup(raw, source.path)
+    if len(inherited_path) < len(path) and not isinstance(value.value, dict):
+        path = list(inherited_path)
+        change = change.model_copy(
+            update={
+                'path': path,
+                'host': lookup(host, path),
+                'pedal': lookup(pedal, path),
+                'choice': Choice.unresolved,
+                'note': 'Materialize the complete inherited definition locally.',
+            }
+        )
+    elif (
+        not change.pedal.present
+        and not lookup(value.value, path[len(inherited_path) :]).present
+    ):
+        # Removing a setup-only field must not create a removal for a value
+        # that never existed in global defaults.
+        return None
+    result = placed(
+        change,
+        data_files.Location(file=root, path=path),
+        trace,
+        change.note + ' Override global defaults in this setup only.',
+    )
+    return result.model_copy(
+        update={
+            'remove_inherited': not result.pedal.present
+            or (
+                result.note.startswith('Materialize')
+                and isinstance(result.pedal.value, dict)
+            )
+        }
+    )
+
+
+def apply_change(document: MutableMapping[str, object], change: Change) -> None:
+    if change.destination is None:
+        raise ValueError(
+            f'{change.setup}: {change.path}: manual source placement required'
+        )
+    if change.remove_inherited:
+        if any(not isinstance(p, str) for p in change.path):
+            raise ValueError('inherited removals require table keys')
+        current = document.setdefault('inheritance', tomlkit.table())
+        if not isinstance(current, MutableMapping):
+            raise ValueError('inheritance must be a table')
+        removals = current.setdefault('remove', [])
+        if not isinstance(removals, MutableSequence):
+            raise ValueError('inheritance.remove must be a list')
+        path = change.path
+        if not any(list(p) == path[: len(p)] for p in removals):
+            for index in reversed(range(len(removals))):
+                if list(removals[index])[: len(path)] == path:
+                    del removals[index]
+            removals.append(path)
+    assign(document, change.destination.path, change.pedal)
 
 
 def placed(
@@ -515,6 +631,7 @@ def assign(document: object, path: list[str | int], value: Value) -> None:
 
 def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
     from .cli import compile_inputs
+    from .source_archive import recovered_baselines
 
     root = store(inputs)
     check_pending(root)
@@ -529,7 +646,7 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
         save_setup(folder, n, saved[n])
     # Raw bytes are retained even if the decoder or asset download fails.
     capture_assets(client, saved, folder)
-    bases = baseline(root)
+    bases = recovered_baselines(root.parent) | baseline(root)
     changes: list[Change] = []
     for n in host_bundle.names:
         host, pedal = canonical(host_bundle.setups[n]), canonical(saved[n])
@@ -572,7 +689,7 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
             changes.append(located)
     review = Review(
         root=root,
-        recipe=recipe(inputs),
+        recipe=recipe(inputs, trace),
         baseline=digest(base_record(root)),
         sources=[Source(file=p, before=digest(v)) for p, v in trace.files.items()],
         host={n: digest(v) for n, v in host_bundle.setups.items()},
@@ -591,7 +708,7 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
         f = c.destination.file
         if f not in documents:
             documents[f] = tomlkit.parse(trace.files[f].decode())
-        assign(documents[f], c.destination.path, c.pedal)
+        apply_change(documents[f], c)
     diff = ''.join(
         s
         for f, d in documents.items()
@@ -664,7 +781,7 @@ def apply_review(path: Path) -> None:
         f = c.destination.file
         if f not in documents:
             documents[f] = tomlkit.parse(f.read_bytes().decode())
-        assign(documents[f], c.destination.path, c.pedal)
+        apply_change(documents[f], c)
         assign(expected[c.setup], c.path, c.pedal)
     candidates = {p: tomlkit.dumps(v).encode() for p, v in documents.items()}
     compiled = compile_inputs(review.recipe, overrides=candidates)
@@ -804,8 +921,7 @@ def prepare_upload(
     prepared = dict(bundle.setups)
     for n in bundle.names:
         if n in existing and existing[n].startswith(binary_format.MAGIC):
-            document = binary_format.unpack(existing[n], binary_format.Kind.setup)
-            if len(document.records) > 1:
+            if binary_format.has_opaque(existing[n]):
                 if binary_format.core(existing[n]) != binary_format.core(prepared[n]):
                     raise ValueError(
                         f'{n}: cannot recompile opaque metadata. Backup: {folder}'

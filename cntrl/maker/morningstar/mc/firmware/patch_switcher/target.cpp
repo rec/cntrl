@@ -31,7 +31,7 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/history_import.h>
 #include <cntrl/asset_commands.h>
 #include <cntrl/disk_speed.h>
-#include <cntrl/midi_file_transfer.h>
+#include <cntrl/file_transfer.h>
 #include <USBHost_t36.h>
 #include <charconv>
 #include <new>
@@ -983,7 +983,9 @@ FLASHMEM bool native_asset_command(const char *line) {
 }
 cntrl::device::SdFile counter_command_file, disk_speed_file, midi_asset_reader, midi_asset_writer;
 cntrl::DiskSpeedTransfer disk_speed_transfer(setup_filesystem, disk_speed_file, board);
-cntrl::MidiFileTransfer midi_asset_transfer(setup_filesystem, midi_asset_reader, midi_asset_writer, board);
+cntrl::FileTransfer midi_asset_transfer(setup_filesystem, midi_asset_reader, midi_asset_writer, board);
+cntrl::device::SdFile source_reader, source_writer;
+cntrl::FileTransfer source_transfer(setup_filesystem, source_reader, source_writer, board, true);
 struct AssetServices {
     Board &hardware, &replies;
     cntrl::StartupCounter &counter;
@@ -996,11 +998,11 @@ struct AssetServices {
     cntrl::SongsUi &song_editor;
     decltype(songs_transfer) &songs;
     font_assets::Storage &fonts;
-    cntrl::MidiFileTransfer &midi_assets;
+    cntrl::FileTransfer &midi_assets, &sources;
     bool (*native_extension)(const char *);
 } asset_services{board, board, startup_counter, counter_command_file, midi_files.recorder,
     history_import, bundle_transfer, storage_listing, disk_speed_transfer, application.song_ui, songs_transfer,
-    font_files, midi_asset_transfer, native_asset_command};
+    font_files, midi_asset_transfer, source_transfer, native_asset_command};
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
 FLASHMEM bool reload_collection(bool initialize_empty = false) {
     patch_sources.release_all(); song_files.close();
@@ -1079,7 +1081,7 @@ bool asset_data(cntrl::UsbKind kind, const uint8_t *bytes, unsigned length, uint
 DMAMEM cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset, asset_data, &board.text_messages());
 FLASHMEM bool midi_storage_idle() {
     return !documents.busy() && !history_import.busy() && !bundle_transfer.busy() && !disk_speed_transfer.busy()
-        && !songs_transfer.busy() && !font_files.busy() && !midi_asset_transfer.busy() && !splash_assets.busy() && !usb_session.active();
+        && !songs_transfer.busy() && !font_files.busy() && !midi_asset_transfer.busy() && !source_transfer.busy() && !splash_assets.busy() && !usb_session.active();
 }
 cntrl::ButtonState buttons[cntrl::target::button_count];
 cntrl::AuxiliarySwitches auxiliary;
@@ -1278,6 +1280,7 @@ public:
     auto &bundle_transfer() { return ::bundle_transfer; }
     auto &disk_transfer() { return disk_speed_transfer; }
     auto &midi_transfer() { return midi_asset_transfer; }
+    auto &source_transfer() { return ::source_transfer; }
     auto &history_transfer() { return history_import; }
     auto &fonts() { return font_files; }
     auto &song_sources() { return ::song_sources; }

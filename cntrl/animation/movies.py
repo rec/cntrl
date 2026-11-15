@@ -4,12 +4,17 @@ import struct
 from pathlib import Path
 from zlib import crc32
 
+from .. import source_files
 from ..patch_switcher.models import Setup
 from .asset import Geometry, inspect_asset, prepare_movie
 
 
 def prepare(
-    setup: Setup, assets: dict[int, bytes], geometry: Geometry | None
+    setup: Setup,
+    assets: dict[int, bytes],
+    geometry: Geometry | None,
+    *,
+    source_snapshots: dict[Path, bytes] | None = None,
 ) -> tuple[Setup, bytes]:
     if (setup.splash_movie or setup.idle_movie) and geometry is None:
         raise ValueError('target must declare animation geometry')
@@ -20,9 +25,9 @@ def prepare(
         if not path.is_file():
             raise ValueError(f'{path}: movie file does not exist')
         data = (
-            path.read_bytes()
+            source_files.read(path, source_snapshots)
             if path.suffix.lower() == '.cnsa'
-            else prepare_movie(path, geometry)
+            else prepare_movie(path, geometry, source_snapshots=source_snapshots)
         )
         info = inspect_asset(data)
         if (info.width, info.height, info.streams) != (

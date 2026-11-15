@@ -3,7 +3,7 @@
 import struct
 from copy import deepcopy
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 from zlib import crc32
 
 import tomlkit
@@ -20,11 +20,14 @@ from pydantic import (
 from . import (
     binary_format,
     compiler,
+    data_files,
+    global_config,
     inputs,
     midi_assets,
     models,
     resolved,
     setup_bundle,
+    source_archive,
     transport,
 )
 from .data_files import validate_name
@@ -114,6 +117,10 @@ def encode(
     target: models.Target | None = None,
     documents: dict[str, object] | None = None,
     assets: dict[int, bytes] | None = None,
+    *,
+    authoring: data_files.DataFile | None = None,
+    trace: data_files.Trace | None = None,
+    movie_assets: dict[int, bytes] | None = None,
 ) -> bytes:
     for items in (library.songs, library.setlists):
         names = [s.name for s in items]
@@ -146,6 +153,18 @@ def encode(
             if 'midi-a' in modes or 'midi-b' in modes
         }
         context: dict[str, object] = {
+            **library.model_dump(
+                include={
+                    'instruments',
+                    'patches',
+                    'midi',
+                    'fonts',
+                    'tag_styles',
+                    'definitions',
+                },
+                exclude_unset=True,
+                exclude_none=True,
+            ),
             # This is an execution container, not an authored browser cycle.
             'fill_in_styles': False,
             'inline_patches': False,
@@ -153,19 +172,27 @@ def encode(
             # owns the physical jack modes when the song plays.
             'trs_ports': port_modes,
             'auxiliary_switches': {},
-            'instruments': library.instruments,
-            'patches': library.patches,
-            **({'midi': library.midi} if library.midi is not None else {}),
             'patch_cycles': {'Songs': values_for_source} if values_for_source else {},
-            'fonts': library.fonts,
-            'tag_styles': {
-                k: v.model_dump(exclude_none=True)
-                for k, v in library.tag_styles.items()
-            },
         }
-        if library.definitions is not None:
-            context['definitions'] = library.definitions.model_dump(exclude_none=True)
-        pending = list(library.patches.values()) + values_for_source
+        if authoring is not None:
+            from .source_archive import session_context
+
+            bindings, relocations = session_context(authoring)
+            errors: list[str] = []
+            context = global_config.resolve_setup(
+                context,
+                authoring,
+                errors,
+                trace=trace,
+                defaults=trace.defaults if trace is not None else bindings,
+                overrides=trace.files if trace is not None else None,
+                relocations=relocations,
+            )
+            if errors:
+                raise compiler.CompilationError(errors)
+        port_modes = cast(dict[str, models.TrsMode], context['trs_ports'])
+        auxiliary_switches = cast(dict[str, str], context['auxiliary_switches'])
+        pending = [context.get('patches', {}), values_for_source]
         while pending:
             value = pending.pop()
             if isinstance(value, dict):
@@ -176,7 +203,7 @@ def encode(
                             port, contact = key.rsplit('.', 1)
                             port_modes[port] = 'aux'
                             if contact == 'both':
-                                context['auxiliary_switches'][port] = 'combined'
+                                auxiliary_switches[port] = 'combined'
                         if isinstance(
                             models.parse_binding(binding), models.ExpressionAssignment
                         ):
@@ -185,7 +212,16 @@ def encode(
             elif isinstance(value, list):
                 pending.extend(value)
         try:
-            source = compiler.compile_show(context, {}, [], target, assets, documents)
+            source = compiler.compile_show(
+                context,
+                {},
+                [],
+                target,
+                assets,
+                documents,
+                movie_assets,
+                source_snapshots=trace.files if trace is not None else None,
+            )
         except compiler.CompilationError as error:
             messages = error.errors
             for index, path in enumerate(paths):
@@ -196,12 +232,22 @@ def encode(
         graph = resolved.graph_offset(source)
         _, _, count, _, _, _ = compiler.GRAPH.unpack_from(source, graph)
         offset = graph + compiler.GRAPH.size + count * 4
+        first = 0
+        if values_for_source:
+            instruments, cycles = compiler.HEADER.unpack_from(source)[4:6]
+            for index in range(cycles):
+                at = 76 + instruments * 68 + index * 68
+                if source[at : at + 64].split(b'\0')[0] == b'Songs':
+                    first = struct.unpack_from('<H', source, at + 64)[0]
+                    break
         roots = [
-            struct.unpack_from('<H', source, offset + i * 2)[0]
+            struct.unpack_from('<H', source, offset + (first + i) * 2)[0]
             for i in range(len(values_for_source))
         ]
+        browser = first
     records = []
-    browser = 0
+    if not source:
+        browser = 0
     for song, values in zip(library.songs, positions, strict=True):
         selections = []
         for position in values:
@@ -543,6 +589,12 @@ def asset_references(data: bytes) -> dict[str, list[str]]:
     return {k: sorted(v) for k, v in result.items()}
 
 
+def source_snapshots(data: bytes) -> set[str]:
+    return {
+        n for s in _parse(data)[4] if (n := source_archive.identifier(s)) is not None
+    }
+
+
 def download(client: transport.SetupClient, *, undo: bool = False) -> bytes:
     prefix = 'CNTRL SONGS UNDO' if undo else 'CNTRL SONGS'
     response = client.request(prefix + ' SIZE').split()
@@ -586,28 +638,92 @@ def run(command: Copy | Download) -> None:
     from . import cli
 
     if isinstance(command, Copy):
-        library = Library.model_validate(compiler.read_document(command.document))
+        trace = data_files.Trace()
+        path = command.document.resolve()
+        authoring = data_files.DataFile(name='Songs', paths=[path])
+        recorded = None
+        if (path.parent / 'cntrl-session.toml').exists():
+            recorded = source_archive.recovered_recipe(path.parent)
+            authoring = data_files.expressions(recorded.document)[0]
+        bindings, relocations = source_archive.session_context(authoring)
+        library = Library.model_validate(
+            compiler.read_document(path, snapshots=trace.files, relocations=relocations)
+        )
+        target_path = command.target
+        if target_path is None and recorded is not None:
+            target_path = data_files.expressions(recorded.target)[0].paths[0]
         target = (
-            models.Target.model_validate(compiler.read_document(command.target))
-            if command.target is not None
+            models.Target.model_validate(
+                compiler.read_document(
+                    target_path, snapshots=trace.files, relocations=relocations
+                )
+            )
+            if target_path is not None
             else None
         )
-        companion_names = references(library)
-        companions = {
-            n: compiler.read_document(command.document.parent / (n + '.toml'))
-            for n in companion_names
-        }
+        errors: list[str] = []
+        context: dict[str, object] = {}
+        if library.songs or library.patches or library.midi is not None:
+            context = global_config.resolve_setup(
+                library.model_dump(
+                    exclude={'songs', 'setlists'}, exclude_unset=True, exclude_none=True
+                ),
+                authoring,
+                errors,
+                trace=trace,
+                defaults=bindings,
+                relocations=relocations,
+            )
+        companion_names = list(
+            dict.fromkeys([*references(library), *cli.document_references(context)])
+        )
+        original_name = authoring.name
+        index = 1
+        while authoring.name in companion_names:
+            authoring = authoring.model_copy(update={'name': f'Songs{index}'})
+            index += 1
+        if authoring.name != original_name:
+            trace.defaults[authoring.name] = trace.defaults.pop(original_name)
+            trace.roots[authoring.name] = trace.roots.pop(original_name)
+            for entries in (trace.locations, trace.inherited):
+                if original_name in entries:
+                    entries[authoring.name] = entries.pop(original_name)
+            for consumers in trace.consumers.values():
+                if original_name in consumers:
+                    consumers[consumers.index(original_name)] = authoring.name
+        companions: dict[str, object] = {}
         index = 0
         while index < len(companion_names):
-            for name in cli.document_references(companions[companion_names[index]]):
-                if name not in companions:
-                    validate_name(name)
-                    companions[name] = compiler.read_document(
-                        command.document.parent / (name + '.toml')
-                    )
-                    companion_names.append(name)
+            name = companion_names[index]
+            companion = data_files.DataFile(
+                name=name, paths=[path.parent / (name + '.toml')]
+            )
+            if recorded is not None:
+                companion = next(
+                    (
+                        e
+                        for e in data_files.expressions(recorded.document)
+                        if e.name == name
+                    ),
+                    companion,
+                )
+            companions[name] = global_config.load_setup(
+                companion,
+                True,
+                errors,
+                trace=trace,
+                overrides=trace.files,
+                defaults={name: bindings.get(name, trace.defaults[authoring.name])},
+            )
+            for reference in cli.document_references(companions[name]):
+                if reference not in companion_names:
+                    validate_name(reference)
+                    companion_names.append(reference)
             index += 1
+        if errors:
+            raise compiler.CompilationError(errors)
         assets: dict[int, bytes] = {}
+        movies: dict[int, bytes] = {}
         if companion_names and target is None:
             raise ValueError('reference imports require --target')
         with transport.SerialConnection(command.port) as connection:
@@ -626,11 +742,28 @@ def run(command: Copy | Download) -> None:
             # The execution container and its companions use the complete deployed
             # index table, including setups unrelated to this song import.
             documents: dict[str, object] = {n: {} for n in compiled} | companions
-            data = encode(library, target, documents, assets)
+            data = encode(
+                library,
+                target,
+                documents,
+                assets,
+                authoring=authoring,
+                trace=trace,
+                movie_assets=movies,
+            )
             if companion_names:
                 assert target is not None
                 imported = {
-                    n: compiler.compile_show(s, {}, [], target, assets, documents)
+                    n: compiler.compile_show(
+                        s,
+                        {},
+                        [],
+                        target,
+                        assets,
+                        documents,
+                        movies,
+                        source_snapshots=trace.files,
+                    )
                     for n, s in companions.items()
                 }
                 combined = setup_bundle.reindex(compiled | imported)
@@ -654,8 +787,55 @@ def run(command: Copy | Download) -> None:
                     margin,
                     previous=current_bundle or None,
                 )
+            prefix, _, _, _, embedded = _parse(data)
+            captured = ({authoring.name: embedded[0]} if embedded else {}) | (
+                {n: bundle.setups[n] for n in companion_names}
+                if companion_names
+                else {}
+            )
+            midi = midi_assets.collect(captured, trace.files)
+            archive = None
+            if captured:
+                expressions = [
+                    f'{authoring.name}={path}',
+                    *[f'{n}={trace.roots[n]}' for n in companion_names],
+                ]
+                recipe = data_files.Sources(
+                    document=expressions,
+                    target=[str(target_path.resolve())]
+                    if target_path is not None
+                    else [],
+                    global_defaults=trace.defaults,
+                )
+                archive = source_archive.create(recipe, trace, captured, kind='songs')
+                if embedded:
+                    source = source_archive.attach(embedded[0], archive)
+                    data = binary_format.replace_core(
+                        data,
+                        binary_format.core(data, binary_format.Kind.songs)[:prefix]
+                        + struct.pack('<I', len(source))
+                        + source,
+                        binary_format.Kind.songs,
+                    )
+                if companion_names:
+                    bundle = bundle.model_copy(
+                        update={
+                            'setups': {
+                                n: source_archive.attach(v, archive)
+                                if n in companions
+                                else v
+                                for n, v in bundle.setups.items()
+                            }
+                        }
+                    )
             for key, font in assets.items():
                 client.copy_font(key, font)
+            for movie in movies.values():
+                client.copy_movie(movie)
+            for name, value in midi.items():
+                client.copy_midi(name, value, overwrite=command.overwrite)
+            if archive is not None:
+                source_archive.upload(client, archive)
             if companion_names:
                 client.copy_bundle(bundle.pack(), overwrite=True)
             upload(client, data, command.overwrite)
@@ -663,11 +843,32 @@ def run(command: Copy | Download) -> None:
     else:
         with transport.SerialConnection(command.port) as connection:
             client = transport.SetupClient(connection)
-            library = decode(download(client))
+            data = download(client)
+            library = decode(data)
             companion_names = references(library)
             files = (
                 cli.download_files(client, companion_names) if companion_names else {}
             )
+            for source in _parse(data)[4]:
+                if (snapshot := source_archive.identifier(source)) is not None:
+                    manifest, entries = source_archive.read(
+                        client.download_source(snapshot)
+                    )
+                    if manifest.kind == 'songs':
+                        name = data_files.expressions(manifest.recipe.document)[0].name
+                    else:
+                        matches = [
+                            n
+                            for n, p in manifest.baselines.items()
+                            if resolved.export(entries[p]) == resolved.export(source)
+                        ]
+                        if len(matches) != 1:
+                            raise ValueError(
+                                'cannot identify the archived setup '
+                                'for this captured song source'
+                            )
+                        name = matches[0]
+                    files.update(source_archive.download(client, {name: source}))
             for path in library.fonts.values():
                 if Path(path) not in files:
                     files[Path(path)] = client.download_font(int(Path(path).stem, 16))

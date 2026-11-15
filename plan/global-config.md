@@ -1,6 +1,35 @@
 # Global defaults for complete setups
 
-Status: planned. User decisions recorded below; implementation has not started.
+Status: implemented. Automated qualification passes; physical pedal qualification
+has not been performed.
+
+The shared authoring pipeline now resolves global defaults and recovered session
+recipes before setup validation. Upload retains exact source snapshots, while
+sync writes inherited edits locally. Source-aware download uses the visible
+`cntrl-session.toml` manifest and restores original sources, baseline images and
+saved pedal images without the original machine or its per-user configuration.
+
+Validation passed 1783 tests with one skip, including native source-transfer,
+sync, song, history and backup/restore coverage. Ruff, formatting, type checking
+and pyupgrade checks pass. Normal and diagnostic firmware links retain the
+existing 4096-byte ITCM growth reserve. No application or hardware was launched
+for physical qualification.
+
+## Implementation format decision
+
+Source archives use a version-1 host manifest inside an immutable archive stored
+at `/cntrl/source/<sha256>.bin`. The source association is a known optional
+setup-envelope record, tag 2, containing the 32-byte archive SHA-256. It adds
+40 bytes including its record header, not the source payload, to a setup image.
+It is singleton metadata with no graph indexes; unknown records retain the
+existing opaque-metadata restrictions. No performance-core or deployment-journal
+format change is needed.
+
+Upload and read-back verify the immutable archive before publishing its reference
+through the existing atomic bundle replacement. Setup save/history retain the
+reference with the image. This ties source publication to the existing setup
+transaction without staging unrelated history and song stores again. Archive
+baselines omit their own source-reference record to avoid a circular hash.
 
 Allow a user to define their normal rig once and author each setup as a small
 set of changes. Defaults must cover every authorable setup field, including

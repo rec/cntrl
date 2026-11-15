@@ -543,6 +543,7 @@ struct RuntimeServices {
     NullJob &bundle_transfer() { return s.unused; }
     NullJob &disk_transfer() { return s.unused; }
     NullJob &midi_transfer() { return s.unused; }
+    NullJob &source_transfer() { return s.unused; }
     NullJob &history_transfer() { return s.unused; }
     NullJob &fonts() { return s.unused; }
     ui::SongSources &song_sources() { return s.song_sources; }

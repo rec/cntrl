@@ -74,6 +74,9 @@ def unpack(data: bytes, kind: Kind) -> Document:
             if core_found or flags != REQUIRED or records:
                 raise ValueError('core must be the first, required, singleton record')
             core_found = True
+        elif tag == SOURCE and kind == Kind.setup:
+            if flags or size != 32 or any(r.tag == SOURCE for r in records):
+                raise ValueError('invalid source snapshot reference')
         elif flags & REQUIRED:
             raise ValueError(f'unsupported required persistent record {tag}')
         records.append(
@@ -119,8 +122,14 @@ def replace_core(data: bytes, replacement: bytes, kind: Kind = Kind.setup) -> by
 
 
 def require_structural_edit(data: bytes, kind: Kind = Kind.setup) -> None:
-    if data.startswith(MAGIC) and len(unpack(data, kind).records) != 1:
+    if has_opaque(data, kind):
         raise ValueError('cannot remap references while opaque metadata is present')
+
+
+def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
+    return data.startswith(MAGIC) and any(
+        r.tag != SOURCE or kind != Kind.setup for r in unpack(data, kind).records[1:]
+    )
 
 
 def format_name(version: int) -> str:
@@ -146,6 +155,7 @@ DEVELOPMENT_FORMAT = 0x8000 | 46
 HEADER = struct.Struct('<4sHHHHII')
 RECORD = struct.Struct('<HHI')
 CORE = 1
+SOURCE = 2
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096

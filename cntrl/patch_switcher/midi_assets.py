@@ -5,7 +5,7 @@ from pathlib import Path
 
 import tomlkit
 
-from . import models, resolved
+from . import compiler, models, resolved, source_archive
 
 
 def filenames(value: object) -> list[str]:
@@ -49,13 +49,24 @@ def collect(setups: dict[str, bytes], sources: dict[Path, bytes]) -> dict[str, b
     required = referenced(setups)
     origins: dict[str, list[Path]] = {n: [] for n in required}
     for source, content in sources.items():
+        if source.suffix not in ('.toml', '.json'):
+            continue
+        relocations = source_archive.source_relocations(source)
+        origin = next(
+            (p for p, actual in relocations.items() if actual == source.resolve()),
+            source,
+        )
         document = (
             json.loads(content)
             if source.suffix == '.json'
             else tomlkit.parse(content.decode()).unwrap()
         )
         for name in filenames(document):
-            if name in origins and (path := source.parent / name) not in origins[name]:
+            if (
+                name in origins
+                and (path := compiler.source_reference(origin, name, relocations))
+                not in origins[name]
+            ):
                 origins[name].append(path)
     result: dict[str, bytes] = {}
     cases: dict[str, str] = {}
@@ -71,6 +82,7 @@ def collect(setups: dict[str, bytes], sources: dict[Path, bytes]) -> dict[str, b
             raise ValueError(f'{name}: cannot locate the declaring source document')
         for path in origins[name]:
             data = path.read_bytes()
+            sources[path.resolve()] = data
             if not data or len(data) > 0xFFFFFFFF:
                 raise ValueError(f'{path}: MIDI file must contain 1..4294967295 bytes')
             if name in result and result[name] != data:

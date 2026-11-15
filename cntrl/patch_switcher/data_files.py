@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated
 
 import tyro
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 from reccy.configuration import units
 
 from .compiler import CompilationError, read_document
@@ -18,13 +18,27 @@ class DataFile(BaseModel, frozen=True):
 
 class Sources(BaseModel, frozen=True):
     document: Annotated[list[str], tyro.conf.Positional]
-    target: list[str]
+    target: list[str] = Field(default_factory=list)
     definitions: list[str] = Field(default_factory=list)
     table: Annotated[list[list[str]], tyro.conf.UseAppendAction] = Field(
         default_factory=list
     )
     avoid_confict: bool = True
     memory_margin: units.Bytes = Field(default=16192, ge=0)
+    global_defaults: Annotated[dict[str, Path | None] | None, tyro.conf.Suppress] = None
+
+    @field_validator('global_defaults', mode='before')
+    @classmethod
+    def default_paths(cls, value: object) -> object:
+        if isinstance(value, dict):
+            return {k: None if v == '' else v for k, v in value.items()}
+        return value
+
+    @field_serializer('global_defaults', when_used='json')
+    def serialized_defaults(
+        self, value: dict[str, Path | None] | None
+    ) -> dict[str, str]:
+        return {k: str(v) if v is not None else '' for k, v in (value or {}).items()}
 
     model_config = ConfigDict(extra='forbid')
 
@@ -42,6 +56,14 @@ class Trace(BaseModel, frozen=True):
         default_factory=dict
     )
     consumers: dict[Path, list[str]] = Field(default_factory=dict)
+    defaults: dict[str, Path | None] = Field(default_factory=dict)
+    discovered_defaults: dict[Path, Path | None] = Field(default_factory=dict)
+    roots: dict[str, Path] = Field(default_factory=dict)
+    relocations: dict[Path, Path] = Field(default_factory=dict)
+    relocations_by_setup: dict[str, dict[Path, Path]] = Field(default_factory=dict)
+    inherited: dict[str, dict[tuple[str | int, ...], Location]] = Field(
+        default_factory=dict
+    )
 
 
 def validate_name(name: str) -> str:
@@ -103,6 +125,8 @@ def expressions(
                 else:
                     name = prefix
                 a = a[j + 1 :]
+            else:
+                a = prefix
             if not a:
                 errors.append('empty data-file path')
             paths.append(Path(a))
@@ -124,13 +148,21 @@ def load(
     *,
     trace: Trace | None = None,
     overrides: dict[Path, bytes] | None = None,
+    defer_references: bool = False,
+    relocations: dict[Path, Path] | None = None,
 ) -> dict[str, object]:
     result: dict[str, object] = {}
     origins: dict[str, str] = {}
     for p in expression.paths:
         try:
             reads: dict[Path, bytes] = {}
-            value = read_document(p, snapshots=reads, overrides=overrides)
+            value = read_document(
+                p,
+                snapshots=reads,
+                overrides=trace.files | (overrides or {}) if trace else overrides,
+                defer_references=defer_references,
+                relocations=relocations,
+            )
         except (OSError, ValueError) as error:
             errors.append(f'{p}: {error}')
             continue
@@ -185,6 +217,7 @@ def load_target(
     *,
     trace: Trace | None = None,
     overrides: dict[Path, bytes] | None = None,
+    relocations: dict[Path, Path] | None = None,
 ) -> dict[str, object]:
     """Resolve resource references at their source file before combining targets."""
     result: dict[str, object] = {}
@@ -196,6 +229,7 @@ def load_target(
             errors,
             trace=trace,
             overrides=overrides,
+            relocations=relocations,
         )
         if isinstance(resources := incoming.get('font_sources'), dict):
             incoming['font_sources'] = {

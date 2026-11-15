@@ -94,7 +94,10 @@ public:
             view_.offset = position_; view_.length = n;
         } else {
             if (tag == 1 || flags) return false;
-            view_.opaque = true;
+            if (tag == 2 && kind_ == Kind::setup) {
+                if (source_ || n != 32) return false;
+                source_ = true;
+            } else view_.opaque = true;
         }
         position_ += n; return true;
     }
@@ -105,7 +108,7 @@ private:
     Kind kind_;
     View view_;
     uint32_t wire_crc_ = 0xffffffffu, envelope_crc_ = 0xffffffffu, expected_ = 0;
-    bool envelope_ = false, wire_ = false;
+    bool envelope_ = false, wire_ = false, source_ = false;
     static void update(uint32_t &crc, uint8_t byte) {
         crc ^= byte;
         for (unsigned bit = 0; bit < 8; ++bit) crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1)));

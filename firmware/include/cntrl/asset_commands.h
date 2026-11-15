@@ -7,7 +7,7 @@
 namespace cntrl {
 
 // Services binds hardware, replies, counter/file, recorder, history, bundle,
-// listing, disk, song_editor, songs, fonts, midi_assets, and an optional native_extension callback.
+// listing, disk, song_editor, songs, fonts, midi_assets, sources, and an optional native_extension callback.
 template<class Services>
 class AssetCommands {
 public:
@@ -25,6 +25,7 @@ public:
         case UsbKind::songs: return s.songs.data(bytes, length, now);
         case UsbKind::font: return s.fonts.data(bytes, length, s.replies, now);
         case UsbKind::midi_file: return s.midi_assets.data(bytes, length, now);
+        case UsbKind::source: return s.sources.data(bytes, length, now);
         default: return false;
         }
     }
@@ -78,6 +79,7 @@ public:
         }
         if (s.hardware.configuration_locked()) { s.replies.reply("CNTRL ERROR close-switches-first"); return true; }
         if (!std::strncmp(line, "CNTRL MIDI_FILE ", 16)) return s.midi_assets.command(line, now);
+        if (!std::strncmp(line, "CNTRL SOURCE ", 13)) return s.sources.command(line, now);
         if (!std::strncmp(line, "CNTRL DISK ", 11)) return s.disk.command(line, now);
         if (s.native_extension && s.native_extension(line)) return true;
         if (!std::strncmp(line, "CNTRL SONGS ", 12)) {

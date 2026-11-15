@@ -7,7 +7,7 @@ import pytest
 import tomlkit
 import tyro
 
-from cntrl.patch_switcher import binary_format, data_files, setup_sync
+from cntrl.patch_switcher import binary_format, data_files, global_config, setup_sync
 
 
 @pytest.mark.parametrize('interrupted', [False, True])
@@ -193,3 +193,141 @@ def test_snapshot_retains_unsupported_bytes_without_claiming_completion(
     assert (folder / 'Old.bin').read_bytes() == b'unsupported binary'
     assert (folder / 'Old.decode-error.txt').read_text()
     assert not (folder / 'complete.toml').exists()
+
+
+@pytest.mark.parametrize('pedal', [[1, 3], []])
+def test_inherited_page_cycle_edit_writes_a_complete_local_list(
+    tmp_path: Path, pedal: list[int]
+) -> None:
+    global_file, local = tmp_path / 'global.toml', tmp_path / 'show.toml'
+    global_file.write_text('[patch_cycles]\nmain=[1,2]\n')
+    local.write_text('# local changes only\n')
+    locations = {
+        ('patch_cycles',): data_files.Location(file=global_file, path=['patch_cycles']),
+        ('patch_cycles', 'main'): data_files.Location(
+            file=global_file, path=['patch_cycles', 'main']
+        ),
+        ('patch_cycles', 'main', 1): data_files.Location(
+            file=global_file, path=['patch_cycles', 'main', 1]
+        ),
+    }
+    trace = data_files.Trace(
+        files={global_file: global_file.read_bytes(), local: local.read_bytes()},
+        locations={'Show': locations},
+        inherited={'Show': locations},
+        roots={'Show': local},
+        consumers={global_file: ['Show', 'Other'], local: ['Show']},
+    )
+    host = {'patch_cycles': {'main': [1, 2]}}
+    after = {'patch_cycles': {'main': pedal}}
+    changes = setup_sync.merge_changes(
+        'Show', *[setup_sync.Value(present=True, value=v) for v in (host, host, after)]
+    )
+    change = setup_sync.destination(changes[0], trace, host, after)
+    assert change.path == ['patch_cycles', 'main']
+    assert change.choice == 'pedal' and change.affects == ['Show']
+    document = tomlkit.parse(local.read_text())
+    setup_sync.apply_change(document, change)
+    assert document.unwrap() == {'patch_cycles': {'main': pedal}}
+    assert tomlkit.dumps(document).startswith('# local changes only')
+    assert global_file.read_text() == '[patch_cycles]\nmain=[1,2]\n'
+
+
+@pytest.mark.parametrize('local_override', [False, True])
+def test_deleting_an_inherited_value_records_a_local_removal(
+    tmp_path: Path, local_override: bool
+) -> None:
+    global_file, local = tmp_path / 'global.toml', tmp_path / 'show.toml'
+    global_file.write_text('[patches.sound]\nprogram=10\nvolume=80\n')
+    local.write_text('[patches.sound]\nvolume=90\n' if local_override else '')
+    path = ['patches', 'sound', 'volume']
+    inherited = data_files.Location(file=global_file, path=path)
+    trace = data_files.Trace(
+        files={global_file: global_file.read_bytes(), local: local.read_bytes()},
+        locations={
+            'Show': {
+                tuple(path): data_files.Location(file=local, path=path)
+                if local_override
+                else inherited
+            }
+        },
+        inherited={'Show': {tuple(path): inherited}},
+        roots={'Show': local},
+        consumers={global_file: ['Show', 'Other'], local: ['Show']},
+    )
+    host = {
+        'patches': {'sound': {'program': 10, 'volume': 90 if local_override else 80}}
+    }
+    pedal = {'patches': {'sound': {'program': 10}}}
+    change = setup_sync.destination(
+        setup_sync.merge_changes(
+            'Show',
+            *[setup_sync.Value(present=True, value=v) for v in (host, host, pedal)],
+        )[0],
+        trace,
+        host,
+        pedal,
+    )
+    assert change.remove_inherited and change.destination.file == local
+    document = tomlkit.parse(local.read_text())
+    setup_sync.apply_change(document, change)
+    assert document['inheritance']['remove'] == [path]
+    assert 'volume' not in document['patches']['sound']
+    assert global_file.read_text().endswith('volume=80\n')
+
+
+def test_sync_recipe_records_explicit_absence_of_defaults(tmp_path: Path) -> None:
+    source = tmp_path / 'show.toml'
+    inputs = data_files.Sources(document=[f'Show={source}'], target=['target.toml'])
+    trace = data_files.Trace(defaults={'Show': None})
+    recipe = setup_sync.recipe(inputs, trace)
+    encoded = tomlkit.dumps(recipe.model_dump(mode='json', exclude_none=True))
+    restored = data_files.Sources.model_validate(tomlkit.parse(encoded).unwrap())
+    assert restored.global_defaults == {'Show': None}
+    assert restored.document == [f'Show={source}']
+
+
+@pytest.mark.parametrize('local_override', [False, True])
+def test_materializing_an_inherited_patch_removes_its_derived_parent(
+    tmp_path: Path, local_override: bool
+) -> None:
+    defaults, local = tmp_path / 'global.toml', tmp_path / 'show.toml'
+    defaults.write_text('[patches.sound]\nparent="base"\nvolume=80\n')
+    local.write_text('[patches.sound]\nvolume=90\n' if local_override else '')
+    path = ['patches', 'sound']
+    inherited = data_files.Location(file=defaults, path=path)
+    trace = data_files.Trace(
+        files={defaults: defaults.read_bytes(), local: local.read_bytes()},
+        locations={
+            'Show': {
+                tuple(path): data_files.Location(file=local, path=path)
+                if local_override
+                else inherited
+            }
+        },
+        inherited={'Show': {tuple(path): inherited}},
+        roots={'Show': local},
+        consumers={local: ['Show'], defaults: ['Show', 'Other']},
+    )
+    program = {'type': 'program-change', 'instrument': 'synth', 'program': 7}
+    change = setup_sync.destination(
+        setup_sync.Change(
+            setup='Show',
+            path=path,
+            base=setup_sync.Value(present=True, value={'parent': 'base', 'volume': 80}),
+            host=setup_sync.Value(present=True, value={'parent': 'base', 'volume': 80}),
+            pedal=setup_sync.Value(present=True, value=program),
+            choice=setup_sync.Choice.pedal,
+            note='Materialize the complete program selection.',
+        ),
+        trace,
+        {},
+        {},
+    )
+    document = tomlkit.parse(local.read_text())
+    setup_sync.apply_change(document, change)
+    resolved = global_config.overlay(
+        tomlkit.parse(defaults.read_text()).unwrap(), document.unwrap()
+    )
+    assert resolved['patches']['sound'] == program
+    assert defaults.read_text().startswith('[patches.sound]\nparent="base"')

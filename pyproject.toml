@@ -51,7 +51,7 @@ include = [
     "/cntrl", "/firmware", "/scripts", "/test", "/doc", "/plan",
     "/examples", "/instruments", "/assets", "/.github", "/*.toml",
     "/uv.lock", "/README*.md", "/AGENTS.md", "/.python-version",
-    "/.gitignore", "/.gitattributes",
+    "/.gitignore", "/.gitattributes", "/conftest.py",
 ]
 
 [tool.pytest.ini_options]

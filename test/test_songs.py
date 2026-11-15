@@ -10,7 +10,15 @@ from zlib import crc32
 import pytest
 from native_peer import NativePeer
 
-from cntrl.patch_switcher import binary_format, compiler, models, songs, transport
+from cntrl.patch_switcher import (
+    binary_format,
+    compiler,
+    data_files,
+    global_config,
+    models,
+    songs,
+    transport,
+)
 from scripts import native_tests
 
 
@@ -87,6 +95,40 @@ def test_names_are_unique(target: models.Target) -> None:
     for field, items in (('songs', value.songs), ('setlists', value.setlists)):
         with pytest.raises(ValueError, match='unique'):
             songs.encode(value.model_copy(update={field: [items[0], items[0]]}), target)
+
+
+def test_song_authoring_inherits_the_rig_without_selecting_an_inherited_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: models.Target
+) -> None:
+    defaults = tmp_path / 'global.toml'
+    defaults.write_text(
+        '[instruments.piano]\noutput="din"\nchannel=3\n'
+        '[patch_cycles]\nEarlier=[{instrument="piano",program=12}]\n'
+    )
+    monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
+    source = tmp_path / 'songs.toml'
+    source.write_text(
+        '[[songs]]\nname="Live"\n'
+        'patches=[{instrument="piano",program=34,display_name="Chosen"}]\n'
+    )
+    value = songs.Library.model_validate(compiler.read_document(source))
+    result = songs.decode(
+        songs.encode(
+            value,
+            target,
+            authoring=data_files.DataFile(name='Songs', paths=[source]),
+            trace=data_files.Trace(files={source: source.read_bytes()}),
+        )
+    )
+    assert result.songs[0].name == 'Live'
+    assert result.songs[0].patches[0]['program'] == 34
+    assert result.songs[0].patches[0]['display_name'] == 'Chosen'
+    assert result.instruments['piano']['channel'] == 3
+    # Low-level encoding of an already resolved library must not read host defaults.
+    with pytest.raises(
+        compiler.CompilationError, match='unknown or invalid instrument'
+    ):
+        songs.encode(value, target)
 
 
 def test_setlists_store_names_without_resolving_them(target: models.Target) -> None:
@@ -400,6 +442,8 @@ def test_empty_song_library_downloads() -> None:
 def test_downloaded_song_source_preserves_unicode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from cntrl.patch_switcher import cli
+
     monkeypatch.setattr(
         io, 'text_encoding', lambda encoding, *args: encoding or 'cp1252'
     )
@@ -416,9 +460,10 @@ def test_downloaded_song_source_preserves_unicode(
         }
     )
     monkeypatch.setattr(
-        transport, 'SerialConnection', lambda *a, **k: nullcontext(Mock())
+        cli.transport, 'SerialConnection', lambda *a, **k: nullcontext(Mock())
     )
-    monkeypatch.setattr(songs, 'download', lambda client: b'library')
+    data = songs.encode(songs.Library())
+    monkeypatch.setattr(songs, 'download', lambda client: data)
     monkeypatch.setattr(songs, 'decode', lambda data: value)
     songs.run(songs.Download(directory=tmp_path, port=Path('unused')))
     path = tmp_path / 'songs.toml'

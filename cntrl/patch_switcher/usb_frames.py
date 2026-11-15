@@ -20,6 +20,7 @@ class Kind(IntEnum):
     movie = 21
     disk = 22
     midi_file = 23
+    source = 24
     text = 128
     data = 129
     error = 255

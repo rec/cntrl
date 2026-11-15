@@ -3,14 +3,21 @@
 import struct
 from pathlib import Path
 
+from .. import source_files
 from .outline import CHARACTER, GLYPH, Glyph, Run
 
 
 class BitmapRaster:
-    def __init__(self, path: Path, horizontal_scale: float = 1.0) -> None:
+    def __init__(
+        self,
+        path: Path,
+        horizontal_scale: float = 1.0,
+        *,
+        source_snapshots: dict[Path, bytes] | None = None,
+    ) -> None:
         from .assets import decode, entries
 
-        data = path.read_bytes()
+        data = source_files.read(path, source_snapshots)
         decode(data, path.stem, 0)
         self.tables = entries(data)
         self.horizontal_scale = horizontal_scale

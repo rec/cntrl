@@ -3,6 +3,7 @@
 import secrets
 import sys
 import time
+from hashlib import sha256
 from pathlib import Path
 from zlib import crc32
 
@@ -572,52 +573,79 @@ class SetupClient:
             or not 0 < len(data) <= 0xFFFFFFFF
         ):
             raise ValueError('invalid MIDI file name or size')
+        self._copy_asset('MIDI_FILE', Kind.midi_file, name, data, overwrite)
+
+    def copy_source(self, snapshot: str, data: bytes) -> None:
+        if sha256(data).hexdigest() != snapshot or not 0 < len(data) <= 0xFFFFFFFF:
+            raise ValueError('invalid source snapshot checksum or size')
+        self._copy_asset('SOURCE', Kind.source, snapshot + '.bin', data, False)
+
+    def download_source(self, snapshot: str) -> bytes:
+        if len(snapshot) != 64 or any(c not in '0123456789abcdef' for c in snapshot):
+            raise ValueError('invalid source snapshot identifier')
+        content = self._download_asset('SOURCE', snapshot + '.bin')
+        if sha256(content).hexdigest() != snapshot:
+            raise ValueError('source archive checksum mismatch')
+        return content
+
+    def _copy_asset(
+        self, protocol: str, kind: Kind, name: str, data: bytes, overwrite: bool
+    ) -> None:
+        label = 'MIDI' if protocol == 'MIDI_FILE' else 'source'
         try:
-            existing = self.download_midi(name)
+            existing = self._download_asset(protocol, name)
         except FileNotFoundError:
             existing = None
         if existing == data:
             return
         if existing is not None and not overwrite:
+            if protocol == 'SOURCE':
+                raise ValueError(
+                    f'{name}: immutable source snapshot has corrupt contents'
+                )
             raise ValueError(
-                f'{name}: MIDI file exists with different contents; use --overwrite/-o'
+                f'{name}: {label} file exists with different contents; '
+                'use --overwrite/-o'
             )
         encoded = name.encode('ascii').hex()
         response = self.request(
-            f'CNTRL MIDI_FILE BEGIN {encoded} {len(data)} '
+            f'CNTRL {protocol} BEGIN {encoded} {len(data)} '
             f'{crc32(data):08x} {int(overwrite)}'
         )
         if response != 'CNTRL SEND':
             raise ValueError(response)
         for i in range(0, len(data), self.connection.usb_block_size):
-            self.send_data(Kind.midi_file, data[i : i + self.connection.usb_block_size])
-        self.ok('CNTRL MIDI_FILE END')
-        if self.download_midi(name) != data:
-            raise ValueError(f'{name}: MIDI file read-back mismatch')
+            self.send_data(kind, data[i : i + self.connection.usb_block_size])
+        self.ok(f'CNTRL {protocol} END')
+        if self._download_asset(protocol, name) != data:
+            raise ValueError(f'{name}: {label} file read-back mismatch')
 
     def download_midi(self, name: str) -> bytes:
         PlayMidiFile.basename(name)
         if not 1 <= len(name) <= 95 or name.lower().startswith('.cntrl-'):
             raise ValueError('invalid MIDI file name')
+        return self._download_asset('MIDI_FILE', name)
+
+    def _download_asset(self, protocol: str, name: str) -> bytes:
         encoded = name.encode('ascii').hex()
-        response = self.request(f'CNTRL MIDI_FILE SIZE {encoded}')
-        if response == 'CNTRL MIDI_FILE MISSING':
-            raise FileNotFoundError(f'{name}: MIDI file is missing on the pedal')
+        response = self.request(f'CNTRL {protocol} SIZE {encoded}')
+        if response == f'CNTRL {protocol} MISSING':
+            raise FileNotFoundError(f'{name}: {protocol} file is missing on the pedal')
         parts = response.split()
-        if len(parts) != 3 or parts[:2] != ['CNTRL', 'MIDI_FILE']:
-            raise ValueError(f'invalid MIDI file response: {response}')
+        if len(parts) != 3 or parts[:2] != ['CNTRL', protocol]:
+            raise ValueError(f'invalid {protocol} file response: {response}')
         length = int(parts[2])
         if not 0 < length <= 0xFFFFFFFF:
-            raise ValueError('invalid MIDI file length')
+            raise ValueError(f'invalid {protocol} file length')
         result = bytearray()
         while len(result) < length:
-            chunk = self.request_data(f'CNTRL MIDI_FILE READ {encoded} {len(result)}')
+            chunk = self.request_data(f'CNTRL {protocol} READ {encoded} {len(result)}')
             if (
                 not 0
                 < len(chunk)
                 <= min(self.connection.usb_block_size, length - len(result))
             ):
-                raise ValueError('invalid MIDI file chunk')
+                raise ValueError(f'invalid {protocol} file chunk')
             result.extend(chunk)
         return bytes(result)
 

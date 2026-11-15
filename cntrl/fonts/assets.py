@@ -4,6 +4,7 @@ import struct
 from pathlib import Path
 from zlib import crc32
 
+from .. import source_files
 from ..patch_switcher import models
 from .bitmap import BitmapRaster
 from .catalogue import SIZES, bundled_sources
@@ -186,6 +187,7 @@ class Preparation:
         target: models.Target,
         requests: list[tuple[int, str, models.Style, int, int, int]],
         contexts: list[str],
+        source_snapshots: dict[Path, bytes] | None = None,
     ) -> None:
         self.outlines: dict[str, Outline | BitmapRaster] = {}
         self.data: dict[str, bytes] = {}
@@ -260,7 +262,7 @@ class Preparation:
                         f'{family}: changing a compiled font scale '
                         'requires its original font file'
                     )
-                data = path.read_bytes()
+                data = source_files.read(path, source_snapshots)
                 face = decode(data, name, crc32(data))
                 self.data[name] = data
                 for t in set(texts):
@@ -275,7 +277,11 @@ class Preparation:
                             f'({", ".join(dict.fromkeys(locations[name, t]))})'
                         )
             else:
-                outline = BitmapRaster(path, scale) if native else Outline(path, scale)
+                outline = (
+                    BitmapRaster(path, scale, source_snapshots=source_snapshots)
+                    if native
+                    else Outline(path, scale, source_snapshots=source_snapshots)
+                )
                 self.outlines[name] = outline
                 valid = []
                 for t in sorted(set(texts)):

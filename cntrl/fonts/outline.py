@@ -11,6 +11,8 @@ from bidi import algorithm
 from fontTools import unicodedata
 from pydantic import BaseModel, Field
 
+from .. import source_files
+
 
 class Glyph(BaseModel, frozen=True):
     identifier: int
@@ -37,7 +39,12 @@ class Raster(Protocol):
 
 class Outline:
     def __init__(
-        self, path: Path, horizontal_scale: float = 1.0, *, autohint: bool = False
+        self,
+        path: Path,
+        horizontal_scale: float = 1.0,
+        *,
+        autohint: bool = False,
+        source_snapshots: dict[Path, bytes] | None = None,
     ) -> None:
         if freetype.version() != (2, 14, 3):
             raise ValueError(
@@ -46,7 +53,7 @@ class Outline:
             )
         self.horizontal_scale = horizontal_scale
         self.autohint = autohint
-        self.data = path.read_bytes()
+        self.data = source_files.read(path, source_snapshots)
         self.face = freetype.Face.from_bytes(self.data)
         self.hb = uharfbuzz.Font(uharfbuzz.Face(self.data))  # ty: ignore[unresolved-attribute]  # Public C extension API.
         uharfbuzz.ot_font_set_funcs(self.hb)  # ty: ignore[unresolved-attribute]  # Public C extension API.

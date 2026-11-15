@@ -7,7 +7,7 @@
 
 struct Services {
     Session usb;
-    Job command, transfer, bundle, history, font, source, song, disk, midi_file;
+    Job command, transfer, bundle, history, font, source, song, disk, midi_file, source_file;
     std::vector<unsigned> order;
     unsigned serial_reads = 0;
     bool reply = true, bus = true;
@@ -23,6 +23,7 @@ struct Services {
     Job &commands() { assert(order.back() == 4); return command; }
     Job &disk_transfer() { return disk; }
     Job &midi_transfer() { return midi_file; }
+    Job &source_transfer() { return source_file; }
     Job &song_transfer() { return transfer; }
     Job &bundle_transfer() { return bundle; }
     Job &history_transfer() { return history; }

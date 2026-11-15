@@ -23,6 +23,7 @@ from . import (
     data_files,
     devices,
     disk_speed,
+    global_config,
     history,
     midi_assets,
     models,
@@ -30,6 +31,7 @@ from . import (
     setup_bundle,
     setup_sync,
     songs,
+    source_archive,
     transport,
 )
 
@@ -141,26 +143,47 @@ def compile_inputs(
     overrides: dict[Path, bytes] | None = None,
 ) -> setup_bundle.SetupBundle:
     errors: list[str] = []
+    if trace is None:
+        trace = data_files.Trace()
+    command = global_config.resolve_inputs(command, trace=trace, overrides=overrides)
 
     documents = data_files.expressions(command.document, errors)
     targets = data_files.expressions(command.target, errors)
     definitions = data_files.expressions(command.definitions, errors)
     tables = [e for t in command.table for e in data_files.expressions(t, errors)]
+    _, relocations = (
+        source_archive.session_context(documents[0]) if documents else ({}, {})
+    )
     target_data = [
         data_files.load_target(
-            e, command.avoid_confict, errors, trace=trace, overrides=overrides
+            e,
+            command.avoid_confict,
+            errors,
+            trace=trace,
+            overrides=overrides,
+            relocations=relocations,
         )
         for e in targets
     ]
     definition_data = [
         data_files.load(
-            e, command.avoid_confict, errors, trace=trace, overrides=overrides
+            e,
+            command.avoid_confict,
+            errors,
+            trace=trace,
+            overrides=overrides,
+            relocations=relocations,
         )
         for e in definitions
     ]
     table_data: list[object] = [
         data_files.load(
-            e, command.avoid_confict, errors, trace=trace, overrides=overrides
+            e,
+            command.avoid_confict,
+            errors,
+            trace=trace,
+            overrides=overrides,
+            relocations=relocations,
         )
         for e in tables
     ]
@@ -184,8 +207,13 @@ def compile_inputs(
     # Companion documents use the same logical names on the host and SD card.
     # Load the whole dependency graph before compiling or opening a transport.
     for e in documents:
-        sources[e.name] = data_files.load(
-            e, command.avoid_confict, errors, trace=trace, overrides=overrides
+        sources[e.name] = global_config.load_setup(
+            e,
+            command.avoid_confict,
+            errors,
+            trace=trace,
+            overrides=overrides,
+            defaults=command.global_defaults,
         )
     index = 0
     while index < len(documents):
@@ -202,12 +230,25 @@ def compile_inputs(
             companion = data_files.DataFile(
                 name=name, paths=[expression.paths[0].parent / f'{name}.toml']
             )
-            sources[name] = data_files.load(
+            if (expression.paths[0].resolve().parent / 'cntrl-session.toml').exists():
+                recovered = source_archive.recovered_recipe(
+                    expression.paths[0].resolve().parent
+                )
+                companion = next(
+                    (
+                        e
+                        for e in data_files.expressions(recovered.document)
+                        if e.name == name
+                    ),
+                    companion,
+                )
+            sources[name] = global_config.load_setup(
                 companion,
                 command.avoid_confict,
                 errors,
                 trace=trace,
                 overrides=overrides,
+                defaults=command.global_defaults,
             )
             documents.append(companion)
     for e in documents:
@@ -230,6 +271,7 @@ def compile_inputs(
                     fonts,
                     sources,
                     movies,
+                    source_snapshots=trace.files,
                 )
                 if assets is not None:
                     assets[e.name] = fonts
@@ -381,9 +423,23 @@ def run_setup(
             bundle, upload_snapshot = setup_sync.prepare_upload(
                 command, bundle, trace, client
             )
+            archive = source_archive.create(
+                command, trace, {n: bundle.setups[n] for n in uploaded_names}
+            )
+            bundle = setup_bundle.SetupBundle(
+                setups={
+                    n: source_archive.attach(d, archive) if n in uploaded_names else d
+                    for n, d in bundle.setups.items()
+                },
+                page_ram2=bundle.page_ram2,
+                memory=bundle.memory,
+                memory_margin=bundle.memory_margin,
+                metadata=bundle.metadata,
+            )
             client.ok(f'CNTRL TIME {int(time.time())}')
             failures: list[str] = []
             try:
+                source_archive.upload(client, archive)
                 for name in bundle.names:
                     for key, font in assets.get(name, {}).items():
                         client.copy_font(key, font)
@@ -506,6 +562,7 @@ def download_files(
                 f'{name}: MIDI file conflicts with another downloaded file'
             )
         files[path] = data
+    files.update(source_archive.download(client, setups))
     return files
 
 

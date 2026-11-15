@@ -26,6 +26,7 @@ from . import (
     resolved,
     setup_bundle,
     songs,
+    source_archive,
     storage_info,
     transport,
 )
@@ -235,12 +236,15 @@ def backup_pedal(
         movies = {int(p.stem, 16) for p in (setups / 'movies').glob('*.cnsa')}
         healthy = all(e.valid for e in entries)
         snapshots: list[dict[str, object]] = []
+        source_snapshots: set[str] = set()
         current_entries = {e.name: e for e in entries}
         history_names = {n for n, _ in history.reserved_numbers(directory)}
         for name in sorted(current_entries.keys() | history_names, key=str.lower):
             entry = current_entries.get(name)
             if entry is not None and entry.valid:
                 data = client.download(name)
+                if (source := source_archive.identifier(data)) is not None:
+                    source_snapshots.add(source)
                 (setups / f'{name}.bin').write_bytes(data)
                 try:
                     readable = resolved.upgrade(data)
@@ -255,6 +259,8 @@ def backup_pedal(
                 print(f'Skipped invalid setup: {name}', flush=True)
             for revision in history.revisions(client, name):
                 data = client.download(name, revision.number)
+                if (source := source_archive.identifier(data)) is not None:
+                    source_snapshots.add(source)
                 if len(data) != revision.length:
                     raise ValueError(
                         f'{name}/{revision.number}: history length differs'
@@ -295,11 +301,29 @@ def backup_pedal(
         (directory / 'history.toml').write_bytes(
             tomlkit.dumps({'revisions': snapshots}).encode()
         )
-        (directory / 'songs.bin').write_bytes(songs.download(client))
+        library = songs.download(client)
+        undo = songs.download(client, undo=True) if raw_state else b''
+        (directory / 'songs.bin').write_bytes(library)
+        if undo:
+            (directory / 'songs-undo.bin').write_bytes(undo)
+        for saved_library in (library, undo):
+            if not saved_library:
+                continue
+            try:
+                source_snapshots.update(songs.source_snapshots(saved_library))
+            except ValueError as error:
+                healthy = False
+                print(f'Retained raw song library: {error}', file=sys.stderr)
+        for source in sorted(source_snapshots):
+            path = directory / 'raw/cntrl/source' / f'{source}.bin'
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(client.download_source(source))
+            if sha256(path.read_bytes()).hexdigest() != source:
+                raise ValueError(f'{source}: source archive checksum mismatch')
+            source_archive.read(path.read_bytes())
         if raw_state and (bundle := client.download_bundle()):
             (directory / 'bundle.bin').write_bytes(bundle)
-        if raw_state and (undo := songs.download(client, undo=True)):
-            (directory / 'songs-undo.bin').write_bytes(undo)
         write_backup_manifest(directory, complete=healthy, raw_state=raw_state)
     result = 'complete' if healthy else 'incomplete; raw recovery data retained'
     print(f'Selected: {selected}\n{status}\nBackup {result}.', flush=True)
@@ -655,6 +679,9 @@ def restore_setups(
             lengths.extend([len(library) + 28, len(library) + 28, len(undo) + 28])
             lengths.extend(len(history.pack_revision(n, r, d)) for n, r, d in snapshots)
             stored = {e.path for e in report.entries if not e.directory}
+            for path in (directory / 'raw/cntrl/source').glob('*.bin'):
+                if f'/cntrl/source/{path.name}' not in stored:
+                    lengths.append(path.stat().st_size)
             for kind, pattern in (
                 ('fonts', '*.cfont'),
                 ('movies', '*.cnsa'),
@@ -674,6 +701,9 @@ def restore_setups(
             client.copy_movie(p.read_bytes())
         for p in sorted((folder / 'midi').glob('*')):
             client.copy_midi(p.name, p.read_bytes(), overwrite=False)
+        for p in sorted((directory / 'raw/cntrl/source').glob('*.bin')):
+            source_archive.read(p.read_bytes())
+            client.copy_source(p.stem, p.read_bytes())
         if minimum_starts:
             client.ok(f'CNTRL STARTS ENSURE {minimum_starts}')
         if active_ready:
@@ -786,6 +816,9 @@ def verify_after_flashing(
         for p in sorted((directory / 'setups/midi').glob('*')):
             if client.download_midi(p.name) != p.read_bytes():
                 raise ValueError(f'{p.name}: MIDI file differs from the backup')
+        for p in sorted((directory / 'raw/cntrl/source').glob('*.bin')):
+            if client.download_source(p.stem) != p.read_bytes():
+                raise ValueError(f'{p.name}: source archive differs from the backup')
         listed: dict[str, list[history.Revision]] = {}
         for name, revision, data in read_history_binaries(directory):
             _, expected = history.normalize_revision(
@@ -840,18 +873,32 @@ def validate_assets(
 ) -> None:
     """Require every executable document's assets before deployment or conversion."""
     needed: set[str] = set()
+    sources: set[str] = set()
     for library in libraries:
         if library:
+            sources.update(songs.source_snapshots(library))
             needed.update(
                 p for v in songs.asset_references(library).values() for p in v
             )
     for data in setups:
+        if (source := source_archive.identifier(data)) is not None:
+            sources.add(source)
         settings = models.Setup.model_validate(
             tomlkit.parse(resolved.export(data)).unwrap()
         )
         needed.update(settings.fonts.values())
         needed.update(settings.splash_movie + settings.idle_movie)
         needed.update(f'midi/{n}' for n in midi_assets.referenced({'setup': data}))
+    for source in sources:
+        archive = directory / 'raw/cntrl/source' / f'{source}.bin'
+        if not archive.is_file():
+            raise ValueError(
+                f'{source}: required source archive is absent from the backup'
+            )
+        content = archive.read_bytes()
+        if sha256(content).hexdigest() != source:
+            raise ValueError(f'{source}: source archive checksum mismatch')
+        source_archive.read(content)
     asset_root = (directory / 'setups').resolve()
     for name in sorted(needed):
         path = (asset_root / name).resolve()

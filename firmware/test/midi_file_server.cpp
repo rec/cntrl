@@ -1,5 +1,5 @@
 // Exercise the production named-file receiver, including failed SD operations.
-#include <cntrl/midi_file_transfer.h>
+#include <cntrl/file_transfer.h>
 #include "filesystem.h"
 #include "usb_peer.h"
 #include <cassert>
@@ -33,7 +33,7 @@ struct File : TestFile {
 int main(int argc, char **argv) {
     assert(argc == 3); cntrl::memory_budget = 192 * 1024;
     FileSystem filesystem(argv[1], argv[2]); File reader(filesystem), writer(filesystem); Replies replies;
-    cntrl::MidiFileTransfer transfer(filesystem, reader, writer, replies);
+    cntrl::FileTransfer transfer(filesystem, reader, writer, replies);
     std::string line;
     return usb_peer(replies.usb, [&](uint8_t byte) {
         if (byte != '\n') line += char(byte);

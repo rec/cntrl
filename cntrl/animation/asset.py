@@ -1,10 +1,13 @@
 """Prepare dimension-driven RGB565 animation streams for bounded playback."""
 
 import struct
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageSequence
 from pydantic import BaseModel, Field
+
+from .. import source_files
 
 
 class Stream(BaseModel, frozen=True):
@@ -104,11 +107,16 @@ def inspect_asset(data: bytes) -> AnimationInfo:
     )
 
 
-def prepare_movie(source: Path, geometry: Geometry) -> bytes:
+def prepare_movie(
+    source: Path,
+    geometry: Geometry,
+    *,
+    source_snapshots: dict[Path, bytes] | None = None,
+) -> bytes:
     """Convert image animations or stills to logical output streams."""
     frames = bytearray()
     durations: list[int] = []
-    with Image.open(source) as image:
+    with Image.open(BytesIO(source_files.read(source, source_snapshots))) as image:
         if image.format not in ('GIF', 'WEBP', 'PNG', 'JPEG'):
             raise ValueError(f'{source}: expected GIF, WebP, PNG or JPEG')
         default_duration = 100 if getattr(image, 'is_animated', False) else 1000
