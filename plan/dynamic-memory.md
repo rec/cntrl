@@ -1,5 +1,53 @@
 # Demand-sized firmware memory
 
+## Compact-loop baseline, 2026-11-15
+
+`firmware/test/measure_midi_looper.cpp` measures the checked allocation ledger
+for the same phrases before and after the compact-loop replacement. The
+baseline below uses source `c6b4a75`, one physical input, all channels, a
+512-event maximum, no display/setup allocations and successful output delivery.
+The probe is a standalone verification program, not the pedal application.
+
+These are measured host allocations with eight-byte pointers and the shared
+target allocation-charge model (eight-byte alignment plus an eight-byte header).
+They are not ARM structure sizes or measurements of physical free RAM. They
+exclude native library allocations and static object/stack storage. Compare the
+same ABI and workload after replacement; do not compare these totals directly
+with the earlier approximately 172.5-KiB ARM calculation.
+
+| Phrase | Destinations | Arm | First playback snapshot | Stopped, after cleanup | Peak |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Empty | 1 | 235552 | 68192 | 112 | 235552 |
+| 24 sequential note events | 1 | 235552 | 106648 | 65632 | 235552 |
+| 24 controller events | 1 | 235552 | 106648 | 65688 | 235552 |
+| 512 sequential note events | 1 | 235552 | 210024 | 169064 | 235552 |
+| 512 controller events | 1 | 235552 | 210024 | 169064 | 235552 |
+| Empty | 2 | 386064 | 219952 | 53072 | 386064 |
+| 24 sequential note events | 2 | 386064 | 228800 | 130256 | 386064 |
+| 24 controller events | 2 | 386064 | 228800 | 130368 | 386064 |
+| 512 sequential note events | 2 | 386064 | 360536 | 319576 | 386064 |
+| 512 controller events | 2 | 386064 | 360536 | 319576 | 386064 |
+| 64-note chord, 128 events | 1 | 235552 | 128672 | 87656 | 235552 |
+
+Idle checked storage is zero in each case. The first playback snapshot is
+sampled just after the first boundary and bounded preparation visits; it is
+not necessarily steady-state memory. The probe separately samples capture and
+tracks the complete allocation peak. Notes alternate attacks/releases except
+for the explicit chord. Controllers use CC 70..79 across channels; input values
+are not passed through, so this isolates recording/playback allocations.
+Output masks 1 and 3 select one and two destinations respectively.
+
+Reproduce from the repository root using the same compiler and flags:
+
+```sh
+c++ -std=c++17 -O2 -Ifirmware/include firmware/test/measure_midi_looper.cpp -o /private/tmp/cntrl-loop-memory
+/private/tmp/cntrl-loop-memory
+```
+
+The generated executable and raw output are disposable artifacts. The workload
+and reproduction instructions are tracked. Physical timing and allocator
+fragmentation remain separate qualification work.
+
 Status: targeted cold-code placement and a mandatory instruction-growth reserve
 are validated for normal and diagnostic builds, 2026-11-14. Physical
 qualification remains incomplete. See the target appendix for measured totals.
