@@ -59,14 +59,19 @@ public:
         if (opened_index_) filesystem_.remove(index_path_);
     }
     bool start(const char *path, PlayMidiFilePatch settings) {
+        finished_ = false;
         settings.outputs = 1;
         if (!source_.open(path, files::Mode::read)) return false;
         opened_index_ = index_.open(index_path_, files::Mode::truncate);
         return opened_index_ && player_.start(settings);
     }
-    void poll(uint32_t now, Sink &sink) override { player_.poll(now, 1, sink); }
+    void poll(uint32_t now, Sink &sink) override {
+        player_.poll(now, 1, sink);
+        // Generator sinks may expire as soon as this service call returns.
+        finished_ = player_.status() == MidiFilePlayer::Status::complete && !player_.cleaning();
+    }
     bool failed() const override { return player_.status() == MidiFilePlayer::Status::failed; }
-    bool finished() const override { return player_.status() == MidiFilePlayer::Status::complete && !player_.cleaning(); }
+    bool finished() const override { return finished_; }
     bool clock() const override { return player_.clock_outputs() != 0; }
 private:
     files::FileSystem &filesystem_;
@@ -74,7 +79,7 @@ private:
     CachedMidiFile source_, index_;
     MidiFilePlayer player_;
     char index_path_[160] = {};
-    bool opened_index_ = false;
+    bool opened_index_ = false, finished_ = false;
 };
 
 class MidiFiles : public StreamFileProvider {
