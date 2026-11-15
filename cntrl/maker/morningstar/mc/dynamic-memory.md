@@ -1164,6 +1164,39 @@ rerun; no warning was suppressed or data format changed. The importer dispatch,
 generator include correction and binary-envelope qualification fix also pass the
 matrix's adapter-free boundary. Workflows remain manually triggered only.
 
+## Startup empty-SysEx qualification, 2026-11-15
+
+The message probe now records a one-second startup capture before sending any
+MIDI. It accepts either no startup bytes or exactly `f0f7`, retaining that empty
+SysEx in both `startup.received_hex` and `startup.ignored_hex`. Other startup
+traffic fails before transmission; every byte received during a controlled trial
+still participates in the exact comparison. Firmware forwarding is unchanged.
+
+The live MIDI-only trial captured and excluded exactly `f0f7` at startup, then
+passed paced messages (304 bytes), bursts (304), SysEx (4099) and notes/sustain/
+releases (396). The report is `build/startup-sysex-midi-only-20261115.toml`.
+Seven new regression cases cover the accepted startup message, unexpected and
+mixed startup traffic, and empty SysEx arriving during a payload. The full local
+suite passed 1671 tests with one skip. After integration of main's native fixture
+ordering fix, the affected fixture and qualifier tests passed; final qualifier
+tests, Ruff, formatting, typing and pyupgrade also pass.
+
+The first read-only backup failed on a malformed 39-byte serial header beginning
+`89 4e 54 52 4c 0d 0a`, at session `df4676a4`, sequence 10429, acknowledged reply
+10427 and USB block size 4096. An immediate inspection succeeded with startup
+count 100 and a valid heap; the fresh backup retry completed. This is a separate,
+unresolved serial-framing observation, not an endpoint disappearance or evidence
+that the new startup classification changed transport behavior. The incomplete
+backup is retained at `build/startup-sysex-before-20261115/`; inspection reports
+are `build/startup-sysex-{before,after-backup-error}-20261115.toml`.
+
+The temporary forwarding setup was deleted and the fresh pre-test backup at
+`build/startup-sysex-before-retry-20261115/` restored through `cntrl`, preserving
+the recorded memory estimates. Final verification reports both setups identical
+and selection, all 15 history revisions, assets and songs unchanged:
+`CNTRL READY 47 25668 8e37bb57 starts=100 starts_status=ready`.
+`simple-setup` is selected. No firmware was flashed.
+
 ## Physical qualification procedure
 
 Use `uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc`
@@ -1179,6 +1212,12 @@ cntrl qualify --target-dir cntrl/maker/morningstar/mc -- --run --expect-enabled 
 
 This uses the same virtual-source check and paced/burst/SysEx/note payloads as the
 combined probe, but opens no serial connection and records no serial counters.
+Before either message probe, the qualifier waits one second without sending
+MIDI and records the received bytes under `startup.received_hex`. An exact
+`f0f7` is recorded under `startup.ignored_hex` and excluded from payload checking;
+an empty startup capture is also accepted. Any other startup bytes are retained
+and fail qualification before the probe sends anything. Once probing begins,
+all payload comparisons remain exact, including any additional empty SysEx.
 It saves the observed bytes and stops at the first mismatch. The firmware's
 serial interface remains part of its USB descriptor; this isolates the host
 serial client, not the presence of the composite interface. Inspect serial

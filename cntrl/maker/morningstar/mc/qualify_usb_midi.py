@@ -514,6 +514,19 @@ def run_message_probe(
     path: Path | None,
     selected: Trial | None = None,
 ) -> None:
+    time.sleep(1)
+    startup = bytes(midi.data)
+    report['startup'] = {
+        'settle_seconds': 1,
+        'received_hex': startup.hex(),
+        'ignored_hex': startup.hex() if startup == b'\xf0\xf7' else '',
+    }
+    save_report(path, report)
+    if startup not in (b'', b'\xf0\xf7'):
+        raise ValueError(
+            'Unexpected MIDI during connection startup; see captured bytes'
+        )
+    del midi.data[: len(startup)]
     report['host_loopback'] = host = probe_virtual_source(midi)
     if client is None and not host['matches']:
         save_report(path, report)

@@ -222,6 +222,65 @@ def test_probe_without_serial_retains_bytes_and_stops_after_a_mismatch(
         assert trials[0]['received_hex'] == ''
 
 
+@pytest.mark.parametrize(
+    'startup, during_test, error, ignored',
+    [
+        (b'', b'', None, ''),
+        (b'\xf0\xf7', b'', None, 'f0f7'),
+        (b'\x90\x3c\x64', b'', 'startup', ''),
+        (b'\xf0\xf7\x90\x3c\x64', b'', 'startup', ''),
+        (b'\xf0\x7d\xf7', b'', 'startup', ''),
+        (b'', b'\xf0\xf7', 'mismatch', ''),
+        (b'\xf0\xf7', b'\xf0\xf7', 'mismatch', 'f0f7'),
+    ],
+)
+def test_only_the_exact_startup_empty_sysex_is_excluded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    startup: bytes,
+    during_test: bytes,
+    error: str | None,
+    ignored: str,
+) -> None:
+    class Loopback(Midi):
+        def __init__(self) -> None:
+            self.data = bytearray()
+            self.sent: list[bytes] = []
+
+        def send(self, endpoint: int, data: bytes) -> None:
+            self.sent.append(data)
+            self.data.extend(during_test + data)
+
+    midi = Loopback()
+
+    def receive_startup(seconds: float) -> None:
+        if seconds == 1:
+            midi.data.extend(startup)
+
+    monkeypatch.setattr(qualify_usb_midi.time, 'sleep', receive_startup)
+    monkeypatch.setattr(
+        qualify_usb_midi, 'probe_virtual_source', lambda midi: {'matches': True}
+    )
+    report: dict[str, object] = {'success': False}
+    path = tmp_path / 'startup.toml'
+    if error is None:
+        qualify_usb_midi.run_message_probe(midi, 1, None, report, path, Trial.burst)
+        assert report['success'] is True
+    else:
+        with pytest.raises(ValueError, match=error):
+            qualify_usb_midi.run_message_probe(midi, 1, None, report, path, Trial.burst)
+        assert report['success'] is False
+    saved = tomlkit.parse(path.read_text()).unwrap()
+    assert saved['startup']['received_hex'] == startup.hex()
+    assert saved['startup']['ignored_hex'] == ignored
+    if error == 'startup':
+        assert not midi.sent and bytes(midi.data) == startup
+        assert 'trials' not in saved
+    else:
+        trial = saved['trials'][0]
+        assert bytes.fromhex(trial['received_hex']) == during_test + b''.join(midi.sent)
+
+
 def test_report_option_preserves_diagnostics_as_toml(tmp_path: Path) -> None:
     path = tmp_path / 'run' / 'report.toml'
     options = tyro.cli(Options, args=['--report', str(path)])
