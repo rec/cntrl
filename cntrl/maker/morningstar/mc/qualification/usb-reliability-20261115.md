@@ -44,11 +44,51 @@ handoff bytes still fail, and reset messages occurring inside a payload still
 fail exact comparison. MIDI mismatches now also retain payloads in the existing
 `--analyze-report` format.
 
-`usb-reliability-20261115-continued.toml` retains the completed connection and
-serial results and requests the remaining 30-minute mixed phase, eight-hour
-soak, pressure/recovery checks, and automatic restoration. A passing result for
-those remaining stages is still required; the initial trial is not a completed
-USB reliability qualification.
+`usb-reliability-20261115-continued.toml` requested the remaining 30-minute mixed
+phase, eight-hour soak, pressure/recovery checks, and automatic restoration.
+The user subsequently requested that the soak finish its current hour and stop
+for the night. The supervisor was interrupted after approximately two hours and
+five minutes of soaking. Its report correctly remains `state = "interrupted"`,
+`success = false`; this was a deliberate stop, not an observed USB failure.
+
+- The complete 30-minute mixed phase passed: 727 verified downloads and
+  3,013,999 MIDI bytes received exactly as sent. Setup changes produced another
+  3,126 bytes of separately validated reset traffic.
+- Before the requested stop, the soak completed 3,014 verified downloads.
+  Its last saved snapshot recorded 12,483,191 MIDI bytes sent and received,
+  with 11,688 bytes of separately validated setup cleanup.
+- There was no observed USB disappearance, unexpected reboot, UART receive
+  drop/overrun, MIDI drop/abort, allocation failure or active quarantine.
+- A fresh `cntrl qualify --inspect` after stopping still reached firmware
+  `63d098a`, startup count 107. The heap was valid, with zero allocation failures
+  and zero interrupt allocations. Heap usage was 186,824 bytes versus 186,848
+  at the continuation baseline; this run showed no increasing retained usage.
+- The pressure/recovery phase was not started. The full eight-hour soak was
+  not completed. This is a useful partial qualification, not a full pass of the
+  requested profile, and it does not establish the cause of older USB failures
+  or attribute their absence to an uploader/toolchain change.
+
+The soak mostly reads data but also selects a test setup every fifth download.
+Each selection persists an 84-byte selection record to SD, with additional
+filesystem writes. It does not write internal program flash or upload firmware.
+
+Generated continuation evidence remains in
+`build/usb-reliability-20261115-continued-artifacts`, with the supervisor report
+at `build/usb-reliability-20261115-continued.toml` and the fresh final diagnostics
+at `build/usb-reliability-final-status-20261115.toml`. The terminal snapshot may
+contain an in-progress operation because the stop interrupted a worker; only
+the completed downloads and recorded comparisons above are counted.
+
+After the requested stop, `cntrl setup set`, `del`, `restore` and `verify` were
+run through the pinned host. Both temporary test setups were deleted. Both
+original setups, all 15 history revisions, readable assets, songs and selection
+were verified unchanged. `simple-setup` was selected with length 25,786 and CRC
+`2c1e1c31`; startup count remained 107. Restoration retained a fresh safety
+backup at
+`build/usb-reliability-20261115-continued-artifacts/before-before-restore-7000106e4562`.
+The two pre-existing unreadable movie objects remained recorded as unavailable;
+this run did not repair them. No test worker was left running and no firmware
+was flashed.
 
 The continuation pins host revision `650f9d9` in the isolated checkout
 `build/usb-reliability-host-650f9d9`, installed without editable dependencies.
