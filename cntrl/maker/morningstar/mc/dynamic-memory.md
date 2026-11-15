@@ -1,5 +1,55 @@
 # Morningstar dynamic-memory inventory
 
+## Per-channel controller tables, 2026-11-15
+
+The CC-state replacement stores 128 value bytes and a 16-byte known-value
+bitmap in one demand-allocated block per output/channel. On the production ARM
+ABI its checked-pool node is 168 bytes, enforced by a static assertion; allocator
+alignment/header accounting makes the total charge 176 bytes. The previous
+per-CC node charged 32 bytes. A channel using one CC costs 144 bytes more;
+six or more distinct CCs on one channel save space. The 160-CC, 16-channel
+benchmark's table storage therefore falls from 5120 to 2816 bytes on this ABI,
+an arithmetic saving of 2304 bytes, before the separate reduction in temporary
+admission requirements. This is not a physical free-heap measurement.
+
+Channels used only for notes, bend or pressure do not acquire a live CC table.
+Playback preparation can reserve blocks for future writes and lend them through
+the existing pool. Resetting known values reuses the allocated table. Channel-mode
+messages can pass without a CC table even when memory is exhausted, without an
+allocation attempt after output. NRPN/RPN parameter records remain sparse.
+The existing RAM2-first, reusable-RAM1 fallback policy is unchanged.
+
+The [shared memory report](../../../../plan/dynamic-memory.md#per-channel-controller-tables-2026-11-15)
+records the same native workload before and after: 512 controller events fall
+from 29672 to 13544 peak bytes on one output and 55200 to 22944 on two.
+Those totals use the native eight-byte-pointer ABI and include both retained
+destination state and temporary exact-admission requirements.
+
+Cancellation-time parameter invalidation is explicitly placed in flash to
+preserve the existing 4096-byte instruction-growth reserve. Normal packet
+preparation, recording and counted ownership submission remain in ITCM.
+
+Both final builds use source `11b78cb`:
+
+| Linked measurement, bytes | Normal | Diagnostic |
+| --- | ---: | ---: |
+| `.text.itcm` | 191440 | 192320 |
+| `.ARM.exidx` | 8 | 8 |
+| Budgeted ITCM use | 191448 | 192328 |
+| ITCM headroom within six banks | 5160 | 4280 |
+| Static RAM1 data/BSS, including reusable pool | 310240 | 314432 |
+| RAM1 stack/local allowance, excluding reusable pool | 17440 | 13248 |
+| RAM2 linked heap budget | 433280 | 433152 |
+| Additional reusable RAM1 pool capacity | 245776 | 245776 |
+
+These linked allowances include intervening main changes; compare runtime
+allocation savings with the controlled native before/after workload above.
+The extra four-byte `.fini` section remains outside the enforced ITCM expression.
+Reproduce with the build commands in the next section, substituting fresh output
+directories. The bundled normal application and manifest are refreshed from this
+source, and the wheel/source-package resource hashes pass verification. No
+firmware was flashed and no physical memory or latency measurement was made.
+
 ## Compact loops and unified note accounting, 2026-11-15
 
 The compact-loop implementation uses packed MIDI bytes and four-byte musical

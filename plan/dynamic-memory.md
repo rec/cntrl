@@ -1,5 +1,61 @@
 # Demand-sized firmware memory
 
+## Per-channel controller tables, 2026-11-15
+
+CC destination state now uses one 128-byte value array and one 16-byte known-value
+bitmap per output/channel, replacing an allocation for every distinct CC. Unknown
+and known-zero remain distinct. Channels carrying only notes, bend or pressure
+do not acquire a CC table. Existing playback admission can reserve future tables
+and lend them to live state, preserving allocation-before-output guarantees.
+Program Change preserves known bank values; Reset All Controllers invalidates
+values without discarding the reusable table. NRPN/RPN parameter records remain
+sparse and separate.
+
+The same tracked probe and command below were run before and after this change,
+starting from `c4c90d3`, with final implementation `11b78cb`. These are native
+eight-byte-pointer checked allocations,
+including alignment and headers, not measured free RAM on hardware. The controller
+phrase uses CC 70..79 across 16 channels; 24 events touch three channels and
+512 events touch all 16. Retained means the first playback snapshot, also equal
+to the stopped snapshot in these workloads.
+
+| Controller events | Destinations | Before retained | After retained | Before peak | After peak | Peak reduction |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 24 | 1 | 2768 | 2024 | 4896 | 2640 | 46.1% |
+| 24 | 2 | 4920 | 3432 | 9064 | 4552 | 49.8% |
+| 512 | 1 | 16872 | 11112 | 29672 | 13544 | 54.4% |
+| 512 | 2 | 29656 | 18136 | 55200 | 22944 | 58.4% |
+
+For 512 controller events on one output, the retained reduction is 5760 bytes
+(34.1%). The 160 old CC nodes cost 8960 bytes; 16 channel tables cost 3200.
+Exact-admission requirements also fall from 177 to 33 records, saving another
+10368 bytes temporarily. The new peak consists of 3672 generation bytes, 3200
+CC-table bytes, 3712 channel-state bytes, 112 output-state bytes, 416 owner/credit
+bytes and 2432 temporary bytes. The MIDI stream itself has not grown.
+
+The table payload is 144 bytes, with a total native checked charge of 200 bytes
+including the existing pool's block bookkeeping. The pool retains one block per
+channel rather than a linked node per CC. This trades sparse-channel efficiency
+for predictable bounded storage: one CC on a channel costs 144 more bytes than
+before. Channels using four or more distinct CCs save native allocation space.
+Target ABI sizes and linked budgets are recorded in the hardware memory inventory.
+
+Arming remains 312 bytes. Note-only results are unchanged: 24 note events peak
+at 672 bytes, 512 at 5560, and a 64-note chord at 3032. With Undo retained,
+512 controller events now peak at 17216 bytes on one output or 26616 on two;
+direction selection and Save retain/peak at 15824 or 22848 respectively.
+Earlier compact-loop measurements below are historical results before this
+controller-table replacement.
+
+Validation passed 1732 tests with one skip, plus seven focused native MIDI/memory
+programs and six distribution tests. The state regression also passed strict
+warnings and AddressSanitizer/UndefinedBehaviorSanitizer, covering bitmap
+boundaries, known zero, failed delivery, bank preservation, reset/reuse and
+allocation-free channel-mode handling under memory exhaustion. Ruff, formatting,
+type checking and pyupgrade checks passed. Normal and diagnostic ARM builds keep
+the existing instruction-growth reserve, and both package formats pass resource
+hash verification for source `11b78cb`.
+
 ## Compact-loop implementation results, 2026-11-15
 
 The replacement removes live RAM SMFs, full 32-byte event indexes, full-capacity
