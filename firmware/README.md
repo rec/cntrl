@@ -468,7 +468,7 @@ Schema 47 retains the default bank page count in type-17 node flags. Implicit
 empty pages have compiled nodes but no local definition names, so editable
 export preserves the sparse bank and page mappings.
 
-Schema 46 adds per-setup `frame_buffers` (integer 0 through 2, default 2) and
+Schema 46 adds per-setup `frame_buffers` (integer 0 through 2, now defaulting to 1) and
 `use_animations` (boolean, default true). Zero buffers disables scrolling while
 ordinary pages and streamed movies remain available. One buffer retains scrolling
 with incoming panes rendered as needed. Two buffers retain the existing cached

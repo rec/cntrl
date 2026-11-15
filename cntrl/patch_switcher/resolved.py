@@ -159,7 +159,7 @@ def upgrade(data: bytes) -> bytes:
             raise ValueError('re-import the backup to replace its legacy Banked Page')
         # New node and presentation options preserve existing records.
         converted = bytearray(data)
-        converted[presentation_settings:presentation_settings] = bytes([2, 1])
+        converted[presentation_settings:presentation_settings] = bytes([1, 1])
         struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
         struct.pack_into('<I', converted, 8, len(converted))
         struct.pack_into('<I', converted, 20, crc32(converted[28:]))
@@ -170,7 +170,7 @@ def upgrade(data: bytes) -> bytes:
     gesture_size = _gesture_size(version)
     shifted_size = gesture_size + 4
     edits = [
-        (presentation_settings, presentation_settings, bytes([2, 1])),
+        (presentation_settings, presentation_settings, bytes([1, 1])),
         (page, layout.section_end(data, page), layout.upgrade(data, page)),
     ]
     if gestures is not None:

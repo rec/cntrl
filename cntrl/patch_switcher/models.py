@@ -1218,7 +1218,7 @@ class Setup(BaseModel, frozen=True):
                 '1 trades rendering work for RAM.'
             ),
         ),
-    ] = 2
+    ] = 1
     use_animations: Annotated[
         bool,
         Field(

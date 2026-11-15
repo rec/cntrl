@@ -769,7 +769,7 @@ int main(int argc, char **argv) {
     test_setup_applies_usb_ports(bytes);
     {
         const unsigned settings = doc.metadata() + cntrl::scrolling_offset + 6;
-        assert(doc.frame_buffers() == 2 && doc.use_animations());
+        assert(doc.frame_buffers() == 1 && doc.use_animations());
         for (unsigned frames = 0; frames <= 2; ++frames) for (bool animations : {false, true}) {
             auto configured = bytes; configured[settings] = uint8_t(frames); configured[settings + 1] = uint8_t(animations);
             cntrl::put32(configured.data() + 20, cntrl::checksum(configured.data() + 28, unsigned(configured.size()) - 28));

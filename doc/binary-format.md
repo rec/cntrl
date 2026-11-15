@@ -148,7 +148,7 @@ envelope does not imply that firmware supports an asset's codec.
 
 Development setup importers cover 36, 38, 39, 40, 41, 42, 43, 44, 45 and 46. The explicit
 upgrade path verifies supported d44, d45 and d46 envelopes and writes d46 output.
-Older setup cores acquire the display defaults of two frame buffers and enabled
+Older setup cores acquire the display defaults of one frame buffer and enabled
 animations. Activation requires the current setup core version even when the
 outer envelope is a supported older development format. Retired development
 archives remain raw recovery material unless an importer is explicitly added.

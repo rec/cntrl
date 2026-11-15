@@ -10,7 +10,7 @@ fast_switches = true
 brightness = 192
 
 # Full-display buffers: 0 disables scrolling; 1 trades rendering work for RAM.
-frame_buffers = 2
+frame_buffers = 1
 
 # Enable scrolling and movie playback; target_pulse remains independent.
 use_animations = true

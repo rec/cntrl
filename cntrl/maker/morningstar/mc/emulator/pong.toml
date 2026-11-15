@@ -1,6 +1,5 @@
 # cntrl emulate cntrl/maker/morningstar/mc/emulator/pong.toml --controller mc6-pro --source-root . --interactive
 fill_in_styles = false
-frame_buffers = 1
 
 [pages.Pong]
 type = 'pong'

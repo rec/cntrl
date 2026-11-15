@@ -79,7 +79,7 @@ def test_previous_development_setup_requires_upgrade_and_keeps_defaults(
     assert struct.unpack_from('<H', core, 4)[0] == version
     upgraded = resolved.upgrade(bytes(previous))
     exported = tomlkit.parse(resolved.export(upgraded)).unwrap()
-    assert exported['frame_buffers'] == 2
+    assert exported['frame_buffers'] == 1
     assert exported['use_animations'] is True
     assert binary_format.core(upgraded) == resolved.upgrade(core)
     assert (

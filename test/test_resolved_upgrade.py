@@ -42,7 +42,7 @@ def test_historical_setup_preserves_graph_assets_and_page_order(version: int) ->
     ni, nc, np = compiler.HEADER.unpack_from(original)[4:7]
     settings = 76 + ni * 68 + nc * 68 + np * 82 + compiler.METADATA.size - 10
     assert upgraded[28:settings] == original[28:settings]
-    assert upgraded[settings : settings + 2] == bytes([2, 1])
+    assert upgraded[settings : settings + 2] == bytes([1, 1])
     assert upgraded[settings + 2 : new_page] == original[settings:old_page]
     assert upgraded[new_end:] == original[old_end:]
     old_layout = layout.unpack(original, old_page)
