@@ -142,3 +142,24 @@ directory and are excluded from published CI artifacts.
 New Morningstar releases require maintainer review and qualification of patches,
 hook, settings transitions and compiled resources before publishing a new pairing.
 Existing packages do not silently change their stock requirement.
+
+## Local qualification, 2026-11-15
+
+The initial committed payload was built and published with `cntrl build --publish`
+from source `5d620027e649cfd42fa1379a856ae8a8db317828`. It contains a
+1,305,600-byte application and a 1,120-byte hook, plus target metadata, fonts and
+the quiet starter collection. Its displayed/USB Git ID is `5d62002`.
+
+Both wheel and sdist passed the resource/hash inventory check. Neither includes
+stock/combined HEX images, the SDK, generated firmware build directories or the
+unrelated worktree screenshot. The installed wheel was checked in a separate
+environment outside the checkout, without the emulator extra, native rasterizer
+provisioning or compilers on PATH. Both its public `cntrl flash --prepare-only`
+command and the package preparation check succeeded. A second preparation with
+the download function blocked produced an identical combined image from cache.
+
+These checks did not open a serial port, launch an upload helper or flash a
+pedal. Automatic entry from stock, first-install storage initialization, and the
+complete upload/reset/restore flow still require physical qualification on the
+supported hardware, including the hub case. The manually started old helper
+must be restarted with the new selected-serial protocol before such a test.

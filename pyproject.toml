@@ -46,6 +46,14 @@ exclude = [
     "**/.upload-helper.sock*",
 ]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/cntrl", "/firmware", "/scripts", "/test", "/doc", "/plan",
+    "/examples", "/instruments", "/assets", "/.github", "/*.toml",
+    "/uv.lock", "/README*.md", "/AGENTS.md", "/.python-version",
+    "/.gitignore", "/.gitattributes",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["test", "cntrl"]
 pythonpath = ["."]

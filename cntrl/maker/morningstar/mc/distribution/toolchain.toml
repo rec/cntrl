@@ -1,0 +1,16 @@
+host = "macOS-14.5-arm64-arm-64bit-Mach-O"
+cli = "1.5.1"
+core = "1.62.0"
+compiler = "15.2.1"
+cli_sha256 = "29bb1cdb3646be8f924f474816c50b66541ee9090a309a1c78d917aff9ab2549"
+compiler_sha256 = "87163a5e5d1cb93b07aa05d49a6fe290529f897642c6dd6ce5225085a2301e6e"
+
+[patches]
+no-external-ram = "a2e9825435587528211479594e228955069e2dca88f92d07fe163eb5588f8495"
+external-flash-config = "77f75b0378e3111655e8820dd9d6e48d12bd4daab50c7ee37aca4f7f757f20db"
+usb-keyboard = "a7bb649d6fbb62bb72dc40c0e91cd96a1350834e449f838000c32c465e5aa156"
+flex-serial-release = "2b2ec9fe74415a65679b20e9120d3775e0f5e518b6f8e3b4dcc531c02eb90983"
+serial-rx-diagnostics = "9a0256fec18366f1af1c93c58c1b2c272bb5b621bd59b489e8676cc03438b7cc"
+usb-midi-interface = "f541df349aee8f9c3f63ca0c2492a45c70f0028db7c5d361f3fa09f4eaeabd91"
+usb-host-forward = "9b647570f2fd032bcea1c446db63a131cbbdb223050b333418524e54cde21479"
+fonts-in-flash = "2117a8cf92a3e1734fc940f78e6ff281044ae1e2c4c6415cffde0e592a256cfb"

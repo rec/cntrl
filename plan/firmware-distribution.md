@@ -1,5 +1,12 @@
 # Firmware distribution without a build toolchain
 
+Implementation status: the packaged-resource build, verified stock cache,
+installation command, first-install flow and installed-package checks are
+implemented. Local preparation has been qualified without a compiler on PATH,
+including verified offline cache reuse. Physical first-install/update and stock
+bootloader-entry qualification remain separate authorized hardware work.
+See the adapter's [installation and qualification notes](../cntrl/maker/morningstar/mc/firmware-distribution.md).
+
 ## Goal and agreed decisions
 
 Ship our compiled firmware as committed resources inside the `cntrl` Python
