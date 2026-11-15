@@ -38,6 +38,30 @@ def test_pong_reserves_three_windows_and_round_trips() -> None:
     assert compiler.compile_show(exported, {}, [], target()) == data
 
 
+@pytest.mark.parametrize('count', [1, 2, 3])
+def test_default_tools_end_with_pong_and_none_when_three_displays_fit(
+    count: int,
+) -> None:
+    device = target().model_copy(update={'displays': target().displays[:count]})
+    data = compiler.compile_show({'fill_in_styles': False}, {}, [], device)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    pages = exported['pages']
+    assert pages['patch-switcher']['min_windows'] == 0
+    if count == 3:
+        assert exported['regions']['tools']['pages'][-2:] == ['pong', 'None']
+        assert pages['pong']['min_windows'] == 3
+    else:
+        assert 'pong' not in pages
+        assert 'None' in pages
+    assert compiler.compile_show(exported, {}, [], device) == data
+
+
+def test_explicit_pong_needs_three_displays() -> None:
+    device = target().model_copy(update={'displays': target().displays[:2]})
+    with pytest.raises(compiler.CompilationError, match='target display count'):
+        compiler.compile_show({'pages': {'game': {'type': 'pong'}}}, {}, [], device)
+
+
 def test_named_instances_and_order_survive_compilation() -> None:
     source = compiler.read_document(ROOT / 'pages.toml')
     data = compiler.compile_show(source, {}, [], target())

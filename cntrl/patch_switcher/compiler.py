@@ -193,6 +193,10 @@ def compile_show(
         show = models.Setup.model_validate(document)
     except ValidationError as error:
         raise CompilationError(_validation_errors('show', error)) from error
+    if 'pages' not in show.model_fields_set and len(target.displays) < 3:
+        show = show.model_copy(
+            update={'pages': {n: p for n, p in show.pages.items() if p.type != 'pong'}}
+        )
     jacks = midi_endpoints.ports(target.midi_endpoints)
     for jack, mode in show.trs_ports.items():
         if jack not in jacks or mode not in target.trs_ports.get(jack, []):

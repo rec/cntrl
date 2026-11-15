@@ -56,11 +56,18 @@ menu marks its region with `*`. Changing focus preserves all page selections.
 Selecting a page also focuses its region. Held gestures are cancelled when
 focus changes. Management and emergency controls remain global.
 
-When regions are omitted or empty, multi-display targets put Patch Switchers, Banked and Pong pages in a
+When regions are omitted or empty, multi-display targets put Patch Switchers and Banked pages in a
 `performance` region and other pages in a `tools` region, omitting empty groups.
 A single-display target uses one `main` region containing the entire catalogue.
 Omitting `pages` uses the built-in catalogue. These defaults focus the first
 physical region, usually the Patch Switcher on a multi-display target.
+
+The default tools cycle ends with Pong followed by None. Pong requires three
+windows; the default Patch Switcher can yield all its windows while the game
+is selected, preserving its state and background execution. Selecting None
+returns all windows to the Patch Switcher. Controllers with fewer than three
+displays omit Pong from the implicit catalogue; explicitly configured Pong
+pages still require three displays.
 
 ## Pong
 
@@ -120,14 +127,16 @@ give_up_windows = ['left', 'right', 'center']
 
 ## Window allocation
 
-Every visible page type except Patch Switcher uses exactly one window. This
-includes Status, Tap Tempo, MIDI Monitor, MIDI Looper and Arpeggiator. Their
+Status, Tap Tempo, MIDI Monitor, MIDI Looper, Arpeggiator and the other utility
+pages use exactly one window. Their
 `min_windows` values are forced to one when compiling, exporting or allocating
 an existing saved setup. They do not acquire spare windows. The blank `None`
-placeholder keeps minimum and maximum zero.
+placeholder keeps minimum and maximum zero. Banked and Pong require three
+windows.
 
 For Patch Switcher, `min_windows` replaces the former page setting `windows`
-and defaults to one. An explicit zero lets it receive no windows while its
+and defaults to one for explicitly configured pages. The default catalogue
+sets it to zero so full-width tools can occupy all displays. Zero lets it receive no windows while its
 controls and background work remain available. It can acquire spare windows up
 to the target's display count.
 

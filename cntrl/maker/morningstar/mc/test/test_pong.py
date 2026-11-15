@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 from pytest_regressions.file_regression import FileRegressionFixture
 
@@ -11,11 +12,16 @@ from cntrl.maker.morningstar.mc.emulator import profiles
 from cntrl.patch_switcher import compiler, setup_bundle
 
 
+@pytest.mark.parametrize('default_catalogue', [False, True])
 def test_pong_spans_screens_and_releases_navigation_controls(
-    tmp_path: Path, file_regression: FileRegressionFixture
+    tmp_path: Path, file_regression: FileRegressionFixture, default_catalogue: bool
 ) -> None:
     target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
-    source = compiler.read_document(BASE / 'emulator/pong.toml')
+    source = (
+        {'layout': {'focus': 'tools'}, 'fill_in_styles': False}
+        if default_catalogue
+        else compiler.read_document(BASE / 'emulator/pong.toml')
+    )
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'
     bundle.write_bytes(
@@ -44,6 +50,11 @@ def test_pong_spans_screens_and_releases_navigation_controls(
             return any(frame[i : i + 2] == b'\xff\xe0' for i in range(0, len(frame), 2))
 
         advance(1000000)
+        if default_catalogue:
+            # The native adapter skips hardware-only cable-test and Panic pages.
+            for _ in range(8):
+                press('f')
+            advance(500000)
         cli.save(session, tmp_path / 'ready')
         image = Image.new('RGB', (480, 128))
         for i in range(3):
@@ -61,6 +72,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
             binary=True,
             extension='.png',
             check_fn=compare_pixels,
+            basename='test_pong_spans_screens_and_releases_navigation_controls',
         )
         assert ball_on('lcd-2')
         press('b')
@@ -82,10 +94,11 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         assert session.frames['lcd-1'] != paused['lcd-1']
         assert session.frames['lcd-3'] != paused['lcd-3']
         assert session.frames['lcd-2'] == paused['lcd-2']
-        press('e')  # Exit to Status.
+        press('e')  # The default cycle exits to None, restoring all patch windows.
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        press('f')  # The normal page control returns to the paused game.
+        for _ in range(9 if default_catalogue else 1):
+            press('f')  # Cycle back to the paused game.
         advance(500000)
         assert ball_on('lcd-1')
         before = dict(session.frames)

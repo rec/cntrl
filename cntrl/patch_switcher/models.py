@@ -1198,9 +1198,11 @@ class Setup(BaseModel, frozen=True):
                     'clock-tempo',
                     'keyboard',
                     'tap-tempo',
+                    'pong',
+                    'None',
                 )
             },
-            'patch-switcher': Page(),
+            'patch-switcher': Page(min_windows=0),
         },
         max_length=255,
     )

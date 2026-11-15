@@ -36,7 +36,7 @@ pages = ["patch-switcher"]
 
 [regions.tools]
 
-pages = ["status", "firmware", "cable-test", "panic", "trs-ports", "expression", "clock-transport", "clock-tempo", "keyboard", "tap-tempo"]
+pages = ["status", "firmware", "cable-test", "panic", "trs-ports", "expression", "clock-transport", "clock-tempo", "keyboard", "tap-tempo", "pong", "None"]
 
 [layout]
 
@@ -210,11 +210,27 @@ min_windows = 1
 give_up_windows = []
 patch = "sample"
 
+[pages.pong]
+
+type = "pong"
+ram2_bytes = 0
+min_windows = 3
+give_up_windows = []
+patch = "sample"
+
+[pages.None]
+
+type = "None"
+ram2_bytes = 0
+min_windows = 0
+give_up_windows = []
+patch = "sample"
+
 [pages.patch-switcher]
 
 type = "patch-switcher"
 ram2_bytes = 0
-min_windows = 1
+min_windows = 0
 give_up_windows = []
 patch = "sample"
 

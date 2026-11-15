@@ -11,14 +11,12 @@ def pack(show: models.Setup, windows: list[str]) -> bytes:
             regions = {'main': models.PageRegion(pages=list(pages))}
         else:
             performance = [
-                n
-                for n, p in pages.items()
-                if p.type in ('patch-switcher', 'banked', 'pong')
+                n for n, p in pages.items() if p.type in ('patch-switcher', 'banked')
             ]
             tools = [
                 n
                 for n, p in pages.items()
-                if p.type not in ('patch-switcher', 'banked', 'pong')
+                if p.type not in ('patch-switcher', 'banked')
             ]
             regions = {
                 n: models.PageRegion(pages=p)
