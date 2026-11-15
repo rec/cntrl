@@ -62,13 +62,13 @@ it is offered!
 * Easy editing, reuse, combination, backup and sharing of patches, setups, songs, and
   sets in friendly .toml text files with a documented format.
 
-* Automatic backups of previous configs; even an undo, when possible.
+* Automatic backups of previous configs.
 
 * Fast response to button presses: usually 1 ms, always below 3.5ms from button
   down to first MIDI byte
 
 * Many pages to choose from in your setup, add one, several or all:
-  * Patch switcher
+  * Patch switcher (with undo)
   * MIDI recorder/playback
   * MIDI looper
   * Tap tempo
@@ -79,8 +79,8 @@ it is offered!
   * Panic
   * MIDI monitor
   * Boring general status page
-  * Exciting Pong!
-  * Setup page
+  * Exciting Pong! (because I can)
+  * Setups page
   * Song page (in progress)
   * Set list page (in progress)
   * More to come
@@ -100,9 +100,7 @@ it is offered!
   * i.e. cues or warnings from your computer or other device
 
 * All the gestures:
-  * tap
-  * double-tap
-  * triple-tap
+  * tap, double-tap, triple-tap
   * hold/release for each of those three
   * combinations of multiple switches
   * tap while hold
