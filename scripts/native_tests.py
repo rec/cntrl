@@ -88,6 +88,7 @@ def compile_native(
                 command.append('/' + a[1:])
             elif not a.startswith('-'):
                 command.append(a)
+        command.extend(['/O1', '/UNDEBUG'])
         objects = output.parent / (output.stem + '-objects')
         objects.mkdir(exist_ok=True)
         command.extend([f'/Fe{output}', f'/Fo{objects}{os.sep}'])
@@ -101,6 +102,7 @@ def compile_native(
     else:
         command = [os.environ.get('CXX', arguments[0]), *arguments[1:]]
         command[output_index] = str(output)
+        command.extend(['-O1', '-UNDEBUG'])
     inputs = [
         Path(a).resolve()
         for a in arguments[1 : output_index - 1]

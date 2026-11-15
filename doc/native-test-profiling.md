@@ -18,6 +18,11 @@ build/switcher-profile/native-programs0/test/test_switcher firmware/test/show.go
 
 On Windows, append `.exe` to the executable name.
 
+Native test builds now default to `-O1`, with assertions explicitly enabled and
+the existing address/undefined-sanitizer flags retained on Clang/GCC. Historical
+unoptimized results below used the earlier default. MSVC uses `/O1` and keeps
+assertions enabled; its existing sanitizer coverage differs from Clang/GCC.
+
 ## Initial profile
 
 Measured on macOS ARM64 with the normal unoptimized, address/undefined-sanitized
@@ -75,3 +80,16 @@ On the same checkout and with the same compiler flags and sanitizers, section
 time decreased from 16.1595 seconds to 8.96394 seconds, about 45%, while extending
 the covered range. No production code, compiler optimization settings or history
 iteration counts changed.
+
+## Optimized compilation
+
+A subsequent comparison ran the same test twice at `-O0` and twice at `-O1`,
+reversing execution order for the second pair. Every run passed and reported
+9,728 recovered byte boundaries, with assertions and both sanitizers enabled.
+
+| Measurement (mean of two runs) | `-O0` | `-O1` |
+| --- | ---: | ---: |
+| Interrupted-write section | 8.890 s | 4.554 s |
+| Complete executable, wall time | 12.930 s | 6.875 s |
+
+The compiler helper now enables this optimization for native tests by default.

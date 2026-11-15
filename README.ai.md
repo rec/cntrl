@@ -136,3 +136,8 @@ Cache keys include source and header contents, generated capabilities, compiler
 identity, compilation flags and build environment settings. Only successful
 builds are cached. Delete `build/native-cache/` to force a cold build.
 The emulator also rebuilds when its displayed Git commit changes.
+
+The native test compiler helper uses `-O1` and `-UNDEBUG` to optimize tests while
+keeping assertions enabled. Shared native tests retain
+`-fsanitize=address,undefined` and frame pointers on Clang/GCC. The MSVC path uses
+`/O1` and `/UNDEBUG`; it does not provide the same dual-sanitizer coverage.
