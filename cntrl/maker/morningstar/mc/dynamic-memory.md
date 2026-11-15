@@ -1,5 +1,64 @@
 # Morningstar dynamic-memory inventory
 
+## Compact loops and unified note accounting, 2026-11-15
+
+The compact-loop implementation uses packed MIDI bytes and four-byte musical
+timestamps, with a shared counted output-note ledger. The
+[shared allocation results](../../../../plan/dynamic-memory.md#compact-loop-implementation-results-2026-11-15)
+record reproducible native before/after measurements. Those eight-byte-pointer
+host allocations are not measurements of free RAM on this controller.
+
+The production ARM builds preserve the existing six instruction banks and the
+mandatory 4096-byte instruction-growth reserve:
+
+| Linked measurement, bytes | Normal | Diagnostic |
+| --- | ---: | ---: |
+| `.text.itcm` | 191536 | 192432 |
+| `.ARM.exidx` | 8 | 8 |
+| Budgeted ITCM use | 191544 | 192440 |
+| ITCM headroom within six banks | 5064 | 4168 |
+| Static RAM1 data/BSS, including reusable pool | 310208 | 314400 |
+| RAM1 stack/local allowance, excluding reusable pool | 17472 | 13280 |
+| RAM2 linked heap budget | 433280 | 433152 |
+| Additional reusable RAM1 pool capacity | 245776 | 245776 |
+
+An additional four-byte `.fini` section appears in the linker's total ITCM
+region usage. The enforced budget above follows the existing explicit
+`.text.itcm` plus unwind-section expression, unchanged by this implementation.
+The heap and stack figures are linker allowances, not measured stack high-water
+or currently free heap after loading a setup.
+
+The initial integrated image failed the instruction-growth check. Precise
+placement rules move output-credit constructors/destructors, reservation
+refills, requirement collection, source-reservation creation and unused-capacity
+retirement to flash. The final ELF retains `MidiState::prepare`,
+`MidiState::record_data`, counted `Ownership::submit` and
+`CompactLoopPlayback::poll` in ITCM. Existing transport/interrupt placement is
+unchanged. The reserve was not relaxed. New build diagnostics retain a linker
+map and print region usage even when an assertion rejects the image.
+
+The extra loop reset setting also changes `Controller`'s ARM size to 396 bytes;
+its static assertion and compiler layout estimate now agree with the build.
+Runtime allocations retain the existing checked RAM2-first, reusable-RAM1
+fallback policy. No memory is taken from the separately reserved stack region.
+
+Reproduce the two builds from the repository root:
+
+```sh
+uv run --no-sync python -m cntrl.patch_switcher.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output /private/tmp/cntrl-compact-release-normal
+uv run --no-sync python -m cntrl.patch_switcher.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output /private/tmp/cntrl-compact-release-diagnostic --diagnostics
+```
+
+Both exports contain `firmware.elf` and `memory.txt`. The most recent build's
+link map is generated at `firmware/build/boot-switch/cntrl.map` in this target
+directory. These are disposable build outputs; their source and build procedure
+are tracked. No firmware was flashed, and MIDI latency, physical recording
+capacity, fragmentation and stack high-water were not measured on hardware.
+The normal export's own-only distribution resources replace the previously
+bundled application, compiler options, manifest and starter bundle, so installed
+packages deploy this implementation and its matching setup schema. Fonts, hook
+and vendor stock pairing are unchanged.
+
 Supporting hardware-specific audit for
 [the shared plan](../../../../plan/dynamic-memory.md).
 Original source baseline: `a32af63`, 2026-11-12. The original inventory is retained

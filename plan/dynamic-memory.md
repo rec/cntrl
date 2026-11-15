@@ -1,5 +1,109 @@
 # Demand-sized firmware memory
 
+## Compact-loop implementation results, 2026-11-15
+
+The replacement removes live RAM SMFs, full 32-byte event indexes, full-capacity
+recorder queues and cross-source note/pedal suppression. Packed channel-message
+bytes and parallel four-byte musical timestamps are the normal generation.
+One shared output ledger counts outstanding attacks by source/output/channel/
+pitch; held pedals use per-source switches. Destination controller and pressure
+values remain separate data for pickup, not another active-note ledger.
+The measured implementation is `caf21b9`, rebased onto main through `63caabf`.
+
+The obsolete prepared-loop file-player scheduler and its retained cursor/token
+arrays are removed; ordinary SMF playback and explicit import remain separate
+file operations. Grouped arpeggiator output uses its own admission credit and
+transaction-token domain, so it neither touches loop-reset targets nor shares a
+loop's output lock when both engines start their counters at the same value.
+
+Measured with the same host compiler, eight-byte-pointer ABI, allocation-charge
+model and baseline workloads below. All numbers are bytes. The before column
+is the complete initial recording/playback/stop peak, which was dominated by
+arming; the after peak covers the same operations, including allocation growth.
+Physical ARM RAM savings have not been measured on a pedal.
+
+| Phrase | Destinations | Before peak | After peak | Reduction | After first playback snapshot | After Stop |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Empty | 1 | 235552 | 464 | 99.8% | 152 | 152 |
+| 24 sequential note events | 1 | 235552 | 672 | 99.7% | 488 | 488 |
+| 24 controller events | 1 | 235552 | 4896 | 97.9% | 2768 | 2768 |
+| 512 sequential note events | 1 | 235552 | 5560 | 97.6% | 3960 | 3960 |
+| 512 controller events | 1 | 235552 | 29672 | 87.4% | 16872 | 16872 |
+| Empty | 2 | 386064 | 464 | 99.9% | 152 | 152 |
+| 24 sequential note events | 2 | 386064 | 672 | 99.8% | 488 | 488 |
+| 24 controller events | 2 | 386064 | 9064 | 97.7% | 4920 | 4920 |
+| 512 sequential note events | 2 | 386064 | 5560 | 98.6% | 3960 | 3960 |
+| 512 controller events | 2 | 386064 | 55200 | 85.7% | 29656 | 29656 |
+| 64-note chord, 128 events | 1 | 235552 | 3032 | 98.7% | 2120 | 2120 |
+
+Arming is now **312 bytes** in every listed case, instead of 235552 or 386064.
+It no longer scales with the configured event maximum, output count or unused
+decoder contexts. Initial allocation is 136 bytes for 32 timestamps, 104 for
+96 MIDI bytes, 16 for a seek checkpoint and 56 for eight compact held records.
+These charges already include allocator alignment and headers. Capture decoders
+are acquired for actual controller traffic.
+
+### Payload and persistent storage
+
+| Phrase | Payload | Seek checkpoints | Allocation headers/alignment | Committed generation allocation | Other retained checked allocation after Stop |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 24 three-byte note events | 168 | 4 | 28 | 200 | 288 |
+| 512 three-byte note events | 3584 | 64 | 24 | 3672 | 288 |
+| 128 three-byte chord events | 896 | 16 | 24 | 936 | 1184 |
+
+Each generation has separate MIDI, time and checkpoint buffers. For 24 events,
+the four-byte checkpoint rounds to eight bytes; the three headers add 24 bytes.
+For 512 events all payload/checkpoint lengths are already eight-byte aligned.
+There are no atomic controller groups or reverse caches in these note-only
+generation totals. Grouped CC/NRPN/RPN phrases add sparse four-byte transaction
+records and their buffer overhead. Capture capacity grows in 32-event/96-byte
+chunks; committed buffers are trimmed to their actual contents.
+
+The remaining note-only allocations are the compact shared claim capacity and
+source admission records. A larger chord needs more simultaneous claim space.
+Controller workloads additionally retain actual output/channel/controller state
+for pickup. They also have a larger temporary exact-admission workspace, which
+is released once the required values have been prepared. Re-preparing a phrase
+reuses matching credit loans instead of reserving another copy of the same
+destination state. These are shared state costs, not more MIDI payload copies.
+
+### Editing, direction and Save peaks
+
+The probe now also measures stopped Reverse with Undo retained, followed by
+backward direction selection and streamed Save. These extra operations were not
+part of the original before peak, so the following table is an after-only
+measurement, not a before/after savings claim.
+
+| Phrase | Destinations | Reverse retained | Reverse peak | Direction and Save retained | Direction and Save peak |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 24 note events | 1 | 688 | 872 | 752 | 792 |
+| 512 note events | 1 | 7632 | 10040 | 8672 | 8712 |
+| 24 controller events | 1 | 2968 | 5096 | 3032 | 3032 |
+| 512 controller events | 1 | 20544 | 33344 | 21584 | 21584 |
+| 512 controller events | 2 | 33328 | 58872 | 34368 | 34368 |
+| 64-note chord | 1 | 3056 | 4088 | 3328 | 3824 |
+
+Reverse keeps both compact generations for Undo. Backward traversal may retain
+one byte of reverse velocity/hold metadata per event for the generations it
+needs, with allocation overhead and temporary note-pairing storage. Save
+converts through a small streaming SMF view; it does not retain another full
+phrase copy. Explicit Load still needs a temporary 32-byte-per-indexed-event
+SMF index, now grown in 512-byte chunks from actual parser writes rather than
+reserved at the configured maximum. It is released after publication.
+
+Reproduction uses the tracked probe and command in the baseline section below.
+Its extra diagnostics report logical payload and total generation allocation
+separately. The overall checked ledger excludes SDK/filesystem allocations,
+static object storage and stack. Build/linker budgets and physical qualification
+must therefore remain separate checks.
+
+Validation of the combined main implementation passed 1690 tests with two
+skips. After refreshing the bundled firmware resources, 107 focused
+distribution/configuration/page tests passed, including the resource-presence
+check that had previously skipped. Ruff, formatting, type checking and
+pyupgrade checks passed. The built wheel and source distribution passed the
+tracked own-only resource/hash verifier, with source identity `caf21b9`.
+
 ## Compact-loop baseline, 2026-11-15
 
 `firmware/test/measure_midi_looper.cpp` measures the checked allocation ledger
