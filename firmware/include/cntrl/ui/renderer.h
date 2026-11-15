@@ -19,7 +19,7 @@ public:
         unsigned offset = 0, maximum = 0, transfer = 0;
         for (unsigned i = 0; i < display.count(); ++i) {
             const auto v = display.viewport(i); const unsigned area = v.width * v.height;
-            screens_[i] = {v, offset, Pane{}, true, false, 0}; offset += area; maximum = std::max(maximum, area);
+            screens_[i] = {v, offset, Pane{}, true, false, 0, {}}; offset += area; maximum = std::max(maximum, area);
             transfer = std::max(transfer, unsigned(v.height * 8 * 2));
         }
         transfer_.resize(transfer);
@@ -128,6 +128,7 @@ public:
         if (pane >= screens_.size()) return;
         auto &screen = screens_[pane];
         if (!std::memcmp(&screen.requested, &content, sizeof(content))) return;
+        damage(screen, content);
         screen.requested = content; screen.dirty = true;
     }
     void error(const char *message) {
@@ -179,16 +180,16 @@ public:
         auto &screen = screens_[unsigned(drawing_)];
         if (rendering_) { paint_step(); return; }
         const auto v = screen.viewport; bool changed = !screen.valid || !frame_count_;
-        if (frame_count_ && screen.valid) for (unsigned y = 0; y < v.height; ++y) if (raster_.pixels()[y * v.width + column_] != cache_[screen.offset + y * v.width + column_]) changed = true;
+        if (frame_count_ && screen.valid) for (int y = painting_region_.top; y < painting_region_.bottom; ++y) if (raster_.pixels()[y * v.width + column_] != cache_[screen.offset + y * v.width + column_]) changed = true;
         if (changed && !preparing_) {
-            for (unsigned y = 0; y < v.height; ++y) encode(y, dim_pixel(unsigned(drawing_), raster_.pixels()[y * v.width + column_]));
-            if (!submit_column(unsigned(drawing_), column_, v.height)) return;
+            for (int y = painting_region_.top; y < painting_region_.bottom; ++y) encode(unsigned(y - painting_region_.top), dim_pixel(unsigned(drawing_), raster_.pixels()[y * v.width + column_]));
+            if (!submit_column(unsigned(drawing_), column_, unsigned(painting_region_.bottom - painting_region_.top), unsigned(painting_region_.top))) return;
         }
-        if (frame_count_) for (unsigned y = 0; y < v.height; ++y) cache_[screen.offset + y * v.width + column_] = raster_.pixels()[y * v.width + column_];
-        if (++column_ == v.width) { screen.valid = true; drawing_ = -1; }
+        if (frame_count_) for (int y = painting_region_.top; y < painting_region_.bottom; ++y) cache_[screen.offset + y * v.width + column_] = raster_.pixels()[y * v.width + column_];
+        if (++column_ == unsigned(painting_region_.right)) { screen.valid = true; drawing_ = -1; }
     }
 private:
-    struct Screen { Viewport viewport; unsigned offset; Pane requested; bool dirty = true, valid = false; unsigned ring = 0; };
+    struct Screen { Viewport viewport; unsigned offset; Pane requested; bool dirty = true, valid = false; unsigned ring = 0; Region damage; };
     Display &display_;
     const Fonts &fonts_;
     Raster raster_;
@@ -201,6 +202,7 @@ private:
     std::vector<Screen> screens_;
     std::vector<uint8_t> transfer_;
     Pane painting_;
+    Region painting_region_;
     std::optional<Pane> message_;
     uint32_t message_revision_ = 0;
     bool usable_ = false, preparing_ = false, animating_ = false, rendering_ = false, undo_ = false, vertical_ = false, panorama_ = true;
@@ -213,13 +215,51 @@ private:
     unsigned column_ = 0, field_ = 0, letter_ = 0, progress_ = 0, duration_ = 0, animation_screen_ = 0, animation_column_ = 0, dim_column_ = 0;
     uint32_t started_ = 0;
     uint8_t brightness_ = 128, requested_brightness_ = 128;
+    void damage(Screen &screen, const Pane &content) {
+        const auto &before = screen.requested;
+        bool full = before.three_bands != content.three_bands || before.heading_band != content.heading_band || before.focused != content.focused
+            || std::memcmp(&before.graphics, &content.graphics, sizeof(content.graphics));
+        // Compare values, not TextLine/Rectangle padding, when deciding damage.
+        for (unsigned i = 0; i < max_lines && !full; ++i) {
+            const auto &a = before.lines[i], &b = content.lines[i];
+            full = std::strcmp(a.text, b.text) || std::memcmp(&a.graphics, &b.graphics, sizeof(a.graphics))
+                || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.stippled != b.stippled
+                || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color;
+        }
+        if (full) {
+            screen.damage = {0, 0, int(screen.viewport.width), int(screen.viewport.height)};
+            return;
+        }
+        for (unsigned i = 0; i < 4; ++i) {
+            const auto &a = before.rectangles[i], &b = content.rectangles[i];
+            if (a.x != b.x || a.y != b.y || a.width != b.width || a.height != b.height || a.color != b.color || a.stippled != b.stippled) {
+                for (const auto *r : {&before.rectangles[i], &content.rectangles[i]}) screen.damage.include(r->x, r->y, r->width, r->height);
+            }
+            if (std::memcmp(&before.circles[i], &content.circles[i], sizeof(Circle))) {
+                for (const auto *c : {&before.circles[i], &content.circles[i]}) if (c->diameter) {
+                    const unsigned span = c->diameter + 2 * c->annulus;
+                    screen.damage.include(int(c->x) - int(span) / 2, int(c->y) - int(span) / 2, span, span);
+                }
+            }
+        }
+        const auto &a = before.toggle, &b = content.toggle;
+        if (a.x != b.x || a.y != b.y || a.visible != b.visible || a.enabled != b.enabled || a.disabled != b.disabled) {
+            const unsigned height = std::max(4u, screen.viewport.height * 7 / 64);
+            for (const auto *t : {&before.toggle, &content.toggle}) if (t->visible) screen.damage.include(t->x, t->y, height * 13 / 7, height);
+        }
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_begin_paint)
 #endif
     void begin_paint(unsigned screen, const Pane &content) {
         drawing_ = int(screen); painting_ = content;
-        column_ = field_ = letter_ = 0;
-        raster_.configure(screens_[screen].viewport, painting_.graphics); backgrounds();
+        auto &s = screens_[screen]; const auto v = s.viewport;
+        painting_region_ = !s.valid || preparing_ || animating_ ? Region{0, 0, int(v.width), int(v.height)} : s.damage;
+        s.damage = {};
+        painting_region_ = {std::max(0, painting_region_.left), std::max(0, painting_region_.top), std::min(int(v.width), painting_region_.right), std::min(int(v.height), painting_region_.bottom)};
+        if (painting_region_.empty()) { drawing_ = -1; return; }
+        column_ = unsigned(painting_region_.left); field_ = letter_ = 0;
+        raster_.configure(v, painting_.graphics, painting_region_); backgrounds();
         for (const auto &circle : painting_.circles) raster_.circle(circle);
         for (const auto &r : painting_.rectangles) raster_.rectangle(r.x, r.y, r.width, r.height, r.color, r.stippled);
         raster_.toggle(painting_.toggle); rendering_ = true; incoming_screen_ = -1;
@@ -229,7 +269,8 @@ private:
 #endif
     void paint_step() {
         const auto &line = painting_.lines[field_];
-        if (raster_.letter(line, letter_, text_y(field_))) ++letter_;
+        const int y = text_y(field_);
+        if ((letter_ || raster_.intersects(line, y)) && raster_.letter(line, letter_, y)) ++letter_;
         else { letter_ = 0; if (++field_ == max_lines) {
             backgrounds(true);
             if (painting_.focused) {
@@ -287,7 +328,7 @@ private:
         auto &screen = screens_[brightness_screen_]; if (!screen.valid) return;
         if (!frame_count_) {
             if (brightness_ != requested_brightness_) {
-                brightness_ = requested_brightness_; screen.dirty = true;
+                brightness_ = requested_brightness_; screen.dirty = true; screen.valid = false;
             }
             return;
         }
@@ -378,10 +419,10 @@ private:
         if (reserved_ && undo_ && unsigned(pane) >= screens_.size() - reserved_ && screens_.size() > reserved_) { const auto &left = screens_[screens_.size() - reserved_ - 1]; return incoming_pixel(unsigned(screens_.size()) - reserved_ - 1, std::min(unsigned(source), left.viewport.width - 1), std::min(y, left.viewport.height - 1)); }
         return previous_[p.offset + y * p.viewport.width + unsigned(source)];
     }
-    bool submit_column(unsigned screen, unsigned column, unsigned height) {
+    bool submit_column(unsigned screen, unsigned column, unsigned height, unsigned top = 0) {
         const unsigned columns = display_.scroll_columns(screen);
-        return columns ? display_.ring_column(screen, (screens_[screen].ring + column) % columns, transfer_.data(), height)
-            : display_.submit(screen, column, 0, 1, height, transfer_.data());
+        if (columns && !top) return display_.ring_column(screen, (screens_[screen].ring + column) % columns, transfer_.data(), height);
+        return display_.submit(screen, columns ? (screens_[screen].ring + column) % columns : column, top, 1, height, transfer_.data());
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_animate_ring)

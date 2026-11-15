@@ -12,9 +12,11 @@
 
 struct Fonts final : cntrl::ui::Fonts {
     const uint8_t bits[2] = {0x80, 0x80};
+    mutable unsigned glyph_calls = 0;
     bool supports(unsigned, unsigned, uint32_t = 0) const override { return true; }
     cntrl::ui::Bounds bounds(unsigned, unsigned, uint32_t, const char *s) const override { return {0, 0, int(std::strlen(s) * 2), 2}; }
     bool glyph(unsigned, unsigned, uint32_t, const char *s, unsigned i, cntrl::ui::Glyph &g) const override {
+        ++glyph_calls;
         if (i >= std::strlen(s)) return false;
         g = {bits, 1, 2, int(i * 2), 0}; return true;
     }
@@ -23,7 +25,7 @@ struct Display : cntrl::ui::Display {
     std::vector<uint16_t> pixels = std::vector<uint16_t>(24 * 18, 0);
     bool due = false, pending = false, accept = true;
     const uint8_t *borrowed = nullptr;
-    unsigned screen = 0, x = 0, y = 0, width = 0, height = 0, calls = 0;
+    unsigned screen = 0, x = 0, y = 0, width = 0, height = 0, calls = 0, transferred = 0;
     unsigned count() const override { return 1; }
     cntrl::ui::Viewport viewport(unsigned) const override { return {24, 18, 0, 0}; }
     void poll() override {}
@@ -32,7 +34,7 @@ struct Display : cntrl::ui::Display {
     bool priority_due() const override { return due; }
     bool submit(unsigned s, unsigned px, unsigned py, unsigned w, unsigned h, const uint8_t *p) override {
         if (!accept || pending) return false;
-        screen = s; x = px; y = py; width = w; height = h; borrowed = p; pending = true; ++calls; return true;
+        screen = s; x = px; y = py; width = w; height = h; borrowed = p; pending = true; ++calls; transferred += w * h; return true;
     }
     void complete() {
         if (!pending) return;
@@ -86,6 +88,13 @@ static void ring_transition_preserves_hidden_columns_and_retries() {
     for (unsigned i = 1000; i < 3000; ++i) { renderer.draw(i * 100); display.complete(); }
     assert(renderer.ready()); assert(display.reveals == 12);
     for (auto pixel : display.pixels) assert(pixel == 0x2222);
+    // Partial-height writes must retain the ring offset left by the transition.
+    pane.rectangles[0] = {4, 7, 3, 2, 0xffff}; display.transferred = 0;
+    renderer.show(0, pane);
+    for (unsigned i = 0; i < 200; ++i) { renderer.draw(); display.complete(); }
+    assert(renderer.ready() && display.transferred <= 6);
+    for (unsigned y = 0; y < 18; ++y) for (unsigned x = 0; x < 24; ++x)
+        assert(display.pixels[y * 24 + x] == (x >= 4 && x < 7 && y >= 7 && y < 9 ? 0xffff : 0x2222));
     }
 }
 static void portable_font_bearings_and_character_advances() {
@@ -190,6 +199,59 @@ struct MixedDisplay final : cntrl::ui::Display {
         return true;
     }
 };
+static void moving_shapes_repaint_only_their_damage_and_restore_overlaps() {
+    for (unsigned frames : {0u, 1u, 2u}) {
+        Fonts fonts; Display display;
+        uint16_t work[24 * 18] = {};
+        cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+        assert(renderer.prepare(frames, true)); renderer.finish(true);
+        auto drain = [](cntrl::ui::Renderer &r, Display &d) {
+            for (unsigned i = 0; i < 1000 && !r.ready(); ++i) { r.draw(); d.complete(); }
+            assert(r.ready());
+        };
+        cntrl::Pane pane; pane.graphics.background = 0; pane.graphics.pad = 0;
+        pane.rectangles[0] = {10, 0, 1, 18, 0x4444, true};
+        pane.rectangles[1] = {8, 7, 4, 4, 0xffff};
+        pane.lines[0].graphics = pane.graphics; pane.lines[0].graphics.foreground = 0x1234;
+        pane.lines[0].x = 8; pane.lines[0].y = 8; std::strcpy(pane.lines[0].text, "ABC");
+        renderer.show(0, pane); drain(renderer, display);
+        for (int x : {12, 4, -2, 22, 8}) {
+            display.transferred = 0;
+            pane.rectangles[1].x = int16_t(x); renderer.show(0, pane); drain(renderer, display);
+            if (x == 12) assert(display.transferred <= 8 * 4);
+            Display reference; uint16_t full[24 * 18] = {};
+            cntrl::ui::Renderer repaint(reference, fonts, full, 24 * 18);
+            repaint.show(0, pane); drain(repaint, reference);
+            assert(display.pixels == reference.pixels);
+        }
+        // Coalesce updates while an earlier transfer is borrowed, including rejection.
+        pane.rectangles[1].x = 12; renderer.show(0, pane);
+        for (unsigned i = 0; i < 100 && !display.pending; ++i) renderer.draw();
+        assert(display.pending);
+        pane.rectangles[1].x = 2; renderer.show(0, pane);
+        pane.rectangles[1].x = 18; renderer.show(0, pane);
+        display.complete(); display.accept = false;
+        for (unsigned i = 0; i < 100; ++i) renderer.draw();
+        display.accept = true; drain(renderer, display);
+        pane.rectangles[1].width = 0; renderer.show(0, pane); drain(renderer, display);
+        // Text outside the damage is not rasterized again.
+        const unsigned glyphs = fonts.glyph_calls;
+        pane.rectangles[1] = {2, 14, 3, 2, 0xffff};
+        renderer.show(0, pane); drain(renderer, display);
+        assert(fonts.glyph_calls == glyphs);
+        pane.rectangles[1].width = 0; renderer.show(0, pane); drain(renderer, display);
+        // Other primitives share damage tracking; removing them restores the court.
+        pane.circles[0] = {10, 9, 4, 1, 0x07e0, 0xf800};
+        pane.toggle = {8, 7, true, true, false};
+        renderer.show(0, pane); drain(renderer, display);
+        pane.circles[0].diameter = 0; pane.toggle.visible = false;
+        renderer.show(0, pane); drain(renderer, display);
+        Display reference; uint16_t full[24 * 18] = {};
+        cntrl::ui::Renderer repaint(reference, fonts, full, 24 * 18);
+        repaint.show(0, pane); drain(repaint, reference);
+        assert(display.pixels == reference.pixels);
+    }
+}
 static void pong_motion_only_changes_intersecting_windows() {
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
     uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0};
@@ -200,7 +262,8 @@ static void pong_motion_only_changes_intersecting_windows() {
     pages.pong.x += 5;
     for (unsigned i = 0; i < 3; ++i) {
         const auto after = pages.view(0, 0, {}, {}, {}, i, 3);
-        assert((std::memcmp(&before[i], &after, sizeof(after)) != 0) == (i == 1));
+        const auto &a = before[i].rectangles[3], &b = after.rectangles[3];
+        assert((a.x != b.x || a.y != b.y || a.width != b.width || a.height != b.height) == (i == 1));
     }
 }
 static void updating_one_window_does_not_starve_the_others() {
@@ -495,6 +558,7 @@ static void expression_reuses_its_initial_layout_and_redraws_only_changed_conten
 
 int main() {
     cntrl::memory_budget = 192 * 1024;
+    moving_shapes_repaint_only_their_damage_and_restore_overlaps();
     pong_motion_only_changes_intersecting_windows();
     updating_one_window_does_not_starve_the_others();
     frame_preparation_failure_and_rollback_preserve_active_storage();
