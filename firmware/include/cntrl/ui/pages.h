@@ -498,7 +498,7 @@ private:
         const char *hint = window == 0 ? prompt("%s Up / %s Down", controls_.previous_section, controls_.previous)
             : window == 2 ? prompt("%s Up / %s Down", controls_.back, controls_.confirm)
             : prompt("%s Serve/Pause  %s Exit", controls_.next, controls_.next_section);
-        line(pane, 1, hint, vertical(117), vertical(9), font, true, nullptr, 0, 0, 8);
+        line(pane, 1, hint, vertical(115), vertical(11), font, true, nullptr, 0, 0, 10);
         if (window == 1 && pong.state != Pong::State::playing) {
             const char *message = pong.state == Pong::State::paused ? "PAUSED" : pong.state == Pong::State::finished ? (pong.left_score == 11 ? "PLAYER 1 WINS" : "PLAYER 2 WINS") : "PRESS TO SERVE";
             line(pane, 2, message, vertical(45), vertical(15), font, true, nullptr, 0, 0, 12);
