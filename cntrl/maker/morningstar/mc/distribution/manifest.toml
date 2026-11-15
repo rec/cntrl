@@ -1,7 +1,7 @@
 format = 1
 controller = "mc6-pro"
-source_commit = "caf21b91a914127a769253192d818933fbd8e95c"
-inputs_sha256 = "1f04acf77dd3b0208153519d8247e98ff36a8a06e5076fa8944b96ff88eabb89"
+source_commit = "63d098aa5bc78d13a554271608075bb575df4b4e"
+inputs_sha256 = "ac534315fdb70e0f86628dfc1127b7463223ef6cb449c7c7dea56d3c54a4c678"
 application = "application.bin"
 application_origin = 1611661312
 application_entry = 1611665408
@@ -18,8 +18,8 @@ url = "https://github.com/Morningstar-Engineering/MC6-PRO-MIDI-Controller/releas
 sha256 = "228d73e768fad383bc205c8fc1ef52f3a49de08c754aca11d4a069ca1aab9fc8"
 
 [files]
-"application.bin" = "6f824b65db6b2b63e7d31481662ae0e9e18c6279b5eb5842361a2376c8e7cc7d"
-"compiler-options.toml" = "dcb82108701dfececff7aed7fd59bfdab570dd2cc107041cb35f10d61c7484e4"
+"application.bin" = "6cd7cd6b86170e1786292cb5a4329ead39e18d7eda5793d704bdab99511ec283"
+"compiler-options.toml" = "1d5ff633060c2e1cfa510b2c4506ff33f06e77b015831f6f70fdabbb8270c0eb"
 "fonts/Arial.cfont" = "7bb33041c54275c714b19c49aedc89c3d61f6a151ae2f3e51c8b79d372e519ad"
 "fonts/ComicSansMS.cfont" = "0e4a8c1cb1dcd1124e3d16a2bd36dc32cdf2bce14ff427f3f75a50930b7cd417"
 "fonts/classic.cfont" = "7bb33041c54275c714b19c49aedc89c3d61f6a151ae2f3e51c8b79d372e519ad"
