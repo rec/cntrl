@@ -1,0 +1,23 @@
+# System generators keep running while the Setups menu is open.
+[pages.performance]
+type = 'patch-switcher'
+
+[patches.menu]
+operation = 'menu'
+
+[patch_cycles]
+main = ['menu']
+
+[midi.backing]
+to = 'din'
+generate = {file = {filename = 'loop.mid', loops = 0}}
+
+[midi.filter]
+to = 'din'
+generate = {lfo = {
+    target = {type = 'control-change', channel = 1, controller = 74},
+    shape = 'triangle',
+    range = [0, 127],
+    period = '200 ms',
+    off = {action = 'value', value = 0},
+}}

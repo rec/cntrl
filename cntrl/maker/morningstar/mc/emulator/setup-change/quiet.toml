@@ -1,0 +1,15 @@
+[pages.performance]
+type = 'patch-switcher'
+
+[patches.proof]
+type = 'control-change'
+output = 'din'
+channel = 1
+controller = 7
+value = 99
+
+[patches.menu]
+operation = 'menu'
+
+[patch_cycles]
+main = ['proof', 'menu']
