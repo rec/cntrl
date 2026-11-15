@@ -80,6 +80,8 @@ struct VisitFile : cntrl::files::File {
     bool sync() override { return true; }
 };
 struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink {
+    // Panic reads midi_outputs() during construction.
+    cntrl::midi::Outputs endpoints;
     cntrl::Panic panic{*this, *this};
     bool panic_owns_midi = false;
     bool available(const char *output) const override { return Hardware::available(output); }
@@ -123,7 +125,6 @@ struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink {
         }
     } expression;
     struct Bridge { void clock_owner(unsigned) {} void configure(bool) {} } bridge;
-    cntrl::midi::Outputs endpoints;
     cntrl::midi::Outputs midi_outputs() const override { return endpoints; }
     cntrl::midi::TrsMode port_mode(unsigned) const { return cntrl::midi::TrsMode::off; }
     bool supports_trs_mode(unsigned port, cntrl::midi::TrsMode mode) const override {
