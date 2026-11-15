@@ -1,7 +1,7 @@
 format = 1
 controller = "mc6-pro"
-source_commit = "979354b0964b348cf7eb752f875bafbd09b5b836"
-inputs_sha256 = "d6a24145619957ed8b86d31f1cb1a332dced64e4ec429a8a87b174d89dd65be5"
+source_commit = "a4b9616b9cff066960fc5db2b0ecb9be4b38d8a7"
+inputs_sha256 = "89be0ec59d63a044145660643bc079d3ba6103da62ca14f051e0bf0fb296997b"
 application = "application.bin"
 application_origin = 1611661312
 application_entry = 1611665408
@@ -18,13 +18,13 @@ url = "https://github.com/Morningstar-Engineering/MC6-PRO-MIDI-Controller/releas
 sha256 = "228d73e768fad383bc205c8fc1ef52f3a49de08c754aca11d4a069ca1aab9fc8"
 
 [files]
-"application.bin" = "38eeaa313294c270b9d4db137b4a8a7f414bd13b2cf36f3f2ba8a14ba16e5a15"
-"compiler-options.toml" = "5e0afb07709e9c1f52536c40679d927a7e06efdfefbbadf3a58a0733d2a6307b"
+"application.bin" = "5f2cb3e7ee1833dda2ef07141f3f00452b4065cc235f206c5106fbd3b89444a8"
+"compiler-options.toml" = "a8fe42b9a1a0617dc2874748864513c31807d6d2b83b08f0e6879092f9ff6f92"
 "fonts/Arial.cfont" = "7bb33041c54275c714b19c49aedc89c3d61f6a151ae2f3e51c8b79d372e519ad"
 "fonts/ComicSansMS.cfont" = "0e4a8c1cb1dcd1124e3d16a2bd36dc32cdf2bce14ff427f3f75a50930b7cd417"
 "fonts/classic.cfont" = "7bb33041c54275c714b19c49aedc89c3d61f6a151ae2f3e51c8b79d372e519ad"
 "hook.bin" = "0cf5373b6b16d13a797beb1d12b3cb495ab860f1915c9359a2b2e43e5d3a1116"
-"starter/bundle.bin" = "f9471e1246238347d7934149f9691acdd6d347c47595dd5a80f12522b38a5ccc"
+"starter/bundle.bin" = "117a326f73c1a6fb605ca7164a0073329b1980dd590bda62b6cefaf91b3530ce"
 "starter/songs.bin" = "24cba0ba556a1d757c0068f76a6eef20f5766eecb09d1d69e448f1931d9ffb7e"
 "starter/starter.toml" = "4aac0368b9363793b1d175c0c6e9c5ec62f9b0075307c3d76b3f3f7f1998d831"
 "target.toml" = "3ef736ae477f10eb3f240cd064fc6e055b6e015b02d74f67c6e103c7e2de3acd"
