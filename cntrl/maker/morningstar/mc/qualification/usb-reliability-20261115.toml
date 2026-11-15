@@ -1,0 +1,14 @@
+# Installed firmware 63d098a, verified through cntrl before this run.
+target_export = '../../../../../build/usb-reliability-target'
+serial = '14468280'
+hub = 'Current connected hub chain, USB location 0-1.3; unchanged during this run'
+cable = 'Current USB cable to pedal 14468280; unchanged during this run'
+stages = ['connections', 'serial', 'mixed', 'soak', 'pressure']
+connection_cycles = 100
+serial_seconds = '30 min'
+mixed_seconds = '30 min'
+soak_seconds = '8 h'
+midi_period = '20 ms'
+settle_seconds = '2 s'
+pressure_seconds = '20 s'
+pressure_bursts = 200

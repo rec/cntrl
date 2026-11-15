@@ -1,0 +1,14 @@
+# Continue after the initial run passed connections and serial-only traffic.
+# Its mixed-stage failure was setup-reset traffic entering the next comparison.
+# Use the corrected handoff capture while retaining those earlier results.
+target_export = '../../../../../build/usb-reliability-target'
+serial = '14468280'
+hub = 'USB2.0 Hub@00100000, port 3 (USB location 0-1.3); unchanged during this run'
+cable = 'Current USB cable to pedal 14468280; unchanged during this run'
+stages = ['mixed', 'soak', 'pressure']
+mixed_seconds = '30 min'
+soak_seconds = '8 h'
+midi_period = '20 ms'
+settle_seconds = '2 s'
+pressure_seconds = '20 s'
+pressure_bursts = 200

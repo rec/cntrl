@@ -1,0 +1,7 @@
+# Separate from runtime testing: this deliberately flashes and resets the pedal.
+target_export = '../../../../../build/usb-reliability-target'
+serial = '14468280'
+hub = 'UNRECORDED'
+cable = 'UNRECORDED'
+stages = ['upload']
+upload_cycles = 3

@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import time
+from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -282,7 +283,11 @@ def run_setup(
     | backups.Convert
     | backups.Recover
     | setup_sync.Sync,
+    *,
+    connection: transport.SerialConnection | None = None,
 ) -> None:
+    if connection is not None and not isinstance(command, Copy):
+        raise ValueError('a supplied setup connection is supported for Copy only')
     if isinstance(command, setup_sync.Sync):
         setup_sync.run(command)
         return
@@ -333,7 +338,11 @@ def run_setup(
         else None
     )
     midi = midi_assets.collect(bundle.setups, trace.files) if bundle is not None else {}
-    with transport.SerialConnection(command.port) as connection:
+    with (
+        nullcontext(connection)
+        if connection is not None
+        else transport.SerialConnection(command.port) as connection
+    ):
         client = transport.SetupClient(connection)
         if isinstance(command, Set):
             if command.name is not None:

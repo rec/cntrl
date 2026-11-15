@@ -1,0 +1,14 @@
+# Paths are relative to this profile. Use an export matching the installed firmware.
+target_export = '../../../../../build/usb-reliability-target'
+serial = '14468280'
+hub = 'UNRECORDED'
+cable = 'UNRECORDED'
+stages = ['connections', 'serial', 'mixed', 'soak', 'pressure']
+connection_cycles = 100
+serial_seconds = '30 min'
+mixed_seconds = '30 min'
+soak_seconds = '8 h'
+midi_period = '20 ms'
+settle_seconds = '2 s'
+pressure_seconds = '20 s'
+pressure_bursts = 200

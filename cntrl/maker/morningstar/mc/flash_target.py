@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
+from contextlib import nullcontext
 from importlib.metadata import version
 from pathlib import Path
 
@@ -39,7 +41,13 @@ class Flash(BaseModel, frozen=True):
     prepare_only: bool = False
 
 
-def run(command: Flash) -> None:
+def run(
+    command: Flash,
+    *,
+    connection_factory: Callable[[Path], transport.SerialConnection] | None = None,
+) -> None:
+    if connection_factory is not None and (command.first_install or command.legacy_usb):
+        raise ValueError('recorded connections require an existing cntrl installation')
     directory = command.directory.resolve()
     if directory.exists():
         raise ValueError(
@@ -155,11 +163,16 @@ def run(command: Flash) -> None:
                 uploader=ready.uploader, uploader_sha256=ready.uploader_sha256
             )
             before = directory / 'before'
-            backups.backup_pedal(
-                before,
-                port,
-                legacy_usb.Connection(port, timeout=5) if command.legacy_usb else None,
-            )
+            with (
+                connection_factory(port)
+                if connection_factory is not None
+                else nullcontext(
+                    legacy_usb.Connection(port, timeout=5)
+                    if command.legacy_usb
+                    else None
+                )
+            ) as connection:
+                backups.backup_pedal(before, port, connection)
             status = (before / 'status.txt').read_text()
             fields = dict(p.split('=', 1) for p in status.split() if '=' in p)
             if fields.get('model', 'mc6-pro') != 'mc6-pro':
@@ -189,9 +202,20 @@ def run(command: Flash) -> None:
                 )
             install_starter(directory, port)
         else:
-            backups.restore_setups(restore, port, target)
-            backups.verify_after_flashing(restore, port, target)
-        with transport.SerialConnection(port) as connection:
+            with (
+                connection_factory(port)
+                if connection_factory is not None
+                else nullcontext(None)
+            ) as connection:
+                backups.restore_setups(restore, port, target, connection=connection)
+                backups.verify_after_flashing(
+                    restore, port, target, connection=connection
+                )
+        with (
+            connection_factory(port)
+            if connection_factory is not None
+            else transport.SerialConnection(port)
+        ) as connection:
             status = transport.SetupClient(connection).request('CNTRL STATUS')
         fields = dict(p.split('=', 1) for p in status.split() if '=' in p)
         if (

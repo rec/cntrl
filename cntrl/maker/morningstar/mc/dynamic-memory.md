@@ -1258,6 +1258,13 @@ and selection, all 15 history revisions, assets and songs unchanged:
 
 ## Physical qualification procedure
 
+The supervised, profile-driven runtime soak and separate uploader trial are
+documented in [usb-reliability.md](usb-reliability.md). `--reliability PROFILE`
+previews without accessing hardware; `--run` is required for live execution.
+The new harness has offline coverage for policy, capture and stuck workers.
+Its connection cycles, hour-long mixed traffic, overnight soak and held-release
+pressure test remain physically unqualified until the pedal is exclusively free.
+
 Use `uv run --frozen --no-editable cntrl qualify --target-dir cntrl/maker/morningstar/mc`
 to discover the MIDI endpoints. Target options follow `--`. The DIN output must
 connect to the DIN input for the forwarding checks below.

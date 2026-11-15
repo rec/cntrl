@@ -7,6 +7,7 @@ import struct
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from difflib import SequenceMatcher
 from enum import StrEnum, auto
 from pathlib import Path
@@ -73,9 +74,29 @@ class Options(BaseModel, frozen=True):
     """Probe without opening serial. Requires already-enabled MIDI forwarding."""
     report: Path | None = None
     """Save serial inspection or before/after run diagnostics as TOML."""
+    reliability: Path | None = None
+    """Preview a reliability profile; add --run to access the pedal."""
 
     @model_validator(mode='after')
     def stress_run(self) -> 'Options':
+        if self.reliability is not None and (
+            self.report is None
+            or self.inspect
+            or self.updater_info
+            or self.watchdog_test
+            or self.analyze_report is not None
+            or self.trace_build is not None
+            or self.probe_short_messages
+            or self.midi_only
+            or self.observe_seconds
+            or self.stress_seconds
+            or self.stress_bursts is not None
+            or self.destination
+            or self.source
+            or self.expect_enabled
+            or self.port != Path('/dev/cu.usbmodem144682801')
+        ):
+            raise ValueError('reliability requires --report and uses profile settings')
         if self.observe_seconds < 0 or (self.observe_seconds and not self.source):
             raise ValueError('observe-seconds requires a positive duration and source')
         if self.trace_build is not None and not (
@@ -150,6 +171,46 @@ def note_lifecycle() -> bytes:
         + releases
         + b''.join(bytes((0xB0 | c, 64, 0)) for c in range(2))
     )
+
+
+def short_messages() -> list[bytes]:
+    return [bytes((0xC0 | i % 16, i)) for i in range(128)] + [
+        bytes((0xB0 | i, 1, 0)) for i in range(16)
+    ]
+
+
+def stress_traffic(
+    midi: Midi,
+    peers: list[int],
+    messages: bytes,
+    seconds: float,
+    bursts: int | None,
+    after_burst: Callable[[int], None] | None = None,
+) -> dict[str, int | float]:
+    begin = time.monotonic()
+    deadline = begin + seconds
+    sending_finished = begin
+    calls = 0
+    while time.monotonic() < deadline:
+        if bursts is None or calls < bursts:
+            for p in peers:
+                midi.send(p, messages)
+            calls += 1
+            if after_burst is not None:
+                after_burst(calls)
+            sending_finished = time.monotonic()
+        time.sleep(0.001)
+    time.sleep(0.5)
+    finished = time.monotonic()
+    return {
+        'bursts': calls,
+        'outputs': len(peers),
+        'sent_bytes': calls * len(peers) * len(messages),
+        'received_bytes': len(midi.data),
+        'sending_seconds': sending_finished - begin,
+        'observation_seconds': finished - sending_finished,
+        'elapsed_seconds': finished - begin,
+    }
 
 
 def analyze_report(source: Path) -> dict[str, object]:
@@ -267,7 +328,7 @@ def capture_transport(options: Options) -> None:
         raise ValueError(str(result['transport_error']))
 
 
-def diagnostics(client: SetupClient) -> dict[str, str]:
+def diagnostics(client: SetupClient, *, quiet: bool = False) -> dict[str, str]:
     result: dict[str, str] = {}
     for name, command in (
         ('device', 'CNTRL STATUS'),
@@ -283,7 +344,8 @@ def diagnostics(client: SetupClient) -> dict[str, str]:
             if str(error) not in ('CNTRL ERROR invalid-command', 'CNTRL ERROR busy'):
                 raise
             result[name] = str(error)
-        print(f'{name}: {result[name]}', flush=True)
+        if not quiet:
+            print(f'{name}: {result[name]}', flush=True)
     route = 0
     while True:
         try:
@@ -292,7 +354,8 @@ def diagnostics(client: SetupClient) -> dict[str, str]:
             if str(error) != 'CNTRL ERROR midi-route':
                 raise
             break
-        print(result[f'route_{route}'], flush=True)
+        if not quiet:
+            print(result[f'route_{route}'], flush=True)
         route += 1
     return result
 
@@ -456,8 +519,7 @@ def probe_short_messages(
     selected: Trial | None = None,
 ) -> list[dict[str, object]]:
     """Retain unsolicited traffic separately from each controlled wire trial."""
-    messages = [bytes((0xC0 | i % 16, i)) for i in range(128)]
-    messages.extend(bytes((0xB0 | i, 1, 0)) for i in range(16))
+    messages = short_messages()
     sysex = b'\xf0\x7d' + bytes(i % 128 for i in range(4096)) + b'\xf7'
     notes = note_lifecycle()
     trials: list[dict[str, object]] = []
@@ -514,19 +576,7 @@ def run_message_probe(
     path: Path | None,
     selected: Trial | None = None,
 ) -> None:
-    time.sleep(1)
-    startup = bytes(midi.data)
-    report['startup'] = {
-        'settle_seconds': 1,
-        'received_hex': startup.hex(),
-        'ignored_hex': startup.hex() if startup == b'\xf0\xf7' else '',
-    }
-    save_report(path, report)
-    if startup not in (b'', b'\xf0\xf7'):
-        raise ValueError(
-            'Unexpected MIDI during connection startup; see captured bytes'
-        )
-    del midi.data[: len(startup)]
+    capture_startup(midi, report, path)
     report['host_loopback'] = host = probe_virtual_source(midi)
     if client is None and not host['matches']:
         save_report(path, report)
@@ -540,7 +590,28 @@ def run_message_probe(
         raise ValueError('Probe mismatch; see trial bytes and available counters')
 
 
+def capture_startup(midi: Midi, report: dict[str, object], path: Path | None) -> None:
+    time.sleep(1)
+    startup = bytes(midi.data)
+    report['startup'] = {
+        'settle_seconds': 1,
+        'received_hex': startup.hex(),
+        'ignored_hex': startup.hex() if startup == b'\xf0\xf7' else '',
+    }
+    save_report(path, report)
+    if startup not in (b'', b'\xf0\xf7'):
+        raise ValueError(
+            'Unexpected MIDI during connection startup; see captured bytes'
+        )
+    del midi.data[: len(startup)]
+
+
 def run(options: Options) -> None:
+    if options.reliability is not None:
+        from .usb_reliability import run_reliability
+
+        run_reliability(options.reliability, options.report, execute=options.run)
+        return
     if options.updater_info:
         updater = upload_helper.updater_path()
         result = subprocess.run(
@@ -765,8 +836,7 @@ def run(options: Options) -> None:
                     )
                     return
                 # Program changes and benign modulation controls, not note events.
-                messages = b''.join(bytes((0xC0 | i % 16, i)) for i in range(128))
-                messages += b''.join(bytes((0xB0 | i, 1, 0)) for i in range(16))
+                messages = b''.join(short_messages())
                 if options.stress_only:
                     report['byte_checks'] = 'skipped'
                     print(
@@ -855,34 +925,18 @@ def run(options: Options) -> None:
                     save_report(options.report, report)
                     client.ok('CNTRL MIDI RESET')
                     midi.data.clear()
-                    begin = time.monotonic()
-                    deadline = begin + options.stress_seconds
-                    sending_finished = begin
-                    calls = 0
-                    while time.monotonic() < deadline:
-                        if (
-                            options.stress_bursts is None
-                            or calls < options.stress_bursts
-                        ):
-                            for p in peers:
-                                midi.send(p, messages)
-                            calls += 1
-                            sending_finished = time.monotonic()
-                        time.sleep(0.001)
-                    time.sleep(0.5)
-                    finished = time.monotonic()
-                    print(
-                        f'Overload: {calls} bursts to {len(peers)} outputs', flush=True
+                    stress = stress_traffic(
+                        midi,
+                        peers,
+                        messages,
+                        options.stress_seconds,
+                        options.stress_bursts,
                     )
-                    report['stress'] = {
-                        'bursts': calls,
-                        'outputs': len(peers),
-                        'sent_bytes': calls * len(peers) * len(messages),
-                        'received_bytes': len(midi.data),
-                        'sending_seconds': sending_finished - begin,
-                        'observation_seconds': finished - sending_finished,
-                        'elapsed_seconds': finished - begin,
-                    }
+                    report['stress'] = stress
+                    print(
+                        f'Overload: {stress["bursts"]} bursts to {len(peers)} outputs',
+                        flush=True,
+                    )
                     report['stress_timing'] = client.request('CNTRL MIDI STATUS 0')
             finally:
                 if armed and connection.serial is not None:

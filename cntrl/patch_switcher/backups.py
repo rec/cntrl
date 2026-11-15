@@ -488,6 +488,7 @@ def restore_setups(
     target: models.Target,
     *,
     preserve_memory_estimates: bool = False,
+    connection: transport.SerialConnection | None = None,
 ) -> None:
     check_conversion(directory)
     minimum_starts = recording_high_water(directory)
@@ -541,7 +542,11 @@ def restore_setups(
     )
     if selected and selected not in setups:
         raise ValueError(f'{selected}: saved selection is absent from the backup')
-    with transport.SerialConnection(port) as connection:
+    with (
+        nullcontext(connection)
+        if connection is not None
+        else transport.SerialConnection(port) as connection
+    ):
         client = transport.SetupClient(connection)
         active_ready = client.recover_deployment()
         recovery = (
@@ -717,6 +722,7 @@ def verify_after_flashing(
     target: models.Target,
     *,
     preserve_memory_estimates: bool = False,
+    connection: transport.SerialConnection | None = None,
 ) -> None:
     check_conversion(directory)
     selected = (directory / 'selected.txt').read_bytes().decode()
@@ -740,7 +746,11 @@ def verify_after_flashing(
         target=target,
         preserve_memory_estimates=preserve_memory_estimates,
     )
-    with transport.SerialConnection(port) as connection:
+    with (
+        nullcontext(connection)
+        if connection is not None
+        else transport.SerialConnection(port) as connection
+    ):
         client = transport.SetupClient(connection)
         status = client.request('CNTRL STATUS')
         parts = status.split()
