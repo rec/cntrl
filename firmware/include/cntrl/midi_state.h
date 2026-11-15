@@ -12,10 +12,25 @@ struct KeyPressureState {
     std::optional<uint8_t> pressure;
 };
 
-struct ControllerState {
-    uint8_t controller, value;
-    bool known = true;
+struct ControllerValues {
+    uint8_t values[128] = {}, known[16] = {};
+    int get(unsigned controller) const {
+        return controller < 128 && (known[controller / 8] & (1u << (controller % 8))) ? values[controller] : -1;
+    }
+    void set(unsigned controller, uint8_t value) {
+        if (controller >= 128) return;
+        values[controller] = value; known[controller / 8] |= uint8_t(1u << (controller % 8));
+    }
+    void invalidate(unsigned controller) {
+        if (controller < 128) known[controller / 8] &= uint8_t(~(1u << (controller % 8)));
+    }
+    void reset() { std::fill(std::begin(known),std::end(known),uint8_t(0)); }
+    void program_change() {
+        const uint8_t msb = known[0] & 1, lsb = known[4] & 1;
+        reset(); known[0] = msb; known[4] = lsb;
+    }
 };
+static_assert(sizeof(ControllerValues) == 144);
 
 struct ParameterState {
     uint16_t parameter;
@@ -27,7 +42,8 @@ struct ParameterState {
 struct ChannelState {
     uint8_t channel;
     CheckedList<KeyPressureState> key_pressures;
-    CheckedList<ControllerState> controllers;
+    // Zero or one table. Checked storage lets prepared writers lend the block.
+    CheckedList<ControllerValues> controllers;
     std::optional<uint8_t> program, pressure;
     std::optional<uint16_t> pitch_bend;
     std::optional<uint8_t> bank_msb, bank_lsb;
@@ -41,7 +57,7 @@ struct OutputState {
 };
 #if UINTPTR_MAX == UINT32_MAX
 static_assert(CheckedList<KeyPressureState>::node_size() == 24);
-static_assert(CheckedList<ControllerState>::node_size() == 24);
+static_assert(CheckedList<ControllerValues>::node_size() == 168);
 static_assert(CheckedList<ParameterState>::node_size() == 32);
 static_assert(CheckedList<ChannelState>::node_size() == 140);
 static_assert(CheckedList<OutputState>::node_size() == 60);
@@ -52,7 +68,7 @@ static_assert(CheckedList<OutputState>::node_size() == 60);
 class MidiState {
     struct Credits {
         CheckedList<KeyPressureState> key_pressures;
-        CheckedList<ControllerState> controllers;
+        CheckedList<ControllerValues> controllers;
         CheckedList<ParameterState> parameters;
         CheckedList<OutputState> outputs;
         CheckedList<ChannelState> channels;
@@ -95,9 +111,7 @@ public:
                 return coarse ? p.coarse ? *p.coarse : -1 : p.value ? *p.value : -1;
             return -1;
         }
-        for (const auto &v : c->controllers)
-            if (v.controller == control && v.known) return v.value;
-        return -1;
+        return c->controllers.empty() ? -1 : c->controllers.front().get(control);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_state_parameter_value)
@@ -122,12 +136,17 @@ public:
             }
         return Parameter::unknown;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_state_forget_parameter)
+#endif
     void forget_parameter(unsigned output, const Parameter &parameter) {
         for (auto &o : outputs) if (o.output == output)
             for (auto &c : o.channels) if (c.channel == parameter.channel) {
-                for (auto &v : c.controllers)
-                    if ((parameter.kind == Parameter::cc7 && v.controller == parameter.address)
-                        || (parameter.kind == Parameter::cc14 && (v.controller == parameter.address || v.controller == parameter.address + 32))) v.known = false;
+                if (!c.controllers.empty()) {
+                    if (parameter.kind == Parameter::cc7 || parameter.kind == Parameter::cc14)
+                        c.controllers.front().invalidate(parameter.address);
+                    if (parameter.kind == Parameter::cc14) c.controllers.front().invalidate(parameter.address + 32);
+                }
                 if (parameter.kind == Parameter::bend) c.pitch_known = false;
                 if (parameter.kind == Parameter::pressure) c.pressure.reset();
                 if (parameter.kind == Parameter::program) c.program.reset();
@@ -185,7 +204,7 @@ private:
         const unsigned kind = bytes[0] >> 4, channel = bytes[0] & 15;
         if (!requirement(*entry, output, 0, 0, 0) || !requirement(*entry, output, channel, 1, 0)) return false;
         if (kind == 10) return requirement(*entry, output, channel, 2, bytes[1]);
-        if (kind == 11) return requirement(*entry, output, channel, 3, bytes[1])
+        if (kind == 11) return requirement(*entry, output, channel, 3, 0)
             && (!generic_parameter || (bytes[1] != 6 && bytes[1] != 38) || requirement(*entry, output, channel, 4, 0));
         return true;
     }
@@ -211,8 +230,8 @@ private:
                         for (const auto &p : channel.key_pressures) if (p.note == r.address)
                             supplied = channel.key_pressures.borrowed_from(p,credit.key_pressures);
                     } else if (r.kind == 3) {
-                        for (const auto &p : channel.controllers) if (p.controller == r.address)
-                            supplied = channel.controllers.borrowed_from(p,credit.controllers);
+                        if (!channel.controllers.empty())
+                            supplied = channel.controllers.borrowed_from(channel.controllers.front(),credit.controllers);
                     } else if (r.kind == 5) {
                         for (const auto &p : channel.parameters) if (p.parameter == (r.address & 16383) && p.registered == (r.address >= 16384))
                             supplied = channel.parameters.borrowed_from(p,credit.parameters);
@@ -291,7 +310,7 @@ private:
         const unsigned old_outputs = credit.outputs.capacity(), old_channels = credit.channels.capacity();
         const unsigned old_notes = credit.key_pressures.capacity(), old_controllers = credit.controllers.capacity(), old_parameters = credit.parameters.capacity();
         const bool ready = credit.outputs.reserve(output_count) && credit.channels.reserve(output_count * channel_count)
-            && credit.key_pressures.reserve(keys) && credit.controllers.reserve(keys + 6 * output_count * channel_count)
+            && credit.key_pressures.reserve(keys) && credit.controllers.reserve(output_count * channel_count)
             && credit.parameters.reserve(keys);
         if (ready) {
             credit.active = true; credit.target_keys = std::max(credit.target_keys, keys);
@@ -316,7 +335,7 @@ private:
                 retired += list.trim(std::min(budget - retired, list.capacity() - target));
         };
         trim(credit.key_pressures, credit.target_keys);
-        trim(credit.controllers, credit.target_keys + 6 * credit.target_contexts);
+        trim(credit.controllers, credit.target_contexts);
         trim(credit.parameters, credit.target_keys);
         trim(credit.outputs, credit.target_outputs);
         trim(credit.channels, credit.target_contexts);
@@ -400,16 +419,13 @@ private:
         }
         bool ready = true;
         if (parameter) {
-            uint8_t missing[6] = {}; unsigned count = 0;
+            bool controllers = false;
             for (unsigned i = 0; i < parameter->messages(); ++i) {
                 uint8_t message[3] = {}; parameter->message(i, message);
                 if (message[0] >> 4 != 11) continue;
-                bool found = false;
-                for (const auto &entry : state->controllers) if (entry.controller == message[1]) found = true;
-                for (unsigned j = 0; j < count; ++j) if (missing[j] == message[1]) found = true;
-                if (!found) missing[count++] = message[1];
+                controllers = true;
             }
-            ready = obtain(state->controllers, credit.controllers, state->controllers.size() + count, protected_write);
+            ready = !controllers || !state->controllers.empty() || obtain(state->controllers, credit.controllers, 1, protected_write);
             if (parameter->kind == Parameter::nrpn7 || parameter->kind == Parameter::nrpn14 || parameter->kind == Parameter::rpn14) {
                 auto existing = std::find_if(state->parameters.begin(), state->parameters.end(), [&](const auto &entry) {
                     return entry.parameter == parameter->address && entry.registered == (parameter->kind == Parameter::rpn14);
@@ -425,9 +441,7 @@ private:
             auto n = std::find_if(state->key_pressures.begin(), state->key_pressures.end(), [&](const auto &v) { return v.note == bytes[1]; });
             ready = n != state->key_pressures.end() || obtain(state->key_pressures, credit.key_pressures, state->key_pressures.size() + 1, protected_write);
         } else if (kind == 11) {
-            auto v = std::find_if(state->controllers.begin(), state->controllers.end(), [&](const auto &s) { return s.controller == bytes[1]; });
-            ready = v != state->controllers.end() || obtain(state->controllers, credit.controllers, state->controllers.size() + 1, protected_write);
-            if (!ready && bytes[1] >= 120) ready = true;
+            ready = bytes[1] >= 120 || !state->controllers.empty() || obtain(state->controllers, credit.controllers, 1, protected_write);
             if (ready && (bytes[1] == 6 || bytes[1] == 38)) {
                 int hi = value(output, channel, state->nrpn ? 99 : 101), lo = value(output, channel, state->nrpn ? 98 : 100);
                 if (hi >= 0 && lo >= 0 && (hi != 127 || lo != 127)) {
@@ -493,35 +507,28 @@ private:
             if (controller == 121) {
                 // Reset values depend on the receiver. Invalidate affected state
                 // instead of claiming that the previous values still apply.
-                c->controllers.clear(); c->pressure.reset(); c->pitch_bend.reset();
+                if (!c->controllers.empty()) c->controllers.front().reset();
+                c->pressure.reset(); c->pitch_bend.reset();
                 for (auto &n : c->key_pressures) n.pressure.reset();
                 c->parameters.clear();
             }
-            auto &controllers = c->controllers;
-            auto v = std::find_if(controllers.begin(), controllers.end(), [controller](const auto &s) { return s.controller == controller; });
-            if (v == controllers.end()) {
-                if (controller >= 120 && controllers.size() == controllers.capacity()) return;
-                if (!controllers.append({bytes[1], bytes[2]})) return;
-            }
-            else { v->value = bytes[2]; v->known = true; }
+            if (c->controllers.empty() && (!c->controllers.capacity() || !c->controllers.append({}))) return;
+            auto &controllers = c->controllers.front();
+            controllers.set(controller,bytes[2]);
             if (controller == 99 || controller == 98 || controller == 101 || controller == 100) {
                 c->nrpn = controller == 99 || controller == 98;
-                for (auto &entry : controllers) if (entry.controller == 6 || entry.controller == 38) entry.known = false;
+                controllers.invalidate(6); controllers.invalidate(38);
             }
             if (controller == 96 || controller == 97) {
                 c->parameters.clear();
-                for (auto &entry : controllers) if (entry.controller == 6 || entry.controller == 38) entry.known = false;
+                controllers.invalidate(6); controllers.invalidate(38);
             }
             if (controller == 6 || controller == 38) {
                 int high = value(output, channel, c->nrpn ? 99 : 101), low = value(output, channel, c->nrpn ? 98 : 100);
                 if (high >= 0 && low >= 0 && (high != 127 || low != 127)) {
                     uint16_t parameter = uint16_t(high * 128 + low);
                     std::optional<uint16_t> data;
-                    int msb = -1, lsb = -1;
-                    for (const auto &entry : controllers) if (entry.known) {
-                        if (entry.controller == 6) msb = entry.value;
-                        if (entry.controller == 38) lsb = entry.value;
-                    }
+                    int msb = controllers.get(6), lsb = controllers.get(38);
                     if (msb >= 0 && lsb >= 0) data = uint16_t(msb * 128 + lsb);
                     auto p = std::find_if(c->parameters.begin(), c->parameters.end(), [&](const auto &v) { return v.parameter == parameter && v.registered == !c->nrpn; });
                     if (p == c->parameters.end()) {
@@ -537,7 +544,7 @@ private:
             c->bank_msb = msb >= 0 ? std::optional<uint8_t>(uint8_t(msb)) : std::nullopt;
             c->bank_lsb = lsb >= 0 ? std::optional<uint8_t>(uint8_t(lsb)) : std::nullopt;
             c->program = bytes[1]; c->parameters.clear(); c->pitch_known = false;
-            for (auto &entry : c->controllers) entry.known = entry.controller == 0 || entry.controller == 32;
+            if (!c->controllers.empty()) c->controllers.front().program_change();
         }
         else if (kind == 13) c->pressure = bytes[1];
         else { c->pitch_bend = uint16_t(bytes[1] | unsigned(bytes[2]) << 7); c->pitch_known = true; }

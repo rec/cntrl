@@ -71,13 +71,53 @@ void arming_does_not_lose_a_preexisting_live_note_owner() {
 }
 
 void failed_playback_reservation_returns_all_new_memory() {
-    for (int failure = 0; failure < 17; ++failure) {
+    bool admitted = false;
+    for (int failure = 0; failure < 32 && !admitted; ++failure) {
         Output out; const unsigned before = cntrl::memory_used;
         cntrl::memory_fail_after = failure;
-        assert(!out.reserve_playback_state(3, 1, 1));
-        assert(cntrl::memory_used == before);
+        admitted = out.reserve_playback_state(3, 1, 1);
+        if (!admitted) assert(cntrl::memory_used == before);
         cntrl::memory_fail_after = -1;
     }
+    assert(admitted);
+}
+
+void controller_bits_preserve_unknown_values_and_reuse_channel_storage() {
+    Output out;
+    assert(out.submit(0,{14,{0xe0,0,64}}));
+    const unsigned failures = cntrl::memory_failures;
+    cntrl::memory_fail_after = 0;
+    assert(out.submit(0,{11,{0xb0,121,0}}));
+    assert(out.state().value(0,0,121) == -1 && cntrl::memory_failures == failures);
+    cntrl::memory_fail_after = -1;
+    const unsigned before = cntrl::memory_used;
+    assert(out.state().value(0,0,7) == -1);
+    assert(out.submit(0,{11,{0xb0,7,0}}));
+    assert(cntrl::memory_used > before && out.state().value(0,0,7) == 0);
+    out.writable = false;
+    assert(!out.submit(0,{11,{0xb0,8,90}}) && out.state().value(0,0,8) == -1);
+    out.writable = true;
+    const unsigned allocations = cntrl::memory_allocations;
+    cntrl::memory_fail_after = 0;
+    const uint8_t controls[] = {0,8,15,16,31,32,33,63,70,95,102,119};
+    for (uint8_t control : controls) {
+        assert(out.state().value(0,0,control) == -1);
+        assert(out.submit(0,{11,{0xb0,control,control}}));
+        assert(out.state().value(0,0,control) == control);
+    }
+    assert(out.state().value(0,0,127) == -1);
+    assert(out.submit(0,{12,{0xc0,3,0}}));
+    assert(out.state().value(0,0,0) == 0 && out.state().value(0,0,32) == 32);
+    assert(out.state().value(0,0,7) == -1 && out.state().value(0,0,119) == -1);
+    assert(out.submit(0,{11,{0xb0,119,0}}));
+    assert(out.state().value(0,0,119) == 0);
+    assert(out.submit(0,{11,{0xb0,121,0}}));
+    assert(out.state().value(0,0,0) == -1 && out.state().value(0,0,119) == -1);
+    assert(out.submit(0,{11,{0xb0,8,127}}));
+    assert(out.state().value(0,0,8) == 127);
+    assert(out.submit(0,{11,{0xb0,127,0}}));
+    assert(out.state().value(0,0,127) == 0 && cntrl::memory_allocations == allocations);
+    cntrl::memory_fail_after = -1;
 }
 
 void exact_loop_admission_reuses_existing_destination_records() {
@@ -120,13 +160,13 @@ void test_sparse_state_follows_successful_delivery() {
     assert(output.output == 5 && output.channels.size() == 1);
     const auto &channel = output.channels.front();
     assert(channel.channel == 3 && channel.key_pressures.empty());
-    assert(channel.controllers.size() == 1 && channel.controllers[0].value == 90);
+    assert(out.state().value(5,3,7) == 90);
     assert(!channel.program && !channel.pressure && !channel.pitch_bend);
     out.submit(5, {11, {0xb3, 7, 0}});
-    assert(channel.controllers.size() == 1 && channel.controllers[0].value == 0);
+    assert(out.state().value(5,3,7) == 0);
     out.writable = false;
     assert(!out.submit(5, {11, {0xb3, 7, 100}}));
-    assert(channel.controllers[0].value == 0);
+    assert(out.state().value(5,3,7) == 0);
 }
 
 void test_notes_and_pressure_are_sparse() {
@@ -185,7 +225,7 @@ void test_channel_modes_clear_affected_state() {
     out.submit(0, {11, {0xb0, 121, 0}});
     const auto &channel = out.state().outputs[0].channels[0];
     assert(channel.program == 12 && !channel.pressure && !channel.pitch_bend);
-    assert(channel.controllers.size() == 1 && channel.controllers[0].controller == 121);
+    assert(out.state().value(0,0,7) == -1 && out.state().value(0,0,121) == 0);
     assert(channel.key_pressures.size() == 1 && !channel.key_pressures[0].pressure);
     assert(out.notes_active());
     for (uint8_t mode : std::initializer_list<uint8_t>{120, 123, 124, 125, 126, 127}) {
@@ -208,7 +248,7 @@ void test_bridge_clients_get_tracking_without_recording_state() {
     for (unsigned i = 0; i < 2; ++i) bridge.service(out, 0);
     assert(out.state().outputs.size() == 1);
     const auto &channel = out.state().outputs[0].channels[0];
-    assert(channel.controllers[0].value == 90 && channel.program == 12);
+    assert(out.state().value(0,0,7) == -1 && channel.program == 12);
     bridge.forward_packet(0, {9, {0x90, 60, 100}}, 0); bridge.service(out, 0);
     assert(out.notes_active() && channel.key_pressures.empty());
 }
@@ -246,6 +286,7 @@ int main() {
     playback_credits_survive_live_memory_pressure_and_recycle();
     arming_does_not_lose_a_preexisting_live_note_owner();
     failed_playback_reservation_returns_all_new_memory();
+    controller_bits_preserve_unknown_values_and_reuse_channel_storage();
     test_sparse_state_follows_successful_delivery();
     test_notes_and_pressure_are_sparse();
     test_outputs_and_channels_keep_independent_values();
