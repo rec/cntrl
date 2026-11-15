@@ -5,6 +5,7 @@
 "test/test_arpeggiator.cpp" = []
 "test/test_text_messages.cpp" = []
 "test/test_midi_pickup.cpp" = []
+"test/test_midi_loop_reset.cpp" = []
 "test/test_midi_monitor.cpp" = []
 "test/test_counters.cpp" = ["test/counters.golden"]
 "test/test_buttons.cpp" = []

@@ -570,19 +570,15 @@ public:
     FLASHMEM bool heap_diagnostic_ready() {
         auto &streams = midi_runtime_.streams();
         const auto loop = midi_files.looper.state();
-        if (configuration_locked() || documents.busy() || !output_idle() || loop_cleaning()
+        if (configuration_locked() || documents.busy() || !output_idle() || loop_cleaning() || loop_control_reset_pending()
             || midi_files.player.active() || midi_files.player.cleaning() || midi_files.recorder.active()
             || (loop != cntrl::midi::MidiLooper::State::empty && loop != cntrl::midi::MidiLooper::State::stopped)
             || arpeggiator().state() != cntrl::midi::MidiArpeggiator::State::stopped
             || ui_.pages_.generator.running() || streams.pending() || streams.voices() || streams.recovery()
             || streams.clock_outputs() || streams.lfo_status().running) return false;
-        for (const auto &output : cntrl::midi::Sink::state().outputs)
-            for (const auto &channel : output.channels) {
-                for (const auto &note : channel.notes) if (note.velocity && *note.velocity) return false;
-                for (const auto &control : channel.controllers)
-                    if (control.known && (control.controller == 64 || control.controller == 66) && control.value >= 64) return false;
-            }
-        return true;
+        bool active = false;
+        each_source([&](unsigned) { active = true; });
+        return !active;
     }
     void scanned(uint32_t gap) { midi_runtime_.scanned(gap); }
 #ifdef CNTRL_DIAGNOSTICS

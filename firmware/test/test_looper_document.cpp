@@ -32,6 +32,8 @@ int main(int argc, char **argv) {
     Hardware hardware; cntrl::Document document;
     assert(document.load(data.data(),unsigned(data.size()),hardware));
     const auto *settings = document.looper_settings(); assert(settings);
+    const auto *reset = document.loop_stop_settings();
+    assert(reset && reset[4] == 1 && cntrl::u16(reset + 5) == 2);
     unsigned meta = 76 + cntrl::u16(data.data() + 12) * 68 + cntrl::u16(data.data() + 14) * 68 + cntrl::u16(data.data() + 16) * 82;
     assert(document.page_ram2() == cntrl::u32(data.data() + meta + cntrl::scrolling_offset + 8));
     assert(cntrl::u16(settings + 12) == 512 && cntrl::u16(settings + 6) == 3);
@@ -60,6 +62,11 @@ int main(int argc, char **argv) {
     }
     unsigned config = unsigned(settings - data.data());
     auto valid = data;
+    const unsigned reset_config = unsigned(reset - data.data());
+    data[reset_config + 4] = 2;
+    cntrl::put32(data.data() + 20,cntrl::checksum(data.data() + 28,unsigned(data.size()) - 28));
+    assert(!document.load(data.data(),unsigned(data.size()),hardware));
+    data = valid;
     data[config + 4] = 2;
     cntrl::put32(data.data() + 20,cntrl::checksum(data.data() + 28,unsigned(data.size()) - 28));
     assert(!document.load(data.data(),unsigned(data.size()),hardware));

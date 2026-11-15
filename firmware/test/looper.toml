@@ -1,4 +1,9 @@
 fill_in_styles = false
+loop_stop_reset_controls = true
+loop_stop_neutral_values = [
+    {type = 'control-change', output = 'din', channel = 1, controller = 10, value = 64},
+    {type = 'nrpn', output = 'din', channel = 2, parameter = 42, value = 8192},
+]
 
 [pages.clock]
 type = 'clock-transport'

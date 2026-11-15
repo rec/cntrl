@@ -7,9 +7,9 @@
 #include "midi_parameter.h"
 
 namespace cntrl::midi {
-struct NoteState {
+struct KeyPressureState {
     uint8_t note;
-    std::optional<uint8_t> velocity, pressure;
+    std::optional<uint8_t> pressure;
 };
 
 struct ControllerState {
@@ -26,7 +26,7 @@ struct ParameterState {
 
 struct ChannelState {
     uint8_t channel;
-    CheckedList<NoteState> notes;
+    CheckedList<KeyPressureState> key_pressures;
     CheckedList<ControllerState> controllers;
     std::optional<uint8_t> program, pressure;
     std::optional<uint16_t> pitch_bend;
@@ -40,7 +40,7 @@ struct OutputState {
     CheckedList<ChannelState> channels;
 };
 #if UINTPTR_MAX == UINT32_MAX
-static_assert(CheckedList<NoteState>::node_size() == 28);
+static_assert(CheckedList<KeyPressureState>::node_size() == 24);
 static_assert(CheckedList<ControllerState>::node_size() == 24);
 static_assert(CheckedList<ParameterState>::node_size() == 32);
 static_assert(CheckedList<ChannelState>::node_size() == 140);
@@ -51,7 +51,7 @@ static_assert(CheckedList<OutputState>::node_size() == 60);
 // Channel numbers are zero based, as they are in MIDI status bytes.
 class MidiState {
     struct Credits {
-        CheckedList<NoteState> notes;
+        CheckedList<KeyPressureState> key_pressures;
         CheckedList<ControllerState> controllers;
         CheckedList<ParameterState> parameters;
         CheckedList<OutputState> outputs;
@@ -114,7 +114,7 @@ public:
                 if (parameter.kind == Parameter::pressure) return c.pressure ? *c.pressure : Parameter::unknown;
                 if (parameter.kind == Parameter::program) return c.program ? *c.program + 1 : Parameter::unknown;
                 if (parameter.kind == Parameter::key_pressure) {
-                    for (const auto &n : c.notes) if (n.note == parameter.address) return n.pressure ? *n.pressure : Parameter::unknown;
+                    for (const auto &n : c.key_pressures) if (n.note == parameter.address) return n.pressure ? *n.pressure : Parameter::unknown;
                     return Parameter::unknown;
                 }
                 for (const auto &p : c.parameters) if (p.parameter == parameter.address && p.registered == (parameter.kind == Parameter::rpn14))
@@ -131,7 +131,7 @@ public:
                 if (parameter.kind == Parameter::bend) c.pitch_known = false;
                 if (parameter.kind == Parameter::pressure) c.pressure.reset();
                 if (parameter.kind == Parameter::program) c.program.reset();
-                if (parameter.kind == Parameter::key_pressure) for (auto &n : c.notes) if (n.note == parameter.address) n.pressure.reset();
+                if (parameter.kind == Parameter::key_pressure) for (auto &n : c.key_pressures) if (n.note == parameter.address) n.pressure.reset();
                 if (parameter.kind == Parameter::nrpn7 || parameter.kind == Parameter::nrpn14 || parameter.kind == Parameter::rpn14)
                     for (auto &p : c.parameters) if (p.parameter == parameter.address && p.registered == (parameter.kind == Parameter::rpn14)) { p.value.reset(); p.coarse.reset(); }
                 ++revision_;
@@ -180,10 +180,11 @@ private:
     }
     bool require_packet(const void *identity, unsigned owner, unsigned output, const uint8_t *bytes, unsigned size, bool generic_parameter) {
         if (!size || bytes[0] < 0x80 || bytes[0] >= 0xf0) return true;
+        if (bytes[0] >> 4 == 8 || bytes[0] >> 4 == 9) return true;
         auto *entry = owner_state(identity, owner, true); if (!entry) return false;
         const unsigned kind = bytes[0] >> 4, channel = bytes[0] & 15;
         if (!requirement(*entry, output, 0, 0, 0) || !requirement(*entry, output, channel, 1, 0)) return false;
-        if ((kind == 9 && bytes[2]) || kind == 10) return requirement(*entry, output, channel, 2, bytes[1]);
+        if (kind == 10) return requirement(*entry, output, channel, 2, bytes[1]);
         if (kind == 11) return requirement(*entry, output, channel, 3, bytes[1])
             && (!generic_parameter || (bytes[1] != 6 && bytes[1] != 38) || requirement(*entry, output, channel, 4, 0));
         return true;
@@ -199,13 +200,35 @@ private:
         if (!entry.credit && !entry.credit.create()) return false;
         auto &credit = *entry.credit;
         unsigned counts[5] = {};
-        for (const auto &r : entry.requirements) ++counts[r.kind >= 4 ? 4 : r.kind];
-        const unsigned previous[] = {credit.outputs.capacity(), credit.channels.capacity(), credit.notes.capacity(), credit.controllers.capacity(), credit.parameters.capacity()};
+        for (const auto &r : entry.requirements) {
+            const unsigned kind = r.kind >= 4 ? 4 : r.kind;
+            bool supplied = false;
+            for (const auto &output : outputs) if (output.output == r.output) {
+                if (r.kind == 0) { supplied = outputs.borrowed_from(output,credit.outputs); break; }
+                for (const auto &channel : output.channels) if (channel.channel == r.channel) {
+                    if (r.kind == 1) supplied = output.channels.borrowed_from(channel,credit.channels);
+                    else if (r.kind == 2) {
+                        for (const auto &p : channel.key_pressures) if (p.note == r.address)
+                            supplied = channel.key_pressures.borrowed_from(p,credit.key_pressures);
+                    } else if (r.kind == 3) {
+                        for (const auto &p : channel.controllers) if (p.controller == r.address)
+                            supplied = channel.controllers.borrowed_from(p,credit.controllers);
+                    } else if (r.kind == 5) {
+                        for (const auto &p : channel.parameters) if (p.parameter == (r.address & 16383) && p.registered == (r.address >= 16384))
+                            supplied = channel.parameters.borrowed_from(p,credit.parameters);
+                    }
+                    break;
+                }
+                break;
+            }
+            if (!supplied) ++counts[kind];
+        }
+        const unsigned previous[] = {credit.outputs.capacity(), credit.channels.capacity(), credit.key_pressures.capacity(), credit.controllers.capacity(), credit.parameters.capacity()};
         const bool ready = credit.outputs.reserve(counts[0]) && credit.channels.reserve(counts[1])
-            && credit.notes.reserve(counts[2]) && credit.controllers.reserve(counts[3]) && credit.parameters.reserve(counts[4]);
+            && credit.key_pressures.reserve(counts[2]) && credit.controllers.reserve(counts[3]) && credit.parameters.reserve(counts[4]);
         if (!ready) {
             credit.outputs.trim(credit.outputs.capacity() - previous[0]); credit.channels.trim(credit.channels.capacity() - previous[1]);
-            credit.notes.trim(credit.notes.capacity() - previous[2]); credit.controllers.trim(credit.controllers.capacity() - previous[3]);
+            credit.key_pressures.trim(credit.key_pressures.capacity() - previous[2]); credit.controllers.trim(credit.controllers.capacity() - previous[3]);
             credit.parameters.trim(credit.parameters.capacity() - previous[4]); return false;
         }
         credit.active = true;
@@ -266,9 +289,9 @@ private:
         for (unsigned mask = output_mask; mask; mask >>= 1) output_count += mask & 1;
         for (unsigned mask = channels; mask; mask >>= 1) channel_count += mask & 1;
         const unsigned old_outputs = credit.outputs.capacity(), old_channels = credit.channels.capacity();
-        const unsigned old_notes = credit.notes.capacity(), old_controllers = credit.controllers.capacity(), old_parameters = credit.parameters.capacity();
+        const unsigned old_notes = credit.key_pressures.capacity(), old_controllers = credit.controllers.capacity(), old_parameters = credit.parameters.capacity();
         const bool ready = credit.outputs.reserve(output_count) && credit.channels.reserve(output_count * channel_count)
-            && credit.notes.reserve(keys) && credit.controllers.reserve(keys + 6 * output_count * channel_count)
+            && credit.key_pressures.reserve(keys) && credit.controllers.reserve(keys + 6 * output_count * channel_count)
             && credit.parameters.reserve(keys);
         if (ready) {
             credit.active = true; credit.target_keys = std::max(credit.target_keys, keys);
@@ -277,7 +300,7 @@ private:
         }
         else {
             credit.outputs.trim(credit.outputs.capacity() - old_outputs); credit.channels.trim(credit.channels.capacity() - old_channels);
-            credit.notes.trim(credit.notes.capacity() - old_notes); credit.controllers.trim(credit.controllers.capacity() - old_controllers);
+            credit.key_pressures.trim(credit.key_pressures.capacity() - old_notes); credit.controllers.trim(credit.controllers.capacity() - old_controllers);
             credit.parameters.trim(credit.parameters.capacity() - old_parameters);
         }
         return ready;
@@ -292,7 +315,7 @@ private:
             if (list.capacity() > target && retired < budget)
                 retired += list.trim(std::min(budget - retired, list.capacity() - target));
         };
-        trim(credit.notes, credit.target_keys);
+        trim(credit.key_pressures, credit.target_keys);
         trim(credit.controllers, credit.target_keys + 6 * credit.target_contexts);
         trim(credit.parameters, credit.target_keys);
         trim(credit.outputs, credit.target_outputs);
@@ -308,9 +331,9 @@ private:
             if (entry.credit) {
                 auto &c = *entry.credit;
                 auto trim = [&](auto &list) { if (retired < budget) retired += list.trim(budget - retired); };
-                trim(c.notes); trim(c.controllers); trim(c.parameters); trim(c.channels); trim(c.outputs);
-                if (c.notes.loans() || c.controllers.loans() || c.parameters.loans() || c.channels.loans() || c.outputs.loans()
-                    || c.notes.capacity() || c.controllers.capacity() || c.parameters.capacity() || c.channels.capacity() || c.outputs.capacity()) { ++i; continue; }
+                trim(c.key_pressures); trim(c.controllers); trim(c.parameters); trim(c.channels); trim(c.outputs);
+                if (c.key_pressures.loans() || c.controllers.loans() || c.parameters.loans() || c.channels.loans() || c.outputs.loans()
+                    || c.key_pressures.capacity() || c.controllers.capacity() || c.parameters.capacity() || c.channels.capacity() || c.outputs.capacity()) { ++i; continue; }
                 entry.credit.reset(); ++retired;
             }
             if (retired < budget) retired += entry.requirements.trim(budget - retired);
@@ -327,7 +350,7 @@ private:
     }
     void return_unused() {
         for (auto &o : outputs) {
-            for (auto &c : o.channels) { c.notes.return_reserved(); c.controllers.return_reserved(); c.parameters.return_reserved(); }
+            for (auto &c : o.channels) { c.key_pressures.return_reserved(); c.controllers.return_reserved(); c.parameters.return_reserved(); }
             o.channels.return_reserved();
         }
         outputs.return_reserved();
@@ -344,6 +367,7 @@ private:
     }
     bool prepare(unsigned output, const uint8_t *bytes, unsigned size, const Parameter *parameter = nullptr, unsigned kind_of_write = 2, const void *identity = nullptr, unsigned owner = 0) {
         finish_preparation(false);
+        if (size && (bytes[0] >> 4 == 8 || bytes[0] >> 4 == 9)) return true;
         auto *owner_entry = kind_of_write == 3 ? owner_state(identity, owner) : nullptr;
         const bool owner_credit = owner_entry && owner_entry->credit && owner_entry->credit->active;
         const bool protected_write = owner_credit || (kind_of_write < 2 && credits_[kind_of_write].active);
@@ -393,13 +417,13 @@ private:
                 ready = ready && (existing != state->parameters.end() || obtain(state->parameters, credit.parameters, state->parameters.size() + 1, protected_write));
             }
             if (parameter->kind == Parameter::key_pressure) {
-                auto existing = std::find_if(state->notes.begin(), state->notes.end(), [&](const auto &entry) { return entry.note == parameter->address; });
-                ready = ready && (existing != state->notes.end() || obtain(state->notes, credit.notes, state->notes.size() + 1, protected_write));
+                auto existing = std::find_if(state->key_pressures.begin(), state->key_pressures.end(), [&](const auto &entry) { return entry.note == parameter->address; });
+                ready = ready && (existing != state->key_pressures.end() || obtain(state->key_pressures, credit.key_pressures, state->key_pressures.size() + 1, protected_write));
             }
         }
-        else if ((kind == 9 && bytes[2]) || kind == 10) {
-            auto n = std::find_if(state->notes.begin(), state->notes.end(), [&](const auto &v) { return v.note == bytes[1]; });
-            ready = n != state->notes.end() || obtain(state->notes, credit.notes, state->notes.size() + 1, protected_write);
+        else if (kind == 10) {
+            auto n = std::find_if(state->key_pressures.begin(), state->key_pressures.end(), [&](const auto &v) { return v.note == bytes[1]; });
+            ready = n != state->key_pressures.end() || obtain(state->key_pressures, credit.key_pressures, state->key_pressures.size() + 1, protected_write);
         } else if (kind == 11) {
             auto v = std::find_if(state->controllers.begin(), state->controllers.end(), [&](const auto &s) { return s.controller == bytes[1]; });
             ready = v != state->controllers.end() || obtain(state->controllers, credit.controllers, state->controllers.size() + 1, protected_write);
@@ -431,6 +455,7 @@ private:
         auto o = std::find_if(outputs.begin(), outputs.end(), [output](const auto &v) { return v.output == output; });
         if (bytes[0] >= 0xf0) return;
         const unsigned kind = bytes[0] >> 4;
+        if (kind == 9 && bytes[2]) return;
         if (size != (kind == 12 || kind == 13 ? 2u : 3u)) return;
         const uint8_t channel = bytes[0] & 15;
         const bool off = kind == 8 || (kind == 9 && !bytes[2]);
@@ -450,26 +475,26 @@ private:
         }
         ++revision_;
         if (kind <= 10) {
-            auto &notes = c->notes;
-            auto n = std::find_if(notes.begin(), notes.end(), [bytes](const auto &v) { return v.note == bytes[1]; });
+            auto &key_pressures = c->key_pressures;
+            auto n = std::find_if(key_pressures.begin(), key_pressures.end(), [bytes](const auto &v) { return v.note == bytes[1]; });
             if (off) {
-                if (n != notes.end()) notes.erase(n);
+                if (n != key_pressures.end()) key_pressures.erase(n);
             } else {
-                if (n == notes.end()) {
-                    auto *created = notes.append({bytes[1], {}, {}}); if (!created) return;
-                    n = std::find_if(notes.begin(), notes.end(), [&](const auto &v) { return &v == created; });
+                if (n == key_pressures.end()) {
+                    if (kind != 10) return;
+                    auto *created = key_pressures.append({bytes[1], {}}); if (!created) return;
+                    n = std::find_if(key_pressures.begin(), key_pressures.end(), [&](const auto &v) { return &v == created; });
                 }
-                if (kind == 9) n->velocity = bytes[2];
-                else n->pressure = bytes[2];
+                if (kind == 10) n->pressure = bytes[2];
             }
         } else if (kind == 11) {
             const unsigned controller = bytes[1];
-            if (controller == 120 || controller >= 123) c->notes.clear();
+            if (controller == 120 || controller >= 123) c->key_pressures.clear();
             if (controller == 121) {
                 // Reset values depend on the receiver. Invalidate affected state
                 // instead of claiming that the previous values still apply.
                 c->controllers.clear(); c->pressure.reset(); c->pitch_bend.reset();
-                for (auto &n : c->notes) n.pressure.reset();
+                for (auto &n : c->key_pressures) n.pressure.reset();
                 c->parameters.clear();
             }
             auto &controllers = c->controllers;

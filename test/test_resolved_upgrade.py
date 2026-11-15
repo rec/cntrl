@@ -15,9 +15,12 @@ def current_setup() -> bytes:
     return bytes.fromhex((ROOT / 'show.golden').read_text())
 
 
-def test_format_46_upgrade_preserves_the_entire_body() -> None:
-    original = bytes.fromhex((ROOT / 'setup46.golden').read_text())
-    assert struct.unpack_from('<H', original, 4)[0] == 46
+@pytest.mark.parametrize('version', [46, 47])
+def test_unchanged_record_format_upgrade_preserves_the_entire_body(
+    version: int,
+) -> None:
+    original = bytes.fromhex((ROOT / f'setup{version}.golden').read_text())
+    assert struct.unpack_from('<H', original, 4)[0] == version
     upgraded = resolved.upgrade(original)
     assert upgraded[6:] == original[6:]
     assert struct.unpack_from('<H', upgraded, 4)[0] == compiler.DOCUMENT_VERSION

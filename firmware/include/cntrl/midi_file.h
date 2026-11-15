@@ -41,99 +41,20 @@ public:
         source_ = &source; index_ = &index; return true;
     }
     uint64_t duration() const { return time_; }
-    bool reserve_prepared() { return deliveries_.reserve(deliveries_.size() + 1); }
     unsigned trim_prepared_storage(unsigned budget = 1) {
         if (active() || cleaning()) return 0;
         unsigned retired = deliveries_.trim(budget);
         if (retired < budget) retired += notes_.trim(budget - retired);
-        if (retired < budget) retired += sounding_.trim(budget - retired);
-        if (retired < budget) retired += pedals_.trim(budget - retired);
         if (retired < budget && tracks_.capacity()) { tracks_.release(); ++retired; }
         return retired;
     }
     unsigned event_count() const { return events_; }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(midi_file_play_prepared)
-#endif
-    bool play_prepared(const PlayMidiFilePatch &settings, unsigned count, uint64_t duration) {
-        if (active() || cleaning() || !settings.outputs || !duration || count > index_->size() / 32) return false;
-        for (auto token : prepared_tokens_) if (token) return false;
-        if (!remember_delivery()) return false;
-        cancel(); settings_ = settings; events_ = count; time_ = duration;
-        musical_ = prepared_ = true; has_clock_ = false; status_ = Status::playing;
-        std::fill(std::begin(prepared_positions_), std::end(prepared_positions_), 0);
-        return true;
-    }
-    bool prepared_done(unsigned output) const { return output < max_routes && prepared_positions_[output] >= events_; }
-    void rewind_prepared() { std::fill(std::begin(prepared_positions_), std::end(prepared_positions_), 0); }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(midi_file_release_prepared)
-#endif
-    void release_prepared(Sink &sink, unsigned outputs = 0xffff) {
-        for (unsigned i = 0; i < max_routes; ++i) if (outputs & (1u << i)) {
-            if (prepared_tokens_[i]) sink.abandon_loop_group(i,prepared_tokens_[i]);
-            prepared_tokens_[i] = 0;
-        }
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(midi_file_finish_prepared)
-#endif
-    bool finish_prepared(unsigned output, uint64_t duration, Sink &sink) {
-        if (output >= max_routes) return false;
-        for (unsigned row = prepared_positions_[output]; row < events_; ++row) {
-            Event event;
-            if (!prepared_event(row,event) || event.time > duration) return false;
-            unsigned kind = event.status >> 4;
-            if (event.time < duration && kind != 8 && !(kind == 9 && !event.second)
-                && !(kind == 11 && event.first >= 64 && event.first <= 69 && event.second < 64)) return false;
-        }
-        poll_prepared(duration,1u << output,sink);
-        return prepared_done(output);
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(midi_file_poll_prepared)
-#endif
-    void poll_prepared(uint64_t position, unsigned available, Sink &sink) {
-        if (status_ != Status::playing) return;
-        unsigned work = 0, blocked = 0;
-        while (work < 64) {
-            bool progress = false;
-            for (unsigned output = 0; output < max_routes && work < 64; ++output) if ((available & settings_.outputs & ~blocked) & (1u << output)) {
-            auto &cursor = prepared_positions_[output];
-            unsigned bit = 1u << output;
-            if (cursor >= events_) { blocked |= bit; continue; }
-            ++work;
-            Event event;
-            if (!prepared_event(cursor, event) || event.status < 0x80 || event.status >= 0xf0) { fail(); return; }
-            if (event.time > position) { blocked |= bit; continue; }
-            Packet packet{uint8_t(event.status >> 4), {event.status,event.first,event.second}};
-            if (!event.previous) {
-                if (sink.submit_loop(output, packet)) { ++cursor; progress = true; } else blocked |= bit;
-                continue;
-            }
-            unsigned first = event.previous - 1, end = event.next - 1;
-            if (first > cursor || end <= cursor || end > events_ || (end - first != 2 && end - first != 5 && end - first != 6)) { fail(); return; }
-            Event a, b;
-            if (!prepared_event(first,a) || !prepared_event(first + 1,b)) { fail(); return; }
-            Parameter parameter;
-            parameter.channel = a.status & 15;
-            parameter.kind = end - first == 2 ? Parameter::cc14 : a.first == 99 ? (end - first == 5 ? Parameter::nrpn7 : Parameter::nrpn14) : Parameter::rpn14;
-            parameter.address = uint16_t(end - first == 2 ? a.first : a.second * 128 + b.second);
-            auto &token = prepared_tokens_[output];
-            if (!token) token = (uint64_t(1) << 63) | ++prepared_serial_;
-            if (sink.submit_loop_group(output,packet,parameter,token,cursor == first,cursor + 1 == end)) {
-                ++cursor; progress = true; if (cursor == end) token = 0;
-            } else blocked |= bit;
-            }
-            if (!progress) break;
-        }
-    }
     Status status() const { return status_; }
     bool active() const { return status_ == Status::indexing || status_ == Status::playing; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_cleaning)
 #endif
-    bool cleaning() const { return !active() && (!sounding_.empty() || !pedals_.empty() || terminate_outputs_); }
+    bool cleaning() const { return !active() && ((sink_ && sink_->source_cleaning(uint16_t(0xe000 + owner_))) || terminate_outputs_); }
     unsigned owner() const { return owner_; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_delivery)
@@ -164,8 +85,7 @@ public:
         auto existing = std::find_if(deliveries_.begin(), deliveries_.end(), [owner](const auto &entry) { return entry.owner == owner; });
         if (existing == deliveries_.end() && !deliveries_.append({owner, Bridge::Delivery::idle})) return false;
         owner_ = owner;
-        cancel(); settings_ = settings; has_clock_ = false; musical_ = musical; prepared_ = false;
-        peak_notes_ = pedal_count_ = 0; std::memset(pedal_seen_, 0, sizeof(pedal_seen_));
+        cancel(); settings_ = settings; has_clock_ = false; musical_ = musical;
         uint8_t header[14];
         if (!source_->read(0, header, sizeof(header)) || std::memcmp(header, "MThd", 4)
             || big(header + 4, 4) < 6 || big(header + 8, 2) > 1 || !big(header + 10, 2)
@@ -201,7 +121,7 @@ public:
     CNTRL_FLASH_ROUTINE(midi_file_poll)
 #endif
     void poll(uint32_t now, unsigned available, Sink &sink) {
-        if (prepared_) return;
+        sink_ = &sink;
         if (!active()) {
             if (terminate_outputs_) {
                 for (unsigned route = 0; route < max_routes; ++route)
@@ -227,9 +147,8 @@ public:
                 || (packet_.cin == 11 && packet_.bytes[1] >= 64 && packet_.bytes[1] <= 69);
             packet_.source = owned ? uint16_t(0xe000 + owner_) : 65535;
             for (unsigned route = 0; route < max_routes; ++route)
-                if ((pending_outputs_ & (1u << route)) && prepare_packet(route) && sink.submit(route, packet_)) {
+                if ((pending_outputs_ & (1u << route)) && sink.submit(route, packet_)) {
                     pending_outputs_ &= ~(1u << route);
-                    remember_packet(route);
                 }
             if (pending_outputs_) return;
             packet_pending_ = false;
@@ -278,23 +197,18 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_cancel)
 #endif
-    void cancel() { terminate_outputs_ |= sysex_outputs(); tracks_.clear(); notes_.clear(); std::memset(controls_, 0, sizeof(controls_)); parser_.reset(); status_ = Status::idle; prepared_ = false; }
+    void cancel() { terminate_outputs_ |= sysex_outputs(); tracks_.clear(); notes_.clear(); std::memset(controls_, 0, sizeof(controls_)); parser_.reset(); status_ = Status::idle; }
     void discard_cleanup() {
-        cancel(); sounding_.clear(); pedals_.clear(); terminate_outputs_ = 0;
+        cancel(); if (sink_) sink_->forget_source(uint16_t(0xe000 + owner_)); terminate_outputs_ = 0;
     }
 private:
     struct Track { uint32_t cursor = 0, end = 0; uint64_t tick = 0; uint8_t running = 0; Event head; bool ready = false, ended = false; };
     struct Held { uint8_t channel, note, velocity; };
-    struct Sounding { unsigned output; uint8_t channel, note; };
-    CheckedList<Sounding> sounding_;
-    struct Pedal { unsigned output; uint8_t channel, controller; };
-    CheckedList<Pedal> pedals_;
+    Sink *sink_ = nullptr;
     MidiFile *source_, *index_;
     PlayMidiFilePatch settings_;
     CheckedArray<Track> tracks_;
     CheckedList<Held> notes_;
-    unsigned peak_notes_ = 0, pedal_count_ = 0;
-    uint8_t pedal_seen_[16] = {};
     uint8_t controls_[16][6] = {};
     Status status_ = Status::idle;
     unsigned owner_ = 0;
@@ -308,61 +222,24 @@ private:
     unsigned division_ = 0, denominator_ = 1;
     uint64_t numerator_ = 500000, remainder_ = 0, tick_ = 0, time_ = 0, elapsed_ = 0;
     uint32_t events_ = 0, position_ = 0, loop_ = 0, previous_ = 0, stream_offset_ = 0;
-    unsigned prepared_positions_[max_routes] = {};
-    uint64_t prepared_tokens_[max_routes] = {}, prepared_serial_ = 0;
     unsigned pending_outputs_ = 0, terminate_outputs_ = 0;
     uint64_t post_start_ = 0;
     bool post_waiting_ = false;
     uint32_t group_last_ = 0;
     bool seeking_group_ = false, has_clock_ = false;
-    bool clock_known_ = false, packet_pending_ = false, event_pending_ = false, musical_ = false, prepared_ = false;
+    bool clock_known_ = false, packet_pending_ = false, event_pending_ = false, musical_ = false;
     Packet packet_;
     Parser parser_;
     Event stream_;
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(midi_file_remember)
-#endif
-    void remember_packet(unsigned route) {
-        unsigned kind = packet_.bytes[0] >> 4;
-        uint8_t channel = packet_.bytes[0] & 15;
-        if (kind == 9 && packet_.bytes[2]) (void)sounding_.append({route, channel, packet_.bytes[1]});
-        if (kind == 8 || (kind == 9 && !packet_.bytes[2])) {
-            auto n = std::find_if(sounding_.begin(), sounding_.end(), [&](const auto &v) { return v.output == route && v.channel == channel && v.note == packet_.bytes[1]; });
-            if (n != sounding_.end()) sounding_.erase(n);
-        }
-        if (kind == 11 && packet_.bytes[1] >= 64 && packet_.bytes[1] <= 69) {
-            auto p = std::find_if(pedals_.begin(), pedals_.end(), [&](const auto &v) { return v.output == route && v.channel == channel && v.controller == packet_.bytes[1]; });
-            if (packet_.bytes[2] >= 64) {
-                if (p == pedals_.end()) (void)pedals_.append({route, channel, packet_.bytes[1]});
-            } else if (p != pedals_.end()) pedals_.erase(p);
-        }
-    }
-    bool prepare_packet(unsigned route) {
-        const unsigned kind = packet_.bytes[0] >> 4;
-        if (kind == 9 && packet_.bytes[2]) return sounding_.reserve(sounding_.size() + 1);
-        if (kind == 11 && packet_.bytes[1] >= 64 && packet_.bytes[1] <= 69 && packet_.bytes[2] >= 64) {
-            for (const auto &entry : pedals_)
-                if (entry.output == route && entry.channel == (packet_.bytes[0] & 15) && entry.controller == packet_.bytes[1]) return true;
-            return pedals_.reserve(pedals_.size() + 1);
-        }
-        return true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_release)
 #endif
     bool release_one(unsigned available, Sink &sink) {
-        // Ownership for cleanup is separate from the sink's complete MIDI state.
-        if (!pedals_.empty()) {
-            auto p = pedals_.back();
-            if (!(available & (1u << p.output)) || sink.submit(p.output, {11, {uint8_t(0xb0 | p.channel), p.controller, 0}, uint16_t(0xe000 + owner_)})) pedals_.pop_back();
-            return false;
-        }
-        if (!sounding_.empty()) {
-            auto n = sounding_.back();
-            if (!(available & (1u << n.output)) || sink.submit(n.output, {8, {uint8_t(0x80 | n.channel), n.note, 0}, uint16_t(0xe000 + owner_)})) sounding_.pop_back();
-            return false;
-        }
-        return true;
+        const unsigned source = uint16_t(0xe000 + owner_);
+        sink.forget_source(source,~available);
+        if (!sink.source_cleaning(source)) return true;
+        (void)sink.release_source(source,available);
+        return !sink.source_cleaning(source);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_big)
@@ -455,10 +332,6 @@ private:
                     append_event(release); return;
                 }
             if (!index_->sync()) { fail(); return; }
-            unsigned outputs = 0;
-            for (unsigned mask = settings_.outputs; mask; mask >>= 1) outputs += mask & 1;
-            if (peak_notes_ > UINT32_MAX / outputs || pedal_count_ > UINT32_MAX / outputs
-                || !sounding_.reserve(peak_notes_ * outputs) || !pedals_.reserve(pedal_count_ * outputs)) { fail(); return; }
             notes_.clear(); tracks_.release(); status_ = Status::playing; return;
         }
         uint64_t delta = chosen->tick - tick_;
@@ -480,7 +353,6 @@ private:
         unsigned kind = event.status >> 4;
         if (kind == 9 && event.second) {
             if (!notes_.append({uint8_t(event.status & 15), event.first, event.second})) { fail(); return; }
-            peak_notes_ = std::max(peak_notes_, notes_.size());
         }
         if (kind == 8 || (kind == 9 && !event.second)) {
             auto note = notes_.end();
@@ -489,8 +361,6 @@ private:
             if (note != notes_.end()) { event.reverse_value = note->velocity; notes_.erase(note); }
         }
         if (kind == 11 && event.first >= 64 && event.first <= 69) {
-            const unsigned channel = event.status & 15, bit = 1u << (event.first - 64);
-            if (!(pedal_seen_[channel] & bit)) { pedal_seen_[channel] |= uint8_t(bit); ++pedal_count_; }
             auto &value = controls_[event.status & 15][event.first - 64];
             event.reverse_value = value; value = event.second;
         }
@@ -562,12 +432,6 @@ public:
         return true;
     }
 private:
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(midi_file_prepared_event)
-#endif
-    bool prepared_event(unsigned position, Event &event) {
-        return settings_.reverse ? reverse_event(*index_,events_,time_,position,event) : read_event(*index_,position,event);
-    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_stream)
 #endif

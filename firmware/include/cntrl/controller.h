@@ -485,5 +485,7 @@ private:
         pane(2, depth_ ? history_[depth_ - 1].previous : -1);
     }
 };
-static_assert(sizeof(void *) != 4 || sizeof(Controller) == 388, "Update layout.estimate_ram for the Controller ABI");
+#if UINTPTR_MAX == UINT32_MAX
+static_assert(sizeof(Controller) == 396, "Update layout.estimate_ram for the Controller ABI");
+#endif
 } // namespace cntrl

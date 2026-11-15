@@ -46,6 +46,9 @@ public:
             std::memset(setup_channels_, 0, sizeof(setup_channels_)); setup_step_ = 0;
             for (const auto &output : static_cast<Sink &>(s).state().outputs) if (output.output < 16)
                 for (const auto &channel : output.channels) setup_channels_[output.output] |= uint16_t(1u << channel.channel);
+            s.each_note([&](unsigned output,unsigned channel,unsigned,unsigned,unsigned) {
+                setup_channels_[output] |= uint16_t(1u << channel);
+            });
             streams_.deactivate(); arpeggiator.suspend(); arpeggiator_parsers_.clear();
             s.runtime_midi_files().player.cancel();
             s.runtime_pages().generator.stop(); s.midi_bridge().stop();
@@ -243,13 +246,13 @@ public:
 #endif
 #if CNTRL_PANIC
         if (s.panic_owns_midi) {
-            if (!s.loop_cleaning()) s.panic.tick(now, bridge.handoff(s));
+            if (!s.loop_cleaning() && !s.loop_control_reset_pending()) s.panic.tick(now, bridge.handoff(s));
             if (!s.panic.active()) { bridge.configure(s.runtime.interface); s.panic_owns_midi = false; }
         } else
 #endif
         CNTRL_RUNTIME_TRACE(midi_bridge);
 #if CNTRL_CABLE_TEST
-        if (s.cable_test.enabled()) { if (!s.loop_cleaning() && bridge.handoff(s)) s.cable_test.tick(now); }
+        if (s.cable_test.enabled()) { if (!s.loop_cleaning() && !s.loop_control_reset_pending() && bridge.handoff(s)) s.cable_test.tick(now); }
         else
 #endif
         bridge.service(s, now, files.player.sysex_outputs() | streams_.sysex_outputs());
@@ -367,7 +370,7 @@ private:
         bridge.service(s, s.milliseconds());
         const bool timed_out = uint32_t(s.milliseconds() - setup_started_) >= 1000;
         bool reset = true;
-        if (bridge.handoff(s)) {
+        if (!s.loop_control_reset_pending() && bridge.handoff(s)) {
             for (unsigned output = 0; output < 16; ++output) {
                 if (!(available & (1u << output))) {
                     if (setup_channels_[output]) setup_step_ = 0;
@@ -382,7 +385,7 @@ private:
             }
         } else reset = false;
         s.midi_flush();
-        const bool drained = reset && !files.player.cleaning() && !s.loop_cleaning()
+        const bool drained = reset && !files.player.cleaning() && !s.loop_cleaning() && !s.loop_control_reset_pending()
             && !streams_.recovery() && !streams_.lfo_status().stopping && !arpeggiator.cleaning()
             && !pages.generator.stopping() && s.output_idle();
         if (!stored || (!drained && !timed_out)) return;

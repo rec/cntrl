@@ -144,6 +144,19 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             # Only the explicit MIDI status reply, never Runtime::poll.
             '*(.text._ZNK5cntrl4midi7Runtime6statusI*)',
             # Document validation, history import and explicit deployment recovery.
+            # Output credit construction/refill and unused-capacity retirement.
+            # Packet preparation, recording, ownership submission and release
+            # stay in ITCM; these helpers manage their checked reservations.
+            '*(.text._ZN5cntrl4midi9MidiState7CreditsC[12]E*)',
+            '*(.text._ZN5cntrl4midi9MidiState7CreditsD[12]E*)',
+            '*(.text._ZN5cntrl4midi9MidiState12refill_ownerE*)',
+            '*(.text._ZN5cntrl4midi9MidiState16reserve_playbackE*)',
+            '*(.text._ZN5cntrl4midi9MidiState15shrink_playbackE*)',
+            '*(.text._ZN5cntrl4midi9MidiState7reclaimE*)',
+            '*(.text._ZN5cntrl4midi9MidiState11requirementE*)',
+            '*(.text._ZN5cntrl4midi9MidiState14require_packetE*)',
+            '*(.text._ZN5cntrl4midi9MidiState17require_parameterE*)',
+            '*(.text._ZN5cntrl4midi9Ownership14prepare_sourceE*)',
             '*(.text._ZN5cntrl8Document14gestures_validE*)',
             '*(.text._ZN5cntrl8Document12output_validE*)',
             '*(.text._ZN5cntrl8Document17output_mask_validE*)',

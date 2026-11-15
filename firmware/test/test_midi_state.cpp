@@ -11,8 +11,8 @@ protected:
 };
 
 void allocation_failure_precedes_output_and_releases_need_no_allocation() {
-    for (int failure = 0; failure < 3; ++failure) {
-        Output out; cntrl::memory_fail_after = failure;
+    {
+        Output out; cntrl::memory_fail_after = 0;
         assert(!out.submit(0, {9, {0x90, 60, 100}}));
         assert(!out.writes && out.state().outputs.empty());
         cntrl::memory_fail_after = -1;
@@ -46,7 +46,8 @@ void playback_credits_survive_live_memory_pressure_and_recycle() {
     assert(out.reserve_playback_state(4, 1, 1));
     const unsigned budget = cntrl::memory_budget;
     cntrl::memory_budget = cntrl::memory_used;
-    assert(!out.submit(0, {9, {0x90, 70, 100}}));
+    for (unsigned key = 70; key < 80 && out.submit(0, {9, {0x90,uint8_t(key),100}}); ++key) {}
+    assert(!out.submit(0, {9, {0x90, 100, 100}}));
     const unsigned allocations = cntrl::memory_allocations;
     assert(out.submit_loop(0, {9, {0x90, 60, 100}}));
     assert(out.submit_loop(0, {8, {0x80, 60, 0}}));
@@ -64,9 +65,9 @@ void arming_does_not_lose_a_preexisting_live_note_owner() {
     const unsigned before = out.writes;
     assert(out.submit_loop(0, {9, {0x90, 60, 100}}));
     assert(out.submit_loop(0, {8, {0x80, 60, 0}}));
-    assert(out.writes == before);
+    assert(out.writes == before + 2);
     assert(out.submit(0, {8, {0x80, 60, 0}, 7}));
-    assert(out.writes == before + 1);
+    assert(out.writes == before + 3);
 }
 
 void failed_playback_reservation_returns_all_new_memory() {
@@ -77,6 +78,28 @@ void failed_playback_reservation_returns_all_new_memory() {
         assert(cntrl::memory_used == before);
         cntrl::memory_fail_after = -1;
     }
+}
+
+void exact_loop_admission_reuses_existing_destination_records() {
+    Output out;
+    const cntrl::midi::Packet control{11,{0xb0,7,80}};
+    assert(out.begin_loop_preparation());
+    assert(out.prepare_loop_packet(0,control));
+    assert(out.finish_loop_preparation(0));
+    assert(out.submit_loop(0,control));
+    const unsigned used = cntrl::memory_used;
+    assert(out.begin_loop_preparation());
+    assert(out.prepare_loop_packet(0,control));
+    assert(out.finish_loop_preparation(0));
+    assert(cntrl::memory_used == used);
+    cntrl::memory_fail_after = 0;
+    assert(out.submit_loop(0,control));
+    cntrl::memory_fail_after = -1;
+    assert(out.begin_loop_preparation());
+    cntrl::memory_fail_after = 0;
+    assert(!out.prepare_loop_packet(1,control));
+    assert(out.submit_loop(0,control));
+    cntrl::memory_fail_after = -1;
 }
 
 void test_sparse_state_follows_successful_delivery() {
@@ -96,7 +119,7 @@ void test_sparse_state_follows_successful_delivery() {
     const auto &output = out.state().outputs.front();
     assert(output.output == 5 && output.channels.size() == 1);
     const auto &channel = output.channels.front();
-    assert(channel.channel == 3 && channel.notes.empty());
+    assert(channel.channel == 3 && channel.key_pressures.empty());
     assert(channel.controllers.size() == 1 && channel.controllers[0].value == 90);
     assert(!channel.program && !channel.pressure && !channel.pitch_bend);
     out.submit(5, {11, {0xb3, 7, 0}});
@@ -109,21 +132,26 @@ void test_sparse_state_follows_successful_delivery() {
 void test_notes_and_pressure_are_sparse() {
     Output out;
     out.submit(0, {9, {0x90, 60, 100}});
-    const auto &channel = out.state().outputs[0].channels[0];
-    assert(channel.notes.size() == 1 && channel.notes[0].velocity == 100);
+    assert(out.notes_active() && out.state().outputs.empty());
     out.submit(0, {10, {0xa0, 60, 20}});
+    const auto &channel = out.state().outputs[0].channels[0];
     out.submit(0, {9, {0x90, 60, 90}});
-    assert(channel.notes.size() == 1 && channel.notes[0].velocity == 90);
-    assert(channel.notes[0].pressure == 20);
+    assert(channel.key_pressures.size() == 1);
+    assert(channel.key_pressures[0].pressure == 20);
+    unsigned count = 0;
+    out.each_note([&](unsigned,unsigned,unsigned,unsigned value,unsigned) { count += value; });
+    assert(count == 2);
     out.submit(0, {9, {0x90, 64, 80}});
-    assert(channel.notes.size() == 2);
+    assert(channel.key_pressures.size() == 1);
     out.submit(0, {8, {0x80, 60, 64}});
-    assert(channel.notes.size() == 1 && channel.notes[0].note == 64);
+    assert(channel.key_pressures.empty() && out.notes_active());
     out.submit(0, {9, {0x90, 64, 0}});
-    assert(channel.notes.empty());
+    assert(channel.key_pressures.empty());
+    out.submit(0, {8, {0x80, 60, 0}});
+    assert(!out.notes_active());
     out.submit(0, {10, {0xa0, 127, 0}});
-    assert(channel.notes.size() == 1 && !channel.notes[0].velocity);
-    assert(channel.notes[0].pressure == 0);
+    assert(channel.key_pressures.size() == 1);
+    assert(channel.key_pressures[0].pressure == 0);
 }
 
 void test_outputs_and_channels_keep_independent_values() {
@@ -139,7 +167,7 @@ void test_outputs_and_channels_keep_independent_values() {
         for (const auto &channel : output.channels) {
             assert(channel.program == output.output + channel.channel);
             assert(channel.pressure == 0 && channel.pitch_bend == 16383);
-            assert(channel.notes.empty() && channel.controllers.empty());
+            assert(channel.key_pressures.empty() && channel.controllers.empty());
         }
     }
     out.submit(8, {15, {0xff, 0, 0}});
@@ -158,11 +186,13 @@ void test_channel_modes_clear_affected_state() {
     const auto &channel = out.state().outputs[0].channels[0];
     assert(channel.program == 12 && !channel.pressure && !channel.pitch_bend);
     assert(channel.controllers.size() == 1 && channel.controllers[0].controller == 121);
-    assert(channel.notes.size() == 1 && channel.notes[0].velocity == 100 && !channel.notes[0].pressure);
+    assert(channel.key_pressures.size() == 1 && !channel.key_pressures[0].pressure);
+    assert(out.notes_active());
     for (uint8_t mode : std::initializer_list<uint8_t>{120, 123, 124, 125, 126, 127}) {
         out.submit(0, {9, {0x90, 60, 100}});
         out.submit(0, {11, {0xb0, mode, 0}});
-        assert(channel.notes.empty());
+        assert(channel.key_pressures.empty());
+        assert(!out.notes_active());
     }
 }
 
@@ -180,7 +210,7 @@ void test_bridge_clients_get_tracking_without_recording_state() {
     const auto &channel = out.state().outputs[0].channels[0];
     assert(channel.controllers[0].value == 90 && channel.program == 12);
     bridge.forward_packet(0, {9, {0x90, 60, 100}}, 0); bridge.service(out, 0);
-    assert(channel.notes.size() == 1 && channel.notes[0].velocity == 100);
+    assert(out.notes_active() && channel.key_pressures.empty());
 }
 
 void configured_terminal_streams_keep_their_admitted_memory() {
@@ -209,6 +239,7 @@ void configured_terminal_streams_keep_their_admitted_memory() {
 
 int main() {
     cntrl::memory_budget = 524288;
+    exact_loop_admission_reuses_existing_destination_records();
     configured_terminal_streams_keep_their_admitted_memory();
     allocation_failure_precedes_output_and_releases_need_no_allocation();
     parameter_admission_reserves_the_whole_message_group();

@@ -3,8 +3,8 @@
 #include "midi_file.h"
 
 namespace cntrl::midi {
-// Prepared live generations never touch storage. Allocation is charged to the
-// same RAM2 budget as documents and fonts before the looper can be armed.
+// Checked RAM-backed file storage for temporary SMF conversion and indexing.
+// Grow with written records instead of reserving a configured maximum up front.
 class LoopFile final : public MidiFile {
 public:
     bool reserve(unsigned capacity) {
@@ -28,7 +28,12 @@ public:
     CNTRL_FLASH_ROUTINE(loop_file_write)
 #endif
     bool write(uint32_t offset, const uint8_t *data, unsigned length) override {
-        if (offset > memory_.size || length > memory_.size - offset) return false;
+        if (length > UINT32_MAX - offset) return false;
+        const uint32_t required = offset + length;
+        if (required > memory_.size) {
+            const uint64_t capacity = (uint64_t(required) + 511) & ~uint64_t(511);
+            if (capacity > UINT32_MAX || !memory_.resize(unsigned(capacity))) return false;
+        }
         if (length) std::memcpy(memory_.data + offset, data, length);
         length_ = std::max(length_, offset + uint32_t(length)); return true;
     }

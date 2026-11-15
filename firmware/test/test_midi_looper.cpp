@@ -179,7 +179,7 @@ void transport_pause_continue_and_clock_loss_have_distinct_restart_behavior() {
     s.poll(MidiLooper::beat * 4);
     assert(s.loop.state() == MidiLooper::State::stopped);
 }
-void a_missed_first_wrap_is_rejected_and_hold_sources_are_unioned() {
+void a_missed_first_wrap_is_rejected_and_hold_sources_are_forwarded() {
     Session late; assert(late.loop.record(late.clock(),500000)); late.poll(MidiLooper::beat);
     late.note(60,true); assert(late.loop.record(late.clock(),500000)); late.poll(MidiLooper::beat * 2 + MidiLooper::beat / 10);
     assert(late.loop.error() == MidiLooper::Error::late && late.loop.state() == MidiLooper::State::empty && late.sink.sent[0].empty());
@@ -189,9 +189,10 @@ void a_missed_first_wrap_is_rejected_and_hold_sources_are_unioned() {
     s.position += MidiLooper::beat / 8; hold(0,0);
     s.position += MidiLooper::beat / 8; hold(1,0);
     assert(s.loop.record(s.clock(),500000)); s.poll(MidiLooper::beat * 2);
-    s.poll(MidiLooper::beat * 2 + MidiLooper::beat / 4); assert(s.sink.sent[0].size() == 2);
+    s.poll(MidiLooper::beat * 2 + MidiLooper::beat / 4); assert(s.sink.sent[0].size() == 3);
     assert(s.sink.sent[0][0].bytes[2] == 80 && s.sink.sent[0][1].bytes[2] == 100);
-    s.poll(MidiLooper::beat * 2 + MidiLooper::beat / 2); assert(s.sink.sent[0].size() == 3 && s.sink.sent[0][2].bytes[2] == 0);
+    assert(s.sink.sent[0][2].bytes[2] == 0);
+    s.poll(MidiLooper::beat * 2 + MidiLooper::beat / 2); assert(s.sink.sent[0].size() == 4 && s.sink.sent[0][3].bytes[2] == 0);
 }
 void a_full_take_and_multiple_overdub_passes_preserve_events() {
     {
@@ -421,32 +422,166 @@ void failed_reverse_preparation_preserves_the_take_and_undo() {
     std::vector<uint8_t> after(file->size()); assert(file->read(0,after.data(),unsigned(after.size()))); s.loop.save_complete(true);
     assert(before == after); cntrl::memory_budget = budget;
 }
-void armed_capacity_survives_exhaustion_through_the_first_wrap() {
-    Session s(16);
+void capture_growth_failure_preserves_the_committed_take() {
+    Session s; s.take();
     assert(s.loop.record(s.clock(),500000));
-    const unsigned allocations = cntrl::memory_allocations;
+    s.poll(MidiLooper::beat * 3);
     cntrl::memory_fail_after = 0;
-    s.poll(MidiLooper::beat);
-    for (unsigned i = 0; i < 8; ++i) s.note(60 + i,true);
-    s.position += MidiLooper::beat / 2;
-    assert(s.loop.record(s.clock(),500000));
-    s.poll(MidiLooper::beat * 2,32);
-    if (s.loop.state() != MidiLooper::State::playing)
-        std::fprintf(stderr,"first wrap: state=%u error=%u events=%u\n",unsigned(s.loop.state()),unsigned(s.loop.error()),s.loop.events());
-    assert(s.loop.state() == MidiLooper::State::playing && s.loop.events() == 16);
-    assert(s.loop.error() == MidiLooper::Error::none && s.sink.sent[0].size() == 8);
-    s.poll(MidiLooper::beat * 3,32);
-    assert(s.loop.state() == MidiLooper::State::playing && s.loop.failed_outputs() == 0);
-    assert(cntrl::memory_allocations == allocations);
+    for (unsigned i = 0; i < 9; ++i) s.note(60 + i,true);
+    assert(s.loop.state() == MidiLooper::State::playing && s.loop.events() == 2);
+    assert(s.loop.error() == MidiLooper::Error::memory);
     cntrl::memory_fail_after = -1;
+    s.poll(MidiLooper::beat * 3 + MidiLooper::beat / 2);
+    s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
+    assert(!s.sink.loop_cleaning());
+}
+void event_and_decoder_growth_failures_report_memory_without_replacing_the_take() {
+    for (bool decoder : {false,true}) {
+        Session s; s.take();
+        assert(s.loop.record(s.clock(),500000)); s.poll(MidiLooper::beat * 3);
+        if (!decoder) for (unsigned i = 0; i < 16; ++i) { s.note(60,true); s.note(60,false); }
+        cntrl::memory_fail_after = 0;
+        if (decoder) s.loop.receive(0,0,{11,{0xb0,1,64}},s.clock());
+        else s.note(60,true);
+        cntrl::memory_fail_after = -1;
+        assert(s.loop.state() == MidiLooper::State::playing && s.loop.events() == 2);
+        assert(s.loop.error() == MidiLooper::Error::memory);
+        s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
+        assert(!s.sink.loop_cleaning());
+    }
+}
+void compact_payload_uses_message_lengths_and_four_byte_times() {
+    for (unsigned count : {24u,512u}) {
+        CompactLoop loop;
+        for (unsigned i = 0; i < count; ++i) {
+            Packet packet{uint8_t(i & 1 ? 8 : 9),{uint8_t(i & 1 ? 0x80 : 0x90),60,uint8_t(i & 1 ? 0 : 100)}};
+            assert(loop.append(&packet,1,uint64_t(i) * 256));
+        }
+        assert(loop.payload_bytes() == count * 7 && loop.trim());
+        assert(loop.storage_bytes() <= loop.payload_bytes() + 128);
+    }
+    CompactLoop short_messages;
+    const Packet program{12,{0xc0,7,0}}, pressure{13,{0xd0,51,0}};
+    assert(short_messages.append(&program,1,0) && short_messages.append(&pressure,1,256));
+    assert(short_messages.payload_bytes() == 12);
+    MidiFilePlayer::Event event;
+    assert(short_messages.event(1,event) && event.time == 256 && event.status == 0xd0 && event.first == 51 && !event.second);
+}
+void compact_insertion_preserves_checkpoints_groups_and_terminal_reservations() {
+    CompactLoop loop;
+    for (unsigned i = 0; i < 70; ++i) {
+        Packet packet{9,{0x90,uint8_t(i),100}};
+        assert(loop.append(&packet,1,(i + 1) * 1024));
+    }
+    const Packet pair[] = {{11,{0xb0,1,65}},{11,{0xb0,33,17}}};
+    assert(loop.append(pair,2,16 * 1024 + 512));
+    for (unsigned i = 0; i < 72; ++i) {
+        MidiFilePlayer::Event event; assert(loop.event(i,event));
+        if (i == 16 || i == 17) assert(event.previous == 17 && event.next == 19 && event.first == (i == 16 ? 1 : 33));
+        else assert(event.status == 0x90 && event.first == (i < 16 ? i : i - 2));
+    }
+    CompactLoop terminal;
+    Packet on{9,{0x90,60,100}}, off{8,{0x80,60,0}};
+    assert(terminal.append(&on,1,0,1));
+    cntrl::memory_fail_after = 0;
+    assert(terminal.append(&off,1,CompactLoop::beat));
+    cntrl::memory_fail_after = -1;
+}
+void repeated_attacks_keep_fifo_velocities_and_receive_individual_stop_releases() {
+    Session s;
+    assert(s.loop.record(s.clock(),500000)); s.poll(MidiLooper::beat);
+    s.note(60,true);
+    s.position += MidiLooper::beat / 8;
+    s.loop.receive(0,0,{9,{0x90,60,70}},s.clock());
+    assert(s.loop.record(s.clock(),500000)); s.poll(MidiLooper::beat * 2);
+    s.poll(MidiLooper::beat * 2 + MidiLooper::beat / 4);
+    assert(s.sink.sent[0].size() == 2);
+    s.loop.stop(); s.loop.poll(s.clock(),true,3,s.sink);
+    assert(s.sink.sent[0].size() == 4 && !s.sink.loop_cleaning());
+    assert(s.sink.sent[0][2].bytes[0] == 0x80 && s.sink.sent[0][3].bytes[0] == 0x80);
+    assert(s.loop.reverse({0,1,false}));
+    for (unsigned i = 0; i < 16; ++i) s.loop.poll({0,1,false},true,3,s.sink);
+    assert(s.loop.play_stop(s.clock())); s.poll(MidiLooper::beat * 3);
+    assert(s.sink.sent[0].size() == 6);
+    assert(s.sink.sent[0][4].bytes[2] == 70 && s.sink.sent[0][5].bytes[2] == 100);
+}
+void imported_fractional_terminal_time_uses_the_same_rounding_as_duration() {
+    Session s;
+    LoopFile source, index;
+    assert(source.reserve(128) && index.reserve(128));
+    MidiFileRecorder recorder(source);
+    assert(recorder.start_prepared({},index,3,500000,2));
+    recorder.receive_tick(0,{9,{0x90,60,100}},0); recorder.poll(0);
+    recorder.receive_tick(0,{8,{0x80,60,0}},1); recorder.poll(0);
+    assert(recorder.request_finish_tick(1));
+    for (unsigned i = 0; i < 16; ++i) recorder.poll(0);
+    assert(recorder.complete() && s.loop.load_begin(source));
+    for (unsigned i = 0; i < 64 && s.loop.state() == MidiLooper::State::loading; ++i) s.loop.poll({0,1,false},true,3,s.sink);
+    assert(s.loop.state() == MidiLooper::State::stopped && s.loop.events() == 2);
+    const uint64_t expected = ((MidiLooper::beat / 3 + 128) >> 8) << 8;
+    assert(s.loop.length() == expected);
+    MidiFile *saved = s.loop.save_begin(); assert(saved && saved->size() < 64);
+    std::vector<uint8_t> bytes(saved->size());
+    assert(saved->read(0,bytes.data(),unsigned(bytes.size())));
+    s.loop.save_complete(true);
+    assert(s.loop.reverse({0,1,false}));
+    for (unsigned i = 0; i < 16; ++i) s.loop.poll({0,1,false},true,3,s.sink);
+    assert(s.loop.state() == MidiLooper::State::stopped && s.loop.error() == MidiLooper::Error::none);
+}
+void clear_retains_ownership_until_continuous_control_resets_are_delivered() {
+    Session s;
+    const uint8_t settings[] = {'C','L','R','S',1,0,0};
+    s.sink.configure_loop_controls(settings);
+    assert(s.loop.record(s.clock(),500000)); s.poll(MidiLooper::beat);
+    s.loop.receive(0,0,{14,{0xe0,0,96}},s.clock());
+    s.loop.receive(0,0,{13,{0xd0,70,0}},s.clock());
+    assert(s.loop.record(s.clock(),500000)); s.poll(MidiLooper::beat * 2);
+    assert(s.sink.sent[0].size() == 2 && s.loop.clear());
+    s.loop.poll({0,1,false},true,3,s.sink);
+    assert(s.loop.owned() && s.sink.loop_control_reset_pending());
+    assert(!s.loop.configure({},s.sink));
+    for (unsigned i = 0; i < 8; ++i) s.loop.poll({0,1,false},true,3,s.sink);
+    assert(!s.loop.owned() && !s.sink.loop_control_reset_pending());
+    assert(s.sink.sent[0].size() == 4);
+    assert(s.sink.sent[0][2].bytes[0] == 0xe0 && s.sink.sent[0][2].bytes[1] == 0 && s.sink.sent[0][2].bytes[2] == 64);
+    assert(s.sink.sent[0][3].bytes[0] == 0xd0 && s.sink.sent[0][3].bytes[1] == 0);
+    assert(s.loop.configure({},s.sink));
+}
+void importing_a_short_file_does_not_reserve_the_configured_maximum() {
+    Session s(65535);
+    LoopFile source, index;
+    MidiFileRecorder recorder(source);
+    assert(recorder.start_prepared({},index,3840,500000,2));
+    recorder.receive_tick(0,{9,{0x90,60,100}},0); recorder.poll(0);
+    recorder.receive_tick(0,{8,{0x80,60,0}},1920); recorder.poll(0);
+    assert(recorder.request_finish_tick(3840));
+    for (unsigned i = 0; i < 16; ++i) recorder.poll(0);
+    assert(recorder.complete());
+    const unsigned budget = cntrl::memory_budget, initial = cntrl::memory_used;
+    cntrl::memory_budget = initial + 8192; cntrl::memory_peak = initial;
+    assert(s.loop.load_begin(source));
+    for (unsigned i = 0; i < 64 && s.loop.state() == MidiLooper::State::loading; ++i) s.loop.poll({0,1,false},true,3,s.sink);
+    assert(s.loop.state() == MidiLooper::State::stopped && s.loop.events() == 2);
+    const unsigned imported = cntrl::memory_used;
+    s.loop.poll({0,1,false},true,3,s.sink);
+    assert(cntrl::memory_used + 512 <= imported);
+    assert(cntrl::memory_peak <= initial + 8192);
+    cntrl::memory_budget = budget;
 }
 int main() {
     cntrl::memory_budget = 524288;
+    compact_payload_uses_message_lengths_and_four_byte_times();
+    compact_insertion_preserves_checkpoints_groups_and_terminal_reservations();
+    repeated_attacks_keep_fifo_velocities_and_receive_individual_stop_releases();
+    imported_fractional_terminal_time_uses_the_same_rounding_as_duration();
+    clear_retains_ownership_until_continuous_control_resets_are_delivered();
+    importing_a_short_file_does_not_reserve_the_configured_maximum();
     pedal_intervals_survive_reverse_edits_and_backward_playback();
     status_preserves_long_duration_and_following_fields();
     idle_configuration_and_failed_arm_preserve_available_memory();
     failed_reverse_preparation_preserves_the_take_and_undo();
-    armed_capacity_survives_exhaustion_through_the_first_wrap();
+    capture_growth_failure_preserves_the_committed_take();
+    event_and_decoder_growth_failures_report_memory_without_replacing_the_take();
     first_wrap_and_thousands_of_irregular_cycles_keep_absolute_phase();
     a_silent_take_has_a_positive_length_and_can_be_stopped();
     overdub_is_published_at_a_boundary_and_undo_has_one_level();
@@ -456,7 +591,7 @@ int main() {
     fine_controls_and_parameters_are_complete_atomic_transactions();
     loading_preserves_fractional_beats_and_rejects_system_events();
     transport_pause_continue_and_clock_loss_have_distinct_restart_behavior();
-    a_missed_first_wrap_is_rejected_and_hold_sources_are_unioned();
+    a_missed_first_wrap_is_rejected_and_hold_sources_are_forwarded();
     a_full_take_and_multiple_overdub_passes_preserve_events();
     parameter_selection_survives_complete_overdub_passes();
     direction_switches_at_boundaries_and_preserves_the_saved_phrase();

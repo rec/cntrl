@@ -474,15 +474,13 @@ public:
         const unsigned blocked = board.blocked;
         board.blocked = 0;
         for (unsigned i = 0; i < 64; ++i) board.midi_runtime.poll(board);
-        // Snapshot accepted notes before releasing them: submit mutates the list.
-        struct Release { unsigned output; midi::Packet packet; };
-        std::vector<Release> releases;
-        for (const auto &output : board.midi::Sink::state().outputs) for (const auto &channel : output.channels) {
-            for (const auto &note : channel.notes) if (note.velocity) releases.push_back({output.output,{8,{uint8_t(0x80 | channel.channel),note.note,0}}});
-            for (const auto &control : channel.controllers) if (control.controller >= 64 && control.controller <= 69 && control.value >= 64)
-                releases.push_back({output.output,{11,{uint8_t(0xb0 | channel.channel),control.controller,0}}});
+        // Snapshot source IDs: accepted releases mutate the shared ledger.
+        std::vector<unsigned> sources;
+        board.each_source([&](unsigned source) { sources.push_back(source); });
+        for (unsigned source : sources) while (board.source_cleaning(source)) {
+            if (!board.release_source(source)) break;
+            board.midi_runtime.poll(board);
         }
-        for (const auto &release : releases) board.submit(release.output,release.packet);
         if (!board.relays.reset()) board.error("Relay cleanup failed");
         board.blocked = blocked;
     }

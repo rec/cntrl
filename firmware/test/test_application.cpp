@@ -242,9 +242,13 @@ static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately
     layout[12 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_looper); layout[12 + 32 + 33] = 1;
     host.pages_.layout({layout});
     using Loop = cntrl::midi::MidiLooper;
-    auto take = [&]() {
+    auto take = [&](bool controls = false) {
         assert(files.looper.record({0,1,true},500000));
         files.looper.poll({Loop::beat,1,true},true,1,sink);
+        if (controls) {
+            files.looper.receive(0,0,{14,{0xe0,1,2}},{Loop::beat,1,true});
+            files.looper.receive(0,0,{13,{0xd0,70,0}},{Loop::beat,1,true});
+        }
         assert(files.looper.record({Loop::beat,1,true},500000));
         files.looper.poll({Loop::beat * 2,1,true},true,1,sink);
         assert(files.looper.unsaved());
@@ -271,7 +275,11 @@ static void looper_page_confirms_clear_but_explicit_bindings_execute_immediately
     assert(host.looper_action(3,""));
     files.looper.poll({Loop::beat * 2,1,true},true,1,sink);
     assert(files.looper.state() == Loop::State::empty);
-    take();
+    const uint8_t reset_settings[] = {'C','L','R','S',1,0,0};
+    sink.configure_loop_controls(reset_settings);
+    take(true);
+    assert(!host.stop_clock() && sink.loop_control_reset_pending());
+    assert(host.stop_clock() && !sink.loop_control_reset_pending());
     source.bytes = {0};
     assert(host.looper_action(5,"selected.mid"));
     assert(files.looper.state() == Loop::State::loading);

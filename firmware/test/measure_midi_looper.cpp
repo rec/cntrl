@@ -51,6 +51,23 @@ void measure(unsigned count, unsigned outputs, bool controllers, bool together =
         std::printf("events=%u output_mask=%u kind=%s idle=%u armed=%u captured=%u playing=%u stopped=%u peak=%u\n",
             count,outputs,controllers ? "controllers" : together ? "chord" : "notes",
             idle,armed,captured,playing,cntrl::memory_used,cntrl::memory_peak);
+        std::printf("  payload=%u generation_storage=%u\n",loop.payload_bytes(),loop.storage_bytes());
+        cntrl::memory_peak = cntrl::memory_used;
+        assert(loop.reverse({0,1,false}));
+        for (unsigned i = 0; i < 256; ++i) loop.poll({0,1,false},false,outputs,output);
+        assert(loop.state() == MidiLooper::State::stopped && loop.events() == count);
+        std::printf("  reverse_retained=%u reverse_peak=%u generation_storage=%u payload_with_undo=%u\n",
+            cntrl::memory_used,cntrl::memory_peak,loop.storage_bytes(),loop.payload_bytes());
+        cntrl::memory_peak = cntrl::memory_used;
+        assert(loop.direction({0,1,false}));
+        MidiFile *saved = loop.save_begin(); assert(saved);
+        uint8_t bytes[64];
+        for (unsigned offset = 0; offset < saved->size();) {
+            const unsigned length = std::min(unsigned(sizeof(bytes)),saved->size() - offset);
+            assert(saved->read(offset,bytes,length)); offset += length;
+        }
+        loop.save_complete(true);
+        std::printf("  direction_and_save_retained=%u direction_and_save_peak=%u\n",cntrl::memory_used,cntrl::memory_peak);
     }
     assert(cntrl::memory_used == 0);
 }

@@ -189,6 +189,7 @@ public:
         if (!configure_ports()) { error("Port memory unavailable"); return; }
         pages_.layout(document.valid() ? document.page_layout() : cntrl::PageLayout{});
         if (looper_files_) {
+            looper_sink_->configure_loop_controls(document.valid() ? document.loop_stop_settings() : nullptr);
             looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none;
             if (looper_files_->looper.clear()) {
                 if (const auto *p = document.valid() ? document.looper_settings() : nullptr) {
@@ -291,7 +292,8 @@ public:
         if (looper_files_) {
             looper_files_->looper.stop();
             looper_files_->looper.poll(pages_.beat_position(platform_.microseconds()),pages_.clock_ready(),platform_.clock_available(),*looper_sink_);
-            if (looper_sink_->loop_cleaning() || looper_files_->storage_busy()) return false;
+            if (looper_sink_->loop_cleaning() || looper_sink_->loop_control_reset_pending()
+                || looper_files_->storage_busy()) return false;
         }
         return !pages_.generator.stopping();
     }

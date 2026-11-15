@@ -51,12 +51,19 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | Tag 1 | Required, first, singleton core snapshot |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
-The setup core snapshot uses the explicitly encoded `CSW1` schema 47,
+The setup core snapshot uses the explicitly encoded `CSW1` schema 48,
 including its indexed graph, fixed settings and retained source metadata. It is
 one record inside the authoritative document, not a separately editable cache.
 The inner body checksum and length are retained. Numeric edits update both the
 core and envelope checksums. Existing bare setup documents are development
 import inputs, not released f0 files.
+
+Schema 48 adds the optional `CLRS` loop-stop policy section before `CLOP`.
+Its seven-byte header contains the magic, an enabled byte and a u16 record count.
+Each seven-byte neutral record contains output route, parameter kind and
+zero-based channel bytes, followed by u16 parameter address and neutral value.
+Parameter kind numbers use the existing logical MIDI parameter encoding.
+An absent section leaves continuous controls unchanged when a loop stops.
 
 The core's offsets, operation encodings and units are described by the
 [setup wire layout](../firmware/README.md#binary-and-transfer-protocol) and the checked-in

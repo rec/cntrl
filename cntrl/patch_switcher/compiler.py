@@ -18,6 +18,7 @@ from . import (
     graphics,
     inputs,
     layout,
+    loop_reset,
     looper,
     midi_endpoints,
     midi_messages,
@@ -742,6 +743,7 @@ def compile_show(
             show.pickup_pairing_ms,
             [compiler.presentation(i)[1].pickup for i in range(len(compiler.values))],
         )
+        + loop_reset.pack(show, target)
         + looper_settings
         + arpeggiator_settings
         + b'CNAM'
@@ -2562,7 +2564,7 @@ def _optional(value: int | None) -> int:
 
 HEADER = struct.Struct('<4sHHIHHHHII')
 METADATA = struct.Struct('<4sHHHBBHH23H4sH6BII')
-DOCUMENT_VERSION = 47
+DOCUMENT_VERSION = 48
 LOOPER_ACTIONS = (
     'record',
     'play-stop',

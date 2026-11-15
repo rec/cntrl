@@ -162,7 +162,8 @@ def compile_command(
         cpp += f' -DCNTRL_GIT_COMMIT=0x{commit}'
     properties = {
         'build.flags.ld': (
-            '-Wl,--gc-sections,--relax,--no-warn-rwx-segments '
+            '-Wl,--gc-sections,--relax,--no-warn-rwx-segments,--print-memory-usage '
+            f'"-Wl,-Map,{(work / "cntrl.map").as_posix()}" '
             f'"-T{linker.as_posix()}" "-T{(root / "memory.ld").as_posix()}"'
         ),
         'build.flags.c': f'{common} {include}',

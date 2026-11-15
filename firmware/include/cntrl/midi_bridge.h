@@ -3,6 +3,7 @@
 #include "midi_packet.h"
 #include "midi_pickup.h"
 #include "midi_ownership.h"
+#include "midi_loop_reset.h"
 #include "checked_array.h"
 #include "input_notes.h"
 #include <cstdint>
@@ -202,6 +203,22 @@ struct Sink {
         if (keys > UINT32_MAX - arpeggiator_keys_ || !ownership_.reserve(keys + arpeggiator_keys_)) return false;
         loop_keys_ = keys; return true;
     }
+    bool begin_loop_preparation() {
+        return state_.begin_identity_stream(&loop_keys_,65536);
+    }
+    bool prepare_loop_packet(unsigned output, const Packet &packet, const Parameter *logical = nullptr) {
+        return state_.require_packet(&loop_keys_,65536,output,packet.bytes,packet.size(),!logical)
+            && (!logical || state_.require_parameter(&loop_keys_,65536,output,*logical));
+    }
+    bool finish_loop_preparation(unsigned claims) {
+        if (!state_.finish_requirements(&loop_keys_,65536) || !reserve_loop_ownership(claims)) return false;
+        if (auto *entry = state_.owner_state(&loop_keys_,65536)) entry->requirements.release();
+        loop_prepared_ = true; return true;
+    }
+    void release_loop_preparation() {
+        state_.end_identity_stream(&loop_keys_,65536);
+        loop_prepared_ = false;
+    }
     bool reserve_playback_state(unsigned keys, unsigned outputs, unsigned channels, unsigned kind = 0) {
         return state_.reserve_playback(keys, outputs, channels, kind);
     }
@@ -230,11 +247,28 @@ struct Sink {
     bool submit_loop(unsigned destination, const Packet &packet) {
         memory_refused_ = false;
         if (destination >= 16) return false;
+        if (!loop_reset_.prepare(destination,packet)) { memory_refused_ = true; return false; }
         if (!pickup_.flush(destination, now_, state_, Writer{*this}, true)) return false;
         if (!ownership_.submit(destination, packet, true, RawWriter{*this, 0}, 65536, &memory_refused_)) return false;
+        loop_reset_.accepted(destination,packet);
         pickup_.observe(state_); return true;
     }
+    void configure_loop_controls(const uint8_t *settings) { loop_reset_.configure(settings); }
+    void begin_loop_control_reset() { loop_reset_.begin(); }
+    bool loop_control_reset_pending() const { return loop_reset_.pending(); }
+    void poll_loop_control_reset(unsigned available) {
+        loop_reset_.poll(available,[&](unsigned output,ParameterTransaction &transaction) { return submit_parameter(output,transaction); });
+    }
     bool loop_cleaning(unsigned outputs = 0xffff) const { return ownership_.cleaning(outputs); }
+    bool notes_active(unsigned outputs = 0xffff) const { return ownership_.notes_active(outputs); }
+    template<class Visit> void each_note(Visit visit) const { ownership_.each_note(visit); }
+    template<class Visit> void each_source(Visit visit) const { ownership_.each_source(visit); }
+    bool source_cleaning(unsigned source, unsigned outputs = 0xffff) const { return ownership_.cleaning(outputs,source); }
+    bool release_source(unsigned source, unsigned available = 0xffff) {
+        const bool accepted = ownership_.release(available,RawWriter{*this},source);
+        pickup_.observe(state_); return accepted;
+    }
+    void forget_source(unsigned source, unsigned outputs = 0xffff) { ownership_.forget_source(source,outputs); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(sink_release_loop)
 #endif
@@ -306,31 +340,36 @@ struct Sink {
         transaction = {};
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(sink_loop_group)
+    CNTRL_FLASH_ROUTINE(sink_group)
 #endif
-    bool submit_loop_group(unsigned output, const Packet &packet, const Parameter &parameter, uint64_t token, bool first, bool last) {
-        if (output >= 16 || !token || packet.bytes[0] >> 4 != 11) return false;
+    bool submit_group(unsigned output, const Packet &packet, const Parameter &parameter, uint64_t token, bool first, bool last, unsigned kind) {
+        if (output >= 16 || !token || packet.bytes[0] >> 4 != 11 || kind > 1) return false;
+        const bool loop = !kind;
+        if (loop && !loop_reset_.prepare(output,packet,&parameter)) { memory_refused_ = true; return false; }
         auto &lock = parameter_locks_[output];
         if (lock.token && lock.token != token) return false;
         if (first && !pickup_.flush(output,now_,state_,Writer{*this},true)) return false;
-        if (!state_.prepare(output,packet.bytes,packet.size(),first ? &parameter : nullptr, 0)) return false;
+        if (!state_.prepare(output,packet.bytes,packet.size(),first ? &parameter : nullptr,
+            loop && loop_prepared_ ? 3 : kind,loop && loop_prepared_ ? &loop_keys_ : nullptr,65536)) return false;
         if (first && observer_ && !observer_->parameter_write(output,packet.bytes,packet.size(),&parameter,0)) { state_.finish_preparation(false); return false; }
         if (!write_packet(output,packet)) { state_.finish_preparation(false); return false; }
+        if (loop) loop_reset_.accepted(output,packet,&parameter);
         state_.record(output,packet.bytes,packet.size()); packet_sent(output,packet);
         lock = {parameter,last ? 0 : token,0};
         if (last) pickup_.observe(state_);
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(sink_abandon_loop_group)
+    CNTRL_FLASH_ROUTINE(sink_abandon_group)
 #endif
-    void abandon_loop_group(unsigned output, uint64_t token) {
+    void abandon_group(unsigned output, uint64_t token) {
         if (output >= 16 || parameter_locks_[output].token != token) return;
         ParameterTransaction transaction{parameter_locks_[output].parameter,token};
         abandon_parameter(output,transaction);
     }
     void forget_output(unsigned output) {
         if (output < 16) parameter_locks_[output] = {};
+        loop_reset_.forget(output);
         state_.forget(output);
         pickup_.release_output(output, [&](const void *identity) {
             state_.end_identity_stream(identity, pickup_owner); ownership_.finish_source(identity, pickup_owner);
@@ -344,6 +383,8 @@ struct Sink {
         if (step >= sizeof(controls) || channel >= 16) return false;
         Packet packet{11, {uint8_t(0xb0 | channel), controls[step], 0}};
         if (!write_packet(output, packet)) return false;
+        ownership_.reset(output,packet);
+        state_.record(output,packet.bytes,packet.size());
         packet_sent(output, packet); return true;
     }
 protected:
@@ -378,7 +419,9 @@ private:
     };
     Pickup pickup_;
     Ownership ownership_;
+    LoopControlReset loop_reset_;
     unsigned loop_keys_ = 0, arpeggiator_keys_ = 0;
+    bool loop_prepared_ = false;
     uint32_t now_ = 0;
     MidiState state_;
     ParameterTransaction parameter_locks_[16] = {};
@@ -402,9 +445,10 @@ private:
         if (destination >= 16) return false;
         bool live_selection = packet.source != 65535 && packet.bytes[0] >> 4 == 11 && packet.bytes[1] >= 98 && packet.bytes[1] <= 101;
         if (parameter_locks_[destination].token && packet.bytes[0] < 0xf8) return false;
-        if (!state_.prepare(destination, packet.bytes, packet.size(), nullptr, identity || writing_owned_ ? 3 : kind,
-                            identity ? identity : writing_owned_ ? state_.active_identity(writing_owner_) : nullptr,
-                            identity ? pickup_owner : writing_owner_)) { memory_refused_ = true; return false; }
+        const bool loop_write = kind == 0 && loop_prepared_;
+        if (!state_.prepare(destination, packet.bytes, packet.size(), nullptr, identity || writing_owned_ || loop_write ? 3 : kind,
+                            identity ? identity : writing_owned_ ? state_.active_identity(writing_owner_) : loop_write ? &loop_keys_ : nullptr,
+                            identity ? pickup_owner : loop_write ? 65536 : writing_owner_)) { memory_refused_ = true; return false; }
         if (observer_ && !live_selection && !observer_->parameter_write(destination, packet.bytes, packet.size(), nullptr, 0)) { state_.finish_preparation(false); return false; }
         if (!write_packet(destination, packet)) { state_.finish_preparation(false); return false; }
         state_.record(destination, packet.bytes, packet.size());
@@ -489,11 +533,15 @@ public:
     void stop() {
         configure(false);
         for (auto &entry : owned_) cancel_owner(entry.owner);
+        const unsigned invalidated = invalidated_;
         for (unsigned i = 0; i < destinations(); ++i) {
             const bool sysex = routes_[i].wire_sysex || routes_[i].terminate;
             disconnect_output(i);
             routes_[i].wire_sysex = routes_[i].terminate = sysex;
         }
+        // Queue cancellation does not replace the physical connection. Keep
+        // accepted source releases and controller resets until handoff drains.
+        invalidated_ = invalidated;
         clock_owner_ = 0;
     }
     // Only forwarded clock/transport is filtered. Notes, SysEx and other real-time

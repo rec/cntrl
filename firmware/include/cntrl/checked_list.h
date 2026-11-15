@@ -162,6 +162,11 @@ public:
     unsigned capacity() const { return capacity_; }
     unsigned memory_bytes() const { return bytes_; }
     unsigned loans() const { return loans_; }
+    bool borrowed_from(const T &value, const CheckedList &source) const {
+        for (auto *node = head_; node; node = node->next)
+            if (&*node->value == &value) return node->origin == &source;
+        return false;
+    }
     bool empty() const { return !size_; }
     T &front() { return *head_->value; }
     const T &front() const { return *head_->value; }

@@ -253,7 +253,7 @@ public:
         CaptureContext context{*this,state_ == State::recording || state_ == State::finishing};
         capture_.flush(clock.value,false,{&context,emit_capture});
         for (auto &voice : voices_) if (voice.active && (state_ == State::stopped || !clock.running || clock.restart != restart_ || clock.value >= voice.end)) {
-            if (voice.token) { sink.abandon_loop_group(voice.output,voice.token); voice.token = 0; }
+            if (voice.token) { sink.abandon_group(voice.output,voice.token); voice.token = 0; }
             if (!(available & (1u << voice.output))) voice.active = false;
             else if (!voice.attacked || (!(busy & (1u << voice.output)) && sink.submit_arpeggiator(voice.output,voice.off))) voice.active = false;
         }
@@ -345,8 +345,9 @@ public:
                     for (unsigned i = 0; i < group.count; ++i) std::copy(group.packets[i].bytes,group.packets[i].bytes + 3,bytes + i * 3);
                     Parameter parameter;
                     if (!parameter.decode_messages(bytes,group.count * 3)) { voice.group = voice.group->next; voice.packet = 0; continue; }
-                    if (!voice.token) voice.token = (uint64_t(1) << 63) | ++next_token_;
-                    accepted = sink.submit_loop_group(voice.output,packet,parameter,voice.token,voice.packet == 0,voice.packet + 1 == group.count);
+                    // Keep this transaction distinct from loop and reset tokens.
+                    if (!voice.token) voice.token = (uint64_t(3) << 62) | ++next_token_;
+                    accepted = sink.submit_group(voice.output,packet,parameter,voice.token,voice.packet == 0,voice.packet + 1 == group.count,1);
                 } else accepted = sink.submit_arpeggiator(voice.output,packet);
                 if (!accepted) { error_ = Error::output; break; }
                 if (++voice.packet == group.count) { voice.packet = 0; voice.token = 0; voice.group = voice.group->next; }

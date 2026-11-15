@@ -1,4 +1,4 @@
-"""The shared live looper's configuration and bounded RAM2 allocation."""
+"""The shared live looper's configuration and initial checked allocation."""
 
 import struct
 
@@ -89,29 +89,11 @@ def estimate_ram(data: bytes) -> int:
 def estimate_arm_ram(data: bytes, *, capture_contexts: int | None = None) -> int:
     if not data:
         return 0
-    _, _, channels, inputs, outputs, events = CONFIG.unpack(data)
-    count = outputs.bit_count()
-    contexts = count * channels.bit_count()
-    if capture_contexts is None:
-        capture_contexts = inputs.bit_count() * 16 * channels.bit_count()
-    # One candidate SMF and index, merge scratch and order, held-note records,
-    # parameter decoder contexts and shared delivery ownership credits.
-    # Published and undo generations are accounted separately at runtime.
-    return (
-        events * 8
-        + 64
-        + 2 * events * 32
-        + events * 4
-        + (events // 2) * 16
-        + capture_contexts * 56
-        + 160 * (events // 2) * count
-        + 72 * events
-        + 132 * events * count
-        + 396 * contexts
-        + 76 * count
-        + 6 * 16
-        + 48
-    )
+    # Initial storage: 32 timestamps (136 charged bytes), 96 MIDI bytes
+    # (104), one checkpoint (16), and eight six-byte capture-held records
+    # (56). Capture/decoder growth and playback admission use actual data;
+    # this does not reserve the configured maximum or future edit storage.
+    return 136 + 104 + 16 + 56
 
 
 CONFIG = struct.Struct('<4s5H')

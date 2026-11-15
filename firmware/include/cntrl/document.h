@@ -14,7 +14,7 @@ constexpr unsigned trs_modes_offset = pages_offset + 2 * PageSettings::clock_out
 constexpr unsigned scrolling_offset = trs_modes_offset + 4;
 constexpr unsigned metadata_header_size = scrolling_offset + 16;
 constexpr unsigned clock_section_size = 2 * (PageSettings::count - PageSettings::clock_outputs);
-constexpr unsigned document_version = 47;
+constexpr unsigned document_version = 48;
 constexpr unsigned gesture_event_count = 12;
 constexpr unsigned gesture_debounce_offset = gesture_event_count * 2;
 constexpr unsigned gesture_record_size = gesture_debounce_offset + 8;
@@ -315,6 +315,27 @@ public:
             for (unsigned i = 0; i < count; ++i) if (bytes[names + 9 + i] > 2) return false;
             pickup = names; names += 9 + count;
         }
+        unsigned loop_reset = 0;
+        if (names + 4 <= length && !std::memcmp(bytes + names, "CLRS", 4)) {
+            if (length - names < 7 || bytes[names + 4] > 1) return false;
+            const unsigned count = u16(bytes + names + 5);
+            if (count > (length - names - 7) / 7) return false;
+            for (unsigned i = 0; i < count; ++i) {
+                const auto *p = bytes + names + 7 + i * 7;
+                midi::Parameter parameter{p[1],p[2],uint16_t(u16(p + 3)),int32_t(u16(p + 5))};
+                if (p[0] >= 16 || !(output_routes & (1u << p[0])) || !parameter.valid()
+                    || (parameter.kind != midi::Parameter::cc7 && parameter.kind != midi::Parameter::cc14
+                        && parameter.kind != midi::Parameter::nrpn7 && parameter.kind != midi::Parameter::nrpn14
+                        && parameter.kind != midi::Parameter::rpn14)
+                    || !output_mask_valid(1u << p[0],bytes + meta + trs_modes_offset,bytes[19],hardware)) return false;
+                for (unsigned j = 0; j < i; ++j) {
+                    const auto *other = bytes + names + 7 + j * 7;
+                    midi::Parameter previous{other[1],other[2],uint16_t(u16(other + 3)),int32_t(u16(other + 5))};
+                    if (p[0] == other[0] && parameter.overlaps(previous)) return false;
+                }
+            }
+            loop_reset = names; names += 7 + count * 7;
+        }
         unsigned looper = 0;
         if (names + 4 <= length && !std::memcmp(bytes + names, "CLOP", 4)) {
             if (length - names < 14 || u16(bytes + names + 4) != 1 || !u16(bytes + names + 6)
@@ -532,6 +553,7 @@ public:
         styles_ = styles + core_; pages_ = page_start + core_; texts_ = texts + core_;
         graph_ = graph + core_; streams_ = streams ? streams + core_ : 0;
         pickup_ = pickup ? pickup + core_ : 0; looper_ = looper ? looper + core_ : 0;
+        loop_reset_ = loop_reset ? loop_reset + core_ : 0;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
@@ -539,6 +561,7 @@ public:
     const uint8_t *midi_streams() const { return streams_ ? data_ + streams_ : nullptr; }
     unsigned midi_streams_size() const { return streams_ ? u32(data_ + streams_ + 4) : 0; }
     const uint8_t *looper_settings() const { return looper_ ? data_ + looper_ : nullptr; }
+    const uint8_t *loop_stop_settings() const { return loop_reset_ ? data_ + loop_reset_ : nullptr; }
     const uint8_t *arpeggiator_settings() const {
         const auto *p = arpeggiator_section();
         return !std::memcmp(p,"CARP",4) ? p : nullptr;
@@ -668,6 +691,7 @@ public:
         const uint8_t *end = counter_section() + (counters() ? 6 + counters() * 104 : 0);
         if (!std::memcmp(end, "CSTR", 4)) end += u32(end + 4);
         if (!std::memcmp(end, "CPUP", 4)) end += 9 + u16(end + 4);
+        if (!std::memcmp(end, "CLRS", 4)) end += 7 + u16(end + 5) * 7;
         if (!std::memcmp(end, "CLOP", 4)) end += 14;
         return end;
     }
@@ -1103,6 +1127,6 @@ private:
     unsigned core_ = 0, core_length_ = 0;
     bool opaque_ = false;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
-    unsigned graph_ = 0, streams_ = 0, pickup_ = 0, looper_ = 0;
+    unsigned graph_ = 0, streams_ = 0, pickup_ = 0, looper_ = 0, loop_reset_ = 0;
 };
 } // namespace cntrl

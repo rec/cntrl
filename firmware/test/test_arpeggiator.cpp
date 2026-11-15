@@ -1,4 +1,5 @@
 #include <cntrl/midi_arpeggiator.h>
+#include <cntrl/midi_compact_loop.h>
 #include <cntrl/tempo.h>
 #include <cassert>
 #include <vector>
@@ -53,6 +54,48 @@ void held_notes_are_replaced_and_restored() {
     assert(sink.sent.size() == 5 && sink.sent[3].bytes[0] == 0x80 && sink.sent[4].bytes[0] == 0x90);
     note.cin = 8; note.bytes[0] = 0x80; arp.receive(0,0,note,{beat / 2,1,true}); assert(sink.submit(0,note));
     assert(arp.size() == 0 && sink.sent.back().bytes[0] == 0x80);
+}
+void generated_notes_keep_their_attacks_and_releases_when_another_source_holds_the_pitch() {
+    Sink sink; cntrl::midi::MidiArpeggiator arp;
+    auto p = settings(); arp.configure(p.data()); arp.poll({0,1,true},1,0,sink);
+    assert(sink.submit(0,{9,{0x90,60,80},16}));
+    arp.receive(0,0,{9,{0x90,60,100},0},{0,1,true});
+    arp.toggle({0,1,true});
+    arp.poll({beat / 4,1,true},1,0,sink);
+    assert(sink.sent.size() == 2 && sink.sent.back().bytes[0] == 0x90 && sink.sent.back().bytes[2] == 100);
+    arp.stop(); arp.poll({beat / 3,1,true},1,0,sink);
+    assert(sink.sent.size() == 3 && sink.sent.back().bytes[0] == 0x80);
+    assert(sink.submit(0,{8,{0x80,60,0},16}));
+    assert(sink.sent.size() == 4 && sink.sent.back().bytes[0] == 0x80);
+}
+void loop_and_arpeggiator_groups_cannot_share_an_output_lock() {
+    struct LimitedSink : Sink {
+        unsigned allowance = UINT32_MAX;
+        bool write_packet(unsigned output,const cntrl::midi::Packet &packet) override {
+            if (!allowance) return false;
+            --allowance; return Sink::write_packet(output,packet);
+        }
+    } sink;
+    cntrl::midi::MidiArpeggiator arp;
+    auto p = settings(true,2); arp.configure(p.data()); arp.poll({0,1,true},1,0,sink);
+    arp.receive(0,0,{11,{0xb0,1,2}},{0,1,true});
+    arp.receive(0,0,{11,{0xb0,33,3}},{beat / 10000,1,true});
+    assert(arp.record({0,1,true})); arp.poll({beat,1,true},1,0,sink);
+    arp.receive(0,0,{9,{0x90,60,100}},{beat,1,true});
+    arp.receive(0,0,{8,{0x80,60,0}},{beat + beat / 2,1,true});
+    assert(arp.record({beat + beat / 2,1,true})); arp.poll({2 * beat,1,true},1,0,sink);
+    cntrl::midi::CompactLoop loop;
+    const cntrl::midi::Packet group[] = {{11,{0xb0,1,8}},{11,{0xb0,33,9}}};
+    assert(loop.append(group,2,0)); loop.length = beat;
+    cntrl::midi::CompactLoopPlayback playback; assert(playback.bind(loop,false));
+    sink.allowance = 1; playback.poll(0,1,sink);
+    assert(sink.sent.size() == 1 && sink.parameter_locked(0));
+    sink.allowance = 1; arp.poll({2 * beat + beat / 4,1,true},1,0,sink);
+    assert(sink.sent.size() == 1 && sink.parameter_locked(0));
+    sink.allowance = 1; playback.poll(0,1,sink);
+    assert(sink.sent.size() == 2 && sink.sent.back().bytes[1] == 33 && !sink.parameter_locked(0));
+    sink.allowance = UINT32_MAX; arp.poll({2 * beat + beat / 4,1,true},1,0,sink);
+    assert(sink.sent.size() > 2 && sink.sent[2].bytes[1] == 1 && sink.sent[2].bytes[2] == 2);
 }
 void mono_finish_closes_the_final_note_and_plays_it() {
     Sink sink; cntrl::midi::MidiArpeggiator arp;
@@ -316,6 +359,8 @@ int main() {
     live_batches_are_refused_before_their_first_note_exceeds_routing_capacity();
     pending_batches_keep_their_routing_slots_until_delivery_finishes();
     held_notes_are_replaced_and_restored();
+    generated_notes_keep_their_attacks_and_releases_when_another_source_holds_the_pitch();
+    loop_and_arpeggiator_groups_cannot_share_an_output_lock();
     mono_finish_closes_the_final_note_and_plays_it();
     mono_reorders_complete_gestures_and_pairs_repeated_pitches();
     tempo_changes_preserve_the_grid_and_external_start_can_be_armed();

@@ -160,6 +160,41 @@ void test_setup_handoff_releases_state_and_is_bounded() {
     }
 }
 
+void setup_handoff_finds_channels_with_only_counted_notes() {
+    Services services(1); cntrl::midi::Runtime runtime;
+    assert(services.submit(0,{9,{0x92,60,100},7}));
+    assert(services.submit(0,{9,{0x92,60,90},7}));
+    assert(services.state().outputs.empty());
+    for (unsigned i = 0; i < 32 && !runtime.configuration_handoff(services); ++i) runtime.poll(services);
+    assert(runtime.configuration_handoff(services) && !services.notes_active());
+    assert(std::any_of(services.packets.begin(),services.packets.end(),[](const auto &packet) {
+        return packet.bytes[0] == 0xb2 && packet.bytes[1] == 123;
+    }));
+}
+
+void setup_handoff_waits_for_pending_loop_control_resets() {
+    Services services(1); cntrl::midi::Runtime runtime;
+    services.bridge.service(services,0);
+    const uint8_t policy[] = {'C','L','R','S',1,0,0};
+    services.configure_loop_controls(policy);
+    assert(services.submit_loop(0,{14,{0xe0,0,96}}));
+    assert(services.submit_loop(0,{13,{0xd0,80,0}}));
+    services.begin_loop_control_reset();
+    const auto before = services.packets.size();
+    for (unsigned i = 0; i < 32; ++i) {
+        assert(!runtime.configuration_handoff(services));
+        runtime.poll(services);
+    }
+    assert(services.loop_control_reset_pending() && services.packets.size() == before);
+    services.poll_loop_control_reset(3);
+    assert(services.loop_control_reset_pending());
+    assert(!runtime.configuration_handoff(services));
+    services.poll_loop_control_reset(3);
+    assert(!services.loop_control_reset_pending());
+    for (unsigned i = 0; i < 32 && !runtime.configuration_handoff(services); ++i) runtime.poll(services);
+    assert(runtime.configuration_handoff(services) && services.errors == 0);
+}
+
 void test_rotating_sources_and_delivery_precede_file_work() {
     Services services;
     cntrl::midi::Runtime runtime(1, 180);
@@ -483,4 +518,6 @@ int main() {
     test_relay_runs_when_physical_interface_is_disabled();
     test_explicit_routes_replace_forwarding_and_yield_to_utilities();
     test_setup_handoff_releases_state_and_is_bounded();
+    setup_handoff_finds_channels_with_only_counted_notes();
+    setup_handoff_waits_for_pending_loop_control_resets();
 }

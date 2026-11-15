@@ -15,6 +15,7 @@ from . import (
     graphics,
     inputs,
     layout,
+    loop_reset,
     looper,
     midi_endpoints,
     midi_messages,
@@ -74,7 +75,7 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> b
     cursor = counters.section_end(data, relay_outputs.section_end(data, cursor))
     end = midi_processing.section_end(data, cursor)
     streams = data[cursor:end]
-    cursor = pickup.section_end(data, end)
+    cursor = loop_reset.section_end(data, pickup.section_end(data, end))
     end = looper.section_end(data, cursor)
     loop = data[cursor:end]
     cursor = end
@@ -141,7 +142,7 @@ def upgrade(data: bytes) -> bytes:
     if version == DOCUMENT_VERSION:
         export(data)
         return data
-    if version == 46:
+    if version in (46, 47):
         converted = bytearray(data)
         struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
         result = bytes(converted)
@@ -290,6 +291,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     cursor = counters.section_end(data, cursor)
     cursor = midi_processing.section_end(data, cursor)
     cursor = pickup.section_end(data, cursor)
+    cursor = loop_reset.section_end(data, cursor)
     cursor = looper.section_end(data, cursor)
     cursor = arpeggiator.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
@@ -384,7 +386,9 @@ def arm_memory(data: bytes) -> dict[str, int]:
         input_offset + inputs.HEADER.size + len(input_labels(data)) * inputs.RECORD.size
     )
     cursor = counters.section_end(data, relay_outputs.section_end(data, cursor))
-    cursor = pickup.section_end(data, midi_processing.section_end(data, cursor))
+    cursor = loop_reset.section_end(
+        data, pickup.section_end(data, midi_processing.section_end(data, cursor))
+    )
     result: dict[str, int] = {}
     endpoints = endpoint_records(data)
     for name, section, estimate in (
@@ -548,6 +552,8 @@ def export(data: bytes) -> str:
         data,
         midi_processing.section_end(data, counters.section_end(data, counter_offset)),
     )
+    result.update(loop_reset.unpack(data, looper_offset, names))
+    looper_offset = loop_reset.section_end(data, looper_offset)
     if settings := looper.unpack(data, looper_offset, names):
         pages['looper'] = settings
     if settings := arpeggiator.unpack(

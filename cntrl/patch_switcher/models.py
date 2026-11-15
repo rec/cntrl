@@ -1166,6 +1166,57 @@ class Setup(BaseModel, frozen=True):
         Annotated[bool, Field(strict=True)] | None, BeforeValidator(parse_pickup)
     ] = None
     pickup_pairing_ms: Annotated[int, Field(strict=True, ge=0, le=65535)] = 2
+    loop_stop_reset_controls: Annotated[bool, Field(strict=True)] = False
+    loop_stop_neutral_values: list[
+        Annotated[ControlChange | Nrpn | Rpn, Field(discriminator='type')]
+    ] = Field(default_factory=list, max_length=65535)
+
+    @field_validator('loop_stop_neutral_values')
+    @classmethod
+    def neutral_values(
+        cls, values: list[ControlChange | Nrpn | Rpn]
+    ) -> list[ControlChange | Nrpn | Rpn]:
+        addresses: set[tuple[object, ...]] = set()
+        for v in values:
+            if v.output is None or v.channel is None:
+                raise ValueError('loop neutral values require output and channel')
+            if isinstance(v, ControlChange):
+                if (
+                    v.controller
+                    in (
+                        0,
+                        6,
+                        32,
+                        38,
+                        64,
+                        65,
+                        66,
+                        67,
+                        68,
+                        69,
+                        84,
+                        88,
+                        96,
+                        97,
+                        98,
+                        99,
+                        100,
+                        101,
+                    )
+                    or v.controller >= 120
+                ):
+                    raise ValueError('loop neutral values require continuous controls')
+                parts = [v.controller]
+                if v.resolution == 14:
+                    parts.append(v.controller + 32)
+                keys = [(v.output, v.channel, v.type, p) for p in parts]
+            else:
+                keys = [(v.output, v.channel, v.type, v.parameter)]
+            if any(k in addresses for k in keys):
+                raise ValueError('overlapping loop neutral parameters')
+            addresses.update(keys)
+        return values
+
     midi: dict[str, object] | None = None
     # Validate entries independently so one malformed patch cannot hide others.
     instruments: dict[str, object] = Field(default_factory=dict)
