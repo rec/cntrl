@@ -123,11 +123,16 @@ Requires Python 3.13 or later and uv.
 
 ```bash
 uv sync
-uv run pytest
+uv run pytest -n 4 --dist=loadscope
 uv run ruff check --select B,E,F,I cntrl test
 uv run ruff format --check cntrl test
 uv run ty check cntrl test
 ```
+
+`pytest-xdist` is included in the development dependencies. Four-worker runs use
+`loadscope` to keep each module's or class's tests together. For serial execution,
+use `uv run pytest -n 0`. Qualification commands and measured timings are recorded
+in [native-test-profiling.md](doc/native-test-profiling.md#parallel-test-execution).
 
 Native test executables and emulator builds share a persistent binary cache in
 `build/native-cache/`. Unchanged builds are copied into each test's temporary

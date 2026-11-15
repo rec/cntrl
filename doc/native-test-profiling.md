@@ -93,3 +93,30 @@ reversing execution order for the second pair. Every run passed and reported
 | Complete executable, wall time | 12.930 s | 6.875 s |
 
 The compiler helper now enables this optimization for native tests by default.
+
+## Parallel test execution
+
+`pytest-xdist` is a development dependency. Run four worker processes with
+module/class-based scheduling, or disable workers for a serial comparison:
+
+```bash
+uv run --no-sync pytest -q -n 4 --dist=loadscope --durations=10
+uv run --no-sync pytest -q -n 0 --durations=10
+```
+
+Keep the checkout and compiler settings fixed between timed runs. Complete a
+qualification run first so native and emulator caches are populated. A Git
+commit changes the emulator build key and may require rebuilding those binaries.
+
+Measured on the same macOS ARM64 checkout on 2026-11-15, with `pytest-xdist 3.8.0`,
+`-O1`, assertions and the existing sanitizer settings:
+
+| Warm-cache run | Elapsed seconds | Result |
+| --- | ---: | --- |
+| Serial, `-n 0` | 142.00 | 1,854 passed, 1 skipped |
+| Four workers, `-n 4 --dist=loadscope` | 42.91 | 1,854 passed, 1 skipped |
+
+Parallel execution was 3.31 times as fast, saving 99.09 seconds (69.8%). Both runs
+reported the existing display-contrast warning. The preceding four-worker
+qualification also passed, taking 72.64 seconds including some uncached emulator
+builds. No parallel-specific fixes or exclusions were necessary.
