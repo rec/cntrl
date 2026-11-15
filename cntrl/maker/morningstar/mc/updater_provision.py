@@ -18,7 +18,7 @@ def installed(directory: Path) -> Path:
     path = directory / ('tycmd.exe' if sys.platform == 'win32' else 'tycmd')
     if not path.is_file():
         raise ValueError(
-            'run cntrl upload-helper --target-dir cntrl/maker/morningstar/mc '
+            'run cntrl upload-helper --controller mc6-pro '
             'provision before starting the helper'
         )
     if hashlib.sha256(path.read_bytes()).hexdigest() != BINARIES[sys.platform]:

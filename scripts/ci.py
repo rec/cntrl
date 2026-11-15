@@ -181,7 +181,7 @@ def wheel_smoke(root: Path, output: Path) -> None:
     wheels = output / 'wheels'
     wheels.mkdir(exist_ok=True)
     execute(
-        ['uv', 'build', '--wheel', str(root), '--out-dir', str(wheels)],
+        ['uv', 'build', str(root), '--out-dir', str(wheels)],
         output / 'wheel-cntrl.log',
         root,
     )
@@ -233,6 +233,27 @@ def wheel_smoke(root: Path, output: Path) -> None:
             directory,
             environment,
         )
+        for manifest in sorted(
+            (root / 'cntrl/maker').glob('**/distribution/manifest.toml')
+        ):
+            module = '.'.join(
+                [*manifest.parent.parent.relative_to(root).parts, 'check_package']
+            )
+            controller = tomlkit.parse(manifest.read_text())['controller']
+            execute(
+                [
+                    str(python),
+                    '-m',
+                    module,
+                    '--artifacts',
+                    *(str(p) for p in sorted(wheels.iterdir())),
+                    '--installation',
+                    str(directory / str(controller)),
+                ],
+                output / f'installed-firmware-{controller}.log',
+                directory,
+                dict(environment, PATH=''),
+            )
         execute(
             [
                 str(python),

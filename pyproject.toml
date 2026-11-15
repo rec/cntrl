@@ -36,6 +36,16 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+exclude = [
+    "**/.tools",
+    "**/.tools/**",
+    "**/firmware/build/**",
+    "**/archive/**",
+    "**/*.hex",
+    "**/.upload-helper.sock*",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["test", "cntrl"]
 pythonpath = ["."]

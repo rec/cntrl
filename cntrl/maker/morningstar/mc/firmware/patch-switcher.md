@@ -34,7 +34,7 @@ After building and inspecting the combined firmware, use its absolute path and
 exact SHA-256 with the existing upload helper:
 
 ```bash
-cntrl upload-helper --target-dir cntrl/maker/morningstar/mc upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
+cntrl upload-helper --controller mc6-pro upload --image /absolute/path/to/firmware.hex --sha256 DIGEST --serial SERIAL
 ```
 
 The helper snapshots and validates the requested worktree image before flashing

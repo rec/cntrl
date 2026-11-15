@@ -31,7 +31,8 @@ The export itself contains the ordinary portable artifacts and a build manifest
 with a trace ID and expected image SHA-256. The trace ID is a compiled source
 recipe label, not a cryptographic readback of every installed flash byte.
 
-The usual backup/flash/restore flow is:
+The following historical backup/flash/restore command was qualified with the
+matching retained host revision, before packaged firmware distribution:
 
 ```sh
 uv run --frozen --no-editable cntrl flash --target-dir cntrl/maker/morningstar/mc/diagnostic_control --output build/sysex-transport-control --skip-build --port /dev/cu.usbmodem144682801
@@ -40,6 +41,12 @@ uv run --frozen --no-editable cntrl flash --target-dir cntrl/maker/morningstar/m
 This requires the existing user-launched upload helper. It preserves uploader
 exit status and retains its fresh backup in `before/`, including after an upload
 error. Do not start another uploader while one is running.
+
+The current `cntrl flash --controller` command installs packaged firmware or
+current component exports. It does not install this frozen comparison export.
+Use the retained matching host/helper revision for reproducing this historical
+experiment; adapting the frozen control to the new installation protocol needs
+separate qualification.
 
 ## Captures
 

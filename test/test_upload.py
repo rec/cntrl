@@ -6,14 +6,15 @@ from pathlib import Path
 
 import pytest
 
+from cntrl import upload
 from cntrl.patch_switcher import cli
 
 
 @pytest.mark.parametrize(
     ('arguments', 'expected'),
     [
-        (['serve'], 'Serve\n'),
-        (['bootloader'], 'Bootloader\n'),
+        (['serve', '--serial', '12345'], 'Serve\n'),
+        (['bootloader', '--serial', '12345'], 'Bootloader\n'),
         (
             [
                 'upload',
@@ -21,6 +22,8 @@ from cntrl.patch_switcher import cli
                 '/worktree/image with spaces.hex',
                 '--sha256',
                 'a' * 64,
+                '--serial',
+                '12345',
             ],
             f'Upload\n{Path("/worktree/image with spaces.hex")}\n' + 'a' * 64 + '\n',
         ),
@@ -34,7 +37,10 @@ def test_public_helper_commands_preserve_arguments_output_and_exit_status(
 ) -> None:
     target = Path(__file__).parent / 'fixtures/build_target'
     monkeypatch.setattr(
-        sys, 'argv', ['cntrl', 'upload-helper', '--target-dir', str(target), *arguments]
+        upload, 'controller_directory', lambda controller: target / 'distribution'
+    )
+    monkeypatch.setattr(
+        sys, 'argv', ['cntrl', 'upload-helper', '--controller', 'test', *arguments]
     )
     with pytest.raises(SystemExit) as error:
         cli.main()
@@ -48,7 +54,18 @@ def test_public_helper_command_rejects_a_target_without_an_entry(
     monkeypatch.setattr(
         sys,
         'argv',
-        ['cntrl', 'upload-helper', '--target-dir', str(tmp_path), 'serve'],
+        [
+            'cntrl',
+            'upload-helper',
+            '--controller',
+            'test',
+            'serve',
+            '--serial',
+            '12345',
+        ],
+    )
+    monkeypatch.setattr(
+        upload, 'controller_directory', lambda controller: tmp_path / 'distribution'
     )
     with pytest.raises(SystemExit, match='does not provide an upload helper entry'):
         cli.main()

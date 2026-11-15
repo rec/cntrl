@@ -111,15 +111,16 @@ builds. The qualification checks validate image structure and readback and
 compare static section layouts separately from the deterministic asset fixtures.
 
 On macOS and Windows, first run
-`cntrl upload-helper --target-dir cntrl/maker/morningstar/mc provision` to install
+`cntrl upload-helper --controller mc6-pro provision` to install
 the pinned official TyTools 0.9.9 executable in the platform cache. The `serve`
 command defaults to that checksum-verified executable, leaving the Morningstar
 updater application untouched. Set `CNTRL_TYCMD` to select an explicitly managed
 executable instead; Linux requires that override because the pinned release has
 no Linux archive. See [upload-helper.md](firmware/upload-helper.md) for startup
-instructions. The helper snapshots the requested worktree image and preserves
-the sole allowed pedal serial/tag. The bootloader
-command discovers that serial number and sends the same 134-baud line-coding
+instructions. Start `serve --serial SERIAL` to bind the helper to your unit.
+The helper snapshots the requested user-owned image and verifies that unit's
+HalfKay identity. The bootloader command discovers the selected cntrl serial
+port and sends the 134-baud line-coding
 request through pySerial, with no serial payload.
 
 The helper uses authenticated local byte messages over named pipes on Windows
@@ -128,7 +129,9 @@ and image snapshots live in the user's platform cache directory (`LOCALAPPDATA`,
 `~/Library/Caches`, or `XDG_CACHE_HOME`/`~/.cache`). Unix cache/key permissions
 are restricted to the user. Named pipes use local access control plus the cache
 authentication key. Requests remain bounded and accept only an image path and
-digest; board/image checks run before uploader invocation. Restart an old helper
+digest and selected serial; board/image checks run before uploader invocation.
+An authenticated readiness request checks the helper's selected unit before
+resetting the pedal. Restart an old helper
 after updating its transport code.
 
 Windows/Linux physical upload, serial permissions, reboot and MIDI qualification

@@ -205,8 +205,10 @@ def build(
         work.resolve(),
         linker.resolve(),
     )
+    command = compile_command(root, source_root, work, linker, diagnostics=diagnostics)
+    (work / 'compiler-options.toml').write_text(tomlkit.dumps({'command': command}))
     subprocess.run(
-        compile_command(root, source_root, work, linker, diagnostics=diagnostics),
+        command,
         env=environment(root),
         check=True,
         timeout=900,

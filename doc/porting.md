@@ -20,21 +20,20 @@ cntrl build --target-dir path/to/implementation --output build/device
 ```
 
 Targets that support managed firmware installation also supply `flash_entry.py`.
-`cntrl flash --target-dir path/to/implementation --output build/device --port PORT`
-first completes the normal build and then executes that entry with the selected
-interpreter, `--directory` pointing to the build export and `--port` identifying
-the device. The shared source root and temporary-directory environment are the
-same as for the build. The target owns backup, bootloader entry, upload and
-post-upload verification. `--legacy-usb` is forwarded explicitly for upgrading a
-device still using the earlier text-framed cntrl protocol; binary USB remains
-the default. A target without a flash entry is rejected before building.
-Use `--skip-build` to install an existing export with the selected target's
-current flash entry. Its `build.toml` and both declared artifacts must exist
-inside the export directory; the image is not rebuilt.
+`cntrl flash --controller CONTROLLER --port PORT` selects committed resources
+through the adapter's `distribution/manifest.toml`, then executes its flash entry
+with the selected interpreter. The adapter composes locally, owns backup,
+bootloader entry, upload and post-upload verification, and never builds on this
+path. `--output` selects a new durable installation directory; `--prepare-only`
+validates and composes without opening a device. Maintainers can supply
+`--resources build/device/distribution` to use their component export through
+the same path. `--legacy-usb` explicitly selects the earlier cntrl transport.
+The common manifest/cache implementation is `cntrl/firmware/distribution.py`.
 
 For independent helper operations, supply `upload_helper_entry.py`.
-`cntrl upload-helper --target-dir path/to/implementation` executes that entry
-with `serve`, `bootloader`, or `upload --image PATH --sha256 DIGEST` arguments.
+`cntrl upload-helper --controller CONTROLLER` executes that entry with
+`serve --serial SERIAL`, `bootloader --serial SERIAL`, `provision`, or
+`upload --image PATH --sha256 DIGEST --serial SERIAL` arguments.
 The target owns the helper and device access. The common command passes through
 its output and exit status. See [Firmware upload helper](upload_helper.md).
 

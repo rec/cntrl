@@ -1,7 +1,8 @@
-"""Flash dispatch uses the selected target and fails before building without it."""
+"""Packaged flashing dispatch never invokes the maintainer build."""
 
-import shutil
+import subprocess
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import tyro
@@ -9,106 +10,57 @@ import tyro
 from cntrl import flash
 
 
-def test_flash_requires_a_target_entry_before_building(tmp_path: Path) -> None:
-    output = tmp_path / 'output'
-    with pytest.raises(ValueError, match='does not provide a flash entry'):
-        flash.run(flash.Flash(target_dir=tmp_path, output=output, port=Path('/unused')))
-    assert not output.exists()
-
-
-def test_selected_target_receives_the_completed_export(tmp_path: Path) -> None:
-    adapter = Path(__file__).parent / 'fixtures/build_target'
-    output = tmp_path / 'flash output'
-    flash.run(
-        flash.Flash(
-            target_dir=adapter,
-            output=output,
-            port=Path('/unused'),
-            legacy_usb=True,
-        )
+def test_packaged_flash_forwards_first_install_and_never_builds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = tmp_path / 'adapter'
+    adapter.mkdir()
+    (adapter / 'flash_entry.py').touch()
+    monkeypatch.setattr(
+        flash, 'controller_directory', lambda controller: adapter / 'distribution'
     )
-    assert (output / 'firmware.bin').read_bytes() == b'test image\n'
-    assert (
-        output / 'flashed.txt'
-    ).read_bytes() == f'{Path("/unused")}\nTrue\n'.encode()
-
-
-def test_flash_options_select_a_target_and_explicit_legacy_usb() -> None:
+    run = Mock()
+    monkeypatch.setattr(subprocess, 'run', run)
     command = tyro.cli(
         flash.Flash,
         args=[
-            '--target-dir',
-            'adapter',
+            '--controller',
+            'test-pedal',
+            '--serial',
+            '12345',
             '--output',
-            'out',
-            '--port',
-            '/unused',
-            '--legacy-usb',
-            '--skip-build',
+            str(tmp_path / 'installation'),
+            '--first-install',
+            '--stock-version',
+            '1.2.3',
+            '--editor-backup',
+            'backup.file',
         ],
     )
-    assert command.target_dir == Path('adapter') and command.output == Path('out')
-    assert command.port == Path('/unused') and command.legacy_usb
-    assert command.skip_build
+    flash.run(command)
+    arguments = run.call_args.args[0]
+    assert arguments[1] == str(adapter / 'flash_entry.py')
+    assert arguments[2:] == [
+        '--directory',
+        str(tmp_path / 'installation'),
+        '--serial',
+        '12345',
+        '--stock-version',
+        '1.2.3',
+        '--editor-backup',
+        'backup.file',
+        '--first-install',
+    ]
+    assert run.call_count == 1
 
 
-def test_existing_export_uses_the_selected_adapter_without_rebuilding(
-    tmp_path: Path,
+def test_missing_adapter_fails_before_creating_installation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    adapter = tmp_path / 'current adapter'
-    adapter.mkdir()
-    shutil.copyfile(
-        Path(__file__).parent / 'fixtures/build_target/flash_entry.py',
-        adapter / 'flash_entry.py',
+    monkeypatch.setattr(
+        flash, 'controller_directory', lambda controller: tmp_path / 'distribution'
     )
-    output = tmp_path / 'historical export'
-    output.mkdir()
-    (output / 'build.toml').write_text(
-        "image = 'firmware.bin'\ntarget = 'target.toml'\n"
-    )
-    (output / 'firmware.bin').write_bytes(b'historical image\n')
-    (output / 'target.toml').write_text("buttons = ['one']\n")
-    flash.run(
-        flash.Flash(
-            target_dir=adapter, output=output, port=Path('/unused'), skip_build=True
-        )
-    )
-    assert (output / 'firmware.bin').read_bytes() == b'historical image\n'
-    assert (
-        output / 'flashed.txt'
-    ).read_bytes() == f'{Path("/unused")}\nFalse\n'.encode()
-    assert (output / 'tmp').is_dir()
-
-
-@pytest.mark.parametrize('artifact', ['missing.bin', '../outside.bin', '.'])
-def test_existing_export_rejects_invalid_artifacts_before_flashing(
-    tmp_path: Path, artifact: str
-) -> None:
-    adapter = Path(__file__).parent / 'fixtures/build_target'
-    output = tmp_path / 'export'
-    output.mkdir()
-    (tmp_path / 'outside.bin').write_bytes(b'outside\n')
-    (output / 'build.toml').write_text(
-        f"image = '{artifact}'\ntarget = 'target.toml'\n"
-    )
-    (output / 'target.toml').write_text("buttons = ['one']\n")
-    with pytest.raises(ValueError, match='build artifact must be a file inside'):
-        flash.run(
-            flash.Flash(
-                target_dir=adapter, output=output, port=Path('/unused'), skip_build=True
-            )
-        )
-    assert not (output / 'flashed.txt').exists()
-    assert not (output / 'tmp').exists()
-
-
-def test_existing_export_requires_its_manifest_before_flashing(tmp_path: Path) -> None:
-    adapter = Path(__file__).parent / 'fixtures/build_target'
-    output = tmp_path / 'missing export'
-    with pytest.raises(FileNotFoundError):
-        flash.run(
-            flash.Flash(
-                target_dir=adapter, output=output, port=Path('/unused'), skip_build=True
-            )
-        )
+    output = tmp_path / 'installation'
+    with pytest.raises(ValueError, match='does not provide a flash entry'):
+        flash.run(flash.Flash(controller='test', output=output, prepare_only=True))
     assert not output.exists()

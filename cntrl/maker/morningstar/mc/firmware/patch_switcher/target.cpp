@@ -606,9 +606,9 @@ public:
     void reply(const char *text) override {
         if (!std::strncmp(text, "CNTRL READY ", 12)) {
             if (!deployment.ready()) { usb_session.reply("CNTRL ERROR deployment-recovery"); return; }
-            char status[192], response[256]; startup_counter.usb_status(text, status, sizeof(status));
-            std::snprintf(response, sizeof(response), "%s persistent_format=%u persistent_root=%lu", status,
-                cntrl::binary::development_format, (unsigned long)deployment.root());
+            char status[192], response[288]; startup_counter.usb_status(text, status, sizeof(status));
+            std::snprintf(response, sizeof(response), "%s persistent_format=%u persistent_root=%lu model=mc6-pro git=%07x", status,
+                cntrl::binary::development_format, (unsigned long)deployment.root(), unsigned(CNTRL_GIT_COMMIT));
             usb_session.reply(response);
         } else usb_session.reply(text);
     }

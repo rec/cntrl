@@ -11,3 +11,4 @@ build/
 *.hex
 /.cache/reccy-docs/
 /.cntrl-emulator/
+/.cntrl-install/

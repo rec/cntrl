@@ -14,6 +14,8 @@ class Build(BaseModel, frozen=True):
     output: Path
     source_root: Path = Field(default_factory=Path.cwd)
     diagnostics: bool = False
+    publish: bool = False
+    """Publish verified own-code resources into the selected adapter's package."""
 
 
 class Artifacts(BaseModel, frozen=True):
@@ -68,6 +70,7 @@ def run(command: Build) -> Artifacts:
             '--output',
             str(output),
             *(['--diagnostics'] if command.diagnostics else []),
+            *(['--publish'] if command.publish else []),
         ],
         check=True,
         env=environment,

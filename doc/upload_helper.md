@@ -1,15 +1,17 @@
 # Firmware upload helper
 
 Firmware upload helpers belong to the selected implementation and are accessed
-through `cntrl upload-helper --target-dir TARGET_DIR`. The selected directory
-provides `upload_helper_entry.py`; the common CLI does not import maker code.
+through `cntrl upload-helper --controller CONTROLLER`. The packaged physical
+controller profile selects `upload_helper_entry.py`; the common CLI does not
+import maker code.
 
 The independent operations are:
 
 ```bash
-cntrl upload-helper --target-dir TARGET_DIR serve
-cntrl upload-helper --target-dir TARGET_DIR bootloader
-cntrl upload-helper --target-dir TARGET_DIR upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
+cntrl upload-helper --controller CONTROLLER provision
+cntrl upload-helper --controller CONTROLLER serve --serial SERIAL
+cntrl upload-helper --controller CONTROLLER bootloader --serial SERIAL
+cntrl upload-helper --controller CONTROLLER upload --image /absolute/path/to/firmware.hex --sha256 DIGEST --serial SERIAL
 ```
 
 `serve` starts the helper in your Terminal. `bootloader` requests bootloader
@@ -19,9 +21,10 @@ output and exit status are returned unchanged.
 
 Use the running, user-launched upload helper for firmware flashing. Reuse that
 process; do not start a second server. Each upload request supplies an absolute
-HEX image path inside a registered Git worktree and its exact SHA-256. The helper
-validates and snapshots that image, then calls the installed updater. All
-worktrees use the same per-user endpoint; no image is staged in another checkout.
+HEX image path, its exact SHA-256 and the serial selected when starting the
+helper. The file must be regular, owned by the user and not publicly writable.
+The helper validates and snapshots that image, then calls the installed updater.
+All clients use the same per-user endpoint; Git is not required.
 It does not expose arbitrary commands, targets or uploader flags.
 
 Build and inspect the image first, close serial captures, request bootloader

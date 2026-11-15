@@ -67,6 +67,15 @@ jobs:
           key: native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.profile }}-${{ hashFiles('cntrl/uv.lock', 'cntrl/cntrl/fonts/provision.py', 'cntrl/cntrl/**/toolchain.py', 'cntrl/cntrl/**/*.patch') }}
       - name: Use HTTPS for public GitHub dependencies
         run: git config --global url.https://github.com/.insteadOf ssh://git@github.com/
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: ${{ !inputs.cold_cache }}
+        with:
+          path: |
+            ~/Library/Caches/cntrl-firmware
+            ~/.cache/cntrl-firmware
+            ~/AppData/Local/cntrl-firmware
+          key: firmware-stock-${{ runner.os }}-${{ hashFiles('cntrl/cntrl/**/distribution/manifest.toml') }}
+          restore-keys: firmware-stock-${{ runner.os }}-
       - name: Install locked dependencies
         env:
           # middy's native CoreMIDI backend requires macOS 11 or later.
@@ -89,3 +98,5 @@ jobs:
           path: |
             cntrl/reports
             !cntrl/reports/*-source/**
+            !cntrl/reports/export with spaces/**
+            !cntrl/reports/**/*.hex

@@ -1,5 +1,7 @@
 # Upload-only helper
 
+For normal installations, follow [packaged firmware installation](../firmware-distribution.md).
+
 The patch-switcher application has repeatedly booted and communicated over USB
 after uploads through this helper. Firmware and compiled setup data are separate;
 verify both the application boot and the selected setup after an upload.
@@ -14,7 +16,7 @@ Provision the pinned official TyTools 0.9.9 uploader once, without accessing the
 pedal:
 
 ```bash
-cntrl upload-helper --target-dir cntrl/maker/morningstar/mc provision
+cntrl upload-helper --controller mc6-pro provision
 ```
 
 On macOS this verifies the release DMG, mounts it read-only, and copies the
@@ -27,8 +29,7 @@ The Morningstar updater application is not changed.
 Then run in Terminal:
 
 ```bash
-cd /Users/tom/code/cntrl
-cntrl upload-helper --target-dir cntrl/maker/morningstar/mc serve
+cntrl upload-helper --controller mc6-pro serve --serial SERIAL
 ```
 
 Keep that Terminal open. Do not use `sudo`. The helper must be launched by you,
@@ -42,7 +43,7 @@ No HID operation occurs at startup. On macOS it listens on the owner-only Unix
 socket `~/Library/Caches/cntrl-upload/helper.sock`. The manually launched server
 creates an authentication key there; clients only read it. Linux uses
 `$XDG_CACHE_HOME/cntrl-upload/` (default `~/.cache/cntrl-upload/`); Windows uses
-the named pipe `\\.\pipe\cntrl-upload-14468280` and a key under
+the named pipe `\\.\pipe\cntrl-upload` and a key under
 `%LOCALAPPDATA%/cntrl-upload/`.
 There is no TCP listener,
 background installation, automatic upload, reset command or general execution
@@ -60,11 +61,11 @@ abnormal termination can leave a stale socket; diagnose that before removing it.
 
 ## Request an upload
 
-For a complete build, backup, firmware installation and verified data restore,
-use the public command from the repository root:
+For packaged firmware installation with backup and verified data restore,
+use the public command, from any working directory:
 
 ```bash
-cntrl flash --target-dir cntrl/maker/morningstar/mc --output cntrl/maker/morningstar/mc/firmware/build/device-flash --port /dev/cu.usbmodem144682801
+cntrl flash --controller mc6-pro --port PORT
 ```
 
 The upload helper must already be running in your Terminal. Use a fresh output
@@ -72,8 +73,8 @@ directory for each installation. The command retains the immutable backup in
 `before/` and validates its current-format data before asking the pedal to
 reboot. Add `--legacy-usb` only when the installed firmware uses
 the old text-framed USB protocol. This uses the maintained MC backup adapter
-inside cntrl. The command restores and verifies the exact saved data without
-format conversion. Incompatible backups stop the operation before reboot.
+inside cntrl. The command prepares supported format conversions offline, then
+restores and verifies the saved data. Incompatible backups stop before reboot.
 
 The final SD scan can find obsolete movie files that the installed firmware
 cannot read. Those paths are reported and retained in `unavailable-assets.txt`;
@@ -85,7 +86,7 @@ The MC build entry provisions the existing pinned FreeType recipe before
 loading its font-generation helpers, so a fresh dependency installation also
 uses the required rasterizer when invoked through `cntrl`.
 
-The helper's image validation, fixed device identity, snapshotting and sole
+The helper's image validation, selected unit identity, snapshotting and sole
 uploader capability remain in force. Upload is not retried automatically. A
 nonzero uploader exit after reset is followed by application/data verification
 when the device returns, but remains an error because data verification alone
@@ -99,10 +100,10 @@ After building and inspecting the image, close any serial monitor and request
 bootloader entry from the running application:
 
 ```bash
-cntrl upload-helper --target-dir cntrl/maker/morningstar/mc bootloader
+cntrl upload-helper --controller mc6-pro bootloader --serial SERIAL
 ```
 
-This local command discovers the serial port for pedal serial `14468280` and
+This local command discovers the cntrl serial port for the selected unit and
 selects 134 baud.
 The bundled Teensy USB core treats that line-coding request as bootloader entry;
 it is not an application MIDI message or saved setting. No new firmware handler
@@ -118,7 +119,7 @@ necessary for broken firmware that cannot process the USB request.
 Request the upload with the exact image digest:
 
 ```bash
-cntrl upload-helper --target-dir cntrl/maker/morningstar/mc upload --image /absolute/path/to/firmware.hex --sha256 DIGEST
+cntrl upload-helper --controller mc6-pro upload --image /absolute/path/to/firmware.hex --sha256 DIGEST --serial SERIAL
 ```
 
 Codex runs this client command, not the server. `DIGEST` is the SHA-256 of the
@@ -127,13 +128,11 @@ its own image, so the shared helper can serve different agents and worktrees
 without copying their output into the primary checkout. The old `prepare`
 staging command is removed.
 
-The image must be an absolute path whose resolved location is a `.hex` file
-inside one of this repository's registered Git worktrees. Symlinks leading
-outside those worktrees are rejected. The server discovers worktrees using
-`git worktree list`. The per-user endpoint and authentication key are shared
-regardless of which worktree runs the client or server. Git must be on the
-server's PATH.
-The protocol accepts only the image path and digest as a newline-terminated
+The image must be an absolute path to a regular `.hex` file. Symlinks are
+rejected. On POSIX it must be owned by the current user and not writable by
+other users. Git is not required. The per-user endpoint and authentication key
+are shared regardless of the client's working directory.
+The protocol accepts the image path, digest and selected serial as a newline-terminated
 JSON object of at most 8192 bytes, allowing long workspace paths. Unknown fields
 are rejected. No target, executable or extra uploader flags can be supplied.
 
@@ -144,7 +143,7 @@ second server or replace a live socket.
 
 The helper then:
 
-1. Copies the requested worktree HEX into a private temporary directory under
+1. Copies the requested HEX into a private temporary directory under
    `~/Library/Caches/cntrl-upload/`, outside the current Codex writable roots.
    The uploader uses this snapshot, never the mutable build output.
 2. Checks its digest, Intel HEX checksums and contiguous address range, matching
@@ -152,9 +151,9 @@ The helper then:
    Images cannot extend into the reserved `0x607c0000` flash tail.
 3. Calls only the server's updater executable, using `CNTRL_TYCMD` when set or
    the checksum-verified, provisioned TyTools executable.
-   A read-only listing must identify exactly the expected board tag, serial
-   `14468280`, HalfKay description, Teensy 4.1 model and upload capability.
-4. Uploads with compatibility checks enabled and the fixed board selector.
+   A read-only listing must identify exactly the selected serial,
+   HalfKay description, Teensy 4.1 model and upload capability.
+4. Uploads with compatibility checks enabled and that board selector.
    The uploader may restart the application afterward. Its output and exit
    status are returned unchanged; there are no automatic retries.
 

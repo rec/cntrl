@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import stat
 import struct
 import subprocess
 import sys
@@ -9,11 +10,14 @@ from multiprocessing.connection import Client, Listener
 from multiprocessing.context import AuthenticationError
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Literal
 
 import tyro
 from pydantic import BaseModel, TypeAdapter
 from serial import Serial
+from serial.tools.list_ports import comports
 
+from ....firmware.distribution import cache_directory
 from ....firmware.intel_hex import FirmwareImage, read_hex
 from ....patch_switcher.devices import connected
 from ....upload import Bootloader, Provision, Serve, Upload
@@ -23,6 +27,8 @@ from . import updater_provision
 class UploadResult(BaseModel, frozen=True):
     returncode: int
     output: str
+    uploader: str = ''
+    uploader_sha256: str = ''
 
 
 class Board(BaseModel, frozen=True):
@@ -33,29 +39,68 @@ class Board(BaseModel, frozen=True):
     capabilities: list[str]
 
 
-def project_worktrees() -> list[Path]:
-    """Read Git's registered checkouts, with the primary checkout first."""
-    result = subprocess.run(
-        ['git', '-C', str(ROOT), 'worktree', 'list', '--porcelain', '-z'],
-        capture_output=True,
-        check=True,
-    )
-    return [
-        Path(f.removeprefix('worktree ')).resolve()
-        for f in result.stdout.decode().split('\0')
-        if f.startswith('worktree ')
-    ]
+class Check(BaseModel, frozen=True):
+    serial: str
+    check: Literal[True] = True
+
+    model_config = {'extra': 'forbid'}
 
 
-def request_bootloader() -> None:
+def request_bootloader(serial: str) -> None:
     """Select the Teensy USB core's special 134-baud bootloader request."""
-    ports = [d.port for d in connected() if d.serial == BOARD_SERIAL]
+    ports = [d.port for d in connected() if d.serial == serial]
     if len(ports) != 1:
         raise ValueError('the expected pedal is not uniquely present in serial mode')
     with Serial(str(ports[0]), baudrate=134, timeout=5, write_timeout=5):
         pass
     # Do not restore line coding: USB must receive the reboot request.
     print('Bootloader requested; verify HalfKay enumeration before uploading.')
+
+
+def list_boards() -> list[Board]:
+    result = subprocess.run(
+        [str(updater_path()), 'list', '--verbose', '--output', 'json'],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return TypeAdapter(list[Board]).validate_json(result.stdout)
+
+
+def stock_board(serial: str) -> Board:
+    matches = [
+        b
+        for b in list_boards()
+        if b.serial == serial and b.description == 'Morningstar MC6 Pro'
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            'the selected unit is not uniquely identified as Morningstar MC6 Pro'
+        )
+    return matches[0]
+
+
+def request_stock_bootloader(board: Board) -> bool:
+    """Try the Teensy CDC request on the pinned stock USB identity."""
+    ports = [
+        p.device
+        for p in comports()
+        if p.vid == 0x331B
+        and p.pid == 7
+        and p.product == 'Morningstar MC6 Pro'
+        and p.serial_number == board.serial
+    ]
+    if len(ports) == 1:
+        with Serial(ports[0], baudrate=134, timeout=5, write_timeout=5):
+            pass
+        return True
+    if 'reboot' in board.capabilities:
+        subprocess.run(
+            [str(updater_path()), 'reset', '--bootloader', '--board', board.tag],
+            check=True,
+        )
+        return True
+    return False
 
 
 def validate_firmware(image: FirmwareImage) -> None:
@@ -98,14 +143,17 @@ def updater_path() -> Path:
 
 
 def upload_image(request: Upload) -> UploadResult:
-    """Snapshot a worktree image, validate it, then upload to the sole target."""
+    """Snapshot an owned image, validate it, then upload to the selected target."""
     if not request.image.is_absolute():
         raise ValueError('firmware image path must be absolute')
-    source = request.image.resolve(strict=True)
-    if source.suffix != '.hex' or not any(
-        source.is_relative_to(w) for w in project_worktrees()
-    ):
-        raise ValueError('expected a HEX file inside a registered project worktree')
+    source = request.image
+    metadata = source.lstat()
+    if source.suffix != '.hex' or not stat.S_ISREG(metadata.st_mode):
+        raise ValueError('expected a regular, non-symlink HEX file')
+    if os.name != 'nt' and (metadata.st_uid != os.getuid() or metadata.st_mode & 0o022):
+        raise ValueError(
+            'firmware must be owned by the current user and not publicly writable'
+        )
     CACHE_DIRECTORY.mkdir(mode=0o700, parents=True, exist_ok=True)
     with TemporaryDirectory(prefix='upload-', dir=CACHE_DIRECTORY) as directory:
         snapshot = Path(directory) / 'patch-switcher.hex'
@@ -129,8 +177,7 @@ def upload_image(request: Upload) -> UploadResult:
         matches = [
             b
             for b in boards
-            if b.tag == BOARD_TAG
-            and b.serial == BOARD_SERIAL
+            if b.serial == request.serial
             and b.description == 'HalfKay'
             and b.model == 'Teensy 4.1'
             and 'upload' in b.capabilities
@@ -139,31 +186,50 @@ def upload_image(request: Upload) -> UploadResult:
             raise ValueError(
                 'the expected pedal is not uniquely present in HalfKay mode'
             )
-        print(f'Uploading SHA-256 {image.sha256} to {BOARD_TAG}', flush=True)
+        board = matches[0]
+        print(f'Uploading SHA-256 {image.sha256} to {board.tag}', flush=True)
         result = subprocess.run(
-            [updater, 'upload', '--board', BOARD_TAG, str(snapshot)],
+            [updater, 'upload', '--board', board.tag, str(snapshot)],
             capture_output=True,
             text=True,
             check=False,
         )
         output = result.stdout + result.stderr
         print(output, end='', flush=True)
-        return UploadResult(returncode=result.returncode, output=output)
+        return UploadResult(
+            returncode=result.returncode,
+            output=output,
+            uploader=updater,
+            uploader_sha256=hashlib.sha256(Path(updater).read_bytes()).hexdigest(),
+        )
 
 
-def process_request(line: bytes) -> UploadResult:
+def process_request(line: bytes, serial: str) -> UploadResult:
     """Accept one bounded JSON object containing an image path and digest."""
     try:
         if len(line) > REQUEST_LIMIT or not line.endswith(b'\n'):
             raise ValueError(
                 f'expected a newline-terminated request (maximum {REQUEST_LIMIT} bytes)'
             )
-        return upload_image(Upload.model_validate_json(line))
+        request = TypeAdapter(Upload | Check).validate_json(line)
+        if request.serial != serial:
+            raise ValueError(
+                'request serial differs from the unit selected when starting the helper'
+            )
+        if isinstance(request, Check):
+            updater = updater_path()
+            return UploadResult(
+                returncode=0,
+                output='Upload helper ready',
+                uploader=str(updater),
+                uploader_sha256=hashlib.sha256(updater.read_bytes()).hexdigest(),
+            )
+        return upload_image(request)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         return UploadResult(returncode=1, output=f'Upload helper: {error}\n')
 
 
-def serve() -> None:
+def serve(serial: str) -> None:
     """Handle one upload at a time; never replace an existing socket."""
     updater_path()
     if os.name != 'nt':
@@ -173,13 +239,16 @@ def serve() -> None:
     ) as listener:
         try:
             print(f'Upload-only helper listening on {SOCKET_PATH}', flush=True)
-            print('Enter HalfKay before requesting upload. Ctrl-C stops the helper.')
+            print(
+                f'Selected unit: {serial}. Enter HalfKay before uploading. '
+                'Ctrl-C stops the helper.'
+            )
             while True:
                 try:
                     with listener.accept() as connection:
                         if connection.poll(5):
                             result = process_request(
-                                connection.recv_bytes(REQUEST_LIMIT)
+                                connection.recv_bytes(REQUEST_LIMIT), serial
                             )
                             connection.send_bytes(result.model_dump_json().encode())
                 except (OSError, EOFError, AuthenticationError) as error:
@@ -189,7 +258,7 @@ def serve() -> None:
             print('Upload helper stopped.', flush=True)
 
 
-def request_upload(request: Upload) -> UploadResult:
+def request_upload(request: Upload | Check) -> UploadResult:
     with Client(
         str(SOCKET_PATH),
         family=IPC_FAMILY,
@@ -219,9 +288,9 @@ def run(options: Serve | Upload | Bootloader | Provision) -> None:
         if isinstance(options, Provision):
             updater_provision.provision(CACHE_DIRECTORY / 'tytools-0.9.9')
         elif isinstance(options, Serve):
-            serve()
+            serve(options.serial)
         elif isinstance(options, Bootloader):
-            request_bootloader()
+            request_bootloader(options.serial)
         else:
             result = request_upload(options)
             print(result.output, end='')
@@ -242,21 +311,10 @@ def main() -> None:
     run(tyro.cli(Serve | Upload | Bootloader | Provision))
 
 
-ROOT = Path(__file__).resolve().parent
 REQUEST_LIMIT = 8192
-CACHE_DIRECTORY = (
-    Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local'))
-    if os.name == 'nt'
-    else Path.home() / 'Library/Caches'
-    if sys.platform == 'darwin'
-    else Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache'))
-) / 'cntrl-upload'
+CACHE_DIRECTORY = cache_directory() / 'cntrl-upload'
 IPC_FAMILY = 'AF_PIPE' if os.name == 'nt' else 'AF_UNIX'
 SOCKET_PATH = (
-    r'\\.\pipe\cntrl-upload-14468280'
-    if os.name == 'nt'
-    else CACHE_DIRECTORY / 'helper.sock'
+    r'\\.\pipe\cntrl-upload' if os.name == 'nt' else CACHE_DIRECTORY / 'helper.sock'
 )
-BOARD_SERIAL = '14468280'
-BOARD_TAG = '14468280-Teensy'
 FLASH_CONFIG_SHA256 = '65b509525e8b0e6e92e4e6bc8fa39575399b27532e04a55f7a7883212042fe7a'

@@ -5,16 +5,14 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Annotated
-from urllib.request import urlopen
 
 import tyro
 from pydantic import AfterValidator, BaseModel, Field
 from reccy.configuration import units
 
-from ....firmware.intel_hex import FirmwareImage, encode_hex, read_hex
+from ....firmware.intel_hex import FirmwareImage, read_hex
 from ....patch_switcher.models import millisecond_resolution
 from . import toolchain
-from .upload_helper import validate_firmware
 
 
 class Build(BaseModel, frozen=True):
@@ -25,9 +23,12 @@ class Build(BaseModel, frozen=True):
         units.unit_validator('second'),
         AfterValidator(millisecond_resolution),
     ] = 0.05
-    stock: Path = Path(__file__).parent / (
-        '2026-10-16_MC6_PRO_Firmware_v_3_14_0_261016501_0.hex'
-    )
+
+
+class Components(BaseModel, frozen=True):
+    application: Path
+    hook: Path
+    stock_reader: int
 
 
 def combine(
@@ -161,25 +162,10 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
     ).replace(flash, cold)
 
 
-def build(command: Build, *, source_root: Path | None = None) -> None:
+def build(command: Build, *, source_root: Path | None = None) -> Components:
     root = Path(__file__).parent / 'firmware'
     work = root / 'build/boot-switch'
     work.mkdir(parents=True, exist_ok=True)
-    if not command.stock.exists() and command.stock == Build().stock:
-        with urlopen(
-            'https://github.com/Morningstar-Engineering/MC6-PRO-MIDI-Controller/releases/download/v3.14.0/'
-            + command.stock.name,
-            timeout=60,
-        ) as response:
-            data = response.read()
-        import hashlib
-
-        if hashlib.sha256(data).hexdigest() != STOCK_SHA256:
-            raise ValueError('downloaded stock firmware checksum mismatch')
-        command.stock.write_bytes(data)
-    stock = read_hex(command.stock)
-    if stock.sha256 != STOCK_SHA256:
-        raise ValueError('stock firmware does not match the traced v3.14.0 image')
     core = root / '.tools/data/packages/teensy/hardware/avr/1.62.0'
     toolchain.ensure(root)
     original = (core / 'cores/teensy4/imxrt1062_t41.ld').read_text()
@@ -243,21 +229,11 @@ def build(command: Build, *, source_root: Path | None = None) -> None:
     addresses = {
         p[2]: int(p[0], 16) for s in symbols.splitlines() if len(p := s.split()) == 3
     }
-    combined = combine(
-        stock, custom, binary.read_bytes(), addresses['stock_reader'] | 1
+    return Components(
+        application=work / 'cntrl.hex',
+        hook=binary,
+        stock_reader=addresses['stock_reader'] | 1,
     )
-    output = work / 'combined.hex'
-    output.write_text(encode_hex(combined, 0x60000000, 0x60001000))
-    image = read_hex(output)
-    validate_firmware(image)
-    if image.data != combined:
-        raise ValueError('combined HEX readback differs')
-    print(
-        f'{output}: patch mode by default; '
-        f'stock exit pair is configured per visit, '
-        f'{command.switch_window} seconds, no hold'
-    )
-    print(f'SHA256: {image.sha256}')
 
 
 def main() -> None:

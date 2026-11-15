@@ -9,9 +9,13 @@ from typing import Annotated
 import tyro
 from pydantic import BaseModel, ConfigDict, Field
 
+from .firmware.distribution import controller_directory
+
 
 class Serve(BaseModel, frozen=True):
     """Serve upload requests. Launch manually from Terminal."""
+
+    serial: str = Field(min_length=1)
 
 
 class Upload(BaseModel, frozen=True):
@@ -19,6 +23,7 @@ class Upload(BaseModel, frozen=True):
 
     image: Path
     sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    serial: str = Field(min_length=1)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -26,13 +31,15 @@ class Upload(BaseModel, frozen=True):
 class Bootloader(BaseModel, frozen=True):
     """Enter the selected target's bootloader without uploading."""
 
+    serial: str = Field(min_length=1)
+
 
 class Provision(BaseModel, frozen=True):
     """Install the selected target's pinned uploader without accessing a device."""
 
 
 class Helper(BaseModel, frozen=True):
-    target_dir: Path
+    controller: str
     command: (
         Annotated[Serve, tyro.conf.subcommand(name='serve')]
         | Annotated[Upload, tyro.conf.subcommand(name='upload')]
@@ -42,20 +49,28 @@ class Helper(BaseModel, frozen=True):
 
 
 def run(command: Helper) -> None:
-    entry = command.target_dir.resolve() / 'upload_helper_entry.py'
+    entry = controller_directory(command.controller).parent / 'upload_helper_entry.py'
     if not entry.is_file():
         raise ValueError(
             f'{entry}: target does not provide an upload helper entry point'
         )
     options = command.command
     arguments = (
-        ['serve']
+        ['serve', '--serial', options.serial]
         if isinstance(options, Serve)
-        else ['bootloader']
+        else ['bootloader', '--serial', options.serial]
         if isinstance(options, Bootloader)
         else ['provision']
         if isinstance(options, Provision)
-        else ['upload', '--image', str(options.image), '--sha256', options.sha256]
+        else [
+            'upload',
+            '--image',
+            str(options.image),
+            '--sha256',
+            options.sha256,
+            '--serial',
+            options.serial,
+        ]
     )
     result = subprocess.run(
         [sys.executable, str(entry), *arguments],

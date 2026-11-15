@@ -10,16 +10,23 @@ from pydantic import BaseModel
 from ....firmware.capabilities import header
 from ....patch_switcher.compiler import read_document
 from ....patch_switcher.models import Target
-from . import boot_switch, export_fonts, toolchain
+from . import boot_switch, export_fonts, release, toolchain
 
 
 class Build(BaseModel, frozen=True):
     source_root: Path
     output: Path
     diagnostics: bool = False
+    publish: bool = False
 
 
 def run(command: Build) -> None:
+    if command.output.exists() and any(
+        p.name != 'tmp' for p in command.output.iterdir()
+    ):
+        raise ValueError(
+            'choose a new build output directory to preserve previous exports'
+        )
     root = Path(__file__).parent
     toolchain.ensure(root / 'firmware')
     command.output.mkdir(parents=True, exist_ok=True)
@@ -40,13 +47,9 @@ def run(command: Build) -> None:
     (command.output / 'target.toml').write_text(
         tomlkit.dumps(target.model_dump(mode='json', exclude_none=True))
     )
-    boot_switch.build(
+    components = boot_switch.build(
         boot_switch.Build(diagnostics=command.diagnostics),
         source_root=command.source_root,
-    )
-    shutil.copyfile(
-        root / 'firmware/build/boot-switch/combined.hex',
-        command.output / 'firmware.hex',
     )
     shutil.copyfile(
         root / 'firmware/build/boot-switch/cntrl/patch_switcher.ino.elf',
@@ -58,6 +61,14 @@ def run(command: Build) -> None:
     shutil.copyfile(
         root / 'firmware/build/boot-switch/memory.txt', command.output / 'memory.txt'
     )
+    shutil.copyfile(
+        root / 'firmware/build/boot-switch/compiler-options.toml',
+        command.output / 'compiler-options.toml',
+    )
+    release.export(command.output, command.source_root, components)
+    release.prepare(command.output / 'distribution', command.output)
+    if command.publish:
+        release.publish(command.output, command.source_root)
     (command.output / 'build.toml').write_text(
         tomlkit.dumps(
             {

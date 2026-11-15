@@ -42,10 +42,12 @@ d45. The generic specification and fixtures are authoritative for these bytes.
 
 ## Authorized hardware qualification
 
-Once explicitly authorized, use the existing `cntrl flash --skip-build` command
-with the retained build output, target directory and device port. Data restoration
-is a separate `cntrl setup restore` operation. Do not treat an interrupted flash
-as an interrupted data stage.
+Once explicitly authorized, use `cntrl flash --controller mc6-pro` with the
+device port. For a retained current component export, supply
+`--resources BUILD_OUTPUT/distribution`; choose a fresh installation output.
+The managed command backs up, converts, flashes, restores and verifies.
+Standalone `cntrl setup restore` remains available for explicit recovery.
+Do not treat an interrupted flash as an interrupted data stage.
 If the new firmware cannot read the old setup core, restore can install the
 verified offline conversion from recovery mode. It first captures the current
 raw stores with digests and retains their original device root. Unknown active

@@ -83,12 +83,13 @@ uv run --frozen pytest
 ```
 
 See [cross-platform build and uploader setup](cross-platform.md).
-Builds do not flash anything. The helper uploads the
-image only from a registered project worktree. Keep an existing helper
+Builds do not flash anything. See [packaged firmware installation](firmware-distribution.md)
+for toolchain-free flashing. The helper accepts verified, user-owned images
+without requiring a checkout. Keep an existing helper
 running between uploads; restart it when its source or IPC changes. An
 address-in-use error can mean it is already serving, not that its socket is stale.
 
-`cntrl flash` retains the original pedal backup in the export's `before/`
+`cntrl flash --controller mc6-pro` retains the original pedal backup in the installation's `before/`
 directory and prepares a separate `restore/` copy before entering the bootloader.
 Setups, history snapshots and song sources from versions 36, 38, 39 and 40 are
 upgraded without recompiling their patches. Old page window
