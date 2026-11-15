@@ -1,5 +1,7 @@
 """Offline qualification policy and supervision; no USB/MIDI endpoints are opened."""
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 from threading import Event
@@ -163,10 +165,7 @@ def test_raw_capture_rotates_without_losing_the_latest_evidence(tmp_path: Path) 
     [
         ('passed', True),
         ('failed', False),
-        ('hung', False),
         ('malformed', False),
-        ('slow_upload', False),
-        ('busy', False),
     ],
 )
 def test_supervisor_requires_both_a_success_report_and_a_clean_worker_exit(
@@ -198,15 +197,117 @@ def test_supervisor_requires_both_a_success_report_and_a_clean_worker_exit(
     assert (tmp_path / 'evidence.txt').read_text() == 'retained bytes'
     if not expected:
         assert (tmp_path / 'failure-captured.txt').exists()
+
+
+@pytest.mark.parametrize('behavior', ['hung', 'busy', 'slow_upload'])
+def test_supervisor_deadlines_preserve_evidence_and_protect_uploads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, behavior: str
+) -> None:
+    class Clock:
+        now = 0.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+        def sleep(self, seconds: float) -> None:
+            self.now += seconds
+            assert self.now < 10  # A broken supervisor must not loop forever.
+
+    clock = Clock()
+
+    class Worker:
+        pid = 1234
+        returncode: int | None = None
+        terminated = False
+
+        def poll(self) -> int | None:
+            if behavior == 'busy':
+                heartbeat = tmp_path / 'heartbeat.txt'
+                stamp = round((clock.now + 1) * 1_000_000_000)
+                os.utime(heartbeat, ns=(stamp, stamp))
+            if (
+                behavior == 'slow_upload'
+                and (tmp_path / 'failure-captured.txt').exists()
+            ):
+                (tmp_path / 'upload-finished.txt').write_text('not interrupted')
+                self.returncode = 0
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self.returncode = -15
+
+        def wait(self, timeout: float) -> int:
+            assert self.returncode is not None
+            return self.returncode
+
+    worker = Worker()
+
+    def start(command: list[str], **options: object) -> Worker:
+        assert options['start_new_session'] is True
+        (tmp_path / 'heartbeat.txt').write_text('started')
+        (tmp_path / 'evidence.txt').write_text('retained bytes')
+        (tmp_path / 'result.toml').write_text('success = true\n')
+        return worker
+
+    captures: list[float] = []
+
+    def capture(pid: int, directory: Path) -> None:
+        assert pid == worker.pid
+        captures.append(clock.now)
+        (directory / 'failure-captured.txt').write_text(str(pid))
+
+    monkeypatch.setattr(usb_reliability, 'time', clock)
+    monkeypatch.setattr(usb_reliability.subprocess, 'Popen', start)
+    assert not usb_reliability.supervise(
+        ['worker'],
+        tmp_path,
+        0.5 if behavior == 'slow_upload' else 5,
+        uploading=behavior == 'slow_upload',
+        capture=capture,
+        maximum_seconds=5 if behavior == 'busy' else None,
+    )
+    assert len(captures) == 1
+    assert (
+        0.5 < captures[0] <= 0.7
+        if behavior == 'slow_upload'
+        else 5 < captures[0] <= 5.3
+    )
+    assert worker.terminated is (behavior != 'slow_upload')
+    assert (tmp_path / 'evidence.txt').read_text() == 'retained bytes'
+    report = tomlkit.parse((tmp_path / 'supervisor.toml').read_text())
+    assert report['stalled'] is True
+    assert report['worker_alive'] is False
+    assert report['worker_report_passed'] is True
+    assert report['deadline_exceeded'] is (behavior == 'busy')
     if behavior == 'slow_upload':
         assert (tmp_path / 'upload-finished.txt').read_text() == 'not interrupted'
-    if behavior == 'busy':
-        assert (
-            tomlkit.parse((tmp_path / 'supervisor.toml').read_text())[
-                'deadline_exceeded'
-            ]
-            is True
-        )
+
+
+def test_stalled_worker_is_terminated_and_reaped(tmp_path: Path) -> None:
+    script = Path(__file__).parent / 'fixtures/reliability_worker.py'
+    with subprocess.Popen(
+        [
+            sys.executable,
+            str(script),
+            '--directory',
+            str(tmp_path),
+            '--behavior',
+            'hung',
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    ) as process:
+        try:
+            assert process.stdout is not None
+            assert process.stdout.readline() == 'ready\n'
+            assert process.poll() is None
+            assert usb_reliability.stop_worker(process)
+            assert process.returncode is not None and process.returncode != 0
+        finally:
+            if process.poll() is None:
+                process.kill()
+    assert (tmp_path / 'evidence.txt').read_text() == 'retained bytes'
 
 
 def test_recovery_is_offered_only_for_a_completed_backup(tmp_path: Path) -> None:

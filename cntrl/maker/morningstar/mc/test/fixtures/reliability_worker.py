@@ -14,8 +14,6 @@ class Behavior(StrEnum):
     failed = auto()
     hung = auto()
     malformed = auto()
-    slow_upload = auto()
-    busy = auto()
 
 
 class Options(BaseModel, frozen=True):
@@ -31,21 +29,11 @@ def main(options: Options) -> None:
         path.write_text('[')
         return
     path.write_text('success = true\n')
+    print('ready', flush=True)
     if options.behavior == Behavior.failed:
         sys.exit('simulated worker failure after report publication')
     if options.behavior == Behavior.hung:
         time.sleep(60)
-    if options.behavior == Behavior.busy:
-        while True:
-            (options.directory / 'heartbeat.txt').write_text('still busy')
-            time.sleep(0.05)
-    if options.behavior == Behavior.slow_upload:
-        deadline = time.monotonic() + 15
-        while not (options.directory / 'failure-captured.txt').exists():
-            if time.monotonic() >= deadline:
-                sys.exit('supervisor did not detect the stalled upload')
-            time.sleep(0.01)
-        (options.directory / 'upload-finished.txt').write_text('not interrupted')
 
 
 if __name__ == '__main__':

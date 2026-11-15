@@ -1,5 +1,6 @@
 """Native controller scenarios use the production compiler, renderer and MIDI."""
 
+from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
 from time import monotonic
@@ -366,18 +367,73 @@ def test_cleanup_releases_accepted_notes(
         )
 
 
+@pytest.mark.parametrize('partial', [False, True])
 def test_an_unresponsive_native_request_has_a_deadline(
-    backend_files: BackendFiles, tmp_path: Path
+    backend_files: BackendFiles,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    partial: bool,
 ) -> None:
     files = backend_files
     with backend.Session(
         files.layout, files.target, files.executable, tmp_path, files.setup
     ) as session:
         session.response_timeout = 0.1
-        started = monotonic()
-        with pytest.raises(ValueError, match='native emulator'):
+
+        class Clock:
+            now = 0.0
+
+            def monotonic(self) -> float:
+                return self.now
+
+        clock = Clock()
+
+        class Watchdog:
+            def __init__(self, interval: float, action: Callable[[], object]) -> None:
+                self.deadline = clock.now + interval
+                self.action = action
+                self.started = self.cancelled = self.fired = False
+                self.daemon = False
+
+            def start(self) -> None:
+                self.started = True
+
+            def cancel(self) -> None:
+                self.cancelled = True
+
+        watchdogs: list[Watchdog] = []
+
+        def timer(interval: float, action: Callable[[], object]) -> Watchdog:
+            watchdog = Watchdog(interval, action)
+            watchdogs.append(watchdog)
+            return watchdog
+
+        def get(timeout: float) -> bytes:
+            clock.now += timeout / 2 if partial and clock.now == 0 else timeout
+            watchdog = watchdogs[0]
+            if (
+                watchdog.started
+                and not watchdog.cancelled
+                and clock.now >= watchdog.deadline
+            ):
+                watchdog.action()  # Kill the real native process at its deadline.
+                watchdog.fired = True
+            if partial:
+                return b'\0'  # Incomplete frames must not restart the deadline.
+            raise backend.Empty
+
+        monkeypatch.setattr(backend, 'time', clock)
+        monkeypatch.setattr(backend, 'Timer', timer)
+        monkeypatch.setattr(session.output, 'get', get)
+        with pytest.raises(ValueError, match='native emulator response timed out'):
             session.advance(0xFFFFFFFFFFFFFFFF)
-        assert monotonic() - started < 5
+        assert clock.now == pytest.approx(session.response_timeout)
+        assert watchdogs[0].started and watchdogs[0].fired and watchdogs[0].cancelled
+        assert session.failed
+        with pytest.raises(ValueError, match='no longer usable'):
+            session.request(b'\0')
+    assert session.process.returncode is not None
+    assert not session.reader.is_alive()
 
 
 def test_bundle_references_execute_the_other_setup(

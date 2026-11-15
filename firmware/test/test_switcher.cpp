@@ -1,6 +1,7 @@
 #include "patch_hardware.h"
 #include <cntrl/documents.h>
 #include <cassert>
+#include <chrono>
 #include <initializer_list>
 #include <fstream>
 #include <filesystem>
@@ -754,8 +755,17 @@ static void test_pages_run_independently(const std::string &path) {
 }
 
 int main(int argc, char **argv) {
-    assert(argc == 3);
+    const bool profiling = argc == 4 && !std::strcmp(argv[3], "--profile");
+    assert(argc == 3 || profiling);
+    auto last = std::chrono::steady_clock::now();
+    const auto mark = [&](const char *name) {
+        if (!profiling) return;
+        const auto now = std::chrono::steady_clock::now();
+        std::cerr << name << ": " << std::chrono::duration<double>(now - last).count() << " s\n";
+        last = now;
+    };
     test_pages_run_independently(argv[1]);
+    mark("independent pages");
     std::ifstream file(argv[1]);
     std::string hex; file >> hex;
     assert(!hex.empty() && hex.size() % 2 == 0);
@@ -764,6 +774,7 @@ int main(int argc, char **argv) {
         bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     Fake hw;
     test_catalogue_jobs_are_bounded_and_preserve_order(bytes);
+    mark("catalogue jobs");
     cntrl::Document doc;
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
     test_setup_applies_usb_ports(bytes);
@@ -858,7 +869,9 @@ int main(int argc, char **argv) {
         cntrl::Document invalid_layout;
         assert(!invalid_layout.load(scaled.data(), unsigned(scaled.size()), hw));
     }
+    mark("setup options and display editing");
     test_revision_history(bytes);
+    mark("revision history");
     test_program_change_brightness(doc);
     test_greyed_names(doc);
     test_configured_scrolling(doc);
@@ -868,6 +881,7 @@ int main(int argc, char **argv) {
     test_greyed_aliases(bytes);
     test_setup_editing_and_empty_ui(bytes);
     test_deletion_and_selection_power_loss(bytes);
+    mark("patch UI, editing and selection power loss");
     for (unsigned n = 0; n < bytes.size(); ++n) {
         cntrl::Document truncated;
         assert(!truncated.load(bytes.data(), n, hw));
@@ -991,6 +1005,7 @@ int main(int argc, char **argv) {
     assert(app.depth() == 1);
     assert(hw.panes[1].lines[1].text[0] && !hw.panes[0].circles[0].diameter);
     test_four_button_navigation(doc);
+    mark("decoder, gestures and undo");
     // Persistent upload, status, reboot, and interrupted inactive-slot writes.
     TestStorage memory;
     Fake io;
@@ -1010,6 +1025,7 @@ int main(int argc, char **argv) {
     cntrl::put32(new_show.data() + 20,
                  cntrl::checksum(new_show.data() + 28, unsigned(new_show.size()) - 28));
     // Every byte boundary in the new slot must leave the previous slot bootable.
+    mark("persistent upload and reboot");
     for (unsigned limit = 0; limit < bytes.size() + 100; ++limit) {
         TestStorage interrupted = memory;
         interrupted.remaining = int(limit);
@@ -1019,6 +1035,7 @@ int main(int argc, char **argv) {
         cntrl::Documents recovery(interrupted, io, runner, io);
         recovery.boot(); assert(!std::strcmp(io.panes[0].lines[1].text, "Flute"));
     }
+    mark("interrupted inactive-slot writes at every byte boundary");
     upload(reboot, new_show);
     assert(io.replies.back() == "CNTRL OK");
     assert(!std::strcmp(io.panes[0].lines[1].text, "Oboe"));
@@ -1034,4 +1051,5 @@ int main(int argc, char **argv) {
     command(reboot, std::string(300, 'x'));
     assert(io.replies.back() == "CNTRL ERROR command-too-long");
     std::cout << "portable controller, decoder, gestures and persistence passed\n";
+    mark("final recovery and protocol checks");
 }
