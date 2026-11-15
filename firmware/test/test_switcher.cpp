@@ -76,6 +76,44 @@ void upload(cntrl::Documents &docs, const std::vector<uint8_t> &data, const char
     while (docs.busy()) docs.tick(1);
 }
 
+void assert_recovers_original(TestStorage &storage, const std::vector<uint8_t> &original) {
+    Fake hardware; TestController controller(hardware);
+    cntrl::Documents recovery(storage, hardware, controller, hardware);
+    recovery.boot();
+    assert(recovery.document().valid());
+    assert(recovery.document().length() == original.size());
+    assert(!std::memcmp(recovery.document().data(), original.data(), original.size()));
+    assert(!std::strcmp(hardware.panes[0].lines[1].text, "Flute"));
+}
+
+// Reuse the successful prefix, but boot the real recovery code after every
+// possible partial write. Actual upload-error paths are exercised separately
+// for each write call; a failed TestStorage write always returns false.
+struct InterruptedUpload : TestStorage {
+    explicit InterruptedUpload(const TestStorage &storage, const std::vector<uint8_t> &original)
+        : TestStorage(storage), original_(original) {}
+    std::vector<unsigned> failure_points;
+    unsigned written = 0, recovered = 0;
+    bool write(const uint8_t *data, unsigned n) override {
+        for (unsigned cut = 0; cut < n; ++cut) {
+            TestStorage interrupted = *this;
+            interrupted.remaining = int(cut);
+            assert(!interrupted.write(data, n));
+            assert_recovers_original(interrupted, original_);
+            ++recovered;
+        }
+        if (n) {
+            failure_points.push_back(written);
+            failure_points.push_back(written + n / 2);
+            failure_points.push_back(written + n - 1);
+        }
+        written += n;
+        return TestStorage::write(data, n);
+    }
+private:
+    const std::vector<uint8_t> &original_;
+};
+
 void sync_program(std::vector<uint8_t> &bytes, const cntrl::Document &document, unsigned index) {
     const uint8_t *cache = bytes.data() + (document.patch(index) - document.data());
     uint8_t *node = bytes.data() + (document.node(document.browser_root(index)) - document.data());
@@ -1024,16 +1062,27 @@ int main(int argc, char **argv) {
     std::memcpy(new_show.data() + first_patch + 12, "Oboe\0\0", 6);
     cntrl::put32(new_show.data() + 20,
                  cntrl::checksum(new_show.data() + 28, unsigned(new_show.size()) - 28));
-    // Every byte boundary in the new slot must leave the previous slot bootable.
+    // Cover every written byte, including the history archive before the new
+    // slot. The former payload-size + 100 budget barely reached its header.
     mark("persistent upload and reboot");
-    for (unsigned limit = 0; limit < bytes.size() + 100; ++limit) {
-        TestStorage interrupted = memory;
-        interrupted.remaining = int(limit);
-        cntrl::Documents replacement(interrupted, io, runner, io);
+    {
+        InterruptedUpload checked(memory, bytes);
+        Fake output; TestController controller(output);
+        cntrl::Documents replacement(checked, output, controller, output);
         replacement.boot(); upload(replacement, new_show);
-        assert(io.replies.back().find("CNTRL ERROR ") == 0);
-        cntrl::Documents recovery(interrupted, io, runner, io);
-        recovery.boot(); assert(!std::strcmp(io.panes[0].lines[1].text, "Flute"));
+        assert(output.replies.back() == "CNTRL OK");
+        assert(!std::strcmp(output.panes[0].lines[1].text, "Oboe"));
+        assert(checked.recovered == checked.written);
+        assert(checked.recovered > bytes.size() + 100);
+        for (unsigned limit : checked.failure_points) {
+            TestStorage interrupted = memory;
+            interrupted.remaining = int(limit);
+            cntrl::Documents failed(interrupted, io, runner, io);
+            failed.boot(); upload(failed, new_show);
+            assert(io.replies.back().find("CNTRL ERROR ") == 0);
+            assert_recovers_original(interrupted, bytes);
+        }
+        if (profiling) std::cerr << "recovered byte boundaries: " << checked.recovered << '\n';
     }
     mark("interrupted inactive-slot writes at every byte boundary");
     upload(reboot, new_show);

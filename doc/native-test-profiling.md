@@ -36,16 +36,42 @@ test executable, on 2026-11-15:
 | Persistent upload and reboot | 0.004 |
 
 The total was approximately 20.43 seconds; interrupted writes accounted for 81%.
-That loop tries every byte boundary in an upload, starting from a copied storage
-image, attempting replacement, then rebooting again to verify the previous setup
-remains readable. This is CPU work against in-memory test storage.
+The original loop replayed the complete upload for each failure budget from
+zero through `payload size + 99`, then rebooted to verify the previous setup.
+Those budgets also paid for archiving the old setup, so this range covered the
+archive and only the start of the new slot's header. This was CPU
+work against in-memory test storage.
 
 A macOS `sample` capture during that loop showed upload/history processing,
 `Revisions::update`, slot checksum/validation during reboot, and byte-vector
 insertion/copying/destruction in `TestStorage`. The sample covered only part of
-the run; the section timings above cover the complete run. No recovery cases or
-history iterations were removed, and no optimization was applied to this test.
+the run; the section timings above cover the complete run before optimization.
 
 For a statistical profile, run the test and, while it is running, use
 `sample <pid> 12 -file <output-path>` on macOS. The resulting text is generated
 profiling data; it does not need to be committed.
+
+## Reusing successful write prefixes
+
+The interrupted-upload test now runs a successful production upload once. At
+each storage write, it copies the current storage image, uses the same partial
+write implementation with every byte limit from zero through `write size - 1`,
+and boots the production recovery code on each copy. The complete original setup
+must match byte-for-byte, and the original display assertion is retained.
+
+This checks all 9,728 byte cuts in the complete archive-and-replacement write
+sequence, including the setup payload and commit marker. The previous loop
+checked 4,868 cuts. Complete-commit success and reboot checks are also retained.
+
+The upload's error-handling paths still run with real injected write failures
+at the start, middle and final byte of every write call. Within a given call,
+every incomplete `TestStorage::write` returns false to the same caller branch;
+each possible partial file image is independently covered by the exhaustive
+recovery checks. Repeating all earlier successful upload/hash work for every
+cut is unnecessary. The test storage's `finish()` does not modify file bytes,
+so the partial image also represents the disk state after failure handling.
+
+On the same checkout and with the same compiler flags and sanitizers, section
+time decreased from 16.1595 seconds to 8.96394 seconds, about 45%, while extending
+the covered range. No production code, compiler optimization settings or history
+iteration counts changed.
