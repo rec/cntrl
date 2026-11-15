@@ -231,6 +231,17 @@ public:
             dirty_ = true;
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_stop)
+#endif
+    void stop() {
+        // Setup replacement cancels actions, including repeating release hooks.
+        if (pending_invocation_) { pending_invocation_ = nullptr; sources_.end(); }
+        prepared_controls_.reset(); pending_.clear(); pending_document_ = Document();
+        destroy_states(); unpin(); bound_.clear(); bindings_ = {};
+        clear_events(); held_ = disarmed_ = 0; transition_ = 0;
+        open_ = closing_ = shifted_ = hooks_enabled_ = false; ++revision_;
+    }
     void close() {
         if (!open_) return;
         if (closing_) {

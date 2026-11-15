@@ -132,6 +132,11 @@ bypass value processors and delays. Cleanup survives patch/setup replacement.
 A new activation waits for required old cleanup. Repeated off requests do not
 queue more cleanup.
 
+A whole-setup change uses the bounded cleanup handoff described in
+[Changing setups](pages.md#changing-setups). A blocked destination cannot keep
+the old setup running indefinitely; incomplete delivery is reported before
+its remaining work is discarded.
+
 Only one LFO can own an output/channel/parameter. Compilation rejects competing
 LFOs, including overlapping coarse/fine CCs and system/patch routes. A manual
 or patch write retires the conflicting LFO writer before taking ownership.

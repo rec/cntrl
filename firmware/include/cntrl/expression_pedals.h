@@ -33,8 +33,8 @@ public:
     }
     void configure(const cntrl::ExpressionAssignment *assignments, midi::Outputs outputs = {}) {
         for (unsigned i = 0; i < inputs_.size(); ++i) {
-            assignments_[i] = assignments[i];
-            const auto *mirror = outputs.route(assignments[i].mirror_route);
+            assignments_[i] = assignments ? assignments[i] : ExpressionAssignment{};
+            const auto *mirror = outputs.route(assignments_[i].mirror_route);
             std::snprintf(mirrors_[i].data(), mirrors_[i].size(), "%s", mirror ? mirror->name : "");
             delivered_[i] = {-1, -1};
             inputs_[i].reset();

@@ -9,6 +9,11 @@
 
 struct Board : TestPatchHardware, cntrl::Replies {
     unsigned sent = 0;
+    bool locked = false, handoff_ready = true;
+    unsigned handoffs = 0;
+    bool configuration_locked() const override { return locked; }
+    bool output_idle() const override { return handoff_ready; }
+    bool configuration_handoff() override { ++handoffs; return handoff_ready; }
     void reply(const char *) override {}
     void data(const uint8_t *, unsigned) override { assert(false); }
     bool send(const char *, const uint8_t *, unsigned) override { ++sent; return true; }
@@ -81,6 +86,15 @@ void test_saving_and_history(File &file, Board &board) {
     for (unsigned i = 0; i < 10000 && documents.busy(); ++i) documents.tick(i);
     assert(!documents.busy() && documents.document().brightness() == 100);
     assert(documents.select("b") && documents.document().brightness() == 101);
+    board.locked = true; board.handoff_ready = false;
+    const auto handoffs = board.handoffs;
+    assert(documents.select("a") && documents.busy());
+    for (unsigned i = 0; i < 4; ++i) documents.tick(i);
+    assert(board.handoffs > handoffs && !std::strcmp(documents.selected(), "b"));
+    board.handoff_ready = true;
+    documents.tick(5);
+    assert(!documents.busy() && !std::strcmp(documents.selected(), "a"));
+    board.locked = false;
     const auto *pinned = storage.setups().get(0); storage.setups().pin(0);
     assert(storage.upload_begin(file.size(), cntrl::checksum(file.bytes.data(), file.size()), 2));
     assert(storage.upload_write(file.bytes.data(), file.size()));

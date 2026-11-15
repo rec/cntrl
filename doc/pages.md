@@ -14,6 +14,35 @@ All configured patch-switchers continue executing queued patches and delays whil
 hidden. They share the setup's patch library, cycles and display templates.
 Shared hardware services, including the MIDI clock, remain shared across pages.
 
+## Changing setups
+
+Selecting another setup stops the current setup's activities instead of refusing
+the selection because they are running. The destination is validated first.
+The Setups menu shows `Changing setup` while the handoff completes; USB selection
+acknowledges completion after the destination is active.
+
+The handoff cancels pending patch sequences, delays, repeated switch gestures,
+song execution and banked-page actions. It stops file players, loopers, LFOs,
+clock generators, arpeggiators, forwarding, processing queues and MIDI monitoring.
+It releases notes, pedal holds and keyboard keys, restores relay resting states,
+clears expression assignments and stops old animations, pulsing and games.
+An active MIDI-file recording is finalized and retained as the latest recording.
+An in-progress save finishes before its buffers are released. The patch editor's
+existing Save/Discard decision still protects unsaved setup edits.
+
+MIDI cleanup has a one-second budget, so an unplugged or blocked output cannot
+prevent changing setups indefinitely. Incomplete delivery is reported and old
+pending traffic is discarded. Bytes already accepted by physical transmitters
+can finish transmitting. Storage errors and an invalid or unaffordable destination
+remain errors; they are not reported as a successful switch.
+If activation fails after cleanup, the old setup stays stopped and another
+selection can be attempted.
+
+The new setup starts with fresh runtime state and its own configured defaults.
+Its system generators may start automatically. Old switch holds and delayed
+actions do not carry into it. Browsing between pages in the same setup continues
+to preserve background performance.
+
 ## Regions and focus
 
 Each region contains at least one page, and every page belongs to exactly one

@@ -312,6 +312,10 @@ public:
         std::snprintf(result.set, 64, "%s", active_set_); std::snprintf(result.song, 64, "%s", current_song_);
         return result;
     }
+    void stop_execution() {
+        pending_function_ = resume_pending_ = invocation_pending_ = false;
+        previous_cursor_ = {}; error_ = "";
+    }
     void cancel_function() {
         if (!pending_function_) return;
         restore_cursor(previous_cursor_); removed_ = previous_removed_;

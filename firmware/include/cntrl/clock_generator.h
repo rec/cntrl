@@ -38,6 +38,7 @@ public:
         stop_pending_ = active_; start_pending_ = 0;
         active_ = 0; running_ = false;
     }
+    void discard_cleanup() { stop(); stop_pending_ = 0; phase_ = 0; beats_ = beat_remainder_ = 0; }
     unsigned stopping() const {
         return stop_pending_;
     }

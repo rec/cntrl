@@ -338,6 +338,14 @@ struct Sink {
         pickup_.forget(output);
         ownership_.forget(output);
     }
+    // Handoff owns the ports: bypass musical ownership and parameter locks.
+    bool reset_channel(unsigned output, unsigned channel, unsigned step) {
+        static constexpr uint8_t controls[] = {64, 65, 66, 67, 68, 69, 123, 120, 121};
+        if (step >= sizeof(controls) || channel >= 16) return false;
+        Packet packet{11, {uint8_t(0xb0 | channel), controls[step], 0}};
+        if (!write_packet(output, packet)) return false;
+        packet_sent(output, packet); return true;
+    }
 protected:
     virtual void packet_sent(unsigned, const Packet &) {}
     virtual bool write_packet(unsigned destination, const Packet &packet) = 0;
@@ -474,6 +482,19 @@ public:
         if (b.delivery == Delivery::pending) invalidated_ |= 1u << b.route;
         if (b.delivery == Delivery::pending && b.sysex) routes_[b.route].terminate = true;
         b.delivery = Delivery::cancelled;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(bridge_stop)
+#endif
+    void stop() {
+        configure(false);
+        for (auto &entry : owned_) cancel_owner(entry.owner);
+        for (unsigned i = 0; i < destinations(); ++i) {
+            const bool sysex = routes_[i].wire_sysex || routes_[i].terminate;
+            disconnect_output(i);
+            routes_[i].wire_sysex = routes_[i].terminate = sysex;
+        }
+        clock_owner_ = 0;
     }
     // Only forwarded clock/transport is filtered. Notes, SysEx and other real-time
     // bytes keep their order, including those queued before a source change.

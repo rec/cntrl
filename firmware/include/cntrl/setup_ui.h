@@ -16,8 +16,16 @@ public:
         if (!name_[0]) browse(false);
         render();
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_poll)
+#endif
     void poll(uint8_t held) {
         if (locked_ && !held) locked_ = false;
+        if (mode_ == Mode::selecting && !docs_.busy()) {
+            if (docs_.last_error()[0]) { mode_ = Mode::failed; render(); }
+            else if (select_edit_) begin_edit();
+            else close();
+        }
         if (browsing_ && !docs_.busy()) {
             browsing_ = false;
             if (docs_.last_error()[0]) mode_ = Mode::failed;
@@ -43,7 +51,7 @@ public:
     CNTRL_FLASH_ROUTINE(setup_ui_button)
 #endif
     void button(unsigned button, bool down, uint32_t now) {
-        if (!down || locked_ || browsing_ || (mode_ == Mode::saving || mode_ == Mode::history_work)) return;
+        if (!down || locked_ || browsing_ || mode_ == Mode::selecting || (mode_ == Mode::saving || mode_ == Mode::history_work)) return;
         if (mode_ == Mode::failed) {
             if (button == 2 || button == 5) {
                 if (docs_.dirty()) { mode_ = Mode::decision; item_ = 0; render(); }
@@ -64,14 +72,15 @@ public:
                 }
                 if (item_ == 0) {
                     if (!docs_.select(name_)) { hardware_.error("Selection failed"); return; }
-                    close(); return;
+                    if (docs_.busy()) { select_edit_ = false; mode_ = Mode::selecting; render(); }
+                    else close();
+                    return;
                 }
                 if (name_compare(name_, docs_.selected())) {
                     if (!docs_.select(name_)) { hardware_.error("Selection failed"); return; }
+                    if (docs_.busy()) { select_edit_ = true; mode_ = Mode::selecting; render(); return; }
                 }
-                if (!docs_.edit_begin()) return;
-                mode_ = Mode::patch; patch_ = field_ = 0;
-                if (!docs_.document().patches()) { mode_ = Mode::field; field_ = 5; }
+                begin_edit();
             }
         } else if (mode_ == Mode::history) {
             if (button == 2 && !revision_.number) {
@@ -123,16 +132,25 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, catalogue, action, patch, field, value, decision, saving, failed, history, comparison, history_work };
+    enum class Mode { closed, catalogue, action, selecting, patch, field, value, decision, saving, failed, history, comparison, history_work };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
     unsigned changed_patches_ = 0, changed_routes_ = 0;
     bool changed_settings_ = false, changed_formatting_ = false;
-    bool locked_ = false, browsing_ = false;
+    bool locked_ = false, browsing_ = false, select_edit_ = false;
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
     void close() { mode_ = Mode::closed; docs_.redraw(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_begin_edit)
+#endif
+    void begin_edit() {
+        if (!docs_.edit_begin()) { mode_ = Mode::failed; render(); return; }
+        mode_ = Mode::patch; patch_ = field_ = 0;
+        if (!docs_.document().patches()) { mode_ = Mode::field; field_ = 5; }
+        render();
+    }
     void browse(bool backward) {
         if (docs_.browse(name_, backward)) browsing_ = true;
     }
@@ -165,6 +183,7 @@ private:
             title = "Unsaved edits"; value = item_ == 0 ? "Save" : item_ == 1 ? "Discard" : "Cancel";
         } else if (mode_ == Mode::history_work) { title = "History"; value = "Working..."; }
         else if (mode_ == Mode::saving) { title = "Saving"; value = "Please wait"; }
+        else if (mode_ == Mode::selecting) { title = "Changing setup"; value = "Please wait"; }
         else if (mode_ == Mode::failed) { title = "Operation failed"; value = docs_.last_error(); }
         if (mode_ == Mode::history) {
             title = "History"; value_label = "Revision";

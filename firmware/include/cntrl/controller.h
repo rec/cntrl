@@ -158,6 +158,13 @@ public:
         current_ = last_sent_ = nullptr; cursors_ = preview_cursors_ = nullptr;
     }
     bool busy() const { return executor_.busy(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(controller_stop)
+#endif
+    void stop() {
+        executor_.cancel(); sending_ = -1; cancel_gesture();
+        previewing_ = false;
+    }
     void runtime_brightness(uint8_t value) { brightness_ = value; }
     PatchExecutor &executor() { return executor_; }
     void validation(bool enabled) {

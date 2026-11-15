@@ -23,6 +23,13 @@ public:
     }
     void refresh() { if (active_) switches_.refresh(); }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(banked_page_stop)
+#endif
+    void stop() {
+        switches_.stop(); active_ = leaving_ = false;
+        pending_ = held_ = blocked_ = waiting_ = 0;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(banked_patch_activate)
 #endif
     bool activate(uint32_t held) {

@@ -121,6 +121,10 @@ public:
         clock_changed_ = true;
         dirty_ = true;
     }
+    void stop_setup() {
+        generator.stop(); tap_ = TapTempo(); clock_ = ClockTempo();
+        held_ = flashing_ = false; clock_changed_ = dirty_ = true;
+    }
     bool browse(bool reverse) {
         if (page_ == Page::confirm_firmware) return !reverse;
         if (!layout_.pages()) return false;

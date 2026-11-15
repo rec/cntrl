@@ -475,6 +475,7 @@ public:
         midi_runtime_.streams().finish_load(commit);
         midi_runtime_.finish_arpeggiator_configuration(commit);
         application.finish_pages(commit);
+        midi_runtime_.finish_setup_change(commit);
     }
     bool stage_font(uint32_t key, unsigned size) override { return font_files.stage(key, size); }
     void finish_fonts(bool commit) override {
@@ -484,12 +485,13 @@ public:
     bool output_idle() const override { return bridge_.idle() && trs_ports.idle(); }
     CNTRL_FLASH_ROUTINE(board_configuration_handoff)
     bool configuration_handoff() override {
+        if (!midi_runtime_.changing_setup()) {
 #if CNTRL_SWITCHES
-        if (switches.open()) return false;
+            switches.stop(); performance_switches_ = false;
 #endif
-        midi_files.looper.stop();
-        midi_files.looper.poll(ui_.pages_.beat_position(micros()),ui_.pages_.clock_ready(),clock_available(),*this);
-        return !loop_cleaning() && output_idle() && !midi_files.storage_busy();
+            page_host().stop_setup();
+        }
+        return midi_runtime_.configuration_handoff(*this) && !song_transfer_busy() && !history_import.busy();
     }
     void set_usb_midi(bool device, bool host) override {
         bridge_.configure_usb(device, host, millis());
@@ -1028,7 +1030,20 @@ FLASHMEM bool asset_command(const char *line) {
         }
         if (documents.busy() || documents.dirty() || songs.busy() || songs.executing()
             || songs_transfer.busy() || history_import.busy() || midi_files.storage_busy()
-            || board.midi_file_assets_busy() || application.busy() || !board.configuration_handoff()) {
+            || board.midi_file_assets_busy() || application.busy()) {
+            board.reply("CNTRL ERROR deployment-busy"); return true;
+        }
+        if (std::sscanf(line, "CNTRL DEPLOY COMMIT %lx %lx%n", &bundle, &library, &end) == 2 && end && !line[end]) {
+            // The staged collection is already loaded. Publishing its root must
+            // not stop that runtime again: no subsequent activation follows.
+            if ((!setup_storage.setups().total_setup_ram() || documents.document().valid())
+                && setup_storage.bundle_crc() == uint32_t(bundle) && songs.continuation().crc == uint32_t(library)
+                && deployment.commit()) board.reply("CNTRL OK");
+            else board.reply("CNTRL ERROR deployment-commit");
+            return true;
+        }
+        end = 0;
+        if (!board.configuration_handoff()) {
             board.reply("CNTRL ERROR deployment-busy"); return true;
         }
         if (std::sscanf(line, "CNTRL DEPLOY RECOVER %lx%n", &root, &end) == 1 && end && !line[end]) {
@@ -1053,14 +1068,6 @@ FLASHMEM bool asset_command(const char *line) {
         if (!std::strcmp(line, "CNTRL DEPLOY ABORT")) {
             if (abort_deployment()) board.reply("CNTRL OK");
             else board.reply("CNTRL ERROR deployment-recovery");
-            return true;
-        }
-        end = 0;
-        if (std::sscanf(line, "CNTRL DEPLOY COMMIT %lx %lx%n", &bundle, &library, &end) == 2 && end && !line[end]) {
-            if ((!setup_storage.setups().total_setup_ram() || documents.document().valid())
-                && setup_storage.bundle_crc() == uint32_t(bundle) && songs.continuation().crc == uint32_t(library)
-                && deployment.commit()) board.reply("CNTRL OK");
-            else board.reply("CNTRL ERROR deployment-commit");
             return true;
         }
         board.reply("CNTRL ERROR deployment-command"); return true;

@@ -217,6 +217,19 @@ void loop_capture_keeps_running_status_and_usb_cables_separate() {
     files.looper.poll({beat * 4 + beat / 2,1,true},true,1,sink);
     assert(sink.bytes.size() == 6);
 }
+void setup_change_finishes_recording_and_retains_latest_file() {
+    Storage storage;
+    File source(storage), index(storage), recording(storage); Directory directory(&storage);
+    cntrl::midi::MidiFiles files(storage,source,index,recording,directory,1,"/midi","/index");
+    assert(files.record({},12,true,0));
+    files.receive(0, {9,{0x90,60,99}}, 10000);
+    for (unsigned i = 0; i < 32 && !files.stop_setup(100000); ++i) {}
+    assert(!files.recorder.active() && files.recorder.complete());
+    assert(storage.exists("/midi/12-1.mid"));
+    // Empty filename must resolve to the recording completed by the handoff.
+    assert(files.play(9, {}));
+    assert(files.stop_setup(200000) && !files.player.active());
+}
 int main() {
     cntrl::memory_budget = 524288;
     independent_file_generators_do_not_share_position_or_indexes();
@@ -225,5 +238,6 @@ int main() {
     file_generator_runs_through_finite_reverse(false, true);
     loop_save_is_exclusive_bounded_and_load_never_autoplays();
     loop_capture_keeps_running_status_and_usb_cables_separate();
+    setup_change_finishes_recording_and_retains_latest_file();
     assert(cntrl::memory_used == 0);
 }

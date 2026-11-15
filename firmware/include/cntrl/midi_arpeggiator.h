@@ -91,6 +91,8 @@ public:
     }
     void stop() { state_ = State::stopped; waiting_clock_ = false; selected_ = absent; candidate_.clear(); candidate_groups_.clear(); finish_ = 0; }
     void suspend() { stop(); held_.clear(); routed_.clear(); }
+    void discard_cleanup() { suspend(); voices_.clear(); batches_.clear(); }
+    bool cleaning() const { return sounding() || !batches_.empty(); }
     void disconnect(unsigned route) {
         capture_.forget_input(route);
         for (auto i = held_.begin(); i != held_.end();) {

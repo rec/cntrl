@@ -90,6 +90,25 @@ public:
     MidiLooper looper{player,recorder};
     bool storage_busy() const { return saving_ || loading_ || browsing_; }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(files_stop_setup)
+#endif
+    bool stop_setup(uint32_t now) {
+        cancel_browse(); player.cancel();
+        if (saving_) { loop_storage_poll(); return false; }
+        const bool loop_recording = looper.owned();
+        looper.disable();
+        if (!loop_recording && recorder.active()) {
+            recorder.request_finish(now); recorder.poll(now);
+            if (recorder.active()) return false;
+            recording_.close();
+            if (recorder.complete()) std::strcpy(latest_, recording_name_);
+        }
+        if (loading_) { source_.close(); loading_ = false; }
+        for (auto &parser : parsers_) parser.reset();
+        source_.close(); index_.close(); recording_.close();
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(files_save_loop)
 #endif
     bool save_loop(unsigned tempo, uint64_t start_count, bool counter_ready) {

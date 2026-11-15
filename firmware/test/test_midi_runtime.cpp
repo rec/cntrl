@@ -25,6 +25,8 @@ struct Player {
     std::vector<std::string> *log;
     bool playing = false;
     void cancel() { playing = false; log->push_back("cancel-play"); }
+    bool cleaning() const { return false; }
+    void discard_cleanup() { cancel(); }
     unsigned clock_outputs() const { return 0; }
     unsigned sysex_outputs() const { return 0; }
     template<class Sink> void poll(uint32_t, unsigned, Sink &) { log->push_back(playing ? "playing" : "play"); }
@@ -40,6 +42,7 @@ struct Files {
     Recorder recorder;
     Player player;
     explicit Files(std::vector<std::string> &log) : recorder{&log}, player{&log} {}
+    bool stop_setup(uint32_t) { player.cancel(); return true; }
     void receive(unsigned, const cntrl::midi::Packet &, uint32_t, cntrl::midi::BeatPosition) { recorder.log->push_back("input"); }
     void receive(unsigned, uint8_t, uint32_t, cntrl::midi::BeatPosition) { recorder.log->push_back("input"); }
     void forget_input(unsigned) {}
@@ -48,6 +51,8 @@ struct Files {
 struct Generator {
     std::vector<std::string> *log;
     void stop() {}
+    unsigned stopping() const { return 0; }
+    void discard_cleanup() {}
     template<class Sink> void poll(uint32_t, unsigned, Sink &) { log->push_back("clock"); }
 };
 struct Pages {
@@ -89,6 +94,7 @@ struct Services : cntrl::midi::Sink {
     struct { bool interface = true; } runtime;
     uint32_t time = 0, timer_step = 1;
     unsigned errors = 0;
+    bool blocked = false;
     explicit Services(unsigned count = 3) : sources(count) {
         pickup(false);
         bridge.configure(true);
@@ -105,6 +111,7 @@ struct Services : cntrl::midi::Sink {
     bool midi_host_connected() const { return host_present; }
     bool midi_device_connected() const { return true; }
     bool midi_document_valid() const { return true; }
+    bool output_idle() const { return bridge.idle(); }
     cntrl::midi::Bridge &midi_bridge() { return bridge; }
     Files &runtime_midi_files() { return files; }
     Pages &runtime_pages() { return pages; }
@@ -122,12 +129,36 @@ struct Services : cntrl::midi::Sink {
         event = sources[source].front(); sources[source].pop_front(); reads.push_back(source); return true;
     }
     bool write_packet(unsigned route, const cntrl::midi::Packet &packet) override {
+        if (blocked) return false;
         writes.push_back(route); packets.push_back(packet); log.push_back("send"); return true;
     }
     void packet_sent(unsigned route, const cntrl::midi::Packet &packet) override {
         if (observer) observer->packet(cntrl::midi::Monitor::Direction::outgoing, route, 0, packet, time, cable_test.enabled());
     }
 };
+
+void test_setup_handoff_releases_state_and_is_bounded() {
+    for (bool blocked : {false, true}) {
+        Services services(1); cntrl::midi::Runtime runtime;
+        assert(services.submit(0, {9, {0x90, 60, 100}}));
+        assert(services.submit(0, {11, {0xb0, 64, 127}}));
+        services.files.player.playing = true; services.blocked = blocked;
+        assert(!runtime.configuration_handoff(services));
+        for (unsigned i = 0; i < 1100 && !runtime.configuration_handoff(services); ++i) {
+            services.time = i * 1000; runtime.poll(services);
+        }
+        assert(runtime.configuration_handoff(services));
+        assert(!services.files.player.playing && services.state().outputs.empty());
+        assert(services.sources[0].empty());
+        assert(services.errors == unsigned(blocked));
+        if (!blocked) {
+            assert(std::any_of(services.packets.begin(), services.packets.end(), [](const auto &p) { return p.bytes[0] == 0xb0 && p.bytes[1] == 120; }));
+            assert(std::any_of(services.packets.begin(), services.packets.end(), [](const auto &p) { return p.bytes[0] == 0xb0 && p.bytes[1] == 64 && !p.bytes[2]; }));
+        }
+        runtime.finish_setup_change(false); assert(runtime.changing_setup());
+        runtime.finish_setup_change(true); assert(!runtime.changing_setup());
+    }
+}
 
 void test_rotating_sources_and_delivery_precede_file_work() {
     Services services;
@@ -451,4 +482,5 @@ int main() {
     test_exclusive_utilities_and_diagnostics();
     test_relay_runs_when_physical_interface_is_disabled();
     test_explicit_routes_replace_forwarding_and_yield_to_utilities();
+    test_setup_handoff_releases_state_and_is_bounded();
 }

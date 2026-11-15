@@ -129,7 +129,7 @@ public:
         }
         return true;
     }
-    void finish_pages(bool commit) override { host->finish_display(commit); midi_runtime.streams().finish_load(commit); midi_runtime.finish_arpeggiator_configuration(commit); app->finish_pages(commit); }
+    void finish_pages(bool commit) override { host->finish_display(commit); midi_runtime.streams().finish_load(commit); midi_runtime.finish_arpeggiator_configuration(commit); app->finish_pages(commit); midi_runtime.finish_setup_change(commit); }
     midi::Outputs midi_outputs() const override { return target::midi_connections; }
     bool supports(const char *name) const override { auto *endpoint = midi_outputs().find(name); return endpoint && endpoint->output; }
     bool available(const char *name) const override {
@@ -162,6 +162,13 @@ public:
     void reply(const char *text) override { if (!std::strncmp(text,"CNTRL ERROR",11) || !std::strncmp(text,"CNTRL SPLASH ERROR",18)) error(text); }
     void data(const uint8_t *,unsigned) override { error("Unexpected serial data in emulator"); }
     bool output_idle() const override { return bridge.idle(); }
+    bool configuration_handoff() override {
+        if (!midi_runtime.changing_setup()) {
+            if (switches) switches->stop();
+            host->stop_setup();
+        }
+        return midi_runtime.configuration_handoff(*this);
+    }
     bool configuration_locked() const override { return switches && switches->open(); }
     bool song_transfer_busy() const override { return false; }
     bool switch_editor_open() const override { return switches && switches->open(); }

@@ -203,6 +203,17 @@ input and either one byte or a decoded `Packet`. The implementation owns native
 packet/cable decoding and slices retained native SysEx buffers into bounded events.
 Core code does not retain a pointer to that native buffer.
 
+Setup selection calls `Hardware::configuration_handoff()` repeatedly until it
+returns true. At the first call, the adapter stops its switch bindings and calls
+`PageHost::stop_setup()`, then delegates to
+`midi::Runtime::configuration_handoff(services)`. Continue polling the runtime
+during the handoff: it discards incoming performance events, finalizes recording
+and services bounded MIDI cleanup. Pass the commit flag to
+`Runtime::finish_setup_change(commit)` from the adapter's `finish_pages()`
+callback. An abandoned preparation keeps the old setup stopped; committing a
+new setup resumes service. The firmware adapter and emulator implement the same contract.
+See [Changing setups](pages.md#changing-setups) for the user-visible behavior.
+
 `InputEvent::relay` requests explicit hosted-device forwarding independently of
 the physical-interface switch. Its destination uses the existing bridge queues
 and central sink/state path. `Bridge::discard_forwarded` clears forwarding work

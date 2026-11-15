@@ -279,6 +279,9 @@ public:
     CNTRL_FLASH_ROUTINE(midi_file_cancel)
 #endif
     void cancel() { terminate_outputs_ |= sysex_outputs(); tracks_.clear(); notes_.clear(); std::memset(controls_, 0, sizeof(controls_)); parser_.reset(); status_ = Status::idle; prepared_ = false; }
+    void discard_cleanup() {
+        cancel(); sounding_.clear(); pedals_.clear(); terminate_outputs_ = 0;
+    }
 private:
     struct Track { uint32_t cursor = 0, end = 0; uint64_t tick = 0; uint8_t running = 0; Event head; bool ready = false, ended = false; };
     struct Held { uint8_t channel, note, velocity; };

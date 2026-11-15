@@ -287,6 +287,22 @@ public:
         for (unsigned i = 0; i < routes_.size(); ++i)
             if (!routes_[i].steps.empty() && routes_[i].steps[0].kind == 9) gate(i, false);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_deactivate)
+#endif
+    void deactivate() {
+        for (unsigned i = 0; i < routes_.size(); ++i) gate(i, false);
+        stop_all();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(streams_discard_cleanup)
+#endif
+    void discard_cleanup() {
+        stop_all(); cleanup_.clear(); cleanup_cursor_ = cleanup_.begin();
+        for (auto &output : output_counts_) output.cleanup = 0;
+        if constexpr (ProcessingPolicy::advanced) extension_.parameters_.clear();
+        sysex_outputs_ = 0;
+    }
     void stop_all() {
         retire(UINT32_MAX);
         for (auto &route : routes_) { if constexpr (ProcessingPolicy::advanced) route.file.reset(); route.started = false; }

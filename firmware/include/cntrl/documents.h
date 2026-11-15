@@ -51,18 +51,16 @@ public:
     CNTRL_FLASH_ROUTINE(documents_select)
 #endif
     bool select(const char *name) {
-        if (busy() || dirty_ || hardware_.configuration_locked() || !hardware_.output_idle() || !setup_name(name) || !load(name)) return false;
+        if (busy() || dirty_ || !setup_name(name) || !load(name)) return false;
         Document candidate;
-        if (!candidate.load(staging_.data, length_, hardware_) || !prepare_resources(candidate)) return false;
-        if (!hardware_.configuration_handoff()) { finish_resources(false); return false; }
-        char canonical[64]; std::snprintf(canonical, sizeof(canonical), "%s", record_name_);
-        if (std::strcmp(selected_, canonical) && !persist_selection(canonical)) { finish_resources(false); return false; }
-        finish_resources(true);
-        std::snprintf(selected_, sizeof(selected_), "%s", canonical);
-        activate(candidate); return true;
+        if (!candidate.load(staging_.data, length_, hardware_)) return false;
+        last_error_[0] = 0; browse_ = Browse(); browse_.select = true;
+        quiet_ = true; browse_phase_ = BrowsePhase::activate;
+        browse_step();
+        return !last_error_[0];
     }
     bool browse(const char *after, bool backward, bool select_result = false) {
-        if (busy() || dirty_ || hardware_.configuration_locked() || !storage_.available()) return false;
+        if (busy() || dirty_ || !storage_.available()) return false;
         browse_ = Browse(); std::snprintf(browse_.reference, 64, "%s", after);
         browse_.backward = backward; browse_.select = select_result;
         last_error_[0] = 0; quiet_ = !select_result;
@@ -203,8 +201,9 @@ public:
         unsigned n = expected_ - written_; if (n > 512) n = 512;
         if (n && !storage_.write(staging_.data + written_, n)) { storage_.finish(); writing_ = false; error("storage-write"); return; }
         written_ += n; if (written_ != expected_) return;
-        if (!hardware_.output_idle() || hardware_.configuration_locked()) return;
-        if (!name_compare(record_name_,selected_) && !hardware_.configuration_handoff()) return;
+        if (!name_compare(record_name_,selected_)) {
+            if (!hardware_.configuration_handoff()) return;
+        } else if (!hardware_.output_idle() || hardware_.configuration_locked()) return;
         bool done = storage_.write(reinterpret_cast<const uint8_t *>("DONE"), 4);
         done = storage_.finish() && done; writing_ = false;
         char name[64]; std::snprintf(name, sizeof(name), "%s", record_name_);
@@ -275,7 +274,7 @@ private:
     }
     void browse_tick(uint32_t now) {
         browse_step();
-        if (browse_phase_ != BrowsePhase::idle && browse_.select && uint32_t(now - browse_.progress) >= 500) {
+        if (!quiet_ && browse_phase_ != BrowsePhase::idle && browse_.select && uint32_t(now - browse_.progress) >= 500) {
             replies_.reply("CNTRL WAIT"); browse_.progress = now;
         }
     }
@@ -338,13 +337,15 @@ private:
         }
         case BrowsePhase::activate: {
             Document candidate;
-            if (!hardware_.output_idle() || !candidate.load(staging_.data, length_, hardware_) || !prepare_resources(candidate)) { browse_fail(); return; }
-            if (!hardware_.configuration_handoff()) { finish_resources(false); return; }
+            if (!candidate.load(staging_.data, length_, hardware_)) { browse_fail(); return; }
+            if (document_.valid() && !hardware_.configuration_handoff()) return;
+            if (!prepare_resources(candidate)) { browse_fail(); return; }
             if (std::strcmp(selected_, record_name_) && !persist_selection(record_name_)) {
                 finish_resources(false); browse_fail(); return;
             }
             finish_resources(true); std::snprintf(selected_, 64, "%s", record_name_);
-            activate(candidate); browse_phase_ = BrowsePhase::idle; replies_.reply("CNTRL OK"); quiet_ = false; return;
+            activate(candidate); browse_phase_ = BrowsePhase::idle;
+            if (!quiet_) replies_.reply("CNTRL OK"); quiet_ = false; return;
         }
         }
     }
@@ -766,7 +767,18 @@ private:
             char response[160]; hex_text(selected_, hex); std::snprintf(response, sizeof(response), "CNTRL CURRENT %s", hex);
             replies_.reply(response); return;
         }
-        if (hardware_.configuration_locked()) { error("configuration-locked"); return; }
+        if (std::sscanf(line_, "CNTRL SETUP SET %126s%n", hex, &end) == 1 && end && !line_[end] && unhex_name(hex, name)) {
+            if (dirty_) { error("unsaved-edits"); return; }
+            if (!select(name)) error("selection-failed");
+            else if (busy()) quiet_ = false;
+            else replies_.reply("CNTRL OK");
+            return;
+        }
+        if (!std::strcmp(line_, "CNTRL SETUP FORWARD") || !std::strcmp(line_, "CNTRL SETUP BACKWARD")) {
+            if (dirty_) { error("unsaved-edits"); return; }
+            if (!rotate(!std::strcmp(line_, "CNTRL SETUP BACKWARD"))) error("rotation-failed");
+            return;
+        }
         if (!storage_.available()) { error("storage-unavailable"); return; }
         if (!std::strcmp(line_, "CNTRL SETUP LIST")) { if (dirty_) { error("unsaved-edits"); return; } download_ = 0; cursor_[0] = 0; listing_ = true; listing(); return; }
         if (!std::strcmp(line_, "CNTRL NEXT")) {
@@ -779,6 +791,7 @@ private:
             }
             error("no-transfer"); return;
         }
+        if (hardware_.configuration_locked()) { error("configuration-locked"); return; }
         if (dirty_) { error("unsaved-edits"); return; }
         listing_ = false; download_ = 0;
         uint64_t revision = 0; char number[21] = {}, operation[16] = {}, label_hex[127] = {}, label[64] = {};
@@ -802,13 +815,6 @@ private:
             return;
         }
         if (std::sscanf(line_, "CNTRL TIME %lu%n", &epoch, &end) == 1 && end && !line_[end] && epoch && epoch <= 0xfffffffful) { epoch_ = uint32_t(epoch); clock_ = now; replies_.reply("CNTRL OK"); return; }
-        if (std::sscanf(line_, "CNTRL SETUP SET %126s%n", hex, &end) == 1 && end && !line_[end] && unhex_name(hex, name)) {
-            if (select(name)) replies_.reply("CNTRL OK"); else error("selection-failed"); return;
-        }
-        if (!std::strcmp(line_, "CNTRL SETUP FORWARD") || !std::strcmp(line_, "CNTRL SETUP BACKWARD")) {
-            if (!rotate(!std::strcmp(line_, "CNTRL SETUP BACKWARD"))) error("rotation-failed");
-            return;
-        }
         if (!std::strcmp(line_, "CNTRL SETUP FINISH")) {
             char first[64]; if (!selected_[0] && next_valid("", first) && !select(first)) { error("selection-failed"); return; }
             replies_.reply("CNTRL OK"); return;

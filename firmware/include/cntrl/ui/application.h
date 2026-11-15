@@ -113,6 +113,20 @@ public:
         return primary_.busy();
     }
     bool patch_pending() { return busy() || songs_.executing() || songs_.busy(); }
+    bool stopping_setup() const { return stopping_setup_; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_stop_setup)
+#endif
+    void stop_setup() {
+        stopping_setup_ = true;
+        primary_.stop();
+        for (unsigned i = 1; i < layout.controllers(); ++i) at(i).stop();
+        for (auto &bank : banked_) if (bank) bank->stop();
+        songs_.stop_execution(); next_song_patch_ = false; pending_operation = 0;
+        menu.leave(); song_ui.leave();
+        pending_page = pending_region = PageLayout::max_pages;
+        binding_return_songs = false; controls_locked = true;
+    }
     bool feature_open(const ApplicationServices &services) const { return menu.open() || setups.open() || song_ui.open() || services.switch_editor_open(); }
     void bindings_enter() {
         binding_return_songs = binding_return_songs || song_ui.open();
@@ -124,6 +138,7 @@ public:
     CNTRL_FLASH_ROUTINE(application_configure)
 #endif
     void configure(const Document &document, ApplicationServices &services) {
+        stopping_setup_ = false;
         layout = document.valid() ? document.page_layout() : PageLayout{}; visible_index = 0; pending_page = PageLayout::max_pages;
         allocation.configure(layout); pending_region = PageLayout::max_pages;
         for (unsigned i = 1; i <= controllers_.size / sizeof(Controller); ++i) {
@@ -159,6 +174,7 @@ public:
         menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(), page_offset() + layout.regions() + layout.pages());
     }
     void tick(uint32_t now) {
+        if (stopping_setup_) return;
         if (!hardware_.relays.tick(now)) hardware_.error("Relay pulse restore failed");
         for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) { processing_index = i; at(i).tick(now); }
         processing_index = PageLayout::max_controllers;
@@ -315,7 +331,7 @@ private:
     }
     Songs &songs_;
     bool has_switches_;
-    bool next_song_patch_ = false;
+    bool next_song_patch_ = false, stopping_setup_ = false;
     unsigned page_offset() const { return has_switches_ ? 3 : 2; }
 };
 } // namespace cntrl::ui

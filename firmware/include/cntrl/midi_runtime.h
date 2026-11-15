@@ -34,6 +34,26 @@ public:
     MidiArpeggiator arpeggiator;
     Monitor &monitor() { return monitor_; }
     Streams &streams() { return streams_; }
+    bool changing_setup() const { return changing_setup_; }
+    void finish_setup_change(bool commit) { if (commit) changing_setup_ = setup_ready_ = false; }
+    template<class Services>
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_setup_handoff)
+#endif
+    bool configuration_handoff(Services &s) {
+        if (!changing_setup_) {
+            changing_setup_ = true; setup_ready_ = false; setup_started_ = s.milliseconds();
+            std::memset(setup_channels_, 0, sizeof(setup_channels_)); setup_step_ = 0;
+            for (const auto &output : static_cast<Sink &>(s).state().outputs) if (output.output < 16)
+                for (const auto &channel : output.channels) setup_channels_[output.output] |= uint16_t(1u << channel.channel);
+            streams_.deactivate(); arpeggiator.suspend(); arpeggiator_parsers_.clear();
+            s.runtime_midi_files().player.cancel();
+            s.runtime_pages().generator.stop(); s.midi_bridge().stop();
+            monitor_.close(); text_messages = TextMessages();
+        }
+        if (!setup_ready_) poll_setup_change(s);
+        return setup_ready_;
+    }
     uint64_t stream_time(uint32_t now) { return extend(now); }
     bool prepare(Outputs outputs) {
         const unsigned count = outputs.route_count();
@@ -86,6 +106,7 @@ public:
         if (polled_) max_service_gap_us_ = std::max(max_service_gap_us_, uint32_t(poll_time - previous_poll_us_));
         previous_poll_us_ = poll_time; polled_ = true;
         s.midi_transport_poll();
+        if (changing_setup_) { poll_setup_change(s); return; }
         auto &bridge = s.midi_bridge();
         auto &files = s.runtime_midi_files();
         auto &pages = s.runtime_pages();
@@ -318,6 +339,61 @@ public:
         s.reply(response);
     }
 private:
+    bool changing_setup_ = false, setup_ready_ = false;
+    uint32_t setup_started_ = 0;
+    uint16_t setup_channels_[16] = {};
+    unsigned setup_step_ = 0;
+    template<class Services>
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(midi_setup_cleanup)
+#endif
+    void poll_setup_change(Services &s) {
+        const uint32_t now = s.microseconds();
+        for (unsigned source = 0; source < s.midi_source_count(); ++source) {
+            InputEvent ignored;
+            for (unsigned i = 0; i < 64 && s.midi_read_event(source, ignored); ++i) {}
+        }
+        if (setup_ready_) return;
+        auto &files = s.runtime_midi_files(); auto &pages = s.runtime_pages(); auto &bridge = s.midi_bridge();
+        const unsigned available = s.clock_available();
+        const bool stored = files.stop_setup(now);
+        if (files.recorder.failed() && !recording_failed_) s.error("MIDI recording write failed");
+        recording_failed_ = files.recorder.failed();
+        pages.generator.poll(now, available, s);
+        arpeggiator.poll(pages.arpeggiator_beat_position(now), available, 0, s, pages.clock_period());
+        streams_.service(s, extend(now), available, 0, 64);
+        files.looper.poll(pages.beat_position(now), false, available, s, pages.clock_period());
+        files.player.poll(now, available, s);
+        bridge.service(s, s.milliseconds());
+        const bool timed_out = uint32_t(s.milliseconds() - setup_started_) >= 1000;
+        bool reset = true;
+        if (bridge.handoff(s)) {
+            for (unsigned output = 0; output < 16; ++output) {
+                if (!(available & (1u << output))) {
+                    if (setup_channels_[output]) setup_step_ = 0;
+                    setup_channels_[output] = 0; continue;
+                }
+                if (!setup_channels_[output]) continue;
+                unsigned channel = 0; while (!(setup_channels_[output] & (1u << channel))) ++channel;
+                if (s.reset_channel(output, channel, setup_step_) && ++setup_step_ == 9) {
+                    setup_channels_[output] &= uint16_t(~(1u << channel)); setup_step_ = 0;
+                }
+                reset = false; break;
+            }
+        } else reset = false;
+        s.midi_flush();
+        const bool drained = reset && !files.player.cleaning() && !s.loop_cleaning()
+            && !streams_.recovery() && !streams_.lfo_status().stopping && !arpeggiator.cleaning()
+            && !pages.generator.stopping() && s.output_idle();
+        if (!stored || (!drained && !timed_out)) return;
+        if (timed_out && !drained) s.error("MIDI cleanup incomplete");
+        streams_.discard_cleanup(); arpeggiator.discard_cleanup();
+        files.player.discard_cleanup(); pages.generator.discard_cleanup();
+        for (unsigned output = 0; output < 16; ++output) s.forget_output(output);
+        // Retire the looper's final ownership after physical state was released.
+        files.looper.poll(pages.beat_position(now), false, available, s, pages.clock_period());
+        setup_ready_ = true;
+    }
     Monitor monitor_;
     struct ArpeggiatorParser { unsigned input, cable; Parser parser; };
     CheckedList<ArpeggiatorParser> arpeggiator_parsers_;

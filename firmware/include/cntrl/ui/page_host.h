@@ -295,6 +295,22 @@ public:
         }
         return !pages_.generator.stopping();
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_stop_setup)
+#endif
+    void stop_setup() {
+        application_.stop_setup(); leave_page();
+        keyboard_.clear(); poll_keyboard();
+        pages_.stop_setup();
+        platform_.animation_session().stop();
+        platform_.expression_controls().configure(nullptr, {});
+        expression_bank_ = nullptr; expression_revision_ = 0;
+        looper_menu_ = LooperMenu::none; pages_.looper_prompt[0] = 0;
+        platform_.midi_monitor().close();
+        brightness_feedback_ = false; pending_patch_ = -1;
+        throb_.configure(0, 0, 0, 0);
+        if (!platform_.relays.reset()) platform_.error("Relay reset failed");
+    }
     bool clock_control(unsigned button, bool pressed) {
         if (!pages_.clock_page()) return false;
         if (pressed) pages_.clock_button(button == controls_.previous ? 0 : button == controls_.next ? 1 : button == controls_.confirm ? 2 : button == controls_.next_section ? 4 : Controls::absent, platform_.microseconds(), platform_.clock_available());
@@ -445,6 +461,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
+        if (application_.stopping_setup()) return;
 #if CNTRL_PANIC
         if (pages_.page() == Pages::Page::panic && platform_.panic.active() && !platform_.panic_owns_midi) start_panic();
 #endif
