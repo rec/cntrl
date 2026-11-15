@@ -8,7 +8,8 @@ namespace cntrl::midi {
 // the immutable setup document; ordinary performance uses no reset storage.
 class LoopControlReset {
 public:
-    void configure(const uint8_t *settings) {
+    void configure(const uint8_t *settings, int enabled = -1) {
+        enabled_ = enabled < 0 ? settings && settings[4] : enabled != 0;
         settings_ = settings; touched_.release(); serial_ = 0; active_ = false;
     }
     bool prepare(unsigned output, const Packet &packet, const Parameter *logical = nullptr) {
@@ -50,6 +51,7 @@ public:
 private:
     struct Touch { Parameter parameter; uint32_t serial; uint8_t output, position; };
     const uint8_t *settings_ = nullptr;
+    bool enabled_ = false;
     CheckedArray<Touch> touched_;
     uint32_t serial_ = 0;
     bool active_ = false;
@@ -64,7 +66,7 @@ private:
         touched_.resize(touched_.size() - 1);
     }
     bool neutral(unsigned output,const Packet &packet,const Parameter *logical,Parameter &parameter,unsigned match) const {
-        if (!settings_ || !settings_[4] || output >= 16) return false;
+        if (!enabled_ || output >= 16) return false;
         const unsigned kind = packet.bytes[0] >> 4, channel = packet.bytes[0] & 15;
         if (logical) {
             // Selector writes alone do not touch the parameter. A partially
@@ -87,7 +89,7 @@ private:
             if (kind != 11) return false;
             parameter.kind = Parameter::cc7; parameter.address = packet.bytes[1];
         }
-        for (unsigned i = 0; i < u16(settings_ + 5); ++i) {
+        for (unsigned i = 0; settings_ && i < u16(settings_ + 5); ++i) {
             const auto *p = settings_ + 7 + i * 7;
             Parameter target{p[1],p[2],uint16_t(u16(p + 3)),int32_t(u16(p + 5))};
             if (p[0] == output && target.overlaps(parameter) && !match--) {

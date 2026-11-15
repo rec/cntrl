@@ -8,6 +8,7 @@
 #include <cntrl/host/filesystem.h>
 #include <cntrl/setup_files.h>
 #include <cntrl/bundled_storage.h>
+#include <cntrl/global_commands.h>
 #include <cntrl/slot_storage.h>
 #include <cntrl/ui/application_hardware.h>
 #include <cntrl/ui/page_host.h>
@@ -78,6 +79,19 @@ class Board : public ui::ApplicationHardware<Board>, public Replies, public anim
 public:
     ui::Application *app = nullptr;
     Documents *documents = nullptr;
+    GlobalCommands *globals = nullptr;
+    GlobalSettings *global_store = nullptr;
+    const GlobalSettings::Values *global_values() const override { return global_store ? &global_store->values() : nullptr; }
+    bool global_setting(unsigned field, uint32_t value, bool clear) override { return globals && globals->request(field, value, clear); }
+    bool global_settings_busy() override {
+        const auto loop = files->looper.state(); auto &streams = midi_runtime.streams();
+        bool claims = false; each_source([&](unsigned) { claims = true; });
+        return claims || !output_idle() || files->storage_busy() || files->player.active() || files->player.cleaning()
+            || files->recorder.active() || files->looper.unsaved()
+            || (loop != midi::MidiLooper::State::empty && loop != midi::MidiLooper::State::stopped)
+            || midi_runtime.arpeggiator.state() != midi::MidiArpeggiator::State::stopped || host->pages_.generator.running()
+            || streams.pending() || streams.voices() || streams.recovery() || streams.clock_outputs() || streams.lfo_status().running;
+    }
     ui::PageHost<Board> *host = nullptr;
     midi::MidiFiles *files = nullptr;
     Switches *switches = nullptr;
@@ -332,7 +346,7 @@ public:
           movie_assets(movie_storage,board), movie_output(display), movie_player(movie_assets,movie_output), movie_session(movie_assets,movie_player),
           reader(filesystem), writer(filesystem), history(filesystem),
           card(filesystem,reader,writer,history), storage(card,board), sources(storage.setups()), font_reader(filesystem), font_writer(filesystem), font_storage(filesystem,font_reader,font_writer), primary(board,board,board,Switches::capacity),
-          documents(storage,board,primary,board), song_writer(filesystem), song_storage(filesystem,song_writer,4,"/cntrl/songs",card.ready),
+          documents(storage,board,primary,board), global_settings(filesystem), global_commands(global_settings,documents,board,board), song_writer(filesystem), song_storage(filesystem,song_writer,4,"/cntrl/songs",card.ready),
           songs(song_storage,board), application(board,documents,primary,board,board,songs,board,true),
           song_sources(board,board,board,storage.setups(),documents,application,songs),
           midi_source(filesystem), midi_index(filesystem), recording(filesystem), midi_directory(filesystem),
@@ -343,6 +357,8 @@ public:
           host(board,application,documents,display,fonts,renderer,target::controls),
           input(buttons.data(),target::controls,documents.document(),application,board), action_router{board}, cooperative(target::scan_interval_ms) {
         board.app = &application; board.documents = &documents; board.host = &host;
+        board.globals = &global_commands;
+        board.global_store = &global_settings;
         board.files = &midi_files; board.switches = &switches; board.song_sources = &song_sources; board.expression = &expression; board.font_storage = &font_storage;
         board.sources = &sources; card.ready = true;
         board.fonts = &fonts;
@@ -355,6 +371,8 @@ public:
         filesystem.make_directory("/cntrl"); filesystem.make_directory("/midi"); filesystem.make_directory("/index");
         import(setup,replace_setup); import_movies(); expression.load_calibrations(); midi_files.boot();
         if (!storage.boot()) throw std::runtime_error("emulator setup bundle failed validation");
+        if (!global_settings.boot()) throw std::runtime_error("emulator global settings journal is invalid");
+        documents.bind_globals(global_settings);
         documents.boot(); songs.boot();
         if (!documents.document().valid()) throw std::runtime_error("emulator setup failed validation");
         settle();
@@ -381,6 +399,8 @@ public:
     font_assets::Storage font_storage;
     Controller primary;
     Documents documents;
+    GlobalSettings global_settings;
+    GlobalCommands global_commands;
     host::File song_writer;
     SlotStorage song_storage;
     Songs songs;
@@ -433,7 +453,7 @@ public:
                 return connection && board.submit_live(connection->route,packet);
             });
     }
-    void navigation() { input.finish(action_router); }
+    void navigation() { input.finish(action_router); global_commands.poll(application.patch_pending()); }
     void display_poll(uint32_t now) { board.display(now,documents.busy() || application.feature_open(board) || application.patch_pending()); }
     void settle(unsigned budget = 4096) {
         unsigned quiet = 0;

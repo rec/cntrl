@@ -32,6 +32,8 @@ inline bool enveloped(const uint8_t *data, unsigned length) {
 struct View {
     unsigned offset = 0, length = 0;
     bool opaque = false;
+    uint64_t global_explicit_mask = UINT64_MAX;
+    unsigned global_mask_offset = 0;
 };
 inline bool prefix(uint8_t (&bytes)[28], Kind kind, unsigned core_length, unsigned extensions = 0) {
     if (core_length > maximum_payload - record_size || extensions > maximum_payload - record_size - core_length) return false;
@@ -97,6 +99,11 @@ public:
             if (tag == 2 && kind_ == Kind::setup) {
                 if (source_ || n != 32) return false;
                 source_ = true;
+            } else if (tag == 3 && kind_ == Kind::setup) {
+                if (view_.global_mask_offset || n != 8 || !reader.read(position_, bytes, 8)) return false;
+                const uint64_t mask = uint64_t(read32(bytes)) | uint64_t(read32(bytes + 4)) << 32;
+                if (mask >> 34) return false;
+                view_.global_explicit_mask = mask; view_.global_mask_offset = position_;
             } else view_.opaque = true;
         }
         position_ += n; return true;

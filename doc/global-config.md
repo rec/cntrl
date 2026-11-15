@@ -93,9 +93,9 @@ them. A setup does not need to repeat an inherited asset path.
 
 ## Compilation, upload and sync
 
-Defaults are applied on the computer during compilation. The pedal receives
-complete setups and does not merge defaults when switching setups. Changing
-`global.toml` affects the next compilation; recompile and copy the setups that
+Rig defaults are applied on the computer during compilation. The pedal receives
+complete setups. Changing `global.toml` affects the next compilation; recompile
+and copy the setups that
 should receive the change.
 
 Each setup upload retains the exact authoring sources used to compile it,
@@ -137,3 +137,76 @@ files are reported rather than silently replaced with the new machine's defaults
 Backups retain source archives alongside setups and history. Older uploads that
 predate source retention still support resolved export, but their original
 omissions and source-file organization cannot be reconstructed from values alone.
+
+## Live pedal-wide preferences
+
+The pedal also keeps a separate, persistent overlay for scalar preferences.
+Resolution is:
+
+1. A value explicitly authored in the setup.
+2. A value set in the device-global overlay.
+3. The setup's compiled fallback, including the host rig defaults used at upload.
+
+Clearing a device-global preference restores each setup's own fallback. It does
+not edit `global.toml`, rewrite uploaded setups, or change named definitions such
+as instruments, patches and routes. Those still use compilation-time defaults.
+Setups uploaded before explicit-setting metadata was introduced must be
+recompiled and uploaded before they can inherit live device-global preferences.
+
+Use the USB connection to inspect, set or clear preferences:
+
+```sh
+cntrl global list --port PORT
+cntrl global set brightness 160 --port PORT
+cntrl global set frame_buffers 1 --port PORT
+cntrl global set scrolling.horizontal_duration '250 ms' --port PORT
+cntrl global clear brightness --port PORT
+cntrl global restore device-globals.toml --port PORT
+```
+
+`list` reports `inherit` for unset device values. `restore` atomically replaces
+the whole overlay with a downloaded snapshot, including clearing omitted values.
+
+The supported preferences are brightness, screensaver timeout, MIDI interface
+and USB forwarding flags, fast switches, frame buffers, animation flags, pickup
+and pairing delay, scrolling directions and durations, navigation timings, TRS
+port roles, auxiliary-switch modes, clock source and outputs, target-pulse
+settings, and the loop-stop controller-reset policy. Physical TRS port indices
+start at one, for example `trs_ports.1`. Patch actions may also use target port
+names and clock output-name lists. The USB CLI uses physical port indices and an
+integer bitmask for clock outputs.
+
+Brightness and screensaver changes apply immediately. MIDI interface changes
+require idle MIDI output. Other preferences can require reloading the active
+setup. Reload-sensitive edits are rejected during active notes, held pedals,
+recording, playback, an unsaved looper take or pending output. Changes that would
+invalidate any stored setup are rejected before persistence. A rejected change
+leaves the previous overlay in force.
+
+`pickup = 'none'` and `'None'` inherit the live device-global pickup policy.
+Explicit `true` or `false` protects the setup's own choice. A deliberate
+`inheritance.remove` reset remains protected from device inheritance.
+
+Existing switches can invoke the same operation through a patch:
+
+```toml
+[patches.dim]
+operation = 'global-setting'
+setting = 'brightness'
+value = 80
+
+[patches.restore_brightness]
+operation = 'global-setting'
+setting = 'brightness'
+```
+
+Omitting `value` clears that device-global preference. These actions do not add a
+settings page or change the existing editor's setup-local scope. A local editor
+save becomes explicit even if its numeric value matches the compiled fallback.
+
+Downloads and reviewed sync keep `device-globals.toml` separate from rig defaults
+and setup sources. Backups retain both the overlay and its on-device journal;
+restoration applies the overlay within the staged deployment. A backup without
+an overlay preserves the destination pedal's current overlay. A fresh emulator
+storage directory imports a recovered session's snapshot, while subsequent
+starts preserve its existing device preferences.

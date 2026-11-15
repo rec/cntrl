@@ -10,7 +10,7 @@ from zlib import crc32
 from pydantic import BaseModel
 from serial import Serial, SerialTimeoutException
 
-from . import binary_format
+from . import binary_format, device_settings
 from .data_files import validate_name
 from .models import PlayMidiFile, TargetMemory
 from .usb_frames import HEADER, MAGIC, Frame, Kind, Status
@@ -352,6 +352,42 @@ class SetupClient:
         if len(fields) != 4 or fields[:2] != ['CNTRL', 'MEMORY']:
             raise ValueError(f'invalid memory response: {response}')
         return TargetMemory(capacity=int(fields[2]), runtime=int(fields[3]))
+
+    def global_settings(self) -> dict[int, int]:
+        fields = self.request('CNTRL GLOBAL GET').split()
+        if fields[:2] != ['CNTRL', 'GLOBAL']:
+            raise ValueError('invalid device-global settings response')
+        result: dict[int, int] = {}
+        for item in fields[2:]:
+            key, separator, value = item.partition('=')
+            if (
+                not separator
+                or not key.isascii()
+                or not key.isdecimal()
+                or not value.isascii()
+                or not value.isdecimal()
+            ):
+                raise ValueError('invalid device-global settings response')
+            field, raw = int(key), int(value)
+            device_settings.decode_value(field, raw)
+            if field in result:
+                raise ValueError('duplicate device-global settings response')
+            result[field] = raw
+        return result
+
+    def set_global(self, field: int, value: int) -> None:
+        device_settings.decode_value(field, value)
+        self.ok(f'CNTRL GLOBAL SET {field} {value}')
+
+    def clear_global(self, field: int) -> None:
+        device_settings.definition(field)
+        self.ok(f'CNTRL GLOBAL CLEAR {field}')
+
+    def replace_globals(self, values: dict[int, int]) -> None:
+        for field, value in values.items():
+            device_settings.decode_value(field, value)
+        suffix = ''.join(f' {k}={v}' for k, v in sorted(values.items()))
+        self.ok('CNTRL GLOBAL PUT' + suffix)
 
     def catalogue(self) -> list[SetupEntry]:
         result: list[SetupEntry] = []

@@ -1,0 +1,121 @@
+#pragma once
+#include "filesystem.h"
+#include "binary_format.h"
+#include <cstring>
+#include <cstdio>
+#include <limits>
+
+namespace cntrl {
+// Sparse device preferences. Compiled setup bytes remain their authored fallback.
+class GlobalSettings {
+public:
+    static constexpr unsigned count = 34;
+    static constexpr uint64_t fields = (uint64_t(1) << count) - 1;
+    struct Values {
+        uint64_t known = 0;
+        uint32_t values[count] = {};
+    };
+    explicit GlobalSettings(files::FileSystem &filesystem) : filesystem_(filesystem) {}
+    const Values &values() const { return values_; }
+    bool ready() const { return ready_; }
+    static uint32_t resolve(const Values *values, uint64_t explicit_fields, unsigned field, uint32_t fallback) {
+        return values && field < count && !(explicit_fields & (uint64_t(1) << field))
+            && (values->known & (uint64_t(1) << field)) ? values->values[field] : fallback;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(global_settings_valid)
+#endif
+    static bool valid(unsigned field, uint32_t value) {
+        if (field >= count) return false;
+        if (field == 0) return value <= 255;
+        if (field == 1) return value <= 2147483;
+        if (field == 7) return value <= 2;
+        if (field == 11 || field == 28 || field == 32) return value <= 65535;
+        if (field == 12 || field == 13 || field == 17 || field == 18) return value && value <= 65535;
+        if (field >= 14 && field <= 16) return value <= 3;
+        if (field >= 19 && field <= 22) return value <= 4;
+        if (field == 29) return value >= 2 && value <= 65535;
+        if (field == 30) return value <= 128;
+        if (field == 31) return value && value <= 128;
+        return value <= 1;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(global_settings_values_valid)
+#endif
+    static bool valid(const Values &values) {
+        if (values.known & ~fields) return false;
+        for (unsigned i = 0; i < count; ++i)
+            if ((values.known & (uint64_t(1) << i)) ? !valid(i, values.values[i]) : values.values[i] != 0) return false;
+        return true;
+    }
+    static bool reload(unsigned field) { return field > 2; }
+    bool candidate(unsigned field, uint32_t value, bool clear, Values &result) const {
+        if (field >= count || (!clear && !valid(field, value))) return false;
+        result = values_;
+        if (clear) { result.known &= ~(uint64_t(1) << field); result.values[field] = 0; }
+        else { result.known |= uint64_t(1) << field; result.values[field] = value; }
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(global_settings_boot)
+#endif
+    bool boot() {
+        ready_ = false; values_ = Values(); sequence_ = 0; slot_ = -1;
+        bool present = false;
+        for (unsigned slot = 0; slot < 2; ++slot) {
+            char path[32]; filename(slot, path);
+            if (!filesystem_.exists(path)) continue;
+            present = true; Values values; uint32_t sequence;
+            if (!read(slot, values, sequence)) continue;
+            if (slot_ < 0 || sequence > sequence_) { values_ = values; sequence_ = sequence; slot_ = int(slot); }
+        }
+        ready_ = !present || slot_ >= 0; return ready_;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(global_settings_commit)
+#endif
+    bool commit(const Values &values) {
+        if (!ready_ || !valid(values) || sequence_ == std::numeric_limits<uint32_t>::max()) return false;
+        if (!filesystem_.exists("/cntrl/global") && !filesystem_.make_directory("/cntrl/global")) return false;
+        uint8_t bytes[record_size] = {};
+        std::memcpy(bytes, "CGLO", 4); bytes[4] = 1;
+        binary::write32(bytes + 8, sequence_ + 1);
+        for (unsigned i = 0; i < 8; ++i) bytes[12 + i] = uint8_t(values.known >> (8 * i));
+        for (unsigned i = 0; i < count; ++i) binary::write32(bytes + 20 + i * 4, values.values[i]);
+        binary::write32(bytes + record_size - 8, binary::crc(bytes, record_size - 8));
+        std::memcpy(bytes + record_size - 4, "DONE", 4);
+        const unsigned slot = slot_ == 0 ? 1 : 0; char path[32]; filename(slot, path);
+        auto file = filesystem_.file();
+        if (!file || !file->open(path, files::Mode::create) || !file->write(0, bytes, sizeof(bytes)) || !file->sync()) return false;
+        file->close(); Values checked; uint32_t sequence;
+        if (!read(slot, checked, sequence) || sequence != sequence_ + 1 || checked.known != values.known
+            || std::memcmp(checked.values, values.values, sizeof(values.values))) return false;
+        values_ = values; ++sequence_; slot_ = int(slot); return true;
+    }
+    static constexpr unsigned record_size = 20 + count * 4 + 8;
+private:
+    friend class Documents;
+    files::FileSystem &filesystem_;
+    Values values_;
+    uint32_t sequence_ = 0;
+    int slot_ = -1;
+    bool ready_ = false;
+    static void filename(unsigned slot, char (&path)[32]) { std::snprintf(path, sizeof(path), "/cntrl/global/%u.bin", slot); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(global_settings_read)
+#endif
+    bool read(unsigned slot, Values &values, uint32_t &sequence) {
+        char path[32]; filename(slot, path); auto file = filesystem_.file(); uint8_t bytes[record_size];
+        if (!file || !file->open(path, files::Mode::read) || file->size() != sizeof(bytes) || !file->read(0, bytes, sizeof(bytes))) return false;
+        file->close();
+        if (std::memcmp(bytes, "CGLO", 4) || bytes[4] != 1 || bytes[5] || bytes[6] || bytes[7]
+            || std::memcmp(bytes + record_size - 4, "DONE", 4)
+            || binary::read32(bytes + record_size - 8) != binary::crc(bytes, record_size - 8)) return false;
+        sequence = binary::read32(bytes + 8); if (!sequence) return false;
+        values = Values();
+        for (unsigned i = 0; i < 8; ++i) values.known |= uint64_t(bytes[12 + i]) << (8 * i);
+        for (unsigned i = 0; i < count; ++i) values.values[i] = binary::read32(bytes + 20 + i * 4);
+        return valid(values);
+    }
+};
+} // namespace cntrl

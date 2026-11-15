@@ -14,7 +14,7 @@ CNTRL_FLASH_ROUTINE(persistent_path)
 #endif
 inline bool persistent_path(const char *path, char (&mapped)[224]) {
     bool mutable_store = false;
-    for (const char *store : {"/cntrl/setups", "/cntrl/history", "/cntrl/songs", "/cntrl/selection"}) {
+    for (const char *store : {"/cntrl/setups", "/cntrl/history", "/cntrl/songs", "/cntrl/selection", "/cntrl/global"}) {
         const unsigned n = unsigned(std::strlen(store));
         if (!std::strncmp(path, store, n) && (!path[n] || path[n] == '/')) mutable_store = true;
     }
@@ -81,7 +81,7 @@ public:
         if (!sequence_ && !publish(active_)) return false;
         char path[96]; std::snprintf(path, sizeof(path), "/cntrl/generations/%08lx", (unsigned long)root);
         if (filesystem_.exists(path) || !filesystem_.make_directory(path)) return false;
-        for (const char *store : {"setups", "history", "songs", "selection"}) {
+        for (const char *store : {"setups", "history", "songs", "selection", "global"}) {
             std::snprintf(path, sizeof(path), "/cntrl/generations/%08lx/%s", (unsigned long)root, store);
             if (!filesystem_.make_directory(path)) return false;
         }

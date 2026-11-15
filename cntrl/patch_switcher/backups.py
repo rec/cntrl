@@ -20,6 +20,7 @@ from . import (
     binary_format,
     compiler,
     data_files,
+    device_globals,
     history,
     midi_assets,
     models,
@@ -226,6 +227,10 @@ def backup_pedal(
                 'Raw recovery backup retained; active data is unreadable.', flush=True
             )
             return
+        if device_globals.supported(status):
+            (directory / 'device-globals.toml').write_bytes(
+                device_globals.dump(client.global_settings())
+            )
         selected = client.current()
         entries = client.catalogue()
         (directory / 'selected.txt').write_bytes(selected.encode())
@@ -516,6 +521,10 @@ def restore_setups(
 ) -> None:
     check_conversion(directory)
     minimum_starts = recording_high_water(directory)
+    overlay = directory / 'device-globals.toml'
+    restored_globals = (
+        device_globals.load(overlay.read_bytes()) if overlay.exists() else None
+    )
     folder = directory / 'setups'
     selected = (directory / 'selected.txt').read_bytes().decode()
     fonts = {
@@ -577,6 +586,9 @@ def restore_setups(
             directory.parent / f'{directory.name}-before-restore-{uuid4().hex[:12]}'
         )
         backup_pedal(recovery, port, connection)
+        current_overlay = recovery / 'device-globals.toml'
+        if restored_globals is None and current_overlay.exists():
+            restored_globals = device_globals.load(current_overlay.read_bytes())
         snapshot = BackupManifest.model_validate(
             tomlkit.parse((recovery / 'backup.toml').read_text()).unwrap()
         )
@@ -694,6 +706,9 @@ def restore_setups(
             # Includes both activation slots, selection journals, directory
             # clusters, and a replacement/upload slot while journals advance.
             directories = 16 + len(combined) * 2 + len(reservations) + len(snapshots)
+            if restored_globals is not None:
+                lengths.extend([len(device_globals.journal(restored_globals))] * 2)
+                directories += 1
             check_deployment_space(report, lengths + [96, 96, 24, 24], directories)
         for key, data in fonts.items():
             client.copy_font(key, data)
@@ -742,6 +757,8 @@ def restore_setups(
             if client.current() != selected:
                 raise ValueError('restored selection does not match the backup')
             print(f'Selected: {selected}', flush=True)
+        if restored_globals is not None:
+            client.replace_globals(restored_globals)
         client.commit_deployment(bundle_data, library)
         print(f'Deployment committed. Recovery backup: {recovery}', flush=True)
 
@@ -783,6 +800,11 @@ def verify_after_flashing(
     ):
         client = transport.SetupClient(connection)
         status = client.request('CNTRL STATUS')
+        overlay = directory / 'device-globals.toml'
+        if overlay.exists() and client.global_settings() != device_globals.load(
+            overlay.read_bytes()
+        ):
+            raise ValueError('device-global settings differ from the backup')
         parts = status.split()
         if len(parts) < 5 or parts[:3] != [
             'CNTRL',

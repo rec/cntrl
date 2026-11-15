@@ -372,6 +372,12 @@ class UsbMidiInterface(Presentation, frozen=True):
     value: Annotated[bool, Field(strict=True)]
 
 
+class GlobalSetting(Presentation, frozen=True):
+    operation: Literal['global-setting']
+    setting: Annotated[str, Field(strict=True, min_length=1)]
+    value: bool | int | float | str | list[str] | None = None
+
+
 class Navigation(Presentation, frozen=True):
     operation: Literal[
         'next-patch',
@@ -557,6 +563,7 @@ ConcretePatch = (
     | Annotated[
         Brightness
         | UsbMidiInterface
+        | GlobalSetting
         | Navigation
         | Shift
         | StockFirmware

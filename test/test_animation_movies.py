@@ -9,7 +9,15 @@ import tomlkit
 from PIL import Image
 
 from cntrl.animation import asset
-from cntrl.patch_switcher import cli, compiler, data_files, models, resolved
+from cntrl.patch_switcher import (
+    binary_format,
+    cli,
+    compiler,
+    data_files,
+    device_settings,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
@@ -135,7 +143,12 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     rebuilt = cli.compile_inputs(
         data_files.Sources(document=[str(source)], target=target_expression)
     )
-    assert rebuilt.setups == bundle.setups
+    assert binary_format.core(rebuilt.setups['setup']) == binary_format.core(
+        bundle.setups['setup']
+    )
+    # Resolved exports author the formerly omitted defaults explicitly.
+    assert device_settings.override_mask(bundle.setups['setup']) == 0
+    assert device_settings.override_mask(rebuilt.setups['setup']) & 1
     image = tmp_path / 'setup.bin'
     image.write_bytes(bundle.setups['setup'])
     executable = tmp_path / 'movie-setup'

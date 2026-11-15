@@ -11,6 +11,7 @@ from . import (
     banked,
     binary_format,
     counters,
+    device_settings,
     display,
     graphics,
     inputs,
@@ -798,7 +799,17 @@ def _patch(
         # Export the actual program when an edit changes its catalogue identity
         # or clears an inherited setting (TOML has no null override).
     value = {k: v for k, v in properties.items() if not k.startswith('_')}
-    if kind == 17:
+    if kind == 18:
+        if flags or size != 6:
+            raise ValueError('invalid global setting action')
+        field, clear, encoded = struct.unpack_from('<BBI', data, cursor)
+        if clear > 1 or clear and encoded:
+            raise ValueError('invalid global setting action')
+        setting = device_settings.definition(field)
+        value.update(operation='global-setting', setting=setting.name)
+        if not clear:
+            value['value'] = device_settings.decode_value(field, encoded)
+    elif kind == 17:
         definitions, count, initial, chord_count = struct.unpack_from(
             '<HHHH', data, cursor
         )

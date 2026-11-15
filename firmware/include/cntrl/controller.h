@@ -486,6 +486,6 @@ private:
     }
 };
 #if UINTPTR_MAX == UINT32_MAX
-static_assert(sizeof(Controller) == 396, "Update layout.estimate_ram for the Controller ABI");
+static_assert(sizeof(Controller) == 448, "Update layout.estimate_ram for the Controller ABI");
 #endif
 } // namespace cntrl

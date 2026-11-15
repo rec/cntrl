@@ -156,6 +156,7 @@ def resolve_setup(
 ) -> dict[str, object]:
     if trace is None:
         trace = data_files.Trace()
+    trace.setting_overrides[expression.name] = deepcopy(document)
     root = expression.paths[0].resolve()
     if expression.name not in trace.locations:
         locations: dict[tuple[str | int, ...], data_files.Location] = {}

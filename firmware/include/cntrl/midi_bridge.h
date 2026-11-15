@@ -253,7 +253,7 @@ struct Sink {
         loop_reset_.accepted(destination,packet);
         pickup_.observe(state_); return true;
     }
-    void configure_loop_controls(const uint8_t *settings) { loop_reset_.configure(settings); }
+    void configure_loop_controls(const uint8_t *settings, int enabled = -1) { loop_reset_.configure(settings, enabled); }
     void begin_loop_control_reset() { loop_reset_.begin(); }
     bool loop_control_reset_pending() const { return loop_reset_.pending(); }
     void poll_loop_control_reset(unsigned available) {

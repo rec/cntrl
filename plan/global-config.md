@@ -1,5 +1,40 @@
 # Global defaults for complete setups
 
+## Live device-global settings extension
+
+The user has authorized live global settings for fixed preferences and the
+reload-sensitive memory, port and routing preferences. No page or editor UI is
+added. USB commands and configurable `global-setting` patch actions provide
+control. Reload-sensitive edits are rejected during notes, playback, recording
+or other active MIDI work, and any change that invalidates an affected setup is
+rejected before persistence. A stopped unsaved looper take also blocks reloads.
+
+The compiled fallback stays unchanged. Effective values use an explicit setup
+value first, then the sparse device-global overlay, then the compiled host-global
+or built-in fallback. Explicit resets through `inheritance.remove` also protect
+the reset value from device-global inheritance. Clearing a device override
+therefore restores each setup's own fallback, even when uploads used different
+versions of the host global file.
+
+For live pickup inheritance, an explicit `None`, `"none"` or `"None"` still
+inherits the device-global policy. Explicit booleans and deliberate removal
+resets remain setup-local choices.
+
+Known optional setup-envelope record 3 stores an eight-byte little-endian
+explicit-setting mask for 34 fixed fields. Missing metadata conservatively treats
+legacy setups as explicit. Record 2 remains the immutable source snapshot
+reference. `global-setting` uses patch opcode 18 with field ID, clear flag and
+four-byte unsigned wire value; arbitrary graph definitions remain host-compiled.
+
+The device overlay uses two CRC-checked journal slots under `/cntrl/global`.
+This store participates in deployment generation mapping so backup restore can
+publish setups and their overlay together. Management supports GET, SET, CLEAR
+and atomic whole-table PUT; the CLI exposes list, set, clear and explicit restore.
+Recovery and synchronization retain `device-globals.toml` separately from
+`global.toml` and setup-local overrides. Compiling recovered sources does not bake
+the device overlay into their fallback values. Emulator startup imports the same
+overlay into its native store.
+
 Status: implemented. Automated qualification passes; physical pedal qualification
 has not been performed.
 
@@ -9,11 +44,24 @@ sync writes inherited edits locally. Source-aware download uses the visible
 `cntrl-session.toml` manifest and restores original sources, baseline images and
 saved pedal images without the original machine or its per-user configuration.
 
-Validation passed 1783 tests with one skip, including native source-transfer,
-sync, song, history and backup/restore coverage. Ruff, formatting, type checking
-and pyupgrade checks pass. Normal and diagnostic firmware links retain the
-existing 4096-byte ITCM growth reserve. No application or hardware was launched
-for physical qualification.
+Validation passed 1854 tests with one skip, including native source-transfer,
+sync, song, history, device globals and backup/restore coverage. Native device
+tests use ASan and UBSan, including cached settings, local port edits, deferred
+patch actions, journal recovery and atomic rejection of invalid settings. Ruff,
+formatting, type checking and pyupgrade checks pass.
+
+Both firmware links retain the existing 4096-byte ITCM growth reserve:
+
+| Build | Executable code | ITCM code | ITCM growth headroom | RAM1 local/stack space |
+| --- | ---: | ---: | ---: | ---: |
+| Normal | 412336 bytes | 191560 bytes | 5048 bytes | 12352 bytes |
+| Diagnostic | 416032 bytes | 192456 bytes | 4152 bytes | 12256 bytes |
+
+Cold document rendering and port-edit management stay in flash. Time-critical
+MIDI paths retain their existing placement. No application or hardware was
+launched for physical qualification. Full backup deployment remains covered by
+the existing host staging tests; the native bundle peer does not implement the
+storage-scan/deployment protocol needed for an end-to-end restore test.
 
 ## Implementation format decision
 

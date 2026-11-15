@@ -173,6 +173,9 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 18:
+            if (!hardware_.global_setting(p[0], u32(p + 2), p[1] != 0)) { fail("Global setting rejected"); return; }
+            started_ = true; complete_leaf(); return;
         case 17: {
             if (!leaving()) return;
             const auto &frame = frames_[depth_ - 1];

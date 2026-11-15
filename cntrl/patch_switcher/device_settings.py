@@ -1,0 +1,259 @@
+"""Stable scalar setting identifiers shared with the pedal's global store."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal
+
+from pydantic import BaseModel, Field, TypeAdapter
+
+if TYPE_CHECKING:
+    from . import models
+
+
+class Setting(BaseModel, frozen=True):
+    name: str
+    kind: Literal['integer', 'boolean', 'milliseconds', 'choice', 'outputs']
+    minimum: int = 0
+    maximum: int = 1
+    choices: list[str] = Field(default_factory=list)
+
+
+def field_id(name: str, target: models.Target | None = None) -> int:
+    for i, s in enumerate(SETTINGS):
+        if name == s.name:
+            field_path(i, target)
+            return i
+    if target is not None:
+        for i in range(19, 27):
+            try:
+                path = field_path(i, target)
+            except ValueError:
+                continue
+            if name == '.'.join(path):
+                return i
+    raise ValueError(f'unknown device-global setting {name!r}')
+
+
+def field_path(field: int, target: models.Target | None = None) -> list[str]:
+    setting = definition(field)
+    parts = setting.name.split('.')
+    if 19 <= field <= 26 and target is not None:
+        from .midi_endpoints import ports
+
+        jacks = ports(target.midi_endpoints)
+        index = (field - 19) % 4
+        if index >= len(jacks) or not jacks[index]:
+            raise ValueError(f'{setting.name}: port is unavailable on target')
+        parts[1] = jacks[index]
+    return parts
+
+
+def definition(field: int) -> Setting:
+    if not 0 <= field < len(SETTINGS):
+        raise ValueError(f'unknown device-global setting id {field}')
+    return SETTINGS[field]
+
+
+def encode_value(field: int, value: object, target: models.Target | None = None) -> int:
+    setting = definition(field)
+    if field == 1 and isinstance(value, str):
+        from . import models
+
+        value = TypeAdapter(
+            models.Setup.model_fields['screensaver_timeout'].rebuild_annotation()
+        ).validate_python(value)
+    if setting.kind == 'boolean':
+        if isinstance(value, str) and value in ('true', 'false'):
+            value = value == 'true'
+        if not isinstance(value, bool):
+            raise ValueError(f'{setting.name}: expected a boolean')
+        return int(value)
+    if setting.kind == 'choice':
+        if isinstance(value, str) and value in setting.choices:
+            return setting.choices.index(value)
+        raise ValueError(f'{setting.name}: expected one of {setting.choices}')
+    if setting.kind == 'outputs' and isinstance(value, list):
+        if target is None:
+            raise ValueError('named clock outputs require a target')
+        routes = {
+            e.name: e.route
+            for e in target.midi_endpoints
+            if e.output
+            or e.port is not None
+            and any(m in ('midi-a', 'midi-b') for m in target.trs_ports.get(e.name, []))
+        }
+        if any(not isinstance(n, str) or n not in routes for n in value):
+            raise ValueError('clock outputs must name available target outputs')
+        if len(set(value)) != len(value):
+            raise ValueError('duplicate clock output')
+        return sum(1 << routes[n] for n in value)
+    if setting.kind == 'milliseconds':
+        from . import models
+
+        path = field_path(field)
+        owner = {
+            'scrolling': models.Scrolling,
+            'navigation': models.NavigationSettings,
+            'target_pulse': models.TargetPulse,
+        }[path[0]]
+        seconds = TypeAdapter(
+            owner.model_fields[path[1]].rebuild_annotation()
+        ).validate_python(value)
+        return round(seconds * 1000)
+    if isinstance(value, str):
+        try:
+            value = int(value)
+        except ValueError as error:
+            raise ValueError(f'{setting.name}: expected an integer') from error
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not setting.minimum <= value <= setting.maximum
+    ):
+        raise ValueError(
+            f'{setting.name}: expected {setting.minimum} through {setting.maximum}'
+        )
+    return value
+
+
+def decode_value(field: int, value: int, target: models.Target | None = None) -> object:
+    setting = definition(field)
+    if not setting.minimum <= value <= setting.maximum:
+        raise ValueError(f'{setting.name}: invalid stored value {value}')
+    if setting.kind == 'boolean':
+        return bool(value)
+    if setting.kind == 'milliseconds':
+        return value / 1000
+    if setting.kind == 'choice':
+        return setting.choices[value]
+    if setting.kind == 'outputs' and target is not None:
+        return [
+            e.name
+            for e in target.midi_endpoints
+            if value & (1 << e.route) and (e.output or e.port is not None)
+        ]
+    return value
+
+
+def explicit_mask(document: dict[str, object], target: models.Target) -> int:
+    mask = 0
+    inheritance = document.get('inheritance', {})
+    removals = inheritance.get('remove', []) if isinstance(inheritance, dict) else []
+    for i in range(len(SETTINGS)):
+        try:
+            path = field_path(i, target)
+        except ValueError:
+            continue
+        if any(isinstance(p, list) and p and path[: len(p)] == p for p in removals):
+            mask |= 1 << i
+            continue
+        current: object = document
+        for key in path:
+            if not isinstance(current, dict) or key not in current:
+                break
+            current = current[key]
+        else:
+            if i == 10 and (current is None or current in ('none', 'None')):
+                continue
+            mask |= 1 << i
+    return mask
+
+
+def attach(data: bytes, document: dict[str, object], target: models.Target) -> bytes:
+    from . import binary_format
+
+    value = binary_format.unpack(binary_format.wrap(data), binary_format.Kind.setup)
+    return value.model_copy(
+        update={
+            'records': [
+                *(r for r in value.records if r.tag != binary_format.SETTING_OVERRIDES),
+                binary_format.Record(
+                    tag=binary_format.SETTING_OVERRIDES,
+                    data=explicit_mask(document, target).to_bytes(8, 'little'),
+                ),
+            ]
+        }
+    ).pack()
+
+
+def override_mask(data: bytes) -> int:
+    from . import binary_format
+
+    if data.startswith(binary_format.MAGIC):
+        for record in binary_format.unpack(data, binary_format.Kind.setup).records:
+            if record.tag == binary_format.SETTING_OVERRIDES:
+                return int.from_bytes(record.data, 'little')
+    return (1 << 64) - 1
+
+
+SETTINGS = [
+    Setting(name='brightness', kind='integer', maximum=255),
+    Setting(name='screensaver_timeout', kind='integer', maximum=2147483),
+    Setting(name='is_midi_interface', kind='boolean'),
+    Setting(name='usb_device_midi', kind='boolean'),
+    Setting(name='usb_host_midi', kind='boolean'),
+    Setting(name='forward_device_to_host', kind='boolean'),
+    Setting(name='fast_switches', kind='boolean'),
+    Setting(name='frame_buffers', kind='integer', maximum=2),
+    Setting(name='use_animations', kind='boolean'),
+    Setting(name='animation_color_cycle', kind='boolean'),
+    Setting(name='pickup', kind='boolean'),
+    Setting(name='pickup_pairing_ms', kind='integer', maximum=65535),
+    Setting(
+        name='scrolling.horizontal_duration',
+        kind='milliseconds',
+        minimum=1,
+        maximum=65535,
+    ),
+    Setting(
+        name='scrolling.vertical_duration',
+        kind='milliseconds',
+        minimum=1,
+        maximum=65535,
+    ),
+    *[
+        Setting(
+            name=f'scrolling.{n}',
+            kind='choice',
+            maximum=3,
+            choices=['right', 'left', 'up', 'down'],
+        )
+        for n in ('send', 'patches', 'cycles')
+    ],
+    Setting(
+        name='navigation.hold_delay', kind='milliseconds', minimum=1, maximum=65535
+    ),
+    Setting(
+        name='navigation.repeat_interval', kind='milliseconds', minimum=1, maximum=65535
+    ),
+    *[
+        Setting(
+            name=f'trs_ports.{i + 1}',
+            kind='choice',
+            maximum=4,
+            choices=['off', 'midi-a', 'midi-b', 'expression', 'aux'],
+        )
+        for i in range(4)
+    ],
+    *[
+        Setting(
+            name=f'auxiliary_switches.{i + 1}',
+            kind='choice',
+            choices=['independent', 'combined'],
+        )
+        for i in range(4)
+    ],
+    Setting(
+        name='page_settings.clock_source',
+        kind='choice',
+        choices=['internal', 'external'],
+    ),
+    Setting(name='page_settings.clock_outputs', kind='outputs', maximum=65535),
+    Setting(name='target_pulse.period', kind='milliseconds', minimum=2, maximum=65535),
+    Setting(name='target_pulse.minimum', kind='integer', maximum=128),
+    Setting(name='target_pulse.maximum', kind='integer', minimum=1, maximum=128),
+    Setting(name='target_pulse.delay', kind='milliseconds', maximum=65535),
+    Setting(name='loop_stop_reset_controls', kind='boolean'),
+]
+COUNT = len(SETTINGS)
+KNOWN_MASK = (1 << COUNT) - 1

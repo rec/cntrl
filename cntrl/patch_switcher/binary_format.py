@@ -77,6 +77,14 @@ def unpack(data: bytes, kind: Kind) -> Document:
         elif tag == SOURCE and kind == Kind.setup:
             if flags or size != 32 or any(r.tag == SOURCE for r in records):
                 raise ValueError('invalid source snapshot reference')
+        elif tag == SETTING_OVERRIDES and kind == Kind.setup:
+            if (
+                flags
+                or size != 8
+                or any(r.tag == SETTING_OVERRIDES for r in records)
+                or int.from_bytes(data[cursor : cursor + size], 'little') >> 34
+            ):
+                raise ValueError('invalid device-global setting overrides')
         elif flags & REQUIRED:
             raise ValueError(f'unsupported required persistent record {tag}')
         records.append(
@@ -128,7 +136,8 @@ def require_structural_edit(data: bytes, kind: Kind = Kind.setup) -> None:
 
 def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
     return data.startswith(MAGIC) and any(
-        r.tag != SOURCE or kind != Kind.setup for r in unpack(data, kind).records[1:]
+        r.tag not in (SOURCE, SETTING_OVERRIDES) or kind != Kind.setup
+        for r in unpack(data, kind).records[1:]
     )
 
 
@@ -156,6 +165,7 @@ HEADER = struct.Struct('<4sHHHHII')
 RECORD = struct.Struct('<HHI')
 CORE = 1
 SOURCE = 2
+SETTING_OVERRIDES = 3
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096

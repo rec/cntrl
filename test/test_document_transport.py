@@ -17,6 +17,8 @@ from cntrl.patch_switcher import (
     cli,
     compiler,
     data_files,
+    device_globals,
+    device_settings,
     midi_assets,
     models,
     resolved,
@@ -204,6 +206,129 @@ def test_large_setup_uses_the_shared_document_budget(peer: Path) -> None:
                 client.copy('Large', setup(40000, 2), True)
             assert client.current() == 'Large'
             assert client.download('Large') == data
+
+
+def test_portable_globals_bootstrap_the_native_runtime_journal(
+    bundle_peer: Path, tmp_path: Path
+) -> None:
+    values = {0: 80, 1: 30, 9: 1}
+    folder = tmp_path / 'cntrl/global'
+    folder.mkdir(parents=True)
+    (folder / '0.bin').write_bytes(device_globals.journal(values))
+    with (
+        NativePeer([str(bundle_peer), str(tmp_path)]) as port,
+        transport.SerialConnection(Path(port)) as connection,
+    ):
+        client = transport.SetupClient(connection)
+        assert client.global_settings() == values
+        client.clear_global(9)
+    with (
+        NativePeer([str(bundle_peer), str(tmp_path)]) as port,
+        transport.SerialConnection(Path(port)) as connection,
+    ):
+        assert transport.SetupClient(connection).global_settings() == {0: 80, 1: 30}
+
+
+def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
+    bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cntrl.patch_switcher import global_config
+
+    global_file = tmp_path / 'global.toml'
+    global_file.write_text('brightness=160\n')
+    monkeypatch.setattr(global_config, 'user_path', lambda: global_file)
+    source = tmp_path / 'Show.toml'
+    source.write_text('# Inherit the rig\n')
+    locked = tmp_path / 'Locked.toml'
+    locked.write_text('brightness=192\n')
+    inputs = data_files.Sources(
+        document=[f'Show={source}'], target=[str(ROOT / 'firmware/test/target.json')]
+    )
+    device = tmp_path / 'device'
+    device.mkdir()
+    with NativePeer([str(bundle_peer), str(device)]) as port:
+        cli.run_setup(
+            cli.Copy(
+                document=[*inputs.document, f'Locked={locked}'],
+                target=inputs.target,
+                port=Path(port),
+            )
+        )
+        with transport.SerialConnection(Path(port)) as connection:
+            client = transport.SetupClient(connection)
+            before = {n: client.download(n) for n in ('Show', 'Locked')}
+            client.set_global(0, 100)
+            assert client.global_settings() == {0: 100}
+            assert {n: client.download(n) for n in before} == before
+            files = cli.download_files(client, list(before))
+            overlays = [d for p, d in files.items() if p.name == 'device-globals.toml']
+            assert overlays and all(
+                device_globals.load(d) == {0: 100} for d in overlays
+            )
+            report = setup_sync.preview(inputs, client)
+            review = setup_sync.Review.model_validate(
+                tomlkit.parse(report.read_text()).unwrap()
+            )
+            assert len(review.changes) == 1
+            change = review.changes[0]
+            assert change.scope == 'device-global' and change.affects == ['Show']
+            setup_sync.apply_review(report)
+            overlay = tmp_path / 'device-globals.toml'
+            assert device_globals.load(overlay.read_bytes()) == {0: 100}
+            assert source.read_text() == '# Inherit the rig\n'
+            assert global_file.read_text() == 'brightness=160\n'
+            client.clear_global(0)
+            setup_sync.apply_review(setup_sync.preview(inputs, client))
+            assert device_globals.load(overlay.read_bytes()) == {}
+            assert {n: client.download(n) for n in before} == before
+        overlay.write_bytes(device_globals.dump({0: 80, 1: 30}))
+        device_globals.run(device_globals.Restore(file=overlay, port=Path(port)))
+    with NativePeer([str(bundle_peer), str(device)]) as port:
+        with transport.SerialConnection(Path(port)) as connection:
+            assert transport.SetupClient(connection).global_settings() == {0: 80, 1: 30}
+
+
+def test_sync_preserves_mask_only_local_settings_edits_and_restored_inheritance(
+    bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cntrl.patch_switcher import global_config
+
+    defaults = tmp_path / 'global.toml'
+    defaults.write_text('brightness=192\n')
+    monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
+    source = tmp_path / 'Show.toml'
+    source.write_text('# Inherit brightness\n')
+    inputs = data_files.Sources(
+        document=[f'Show={source}'], target=[str(ROOT / 'firmware/test/target.json')]
+    )
+    target = models.Target.model_validate(
+        compiler.read_document(Path(inputs.target[0]))
+    )
+    device = tmp_path / 'device'
+    device.mkdir()
+    with NativePeer([str(bundle_peer), str(device)]) as port:
+        cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
+        with transport.SerialConnection(Path(port)) as connection:
+            client = transport.SetupClient(connection)
+            original = client.download('Show')
+            client.set_global(0, 100)
+            local = device_settings.attach(original, {'brightness': 192}, target)
+            assert binary_format.core(local) == binary_format.core(original)
+            client.copy('Show', local, True)
+            client.ok('CNTRL SETUP FINISH')
+            trace = data_files.Trace()
+            compiled = cli.compile_inputs(inputs, trace=trace)
+            with pytest.raises(ValueError, match='unreconciled pedal edits'):
+                setup_sync.prepare_upload(inputs, compiled, trace, client)
+            report = setup_sync.preview(inputs, client)
+            setup_sync.apply_review(report)
+            assert tomlkit.parse(source.read_text())['brightness'] == 192
+            assert defaults.read_text() == 'brightness=192\n'
+            client.copy('Show', original, True)
+            client.ok('CNTRL SETUP FINISH')
+            setup_sync.apply_review(setup_sync.preview(inputs, client))
+            assert 'brightness' not in tomlkit.parse(source.read_text())
+            assert client.global_settings() == {0: 100}
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -862,6 +987,7 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         assert sorted(p.name for p in output.iterdir()) == [
             'Other.toml',
             'Show.toml',
+            'device-globals.toml',
             'sessions',
             'song.mid',
         ]
@@ -887,6 +1013,7 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         assert sorted(p.name for p in selected.iterdir()) == [
             'Other.toml',
             'Show.toml',
+            'device-globals.toml',
             'sessions',
             'song.mid',
         ]

@@ -21,6 +21,7 @@ from . import (
     binary_format,
     compiler,
     data_files,
+    device_settings,
     global_config,
     inputs,
     midi_assets,
@@ -281,7 +282,11 @@ def encode(
         + b'CSP5'
     )
     if source:
-        source = binary_format.wrap(source)
+        source = (
+            device_settings.attach(source, {}, target)
+            if authoring is not None and target is not None
+            else binary_format.wrap(source)
+        )
         payload += struct.pack('<I', len(source)) + source
     if len(payload) > 0xFFFFFFFF - 20:
         raise ValueError('song library exceeds the SD file format size')
@@ -763,6 +768,7 @@ def run(command: Copy | Download) -> None:
                         documents,
                         movies,
                         source_snapshots=trace.files,
+                        setting_overrides=trace.setting_overrides[n],
                     )
                     for n, s in companions.items()
                 }

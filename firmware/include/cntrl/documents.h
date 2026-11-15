@@ -15,13 +15,14 @@ struct Replies {
 
 class Documents {
 public:
-    Documents(SetupStorage &storage, Hardware &hardware, Controller &controller, Replies &replies)
-        : revisions_(storage), storage_(storage), hardware_(hardware), controller_(controller), replies_(replies) {}
+    Documents(SetupStorage &storage, Hardware &hardware, Controller &controller, Replies &replies, GlobalSettings *globals = nullptr)
+        : revisions_(storage), storage_(storage), hardware_(hardware), controller_(controller), replies_(replies), globals_(globals) {}
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_boot)
 #endif
     void boot() {
         empty();
+        if (globals_ && !globals_->ready()) { std::strcpy(boot_error_, "global-settings-invalid"); return; }
         if (!storage_.available()) { std::strcpy(boot_error_, "storage-unavailable"); return; }
         int stored = read_selection();
         if (stored < 0) { std::strcpy(boot_error_, "selection-record-invalid"); return; }
@@ -38,6 +39,62 @@ public:
     const char *selected() const { return selected_; }
     bool busy() const { return browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
     bool dirty() const { return dirty_; }
+    void bind_globals(GlobalSettings &globals) { globals_ = &globals; document_.bind_globals(&globals.values()); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_global_change)
+#endif
+    bool global_change(unsigned field, uint32_t value, bool clear, bool activity_busy) {
+        GlobalSettings *target = globals_;
+        GlobalSettings::Values candidate;
+        if (!target || !target->candidate(field, value, clear, candidate)) return global_error("global-value");
+        return global_replace(candidate, activity_busy);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_global_replace)
+#endif
+    bool global_replace(const GlobalSettings::Values &values, bool activity_busy) {
+        GlobalSettings *target = globals_;
+        if (!target || !target->ready()) return global_error("global-unavailable");
+        if (!GlobalSettings::valid(values)) return global_error("global-value");
+        uint64_t changed = target->values().known ^ values.known;
+        for (unsigned i = 0; i < GlobalSettings::count; ++i)
+            if (target->values().values[i] != values.values[i]) changed |= uint64_t(1) << i;
+        if (!changed) { last_error_[0] = 0; return true; }
+        if (busy() || dirty_ || ((changed & ~uint64_t(3)) && activity_busy)) return global_error("global-busy");
+        if (changed & ~uint64_t(7)) {
+            if (!validate_globals(values)) return false;
+        }
+        Document prepared;
+        bool reload = document_.valid() && bool(changed & ~document_.explicit_settings() & ~uint64_t(7));
+        const GlobalSettings::Values previous = target->values();
+        if (reload) {
+            // Prepared pages retain Document copies. All copies must point at
+            // stable store memory, never the caller's proposed Values object.
+            target->values_ = values;
+            if (!prepared.load(active_.data, document_.length(), hardware_, &target->values()) || !prepare_resources(prepared)) {
+                target->values_ = previous;
+                return global_error("global-resources");
+            }
+        }
+        if (!target->commit(values)) {
+            if (reload) target->values_ = previous;
+            if (reload) finish_resources(false);
+            return global_error("global-write");
+        }
+        if (document_.valid()) {
+            const uint64_t affected = changed & ~document_.explicit_settings();
+            if (reload) {
+                prepared.bind_globals(&target->values()); document_ = prepared;
+                finish_resources(true); controller_.activate(document_);
+            } else {
+                document_.bind_globals(&target->values());
+                if (affected & 1) { hardware_.set_brightness(document_.brightness()); controller_.runtime_brightness(document_.brightness()); }
+                if (affected & 2) hardware_.set_splash(document_.splash(), document_.screensaver_timeout());
+                if (affected & 4) hardware_.set_midi_interface(document_.is_midi_interface());
+            }
+        }
+        last_error_[0] = 0; return true;
+    }
     const char *last_error() const { return last_error_; }
     bool next_valid(const char *after, char *name) {
         char cursor[64]; std::snprintf(cursor, sizeof(cursor), "%s", after);
@@ -53,7 +110,7 @@ public:
     bool select(const char *name) {
         if (busy() || dirty_ || !setup_name(name) || !load(name)) return false;
         Document candidate;
-        if (!candidate.load(staging_.data, length_, hardware_)) return false;
+        if (!candidate.load(staging_.data, length_, hardware_, global_values())) return false;
         last_error_[0] = 0; browse_ = Browse(); browse_.select = true;
         quiet_ = true; browse_phase_ = BrowsePhase::activate;
         browse_step();
@@ -75,7 +132,7 @@ public:
         std::memcpy(staging_.data, active_.data, document_.length()); dirty_ = true; return true;
     }
     int64_t edit_value(unsigned patch, unsigned field) const {
-        Document d; if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_) || (field <= 4 && patch >= d.patches())) return 0;
+        Document d; if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_, global_values()) || (field <= 4 && patch >= d.patches())) return 0;
         const uint8_t *p = patch < d.patches() ? d.patch(patch) : nullptr;
         if (p && u16(p) == 65535 && field <= 4) return -1;
         switch (field) {
@@ -94,7 +151,7 @@ public:
 #endif
     bool edit_adjust(unsigned patch, unsigned field, int delta) {
         Document d;
-        if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_) || (field <= 4 && patch >= d.patches()) || field > 7) return false;
+        if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_, global_values()) || (field <= 4 && patch >= d.patches()) || field > 7) return false;
         uint8_t *p = patch < d.patches() ? staging_.data + (d.patch(patch) - staging_.data) : nullptr;
         if (p && u16(p) == 65535 && field <= 4) return false;
         int node = patch < d.patches() ? editable_node(d, patch) : -1;
@@ -132,21 +189,33 @@ public:
                 std::memcpy(staging_.data + (d.bank(i) - staging_.data), program + 7, 4);
             }
         }
+        if (field >= 5 && d.global_mask_offset()) {
+            uint64_t mask = d.explicit_settings() | (uint64_t(1) << (field - 5));
+            for (unsigned i = 0; i < 8; ++i) staging_.data[d.global_mask_offset() + i] = uint8_t(mask >> (i * 8));
+        }
         binary::seal_setup(staging_.data, document_.length());
         Document candidate;
-        if (!candidate.load(staging_.data, document_.length(), hardware_)) {
+        if (!candidate.load(staging_.data, document_.length(), hardware_, global_values())) {
             std::memcpy(staging_.data, scratch_.data, document_.length());
             return false;
         }
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_save_trs_mode)
+#endif
     bool save_trs_mode(unsigned jack, midi::TrsMode mode, uint32_t now) {
         if (jack >= 4 || dirty_ || !edit_begin()) return false;
-        staging_.data[document_.trs_modes() - document_.data() + jack] = uint8_t(mode);
+        staging_.data[document_.metadata() + trs_modes_offset + jack] = uint8_t(mode);
         if (mode != midi::TrsMode::aux) staging_.data[document_.metadata() + scrolling_offset + 5] &= ~(4u << jack);
+        if (document_.global_mask_offset()) {
+            uint64_t mask = document_.explicit_settings() | (uint64_t(1) << (19 + jack));
+            if (mode != midi::TrsMode::aux) mask |= uint64_t(1) << (23 + jack);
+            for (unsigned i = 0; i < 8; ++i) staging_.data[document_.global_mask_offset() + i] = uint8_t(mask >> (i * 8));
+        }
         binary::seal_setup(staging_.data, document_.length());
         Document candidate;
-        if (candidate.load(staging_.data, document_.length(), hardware_) && edit_save(now)) return true;
+        if (candidate.load(staging_.data, document_.length(), hardware_, global_values()) && edit_save(now)) return true;
         edit_cancel(); return false;
     }
     void edit_cancel() { dirty_ = false; staging_.clear(); scratch_.clear(); }
@@ -216,7 +285,7 @@ public:
         }
         if (!name_compare(name, selected_)) {
             Document candidate;
-            if (!candidate.load(staging_.data, length_, hardware_) || !prepare_resources(candidate)) { error("setup-resources"); return; }
+            if (!candidate.load(staging_.data, length_, hardware_, global_values()) || !prepare_resources(candidate)) { error("setup-resources"); return; }
             finish_resources(true); activate(candidate);
         }
         if (!quiet_) replies_.reply("CNTRL OK");
@@ -320,7 +389,7 @@ private:
         case BrowsePhase::trailer: {
             uint8_t trailer[4]; Document candidate;
             if (!storage_.read(browse_.slot, 96 + browse_.length, trailer, 4) || std::memcmp(trailer, "DONE", 4)
-                || ~browse_.crc != browse_.expected_crc || (browse_.length && !candidate.load(scratch_.data, browse_.length, hardware_))) {
+                || ~browse_.crc != browse_.expected_crc || (browse_.length && !candidate.load(scratch_.data, browse_.length, hardware_, global_values()))) {
                 browse_next_slot(); return;
             }
             if (browse_.final) {
@@ -337,7 +406,7 @@ private:
         }
         case BrowsePhase::activate: {
             Document candidate;
-            if (!candidate.load(staging_.data, length_, hardware_)) { browse_fail(); return; }
+            if (!candidate.load(staging_.data, length_, hardware_, global_values())) { browse_fail(); return; }
             if (document_.valid() && !hardware_.configuration_handoff()) return;
             if (!prepare_resources(candidate)) { browse_fail(); return; }
             if (std::strcmp(selected_, record_name_) && !persist_selection(record_name_)) {
@@ -368,6 +437,7 @@ private:
     MemoryBuffer active_, staging_;
     uint8_t header_[96] = {};
     Document document_;
+    GlobalSettings *globals_ = nullptr;
     char selected_[64] = {}, record_name_[64] = {}, cursor_[64] = {}, line_[256] = {}, last_error_[64] = {}, boot_error_[64] = {};
     unsigned used_ = 0, received_ = 0, expected_ = 0, written_ = 0, slot_ = 0, length_ = 0, download_ = 0;
     unsigned delete_length_ = 0, delete_offset_ = 0;
@@ -377,6 +447,39 @@ private:
     bool receiving_ = false, writing_ = false, overflow_ = false, dirty_ = false, quiet_ = false, listing_ = false, deleting_ = false, erasing_ = false, present_ = false;
     inline static const uint8_t zero_[64] = {};
     bool allocation_failed_ = false;
+    const GlobalSettings::Values *global_values() const { return globals_ ? &globals_->values() : nullptr; }
+    bool global_error(const char *message) { std::snprintf(last_error_, sizeof(last_error_), "%s", message); return false; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_validate_globals)
+#endif
+    bool validate_globals(const GlobalSettings::Values &values) {
+        char cursor[64] = {}, name[64]; MemoryBuffer bytes;
+        while (storage_.next(cursor, name)) {
+            std::snprintf(cursor, sizeof(cursor), "%s", name); storage_.choose(name);
+            int best = -1; uint32_t generation = 0;
+            for (unsigned slot = 0; slot < 2; ++slot) {
+                uint8_t header[96], trailer[4];
+                if (!storage_.read(slot, 0, header, sizeof(header)) || !header_valid(header)
+                    || name_compare(name, reinterpret_cast<const char *>(header + 20))) continue;
+                unsigned length = u32(header + 8);
+                if (storage_.size(slot) != length + 100 || !storage_.read(slot, 96 + length, trailer, 4)
+                    || std::memcmp(trailer, "DONE", 4)) continue;
+                if (!bytes.resize(length)) { storage_.choose(selected_); return global_error("global-memory"); }
+                if (length && (!storage_.read(slot, 96, bytes.data, length) || checksum(bytes.data, length) != u32(header + 12))) continue;
+                Document raw;
+                if (length && !raw.load(bytes.data, length, hardware_, nullptr)) continue;
+                if (best < 0 || int32_t(u32(header + 4) - generation) > 0) { best = int(slot); generation = u32(header + 4); }
+            }
+            if (best < 0) { storage_.choose(selected_); return global_error("global-invalid-setup"); }
+            uint8_t header[96];
+            if (!storage_.read(unsigned(best), 0, header, sizeof(header))) { storage_.choose(selected_); return global_error("global-read"); }
+            unsigned length = u32(header + 8);
+            if (!bytes.resize(length) || (length && !storage_.read(unsigned(best), 96, bytes.data, length))) { storage_.choose(selected_); return global_error("global-read"); }
+            Document candidate;
+            if (length && !candidate.load(bytes.data, length, hardware_, &values)) { storage_.choose(selected_); return global_error("global-invalid-setup"); }
+        }
+        storage_.choose(selected_); return true;
+    }
     bool allocate(MemoryBuffer &buffer, unsigned length) {
         allocation_failed_ = !buffer.resize(length);
         return !allocation_failed_;
@@ -453,7 +556,7 @@ private:
         }
         if (history_phase_ == HistoryPhase::current) {
             const Revision &info = revisions_.info(); Document candidate;
-            if (revisions_.success() && candidate.load(scratch_.data, info.length, hardware_)
+            if (revisions_.success() && candidate.load(scratch_.data, info.length, hardware_, global_values())
                 && (!current_length_ || int32_t(uint32_t(info.number) - current_generation_) > 0)) {
                 current_generation_ = uint32_t(info.number); current_length_ = info.length; current_slot_ = history_slot_;
             }
@@ -466,7 +569,7 @@ private:
         } else if (history_phase_ == HistoryPhase::selected) {
             Document candidate; const auto &info = revisions_.info();
             if (!revisions_.success() || info.length != current_length_ || info.number != current_generation_
-                || !candidate.load(scratch_.data, info.length, hardware_)) { history_complete(false); return; }
+                || !candidate.load(scratch_.data, info.length, hardware_, global_values())) { history_complete(false); return; }
             current_ready(now);
         } else if (history_phase_ == HistoryPhase::revision) {
             if (!revisions_.success()) {
@@ -477,12 +580,12 @@ private:
             history_revision_ = revisions_.info();
             if (history_action_ == HistoryAction::restore || history_action_ == HistoryAction::compare) {
                 Document original;
-                if (!original.load(staging_.data, history_revision_.length, hardware_)
+                if (!original.load(staging_.data, history_revision_.length, hardware_, global_values())
                     || !revisions_.remap(staging_, original)) { history_complete(false); return; }
             }
             if (history_action_ == HistoryAction::restore) {
                 Document candidate;
-                if (!candidate.load(staging_.data, history_revision_.length, hardware_) || !candidate.prepare_fonts(hardware_)) { history_complete(false); return; }
+                if (!candidate.load(staging_.data, history_revision_.length, hardware_, global_values()) || !candidate.prepare_fonts(hardware_)) { history_complete(false); return; }
                 hardware_.finish_fonts(false);
                 expected_ = history_revision_.length; expected_crc_ = checksum(staging_.data, expected_);
                 archive_ready(now);
@@ -610,7 +713,7 @@ private:
         if (storage_.size(slot) != length + 100 || !storage_.read(slot, 96 + length, trailer, 4)
             || std::memcmp(trailer, "DONE", 4) || (length && !storage_.read(slot, 96, staging_.data, length))
             || checksum(staging_.data, length) != u32(header_ + 12)) return false;
-        Document candidate; return !length || candidate.load(staging_.data, length, hardware_);
+        Document candidate; return !length || candidate.load(staging_.data, length, hardware_, global_values());
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_load)
@@ -665,7 +768,7 @@ private:
 #endif
     bool begin_write(uint32_t now) {
         Document prepared;
-        if (expected_ && !prepared.load(staging_.data, expected_, hardware_)) return false;
+        if (expected_ && !prepared.load(staging_.data, expected_, hardware_, global_values())) return false;
         storage_.prepare_document(prepared);
         if (dirty_ && !allocate(scratch_, expected_)) { error("document-memory"); return false; }
         last_error_[0] = 0;
@@ -726,7 +829,7 @@ private:
         if (checksum(staging_.data, expected_) != expected_crc_) { error("checksum"); return; }
         if (deleting_) { erase_batch(); return; }
         Document candidate;
-        if (!candidate.load(staging_.data, expected_, hardware_)) { error("invalid-document"); return; }
+        if (!candidate.load(staging_.data, expected_, hardware_, global_values())) { error("invalid-document"); return; }
         if (!candidate.prepare_fonts(hardware_)) { error("font-load"); return; }
         hardware_.finish_fonts(false);
         start_write(now);
@@ -759,8 +862,8 @@ private:
         }
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
-            char response[80]; std::snprintf(response, sizeof(response), "CNTRL READY %u %u %08lx", document_version, document_.length(),
-                document_.valid() ? (unsigned long)checksum(active_.data, document_.length()) : 0ul);
+            char response[96]; std::snprintf(response, sizeof(response), "CNTRL READY %u %u %08lx%s", document_version, document_.length(),
+                document_.valid() ? (unsigned long)checksum(active_.data, document_.length()) : 0ul, globals_ && globals_->ready() ? " device_globals=1" : "");
             replies_.reply(response); return;
         }
         if (!std::strcmp(line_, "CNTRL SETUP CURRENT")) {

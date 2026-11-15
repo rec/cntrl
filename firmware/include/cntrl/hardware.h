@@ -1,4 +1,5 @@
 #pragma once
+#include "global_settings.h"
 #include "midi_outputs.h"
 #include <cstddef>
 #include <cstdint>
@@ -119,6 +120,9 @@ struct Hardware : RelayDriver {
     virtual void set_splash(bool enabled, uint32_t idle_ms) = 0;
     virtual void set_movies(const uint8_t *, unsigned, const uint8_t *, unsigned) {}
     virtual void set_animation_color_cycle(bool) {}
+    virtual bool global_setting(unsigned, uint32_t, bool) { return false; }
+    virtual bool global_settings_busy() { return !output_idle(); }
+    virtual const GlobalSettings::Values *global_values() const { return nullptr; }
     virtual void error(const char *message) = 0;
 };
 

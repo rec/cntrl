@@ -4,6 +4,7 @@
 #include "midi_processing.h"
 #include "numeric.h"
 #include "binary_format.h"
+#include "global_settings.h"
 #include "banked_pages.h"
 #include <cstring>
 #include <cstdio>
@@ -76,10 +77,18 @@ public:
     CNTRL_FLASH_ROUTINE(document_load)
 #endif
     bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware) {
+        return load(bytes, length, hardware, hardware.global_values());
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_load_global)
+#endif
+    bool load(const uint8_t *bytes, unsigned length, const Hardware &hardware, const GlobalSettings::Values *globals) {
         const uint8_t *serialized = bytes;
         const unsigned serialized_length = length;
         binary::View persistent;
         if (!binary::open(bytes, length, binary::Kind::setup, persistent)) return false;
+        const uint64_t explicit_fields = persistent.global_explicit_mask;
+        auto setting = [&](unsigned field, uint32_t fallback) { return GlobalSettings::resolve(globals, explicit_fields, field, fallback); };
         bytes += persistent.offset; length = persistent.length;
         if (length < 76 || std::memcmp(bytes, "CSW1", 4)
             || u16(bytes + 4) != document_version || u16(bytes + 6) < 1
@@ -90,8 +99,11 @@ public:
         if (ni > max_instruments || nc > max_patch_cycles || bool(nc) != bool(np)
             || meta + metadata_header_size + ni * 64 + np * 4 > length
             || std::memcmp(bytes + meta, "CMTA", 4)) return false;
+        uint8_t effective_ports[4];
+        for (unsigned i = 0; i < 4; ++i) effective_ports[i] = uint8_t(setting(19 + i, bytes[meta + trs_modes_offset + i]));
+        uint8_t flags = (bytes[19] & ~uint8_t(8 | 16)) | (setting(3, (bytes[19] & 8) != 0) ? 8 : 0) | (setting(4, (bytes[19] & 16) != 0) ? 16 : 0);
         for (unsigned i = 0; i < 4; ++i) {
-            auto mode = midi::TrsMode(bytes[meta + trs_modes_offset + i]);
+            auto mode = midi::TrsMode(effective_ports[i]);
             if (mode > midi::TrsMode::aux || !hardware.supports_trs_mode(i, mode)) return false;
         }
         unsigned nb = u16(bytes + meta + 4);
@@ -100,9 +112,9 @@ public:
         if (bytes[meta + scrolling_offset + 5] > 63) return false;
         if (bytes[meta + scrolling_offset + 6] > 2 || bytes[meta + scrolling_offset + 7] > 1) return false;
         for (unsigned i = 0; i < 4; ++i)
-            if ((bytes[meta + scrolling_offset + 5] & (4u << i)) && bytes[meta + trs_modes_offset + i] != unsigned(midi::TrsMode::aux)) return false;
-        if (u16(bytes + meta + 8) < 2 || bytes[meta + 10] > bytes[meta + 11]
-            || !bytes[meta + 11] || bytes[meta + 11] > 128) return false;
+            if (setting(23 + i, (bytes[meta + scrolling_offset + 5] & (4u << i)) != 0) && effective_ports[i] != unsigned(midi::TrsMode::aux)) return false;
+        if (setting(29, u16(bytes + meta + 8)) < 2 || setting(30, bytes[meta + 10]) > setting(31, bytes[meta + 11])
+            || !setting(31, bytes[meta + 11]) || setting(31, bytes[meta + 11]) > 128) return false;
         if (!u16(bytes + meta + 12)) return false;
         PageSettings right;
         for (unsigned i = 0; i < PageSettings::clock_outputs; ++i) right.words[i] = u16(bytes + meta + pages_offset + 2 * i);
@@ -123,9 +135,9 @@ public:
             for (unsigned i = 0; i < 4; ++i) {
                 const uint8_t *p = bytes + names + i * expression_record_size;
                 if (!p[32]) continue;
-                if (midi::TrsMode(bytes[meta + trs_modes_offset + i]) != midi::TrsMode::expression || !text_valid(p, 32)
-                    || !output_valid(bytes + meta + trs_modes_offset, p, hardware)
-                    || !transport_enabled(reinterpret_cast<const char *>(p), bytes[19], hardware)
+                if (midi::TrsMode(effective_ports[i]) != midi::TrsMode::expression || !text_valid(p, 32)
+                    || !output_valid(effective_ports, p, hardware, 0xffff, flags)
+                    || !transport_enabled(reinterpret_cast<const char *>(p), flags, hardware)
                     || p[32] > 16 || p[33] > 127 || p[34] > p[35] || p[35] > 127
                     || p[36] > 1 || (p[37] & 3) > 2 || (p[37] >> 2) > 16) return false;
             }
@@ -135,13 +147,15 @@ public:
             if (names + clock_section_size > length) return false;
             read_clock(right, bytes + names);
             names += clock_section_size;
-            if (right[R::clock_external] > 1 || !right[R::slot1]
-                || !output_mask_valid(right[R::clock_outputs], bytes + meta + trs_modes_offset, bytes[19], hardware)) return false;
+            if (right[R::clock_external] > 1 || !right[R::slot1]) return false;
             for (unsigned i = R::slot1; i <= R::slot4; ++i) {
                 unsigned bpm = right.words[i];
                 if (bpm && (bpm < 20 || bpm > 600 || (i > R::slot1 && !right.words[i - 1]))) return false;
             }
         }
+        right.words[R::clock_outputs] = uint16_t(setting(28, right[R::clock_outputs]));
+        right.words[R::clock_external] = uint16_t(setting(27, right[R::clock_external]));
+        if (!output_mask_valid(right[R::clock_outputs], effective_ports, flags, hardware)) return false;
         if (names + 4 <= length && !std::memcmp(bytes + names, "CKBD", 4)) {
             if (!hardware.supports_keyboard() || names + 6 > length || !u16(bytes + names + 4)) return false;
             unsigned count = u16(bytes + names + 4);
@@ -241,8 +255,8 @@ public:
             unsigned expression = meta + metadata_header_size + ni * 64 + nb * 8 + np * 4;
             for (unsigned i = 0; i < 4; ++i) {
                 const uint8_t *p = bytes + expression + i * expression_record_size;
-                if (p[32] && (!output_valid(bytes + meta + trs_modes_offset, p, hardware, output_routes)
-                    || (p[37] >> 2 && !output_mask_valid(1u << ((p[37] >> 2) - 1), bytes + meta + trs_modes_offset, bytes[19], hardware)))) return false;
+                if (p[32] && (!output_valid(effective_ports, p, hardware, output_routes, flags)
+                    || (p[37] >> 2 && !output_mask_valid(1u << ((p[37] >> 2) - 1), effective_ports, flags, hardware)))) return false;
             }
         }
         names += 6 + endpoints * 68;
@@ -291,7 +305,7 @@ public:
             for (unsigned i = 0; i < counter_count; ++i) {
                 const uint8_t *p = bytes + names + 6 + i * 104;
                 if (!label_valid(p, 64) || !text_valid(p + 64, 32)
-                    || !output_valid(bytes + meta + trs_modes_offset, p + 64, hardware, output_routes)
+                    || !output_valid(effective_ports, p + 64, hardware, output_routes, flags)
                     || (p[96] >> 4 != 11 && p[96] >> 4 != 12) || p[97] > 127
                     || (p[96] >> 4 == 12 && p[97]) || p[99] > p[98] || p[98] > p[100]
                     || p[100] > 127 || !u16(p + 101) || u16(p + 101) == 32768 || p[103] > 1) return false;
@@ -327,7 +341,7 @@ public:
                     || (parameter.kind != midi::Parameter::cc7 && parameter.kind != midi::Parameter::cc14
                         && parameter.kind != midi::Parameter::nrpn7 && parameter.kind != midi::Parameter::nrpn14
                         && parameter.kind != midi::Parameter::rpn14)
-                    || !output_mask_valid(1u << p[0],bytes + meta + trs_modes_offset,bytes[19],hardware)) return false;
+                    || !output_mask_valid(1u << p[0],effective_ports,flags,hardware)) return false;
                 for (unsigned j = 0; j < i; ++j) {
                     const auto *other = bytes + names + 7 + j * 7;
                     midi::Parameter previous{other[1],other[2],uint16_t(u16(other + 3)),int32_t(u16(other + 5))};
@@ -343,14 +357,14 @@ public:
                 || !u16(bytes + names + 10) || (u16(bytes + names + 10) & ~output_routes)
                 || !u16(bytes + names + 12)) return false;
             unsigned mask = u16(bytes + names + 10);
-            if (!output_mask_valid(mask,bytes + meta + trs_modes_offset,bytes[19],hardware)
+            if (!output_mask_valid(mask,effective_ports,flags,hardware)
                 || hardware.memory_capacity() < hardware.memory_runtime()
                 || u32(bytes + meta + scrolling_offset + 8) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
             for (const auto &connection : hardware.midi_outputs()) if (connection.port != midi::no_port
-                && (mask & (1u << connection.route)) && !midi::midi_output(midi::TrsMode(bytes[meta + trs_modes_offset + connection.port]))) return false;
+                && (mask & (1u << connection.route)) && !midi::midi_output(midi::TrsMode(effective_ports[connection.port]))) return false;
             for (const auto &connection : hardware.midi_outputs()) if (u16(bytes + names + 8) & (1u << connection.route)) {
-                if ((connection.transport == midi::OutputTransport::usb_device && !(bytes[19] & 8))
-                    || (connection.transport == midi::OutputTransport::usb_host && !(bytes[19] & 16))) return false;
+                if ((connection.transport == midi::OutputTransport::usb_device && !(flags & 8))
+                    || (connection.transport == midi::OutputTransport::usb_host && !(flags & 16))) return false;
             }
             looper = names; names += 14;
         }
@@ -365,7 +379,7 @@ public:
                 || !u16(p + 14) || u16(p + 16) < 2
                 || !gate || gate > step || step > (uint64_t(64) << 32)
                 || !u32(p + 42) || uint64_t(u32(p + 34)) + u32(p + 38) > u32(p + 42) || !u32(p + 46)
-                || !output_mask_valid(u16(p + 12),bytes + meta + trs_modes_offset,bytes[19],hardware)) return false;
+                || !output_mask_valid(u16(p + 12),effective_ports,flags,hardware)) return false;
             unsigned outputs = 0, channels = 0;
             for (unsigned mask = u16(p + 12); mask; mask &= mask - 1) ++outputs;
             for (unsigned mask = u16(p + 8); mask; mask &= mask - 1) ++channels;
@@ -390,7 +404,7 @@ public:
             end += size;
         }
         unsigned graph = end;
-        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count,looper != 0)) return false;
+        if (!graph_valid(bytes, length, graph, ni, np, meta, nb, hardware, output_routes, input_routes, inputs, relay_records, relay_count, counter_count,looper != 0,effective_ports,flags)) return false;
         if (!std::memcmp(bytes + banked_offset, "CBPG", 4)) {
             const unsigned views = u16(bytes + banked_offset + 8);
             unsigned definitions = 0;
@@ -419,7 +433,7 @@ public:
                 connection.input = bool(input_routes & (1u << connection.route));
                 connection.output = bool(output_routes & (1u << connection.route));
                 if (connection.port != midi::no_port
-                    && !midi::midi_output(midi::TrsMode(bytes[meta + trs_modes_offset + connection.port])))
+                    && !midi::midi_output(midi::TrsMode(effective_ports[connection.port])))
                     connection.input = connection.output = false;
                 if (!configured.append(connection)) return false;
             }
@@ -507,7 +521,7 @@ public:
             const uint8_t *p = bytes + 76 + i * 68;
             if (!text_valid(p, 32) || !text_valid(p + 32, 32) || p[64] > 15
                 || p[65] || p[66] || p[67]
-                || !output_valid(bytes + meta + trs_modes_offset, p + 32, hardware, output_routes)) return false;
+                || !output_valid(effective_ports, p + 32, hardware, output_routes, flags)) return false;
             for (unsigned j = 0; j < i; ++j)
                 if (!std::strcmp(reinterpret_cast<const char *>(p),
                                  reinterpret_cast<const char *>(bytes + 76 + j * 68))) return false;
@@ -554,24 +568,31 @@ public:
         graph_ = graph + core_; streams_ = streams ? streams + core_ : 0;
         pickup_ = pickup ? pickup + core_ : 0; looper_ = looper ? looper + core_ : 0;
         loop_reset_ = loop_reset ? loop_reset + core_ : 0;
+        globals_ = globals; explicit_fields_ = explicit_fields;
+        global_mask_offset_ = persistent.global_mask_offset;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
+    void bind_globals(const GlobalSettings::Values *values) { globals_ = values; }
+    uint64_t explicit_settings() const { return explicit_fields_; }
+    unsigned global_mask_offset() const { return global_mask_offset_; }
+    uint32_t setting(unsigned field, uint32_t fallback) const { return GlobalSettings::resolve(globals_, explicit_fields_, field, fallback); }
     unsigned switches() const { return u16(data_ + graph_ + 10); }
     const uint8_t *midi_streams() const { return streams_ ? data_ + streams_ : nullptr; }
     unsigned midi_streams_size() const { return streams_ ? u32(data_ + streams_ + 4) : 0; }
     const uint8_t *looper_settings() const { return looper_ ? data_ + looper_ : nullptr; }
     const uint8_t *loop_stop_settings() const { return loop_reset_ ? data_ + loop_reset_ : nullptr; }
+    bool loop_stop_reset_controls() const { return setting(33, loop_reset_ && data_[loop_reset_ + 4]); }
     const uint8_t *arpeggiator_settings() const {
         const auto *p = arpeggiator_section();
         return !std::memcmp(p,"CARP",4) ? p : nullptr;
     }
     bool pickup(unsigned root = 65535) const {
         unsigned policy = pickup_ ? data_[pickup_ + 6] : 0;
-        if (pickup_ && root < nodes() && data_[pickup_ + 9 + root]) policy = data_[pickup_ + 9 + root];
-        return policy != 1;
+        if (pickup_ && root < nodes() && data_[pickup_ + 9 + root]) return data_[pickup_ + 9 + root] != 1;
+        return setting(10, policy != 1);
     }
-    unsigned pickup_pairing_ms() const { return pickup_ ? u16(data_ + pickup_ + 7) : 2; }
+    unsigned pickup_pairing_ms() const { return setting(11, pickup_ ? u16(data_ + pickup_ + 7) : 2); }
     bool stream_scope(unsigned root, unsigned &scope) const {
         unsigned edges = 1;
         for (unsigned i = 0; i < nodes(); ++i) {
@@ -619,10 +640,10 @@ public:
     unsigned patch_cycles() const { return patch_cycles_; }
     unsigned instruments() const { return instruments_; }
     unsigned patches() const { return patches_; }
-    unsigned navigation_hold_ms() const { return u16(data_ + core_ + 6); }
-    bool fast_switches() const { return data_[metadata() + scrolling_offset + 5] & 1; }
-    bool forward_device_to_host() const { return !(data_[metadata() + scrolling_offset + 5] & 2); }
-    bool auxiliary_combined(unsigned port) const { return data_[metadata() + scrolling_offset + 5] & (4u << port); }
+    unsigned navigation_hold_ms() const { return setting(17, u16(data_ + core_ + 6)); }
+    bool fast_switches() const { return setting(6, data_[metadata() + scrolling_offset + 5] & 1); }
+    bool forward_device_to_host() const { return setting(5, !(data_[metadata() + scrolling_offset + 5] & 2)); }
+    bool auxiliary_combined(unsigned port) const { return setting(23 + port, (data_[metadata() + scrolling_offset + 5] & (4u << port)) != 0); }
     const uint8_t *input_section() const {
         const uint8_t *endpoints = movie_section() + 8 + 4 * (movies(false) + movies(true));
         return endpoints + 6 + 68 * u16(endpoints + 4);
@@ -637,12 +658,15 @@ public:
     const uint8_t *counter(unsigned index) const { return counter_section() + 6 + index * 104; }
     unsigned page_ram2() const { return u32(data_ + metadata() + scrolling_offset + 8); }
     uint32_t names_signature() const { return u32(data_ + metadata() + scrolling_offset + 12); }
-    uint8_t brightness() const { return data_[core_ + 18]; }
-    unsigned pulse_delay_ms() const { return u16(data_ + metadata() + 14); }
-    unsigned pulse_period_ms() const { return u16(data_ + metadata() + 8); }
-    uint8_t pulse_minimum() const { return data_[metadata() + 10]; }
-    uint8_t pulse_maximum() const { return data_[metadata() + 11]; }
-    unsigned navigation_repeat_ms() const { return u16(data_ + metadata() + 12); }
+    uint8_t brightness() const { return uint8_t(setting(0, data_[core_ + 18])); }
+    unsigned pulse_delay_ms() const { return setting(32, u16(data_ + metadata() + 14)); }
+    unsigned pulse_period_ms() const { return setting(29, u16(data_ + metadata() + 8)); }
+    uint8_t pulse_minimum() const { return uint8_t(setting(30, data_[metadata() + 10])); }
+    uint8_t pulse_maximum() const { return uint8_t(setting(31, data_[metadata() + 11])); }
+    unsigned navigation_repeat_ms() const { return setting(18, u16(data_ + metadata() + 12)); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_page_settings)
+#endif
     PageSettings page_settings() const {
         PageSettings settings;
         for (unsigned i = 0; i < PageSettings::clock_outputs; ++i) settings.words[i] = u16(data_ + metadata() + pages_offset + 2 * i);
@@ -660,11 +684,13 @@ public:
             settings.keyboard_count = u16(keyboard_section() + 4);
             settings.keyboard = keyboard_section() + 6;
         }
+        settings.words[PageSettings::clock_outputs] = uint16_t(setting(28, settings[PageSettings::clock_outputs]));
+        settings.words[PageSettings::clock_external] = uint16_t(setting(27, settings[PageSettings::clock_external]));
         return settings;
     }
     bool splash() const { return data_[core_ + 19] & 1; }
-    bool animation_color_cycle() const { return data_[core_ + 19] & 4; }
-    bool usb_device_midi() const { return data_[core_ + 19] & 8; }
+    bool animation_color_cycle() const { return setting(9, (data_[core_ + 19] & 4) != 0); }
+    bool usb_device_midi() const { return setting(3, (data_[core_ + 19] & 8) != 0); }
     const uint8_t *keyboard_section() const {
         return bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0) + ((data_[core_ + 19] & 0x20) ? clock_section_size : 0);
     }
@@ -728,14 +754,17 @@ public:
         const uint8_t *p = switch_hook_section() - 5 * gesture_record_size + slot * gesture_record_size;
         return u16(p + gesture_debounce_offset) ? p : nullptr;
     }
-    const uint8_t *trs_modes() const { return data_ + metadata() + trs_modes_offset; }
-    bool usb_host_midi() const { return data_[core_ + 19] & 16; }
-    bool is_midi_interface() const { return data_[core_ + 19] & 2; }
-    uint32_t screensaver_timeout() const { return u32(data_ + core_ + 24); }
-    unsigned scroll_ms(bool vertical = false) const { return u16(data_ + metadata() + (vertical ? scrolling_offset : 6)); }
-    unsigned frame_buffers() const { return data_[metadata() + scrolling_offset + 6]; }
-    bool use_animations() const { return data_[metadata() + scrolling_offset + 7]; }
-    unsigned scroll_direction(unsigned action) const { return data_[metadata() + scrolling_offset + 2 + action]; }
+    const uint8_t *trs_modes() const {
+        for (unsigned i = 0; i < 4; ++i) effective_ports_[i] = uint8_t(setting(19 + i, data_[metadata() + trs_modes_offset + i]));
+        return effective_ports_;
+    }
+    bool usb_host_midi() const { return setting(4, (data_[core_ + 19] & 16) != 0); }
+    bool is_midi_interface() const { return setting(2, (data_[core_ + 19] & 2) != 0); }
+    uint32_t screensaver_timeout() const { return setting(1, u32(data_ + core_ + 24) / 1000) * 1000; }
+    unsigned scroll_ms(bool vertical = false) const { return setting(vertical ? 13 : 12, u16(data_ + metadata() + (vertical ? scrolling_offset : 6))); }
+    unsigned frame_buffers() const { return setting(7, data_[metadata() + scrolling_offset + 6]); }
+    bool use_animations() const { return setting(8, data_[metadata() + scrolling_offset + 7]); }
+    unsigned scroll_direction(unsigned action) const { return setting(14 + action, data_[metadata() + scrolling_offset + 2 + action]); }
     ScreenGraphics graphics(unsigned slot) const {
         const uint8_t *p = data_ + core_ + 28 + slot * 16;
         return read_graphics(p);
@@ -846,7 +875,8 @@ private:
     static bool graph_valid(const uint8_t *bytes, unsigned document_length, unsigned start,
                             unsigned instruments, unsigned browser_count, unsigned metadata,
                             unsigned mappings, const Hardware &hardware, unsigned output_routes, unsigned input_routes, unsigned input_count,
-                            const uint8_t *relay_records, unsigned relay_count, unsigned counter_count, bool looper) {
+                            const uint8_t *relay_records, unsigned relay_count, unsigned counter_count, bool looper,
+                            const uint8_t *ports, uint8_t flags) {
         if (start > document_length || document_length - start < 16 || std::memcmp(bytes + start, "CPAT", 4)) return false;
         const uint8_t *g = bytes + start;
         unsigned size = u32(g + 4), count = u16(g + 8), switches = u16(g + 10), named = u16(g + 14);
@@ -892,7 +922,7 @@ private:
             case 2:
                 if ((n[1] != 0 && n[1] != 1 && n[1] != 2 && n[1] != 4 && n[1] != 9 && n[1] != 10)
                     || length <= 32 || !text_valid(p, 32)
-                    || !output_valid(bytes + metadata + trs_modes_offset, p, hardware, output_routes)
+                    || !output_valid(ports, p, hardware, output_routes, flags)
                     || !((n[1] == 4 || n[1] == 10) ? midi::stream_valid(p + 32, length - 32) : midi::message_valid(p + 32, length - 32))) return false;
                 if (n[1] == 10) {
                     midi::Parameter parameter;
@@ -926,7 +956,7 @@ private:
                 if (n[1] || length != 120 || (p[0] && !text_valid(p, 96)) || !u16(p + 96)
                     || p[118] > 1 || int8_t(p[119]) == -128
                     || (u16(p + 96) & ~output_routes)
-                    || !output_mask_valid(u16(p + 96), bytes + metadata + trs_modes_offset, bytes[19], hardware)) return false;
+                    || !output_mask_valid(u16(p + 96), ports, flags, hardware)) return false;
                 for (unsigned j = 0; j < 96 && p[j]; ++j) if (p[j] == '/' || p[j] == '\\') return false;
                 std::memcpy(&speed, p + 110, 8);
                 if (!positive_finite_binary64(speed)) return false;
@@ -959,9 +989,9 @@ private:
                     const uint8_t *e = p + 68 + j * expression_record_size;
                     if (!e[32]) continue;
                     if (e[32] > 16 || e[33] > 127 || e[34] > e[35] || e[35] > 127 || e[36] > 1 || (e[37] & 3) > 2 || (e[37] >> 2) > 16
-                        || bytes[metadata + trs_modes_offset + j] != unsigned(midi::TrsMode::expression)
-                        || !output_valid(bytes + metadata + trs_modes_offset, e, hardware, output_routes)) return false;
-                    if (e[37] >> 2 && !output_mask_valid(1u << ((e[37] >> 2) - 1), bytes + metadata + trs_modes_offset, bytes[19], hardware)) return false;
+                        || ports[j] != unsigned(midi::TrsMode::expression)
+                        || !output_valid(ports, e, hardware, output_routes, flags)) return false;
+                    if (e[37] >> 2 && !output_mask_valid(1u << ((e[37] >> 2) - 1), ports, flags, hardware)) return false;
                 }
                 unsigned assigned = 0;
                 for (unsigned j = 0; j < p[66]; ++j) {
@@ -1010,10 +1040,14 @@ private:
                 for (unsigned j = 0; j < u16(p); ++j, r += 66) if (u16(r) >= count || !text_valid(r + 2, 64)) return false;
                 break;
             }
+            case 18:
+                if (n[1] || length != 6 || p[0] >= GlobalSettings::count || p[1] > 1
+                    || (p[1] ? u32(p + 2) != 0 : !GlobalSettings::valid(p[0], u32(p + 2)))) return false;
+                break;
             case 16:
                 if (n[1] || length != 37 || u16(p) >= counter_count || !text_valid(p + 2, 32)
                     || !p[34] || p[34] > 16 || p[35] > 2 || p[36] > 1
-                    || !output_valid(bytes + metadata + trs_modes_offset, p + 2, hardware, output_routes)) return false;
+                        || !output_valid(ports, p + 2, hardware, output_routes, flags)) return false;
                 break;
             case 7:
                 if (n[1] || length != 4 || !u32(p) || u32(p) > 65535) return false;
@@ -1057,10 +1091,11 @@ private:
         }
         return true;
     }
-    static bool output_valid(const uint8_t *modes, const uint8_t *output, const Hardware &hardware, unsigned allowed = 0xffff) {
+    static bool output_valid(const uint8_t *modes, const uint8_t *output, const Hardware &hardware, unsigned allowed = 0xffff, uint8_t flags = 255) {
         auto name = reinterpret_cast<const char *>(output);
         auto *route = hardware.midi_outputs().find(name);
         return route && route->output && (allowed & (1u << route->route)) && hardware.supports(name)
+            && transport_enabled(name, flags, hardware)
             && (route->port == midi::no_port || midi::midi_output(midi::TrsMode(modes[route->port])));
     }
     static bool transport_enabled(const char *name, uint8_t flags, const Hardware &hardware) {
@@ -1084,6 +1119,9 @@ private:
             && 2u * p[2] + u16(p + 8) <= hardware.display_height()
             && u16(p + 8) && u16(p + 10) < u16(p + 8);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_field_text)
+#endif
     void field_text(char *text, unsigned size, unsigned code, unsigned index, unsigned literal, const Counters *values) const {
         const uint8_t *p = patch(index);
         const uint8_t *source = data_ + texts_;
@@ -1128,5 +1166,9 @@ private:
     bool opaque_ = false;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0;
     unsigned graph_ = 0, streams_ = 0, pickup_ = 0, looper_ = 0, loop_reset_ = 0;
+    const GlobalSettings::Values *globals_ = nullptr;
+    uint64_t explicit_fields_ = UINT64_MAX;
+    unsigned global_mask_offset_ = 0;
+    mutable uint8_t effective_ports_[4] = {};
 };
 } // namespace cntrl

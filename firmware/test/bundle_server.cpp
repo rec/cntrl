@@ -6,9 +6,14 @@
 #include <cntrl/history_import.h>
 #include <cntrl/file_transfer.h>
 #include <cntrl/songs_transfer.h>
+#include <cntrl/global_commands.h>
 
 struct Peer : TestPatchHardware, cntrl::SongResolver, cntrl::Replies {
     cntrl::UsbSession usb;
+    cntrl::GlobalCommands *globals = nullptr;
+    cntrl::GlobalSettings *global_store = nullptr;
+    const cntrl::GlobalSettings::Values *global_values() const override { return global_store ? &global_store->values() : nullptr; }
+    bool global_setting(unsigned field, uint32_t value, bool clear) override { return globals && globals->request(field, value, clear); }
     bool reply_ready() const override { return usb.reply_ready(); }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *) const override { return true; }
@@ -43,6 +48,9 @@ int main(int argc, char **argv) {
     const auto root = argc > 1 ? std::filesystem::path(argv[1]) : std::filesystem::path(argv[0]).parent_path() / "device";
     std::filesystem::create_directories(root);
     TestFileSystem filesystem(root);
+    cntrl::GlobalSettings global_settings(filesystem); assert(global_settings.boot());
+    documents.bind_globals(global_settings); documents.boot();
+    cntrl::GlobalCommands global_commands(global_settings, documents, peer, peer); peer.globals = &global_commands; peer.global_store = &global_settings;
     TestFile reader(filesystem), writer(filesystem);
     cntrl::FileTransfer midi(filesystem, reader, writer, peer);
     TestFile source_reader(filesystem), source_writer(filesystem);
@@ -57,13 +65,13 @@ int main(int argc, char **argv) {
             if (!std::strcmp(line, "CNTRL MEMORY")) {
                 char response[64]; std::snprintf(response, sizeof(response), "CNTRL MEMORY %u %u", peer.memory_capacity(), peer.memory_runtime());
                 peer.reply(response);
-            } else if (!song_transfer.command(line) && !source.command(line, 0) && !midi.command(line, 0) && !history.command(line, 0) && !transfer.command(line, 0)) {
+            } else if (!global_commands.command(line) && !song_transfer.command(line) && !source.command(line, 0) && !midi.command(line, 0) && !history.command(line, 0) && !transfer.command(line, 0)) {
                 for (unsigned i = 0; i < used; ++i) documents.receive(uint8_t(line[i]), 0);
                 documents.receive('\n', 0);
             }
             used = 0;
         } else if (used + 1 < sizeof(line)) line[used++] = char(byte);
-    }, [&]() { documents.tick(0); transfer.poll(0); history.tick(0); midi.poll(0); source.poll(0); songs.tick(); song_transfer.poll(0); },
+    }, [&]() { documents.tick(0); transfer.poll(0); history.tick(0); midi.poll(0); source.poll(0); songs.tick(); song_transfer.poll(0); global_commands.poll(controller.executor().busy()); },
        [&]() { return documents.accepts_input() && !song_transfer.processing(); },
        [&]() { documents.cancel_transfer(); transfer.cancel(); history.cancel(); midi.cancel(); source.cancel(); song_transfer.cancel_transfer(); },
        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) {

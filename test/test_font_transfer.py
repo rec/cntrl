@@ -15,6 +15,7 @@ from cntrl.patch_switcher import (
     cli,
     compiler,
     data_files,
+    device_settings,
     display,
     models,
     resolved,
@@ -174,7 +175,10 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     (tmp_path / 'fonts').mkdir()
     (tmp_path / 'fonts' / f'{key:08x}.cfont').write_bytes(bitmap)
     document.write_text(exported)
-    assert cli.compile_inputs(command).setups['show'] == data
+    rebuilt = cli.compile_inputs(command).setups['show']
+    assert binary_format.core(rebuilt) == binary_format.core(data)
+    assert device_settings.override_mask(data) == 0
+    assert device_settings.override_mask(rebuilt) & 1
 
 
 def test_asset_transfer_and_failed_load_preserve_active_fonts(

@@ -76,6 +76,7 @@ extern "C" char cntrl_memory_budget;
 #include <cntrl/storage_listing.h>
 #include <cntrl/slot_storage.h>
 #include <cntrl/state_transfer.h>
+#include <cntrl/global_commands.h>
 #include "font_storage.h"
 #include "../../splash/board.h"
 #include <cntrl/animation/router.h>
@@ -91,6 +92,8 @@ cntrl::ui::AssetFonts fonts(embedded_fonts, sizeof(embedded_fonts) / sizeof(*emb
 ScrollTimingProbe scroll_timing;
 #endif
 extern cntrl::Documents documents;
+extern cntrl::GlobalCommands global_commands;
+extern cntrl::GlobalSettings global_settings;
 extern cntrl::HistoryImport history_import;
 extern cntrl::SongsTransfer songs_transfer;
 extern cntrl::animation::Session splash_session;
@@ -567,6 +570,18 @@ public:
         return midi_files.storage_busy() || midi_files.player.active() || midi_files.player.cleaning()
             || midi_files.recorder.active() || midi_runtime_.streams().file_sources_open();
     }
+    bool global_setting(unsigned field, uint32_t value, bool clear) override { return global_commands.request(field, value, clear); }
+    const cntrl::GlobalSettings::Values *global_values() const override { return &global_settings.values(); }
+    FLASHMEM bool global_settings_busy() override {
+        const auto loop = midi_files.looper.state();
+        auto &streams = midi_runtime_.streams();
+        bool claims = false; each_source([&](unsigned) { claims = true; });
+        return claims || !output_idle() || midi_files.storage_busy() || midi_files.player.active() || midi_files.player.cleaning()
+            || midi_files.recorder.active() || midi_files.looper.unsaved()
+            || (loop != cntrl::midi::MidiLooper::State::empty && loop != cntrl::midi::MidiLooper::State::stopped)
+            || arpeggiator().state() != cntrl::midi::MidiArpeggiator::State::stopped || ui_.pages_.generator.running()
+            || streams.pending() || streams.voices() || streams.recovery() || streams.clock_outputs() || streams.lfo_status().running;
+    }
     FLASHMEM bool heap_diagnostic_ready() {
         auto &streams = midi_runtime_.streams();
         const auto loop = midi_files.looper.state();
@@ -812,6 +827,8 @@ cntrl::BundledStorage setup_storage(card, board);
 cntrl::Controller primary_controller(board, board, patch_sources, cntrl::Switches::capacity);
 // Document bytes are allocated from RAM2's heap as needed.
 DMAMEM cntrl::Documents documents(setup_storage, board, primary_controller, board);
+cntrl::GlobalSettings global_settings(setup_filesystem);
+cntrl::GlobalCommands global_commands(global_settings, documents, board, board);
 cntrl::StoredPatchSources patch_sources(setup_storage.setups());
 cntrl::BundleTransfer bundle_transfer(setup_storage, documents, board, board);
 cntrl::HistoryImport history_import(card, documents, board, board);
@@ -1005,6 +1022,9 @@ struct AssetServices {
     font_files, midi_asset_transfer, source_transfer, native_asset_command};
 cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
 FLASHMEM bool reload_collection(bool initialize_empty = false) {
+    global_commands.cancel();
+    if (!global_settings.boot()) return false;
+    documents.bind_globals(global_settings);
     patch_sources.release_all(); song_files.close();
     if (!setup_storage.boot() || !deployment.stores_complete(setup_storage.bundle_size() != 0, true)
         || !songs.boot(initialize_empty)) return false;
@@ -1019,6 +1039,7 @@ FLASHMEM bool abort_deployment() {
 }
 FLASHMEM bool asset_command(const char *line) {
     if (state_transfer.command(line, board)) return true;
+    if (global_commands.command(line, deployment.pending())) return true;
     if (!std::strncmp(line, "CNTRL DEPLOY ", 13)) {
         unsigned long root = 0, bundle = 0, library = 0; int end = 0;
         if (!std::strcmp(line, "CNTRL DEPLOY STATUS")) {
@@ -1032,8 +1053,8 @@ FLASHMEM bool asset_command(const char *line) {
             board.reply("CNTRL ERROR deployment-busy"); return true;
         }
         if (std::sscanf(line, "CNTRL DEPLOY COMMIT %lx %lx%n", &bundle, &library, &end) == 2 && end && !line[end]) {
-            // The staged collection is already loaded. Publishing its root must
-            // not stop that runtime again: no subsequent activation follows.
+            // Bundle and global-overlay uploads already prepared the staged
+            // runtime. Publishing must not replay song continuations.
             if ((!setup_storage.setups().total_setup_ram() || documents.document().valid())
                 && setup_storage.bundle_crc() == uint32_t(bundle) && songs.continuation().crc == uint32_t(library)
                 && deployment.commit()) board.reply("CNTRL OK");
@@ -1133,6 +1154,8 @@ FLASHMEM void initialize_target() {
         deployment.prepare_runtime(false); card.ready = false; board.error("Setup bundle invalid");
     }
     cntrl::device::heap_phase(cntrl::device::HeapPhase::documents);
+    if (card.ready && !global_settings.boot()) { card.ready = false; board.error("Global settings recovery required"); }
+    documents.bind_globals(global_settings);
     documents.boot();
     cntrl::device::heap_phase(cntrl::device::HeapPhase::songs);
     bool songs_valid = !card.ready || songs.boot(deployment.root() == 0);
@@ -1304,7 +1327,7 @@ public:
     }
     bool expression_allowed() const { return !deployment.pending() && deployment.ready() && commands_allowed(); }
     void expression(uint32_t now) { CNTRL_RUNTIME_TRACE(expression); board.poll_expression(now); }
-    void navigation() { if (deployment.pending() || !deployment.ready()) return; CNTRL_RUNTIME_TRACE(navigation); if (!history_import.busy()) input_coordinator.finish(target_controls); }
+    void navigation() { if (deployment.pending() || !deployment.ready()) return; CNTRL_RUNTIME_TRACE(navigation); if (!history_import.busy()) input_coordinator.finish(target_controls); global_commands.poll(application.patch_pending()); }
     void display(uint32_t now) { CNTRL_RUNTIME_TRACE(display); board.display(now, documents.busy() || application.feature_open(board) || application.patch_pending()); }
 };
 TargetRuntime target_runtime;

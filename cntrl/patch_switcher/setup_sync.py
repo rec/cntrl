@@ -8,7 +8,7 @@ from enum import StrEnum, auto
 from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile, mkdtemp
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 
 import tomlkit
 import tyro
@@ -19,9 +19,13 @@ from . import (
     binary_format,
     compiler,
     data_files,
+    device_globals,
+    device_settings,
     global_config,
+    models,
     resolved,
     setup_bundle,
+    source_archive,
     transport,
 )
 
@@ -64,11 +68,15 @@ class Change(BaseModel, frozen=True):
     affects: list[str] = Field(default_factory=list)
     note: str = ''
     remove_inherited: bool = False
+    scope: Literal['setup', 'device-global'] = 'setup'
+    setting_override: Literal['none', 'set', 'inherit'] = 'none'
+    setting_field: int | None = None
 
 
 class Source(BaseModel, frozen=True):
     file: Path
     before: str
+    present: bool = True
 
 
 class Review(BaseModel, frozen=True):
@@ -79,6 +87,7 @@ class Review(BaseModel, frozen=True):
     host: dict[str, str]
     pedal: dict[str, str]
     changes: list[Change]
+    global_snapshot: str | None = None
 
 
 def canonical(data: bytes) -> dict[str, object]:
@@ -89,6 +98,14 @@ def canonical(data: bytes) -> dict[str, object]:
     if isinstance(definitions := result.get('definitions'), dict):
         definitions.pop('programs', None)
     return result
+
+
+def same_saved_setup(left: bytes, right: bytes) -> bool:
+    before = device_settings.override_mask(left)
+    after = device_settings.override_mask(right)
+    return canonical(left) == canonical(right) and (
+        0xFFFFFFFFFFFFFFFF in (before, after) or before == after
+    )
 
 
 def merge_changes(
@@ -249,6 +266,19 @@ def baseline(root: Path) -> dict[str, bytes]:
     return result
 
 
+def global_baseline(root: Path) -> dict[int, int] | None:
+    record = base_record(root)
+    if record:
+        entry = tomlkit.parse(record.decode()).unwrap().get('device_globals')
+        if isinstance(entry, dict):
+            data = (root / entry['file']).read_bytes()
+            if digest(data) != entry['checksum']:
+                raise ValueError('damaged device-global synchronization baseline')
+            return device_globals.load(data)
+    recovered = root.parent / 'pedal/device-globals.toml'
+    return device_globals.load(recovered.read_bytes()) if recovered.exists() else None
+
+
 def migrate_baselines(root: Path) -> None:
     """Publish converted baselines together while retaining their source snapshots."""
     check_pending(root)
@@ -298,6 +328,12 @@ def advance(root: Path, folder: Path, names: list[str]) -> None:
         setups[n] = {
             'file': str(path.relative_to(root)),
             'checksum': digest(path.read_bytes()),
+        }
+    globals_path = folder / 'device-globals.toml'
+    if globals_path.exists():
+        previous['device_globals'] = {
+            'file': str(globals_path.relative_to(root)),
+            'checksum': digest(globals_path.read_bytes()),
         }
     write_record(root / 'base.toml', previous)
 
@@ -387,6 +423,21 @@ def destination(
 ) -> Change:
     path = change.path
     locations = trace.locations.get(change.setup, {})
+    if change.setting_override == 'inherit':
+        location = locations.get(tuple(path))
+        if location is None or location.file in trace.defaults.values():
+            return change.model_copy(
+                update={
+                    'note': 'Restore setting inheritance by removing '
+                    'the local declaration manually.'
+                }
+            )
+        return placed(
+            change,
+            location,
+            trace,
+            'Remove this setup-local setting override; retain global defaults.',
+        )
     if (inherited := inherited_destination(change, trace, host, pedal)) is not None:
         return inherited
     # Only the fields currently editable on the pedal may be placed automatically.
@@ -544,6 +595,10 @@ def apply_change(document: MutableMapping[str, object], change: Change) -> None:
         raise ValueError(
             f'{change.setup}: {change.path}: manual source placement required'
         )
+    if change.scope == 'device-global':
+        document['format'] = 1
+        assign(document, change.destination.path, change.pedal)
+        return
     if change.remove_inherited:
         if any(not isinstance(p, str) for p in change.path):
             raise ValueError('inherited removals require table keys')
@@ -676,6 +731,13 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
                 Value(present=True, value=host),
                 Value(present=True, value=pedal),
             )
+            mask_changes = setting_changes(
+                n, bases[n], host_bundle.setups[n], saved[n], inputs, trace
+            )
+            paths = {tuple(c.path) for c in mask_changes}
+            differences = [
+                c for c in differences if tuple(c.path) not in paths
+            ] + mask_changes
         for c in differences:
             located = destination(c, trace, host, pedal)
             if base is None:
@@ -687,14 +749,68 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
                     }
                 )
             changes.append(located)
+    live_globals = device_globals.capture(client)
+    global_checksum: str | None = None
+    overlay = root.parent / 'device-globals.toml'
+    overlay_present = overlay.exists()
+    if live_globals is not None:
+        captured = device_globals.dump(live_globals)
+        (folder / 'device-globals.toml').write_bytes(captured)
+        global_checksum = digest(captured)
+        overlay_bytes = overlay.read_bytes() if overlay_present else b''
+        host_globals = device_globals.load(overlay_bytes) if overlay_present else {}
+        base_globals = global_baseline(root) if overlay_present else {}
+        base_values = base_globals if base_globals is not None else host_globals
+        for field in sorted(
+            base_values.keys() | host_globals.keys() | live_globals.keys()
+        ):
+            key = str(field)
+            path: list[str | int] = ['values', key]
+            base_value = Value(
+                present=field in base_values, value=base_values.get(field, '')
+            )
+            host_value = Value(
+                present=field in host_globals, value=host_globals.get(field, '')
+            )
+            pedal_value = Value(
+                present=field in live_globals, value=live_globals.get(field, '')
+            )
+            for change in merge_changes(
+                'device-global', base_value, host_value, pedal_value, path
+            ):
+                affects = [
+                    n
+                    for n, d in host_bundle.setups.items()
+                    if not device_settings.override_mask(d) & (1 << field)
+                ]
+                setting_name = device_settings.definition(field).name
+                changes.append(
+                    change.model_copy(
+                        update={
+                            'scope': 'device-global',
+                            'destination': data_files.Location(file=overlay, path=path),
+                            'affects': affects,
+                            'choice': Choice.unresolved
+                            if base_globals is None
+                            else change.choice,
+                            'note': f'Device-global {setting_name}; '
+                            'preserve compiled setup defaults and local overrides.',
+                        }
+                    )
+                )
+        trace.files[overlay] = overlay_bytes
     review = Review(
         root=root,
         recipe=recipe(inputs, trace),
         baseline=digest(base_record(root)),
-        sources=[Source(file=p, before=digest(v)) for p, v in trace.files.items()],
+        sources=[
+            Source(file=p, before=digest(v), present=p.exists())
+            for p, v in trace.files.items()
+        ],
         host={n: digest(v) for n, v in host_bundle.setups.items()},
         pedal={n: digest(v) for n, v in saved.items()},
         changes=changes,
+        global_snapshot=global_checksum,
     )
     report = folder / 'review.toml'
     write_record(report, review.model_dump(mode='json', exclude_none=True))
@@ -724,6 +840,92 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
     for c in changes:
         print(f'{c.setup}: {c.path}: {c.choice}; {c.destination}; {c.note}')
     return report
+
+
+def setting_changes(
+    name: str,
+    base: bytes,
+    host: bytes,
+    pedal: bytes,
+    inputs: data_files.Sources,
+    trace: data_files.Trace,
+) -> list[Change]:
+    if any(
+        not d.startswith(binary_format.MAGIC)
+        or not any(
+            r.tag == binary_format.SETTING_OVERRIDES
+            for r in binary_format.unpack(d, binary_format.Kind.setup).records
+        )
+        for d in (base, pedal)
+    ):
+        return []
+    before = device_settings.override_mask(base)
+    current = device_settings.override_mask(pedal)
+    authored = device_settings.override_mask(host)
+    changed = (before ^ current) & device_settings.KNOWN_MASK
+    if not changed:
+        return []
+    recorded = recipe(inputs, trace)
+    roots = data_files.expressions(recorded.document)
+    _, relocations = source_archive.session_context(roots[0], snapshots=trace.files)
+    errors: list[str] = []
+    targets = data_files.expressions(recorded.target)
+    target = models.Target.model_validate(
+        data_files.load_target(
+            targets[0],
+            recorded.avoid_confict,
+            errors,
+            overrides=trace.files,
+            relocations=relocations,
+        )
+    )
+    if errors:
+        raise ValueError('\n'.join(errors))
+    values = [
+        models.Setup.model_validate(canonical(d)).model_dump(mode='json')
+        for d in (base, host, pedal)
+    ]
+    result: list[Change] = []
+    for field in range(device_settings.COUNT):
+        bit = 1 << field
+        if not changed & bit:
+            continue
+        if current & bit and authored & bit:
+            continue
+        try:
+            path: list[str | int] = list(device_settings.field_path(field, target))
+        except ValueError:
+            continue
+        b, h, p = (lookup(v, path) for v in values)
+        if not p.present:
+            p = Value(
+                present=True, value=device_settings.decode_value(field, 0, target)
+            )
+        if field == 10 and p.value is None:
+            p = Value(present=True, value='none')
+        explicit = bool(current & bit)
+        choice = (
+            Choice.pedal
+            if bool(authored & bit) == bool(before & bit)
+            and (not before & bit or h == b)
+            else Choice.unresolved
+        )
+        if not explicit and not authored & bit:
+            choice = Choice.host
+        result.append(
+            Change(
+                setup=name,
+                path=path,
+                base=b,
+                host=h,
+                pedal=p if explicit else Value(),
+                choice=choice,
+                setting_override='set' if explicit else 'inherit',
+                setting_field=field,
+                note='Preserve the pedal setting inheritance choice.',
+            )
+        )
+    return result
 
 
 def apply_review(path: Path) -> None:
@@ -759,8 +961,17 @@ def apply_review(path: Path) -> None:
     for n, checksum in review.pedal.items():
         if digest((path.parent / f'{n}.bin').read_bytes()) != checksum:
             raise ValueError(f'{n}: pedal snapshot changed since review; preview again')
+    if (
+        review.global_snapshot is not None
+        and digest((path.parent / 'device-globals.toml').read_bytes())
+        != review.global_snapshot
+    ):
+        raise ValueError('device-global snapshot changed since review; preview again')
     for s in review.sources:
-        if digest(s.file.read_bytes()) != s.before:
+        if (
+            s.file.exists() != s.present
+            or digest(s.file.read_bytes() if s.present else b'') != s.before
+        ):
             raise ValueError(f'{s.file}: source changed since review; preview again')
     trace = data_files.Trace()
     host = compile_inputs(review.recipe, trace=trace)
@@ -773,18 +984,46 @@ def apply_review(path: Path) -> None:
             continue
         if c.destination is None:
             raise ValueError(f'{c.setup}: {c.path}: manual source placement required')
-        if any(n not in host.setups for n in c.affects):
+        if c.scope != 'device-global' and any(n not in host.setups for n in c.affects):
             raise ValueError(
                 f'{c.destination.file}: include every affected setup in a new '
                 f'preview: {c.affects}'
             )
         f = c.destination.file
         if f not in documents:
-            documents[f] = tomlkit.parse(f.read_bytes().decode())
+            documents[f] = (
+                tomlkit.parse(f.read_bytes().decode())
+                if f.exists()
+                else tomlkit.document()
+            )
         apply_change(documents[f], c)
-        assign(expected[c.setup], c.path, c.pedal)
+        if c.scope != 'device-global' and c.setting_override != 'inherit':
+            assign(expected[c.setup], c.path, c.pedal)
     candidates = {p: tomlkit.dumps(v).encode() for p, v in documents.items()}
+    for change in review.changes:
+        if (
+            change.scope == 'device-global'
+            and change.destination is not None
+            and change.destination.file in candidates
+        ):
+            device_globals.load(candidates[change.destination.file])
     compiled = compile_inputs(review.recipe, overrides=candidates)
+    for change in review.changes:
+        if change.choice != Choice.pedal or change.setting_field is None:
+            continue
+        mask = device_settings.override_mask(compiled.setups[change.setup])
+        if bool(mask & (1 << change.setting_field)) != (
+            change.setting_override == 'set'
+        ):
+            raise ValueError(
+                'candidate setting inheritance differs from the reviewed result'
+            )
+        if change.setting_override == 'inherit':
+            assign(
+                expected[change.setup],
+                change.path,
+                lookup(canonical(compiled.setups[change.setup]), change.path),
+            )
     # Explicitly accepting a shared source edit accepts its same-field effects
     # on the listed consumers. No other candidate differences are accepted.
     for n in host.names:
@@ -824,18 +1063,27 @@ def apply_review(path: Path) -> None:
         )
     sources = []
     for i, (p, after) in enumerate(candidates.items()):
-        before = p.read_bytes()
-        if before == after:
+        present = p.exists()
+        before = p.read_bytes() if present else b''
+        if present and before == after:
             continue
         (path.parent / f'apply-{i}.before').write_bytes(before)
         (path.parent / f'apply-{i}.after').write_bytes(after)
         sources.append(
-            {'file': str(p), 'before': f'apply-{i}.before', 'after': f'apply-{i}.after'}
+            {
+                'file': str(p),
+                'before': f'apply-{i}.before',
+                'after': f'apply-{i}.after',
+                'present': present,
+            }
         )
     journal = {'review': str(path), 'sources': sources}
     # Check again immediately before the first replacement, after compilation.
     for s in review.sources:
-        if digest(s.file.read_bytes()) != s.before:
+        if (
+            s.file.exists() != s.present
+            or digest(s.file.read_bytes() if s.present else b'') != s.before
+        ):
             raise ValueError(f'{s.file}: source changed during apply')
     if digest(base_record(review.root)) != review.baseline:
         raise ValueError('baseline changed during apply')
@@ -843,7 +1091,10 @@ def apply_review(path: Path) -> None:
     (path.parent / 'base.before').write_bytes(before_base)
     write_record(review.root / 'pending.toml', journal)
     for s in sources:
-        replace(Path(s['file']), (path.parent / s['after']).read_bytes())
+        replace(
+            Path(cast(str, s['file'])),
+            (path.parent / cast(str, s['after'])).read_bytes(),
+        )
     advance(review.root, path.parent, list(review.host))
     write_record(path.parent / 'applied.toml', {'complete': True})
     (review.root / 'pending.toml').unlink()
@@ -858,16 +1109,19 @@ def recover(path: Path) -> None:
     folder = Path(journal['review']).parent
     # Refuse to discard edits made after an interrupted publication.
     for s in journal['sources']:
-        current = Path(s['file']).read_bytes()
+        current = Path(s['file']).read_bytes() if Path(s['file']).exists() else None
         if current not in (
-            (folder / s['before']).read_bytes(),
+            (folder / s['before']).read_bytes() if s.get('present', True) else None,
             (folder / s['after']).read_bytes(),
         ):
             raise ValueError(
                 f'{s["file"]}: changed after interruption; restore manually'
             )
     for s in journal['sources']:
-        replace(Path(s['file']), (folder / s['before']).read_bytes())
+        if s.get('present', True):
+            replace(Path(s['file']), (folder / s['before']).read_bytes())
+        else:
+            Path(s['file']).unlink(missing_ok=True)
     before = (folder / 'base.before').read_bytes()
     if before:
         replace(path.parent / 'base.toml', before)
@@ -927,11 +1181,7 @@ def prepare_upload(
                         f'{n}: cannot recompile opaque metadata. Backup: {folder}'
                     )
                 prepared[n] = existing[n]
-        if (
-            n in existing
-            and n in bases
-            and canonical(existing[n]) != canonical(bases[n])
-        ):
+        if n in existing and n in bases and not same_saved_setup(existing[n], bases[n]):
             raise ValueError(
                 f'{n}: unreconciled pedal edits; run cntrl setup sync first. '
                 f'Backup: {folder}'
@@ -939,7 +1189,7 @@ def prepare_upload(
         if (
             n in existing
             and n not in bases
-            and canonical(existing[n]) != canonical(bundle.setups[n])
+            and not same_saved_setup(existing[n], bundle.setups[n])
         ):
             raise ValueError(
                 f'{n}: no synchronization baseline; run cntrl setup sync and '

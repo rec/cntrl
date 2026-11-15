@@ -18,6 +18,7 @@ from . import (
     arpeggiator,
     banked,
     counters,
+    device_settings,
     display,
     graphics,
     inputs,
@@ -288,6 +289,7 @@ def compile_show(
     movie_assets: dict[int, bytes] | None = None,
     *,
     source_snapshots: dict[Path, bytes] | None = None,
+    setting_overrides: dict[str, object] | None = None,
 ) -> bytes:
     errors: list[str] = []
     generated: dict[int, bytes] = {}
@@ -905,7 +907,11 @@ def compile_show(
             struct.unpack_from('<I', result, address)[0] + extra_ram,
         )
         struct.pack_into('<I', result, 20, crc32(result[28:]))
-    return bytes(result)
+    return (
+        device_settings.attach(bytes(result), setting_overrides, target)
+        if setting_overrides is not None
+        else bytes(result)
+    )
 
 
 class PatchCompiler:
@@ -1041,6 +1047,7 @@ class PatchCompiler:
             (
                 models.Brightness,
                 models.UsbMidiInterface,
+                models.GlobalSetting,
                 models.Navigation,
                 models.Shift,
             ),
@@ -1299,6 +1306,19 @@ class PatchCompiler:
             payload = bytes((mask,))
             if 'stock-firmware' not in self.target.functions:
                 self.errors.append(f'{path}: stock firmware unavailable on target')
+        elif isinstance(value, models.GlobalSetting):
+            kind = 18
+            try:
+                field = device_settings.field_id(value.setting, self.target)
+                encoded = (
+                    0
+                    if value.value is None
+                    else device_settings.encode_value(field, value.value, self.target)
+                )
+                payload = struct.pack('<BBI', field, int(value.value is None), encoded)
+            except ValueError as error:
+                self.errors.append(f'{path}: {error}')
+                payload = bytes(6)
         elif isinstance(
             value,
             (

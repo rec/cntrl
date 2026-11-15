@@ -15,7 +15,8 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.emulator.replay import Scenario
 from cntrl.fonts import assets, catalogue, ui
-from cntrl.patch_switcher import compiler, models, setup_bundle
+from cntrl.patch_switcher import compiler, device_globals, models, setup_bundle
+from cntrl.patch_switcher.cli import compile_to_file
 
 
 class BackendFiles(BaseModel, frozen=True):
@@ -145,6 +146,32 @@ def test_native_build_reuses_the_compiled_executable(
     assert result == executable
     assert executable.stat().st_mtime_ns == timestamp
     print(f'unchanged native build: {elapsed:.3f} s')
+
+
+def test_recovered_globals_initialize_only_fresh_emulator_storage(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    setup = tmp_path / 'setup.bin'
+    setup.write_bytes(backend_files.setup.read_bytes())
+    target = tmp_path / 'target.toml'
+    target.write_text(
+        tomlkit.dumps(backend_files.target.model_dump(mode='json', exclude_none=True))
+    )
+    overlay = tmp_path / 'device-globals.toml'
+    overlay.write_bytes(device_globals.dump({0: 80}))
+    storage = tmp_path / 'storage'
+    command = cli.Emulate(
+        setup=setup,
+        target=target,
+        layout=backend_files.setup.parent / 'layout.toml',
+        storage=storage,
+    )
+    cli.prepare(command, compile_to_file)
+    journal = storage / 'cntrl/global/0.bin'
+    assert journal.read_bytes() == device_globals.journal({0: 80})
+    overlay.write_bytes(device_globals.dump({0: 160}))
+    cli.prepare(command, compile_to_file)
+    assert journal.read_bytes() == device_globals.journal({0: 80})
 
 
 def test_font_replacement_changes_rendering_without_recompiling(

@@ -11,7 +11,7 @@ import tomlkit
 from pydantic import BaseModel, ConfigDict, Field
 
 from .. import source_files
-from . import binary_format, data_files, transport
+from . import binary_format, data_files, device_globals, transport
 
 
 def compiler_identity() -> str:
@@ -181,7 +181,10 @@ def read(data: bytes) -> tuple[Manifest, dict[str, bytes]]:
 
 
 def download(
-    client: transport.SetupClient, setups: dict[str, bytes]
+    client: transport.SetupClient,
+    setups: dict[str, bytes],
+    *,
+    live_globals: dict[int, int] | None = None,
 ) -> dict[Path, bytes]:
     """Return portable recovered sources and saved images for publish_download."""
     result: dict[Path, bytes] = {}
@@ -220,6 +223,11 @@ def download(
             recovered.model_dump(mode='json')
         ).encode()
         result[base / 'originals.zip'] = data
+        if live_globals is not None:
+            result[base / 'device-globals.toml'] = device_globals.dump(live_globals)
+            result[base / 'pedal/device-globals.toml'] = device_globals.dump(
+                live_globals
+            )
         for name, key in manifest.baselines.items():
             result[base / baselines[name]] = entries[key]
         for name, current in setups.items():

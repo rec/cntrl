@@ -11,7 +11,7 @@ import tyro
 from PIL import Image
 from pydantic import BaseModel, Field, model_validator
 
-from ..patch_switcher import data_files
+from ..patch_switcher import data_files, device_globals
 from ..patch_switcher.models import Target
 from ..patch_switcher.setup_bundle import SetupBundle
 from .backend import Session, bind_target, build
@@ -90,6 +90,15 @@ def prepare(
     target = load_target(target_path)
     bind_target(layout, target)
     storage.mkdir(parents=True, exist_ok=True)
+    overlay = command.setup.resolve().parent / 'device-globals.toml'
+    global_folder = storage / 'cntrl' / 'global'
+    if overlay.is_file() and not any(
+        (global_folder / f'{i}.bin').exists() for i in range(2)
+    ):
+        global_folder.mkdir(parents=True, exist_ok=True)
+        (global_folder / '0.bin').write_bytes(
+            device_globals.journal(device_globals.load(overlay.read_bytes()))
+        )
     setup = command.setup
     with setup.open('rb') as source:
         compiled = source.read(4) in (b'CSTB', b'CNBF')

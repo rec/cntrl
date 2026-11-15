@@ -21,6 +21,7 @@ from . import (
     binary_format,
     compiler,
     data_files,
+    device_globals,
     devices,
     disk_speed,
     global_config,
@@ -274,6 +275,7 @@ def compile_inputs(
                     sources,
                     movies,
                     source_snapshots=trace.files,
+                    setting_overrides=trace.setting_overrides.get(e.name),
                 )
                 if assets is not None:
                     assets[e.name] = fonts
@@ -467,6 +469,11 @@ def run_setup(
             setup_sync.capture_assets(
                 client, {n: bundle.setups[n] for n in uploaded_names}, upload_snapshot
             )
+            live_globals = device_globals.capture(client)
+            if live_globals is not None:
+                (upload_snapshot / 'device-globals.toml').write_bytes(
+                    device_globals.dump(live_globals)
+                )
             setup_sync.advance(
                 setup_sync.store(command), upload_snapshot, uploaded_names
             )
@@ -568,7 +575,10 @@ def download_files(
                 f'{name}: MIDI file conflicts with another downloaded file'
             )
         files[path] = data
-    files.update(source_archive.download(client, setups))
+    live_globals = device_globals.capture(client)
+    if live_globals is not None:
+        files[Path('device-globals.toml')] = device_globals.dump(live_globals)
+    files.update(source_archive.download(client, setups, live_globals=live_globals))
     return files
 
 
@@ -693,6 +703,7 @@ def main() -> None:
         Annotated[Compile, tyro.conf.subcommand(name='compile')]
         | Annotated[SetupCLI, tyro.conf.subcommand(name='setup')]
         | Annotated[Status, tyro.conf.subcommand(name='status')]
+        | Annotated[device_globals.GlobalCLI, tyro.conf.subcommand(name='global')]
         | Annotated[Songs, tyro.conf.subcommand(name='songs')]
         | Annotated[build.Build, tyro.conf.subcommand(name='build')]
         | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
@@ -722,6 +733,8 @@ def main() -> None:
             songs.run(command.command)
         elif isinstance(command, SetupCLI):
             run_setup(command.command)
+        elif isinstance(command, device_globals.GlobalCLI):
+            device_globals.run(command.command)
         elif command.command is not None:
             if command.reset_starts:
                 raise ValueError('--reset-starts cannot be combined with disk-speed')

@@ -65,6 +65,7 @@ class Trace(BaseModel, frozen=True):
     inherited: dict[str, dict[tuple[str | int, ...], Location]] = Field(
         default_factory=dict
     )
+    setting_overrides: dict[str, dict[str, object]] = Field(default_factory=dict)
 
 
 def validate_name(name: str) -> str:
