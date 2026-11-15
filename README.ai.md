@@ -128,3 +128,11 @@ uv run ruff check --select B,E,F,I cntrl test
 uv run ruff format --check cntrl test
 uv run ty check cntrl test
 ```
+
+Native test executables and emulator builds share a persistent binary cache in
+`build/native-cache/`. Unchanged builds are copied into each test's temporary
+directory instead of being compiled again. Tests still execute on every run.
+Cache keys include source and header contents, generated capabilities, compiler
+identity, compilation flags and build environment settings. Only successful
+builds are cached. Delete `build/native-cache/` to force a cold build.
+The emulator also rebuilds when its displayed Git commit changes.

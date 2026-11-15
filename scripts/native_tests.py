@@ -8,6 +8,8 @@ from pathlib import Path
 import tomlkit
 from pydantic import BaseModel
 
+from cntrl.firmware import native_cache
+
 
 class Suite(BaseModel, frozen=True):
     tests: dict[str, list[str]]
@@ -65,6 +67,9 @@ def compile_native(
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.parent / 'tmp'
     temporary.mkdir(exist_ok=True)
+    arguments = [
+        f'-I{Path(a[2:]).resolve()}' if a.startswith('-I') else a for a in arguments
+    ]
     if sys.platform == 'win32':
         command = [
             os.environ.get('CXX', 'cl'),
@@ -96,7 +101,23 @@ def compile_native(
     else:
         command = [os.environ.get('CXX', arguments[0]), *arguments[1:]]
         command[output_index] = str(output)
-    return subprocess.run(
+    inputs = [
+        Path(a).resolve()
+        for a in arguments[1 : output_index - 1]
+        if not a.startswith('-')
+    ]
+    includes = [Path(a[2:]).resolve() for a in arguments if a.startswith('-I')]
+    for directory in [*includes, *(p.parent for p in inputs)]:
+        inputs.extend(directory.rglob('*.h'))
+        inputs.extend(directory.rglob('*.hpp'))
+        inputs.extend(directory.rglob('*.inc'))
+    if sys.platform == 'win32':
+        inputs.append(Path(__file__).with_name('windows-native.manifest'))
+    cache = Path(__file__).resolve().parents[1] / 'build/native-cache'
+    key = native_cache.build_key(command, output.parent, inputs)
+    if native_cache.restore(cache, key, output):
+        return subprocess.CompletedProcess(command, 0)
+    result = subprocess.run(
         command,
         check=check,
         timeout=180,
@@ -104,6 +125,9 @@ def compile_native(
             os.environ, TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary)
         ),
     )
+    if result.returncode == 0:
+        native_cache.store(cache, key, output)
+    return result
 
 
 def run_native(

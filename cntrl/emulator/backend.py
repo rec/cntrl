@@ -9,7 +9,6 @@ import time
 from hashlib import sha256
 from pathlib import Path
 from queue import Empty, Full, Queue
-from shutil import which
 from threading import Thread, Timer
 from types import TracebackType
 from typing import Literal
@@ -17,6 +16,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from .. import models
+from ..firmware import native_cache
 from ..firmware.build_info import commit_id
 from ..firmware.capabilities import header
 from ..fonts.catalogue import UI_FONTS
@@ -114,51 +114,26 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
         command.insert(
             1, f'{"/D" if sys.platform == "win32" else "-D"}CNTRL_GIT_COMMIT=0x{commit}'
         )
-    compiler = which(command[0])
-    if compiler is None:
-        raise FileNotFoundError(f'emulator compiler not found: {command[0]}')
-    compiler_path = Path(compiler).resolve()
-    signature = sha256(repr(command).encode())
-    signature.update(str(compiler_path).encode())
-    if sys.platform == 'win32':
-        signature.update(sha256(compiler_path.read_bytes()).digest())
-    else:
-        version = subprocess.run(
-            [str(compiler_path), '--version'], check=True, capture_output=True
-        )
-        signature.update(version.stdout)
-        signature.update(version.stderr)
-    for name in (
-        'CPATH',
-        'CPLUS_INCLUDE_PATH',
-        'LIBRARY_PATH',
-        'SDKROOT',
-        'MACOSX_DEPLOYMENT_TARGET',
-        'CL',
-        '_CL_',
-        'INCLUDE',
-        'LIB',
-        'LIBPATH',
-    ):
-        signature.update(repr((name, os.environ.get(name))).encode())
     for name, text in generated.items():
-        signature.update(name.encode())
-        signature.update(sha256(text.encode()).digest())
-    inputs = [source, *source.parent.rglob('*.h'), *include.rglob('*.h')]
+        (directory / name).write_text(text)
+    inputs = [
+        source,
+        *source.parent.rglob('*.h'),
+        *include.rglob('*.h'),
+        *(directory / n for n in generated),
+    ]
     if sys.platform == 'win32':
         inputs.append(source_root / 'scripts/windows-native.manifest')
-    for path in sorted(inputs):
-        signature.update(path.relative_to(source_root).as_posix().encode() + b'\0')
-        signature.update(sha256(path.read_bytes()).digest())
-    key = signature.hexdigest()
+    key = native_cache.build_key(command, directory, inputs)
+    cache = source_root / 'build/native-cache'
     record = directory / 'emulator.sha256'
     if executable.is_file() and record.is_file() and record.read_text() == key:
         return executable
     # A failed compiler may truncate an old executable. Never reuse its old key.
     record.write_text('')
-    for name, text in generated.items():
-        (directory / name).write_text(text)
-    subprocess.run(command, check=True)
+    if not native_cache.restore(cache, key, executable):
+        subprocess.run(command, check=True)
+        native_cache.store(cache, key, executable)
     record.write_text(key)
     return executable
 

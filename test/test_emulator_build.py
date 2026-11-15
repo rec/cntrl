@@ -162,11 +162,12 @@ def test_changed_compiler_location_recompiles(
     assert executable.read_text() == 'build 2'
 
 
-def test_missing_executable_is_rebuilt(files: BuildFiles) -> None:
+def test_missing_executable_is_restored(files: BuildFiles) -> None:
     executable = backend.build(files.target, files.output, files.root)
     executable.unlink()
     backend.build(files.target, files.output, files.root)
-    assert executable.read_text() == 'build 2'
+    assert executable.read_text() == 'build 1'
+    assert files.compilations == 1
 
 
 def test_failed_build_cannot_reuse_a_partial_executable(files: BuildFiles) -> None:
@@ -179,4 +180,23 @@ def test_failed_build_cannot_reuse_a_partial_executable(files: BuildFiles) -> No
     files.source.write_bytes(original)
     files.fail = False
     backend.build(files.target, files.output, files.root)
-    assert executable.read_text() == 'build 3'
+    assert executable.read_text() == 'build 1'
+    assert files.compilations == 2
+
+
+def test_new_build_directory_reuses_cached_executable(files: BuildFiles) -> None:
+    backend.build(files.target, files.output, files.root)
+    other = files.output.with_name('another-pytest-run')
+    executable = backend.build(files.target, other, files.root)
+    assert executable.parent == other
+    assert executable.read_text() == 'build 1'
+    assert files.compilations == 1
+
+
+def test_changed_target_in_new_directory_compiles_separately(files: BuildFiles) -> None:
+    backend.build(files.target, files.output, files.root)
+    target = files.target.model_copy(
+        update={'memory': files.target.memory.model_copy(update={'runtime': 1})}
+    )
+    executable = backend.build(target, files.output.with_name('other'), files.root)
+    assert executable.read_text() == 'build 2'
