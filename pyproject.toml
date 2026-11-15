@@ -54,6 +54,9 @@ include = [
     "/.gitignore", "/.gitattributes", "/conftest.py",
 ]
 
+[tool.hatch.build.targets.wheel.force-include]
+"doc/instrument-definitions.md" = "cntrl/patch_switcher/instrument-definitions.md"
+
 [tool.pytest.ini_options]
 testpaths = ["test", "cntrl"]
 pythonpath = ["."]

@@ -12,7 +12,17 @@ The file is loaded automatically from:
 | Linux | `$XDG_CONFIG_HOME/cntrl/global.toml`, or `~/.config/cntrl/global.toml` |
 | Windows | `%APPDATA%/cntrl/global.toml`, or `~/AppData/Roaming/cntrl/global.toml` |
 
-A missing file means there are no user defaults. An unreadable or malformed
+Both a setup and its global defaults can load instrument definitions directly:
+
+```toml
+instrument_files = ['instruments/synth.toml', 'instruments/keys.toml']
+```
+
+Paths are relative to the file declaring them. The referenced TOML fragments
+are merged in order before that file's own settings. Compile or copy the setup
+file alone; its instrument files are captured in source archives automatically.
+
+A missing `global.toml` means there are no user defaults. An unreadable or malformed
 existing file reports an error. Compilation does not create or edit this file.
 Hardware target declarations and expression calibration remain separate.
 

@@ -29,6 +29,7 @@ from . import (
     models,
     resolved,
     setup_bundle,
+    setup_create,
     setup_sync,
     songs,
     source_archive,
@@ -88,7 +89,8 @@ class Download(BaseModel, frozen=True):
 
 class SetupCLI(BaseModel, frozen=True):
     command: (
-        Annotated[setup_sync.Sync, tyro.conf.subcommand(name='sync')]
+        Annotated[setup_create.Create, tyro.conf.subcommand(name='create')]
+        | Annotated[setup_sync.Sync, tyro.conf.subcommand(name='sync')]
         | Annotated[history.History, tyro.conf.subcommand(name='history')]
         | Annotated[Copy, tyro.conf.subcommand(name='copy')]
         | Annotated[Set, tyro.conf.subcommand(name='set')]
@@ -324,12 +326,16 @@ def run_setup(
     | backups.Verify
     | backups.Convert
     | backups.Recover
-    | setup_sync.Sync,
+    | setup_sync.Sync
+    | setup_create.Create,
     *,
     connection: transport.SerialConnection | None = None,
 ) -> None:
     if connection is not None and not isinstance(command, Copy):
         raise ValueError('a supplied setup connection is supported for Copy only')
+    if isinstance(command, setup_create.Create):
+        setup_create.run(command)
+        return
     if isinstance(command, setup_sync.Sync):
         setup_sync.run(command)
         return
@@ -695,6 +701,7 @@ def main() -> None:
         | Annotated[Emulate, tyro.conf.subcommand(name='emulate')]
         | Annotated[importing.Import, tyro.conf.subcommand(name='import')],
         config=(tyro.conf.OmitSubcommandPrefixes,),
+        args=sys.argv[1:] or ['setup', 'create'],
     )
     try:
         if isinstance(command, importing.Import):
@@ -730,6 +737,8 @@ def main() -> None:
             )
     except KeyboardInterrupt:
         sys.exit(130)
+    except EOFError:
+        sys.exit('Input ended; setup creation cancelled.')
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))
 

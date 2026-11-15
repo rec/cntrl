@@ -110,3 +110,70 @@ def test_origin_defaults_are_resolved_before_combining_tables(tmp_path: Path) ->
         {'program': 1, 'instrument': 'vl70'},
     ]
     assert not errors
+
+
+def test_instrument_files_resolve_relative_paths_and_preserve_edit_locations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    definitions = tmp_path / 'instruments'
+    definitions.mkdir()
+    synth = definitions / 'synth.toml'
+    synth.write_text("[instruments.synth]\noutput='din'\nchannel=1\n")
+    keys = definitions / 'keys.toml'
+    keys.write_text("[instruments.keys]\noutput='din'\nchannel=2\n")
+    root = tmp_path / 'Live.toml'
+    root.write_text("""instrument_files = [
+    'instruments/synth.toml', 'instruments/keys.toml',
+]
+[instruments.synth]
+channel = 3
+""")
+    monkeypatch.chdir(definitions)
+    trace = data_files.Trace()
+    errors: list[str] = []
+    settings = data_files.load(
+        data_files.DataFile(name='Live', paths=[root]), True, errors, trace=trace
+    )
+    assert not errors
+    assert settings == {
+        'instruments': {
+            'synth': {'output': 'din', 'channel': 3},
+            'keys': {'output': 'din', 'channel': 2},
+        }
+    }
+    assert trace.locations['Live'][('instruments', 'synth', 'channel')].file == root
+    assert trace.locations['Live'][('instruments', 'keys', 'channel')].file == keys
+    assert trace.locations['Live'][()].file == root
+    assert set(trace.files) == {root, synth, keys}
+    assert trace.consumers[keys] == ['Live']
+
+
+@pytest.mark.parametrize(
+    ('references', 'message'),
+    [
+        ("'synth.toml'", 'must be a list'),
+        ('[1]', 'must be a list'),
+        ("['']", 'must be a list'),
+        ("['missing.toml']", 'missing.toml'),
+        ("['setup.toml']", 'reference cycle'),
+    ],
+)
+def test_invalid_instrument_file_references_report_errors(
+    tmp_path: Path, references: str, message: str
+) -> None:
+    root = tmp_path / 'setup.toml'
+    root.write_text(f'instrument_files = {references}\n')
+    errors: list[str] = []
+    data_files.load(data_files.DataFile(name='Live', paths=[root]), True, errors)
+    assert len(errors) == 1
+    assert message in errors[0]
+
+
+def test_indirect_instrument_file_cycles_report_errors(tmp_path: Path) -> None:
+    root = tmp_path / 'setup.toml'
+    root.write_text("instrument_files = ['synth.toml']\n")
+    (tmp_path / 'synth.toml').write_text("instrument_files = ['setup.toml']\n")
+    errors: list[str] = []
+    data_files.load(data_files.DataFile(name='Live', paths=[root]), True, errors)
+    assert len(errors) == 1
+    assert 'reference cycle' in errors[0]

@@ -1,5 +1,6 @@
 """Ordered data-file expressions, logical names and accumulated merge errors."""
 
+from collections.abc import Iterator
 from copy import deepcopy
 from pathlib import Path
 from typing import Annotated
@@ -8,7 +9,7 @@ import tyro
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 from reccy.configuration import units
 
-from .compiler import CompilationError, read_document
+from .compiler import CompilationError, read_document, source_reference
 
 
 class DataFile(BaseModel, frozen=True):
@@ -156,31 +157,75 @@ def load(
     for p in expression.paths:
         try:
             reads: dict[Path, bytes] = {}
-            value = read_document(
+            if trace is not None:
+                trace.locations.setdefault(expression.name, {}).setdefault(
+                    (), Location(file=p.resolve(), path=[])
+                )
+            for source, value in source_documents(
                 p,
                 snapshots=reads,
                 overrides=trace.files | (overrides or {}) if trace else overrides,
                 defer_references=defer_references,
                 relocations=relocations,
-            )
+            ):
+                _merge(result, value, origins, str(source), '', avoid_confict, errors)
+                if trace is not None:
+                    trace.files.update(reads)
+                    for f in reads:
+                        names = trace.consumers.setdefault(f, [])
+                        if expression.name not in names:
+                            names.append(expression.name)
+                    locations = trace.locations.setdefault(expression.name, {})
+                    record_locations(
+                        value, result, source, [], [], locations, avoid_confict
+                    )
         except (OSError, ValueError) as error:
             errors.append(f'{p}: {error}')
-            continue
-        if not isinstance(value, dict):
-            errors.append(f'{p}: expected a dictionary')
-            continue
-        _merge(result, value, origins, str(p), '', avoid_confict, errors)
-        if trace is not None:
-            trace.files.update(reads)
-            for f in reads:
-                names = trace.consumers.setdefault(f, [])
-                if expression.name not in names:
-                    names.append(expression.name)
-            locations = trace.locations.setdefault(expression.name, {})
-            record_locations(
-                value, result, p.resolve(), [], [], locations, avoid_confict
-            )
     return result
+
+
+def source_documents(
+    path: Path,
+    *,
+    snapshots: dict[Path, bytes],
+    overrides: dict[Path, bytes] | None = None,
+    defer_references: bool = False,
+    relocations: dict[Path, Path] | None = None,
+    ancestors: tuple[Path, ...] = (),
+) -> Iterator[tuple[Path, dict[str, object]]]:
+    """Read referenced instrument fragments before their declaring document."""
+    relocated = relocations or {}
+    actual = path.resolve()
+    actual = relocated.get(path, relocated.get(actual, actual)).resolve()
+    if actual in ancestors:
+        raise ValueError(f'{path}: instrument file reference cycle')
+    value = read_document(
+        path,
+        snapshots=snapshots,
+        overrides=overrides,
+        defer_references=defer_references,
+        relocations=relocations,
+    )
+    if not isinstance(value, dict):
+        raise ValueError(f'{path}: expected a dictionary')
+    references = value.pop('instrument_files', [])
+    if not isinstance(references, list) or any(
+        not isinstance(r, str) or not r for r in references
+    ):
+        raise ValueError(f'{path}: instrument_files must be a list of file paths')
+    origin = next(
+        (k for k, v in (relocations or {}).items() if v.resolve() == actual), path
+    )
+    for reference in references:
+        yield from source_documents(
+            source_reference(origin, reference, relocations),
+            snapshots=snapshots,
+            overrides=overrides,
+            defer_references=defer_references,
+            relocations=relocations,
+            ancestors=(*ancestors, actual),
+        )
+    yield actual, value
 
 
 def record_locations(

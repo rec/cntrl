@@ -31,12 +31,16 @@ def test_recovered_rig_recompiles_with_its_original_defaults_and_assets(
 ) -> None:
     rig = tmp_path / 'rig'
     rig.mkdir()
+    instruments = rig / 'instruments'
+    instruments.mkdir()
+    (instruments / 'synth.toml').write_text(
+        "[instruments.synth]\noutput='din'\nchannel=1\n"
+    )
+    (instruments / 'live.toml').write_text('[instruments.synth]\nchannel=2\n')
     defaults = rig / 'global.toml'
-    defaults.write_text("""brightness = 161
+    defaults.write_text("""instrument_files = ['instruments/synth.toml']
+brightness = 161
 splash_movie = ['intro.cnsa']
-[instruments.synth]
-output = 'din'
-channel = 1
 [patches.sound]
 instrument = 'synth'
 program = 10
@@ -46,8 +50,7 @@ filename = 'intro.mid'
 """)
     monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
     root = rig / 'show.toml'
-    root.write_text("""[instruments.synth]
-channel = 2
+    root.write_text("""instrument_files = ['instruments/live.toml']
 [patches.sound]
 program = 12
 [patch_cycles]
@@ -69,6 +72,8 @@ main = ['sound', 'play']
     original = cli.compile_inputs(inputs, movies=movies, trace=trace)
     assert midi_assets.collect(original.setups, trace.files) == {'intro.mid': midi}
     assert trace.files[rig / 'intro.cnsa'] == movie
+    assert instruments / 'synth.toml' in trace.files
+    assert instruments / 'live.toml' in trace.files
     archived = source_archive.create(inputs, trace, original.setups)
     recovered = tmp_path / 'recovered'
     files = source_archive.download(
