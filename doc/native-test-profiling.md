@@ -23,6 +23,39 @@ the existing address/undefined-sanitizer flags retained on Clang/GCC. Historical
 unoptimized results below used the earlier default. MSVC uses `/O1` and keeps
 assertions enabled; its existing sanitizer coverage differs from Clang/GCC.
 
+## Routine and exhaustive interrupted-write checks
+
+The normal suite checks structural boundaries. An explicitly selected
+qualification uses the same recovery assertions at every byte boundary:
+
+```bash
+uv run --no-sync pytest -q -s test/qualification_interrupted_writes.py
+```
+
+The qualification filename intentionally does not match pytest's default test
+discovery pattern. Selecting that file explicitly collects its test. Both modes
+use the same cached native executable, assertions and sanitizer settings.
+The native executable also accepts `--exhaustive` alongside `--profile`.
+
+Cases are derived from each actual storage write during the successful upload:
+
+- Every partial header: the first write after opening an empty record.
+- Every byte cut in short writes, including the four-byte commit marker.
+- For each payload write: no bytes written, one byte written, the midpoint,
+  and the last incomplete prefix. The next write's zero-byte cut checks the
+  preceding write's completed state, including the header/payload transition.
+- Complete upload and reboot checks verify the fully committed replacement.
+
+Both modes also inject real upload failures at the start, midpoint and final
+byte of each write call. Every recovery checks the complete original setup
+byte-for-byte and retains the original display assertion.
+
+With the current fixture, the routine mode checks 272 unique byte cuts and the
+exhaustive mode checks all 9,728. On macOS ARM64 on 2026-11-16, with the same
+`-O1` executable, the interrupted-write section took 0.220 seconds routinely
+and 4.082 seconds exhaustively. The counts follow the actual write sequence;
+they are not fixed limits in the test.
+
 ## Initial profile
 
 Measured on macOS ARM64 with the normal unoptimized, address/undefined-sanitized
@@ -58,8 +91,8 @@ profiling data; it does not need to be committed.
 
 ## Reusing successful write prefixes
 
-The interrupted-upload test now runs a successful production upload once. At
-each storage write, it copies the current storage image, uses the same partial
+The exhaustive interrupted-upload test runs a successful production upload once.
+At each storage write, it copies the current storage image, uses the same partial
 write implementation with every byte limit from zero through `write size - 1`,
 and boots the production recovery code on each copy. The complete original setup
 must match byte-for-byte, and the original display assertion is retained.

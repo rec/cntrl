@@ -134,6 +134,10 @@ uv run ty check cntrl test
 use `uv run pytest -n 0`. Qualification commands and measured timings are recorded
 in [native-test-profiling.md](doc/native-test-profiling.md#parallel-test-execution).
 
+Routine interrupted-write tests cover headers, commit markers and representative
+cuts in every payload write. Run the exhaustive byte-by-byte qualification
+explicitly with `uv run pytest -q -s test/qualification_interrupted_writes.py`.
+
 Native test executables and emulator builds share a persistent binary cache in
 `build/native-cache/`. Unchanged builds are copied into each test's temporary
 directory instead of being compiled again. Tests still execute on every run.

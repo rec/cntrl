@@ -86,16 +86,22 @@ void assert_recovers_original(TestStorage &storage, const std::vector<uint8_t> &
     assert(!std::strcmp(hardware.panes[0].lines[1].text, "Flute"));
 }
 
-// Reuse the successful prefix, but boot the real recovery code after every
-// possible partial write. Actual upload-error paths are exercised separately
-// for each write call; a failed TestStorage write always returns false.
+// Reuse the successful prefix and boot the real recovery code after selected
+// partial writes. Qualification can expand the same checks to every byte cut.
+// Actual upload-error paths are also exercised for each write call.
 struct InterruptedUpload : TestStorage {
-    explicit InterruptedUpload(const TestStorage &storage, const std::vector<uint8_t> &original)
-        : TestStorage(storage), original_(original) {}
+    explicit InterruptedUpload(const TestStorage &storage, const std::vector<uint8_t> &original, bool exhaustive)
+        : TestStorage(storage), original_(original), exhaustive_(exhaustive) {}
     std::vector<unsigned> failure_points;
     unsigned written = 0, recovered = 0;
     bool write(const uint8_t *data, unsigned n) override {
+        // The first write in a newly opened file is its header. Small writes
+        // include the four-byte commit marker: retain all of their cuts.
+        const bool every_byte = exhaustive_ || size(slot) == 0 || n <= 4;
         for (unsigned cut = 0; cut < n; ++cut) {
+            // Derive payload cases from the actual write length. Cut zero also
+            // checks the state after the preceding write completed.
+            if (!every_byte && cut != 0 && cut != 1 && cut != n / 2 && cut != n - 1) continue;
             TestStorage interrupted = *this;
             interrupted.remaining = int(cut);
             assert(!interrupted.write(data, n));
@@ -112,6 +118,7 @@ struct InterruptedUpload : TestStorage {
     }
 private:
     const std::vector<uint8_t> &original_;
+    bool exhaustive_;
 };
 
 void sync_program(std::vector<uint8_t> &bytes, const cntrl::Document &document, unsigned index) {
@@ -793,8 +800,12 @@ static void test_pages_run_independently(const std::string &path) {
 }
 
 int main(int argc, char **argv) {
-    const bool profiling = argc == 4 && !std::strcmp(argv[3], "--profile");
-    assert(argc == 3 || profiling);
+    assert(argc >= 3);
+    bool profiling = false, exhaustive = false;
+    for (int i = 3; i < argc; ++i) {
+        if (!std::strcmp(argv[i], "--profile")) profiling = true;
+        else { assert(!std::strcmp(argv[i], "--exhaustive")); exhaustive = true; }
+    }
     auto last = std::chrono::steady_clock::now();
     const auto mark = [&](const char *name) {
         if (!profiling) return;
@@ -1062,18 +1073,19 @@ int main(int argc, char **argv) {
     std::memcpy(new_show.data() + first_patch + 12, "Oboe\0\0", 6);
     cntrl::put32(new_show.data() + 20,
                  cntrl::checksum(new_show.data() + 28, unsigned(new_show.size()) - 28));
-    // Cover every written byte, including the history archive before the new
-    // slot. The former payload-size + 100 budget barely reached its header.
+    // Cover structural boundaries in both the archive and replacement slot.
+    // Explicit qualification expands payload checks to every written byte.
     mark("persistent upload and reboot");
     {
-        InterruptedUpload checked(memory, bytes);
+        InterruptedUpload checked(memory, bytes, exhaustive);
         Fake output; TestController controller(output);
         cntrl::Documents replacement(checked, output, controller, output);
         replacement.boot(); upload(replacement, new_show);
         assert(output.replies.back() == "CNTRL OK");
         assert(!std::strcmp(output.panes[0].lines[1].text, "Oboe"));
-        assert(checked.recovered == checked.written);
-        assert(checked.recovered > bytes.size() + 100);
+        assert(checked.written > bytes.size() + 100);
+        assert(checked.recovered > 0);
+        assert(exhaustive ? checked.recovered == checked.written : checked.recovered < checked.written);
         for (unsigned limit : checked.failure_points) {
             TestStorage interrupted = memory;
             interrupted.remaining = int(limit);
@@ -1084,7 +1096,8 @@ int main(int argc, char **argv) {
         }
         if (profiling) std::cerr << "recovered byte boundaries: " << checked.recovered << '\n';
     }
-    mark("interrupted inactive-slot writes at every byte boundary");
+    mark(exhaustive ? "interrupted inactive-slot writes at every byte boundary"
+                    : "interrupted inactive-slot writes at structural boundaries");
     upload(reboot, new_show);
     assert(io.replies.back() == "CNTRL OK");
     assert(!std::strcmp(io.panes[0].lines[1].text, "Oboe"));
