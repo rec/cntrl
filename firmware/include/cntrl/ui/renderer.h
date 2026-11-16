@@ -147,13 +147,13 @@ public:
         pane.lines[0].graphics = pane.graphics;
         std::snprintf(pane.lines[0].text, sizeof(pane.lines[0].text), "%s", message); show(screen, pane);
     }
-    void transition(bool undo, std::optional<unsigned> duration, int pane = -1, unsigned reserved = 0, bool vertical = false, bool panorama = true, unsigned pane_count = 1) {
+    void transition(bool undo, std::optional<unsigned> duration, int pane = -1, unsigned reserved = 0, bool vertical = false, bool panorama = true, unsigned pane_count = 1, bool fixed_heading = false) {
         if (message_) return;
         if (!frame_count_ || !animations_ || !usable_ || preparing_ || animating_ || !display_.ready()) return;
         for (const auto &screen : screens_) if (!screen.valid) return;
         if (frame_count_ == 2) for (const auto &screen : screens_) std::copy(cache_ + screen.offset, cache_ + screen.offset + screen.viewport.width * screen.viewport.height, previous_ + screen.offset);
         drawing_ = -1; undo_ = undo; selected_ = pane; reserved_ = std::min(reserved, unsigned(screens_.size())); vertical_ = vertical; panorama_ = panorama;
-        selected_count_ = pane_count;
+        selected_count_ = pane_count; fixed_heading_ = fixed_heading;
         duration_ = duration.value_or(vertical ? 200 : 75); preparing_ = true;
         for (auto &screen : screens_) screen.dirty = true;
     }
@@ -213,7 +213,7 @@ private:
     Region painting_region_;
     std::optional<Pane> message_;
     uint32_t message_revision_ = 0;
-    bool usable_ = false, preparing_ = false, animating_ = false, rendering_ = false, undo_ = false, vertical_ = false, panorama_ = true;
+    bool usable_ = false, preparing_ = false, animating_ = false, rendering_ = false, undo_ = false, vertical_ = false, panorama_ = true, fixed_heading_ = false;
     bool reset_scroll_ = true, ring_scroll_ = false, ring_step_ = false, reveal_ = false, settling_ = false, settle_anchor_ = false;
     unsigned reveal_screen_ = 0;
     uint32_t settled_ = 0;
@@ -351,7 +351,8 @@ private:
     void start_animation(uint32_t now) {
         preparing_ = false; animating_ = true; started_ = now; progress_ = 0;
         animation_screen_ = animation_column_ = 0; incoming_screen_ = -1;
-        ring_scroll_ = !vertical_; ring_step_ = false; reveal_ = settling_ = settle_anchor_ = false;
+        // Native scrolling moves full-height columns; fixed headings need regional redraws.
+        ring_scroll_ = !vertical_ && !fixed_heading_; ring_step_ = false; reveal_ = settling_ = settle_anchor_ = false;
         for (unsigned i = 0; i < screens_.size(); ++i)
             if (moving(i) && (display_.scroll_columns(i) <= screens_[i].viewport.width
                 || screens_[i].viewport.width != screens_[0].viewport.width
@@ -448,17 +449,19 @@ private:
     }
     bool moving(unsigned screen) const { return selected_ >= 0 ? screen >= unsigned(selected_) && screen - unsigned(selected_) < selected_count_ : screen + reserved_ < screens_.size(); }
     bool panoramic() const { return panorama_ && (selected_ < 0 || selected_count_ > 1); }
+    unsigned animation_top(unsigned screen) const { return fixed_heading_ ? screens_[screen].viewport.height / 3 : 0; }
     unsigned distance() const {
         unsigned result = 1;
-        for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i)) result = std::max(result, vertical_ ? screens_[i].viewport.height : screens_[i].viewport.width + (panoramic() ? screens_[i].viewport.gap : 0));
+        for (unsigned i = 0; i < screens_.size(); ++i) if (moving(i)) result = std::max(result, vertical_ ? screens_[i].viewport.height - animation_top(i) : screens_[i].viewport.width + (panoramic() ? screens_[i].viewport.gap : 0));
         return result;
     }
     uint16_t sample(unsigned screen, unsigned x, unsigned y) const {
         const auto &s = screens_[screen]; const auto v = s.viewport;
-        const unsigned shift = progress_ * (vertical_ ? v.height : v.width + (panoramic() ? v.gap : 0)) / distance();
+        const unsigned top = animation_top(screen), height = v.height - top;
+        const unsigned shift = progress_ * (vertical_ ? height : v.width + (panoramic() ? v.gap : 0)) / distance();
         if (vertical_) {
-            int source = int(y) + (undo_ ? -int(shift) : int(shift)); const bool incoming = source < 0 || source >= int(v.height);
-            source = (source + int(v.height)) % int(v.height);
+            int source = int(y - top) + (undo_ ? -int(shift) : int(shift)); const bool incoming = source < 0 || source >= int(height);
+            source = int(top) + (source + int(height)) % int(height);
             return incoming ? incoming_pixel(screen, x, unsigned(source)) : previous_[s.offset + unsigned(source) * v.width + x];
         }
         int source = int(x) + (undo_ ? int(shift) : -int(shift));
@@ -557,9 +560,10 @@ private:
         while (animation_screen_ < screens_.size() && !moving(animation_screen_)) ++animation_screen_;
         if (animation_screen_ == screens_.size()) { animating_ = false; return; }
         auto &screen = screens_[animation_screen_]; const auto v = screen.viewport;
+        const unsigned top = animation_top(animation_screen_), height = v.height - top;
         const unsigned width = display_.scroll_columns(animation_screen_) ? 1u : std::min(8u, v.width - animation_column_);
-        for (unsigned x = 0; x < width; ++x) for (unsigned y = 0; y < v.height; ++y) encode(x * v.height + y, dim_pixel(animation_screen_, sample(animation_screen_, animation_column_ + x, y)));
-        if (!(width == 1 ? submit_column(animation_screen_, animation_column_, v.height) : display_.submit(animation_screen_, animation_column_, 0, width, v.height, transfer_.data()))) return;
+        for (unsigned x = 0; x < width; ++x) for (unsigned y = top; y < v.height; ++y) encode(x * height + y - top, dim_pixel(animation_screen_, sample(animation_screen_, animation_column_ + x, y)));
+        if (!(width == 1 ? submit_column(animation_screen_, animation_column_, height, top) : display_.submit(animation_screen_, animation_column_, top, width, height, transfer_.data()))) return;
         animation_column_ += width;
         if (animation_column_ == v.width) { animation_column_ = 0; do { ++animation_screen_; } while (animation_screen_ < screens_.size() && !moving(animation_screen_)); }
         if (animation_screen_ == screens_.size()) {

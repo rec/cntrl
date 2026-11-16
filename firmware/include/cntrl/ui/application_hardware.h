@@ -30,8 +30,8 @@ public:
 #endif
     void tap_tempo(uint32_t now) override { presentation().tap_tempo(now); }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) override { presentation().set_target_pulse(period, low, high, delay); }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) override {
-        presentation().transition(undo, duration_ms, pane, vertical, panorama);
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true, bool fixed_heading = false) override {
+        presentation().transition(undo, duration_ms, pane, vertical, panorama, fixed_heading);
     }
     void set_brightness(uint8_t value, bool temporary = false) override { presentation().set_brightness(value, temporary); }
     void set_splash(bool enabled, uint32_t idle_ms) override { presentation().set_splash(enabled, idle_ms); }

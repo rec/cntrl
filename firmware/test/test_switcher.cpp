@@ -17,7 +17,7 @@ struct Fake : TestPatchHardware, cntrl::Replies {
     std::vector<std::string> routes, replies;
     std::vector<bool> transitions;
     std::vector<bool> target_transitions, target_vertical;
-    std::vector<bool> scroll_vertical, scroll_panorama;
+    std::vector<bool> scroll_vertical, scroll_panorama, scroll_fixed_heading;
     std::vector<std::optional<unsigned>> scroll_durations;
     std::vector<bool> page_moves;
     unsigned taps = 0;
@@ -49,8 +49,9 @@ struct Fake : TestPatchHardware, cntrl::Replies {
         const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
     }
     void show(unsigned p, const cntrl::Pane &view) override { panes[p] = view; }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) override {
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true, bool fixed_heading = false) override {
         scroll_vertical.push_back(vertical); scroll_panorama.push_back(panorama); scroll_durations.push_back(duration_ms);
+        scroll_fixed_heading.push_back(fixed_heading);
         if (pane >= 0) { target_transitions.push_back(undo); target_vertical.push_back(vertical); return; }
         transitions.push_back(undo); durations.push_back(duration_ms);
     }
@@ -328,6 +329,7 @@ void test_configured_scrolling(const cntrl::Document &source) {
             assert(hw.scroll_vertical[call] == (configured >= 2));
             assert(hw.scroll_panorama[call] == (configured == 0));
             assert(hw.scroll_durations[call] == (configured >= 2 ? 234u : 123u));
+            assert(hw.scroll_fixed_heading[call] == (action == 1));
             ++call;
         }
         bytes[meta + cntrl::scrolling_offset + 2] = 4;

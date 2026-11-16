@@ -447,6 +447,59 @@ static void one_frame_scrolls_match_two_frame_pixels_in_both_axes_and_directions
         assert(software_transition_first_frame(1, vertical, reverse) == software_transition_first_frame(2, vertical, reverse));
     for (bool reverse : {false, true}) assert(panoramic_first_frame(1, reverse) == panoramic_first_frame(2, reverse));
 }
+template <class Surface>
+static void patch_scroll_keeps_the_heading_fixed(unsigned frames, bool vertical, bool reverse) {
+    Fonts fonts; Surface display; uint16_t work[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+    assert(renderer.prepare(frames, true)); renderer.finish(true);
+    cntrl::Pane pane; pane.graphics.pad = 0; pane.graphics.background = 0x1111;
+    pane.rectangles[0] = {0, 0, 24, 6, 0x3333};
+    pane.rectangles[1] = {4, 0, 6, 6, 0xf800};
+    pane.rectangles[2] = {3, 8, 5, 4, 0x07e0};
+    renderer.show(0, pane);
+    for (unsigned i = 0; i < 200; ++i) { renderer.draw(i * 1000); display.complete(); }
+    assert(renderer.ready());
+    // A preceding full-panel scroll leaves a nonzero native ring offset.
+    renderer.transition(false, 10, 0, 0, false, false);
+    for (unsigned i = 0; i < 3000; ++i) { renderer.draw(i * 1000); display.complete(); }
+    assert(renderer.ready()); const auto previous = display.pixels;
+
+    renderer.transition(reverse, 10, 0, 0, vertical, false, 1, true);
+    pane.graphics.background = 0x2222;
+    pane.rectangles[2] = {15, 11, 5, 4, 0x001f}; renderer.show(0, pane);
+    auto incoming = previous;
+    for (unsigned y = 6; y < 18; ++y) for (unsigned x = 0; x < 24; ++x)
+        incoming[y * 24 + x] = x >= 15 && x < 20 && y >= 11 && y < 15 ? 0x001f : 0x2222;
+    const unsigned before = display.calls;
+    const unsigned columns = display.scroll_columns(0) ? 1 : 8;
+    for (unsigned i = 0; i < 2000 && display.calls < before + 24 / columns; ++i) {
+        display.accept = i != 35;
+        renderer.draw(i * 1000); display.complete();
+        for (unsigned p = 0; p < 24 * 6; ++p) assert(display.pixels[p] == previous[p]);
+        if (display.calls > before) assert(display.y == 6 && display.height == 12);
+    }
+    assert(display.calls == before + 24 / columns);
+    // Check the first moving frame, including wrap within the lower band only.
+    for (unsigned y = 6; y < 18; ++y) for (unsigned x = 0; x < 24; ++x) {
+        int source = vertical ? int(y - 6) + (reverse ? -3 : 3) : int(x) + (reverse ? 6 : -6);
+        const int span = vertical ? 12 : 24;
+        const bool entering = source < 0 || source >= span;
+        source = (source + span) % span;
+        const unsigned index = vertical ? unsigned(source + 6) * 24 + x : y * 24 + unsigned(source);
+        assert(display.pixels[y * 24 + x] == (entering ? incoming[index] : previous[index]));
+    }
+    for (unsigned i = 2000; i < 6000; ++i) {
+        renderer.draw(i * 1000); display.complete();
+        for (unsigned p = 0; p < 24 * 6; ++p) assert(display.pixels[p] == previous[p]);
+    }
+    assert(renderer.ready() && display.pixels == incoming);
+}
+static void patch_scrolls_preserve_headings_in_both_axes_and_directions() {
+    for (unsigned frames : {1u, 2u}) for (bool vertical : {false, true}) for (bool reverse : {false, true}) {
+        patch_scroll_keeps_the_heading_fixed<Display>(frames, vertical, reverse);
+        patch_scroll_keeps_the_heading_fixed<RingDisplay>(frames, vertical, reverse);
+    }
+}
 static void frame_preparation_failure_and_rollback_preserve_active_storage() {
     const unsigned initial = cntrl::memory_used;
     Fonts fonts; Display display; uint16_t work[24 * 18] = {};
@@ -614,6 +667,7 @@ int main() {
     updating_one_window_does_not_starve_the_others();
     frame_preparation_failure_and_rollback_preserve_active_storage();
     one_frame_scrolls_match_two_frame_pixels_in_both_axes_and_directions();
+    patch_scrolls_preserve_headings_in_both_axes_and_directions();
     animations_can_be_disabled_without_disabling_brightness();
     expression_reuses_its_initial_layout_and_redraws_only_changed_content();
     messages_restore_the_latest_page_after_replacement_and_expiry();
