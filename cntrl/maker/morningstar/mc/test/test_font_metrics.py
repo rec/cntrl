@@ -17,7 +17,7 @@ def test_page_lines_select_different_native_font_families() -> None:
         {
             'instruments': {},
             'patch_cycles': {},
-            'style': {'font_name': 'Arial'},
+            'style': {'font_name': 'Arimo'},
             'patch_views': {
                 'patch': {'line_styles': {'display_name': {'font_name': 'ComicSansMS'}}}
             },
@@ -26,20 +26,24 @@ def test_page_lines_select_different_native_font_families() -> None:
     value = display.DisplayPatch(
         values={'patch_cycle.name': 'Brass', 'display_name': 'Trumpet'}
     )
-    _, _, block = display.compile_display(show, [value], target)
-    assert graphics.SCREEN.unpack_from(block, display.HEADER.size)[0] == 1
+    font_data: dict[int, bytes] = {}
+    _, _, block = display.compile_display(show, [value], target, font_data)
+    assert graphics.SCREEN.unpack_from(block, display.HEADER.size)[0] == 17
     assert (
         graphics.SCREEN.unpack_from(block, display.HEADER.size + graphics.SCREEN.size)[
             0
         ]
-        == 2
+        == 255
     )
+    start = display.HEADER.size + graphics.SCREEN.size
+    assert int.from_bytes(block[start + 12 : start + 16], 'little') in font_data
 
 
 @pytest.mark.parametrize(
     'name',
     [
-        'Arial',
+        'Arimo',
+        'ArimoBold',
         'ComicSansMS',
         'Circuit',
         'CircuitBold',
@@ -79,7 +83,7 @@ def test_native_metrics_are_proportional_and_fit_selected_sizes() -> None:
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
     )
-    for name in ('Arial', 'ComicSansMS'):
+    for name in ('Arimo', 'ComicSansMS'):
         face = next(f for f in target.fonts if f.name == name)
         assert (
             graphics.bounds('WWWW', face.sizes[16])[1]
@@ -96,18 +100,20 @@ def test_native_metrics_are_proportional_and_fit_selected_sizes() -> None:
         )
 
 
-def test_classic_uses_native_arial_metrics_instead_of_enlarged_pixels() -> None:
+def test_ui_and_performance_catalogues_exclude_retired_fonts() -> None:
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
     )
-    classic = next(f for f in target.fonts if f.name == 'classic')
-    arial = next(f for f in target.fonts if f.name == 'Arial')
-    assert classic.id == 0 and classic.sizes == arial.sizes
-    assert 56 not in classic.sizes
-    assert (
-        graphics.bounds('WWWW', classic.sizes[32])[1]
-        > graphics.bounds('iiii', classic.sizes[32])[1]
-    )
+    assert {'Arial', 'classic'}.isdisjoint(f.name for f in target.fonts)
+    assert set(target.ui_fonts) == {
+        'Arimo',
+        'CourierPrime',
+        'AtkinsonNextSemiBold',
+        'TamzenBold7x13',
+    }
+    assert {'ComicSansMS', 'StillTime', 'CourierPrimeBold', 'ArimoBold'} <= {
+        f.name for f in target.fonts
+    }
 
 
 def test_bit_reader_crosses_bytes_and_decodes_signed_offsets() -> None:
@@ -128,7 +134,7 @@ def test_unknown_font_is_rejected() -> None:
         )
 
 
-@pytest.mark.parametrize('family', ['Arial', 'ComicSansMS'])
+@pytest.mark.parametrize('family', ['ComicSansMS'])
 def test_bitmap_scaling_doubles_columns_without_changing_rows(family: str) -> None:
     source = build_font_metrics.Options().source / f'st7735_t3_font_{family}.c'
     normal = NativeRaster(source, family, 1.0)
@@ -152,7 +158,7 @@ def test_bitmap_scaling_doubles_columns_without_changing_rows(family: str) -> No
                     assert actual == expected
 
 
-@pytest.mark.parametrize('family', ['Arial', 'ComicSansMS'])
+@pytest.mark.parametrize('family', ['ComicSansMS'])
 def test_exported_native_resources_preserve_scaled_glyphs_and_runs(family: str) -> None:
     from cntrl.fonts.bitmap import BitmapRaster
 

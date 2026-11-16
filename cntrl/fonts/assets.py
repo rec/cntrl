@@ -201,7 +201,7 @@ class Preparation:
         names: dict[str, list[str]] = {}
         locations: dict[tuple[str, str], list[str]] = {}
         for (code, text, style, *_), context in zip(requests, contexts, strict=True):
-            family = style.font_name or 'classic'
+            family = style.font_name or 'Arimo'
             scale = style.horizontal_scale
             if scale is None:
                 scale = defaults.get(family, 1.0)
@@ -231,9 +231,25 @@ class Preparation:
             if source is not None:
                 path = Path(source)
             elif resource is not None:
-                path = resource if resource.suffix.lower() != '.cfont' else None
+                path = (
+                    resource
+                    if resource.suffix.lower() != '.cfont'
+                    or family not in target.ui_fonts
+                    else None
+                )
             else:
                 path = builtins.get(family)
+            if (
+                source is None
+                and resource is None
+                and scale == 1
+                and family in target.ui_fonts
+                and family in faces
+                and all(32 <= ord(c) < 127 for t in texts for c in t)
+            ):
+                # The target's embedded UI face is also usable for performance
+                # text. An outline is needed only for scaling or extra glyphs.
+                path = None
             native = (
                 source is None
                 and resource is not None
@@ -256,7 +272,12 @@ class Preparation:
                                 f'({", ".join(dict.fromkeys(locations[name, t]))})'
                             )
                 continue
-            if family in show.fonts and family in faces and family not in builtins:
+            if (
+                family in show.fonts
+                and family in faces
+                and family not in builtins
+                and path.suffix != '.cfont'
+            ):
                 errors.append(f'{name}: font name already exists')
                 continue
             if path.suffix == '.cfont' and not native:

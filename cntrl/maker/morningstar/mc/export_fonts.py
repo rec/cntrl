@@ -52,11 +52,7 @@ def export(options: FontExport) -> dict[str, str]:
     options.output.mkdir(parents=True, exist_ok=True)
     sources = {}
     embedded: dict[str, bytes] = {}
-    families = [
-        (0, 'classic', 'Arial'),
-        (1, 'Arial', 'Arial'),
-        (2, 'ComicSansMS', 'ComicSansMS'),
-    ]
+    families = [(2, 'ComicSansMS', 'ComicSansMS')]
     families.extend(
         (i, n, n) for i, (n, _, _) in enumerate([*FAMILIES, PAGE_FAMILY], 3)
     )
@@ -94,11 +90,12 @@ def export(options: FontExport) -> dict[str, str]:
         / 'TamzenBold7x13.cfont',
     }
     for name, path in portable.items():
+        data = path.read_bytes()
+        resource = f'{name}.cfont'
+        (options.output / resource).write_bytes(data)
+        sources[name] = resource
         if name in options.ui_fonts:
-            resource = f'{name}.cfont'
-            embedded[name] = path.read_bytes()
-            (options.output / resource).write_bytes(embedded[name])
-            sources[name] = resource
+            embedded[name] = data
     prefix = (
         '#if defined(__IMXRT1062__)\n'
         '#define CNTRL_UI_FONT_STORAGE __attribute__((section(".progmem")))\n'

@@ -195,6 +195,7 @@ def compile_display(
                 )
     from ..fonts.assets import SWITCH_STATES, Preparation
 
+    window_face = next(f for f in target.fonts if f.name == 'Arimo')
     prepared = Preparation(show, target, requests, contexts, source_snapshots)
     target = prepared.target
     choices = [
@@ -264,7 +265,7 @@ def compile_display(
             else (4 if show.pad is None else show.pad)
         )
         style = merge_style(base, window.style)
-        face = next(f for f in target.fonts if f.name == 'classic')
+        face = window_face
         size = 8
         metrics = face.sizes[size]
         fg, bg = graphics.colors(style, show.contrast)

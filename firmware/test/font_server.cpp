@@ -18,7 +18,7 @@ struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *name) const override { return !std::strcmp(name, "din") || !std::strcmp(name, "trs"); }
     bool supports_function(unsigned code) const override { return code == 1; }
-    bool supports_font(unsigned face, unsigned size) const override { return face == 0 && size >= 8 && size <= 96 && size % 8 == 0; }
+    bool supports_font(unsigned face, unsigned size) const override { return face == 17 && size >= 8 && size <= 96 && size % 8 == 0; }
     bool supports_font_asset(uint32_t key, unsigned size) const override { return fonts.supports(key, size); }
     bool begin_fonts(unsigned count) override { return font_assets::cache.begin(count); }
     bool stage_font(uint32_t key, unsigned size) override { return fonts.stage(key, size); }

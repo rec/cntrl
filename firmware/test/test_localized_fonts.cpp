@@ -62,14 +62,14 @@ int main(int argc, char **argv) {
     assert(cntrl::ui::AssetFonts::valid_localized(french.data(), unsigned(french.size())));
     assert(!cntrl::ui::AssetFonts::valid_localized(french.data(), unsigned(french.size() - 1)));
     const cntrl::ui::EmbeddedFont embedded[] = {
-        {0, english.data(), unsigned(english.size())},
+        {17, english.data(), unsigned(english.size())},
         {cntrl::ui::status_face, status.data(), unsigned(status.size())},
     };
     cntrl::ui::AssetFonts fonts(embedded, 2);
     cntrl::ui::Glyph actual, accent;
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "Œāé", 2, actual));
     assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "ã", 0, actual));
-    const auto english_bounds = fonts.bounds(0, 12, 0, "Midi");
+    const auto english_bounds = fonts.bounds(17, 12, 0, "Midi");
     assert(fonts.bounds(cntrl::ui::localized_face, 12, 0, "Midi").width == english_bounds.width);
     cntrl::ui::AssetFonts::localized(french.data(), unsigned(french.size()));
     assert(fonts.supports(cntrl::ui::localized_face, 12));
@@ -89,10 +89,10 @@ int main(int argc, char **argv) {
     assert(fonts.glyph(cntrl::ui::localized_face, 12, 0, "é", 0, accent));
     assert(actual.pixels == accent.pixels && actual.width == accent.width && actual.height == accent.height);
     assert(!fonts.glyph(cntrl::ui::localized_face, 12, 0, "Café", 4, actual));
-    assert(!fonts.glyph(0, 12, 0, "é", 0, actual)); // Authored/embedded faces are not replaced.
+    assert(!fonts.glyph(17, 12, 0, "é", 0, actual)); // Authored/embedded faces are not replaced.
     const auto bounds = fonts.bounds(cntrl::ui::localized_face, 12, 0, "Éléments");
     assert(bounds.width > 20 && bounds.height > 0);
-    assert(fonts.bounds(0, 12, 0, "Midi").width == english_bounds.width);
+    assert(fonts.bounds(17, 12, 0, "Midi").width == english_bounds.width);
     uint16_t pixels[96 * 32] = {};
     cntrl::ui::Raster raster(fonts, pixels);
     cntrl::ScreenGraphics settings; settings.background = 0; settings.foreground = 0xffff;

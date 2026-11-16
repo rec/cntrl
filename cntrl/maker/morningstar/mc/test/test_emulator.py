@@ -174,6 +174,7 @@ def test_exported_profiles_build_without_the_physical_sdk(
     target = cli.load_target(path)
     executable = backend.build(target, tmp_path / 'native', root)
     show = {
+        'fill_in_styles': False,
         'pages': {'performance': {'type': 'patch-switcher'}},
         'patches': {
             'control': {

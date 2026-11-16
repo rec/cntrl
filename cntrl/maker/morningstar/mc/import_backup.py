@@ -323,7 +323,7 @@ def run(command: ImportBackup) -> None:
         'and all bank/preset-page slots in one banked patch',
         'presentation': 'saved palette, switch alignment, short and long names, '
         'three display bands; photo-matched Atkinson Next SemiBold labels '
-        'and Arial middle-band text substitute for the stock typeface',
+        'and Arimo middle-band text substitute for the stock typeface',
         'controller_settings': 'uses scroll counters, expression roles, bank '
         'arrangement, channel routing and display settings; '
         'other global settings are not imported',

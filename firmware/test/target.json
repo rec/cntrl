@@ -117,8 +117,8 @@
   ],
   "fonts": [
     {
-      "name": "classic",
-      "id": 0,
+      "name": "Arimo",
+      "id": 17,
       "sizes": {
         "8": {
           "line_height": 8,
@@ -184,12 +184,8 @@
     }
   ],
   "ui_fonts": [
-    "classic",
-    "Arial",
-    "ComicSansMS",
-    "StillTime",
+    "Arimo",
     "CourierPrime",
-    "CourierPrimeBold",
     "AtkinsonNextSemiBold",
     "TamzenBold7x13"
   ]

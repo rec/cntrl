@@ -142,7 +142,7 @@ private:
         }
         if (face == localized_face) {
             if (localized_bytes_) return size != status_size && find_size(localized_bytes_, localized_length_, size, view);
-            face = 0;
+            face = 17;
         }
         for (unsigned f = 0; f < count_; ++f) {
             const auto &font = fonts_[f];

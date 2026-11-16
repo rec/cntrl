@@ -104,7 +104,7 @@ saved banks, including dim black (64); other dim/mesh colors are not implemented
 The editor's icon 46 (`\.`) becomes a right chevron. The size settings encode
 18 down to 8, with 0 meaning 18. Switch labels use Atkinson Next SemiBold at
 twice that size limit, fitted to the band using actual exported glyph bounds.
-The middle text uses Arial at the saved size limit. These choices follow the
+The middle text uses Arimo at the saved size limit. These choices follow the
 original-pedal photo supplied on 2026-11-14, using the existing bundled fonts.
 Bank/page sizes Large/Medium/Small map to maximum sizes 12/10/8; Hidden omits
 the indication but preserves its background. These font and band metrics

@@ -156,7 +156,7 @@ class Style(BaseModel, frozen=True):
 
 
 class BindingView(BaseModel, frozen=True):
-    font_name: str = 'Arial'
+    font_name: str = 'Arimo'
     maximum_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
     detail_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
     status_size: Annotated[int, Field(strict=True, ge=8, le=48)] = 18
@@ -1445,9 +1445,9 @@ class Target(BaseModel, frozen=True):
     @field_validator('ui_fonts')
     @classmethod
     def ui_font_families(cls, value: list[str]) -> list[str]:
-        if 'classic' not in value:
+        if 'Arimo' not in value:
             raise ValueError(
-                'classic UI font is required for management and error screens'
+                'Arimo UI font is required for management and error screens'
             )
         if len(value) != len(set(value)) or any(n not in UI_FONTS for n in value):
             raise ValueError('UI fonts must name distinct canonical font families')

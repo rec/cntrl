@@ -284,7 +284,7 @@ patches = ['A′', 'A', 'A′']
 Writing `type = 'derived'` alongside `parent` is optional. In the song list,
 strings select named patches. Every press plays a complete selection, so A′
 can be first. The example sends program 7 at volumes 100, 80 and 100.
-The ASCII display name works with the classic font; the patch key uses the
+The ASCII display name works with the Arimo font; the patch key uses the
 typographic prime.
 
 Inheritance is resolved when compiling the setup or song library. Editing A

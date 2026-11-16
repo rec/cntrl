@@ -101,7 +101,7 @@ def font_choice(
         (
             f
             for f in target.fonts
-            if f.name == ('classic' if font_name is None else font_name)
+            if f.name == ('Arimo' if font_name is None else font_name)
         ),
         None,
     )

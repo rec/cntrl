@@ -1,6 +1,6 @@
 take_first_match = false
 brightness = 192
-style = {font_name = 'classic'}
+style = {font_name = 'Arimo'}
 pad = 4
 contrast = 0.6
 

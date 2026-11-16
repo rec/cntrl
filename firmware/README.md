@@ -299,7 +299,7 @@ can also be None. F from patch selection offers Save/Discard/Cancel. No edit
 auditions or sends MIDI; only Save updates storage. USB operations that could
 displace unsaved edits return `unsaved-edits`. Text/font/routing edits are not
 included. Management uses built-in readable typography even without a setup.
-Management uses a 16-pixel classic font, twice the performance-independent
+Management uses a 16-pixel Arimo font, twice the performance-independent
 editor's original size. Labels and values occupy separate screens; long names
 wrap at 12 characters per line within the padding, without truncation.
 
@@ -321,7 +321,7 @@ contrast = 0.6
 pad = 4
 
 [style]
-font_name = 'Arial'
+font_name = 'Arimo'
 
 [patch_views.patch]
 fields = ['patch_cycle.name', 'display_name']
@@ -400,7 +400,7 @@ tags = ['whole-system']
 fields = ['patch_cycle.name', 'tags', 'display_name']
 ```
 
-The default font is `classic`, default padding is 4, and default colors are
+The default font is `Arimo`, default padding is 4, and default colors are
 black on white. Set the show font with `[style].font_name`; each window may
 override `pad`. Each line independently uses the largest available bitmap face
 that fits its width and equal share of the padded height, preserving proportions.
@@ -744,11 +744,11 @@ flasher_diameter = 40
 annulus = 5
 background_color = '0xFFF085'
 title_height = 12
-title_font = 'classic' # also Arial or ComicSansMS
+title_font = 'AtkinsonNextSemiBold'
 tempo_height = 40
 padding = 2
-tempo_font = 'CourierPrime' # or CourierPrimeBold
-status_font = 'classic' # also Arial or ComicSansMS
+tempo_font = 'CourierPrime'
+status_font = 'TamzenBold7x13'
 off_color = '0x600000'
 on_color = '0xFF0000'
 ring_color = 'black'
@@ -800,8 +800,9 @@ operations. The cable tester shows DIN/TRS rows and Out/In columns: DIN test dat
 is blue, TRS test data is green, and each input takes the color of its latest
 matching test stream.
 
-Page titles use `title_font`, defaulting to `classic`; `Arial` and
-`ComicSansMS` are also supported. The title band adds two pixels above and below
+Page titles use `title_font`, defaulting to `AtkinsonNextSemiBold`. The four UI
+choices are Arimo, AtkinsonNextSemiBold, CourierPrime and TamzenBold7x13.
+The title band adds two pixels above and below
 the previous layout, without enlarging the text. Status shows `Up` beside Disk.
 Setup format 27 appends the title-font word to the page metadata.
 Panic stops an unfinished first sweep one second after C is released and shows

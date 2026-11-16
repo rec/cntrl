@@ -1,8 +1,8 @@
 # Bitmap display fonts
 
-Thirteen bundled outline families are available alongside classic, Arial and
-ComicSansMS. Atkinson is an additional page-text face, excluded from random
-patch formatting. The IDs below identify their generated reference tables:
+Fifteen bundled outline families are available alongside ComicSansMS. Arimo is
+the default performance font. Atkinson is an additional page-text face, excluded
+from random patch formatting. The IDs below identify their generated reference tables:
 
 | Configuration name | Source | Face ID | License |
 | --- | --- | --- | --- |
@@ -20,6 +20,8 @@ patch formatting. The IDs below identify their generated reference tables:
 | `RubikDistressed` | Rubik Distressed Regular | 14 | SIL OFL 1.1 |
 | `SpecialElite` | Special Elite Regular | 15 | Apache 2.0 |
 | `AtkinsonNextSemiBold` | Atkinson Hyperlegible Next SemiBold | 16 | SIL OFL 1.1 |
+| `Arimo` | Arimo Regular | 17 | SIL OFL 1.1 |
+| `ArimoBold` | Arimo Bold | 18 | SIL OFL 1.1 |
 
 The generated reference tables contain printable ASCII, characters 32 through
 126, at nominal pixel
@@ -53,7 +55,7 @@ included license declares a Reserved Font Name.
 The additional source fonts, pinned revision, checksums and licenses are listed
 in the [font source catalogue](../../../fonts/README.md). DecoRound, CollegeBlock,
 and OrnamentalSlab use different bitmap names because their source
-licenses reserve the original names. All thirteen bundled outline families are
+licenses reserve the original names. All fifteen bundled outline families are
 automatically eligible for cycle formatting when `fill_in_styles = true`.
 
 A show can declare local TrueType or OpenType files and select them with the
@@ -76,9 +78,21 @@ The normal `cntrl setup copy` command shapes text with HarfBuzz and rasterizes
 it with FreeType on the development machine. Only glyphs actually used by the
 show, at the sizes selected by automatic fitting, are uploaded to
 `/cntrl/fonts/` on the pedal's SD card. All bundled outline families listed above
-use this same sparse path automatically. Classic, Arial and ComicSansMS remain
-built-in ASCII fonts for the UI and shows that select them. StillTime at size
-28 remains built in for the fixed cable-test title; show text uses its SD subset.
+use this same sparse path automatically. Prepared ComicSansMS and ArimoBold
+resources can also be loaded as setup font assets. Only CourierPrime,
+AtkinsonNextSemiBold, Arimo and TamzenBold7x13 remain embedded for UI use.
+ComicSansMS, StillTime, CourierPrimeBold and ArimoBold are performance-only fonts.
+Arial and its classic alias have been removed; update existing source selections
+to Arimo and recompile. Cable Test uses Atkinson for its title and body.
+
+The normal firmware image shrinks from 1755136 to 941056 bytes after this font
+split, saving 814080 bytes (795 KiB). Embedded UI font/size pairs fall from 151
+distinct pairs to 69: CourierPrime has eight, Atkinson and Arimo have 30 each,
+and Tamzen has one. The base font data stays in flash; this is a firmware flash
+saving rather than reclaimed recording RAM. The linked normal build retains
+5064 bytes of instruction-RAM headroom without changing the memory-budget rule.
+
+### Historical Arial renderer qualification, 2026-10-31
 
 `classic` uses the same native-size Arial bitmaps and proportional metrics as
 `Arial`, keeping face ID 0 for existing configurations. It no longer enlarges the
@@ -337,9 +351,8 @@ Different scales can coexist in a setup. Exported font assets use names such as
 autoformatting. Recompiling an export reuses the already-scaled assets. Changing
 the scale of a compiled-only font requires rebuilding from its original source.
 
-Outline fonts are rasterized at the requested width. Scaling classic, Arial or
-ComicSansMS resamples their native bitmaps and requires the pinned Teensy font
-sources installed by the firmware toolchain. Exported assets are self-contained
+Outline fonts are rasterized at the requested width. Scaling ComicSansMS
+resamples its prepared native bitmaps. Exported assets are self-contained
 and do not require those sources for unchanged recompilation.
 
 

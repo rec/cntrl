@@ -17,7 +17,7 @@ constexpr unsigned max_patch_cycles = UINT16_MAX;
 constexpr unsigned max_lines = 16;
 
 struct ScreenGraphics {
-    uint8_t font = 0, size = 8, pad = 4, reserved = 0;
+    uint8_t font = 17, size = 8, pad = 4, reserved = 0;
     uint16_t foreground = 0, background = 0xffff, line_height = 8, top = 0;
     uint32_t asset = 0;
 };

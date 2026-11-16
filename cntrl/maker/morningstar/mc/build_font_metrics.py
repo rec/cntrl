@@ -4,9 +4,12 @@ import json
 import re
 from pathlib import Path
 
+import tomlkit
 import tyro
 from pydantic import BaseModel
 
+from ....fonts.assets import decode
+from ....fonts.catalogue import UI_FONTS
 from ....patch_switcher import models
 from .build_bitmap_fonts import FAMILIES
 
@@ -101,14 +104,33 @@ def native_tables(source: str, name: str) -> dict[int, tuple[bytes, bytes, list[
     return result
 
 
+def portable_face(name: str, identifier: int) -> models.FontFace:
+    face = decode(
+        (Path(__file__).parent / 'font_sources' / f'{name}.cfont').read_bytes(), name, 0
+    )
+    sizes = {
+        s: m.model_copy(
+            update={
+                'characters': {},
+                'glyphs': bytes(
+                    v & 255 for c in range(32, 127) for v in m.characters[chr(c)]
+                ).hex(),
+            }
+        )
+        for s, m in face.sizes.items()
+    }
+    return face.model_copy(update={'id': identifier, 'sizes': sizes})
+
+
 def main() -> None:
     options = tyro.cli(Options)
-    classic = native_face(
-        (options.source / 'st7735_t3_font_Arial.c').read_text(), 'Arial', 0
-    ).model_copy(update={'name': 'classic'})
-    faces = [classic] + [
-        native_face((options.source / f'st7735_t3_font_{n}.c').read_text(), n, i)
-        for i, n in enumerate(['Arial', 'ComicSansMS'], 1)
+    faces = [
+        portable_face('Arimo', 17),
+        native_face(
+            (options.source / 'st7735_t3_font_ComicSansMS.c').read_text(),
+            'ComicSansMS',
+            2,
+        ),
     ]
     faces += [
         native_face(
@@ -124,9 +146,23 @@ def main() -> None:
         f.model_copy(update={'horizontal_scale': 1.5}) if f.name == 'StillTime' else f
         for f in faces
     ]
-    data = json.loads(options.output.read_text())
-    data.update(fonts=[f.model_dump() for f in faces])
-    options.output.write_text(json.dumps(data, indent=2) + '\n')
+    faces.append(portable_face('ArimoBold', 18))
+    text = options.output.read_text()
+    data = (
+        tomlkit.parse(text).unwrap()
+        if options.output.suffix == '.toml'
+        else json.loads(text)
+    )
+    data.update(
+        fonts=[f.model_dump(mode='json') for f in faces], ui_fonts=list(UI_FONTS)
+    )
+    for name in ('Arial', 'classic'):
+        data.get('font_sources', {}).pop(name, None)
+    options.output.write_text(
+        tomlkit.dumps(data)
+        if options.output.suffix == '.toml'
+        else json.dumps(data, indent=2) + '\n'
+    )
 
 
 if __name__ == '__main__':

@@ -172,7 +172,7 @@ def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
         [display.DisplayPatch(values={'patch_cycle.name': '☃', 'display_name': '雪'})],
         target,
     )
-    assert all(w[0:2] == bytes([0, 8]) for w in windows)
+    assert all(w[0:2] == bytes([17, 8]) for w in windows)
 
 
 def test_outline_scaling_changes_width_without_changing_height() -> None:

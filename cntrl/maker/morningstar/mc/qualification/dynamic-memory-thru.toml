@@ -8,6 +8,6 @@ pickup = false
 pages = {status = {type = 'status'}}
 
 [page_settings]
-tempo_font = 'classic'
-status_font = 'classic'
-title_font = 'classic'
+tempo_font = 'Arimo'
+status_font = 'Arimo'
+title_font = 'Arimo'

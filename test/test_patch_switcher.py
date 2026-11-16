@@ -91,7 +91,7 @@ def test_pages_round_trip(
         'clock_average_beats': 2,
         'tap_intervals': 6,
         'minimum_taps': 3,
-        'title_font': 'Arial',
+        'title_font': 'Arimo',
         'clock_bpms': [90, 123, 405],
         'clock_outputs': ['din', 'trs'],
         'clock_source': 'external',
@@ -100,8 +100,8 @@ def test_pages_round_trip(
         'flash_fraction': '20%',
         'flasher_diameter': 36,
         'annulus': 12,
-        'tempo_font': 'CourierPrimeBold',
-        'status_font': 'Arial',
+        'tempo_font': 'CourierPrime',
+        'status_font': 'Arimo',
         'off_color': '0x300000',
         'on_color': '0xFF2200',
         'background_color': '0x123456',
@@ -114,9 +114,9 @@ def test_pages_round_trip(
     assert (
         settings.clock_outputs == ['din', 'trs'] and settings.clock_source == 'external'
     )
-    assert settings.title_font == 'Arial'
+    assert settings.title_font == 'Arimo'
     assert settings.refresh_interval == 2 and settings.flash_fraction == 0.2
-    assert settings.tempo_font == 'CourierPrimeBold'
+    assert settings.tempo_font == 'CourierPrime'
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
@@ -270,7 +270,7 @@ def test_target_units_normalize_before_compilation(target: models.Target) -> Non
 
 @pytest.mark.parametrize(
     'field,value',
-    [('font_size', 8), ('autoscale_fonts', True), ('font_name', 'classic')],
+    [('font_size', 8), ('autoscale_fonts', True), ('font_name', 'Arimo')],
 )
 def test_removed_show_sizing_controls_are_rejected(
     show: dict[str, object], field: str, value: object

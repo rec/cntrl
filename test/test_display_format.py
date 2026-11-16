@@ -82,8 +82,8 @@ def test_disabled_style_filling_preserves_plain_page(target: models.Target) -> N
         models.Setup(fill_in_styles=False), [patch()], target
     )
     expected = [
-        (0, (0, 48, 4, 0, 0, 65535, 48, 0), 8, 'wind'),
-        (1, (0, 40, 4, 0, 0, 65535, 40, 0), 5, 'Flute'),
+        (0, (17, 48, 4, 0, 0, 65535, 48, 0), 8, 'wind'),
+        (1, (17, 40, 4, 0, 0, 65535, 40, 0), 5, 'Flute'),
     ]
     assert all(lines(block, r) == expected for r in references[0])
     assert all(graphics.SCREEN.unpack(w)[1:3] == (8, 4) for w in windows)
@@ -277,7 +277,7 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
             'program': 1,
             'bank': 0,
             'name': 'Flute',
-            'style': {'font_name': 'classic', 'foreground_color': 'blue'},
+            'style': {'font_name': 'Arimo', 'foreground_color': 'blue'},
         }
     ]
     data = compiler.compile_show(show, definitions, [], target)
@@ -313,7 +313,7 @@ def test_tag_labels_and_patch_content_resolve_their_own_styles(
         update={
             'program_tags': ['sax'],
             'tags': ['whole-system'],
-            'program_style': models.Style(font_name='classic'),
+            'program_style': models.Style(font_name='Arimo'),
             'style': models.Style(foreground_color='green'),
         }
     )

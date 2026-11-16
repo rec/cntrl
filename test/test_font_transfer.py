@@ -116,12 +116,16 @@ def test_autoformatting_prepares_every_bundled_outline_family() -> None:
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert set(exported['fonts']) == {
         f.name if f.horizontal_scale == 1 else f'{f.name}@{f.horizontal_scale}x'
-        for f in target.fonts[3:]
+        for f in target.fonts
+        if f.name not in target.ui_fonts
     }
     for name, path in exported['fonts'].items():
         key = int(Path(path).stem, 16)
         face = assets.decode(font_data[key], name, key)
-        assert any('Patch' in m.runs for m in face.sizes.values())
+        assert any(
+            'Patch' in m.runs or set('Patch') <= m.characters.keys()
+            for m in face.sizes.values()
+        )
 
 
 @pytest.fixture(scope='module')
@@ -166,7 +170,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     data = cli.compile_inputs(command, font_data).setups['show']
     assert font_data['show']
     key, bitmap = next(iter(font_data['show'].items()))
-    assert binary_format.core(data)[28] == 0  # Window records only paint backgrounds.
+    assert binary_format.core(data)[28] == 17  # Window records only paint backgrounds.
     assert struct.pack('<I', key) in data
     exported = resolved.export(data)
     assert tomlkit.parse(exported).unwrap()['fonts'] == {
@@ -356,7 +360,15 @@ def test_bundled_outline_fonts_use_sparse_unicode_assets() -> None:
 
 
 @pytest.mark.parametrize(
-    'family', ['StillTime', 'CaveatBold', 'classic', 'Arial', 'ComicSansMS']
+    'family',
+    [
+        'StillTime',
+        'CaveatBold',
+        'Arimo',
+        'ComicSansMS',
+        'CourierPrimeBold',
+        'ArimoBold',
+    ],
 )
 def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> None:
     source = compiler.read_document(ROOT / 'firmware/test/show.json')

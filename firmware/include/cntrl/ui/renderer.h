@@ -97,14 +97,14 @@ public:
                 unsigned used = 0;
                 while (*text && used + 1 < sizeof(line.text)) {
                     line.text[used] = *text; line.text[used + 1] = 0;
-                    if (fonts_.bounds(0, 8, 0, line.text).width > width) { line.text[used] = 0; break; }
+                    if (fonts_.bounds(17, 8, 0, line.text).width > width) { line.text[used] = 0; break; }
                     ++used; ++text;
                 }
                 if (row + 1 == rows && *text) {
                     used = std::min(used, unsigned(sizeof(line.text) - 4));
                     do {
                         std::memcpy(line.text + used, "...", 4);
-                        if (fonts_.bounds(0, 8, 0, line.text).width <= width || !used) break;
+                        if (fonts_.bounds(17, 8, 0, line.text).width <= width || !used) break;
                         --used;
                     } while (true);
                 }

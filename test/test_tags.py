@@ -113,11 +113,11 @@ def test_tags_are_inherited_once_in_child_then_parent_order() -> None:
 
 def test_later_tags_override_properties_without_replacing_the_style() -> None:
     tags = {
-        'sax': models.Style(foreground_color='red', font_name='classic'),
+        'sax': models.Style(foreground_color='red', font_name='Arimo'),
         'whole-system': models.Style(foreground_color='blue'),
     }
     assert display.tag_style(['sax', 'whole-system'], tags) == models.Style(
-        foreground_color='blue', font_name='classic'
+        foreground_color='blue', font_name='Arimo'
     )
     assert (
         display.tag_style(['sax', 'whole-system', 'sax'], tags).foreground_color

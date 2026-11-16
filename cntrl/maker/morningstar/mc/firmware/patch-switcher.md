@@ -524,12 +524,13 @@ override the show default.
 Foreground/background color selection and warnings are resolved on the host.
 Rendering fills the whole background and clips all text to the padded rectangle.
 
-Built-in fonts are `classic` (default), `Arial`, and `ComicSansMS`.
+Arimo is the default performance font. Embedded UI fonts are Arimo,
+CourierPrime, AtkinsonNextSemiBold and TamzenBold7x13. ComicSansMS, StillTime,
+CourierPrimeBold and ArimoBold are performance-only; Arial/classic are removed.
 Bundled outline families and user-supplied TTF/OTF files use
 [sparse SD assets](../bitmap-fonts.md#fonts-supplied-by-a-show), containing only
 the glyphs and sizes used by the show. Unicode shaping and missing-glyph checks
-run on the host. The pedal draws prepared positions. Classic sizes are 8,
-16, ... 96 (6x8 cell scaled by an integer). Native font sizes are 8, 9, 10, 11,
+run on the host. The pedal draws prepared positions. ComicSansMS sizes are 8, 9, 10, 11,
 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 60, 72 and 96; these are the
 library's nominal size names. The compiler selects among these available bitmap faces automatically.
 Automatic sizing picks the largest supported size fitting each line. The selected size is resolved once on the Mac, never searched on the pedal.
@@ -544,8 +545,8 @@ uv run --frozen -m cntrl.maker.morningstar.mc.build_font_metrics
 Packed glyph metrics in the target file are generated data. The document stores
 only selected font IDs/sizes, RGB565 colors, padding, vertical metrics and
 precomputed name offsets. Sparse font records reference their SD asset by CRC32;
-bitmaps and shaped runs are transferred separately. Classic, Arial, ComicSansMS
-and the fixed StillTime tool titles remain in firmware. Changing show
+bitmaps and shaped runs are transferred separately. Only the four UI fonts
+remain embedded in firmware. Changing performance
 fonts uses SD uploads without reflashing.
 `fonts-in-flash.patch` places the library's immutable native font data in mapped
 program flash instead of DTCM. It does not change font contents or decoding.

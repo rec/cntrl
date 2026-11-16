@@ -33,8 +33,8 @@ def prepare(
     characters: str = ''.join(chr(c) for c in range(32, 127)),
 ) -> bytes:
     """Use hinted monochrome glyph pixels and advances, without stretching."""
-    if name not in UI_FONTS:
-        raise ValueError(f'unknown UI font family {name!r}')
+    if name not in UI_FONTS and name not in bundled_sources():
+        raise ValueError(f'unknown font family {name!r}')
     if path is None:
         if name not in (sources := bundled_sources()):
             raise ValueError(f'UI font {name!r} requires an outline source')

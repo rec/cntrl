@@ -110,7 +110,7 @@ def backend_files(
     font = directory / 'font.cfont'
     font.write_bytes(
         ui.prepare(
-            'classic',
+            'Arimo',
             [8, 12, 16, 20, 24, 32, 48, 64, 96],
             catalogue.bundled_sources()['CourierPrime'],
         )
@@ -309,7 +309,7 @@ def test_font_replacement_changes_rendering_without_recompiling(
     font = tmp_path / 'replacement.cfont'
     font.write_bytes(
         ui.prepare(
-            'classic',
+            'Arimo',
             [8, 12, 16, 20, 24, 32, 48, 64, 96],
             catalogue.bundled_sources()['AtkinsonNextSemiBold'],
         )

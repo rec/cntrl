@@ -9,15 +9,9 @@ def bundled_sources() -> dict[str, Path]:
 
 SIZES = [12, 16, 20, 24, 28, 32, 40, 48]
 UI_FONTS = {
-    'classic': 0,
-    'Arial': 1,
-    'ComicSansMS': 2,
-    'StillTime': 5,
     'CourierPrime': 8,
-    'CourierPrimeBold': 9,
     'AtkinsonNextSemiBold': 16,
     'Arimo': 17,
-    'ArimoBold': 18,
     'TamzenBold7x13': 19,
 }
 OUTLINE_SOURCES = {

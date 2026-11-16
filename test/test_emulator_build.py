@@ -36,7 +36,7 @@ class BuildFiles:
         self.target = models.Target.model_validate(data)
         self.font = directory / 'font.cfont'
         self.font.write_bytes(
-            ui.prepare('classic', [8], catalogue.bundled_sources()['CourierPrime'])
+            ui.prepare('Arimo', [8], catalogue.bundled_sources()['CourierPrime'])
         )
         self.target = self.target.model_copy(
             update={'font_sources': {n: str(self.font) for n in self.target.ui_fonts}}
@@ -136,7 +136,7 @@ def test_font_content_and_target_font_metadata_do_not_recompile(
 ) -> None:
     executable = backend.build(files.target, files.output, files.root)
     files.font.write_bytes(
-        ui.prepare('classic', [8, 12], catalogue.bundled_sources()['CourierPrime'])
+        ui.prepare('Arimo', [8, 12], catalogue.bundled_sources()['CourierPrime'])
     )
     face = files.target.fonts[0]
     sizes = dict(face.sizes)

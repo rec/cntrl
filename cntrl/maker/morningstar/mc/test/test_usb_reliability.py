@@ -1,5 +1,6 @@
 """Offline qualification policy and supervision; no USB/MIDI endpoints are opened."""
 
+import json
 import os
 import subprocess
 import sys
@@ -338,24 +339,26 @@ def test_frozen_export_keeps_fonts_and_does_not_copy_old_device_backups(
     (source / 'firmware.hex').write_bytes(b'image')
     (source / 'target.toml').write_text('description = "target"')
     (source / 'fonts').mkdir()
-    (source / 'fonts/classic.cfont').write_bytes(b'font')
+    (source / 'fonts/Arimo.cfont').write_bytes(b'font')
     (source / 'distribution').mkdir()
     (source / 'distribution/application.bin').write_bytes(b'application')
     (source / 'before').mkdir()
     (source / 'before/private.txt').write_text('old backup')
     frozen = tmp_path / 'frozen'
     hashes = usb_reliability.freeze_export(source, frozen)
-    assert (frozen / 'fonts/classic.cfont').read_bytes() == b'font'
-    assert hashes[str(Path('fonts/classic.cfont'))] == usb_reliability.digest(b'font')
+    assert (frozen / 'fonts/Arimo.cfont').read_bytes() == b'font'
+    assert hashes[str(Path('fonts/Arimo.cfont'))] == usb_reliability.digest(b'font')
     assert not (frozen / 'before').exists()
     assert (frozen / 'distribution/application.bin').read_bytes() == b'application'
 
 
 def test_qualification_resolves_fonts_from_the_frozen_export(tmp_path: Path) -> None:
-    source = Path(usb_reliability.__file__).parent / 'distribution/target.toml'
-    (tmp_path / 'target.toml').write_bytes(source.read_bytes())
+    source = Path(usb_reliability.__file__).parent / 'patch-switcher-target.json'
+    data = json.loads(source.read_text())
+    data['font_sources'] = {'Arimo': 'fonts/Arimo.cfont'}
+    (tmp_path / 'target.toml').write_text(tomlkit.dumps(data))
     target = usb_reliability.read_target(tmp_path)
-    assert Path(target.font_sources['classic']) == tmp_path / 'fonts/classic.cfont'
+    assert Path(target.font_sources['Arimo']) == tmp_path / 'fonts/Arimo.cfont'
 
 
 @pytest.mark.parametrize('fault', ['none', 'drop', 'extra-cleanup'])

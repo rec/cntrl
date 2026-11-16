@@ -158,7 +158,7 @@ def test_cycle_formatting_is_shared_without_overriding_authored_properties(
         for n in ['Flute', 'Oboe']
     ]
     patches[1] = patches[1].model_copy(
-        update={'program_style': models.Style(font_name='classic')}
+        update={'program_style': models.Style(font_name='Arimo')}
     )
     _, references, block = display.compile_display(show, patches, target)
     # Equal cycle headings share a page style, while program overrides remain local.
@@ -167,7 +167,7 @@ def test_cycle_formatting_is_shared_without_overriding_authored_properties(
     assert first[0][1] == second[0][1]
     assert all(r[1][4] == graphics.rgb565((255, 0, 0)) for r in first + second)
     assert {r[1][5] for r in first + second} == {first[0][1][5]}
-    assert second[1][1][0] == next(f.id for f in target.fonts if f.name == 'classic')
+    assert second[1][1][0] == next(f.id for f in target.fonts if f.name == 'Arimo')
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'firmware/test'

@@ -124,12 +124,10 @@ def test_ui_font_header_compiles_and_renders_without_a_driver_sdk(
     native_tests.run_native([str(executable)], check=True)
 
 
-def test_optional_classic_font_can_be_prepared_from_an_explicit_outline() -> None:
-    with pytest.raises(ValueError, match='requires an outline source'):
-        ui.prepare('classic', [12])
-    assert ui.prepare(
-        'classic', [12], bundled_sources()['AtkinsonNextSemiBold']
-    ).startswith(b'CFN2')
+@pytest.mark.parametrize('name', ['classic', 'Arial'])
+def test_removed_fonts_cannot_be_prepared(name: str) -> None:
+    with pytest.raises(ValueError, match='unknown font family'):
+        ui.prepare(name, [12])
 
 
 def test_french_runtime_glyphs_render_without_replacing_authored_fonts(
@@ -197,20 +195,27 @@ def test_page_fonts_use_declared_ui_families_without_entering_patch_picker() -> 
     restricted = target.model_copy(
         update={
             'ui_fonts': [
-                'classic',
+                'Arimo',
                 'CourierPrime',
-                'AtkinsonNextSemiBold',
                 'TamzenBold7x13',
             ]
         }
     )
-    show = models.Setup.model_validate({'page_settings': {'title_font': 'Arial'}})
+    show = models.Setup.model_validate({})
     with pytest.raises(ValueError, match='title_font: unavailable font'):
         page_settings.pack(show, restricted)
     with pytest.raises(ValueError, match='distinct canonical'):
-        models.Target.model_validate({**data, 'ui_fonts': ['classic', 'Unknown']})
-    with pytest.raises(ValueError, match='classic UI font is required'):
+        models.Target.model_validate({**data, 'ui_fonts': ['Arimo', 'Unknown']})
+    with pytest.raises(ValueError, match='Arimo UI font is required'):
         models.Target.model_validate({**data, 'ui_fonts': ['CourierPrime']})
+
+
+@pytest.mark.parametrize(
+    'name', ['ComicSansMS', 'StillTime', 'CourierPrimeBold', 'ArimoBold']
+)
+def test_performance_only_fonts_cannot_be_selected_for_ui(name: str) -> None:
+    with pytest.raises(ValueError, match='unknown canonical UI font'):
+        models.PageSettings(status_font=name)
 
 
 @pytest.mark.parametrize('family', ['Portable', 'CourierPrime'])
@@ -271,19 +276,19 @@ def test_all_canonical_ui_ids_round_trip_for_each_page_role() -> None:
     show = models.Setup.model_validate(
         {
             'page_settings': {
-                'tempo_font': 'Arial',
-                'status_font': 'CourierPrimeBold',
-                'title_font': 'StillTime',
+                'tempo_font': 'Arimo',
+                'status_font': 'CourierPrime',
+                'title_font': 'TamzenBold7x13',
             }
         }
     )
     words = page_settings.pack(show, target)
-    assert words[14] == 1 and words[15] == 9 and words[22] == 5
+    assert words[14] == 17 and words[15] == 8 and words[22] == 19
     restored = page_settings.unpack(struct.pack('<23H', *words), 0)
     assert (
-        restored['tempo_font'] == 'Arial'
-        and restored['status_font'] == 'CourierPrimeBold'
-        and restored['title_font'] == 'StillTime'
+        restored['tempo_font'] == 'Arimo'
+        and restored['status_font'] == 'CourierPrime'
+        and restored['title_font'] == 'TamzenBold7x13'
     )
 
 

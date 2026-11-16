@@ -93,7 +93,7 @@ status in the middle bands. It supports up to six switches.
 
 ```toml
 [patches.verse.binding_view]
-font_name = 'Arial'
+font_name = 'Arimo'
 maximum_size = 18
 detail_size = 18
 status_size = 12

@@ -129,26 +129,23 @@ clear while retaining a queue and transport identity.
 
 UI font IDs are a portable product contract, independent of any display library.
 `Target.ui_fonts` is a required list of available names; it is not a second wire font table.
-The classic face is required for management/error text. Default page settings also
+The Arimo face is required for management/error text. Default page settings also
 require CourierPrime and AtkinsonNextSemiBold unless alternatives are authored.
 The canonical IDs are:
 
 | Name | ID |
 | --- | --- |
-| classic | 0 |
-| Arial | 1 |
-| ComicSansMS | 2 |
-| StillTime | 5 |
 | CourierPrime | 8 |
-| CourierPrimeBold | 9 |
 | AtkinsonNextSemiBold | 16 |
+| Arimo | 17 |
+| TamzenBold7x13 | 19 |
 
-The default outline sources for AtkinsonNextSemiBold and the CourierPrime faces
-are bundled with the shared font tooling. Optional classic, Arial and ComicSansMS
-faces can be supplied as exported neutral CFN2 sources or rendered from outline
-sources. `cntrl.fonts.ui.prepare(name, sizes, path=None)` prepares hinted outline text as
-ASCII CFN2. The bundled defaults cover AtkinsonNextSemiBold and the CourierPrime
-faces; preparing classic requires an explicit outline source.
+The outline sources for Arimo, AtkinsonNextSemiBold and CourierPrime are bundled
+with the shared font tooling. Tamzen uses its prepared bitmap asset.
+`cntrl.fonts.ui.prepare(name, sizes, path=None)` prepares hinted outline text as
+ASCII CFN2. ComicSansMS, StillTime, CourierPrimeBold and ArimoBold are performance
+fonts and cannot be selected for UI page roles. Performance-only fonts use setup
+font assets rather than the embedded UI font provider.
 `ui.embedded_header({name: data})` generates an `EmbeddedFont` array. The optional
 `CNTRL_UI_FONT_STORAGE` macro lets the implementation choose its storage placement.
 `Target.font_sources` accepts CFN2 sources or authoritative TTF/OTF outlines for

@@ -1,4 +1,6 @@
 # System generators keep running while the Setups menu is open.
+fill_in_styles = false
+
 [pages.performance]
 type = 'patch-switcher'
 

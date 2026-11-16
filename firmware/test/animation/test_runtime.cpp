@@ -16,7 +16,7 @@ struct Device : TestPatchHardware, cntrl::Replies, cntrl::animation::Replies {
     cntrl::Pane panes[3];
     bool send(const char *, const uint8_t *, unsigned) override { ++sent; return true; }
     bool supports(const char *) const override { return true; }
-    bool supports_font(unsigned font, unsigned size) const override { return font == 0 && size % 8 == 0; }
+    bool supports_font(unsigned font, unsigned size) const override { return font == 17 && size % 8 == 0; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     void show(unsigned slot, const cntrl::Pane &pane) override { panes[slot] = pane; }

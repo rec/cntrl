@@ -43,7 +43,7 @@ Illustrative configuration:
 [style]
 foreground_color = 'black'
 background_color = 'white'
-font_name = 'Arial'
+font_name = 'Arimo'
 
 [tag_styles.sax]
 foreground_color = '0xD08000'
