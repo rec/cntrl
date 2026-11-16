@@ -12,35 +12,33 @@ struct PanicOutputs {
 
 class Panic {
 public:
-    enum class Status { ready, sending, incomplete };
-    Status status() const { return active() ? Status::sending : incomplete_ ? Status::incomplete : Status::ready; }
+    enum class Status { ready, all_off, notes_off };
+    // Visible feedback follows the button, even when a released tap still has
+    // controller messages to finish sending.
+    Status status() const { return !held_ ? Status::ready : phase_ == Phase::notes ? Status::notes_off : Status::all_off; }
     Panic(Hardware &hardware, PanicOutputs &outputs) : hardware_(hardware), outputs_(outputs),
         connections_(hardware.midi_outputs()), progress_(connections_.count) {}
     bool take_redraw() { bool result = dirty_; dirty_ = false; return result; }
     bool open() const { return open_; }
     bool active() const { return phase_ != Phase::idle; }
     void enter(uint8_t brightness) {
-        open_ = true; held_ = incomplete_ = false; phase_ = Phase::idle;
+        open_ = true; held_ = false; phase_ = Phase::idle;
         brightness_ = brightness; dirty_ = true;
     }
     void leave() {
-        button(false, 0); phase_ = Phase::idle; open_ = false;
+        button(false); phase_ = Phase::idle; open_ = false;
     }
-    void button(bool down, uint32_t now) {
+    void button(bool down) {
         if (!open_ || held_ == down) return;
         held_ = down; dirty_ = true;
-        if (!down) released_ = now;
         hardware_.set_brightness(down ? 255 : brightness_, down);
         if (down && !active()) {
-            incomplete_ = false; first_ = true; phase_ = Phase::controllers; reset_progress();
+            first_ = true; phase_ = Phase::controllers; reset_progress();
         } else if (!down && !first_) phase_ = Phase::idle;
     }
     // At most one three-byte message per poll. A blocked output cannot starve others.
-    void tick(uint32_t now, bool outputs_ready) {
+    void tick(bool outputs_ready) {
         if (!active()) return;
-        if (!held_ && uint32_t(now - released_) >= 1000) {
-            phase_ = Phase::idle; incomplete_ = dirty_ = true; return;
-        }
         if (!outputs_ready) return;
         for (unsigned attempt = 0; attempt < connections_.count; ++attempt) {
             unsigned port = cursor_;
@@ -80,8 +78,7 @@ private:
     midi::Outputs connections_;
     std::vector<Progress> progress_;
     Phase phase_ = Phase::idle;
-    bool dirty_ = true, incomplete_ = false;
-    uint32_t released_ = 0;
+    bool dirty_ = true;
     bool open_ = false, held_ = false, first_ = false;
     uint8_t brightness_ = 192;
     unsigned cursor_ = 0;

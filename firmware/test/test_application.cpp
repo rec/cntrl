@@ -441,7 +441,7 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     assert(platform.panic.active() && !platform.panic_owns_midi);
     // A quick tap must still fire once the pending MIDI cleanup finishes.
     app.held &= ~(uint64_t(1) << controls.confirm);
-    platform.panic.button(false, 4051);
+    platform.panic.button(false);
     platform.idle = true;
     host.display(4052, false);
     assert(platform.panic.active() && platform.panic_owns_midi);

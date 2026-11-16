@@ -293,9 +293,26 @@ public:
             line(pane, 1, prompt("%s to cancel", controls_.confirm), viewport_.height / 2, height, settings_[R::title_font], true, nullptr, 0, viewport_.width, pane.lines[0].graphics.size);
             return pane;
         }
+        if (page_ == Page::panic) {
+            constexpr uint16_t red = 0xf800, dark_red = 0x6000;
+            const bool pressed = panic != cntrl::Panic::Status::ready;
+            auto &button = pane.circles[0];
+            button.diameter = 25; button.annulus = settings_[R::annulus];
+            const unsigned inset = (button.diameter + 2 * button.annulus + 1) / 2 + pad;
+            button.x = uint16_t(std::max(0, int(viewport_.width) - int(inset)));
+            button.y = uint16_t(std::max(0, int(viewport_.height) - int(inset)));
+            button.color = pressed ? red : dark_red; button.ring_color = settings_[R::ring_color];
+            if (pressed) {
+                pane.graphics.foreground = red;
+                const unsigned height = vertical(24);
+                line(pane, 1, panic == cntrl::Panic::Status::notes_off ? "Notes off" : "All off",
+                     (viewport_.height - height) / 2, height, settings_[R::status_font], true, "Notes off");
+            }
+            return pane;
+        }
         const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::panic ? "Panic" : page_ == Page::ports ? "TRS Ports" : page_ == Page::keyboard ? "Keyboard" : "Firmware";
+        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::ports ? "TRS Ports" : page_ == Page::keyboard ? "Keyboard" : "Firmware";
         page_heading(pane, heading);
         if (clock_page()) {
             const unsigned font = settings_[R::status_font];
@@ -374,12 +391,6 @@ public:
                 line(pane, 3, prompt("%s: Jack   %s: Mode", controls_.previous, controls_.next), vertical(87), vertical(17), font, true);
                 line(pane, 4, prompt("%s: Apply", controls_.confirm), vertical(106), vertical(17), font, true);
             }
-            return pane;
-        }
-        if (page_ == Page::panic) {
-            line(pane, 1, prompt("Press %s", controls_.confirm), vertical(40), vertical(22), settings_[R::status_font], true);
-            line(pane, 2, "Hold to repeat", vertical(66), vertical(22), settings_[R::status_font], true);
-            line(pane, 3, panic == cntrl::Panic::Status::sending ? "Sending" : panic == cntrl::Panic::Status::incomplete ? "Incomplete" : "Ready", vertical(100), vertical(24), settings_[R::status_font], true);
             return pane;
         }
         if (page_ == Page::firmware) {

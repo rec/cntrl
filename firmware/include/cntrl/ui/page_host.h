@@ -403,7 +403,7 @@ public:
 #endif
 #if CNTRL_PANIC
         if (pages_.page() == Pages::Page::panic) {
-            platform_.panic.button(true, now);
+            platform_.panic.button(true);
             start_panic();
             return;
         }

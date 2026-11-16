@@ -246,7 +246,7 @@ public:
 #endif
 #if CNTRL_PANIC
         if (s.panic_owns_midi) {
-            if (!s.loop_cleaning() && !s.loop_control_reset_pending()) s.panic.tick(now, bridge.handoff(s));
+            if (!s.loop_cleaning() && !s.loop_control_reset_pending()) s.panic.tick(bridge.handoff(s));
             if (!s.panic.active()) { bridge.configure(s.runtime.interface); s.panic_owns_midi = false; }
         } else
 #endif

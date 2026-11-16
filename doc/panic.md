@@ -1,12 +1,18 @@
 # Panic page
 
-Panic follows MIDI Cable Test in the page cycle. It uses the shared
-background, heading and text style, with press/hold instructions and a
-Ready/Sending indicator. The other two displays stay in place.
+Panic follows MIDI Cable Test in the page cycle. On entry it has no text or
+heading, just a dark-red circular indicator at the bottom right. Its center is
+25 pixels in diameter; it uses the shared annulus width and ring color (normally
+a five-pixel black ring), page padding and background. The other two displays
+stay in place.
 
 Press C to start and temporarily set the screens to maximum brightness. Release
-C to restore the brightness that was active on entry. Browsing the page sends
-nothing and leaves normal MIDI routing unchanged.
+C to restore the brightness that was active on entry. While C is held, the
+indicator is bright red and centered red text shows the current phase:
+`All off` for controller resets or `Notes off` for the individual Note Off sweep.
+Release immediately removes all text and returns the indicator to dark red,
+including while the initial reset pass is still finishing. Browsing the page
+sends nothing and leaves normal MIDI routing unchanged.
 
 Triggering Panic also stops all MIDI-file playback, including infinite loops,
 stream file sources and the MIDI looper. Playback stays stopped after Panic
@@ -20,10 +26,10 @@ A press starts this sequence on every available MIDI output, on channels 1..16:
 2. All Sound Off: CC 120, value 0.
 3. Reset All Controllers: CC 121, value 0.
 
-A tap continues this first controller sweep after C is released, for up to one
-second. If an output remains blocked, it stops and shows `Incomplete`; a completed
-sweep returns to `Ready`. Once all
-outputs have completed it, a continued hold starts Note Off messages with
+A tap completes this first controller sweep even after C is released. A blocked
+output is retried until it accepts the messages or becomes unavailable; there
+is no release timeout. Once all outputs have completed the pass, a continued
+hold starts Note Off messages with
 velocity 0, covering every note on every channel and output. Notes described to
 the user as 1..128 are encoded as MIDI values 0..127.
 
@@ -52,7 +58,7 @@ accepted by a transmitter finish transmitting.
 
 ## Verification
 
-Native tests cover the shared page layout, full controller and Note Off sequences on all
+Native tests cover the quiet/held/released page layout, full controller and Note Off sequences on all
 outputs/channels, repetition, tap/hold/release, brightness restoration, retry,
 disconnection, cancellation, re-entry, playback cancellation and a quick tap
 waiting for MIDI cleanup. Physical message capture and visible

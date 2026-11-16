@@ -1267,11 +1267,9 @@ public:
         return false;
 #endif
     }
-    void panic_release(uint32_t now) {
+    void panic_release(uint32_t) {
 #if CNTRL_PANIC
-        board.panic.button(false, now);
-#else
-        (void)now;
+        board.panic.button(false);
 #endif
     }
     bool animation_controls(uint8_t pressed, uint32_t now, bool replay) { return splash_session.controls(pressed, now, replay); }

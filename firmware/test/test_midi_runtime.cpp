@@ -33,9 +33,10 @@ struct Player {
 };
 struct Files {
     struct Looper {
+        bool playing = false;
         void connection(unsigned) {}
         void clear() {}
-        void stop() {}
+        void stop() { playing = false; }
         bool owned() const { return false; }
         template<class Sink> void poll(cntrl::midi::BeatPosition,bool,unsigned,Sink &,unsigned) {}
     } looper;
@@ -76,7 +77,7 @@ struct Panic {
     bool running = false;
     unsigned ticks = 0;
     bool active() const { return running; }
-    void tick(uint32_t, bool ready) { ++ticks; if (ready) running = false; }
+    void tick(bool ready) { ++ticks; if (ready) running = false; }
 };
 struct Services : cntrl::midi::Sink {
     cntrl::midi::Monitor *observer = nullptr;
@@ -243,16 +244,18 @@ void test_exclusive_utilities_and_diagnostics() {
     cntrl::midi::Runtime runtime(1, 180);
     services.panic_owns_midi = services.panic.running = true;
     services.files.player.playing = true;
+    services.files.looper.playing = true;
     runtime.poll(services);
-    assert(!services.files.player.playing);
+    assert(!services.files.player.playing && !services.files.looper.playing);
     assert(std::find(services.log.begin(), services.log.end(), "playing") == services.log.end());
     assert(services.writes.empty() && services.panic.ticks == 1 && !services.panic_owns_midi);
     // A requested panic stops playback even while the page waits for handoff.
     Services requested(0);
     cntrl::midi::Runtime pending_runtime;
     requested.panic.running = requested.files.player.playing = true;
+    requested.files.looper.playing = true;
     pending_runtime.poll(requested);
-    assert(!requested.files.player.playing && requested.panic.running && !requested.panic.ticks);
+    assert(!requested.files.player.playing && !requested.files.looper.playing && requested.panic.running && !requested.panic.ticks);
     services.cable_test.running = true;
     services.sources[1].front().packetized = false;
     services.sources[1].front().byte = 0xb0;
