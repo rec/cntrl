@@ -1,6 +1,5 @@
 # First installation: status only, no instruments, routes or MIDI actions.
 use_animations = false
-frame_buffers = 0
 usb_device_midi = false
 usb_host_midi = false
 forward_device_to_host = false
