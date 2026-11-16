@@ -105,6 +105,12 @@ it is not acknowledgement from a synthesizer. The emulator uses only the setup's
 explicit `[midi]` routes for incoming MIDI. It does not infer the physical
 adapter's legacy USB/DIN forwarding connections or echo input back to itself.
 
+MIDI Cable Test remains in the page cycle with its original Atkinson font,
+toggle and port indicators. Its probes run locally and are never sent to host
+MIDI ports or included in the accepted-output trace. Virtual MIDI injection can
+return probe messages to exercise the input indicators. Leaving the page stops
+the test and restores normal setup routing.
+
 Built-in controller features that the selected execution backend cannot service
 are rejected explicitly. The generic layout model has no six/eight-switch or
 three/four-display limit. The initial cntrl backend retains its existing eight

@@ -297,6 +297,24 @@ static void panic_is_quiet_until_pressed_and_shows_only_its_current_phase() {
     for (const auto &line : released.lines) assert(!line.text[0]);
     assert(released.circles[0].color == button.color && released.circles[0].diameter == 25);
 }
+static void cable_test_preserves_its_original_font_and_indicators() {
+    Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
+    cntrl::PageSettings settings;
+    settings.words[cntrl::PageSettings::status_font] = 19;
+    settings.words[cntrl::PageSettings::title_font] = 19;
+    pages.configure(settings);
+    auto layout = page_fixture(1, {unsigned(cntrl::ui::Pages::Page::cable)}, {{0}});
+    pages.layout({layout.data()});
+    const cntrl::midi::OutputConnection connections[] = {{"din","DIN",0,cntrl::midi::OutputTransport::physical},{"trs","TRS",1,cntrl::midi::OutputTransport::physical}};
+    const uint8_t sending[] = {1,1}; const int inputs[] = {1,-1};
+    const auto pane = pages.view(0,0,{}, {true,sending,inputs,2,2,connections});
+    assert(!std::strcmp(pane.lines[0].text,"MIDI Cable Test"));
+    for (unsigned i = 0; i < 5; ++i) assert(pane.lines[i].graphics.font == 16);
+    assert(pane.circles[0].x == 78 && pane.circles[0].diameter == 12);
+    assert(pane.circles[0].color == 0x001f && pane.circles[1].color == 0x07e0);
+    assert(pane.circles[2].x == 130 && pane.circles[2].color == 0x07e0);
+    assert(pane.circles[3].color == 0x8410 && pane.toggle.enabled);
+}
 static void updating_one_window_does_not_starve_the_others() {
     for (unsigned frames : {0u, 1u, 2u}) {
         Fonts fonts; MixedDisplay display;
@@ -588,6 +606,7 @@ static void expression_reuses_its_initial_layout_and_redraws_only_changed_conten
 }
 
 int main() {
+    cable_test_preserves_its_original_font_and_indicators();
     panic_is_quiet_until_pressed_and_shows_only_its_current_phase();
     cntrl::memory_budget = 192 * 1024;
     moving_shapes_repaint_only_their_damage_and_restore_overlaps();

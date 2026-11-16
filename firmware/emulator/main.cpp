@@ -1,7 +1,7 @@
 #define CNTRL_SWITCHES 1
 #define CNTRL_EMULATOR 1
 #define CNTRL_PANIC 0
-#define CNTRL_CABLE_TEST 0
+#define CNTRL_CABLE_TEST 1
 #define CNTRL_ORIGINAL_FIRMWARE 0
 #include "target_capabilities.h"
 #include "fonts.h"
@@ -18,6 +18,7 @@
 #include <cntrl/ui/song_sources.h>
 #include <cntrl/ui/font_storage.h>
 #include <cntrl/midi_runtime.h>
+#include <cntrl/cable_test.h>
 #include <cntrl/expression_pedals.h>
 #include <cntrl/auxiliary_switches.h>
 #include <cntrl/asset_storage.h>
@@ -128,6 +129,11 @@ public:
     ui::RuntimeState runtime;
     midi::Runtime midi_runtime;
     midi::Bridge bridge{target::midi_connections};
+    CableTest cable_test{*this,target::cable_connections,target::cable_connections.count};
+    void leave_cable_test() {
+        if (cable_test.enabled()) bridge.configure(runtime.interface);
+        cable_test.leave();
+    }
     std::vector<std::deque<midi::InputEvent>> incoming = std::vector<std::deque<midi::InputEvent>>(target::endpoints.size());
     ui::PageHost<Board> &page_host() { return *host; }
     uint32_t microseconds() const { return uint32_t(time); }
@@ -272,10 +278,12 @@ public:
     void recalled() override { song_sources->recalled(); }
     bool write_packet(unsigned route,const midi::Packet &packet) override {
         if ((blocked & (1u << route)) || !(connected & (1u << route))) return false;
+        // Exercise the tester without forwarding its probes to host MIDI ports.
+        if (cable_test.enabled()) { ++accepted_packets; return true; }
         std::vector<uint8_t> bytes{2}; integer(bytes,time,8); integer(bytes,route,1);
         bytes.insert(bytes.end(),packet.bytes,packet.bytes + packet.size()); frame(bytes); ++accepted_packets; return true;
     }
-    void packet_sent(unsigned route,const midi::Packet &packet) override { midi_runtime.monitor().packet(midi::Monitor::Direction::outgoing,route,0,packet,microseconds()); }
+    void packet_sent(unsigned route,const midi::Packet &packet) override { midi_runtime.monitor().packet(midi::Monitor::Direction::outgoing,route,0,packet,microseconds(),cable_test.enabled()); }
     void midi_transport_poll() {}
     bool midi_host_connected() const { return true; }
     bool midi_device_connected() const { return true; }
@@ -300,7 +308,10 @@ public:
     void midi_flush() {}
     bool midi_read_event(unsigned source,midi::InputEvent &event) {
         if (incoming[source].empty()) return false;
-        event = incoming[source].front(); incoming[source].pop_front(); return true;
+        event = incoming[source].front(); incoming[source].pop_front();
+        for (unsigned i = 0; i < target::cable_connections.count; ++i)
+            if (target::cable_connections.data[i].route == event.input) event.cable_input = i;
+        return true;
     }
 };
 
@@ -501,6 +512,7 @@ public:
     }
     void tick();
     void cleanup() {
+        board.leave_cable_test();
         board.held = 0; std::fill(std::begin(board.contacts),std::end(board.contacts),uint8_t(0));
         for (unsigned i = 0; i < 32; ++i) if (application.held & (uint64_t(1) << i)) switches.button(i,false,board.milliseconds());
         application.held = 0; std::fill(buttons.begin(),buttons.end(),ButtonState{});

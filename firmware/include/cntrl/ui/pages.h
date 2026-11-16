@@ -357,7 +357,7 @@ public:
         }
         if (page_ == Page::cable) {
             const bool active = cable.enabled;
-            const unsigned font = settings_[R::status_font];
+            const unsigned font = 16; // Preserve Cable Test's Atkinson font.
             line(pane, 1, i18n::text(i18n::Message::output_heading), vertical(32), vertical(18), font, true, nullptr, horizontal(56), horizontal(100));
             line(pane, 2, i18n::text(i18n::Message::input_heading), vertical(32), vertical(18), font, true, nullptr, horizontal(106), horizontal(154));
             unsigned rows = std::max(cable.output_count, cable.input_count);
@@ -720,7 +720,7 @@ private:
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) sample = nullptr;
 #endif
-        line(pane, 0, text, pad + 2, height, settings_[R::title_font], true, sample);
+        line(pane, 0, text, pad + 2, height, page_ == Page::cable ? 16 : settings_[R::title_font], true, sample);
         pane.heading_band = true;
         auto &header = pane.lines[0];
         header.graphics.line_height += 4;

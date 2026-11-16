@@ -134,6 +134,57 @@ def backend_files(
     )
 
 
+def test_cable_test_cycles_runs_locally_and_releases_midi_on_exit(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    target = files.target.model_copy(
+        update={'controls': models.TargetControls(tap='a', next_page='b')}
+    )
+    setup = tmp_path / 'cable.bin'
+    write_bundle(
+        {
+            'cable': {
+                'pages': {
+                    'status': {'type': 'status'},
+                    'cable': {'type': 'cable-test'},
+                },
+                'midi': {'thru': {'from': 'din', 'to': 'trs'}},
+            }
+        },
+        target,
+        setup,
+    )
+    executable = backend.build(target, tmp_path / 'native', Path(__file__).parents[1])
+    with backend.Session(files.layout, target, executable, tmp_path, setup) as session:
+
+        def press(button: str) -> None:
+            session.button(button, True)
+            session.advance(session.time_us + 60000)
+            session.button(button, False)
+            session.advance(session.time_us + 60000)
+
+        press('b')
+        session.advance(session.time_us + 500000)
+        idle = dict(session.frames)
+        press('a')
+        active = dict(session.frames)
+        assert active != idle
+        assert not any(e.kind == 'midi' for e in session.messages)
+        # Return the complete probe cycle, including the most recent values.
+        session.midi('din', b''.join(bytes([0xB0, 2, v]) for v in range(128)))
+        session.advance(session.time_us + 80000)
+        assert session.frames != active
+        assert not any(e.kind == 'midi' for e in session.messages)
+        press('b')
+        session.messages.clear()
+        session.midi('din', bytes([0x90, 60, 100]))
+        assert any(
+            e.kind == 'midi' and e.endpoint == 'trs' and e.data == b'\x90\x3c\x64'
+            for e in session.messages
+        )
+
+
 def test_status_font_samples_cycle_without_navigating_or_repeating_held_f(
     backend_files: BackendFiles, tmp_path: Path
 ) -> None:

@@ -51,8 +51,8 @@ def test_pong_spans_screens_and_releases_navigation_controls(
 
         advance(1000000)
         if default_catalogue:
-            # The native adapter skips hardware-only cable-test and Panic pages.
-            for _ in range(8):
+            # The native adapter skips the hardware-only Panic page.
+            for _ in range(9):
                 press('f')
             advance(500000)
         cli.save(session, tmp_path / 'ready')
@@ -97,7 +97,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         press('e')  # The default cycle exits to None, restoring all patch windows.
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        for _ in range(9 if default_catalogue else 1):
+        for _ in range(10 if default_catalogue else 1):
             press('f')  # Cycle back to the paused game.
         advance(500000)
         assert ball_on('lcd-1')
