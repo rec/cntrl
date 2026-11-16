@@ -208,7 +208,7 @@ class ControllerCanvas(QtWidgets.QWidget):
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.isAutoRepeat():
             return
-        identity = event.text().lower()
+        identity = QtGui.QKeySequence(event.key()).toString().lower()
         if any(
             c.id == identity and isinstance(c, models.Button)
             for c in self.session.controller.controls
@@ -220,7 +220,7 @@ class ControllerCanvas(QtWidgets.QWidget):
 
     def keyReleaseEvent(self, event: QtGui.QKeyEvent) -> None:
         if not event.isAutoRepeat():
-            self.keyboard.discard(event.text().lower())
+            self.keyboard.discard(QtGui.QKeySequence(event.key()).toString().lower())
             self.synchronize()
 
     def release(self) -> None:

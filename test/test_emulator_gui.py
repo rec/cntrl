@@ -159,6 +159,40 @@ def test_keyboard_repeat_does_not_retrigger_or_release_a_held_switch(
     canvas.close()
 
 
+def test_keyboard_chord_tracks_keys_without_character_text(
+    application: QtWidgets.QApplication,
+) -> None:
+    session = CapturedSession()
+    session.controller = Controller(
+        name='Test controller',
+        controls=[Button(id='d', name='D'), Button(id='f', name='F')],
+    )
+    canvas = ControllerCanvas(session, lambda message: None)
+    for event, code, text in [
+        (QtCore.QEvent.Type.KeyPress, QtCore.Qt.Key.Key_D, ''),
+        (QtCore.QEvent.Type.KeyPress, QtCore.Qt.Key.Key_F, 'f'),
+        (QtCore.QEvent.Type.KeyRelease, QtCore.Qt.Key.Key_F, ''),
+    ]:
+        QtWidgets.QApplication.sendEvent(
+            canvas,
+            QtGui.QKeyEvent(event, code, QtCore.Qt.KeyboardModifier.NoModifier, text),
+        )
+    assert canvas.active == {'d'}
+    assert session.inputs == [('d', True), ('f', True), ('f', False)]
+    QtWidgets.QApplication.sendEvent(
+        canvas,
+        QtGui.QKeyEvent(
+            QtCore.QEvent.Type.KeyRelease,
+            QtCore.Qt.Key.Key_D,
+            QtCore.Qt.KeyboardModifier.NoModifier,
+            'D',
+        ),
+    )
+    assert not canvas.active
+    assert session.inputs[-1] == ('d', False)
+    canvas.close()
+
+
 def test_latched_chord_and_focus_loss_release_each_switch(
     application: QtWidgets.QApplication,
 ) -> None:
