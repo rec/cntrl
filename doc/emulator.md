@@ -4,6 +4,12 @@ The emulator runs cntrl's shared C++ application in a native host process. A
 Python/PySide6 window supplies the controls and shows the production renderer's
 pixels. It does not run an ARM image or a manufacturer's original firmware.
 
+Display images use integer scaling in physical screen pixels, including on
+Retina and fractional-DPI screens. Every pedal pixel occupies an equal-sized
+square block, with no smoothing. Small black margins inside the bezels are
+normal. If the window is too small for native-size pixels, the display is
+cropped; enlarge the window to see the full image.
+
 Install from the source checkout, including the optional desktop/MIDI packages:
 
 ```sh

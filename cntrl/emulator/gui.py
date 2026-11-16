@@ -16,6 +16,30 @@ from .layout import Canvas, Placement
 from .replay import Scenario
 
 
+def display_rectangle(
+    rectangle: QtCore.QRectF, width: int, height: int, pixel_ratio: float
+) -> QtCore.QRectF:
+    """Map each pedal pixel to an integer block on the physical screen."""
+    scale = max(
+        1,
+        int(
+            min(
+                rectangle.width() * pixel_ratio / width,
+                rectangle.height() * pixel_ratio / height,
+            )
+        ),
+    )
+    physical_width, physical_height = width * scale, height * scale
+    left = round(rectangle.center().x() * pixel_ratio - physical_width / 2)
+    top = round(rectangle.center().y() * pixel_ratio - physical_height / 2)
+    return QtCore.QRectF(
+        left / pixel_ratio,
+        top / pixel_ratio,
+        physical_width / pixel_ratio,
+        physical_height / pixel_ratio,
+    )
+
+
 class ControllerCanvas(QtWidgets.QWidget):
     def __init__(self, session: Session, report: Callable[[str], None]) -> None:
         super().__init__()
@@ -124,14 +148,17 @@ class ControllerCanvas(QtWidgets.QWidget):
                     d.width * 2,
                     QtGui.QImage.Format.Format_RGB16,
                 )
-                size = QtCore.QSizeF(d.width, d.height)
-                size.scale(rectangle.size(), QtCore.Qt.AspectRatioMode.KeepAspectRatio)
-                destination = QtCore.QRectF(
-                    rectangle.center()
-                    - QtCore.QPointF(size.width() / 2, size.height() / 2),
-                    size,
+                destination = display_rectangle(
+                    rectangle, d.width, d.height, self.devicePixelRatioF()
                 )
+                painter.save()
+                painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, False)
+                painter.setRenderHint(
+                    QtGui.QPainter.RenderHint.SmoothPixmapTransform, False
+                )
+                painter.setClipRect(rectangle)
                 painter.drawImage(destination, image)
+                painter.restore()
         for p in self.session.layout.ports:
             rectangle = self.placement_rect(p)
             painter.setPen(QtGui.QColor('#b1bac9'))

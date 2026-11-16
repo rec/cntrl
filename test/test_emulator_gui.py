@@ -12,7 +12,7 @@ pytest.importorskip('middy')
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from cntrl.emulator.backend import OutputEvent, Session
-from cntrl.emulator.gui import ControllerCanvas, EmulatorWindow
+from cntrl.emulator.gui import ControllerCanvas, EmulatorWindow, display_rectangle
 from cntrl.emulator.layout import EmulatorLayout, Placement
 from cntrl.models import Button, Controller
 from cntrl.patch_switcher.models import MidiEndpoint, Target, TargetDisplay
@@ -190,6 +190,45 @@ def test_frame_pixels_keep_native_aspect_ratio_and_correct_rgb565_byte_order(
         0,
         255,
     )
+    canvas.close()
+
+
+@pytest.mark.parametrize('ratio', [1.0, 1.25, 1.5, 2.0, 3.0])
+def test_display_size_and_origin_align_to_physical_pixels(ratio: float) -> None:
+    bezel = QtCore.QRectF(27.3, 15.7, 187.8, 150.2)
+    destination = display_rectangle(bezel, 160, 128, ratio)
+    scale = destination.width() * ratio / 160
+    assert scale == pytest.approx(round(scale))
+    assert scale >= 1
+    assert destination.height() * ratio / 128 == pytest.approx(scale)
+    assert destination.left() * ratio == pytest.approx(
+        round(destination.left() * ratio)
+    )
+    assert destination.top() * ratio == pytest.approx(round(destination.top() * ratio))
+    assert abs(destination.center().x() - bezel.center().x()) * ratio <= 0.5 + 1e-9
+    assert abs(destination.center().y() - bezel.center().y()) * ratio <= 0.5 + 1e-9
+
+
+def test_display_pixel_columns_have_uniform_width_at_fractional_window_sizes(
+    application: QtWidgets.QApplication,
+) -> None:
+    session = CapturedSession()
+    session.frames['screen'] = b'\xf8\x00\x07\xe0' * 16
+    canvas = ControllerCanvas(session, lambda message: None)
+    canvas.resize(603, 407)
+    image = canvas.grab().toImage()
+    ratio = canvas.devicePixelRatioF()
+    destination = display_rectangle(
+        canvas.placement_rect(session.layout.displays['screen']), 8, 4, ratio
+    )
+    left = round(destination.left() * ratio)
+    middle = round(destination.center().y() * ratio)
+    scale = round(destination.width() * ratio / 8)
+    for column in range(8):
+        for offset in range(scale):
+            assert image.pixelColor(left + column * scale + offset, middle).name() == (
+                '#ff0000' if column % 2 == 0 else '#00ff00'
+            )
     canvas.close()
 
 
