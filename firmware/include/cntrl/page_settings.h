@@ -6,7 +6,7 @@
 
 namespace cntrl {
 inline bool ui_font_valid(unsigned face) {
-    return face <= 2 || face == 5 || face == 8 || face == 9 || face == 16;
+    return face <= 2 || face == 5 || face == 8 || face == 9 || (face >= 16 && face <= 18);
 }
 struct PageSettings {
     enum Word : unsigned {

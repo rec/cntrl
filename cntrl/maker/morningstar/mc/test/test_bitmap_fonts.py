@@ -59,7 +59,7 @@ def test_firmware_glyphs_preserve_pixels_and_baseline(
             offset += b
         width, height, left, y, advance = metrics
         if name == 'AtkinsonNextSemiBold':
-            raster = Outline(outline, autohint=True)
+            raster = Outline(outline, hinting='auto')
             glyph = raster.glyph(size, raster.face.get_char_index(c))
             expected = [
                 int(
@@ -141,7 +141,7 @@ def test_generated_fonts_and_exported_metrics_are_current(tmp_path: Path) -> Non
 
 def test_small_page_font_has_equal_vertical_stems() -> None:
     path = Path(__file__).parents[4] / 'fonts' / build_bitmap_fonts.PAGE_FAMILY[1]
-    font = Outline(path, autohint=True)
+    font = Outline(path, hinting='auto')
     glyph = font.glyph(12, font.face.get_char_index(ord('H')))
     row = ''.join(
         '#' if glyph.pixels[x // 8] & (128 >> (x % 8)) else '.'

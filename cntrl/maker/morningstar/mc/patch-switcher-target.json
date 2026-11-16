@@ -4,6 +4,8 @@
     "runtime": 294912
   },
   "font_sources": {
+    "Arimo": "font_sources/Arimo.cfont",
+    "ArimoBold": "font_sources/ArimoBold.cfont",
     "classic": "font_sources/classic.cfont",
     "Arial": "font_sources/Arial.cfont",
     "ComicSansMS": "font_sources/ComicSansMS.cfont"
@@ -1094,6 +1096,8 @@
     "StillTime",
     "CourierPrime",
     "CourierPrimeBold",
-    "AtkinsonNextSemiBold"
+    "AtkinsonNextSemiBold",
+    "Arimo",
+    "ArimoBold"
   ]
 }

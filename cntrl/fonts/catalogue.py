@@ -16,8 +16,12 @@ UI_FONTS = {
     'CourierPrime': 8,
     'CourierPrimeBold': 9,
     'AtkinsonNextSemiBold': 16,
+    'Arimo': 17,
+    'ArimoBold': 18,
 }
 OUTLINE_SOURCES = {
+    'Arimo': 'arimo/Arimo-Regular.ttf',
+    'ArimoBold': 'arimo/Arimo-Bold.ttf',
     'Circuit': 'orbitron/Orbitron-Medium.ttf',
     'CircuitBold': 'orbitron/Orbitron-Bold.ttf',
     'StillTime': 'still-time/StillTime.otf',

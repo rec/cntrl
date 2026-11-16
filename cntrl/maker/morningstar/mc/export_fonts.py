@@ -85,6 +85,13 @@ def export(options: FontExport) -> dict[str, str]:
         if name not in options.ui_fonts:
             continue
         embedded[name] = embedded_font(path, native, face)
+    for name in ('Arimo', 'ArimoBold'):
+        if name in options.ui_fonts:
+            resource = f'{name}.cfont'
+            path = Path(__file__).with_name('font_sources') / resource
+            embedded[name] = path.read_bytes()
+            (options.output / resource).write_bytes(embedded[name])
+            sources[name] = resource
     prefix = (
         '#if defined(__IMXRT1062__)\n'
         '#define CNTRL_UI_FONT_STORAGE __attribute__((section(".progmem")))\n'

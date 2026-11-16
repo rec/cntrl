@@ -2,6 +2,7 @@
 
 import struct
 from pathlib import Path
+from typing import Literal
 from zlib import crc32
 
 import pytest
@@ -16,17 +17,19 @@ from scripts import native_tests
 
 
 @pytest.mark.parametrize(
-    'name', ['AtkinsonNextSemiBold', 'CourierPrime', 'CourierPrimeBold']
+    'name',
+    ['AtkinsonNextSemiBold', 'CourierPrime', 'CourierPrimeBold', 'Arimo', 'ArimoBold'],
 )
+@pytest.mark.parametrize('hinting', ['auto', 'native'])
 def test_ui_fonts_preserve_hinted_pixels_bearings_and_advances(
-    name: str, tmp_path: Path
+    name: str, hinting: Literal['auto', 'native'], tmp_path: Path
 ) -> None:
-    data = ui.prepare(name, [12, 20])
+    data = ui.prepare(name, [12, 20], hinting=hinting)
     resource = tmp_path / 'prepared.cfont'
     resource.write_bytes(data)
     bitmap = BitmapRaster(resource)
     face = assets.decode(data, name, crc32(data))
-    source = Outline(bundled_sources()[name], autohint=True)
+    source = Outline(bundled_sources()[name], hinting=hinting)
     for size in [12, 20]:
         assert set(bitmap.characters[size]) == set(range(32, 127))
         assert not face.sizes[size].runs

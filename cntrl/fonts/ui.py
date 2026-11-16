@@ -1,7 +1,11 @@
 """Prepare portable embedded UI fonts without a display library or CPU SDK."""
 
 from pathlib import Path
+from typing import Literal
 from zlib import crc32
+
+import tyro
+from pydantic import BaseModel, Field
 
 from ..patch_switcher.models import FontMetrics
 from .assets import decode, pack
@@ -9,7 +13,24 @@ from .catalogue import UI_FONTS, bundled_sources
 from .outline import Outline
 
 
-def prepare(name: str, sizes: list[int], path: Path | None = None) -> bytes:
+class Prepare(BaseModel, frozen=True):
+    """Export an outline family as a portable UI font asset."""
+
+    name: str
+    sizes: list[int] = Field(
+        default_factory=lambda: list(range(8, 33)) + [40, 48, 60, 72, 96]
+    )
+    output: Path
+    hinting: Literal['auto', 'native'] = 'auto'
+
+
+def prepare(
+    name: str,
+    sizes: list[int],
+    path: Path | None = None,
+    *,
+    hinting: Literal['auto', 'native'] = 'auto',
+) -> bytes:
     """Use hinted monochrome glyph pixels and advances, without stretching."""
     if name not in UI_FONTS:
         raise ValueError(f'unknown UI font family {name!r}')
@@ -17,7 +38,7 @@ def prepare(name: str, sizes: list[int], path: Path | None = None) -> bytes:
         if name not in (sources := bundled_sources()):
             raise ValueError(f'UI font {name!r} requires an outline source')
         path = sources[name]
-    outline = Outline(path, autohint=True)
+    outline = Outline(path, hinting=hinting)
     characters = ''.join(chr(c) for c in range(32, 127))
     selected = {s: list(characters) for s in sizes}
     metrics = {}
@@ -78,3 +99,15 @@ def embedded_header(fonts: dict[str, bytes]) -> str:
         ]
     )
     return '\n'.join(lines)
+
+
+def main() -> None:
+    options = tyro.cli(Prepare)
+    options.output.parent.mkdir(parents=True, exist_ok=True)
+    options.output.write_bytes(
+        prepare(options.name, options.sizes, hinting=options.hinting)
+    )
+
+
+if __name__ == '__main__':
+    main()

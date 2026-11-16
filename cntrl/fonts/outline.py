@@ -3,7 +3,7 @@
 import struct
 from math import ceil
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 import freetype
 import uharfbuzz
@@ -43,7 +43,7 @@ class Outline:
         path: Path,
         horizontal_scale: float = 1.0,
         *,
-        autohint: bool = False,
+        hinting: Literal['none', 'auto', 'native'] = 'none',
         source_snapshots: dict[Path, bytes] | None = None,
     ) -> None:
         if freetype.version() != (2, 14, 3):
@@ -52,7 +52,7 @@ class Outline:
                 'after dependency installation'
             )
         self.horizontal_scale = horizontal_scale
-        self.autohint = autohint
+        self.hinting = hinting
         self.data = source_files.read(path, source_snapshots)
         self.face = freetype.Face.from_bytes(self.data)
         self.hb = uharfbuzz.Font(uharfbuzz.Face(self.data))  # ty: ignore[unresolved-attribute]  # Public C extension API.
@@ -78,8 +78,10 @@ class Outline:
                 | freetype.FT_LOAD_TARGET_MONO  # ty: ignore[unresolved-attribute]  # Public C extension API.
                 | (
                     freetype.FT_LOAD_FORCE_AUTOHINT  # ty: ignore[unresolved-attribute]  # Public C extension API.
-                    if self.autohint
+                    if self.hinting == 'auto'
                     else freetype.FT_LOAD_NO_HINTING  # ty: ignore[unresolved-attribute]  # Public C extension API.
+                    if self.hinting == 'none'
+                    else freetype.FT_LOAD_NO_AUTOHINT  # ty: ignore[unresolved-attribute]  # Public C extension API.
                 ),
             )
             slot = self.face.glyph

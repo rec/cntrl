@@ -1,5 +1,34 @@
 # Additional font sources
 
+## Arimo UI trial
+
+`Arimo` and `ArimoBold` use the unmodified Regular and Bold TrueType outlines from
+[googlefonts/Arimo revision 22e482e2ce0ebb2e6f88ba49d029d60f558d5d67](https://github.com/googlefonts/Arimo/tree/22e482e2ce0ebb2e6f88ba49d029d60f558d5d67).
+It was downloaded on 2026-11-16 with its [SIL OFL 1.1 licence](arimo/OFL.txt).
+The source SHA-256 values are:
+
+```text
+41b22bc8f0b51f932825d37bc55b5eb6ba67dfe599a626e4aff2b43b624f9f8c  Arimo-Regular.ttf
+d7a8b187cf8444d4cfee102e8eae9e3043682fd5106d5d33ed677fe268a0e2ba  Arimo-Bold.ttf
+```
+
+The portable monochrome UI asset is generated at sizes 8 through 32 and
+40, 48, 60, 72 and 96, using Arimo's native TrueType hinting rather than
+FreeType's automatic hinter. To regenerate the controller's assets from the
+repository root:
+
+```sh
+python -m cntrl.fonts.ui --name Arimo --hinting native --output cntrl/maker/morningstar/mc/font_sources/Arimo.cfont
+python -m cntrl.fonts.ui --name ArimoBold --hinting native --output cntrl/maker/morningstar/mc/font_sources/ArimoBold.cfont
+```
+
+`simple-setup.toml` selects Arimo Bold through the shared `page_settings.status_font`
+setting for the trial. Headings retain their existing font.
+In the emulator preview, native hinting improved readability compared with
+forced automatic hinting, but the small Status text was still unsatisfactory.
+
+## Other sources
+
 These unmodified regular-weight TrueType files were downloaded on
 2026-11-02 from [Google Fonts at revision 6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec](https://github.com/google/fonts/tree/6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec).
 Only the generated bitmap versions use the selectable names below.

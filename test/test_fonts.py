@@ -224,7 +224,7 @@ def test_dynamic_ascii_uses_hinted_advances_and_preserves_pixels(
         ROOT
         / 'cntrl/fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-SemiBold.ttf'
     )
-    outline = Outline(source, autohint=True)
+    outline = Outline(source, hinting='auto')
     characters = ''.join(chr(c) for c in range(32, 127))
     data = assets.pack(
         outline,

@@ -11,7 +11,7 @@ def raster_data(
     path: Path, size: int, hinted: bool = False
 ) -> tuple[list[list[int]], list[list[int]], int]:
     if hinted:
-        raster = Outline(path, autohint=True)
+        raster = Outline(path, hinting='auto')
         glyphs = [
             raster.glyph(size, raster.face.get_char_index(c)) for c in range(32, 127)
         ]
