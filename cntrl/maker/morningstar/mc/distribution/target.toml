@@ -3,7 +3,7 @@ buttons = ["A", "B", "C", "D", "E", "F"]
 scan_interval = 0.001
 usb_block_size = 4096
 max_switches = 5
-ui_fonts = ["classic", "Arial", "ComicSansMS", "StillTime", "CourierPrime", "CourierPrimeBold", "AtkinsonNextSemiBold"]
+ui_fonts = ["classic", "Arial", "ComicSansMS", "StillTime", "CourierPrime", "CourierPrimeBold", "AtkinsonNextSemiBold", "Arimo", "ArimoBold", "TamzenBold7x13"]
 default_midi_output = "din"
 relay_outputs = []
 max_instruments = 65535
@@ -1581,6 +1581,9 @@ glyphs = "0e000e0d000d1100111b001b1900192000202000200900090d000d0e000e1900191800
 classic = "fonts/classic.cfont"
 Arial = "fonts/Arial.cfont"
 ComicSansMS = "fonts/ComicSansMS.cfont"
+Arimo = "fonts/Arimo.cfont"
+ArimoBold = "fonts/ArimoBold.cfont"
+TamzenBold7x13 = "fonts/TamzenBold7x13.cfont"
 
 [animation]
 width = 160

@@ -1,7 +1,7 @@
 format = 1
 controller = "mc6-pro"
-source_commit = "a4b9616b9cff066960fc5db2b0ecb9be4b38d8a7"
-inputs_sha256 = "89be0ec59d63a044145660643bc079d3ba6103da62ca14f051e0bf0fb296997b"
+source_commit = "aa6f0c5faa40f152d8889309780f23cf11173bc9"
+inputs_sha256 = "2b2599fea85ef4e73b891c3df2421e33528fb51de025ba781ebe8d0d55be4520"
 application = "application.bin"
 application_origin = 1611661312
 application_entry = 1611665408
@@ -18,14 +18,19 @@ url = "https://github.com/Morningstar-Engineering/MC6-PRO-MIDI-Controller/releas
 sha256 = "228d73e768fad383bc205c8fc1ef52f3a49de08c754aca11d4a069ca1aab9fc8"
 
 [files]
-"application.bin" = "5f2cb3e7ee1833dda2ef07141f3f00452b4065cc235f206c5106fbd3b89444a8"
-"compiler-options.toml" = "a8fe42b9a1a0617dc2874748864513c31807d6d2b83b08f0e6879092f9ff6f92"
+"application.bin" = "ed79d5244d5a39d5dfae84f2c0e5825781336a2b565f92d9cd08f274ecdf261d"
+"compiler-options.toml" = "d97fc337d5624dd6438a5834b8eb295b761c4f5cc0703b79a9c141ced67b7b25"
 "fonts/Arial.cfont" = "7bb33041c54275c714b19c49aedc89c3d61f6a151ae2f3e51c8b79d372e519ad"
+"fonts/Arimo.cfont" = "2f9ab3922ff6981ac27c79a964650cc246cf0a68d8710d5c237663960b01a34e"
+"fonts/ArimoBold.cfont" = "31497009d29c00cc76fb0067f336e4325729c06b6bfec0dafc74fa03b65fc986"
 "fonts/ComicSansMS.cfont" = "0e4a8c1cb1dcd1124e3d16a2bd36dc32cdf2bce14ff427f3f75a50930b7cd417"
+"fonts/TamzenBold7x13.cfont" = "9ced74bdadd4fa74f554614169ee158a1ac8b8758bab28b0f673d2c79c5e6ee1"
 "fonts/classic.cfont" = "7bb33041c54275c714b19c49aedc89c3d61f6a151ae2f3e51c8b79d372e519ad"
 "hook.bin" = "0cf5373b6b16d13a797beb1d12b3cb495ab860f1915c9359a2b2e43e5d3a1116"
-"starter/bundle.bin" = "117a326f73c1a6fb605ca7164a0073329b1980dd590bda62b6cefaf91b3530ce"
+"languages/en.bin" = "10804efacb2c1191389f337ef680aff5a5600d586e7c77cea23650f7fbe94e59"
+"languages/fr.bin" = "4f2d1ab437feda614d76c90a2f7d2cc4a11c61c3d41ea3da68908ede39fe4624"
+"starter/bundle.bin" = "668dc6e8ce6b69fce4a7651e6428c6f246db11b8b23ae539402d2fd37ef23a50"
 "starter/songs.bin" = "24cba0ba556a1d757c0068f76a6eef20f5766eecb09d1d69e448f1931d9ffb7e"
 "starter/starter.toml" = "4aac0368b9363793b1d175c0c6e9c5ec62f9b0075307c3d76b3f3f7f1998d831"
-"target.toml" = "3ef736ae477f10eb3f240cd064fc6e055b6e015b02d74f67c6e103c7e2de3acd"
+"target.toml" = "0ef120d37c1335ed1b81204fd4c706ebd00e16c185172335588b50e757b04066"
 "toolchain.toml" = "abbebdd69e2cb74208ef564c1336dbfe7817d5ca4f6ea126fca81a68b2629213"
