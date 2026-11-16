@@ -58,7 +58,8 @@ public:
             } else {
                 if (!services.midi_reserved() && (press || release) && services.looper(i, press)) continue;
                 if (i == controls_.next_page) {
-                    if (press) services.browse(false);
+                    if (press) services.browse(controls_.reverse_page < 64
+                        && (held & (uint64_t(1) << controls_.reverse_page)));
                     continue;
                 }
                 if (i == controls_.previous_page) {

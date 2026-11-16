@@ -428,6 +428,10 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     }
     const auto after_tools = primary.navigation(); std::vector<uint8_t> after_bytes(after_tools.encoded_size());
     assert(after_tools.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes && hardware.sent == before_tools);
+    click(5, 3600);
+    assert(host.pages_.index() == layout.region_page(tools, 1));
+    edge(3, true, 3700); click(5, 3800); edge(3, false, 3900);
+    assert(host.pages_.index() == layout.region_page(tools, 0));
     const auto select_tool = [&](cntrl::ui::Pages::Page type) {
         for (unsigned page = 0; page < layout.pages(); ++page) if (layout.page(page)[0] == unsigned(type)) {
             host.select_page(page); return;
