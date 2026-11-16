@@ -336,6 +336,22 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     assert(app.allocation.region(tools).count == 1);
     assert(app.allocation.controller_window(0,0) == 0 && app.allocation.controller_window(0,1) == 1);
     assert(app.allocation.controller_window(0,2) == -1);
+    // A utility page owns focus, but the pending patch on the left must still throb.
+    for (unsigned frames : {0u, 1u, 2u}) {
+        assert(renderer.prepare(frames, true)); renderer.finish(true);
+        host.set_target_pulse(4000, 64, 128, 0);
+        cntrl::Pane pane; pane.performance = true; pane.graphics.background = 0xffff;
+        pane.pending_patch = 0; host.show(0, pane); host.show(1, pane);
+        for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
+        assert(display.pixels[0].back() == 0xffff && display.pixels[1].back() == 0xffff);
+        host.apply_brightness(2000);
+        for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
+        assert(display.pixels[0].back() != 0xffff && display.pixels[0].back() != 0);
+        assert(display.pixels[1].back() == 0xffff);
+        pane.pending_patch = -1; host.show(0, pane);
+        for (unsigned i = 0; i < 1000; ++i) renderer.draw(i * 1000);
+        assert(display.pixels[0].back() == 0xffff);
+    }
     // Establish a sent patch and an undoable second send before changing tools.
     assert(primary.navigate(7)); for (unsigned i = 0; i < 100; ++i) app.tick(i);
     assert(primary.navigate(3) && primary.navigate(7));

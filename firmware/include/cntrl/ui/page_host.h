@@ -163,7 +163,7 @@ public:
             Pane view = content;
             unsigned region = application_.layout.page_region(application_.layout.controller_page(application_.rendering()));
             view.focused = region == application_.allocation.focus();
-            if (view.focused && unsigned(destination) == application_.allocation.region(region).first) { pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds()); }
+            if (application_.rendering() == application_.visible_index && unsigned(destination) == application_.allocation.region(region).first) { pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds()); }
             renderer_.show(unsigned(destination),view);
             return;
         }
@@ -562,10 +562,10 @@ public:
         if (!splash_visible_) draw();
     }
     void apply_brightness(uint32_t now) {
-        bool focused_patch = application_.focused_controller() && application_.allocation.region(application_.allocation.focus()).count;
-        unsigned screen = focused_patch ? application_.allocation.region(application_.allocation.focus()).first : 0;
+        const int patch_screen = application_.allocation.controller_window(application_.visible_index, 0);
+        unsigned screen = patch_screen >= 0 ? unsigned(patch_screen) : 0;
         renderer_.target_brightness(throb_.brightness(
-            focused_patch && !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128, application_.held),screen);
+            patch_screen >= 0 && !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128, application_.held),screen);
         uint8_t brightness = brightness_feedback_ ? feedback_brightness_ : platform_.animation_session().brightness(platform_.runtime.brightness, now);
         if (brightness != applied_brightness_) {
             platform_.display_brightness(brightness); applied_brightness_ = brightness;
