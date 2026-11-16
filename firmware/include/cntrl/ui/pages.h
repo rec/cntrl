@@ -670,7 +670,7 @@ private:
 #endif
         auto &l = pane.lines[index];
         utf8::copy(l.text, sizeof(l.text), text);
-        if (!preview && i18n::translated_ui) face = localized_face;
+        if (!preview && i18n::translated_ui && face != status_face) face = localized_face;
         l.graphics = pane.graphics; l.graphics.font = uint8_t(face);
         l.graphics.asset = preview ? 0 : i18n::identity(text);
         int left = 0, top = 0, width = 0, ink_height = 0;

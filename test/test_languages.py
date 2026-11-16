@@ -1,7 +1,9 @@
 """Language packs activate transactionally through the native runtime."""
 
+import struct
 import subprocess
 from pathlib import Path
+from zlib import crc32
 
 from scripts import native_tests
 
@@ -26,12 +28,20 @@ def test_language_switch_preserves_the_old_ui_until_assets_are_ready(
         ]
     )
     packs = root / 'cntrl/localization/packs'
+    legacy = bytearray((packs / 'fr.bin').read_bytes())
+    struct.pack_into('<H', legacy, 4, 1)
+    struct.pack_into('<I', legacy, 12, 0)
+    struct.pack_into('<I', legacy, 12, crc32(legacy))
+    legacy_path = tmp_path / 'legacy-fr.bin'
+    legacy_path.write_bytes(legacy)
     subprocess.run(
         [
             str(executable),
             str(tmp_path / 'device'),
             str(packs / 'fr.bin'),
             str(packs / 'en.bin'),
+            str(root / 'cntrl/fonts/bitmap_samples/TamzenBold7x13.cfont'),
+            str(legacy_path),
         ],
         check=True,
     )

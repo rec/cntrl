@@ -15,6 +15,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel
 
+from cntrl.fonts import status
 from cntrl.fonts.bdf import prepare
 
 
@@ -90,9 +91,7 @@ def main() -> None:
             filename = f'{family}-{Path(entry.file).stem}.cfont'
             (options.output / filename).write_bytes(prepare(data, entry.size))
             if family == 'Tamzen' and entry.file == 'bdf/Tamzen7x13b.bdf':
-                (options.output / 'TamzenBold7x13.cfont').write_bytes(
-                    prepare(data, entry.size, trim=True)
-                )
+                (options.output / 'TamzenBold7x13.cfont').write_bytes(status.prepare())
             samples.append(
                 dict(name=f'{family} {entry.label}', file=filename, size=entry.size)
             )

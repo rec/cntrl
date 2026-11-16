@@ -76,7 +76,7 @@ def inspect(data: bytes) -> Pack:
     catalogue = load()
     if (
         magic != b'CLNG'
-        or version != 1
+        or version != 2
         or length != len(data)
         or crc32(data[:12] + bytes(4) + data[16:]) != checksum
         or count != len(catalogue.messages)
@@ -174,7 +174,7 @@ def compile_catalogue(locale: str, font: bytes) -> bytes:
     font_offset = base + len(strings)
     header = HEADER.pack(
         b'CLNG',
-        1,
+        2,
         len(catalogue.messages),
         font_offset + len(font),
         0,

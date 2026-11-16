@@ -7,6 +7,7 @@ from zlib import crc32
 
 import pytest
 
+from cntrl.fonts import assets, status
 from cntrl.localization import catalogue
 from scripts import native_tests
 
@@ -40,7 +41,7 @@ def test_translation_can_reorder_typed_values() -> None:
     assert catalogue.fields(message.fr) == [('count', 'u'), ('name', 's')]
 
 
-@pytest.mark.parametrize('damage', ['crc', 'offset', 'schema', 'template'])
+@pytest.mark.parametrize('damage', ['crc', 'offset', 'schema', 'template', 'version'])
 def test_damaged_or_incompatible_pack_is_rejected(damage: str) -> None:
     packed = bytearray((ROOT / 'cntrl/localization/packs/fr.bin').read_bytes())
     catalogue.inspect(bytes(packed))
@@ -50,6 +51,8 @@ def test_damaged_or_incompatible_pack_is_rejected(damage: str) -> None:
         struct.pack_into('<I', packed, catalogue.HEADER.size, 0)
     elif damage == 'schema':
         struct.pack_into('<I', packed, 64, 0)
+    elif damage == 'version':
+        struct.pack_into('<H', packed, 4, 1)
     else:
         source = catalogue.load()
         index = list(source.messages).index('tempo_slot')
@@ -68,6 +71,12 @@ def test_shipped_packs_match_their_translation_sources(language: str) -> None:
     packed = catalogue.inspect(data)
     assert packed.language == language
     assert catalogue.compile_catalogue(language, data[packed.font_offset :]) == data
+    faces = assets.decode(data[packed.font_offset :], language, 0).sizes
+    if language == 'en':
+        assert 13 not in faces
+    else:
+        assert set(faces[13].characters) == {'’'}
+        assert not set(faces[13].characters) & set(status.BASE_CHARACTERS)
 
 
 def test_native_formatter_reorders_values_and_preserves_utf8(tmp_path: Path) -> None:

@@ -668,6 +668,18 @@ int main() {
     pages.viewport({200, 128, 0, 0});
     const auto status_view = pages.view(0,0,status);
     assert(std::strcmp(status_view.lines[6].text, "Starts:42  Git:000a1b2") == 0);
+    {
+        auto localized_settings = settings;
+        localized_settings.words[cntrl::PageSettings::status_font] = cntrl::ui::status_face;
+        pages.configure(localized_settings);
+        cntrl::ui::i18n::translated_ui = true;
+        const auto localized = pages.view(0, 0, status);
+        assert(localized.lines[0].graphics.font == cntrl::ui::localized_face);
+        for (unsigned i = 1; i <= 6; ++i)
+            assert(localized.lines[i].graphics.font == cntrl::ui::status_face);
+        cntrl::ui::i18n::translated_ui = false;
+        pages.configure(settings);
+    }
     for (unsigned i = 1; i <= 6; ++i) assert(!std::strstr(status_view.lines[i].text,": "));
     for (const auto *label : {"Starts:","Git:"}) {
         const auto &line = status_view.lines[6];

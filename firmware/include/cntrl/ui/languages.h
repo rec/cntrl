@@ -172,7 +172,7 @@ private:
     CNTRL_FLASH_ROUTINE(languages_header)
 #endif
     static bool valid_header(const uint8_t *p, unsigned length, const char *tag) {
-        return !std::memcmp(p, "CLNG", 4) && u16(p + 4) == 1 && u16(p + 6) == i18n::message_count
+        return !std::memcmp(p, "CLNG", 4) && u16(p + 4) == 2 && u16(p + 6) == i18n::message_count
             && u32(p + 8) == length && u32(p + 64) == i18n::catalogue_schema
             && std::memchr(p + 16, 0, 16) && !std::strcmp(reinterpret_cast<const char *>(p + 16), tag)
             && p[32] && std::memchr(p + 32, 0, 32)

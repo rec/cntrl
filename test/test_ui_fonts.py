@@ -10,7 +10,7 @@ import tomlkit
 from PIL import Image
 from pytest_regressions.file_regression import FileRegressionFixture
 
-from cntrl.fonts import assets, ui
+from cntrl.fonts import assets, status, ui
 from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.catalogue import bundled_sources
 from cntrl.fonts.outline import Glyph, Outline
@@ -70,6 +70,32 @@ def test_tamzen_utility_asset_preserves_native_pixels_and_advances() -> None:
         assert ink(actual) == ink(source)
         assert actual.advance == source.advance == 7
     assert utility.glyph(13, ord('H')).height == 7
+    assert set(utility.characters[13]) == set(map(ord, status.BASE_CHARACTERS))
+    assert len(utility.characters[13]) == 139
+    assert (directory / 'TamzenBold7x13.cfont').read_bytes() == status.prepare()
+
+
+def test_status_base_glyphs_render_at_the_native_baseline(
+    tmp_path: Path, file_regression: FileRegressionFixture
+) -> None:
+    font = BitmapRaster(ROOT / 'cntrl/fonts/bitmap_samples/TamzenBold7x13.cfont')
+    image = Image.new('1', (20 * 9, 7 * 16), 0)
+    for i, c in enumerate(status.BASE_CHARACTERS):
+        glyph = font.glyph(13, ord(c))
+        assert glyph.advance == 7
+        for y in range(glyph.height):
+            for x in range(glyph.width):
+                if glyph.pixels[y * ((glyph.width + 7) // 8) + x // 8] & (
+                    128 >> (x % 8)
+                ):
+                    image.putpixel(
+                        (i % 20 * 9 + x, i // 20 * 16 + 11 - glyph.top + y), 1
+                    )
+    path = tmp_path / 'status-base.png'
+    image.resize((image.width * 4, image.height * 4), Image.Resampling.NEAREST).save(
+        path
+    )
+    file_regression.check(path.read_bytes(), binary=True, extension='.png')
 
 
 def test_ui_font_header_compiles_and_renders_without_a_driver_sdk(
@@ -121,6 +147,9 @@ def test_french_runtime_glyphs_render_without_replacing_authored_fonts(
         hinting='native',
         characters=characters,
     )
+    # Exercise a language-only letter and punctuation alongside the base.
+    supplement = status.prepare('ã’')
+    data = assets.HEADER.pack(b'CFN2', 7) + data[8:] + supplement[8:]
     french.write_bytes(data)
     face = assets.decode(data, 'Français', crc32(data))
     assert set(face.sizes[12].characters) == set(characters)
@@ -143,7 +172,14 @@ def test_french_runtime_glyphs_render_without_replacing_authored_fonts(
     )
     rendered = tmp_path / 'french.ppm'
     native_tests.run_native(
-        [str(program), str(english), str(french), str(rendered)], check=True
+        [
+            str(program),
+            str(english),
+            str(french),
+            str(rendered),
+            str(ROOT / 'cntrl/fonts/bitmap_samples/TamzenBold7x13.cfont'),
+        ],
+        check=True,
     )
     screenshot = tmp_path / 'french.png'
     Image.open(rendered).save(screenshot)

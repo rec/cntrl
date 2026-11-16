@@ -1,8 +1,9 @@
 # Status font comparison samples
 
 These portable CFN2 assets preserve the upstream bitmap pixels and horizontal
-advances at their native sizes. They contain printable ASCII only. No outlines
-are rasterized, scaled, or automatically hinted for this comparison.
+advances at their native sizes. The comparison samples contain printable ASCII
+only. No outlines are rasterized, scaled, or automatically hinted for this
+comparison.
 
 The asset collection contains 35 samples. The emulator comparison selects only
 those whose visible capital `H` is seven pixels high, ignoring blank rows in
@@ -21,6 +22,13 @@ default plain zero; the other families retain their own zero designs.
 pinned Tamzen Bold 7x13 BDF. It removes only empty bitmap rows, preserving each
 glyph's baseline-relative pixels and character advance. The comparison samples
 retain their original cell padding.
+
+The selected utility asset has the [139-glyph base repertoire](../README.md).
+Its pinned upstream source is also vendored as `Tamzen7x13b.bdf`, with the
+additional drawings in `Tamzen7x13b-additions.bdf`. These files allow offline
+regeneration using `uv run --no-sync python -m cntrl.fonts.status`. The additions
+also contain the French-only curly apostrophe, which is excluded from the base
+and included in the active French language pack instead.
 
 Regenerate from the repository root with:
 

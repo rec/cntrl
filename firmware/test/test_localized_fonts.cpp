@@ -56,19 +56,35 @@ static void render(const cntrl::ui::Fonts &fonts, const char *path) {
 }
 
 int main(int argc, char **argv) {
-    assert(argc == 4);
+    assert(argc == 5);
     cntrl::memory_budget = 1024 * 1024;
-    auto english = read(argv[1]), french = read(argv[2]);
+    auto english = read(argv[1]), french = read(argv[2]), status = read(argv[4]);
     assert(cntrl::ui::AssetFonts::valid_localized(french.data(), unsigned(french.size())));
     assert(!cntrl::ui::AssetFonts::valid_localized(french.data(), unsigned(french.size() - 1)));
-    const cntrl::ui::EmbeddedFont embedded[] = {{0, english.data(), unsigned(english.size())}};
-    cntrl::ui::AssetFonts fonts(embedded, 1);
+    const cntrl::ui::EmbeddedFont embedded[] = {
+        {0, english.data(), unsigned(english.size())},
+        {cntrl::ui::status_face, status.data(), unsigned(status.size())},
+    };
+    cntrl::ui::AssetFonts fonts(embedded, 2);
+    cntrl::ui::Glyph actual, accent;
+    assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "Œāé", 2, actual));
+    assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "ã", 0, actual));
     const auto english_bounds = fonts.bounds(0, 12, 0, "Midi");
     assert(fonts.bounds(cntrl::ui::localized_face, 12, 0, "Midi").width == english_bounds.width);
     cntrl::ui::AssetFonts::localized(french.data(), unsigned(french.size()));
     assert(fonts.supports(cntrl::ui::localized_face, 12));
     assert(!fonts.supports(cntrl::ui::localized_face, 13));
-    cntrl::ui::Glyph actual, accent;
+    assert(fonts.bounds(cntrl::ui::status_face, 13, 0, "AãB’").width == 28);
+    for (unsigned i = 0; i < 4; ++i) {
+        assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "AãB’", i, actual));
+        assert(actual.x == int(i * 7) && actual.height && actual.width == 7);
+    }
+    assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "AãB’", 4, actual));
+    const auto mixed = fonts.bounds(cntrl::ui::status_face, 13, 0, "AãB’");
+    for (unsigned i = 0; i < 4; ++i) {
+        assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "AãB’", i, actual));
+        assert(actual.y >= mixed.top && actual.y + int(actual.height) <= mixed.top + mixed.height);
+    }
     assert(fonts.glyph(cntrl::ui::localized_face, 12, 0, "Café", 3, actual));
     assert(fonts.glyph(cntrl::ui::localized_face, 12, 0, "é", 0, accent));
     assert(actual.pixels == accent.pixels && actual.width == accent.width && actual.height == accent.height);
@@ -101,5 +117,7 @@ int main(int argc, char **argv) {
     assert(!cntrl::ui::utf8::next(invalid, code));
     render(fonts, argv[3]);
     cntrl::ui::AssetFonts::localized(nullptr, 0);
+    assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "ã", 0, actual));
+    assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "Œāé", 2, actual));
     assert(fonts.bounds(cntrl::ui::localized_face, 12, 0, "Midi").width == english_bounds.width);
 }

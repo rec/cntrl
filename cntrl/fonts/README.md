@@ -9,6 +9,26 @@ baseline positions and seven-pixel character advances are preserved.
 Headings retain Atkinson Hyperlegible Next SemiBold.
 See [the pinned sources and regeneration command](bitmap_samples/README.md).
 
+The shared base has exactly 139 glyphs: printable ASCII, the French repertoire,
+and `Ä Å Ñ Ö Ā Ō ä å ñ ö ā ō` for familiar English loanwords. Its trimmed CFN2
+asset is 4377 bytes: 1010 bitmap bytes, 3336 glyph/character index bytes and
+31 header/metric bytes. This is 1442 bytes larger than the previous ASCII asset.
+The bitmap drawings for `Œ œ Ÿ Ā ā Ō ō` supplement the pinned upstream source.
+
+Language packs carry only their additional Status characters, in a size-13
+CFN2 entry. Other pack entries are the localized Arimo face at its existing
+sizes. The renderer resolves each Status character against the base first,
+then the active pack, preserving the base's baseline and seven-pixel advances.
+French adds only `’`, a 50-byte supplement including its descriptor and index;
+English adds none. Preparing another language temporarily retains the old pack
+until validation succeeds; committing the switch releases the old supplement.
+
+Regenerate the Status base offline with:
+
+```sh
+uv run --no-sync python -m cntrl.fonts.status
+```
+
 ## Arimo UI trial
 
 `Arimo` and `ArimoBold` use the unmodified Regular and Bold TrueType outlines from

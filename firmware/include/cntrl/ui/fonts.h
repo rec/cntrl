@@ -4,6 +4,7 @@
 
 namespace cntrl::ui {
 inline constexpr unsigned localized_face = 253;
+inline constexpr unsigned status_face = 19, status_size = 13;
 struct Bounds { int left = 0, top = 0, width = 0, height = 0; };
 struct Glyph {
     const uint8_t *pixels = nullptr;
@@ -57,6 +58,7 @@ public:
     Bounds bounds(unsigned face, unsigned size, uint32_t asset, const char *text) const override {
         font_assets::View view; Bounds result;
         if (!find(face, size, asset, view)) return result;
+        if (face == status_face) return status_bounds(view, text);
         view.bounds(text, result.left, result.top, result.width, result.height, face == 255 ? 0 : view.entry.bytes[14]);
         return result;
     }
@@ -64,13 +66,70 @@ public:
     CNTRL_FLASH_ROUTINE(fonts_glyph)
 #endif
     bool glyph(unsigned face, unsigned size, uint32_t asset, const char *text, unsigned index, Glyph &result) const override {
-        font_assets::View view; return find(face, size, asset, view) && make_glyph(view, text, index, result, face == 255);
+        font_assets::View view;
+        if (!find(face, size, asset, view)) return false;
+        if (face == status_face) {
+            const char *cursor = text; uint32_t code; int x = 0;
+            for (unsigned i = 0; utf8::next(cursor, code); ++i) {
+                font_assets::View selected;
+                const auto *c = status_character(view, code, selected);
+                if (!c) return false;
+                if (i == index) {
+                    const auto *g = selected.data + cntrl::u16(c + 4) * 16;
+                    result.width = cntrl::u16(g + 4); result.height = cntrl::u16(g + 6);
+                    result.x = x + font_assets::signed16(g + 8);
+                    result.y = view.entry.bytes[14] - font_assets::signed16(g + 10);
+                    result.pixels = selected.data + selected.entry.index_length() + cntrl::u32(g + 12);
+                    return true;
+                }
+                x += font_assets::signed16(c + 6);
+            }
+            return false;
+        }
+        return make_glyph(view, text, index, result, face == 255);
     }
 private:
     const EmbeddedFont *fonts_;
     unsigned count_;
     inline static const uint8_t *localized_bytes_ = nullptr;
     inline static unsigned localized_length_ = 0;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_status_character)
+#endif
+    static const uint8_t *status_character(const font_assets::View &base, unsigned code, font_assets::View &selected) {
+        selected = base;
+        if (const auto *c = selected.character(code)) return c;
+        if (localized_bytes_ && find_size(localized_bytes_, localized_length_, status_size, selected))
+            return selected.character(code);
+        return nullptr;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_status_bounds)
+#endif
+    static Bounds status_bounds(const font_assets::View &base, const char *text) {
+        Bounds result; int cursor = 0, right = 0; bool first = true;
+        uint32_t code;
+        while (utf8::next(text, code)) {
+            font_assets::View selected;
+            const auto *c = status_character(base, code, selected);
+            if (!c) return result;
+            const auto *g = selected.data + cntrl::u16(c + 4) * 16;
+            const unsigned w = cntrl::u16(g + 4), h = cntrl::u16(g + 6);
+            const int top = base.entry.bytes[14] - font_assets::signed16(g + 10);
+            if (w && h) {
+                if (first) { result.top = top; result.height = int(h); first = false; }
+                else {
+                    const int bottom = std::max(result.top + result.height, top + int(h));
+                    result.top = std::min(result.top, top); result.height = bottom - result.top;
+                }
+            }
+            result.left = std::min(result.left, cursor + font_assets::signed16(g + 8));
+            right = std::max(right, cursor + font_assets::signed16(g + 8) + int(w));
+            cursor += font_assets::signed16(c + 6);
+        }
+        result.width = std::max(cursor, right) - result.left;
+        return result;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(fonts_find)
 #endif
@@ -82,7 +141,7 @@ private:
             return true;
         }
         if (face == localized_face) {
-            if (localized_bytes_) return find_size(localized_bytes_, localized_length_, size, view);
+            if (localized_bytes_) return size != status_size && find_size(localized_bytes_, localized_length_, size, view);
             face = 0;
         }
         for (unsigned f = 0; f < count_; ++f) {

@@ -1,4 +1,4 @@
-"""Preserve native BDF pixels and advances in portable ASCII UI assets."""
+"""Preserve native BDF pixels and advances in portable UI assets."""
 
 from ..patch_switcher.models import FontMetrics
 from .assets import pack
@@ -12,7 +12,7 @@ class Bdf:
             header, bitmap = block.split('\nBITMAP\n', 1)
             fields = {s.split()[0]: s.split()[1:] for s in header.splitlines()[1:]}
             code = int(fields['ENCODING'][0])
-            if not 32 <= code < 127:
+            if code < 32 or 127 <= code < 160:
                 continue
             width, height, left, bottom = map(int, fields['BBX'])
             pixels = bytes.fromhex(bitmap.split('ENDCHAR', 1)[0])
@@ -27,7 +27,7 @@ class Bdf:
                 pixels=pixels,
                 advance=int(fields['DWIDTH'][0]),
             )
-        if set(self.glyphs) != set(range(32, 127)):
+        if not set(range(32, 127)) <= self.glyphs.keys():
             missing = sorted(set(range(32, 127)) - self.glyphs.keys())
             raise ValueError(f'BDF UI font missing ASCII codes: {missing}')
 
@@ -54,8 +54,17 @@ class Bdf:
         )
 
 
-def prepare(data: bytes, size: int, *, trim: bool = False) -> bytes:
+def prepare(
+    data: bytes,
+    size: int,
+    *,
+    trim: bool = False,
+    characters: str = ''.join(chr(c) for c in range(32, 127)),
+) -> bytes:
     font = Bdf(data)
+    characters = ''.join(sorted(set(characters)))
+    if missing := sorted(set(map(ord, characters)) - font.glyphs.keys()):
+        raise ValueError(f'BDF UI font missing character codes: {missing}')
     if trim:
         for code, glyph in font.glyphs.items():
             stride = (glyph.width + 7) // 8
@@ -72,7 +81,6 @@ def prepare(data: bytes, size: int, *, trim: bool = False) -> bytes:
                     'pixels': glyph.pixels[first * stride : end * stride],
                 }
             )
-    characters = ''.join(chr(c) for c in range(32, 127))
     return pack(
         font,
         {size: list(characters)},

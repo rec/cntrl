@@ -26,6 +26,15 @@ can wrap, use a reviewed short caption or end with an ellipsis when necessary;
 it does not depend on scrolling or frame buffers. Built-in UI translation uses
 its own font, preserving the fonts chosen for authored performance text.
 
+The default Tamzen Status/body font stays selected in French. Its shared
+139-glyph base covers French and common accented English loanwords. Any Status
+characters outside that base come only from the active language pack; switching
+languages releases the previous supplement. English needs no supplement and
+French adds a curly apostrophe. Other localized UI fonts continue to use Arimo.
+This font split uses language-pack format version 2. Install the supplied packs
+with the updated firmware; version-1 packs are rejected. If an old pack remains
+on SD, the pedal uses its English recovery UI until the matching pack is installed.
+
 Language packs contain translations and their font glyphs and live under
 `/cntrl/languages` on SD. Only the active pack and a candidate being checked are
 loaded into RAM. Failed reads, invalid packs or insufficient memory leave the
