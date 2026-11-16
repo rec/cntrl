@@ -8,8 +8,10 @@ For a Status font comparison using the real setup contents:
 cntrl emulate simple-setup.toml --controller mc6-pro --compare-status-fonts
 ```
 
-Press or click F to cycle through 35 bitmap font samples. The Status heading
-shows the family, weight (`R` or `B`) and native pixel size. Each sample keeps
+Press or click F to cycle through bitmap font samples with seven-pixel visible
+capitals. Selection measures the lit rows in `H`, excluding blank bitmap padding.
+The Status heading shows the family, weight (`R` or `B`), native cell size and
+`(7px)` capital height. Each sample keeps
 its exact pixel size; overflowing text is cut off at the last complete glyph
 that fits, without shrinking or adding an ellipsis. After the last sample, F
 returns to the first. Other switches keep their normal actions. Open Status

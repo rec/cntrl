@@ -149,6 +149,11 @@ def test_status_font_samples_cycle_without_navigating_or_repeating_held_f(
                 session.compare_status_fonts()
             return
         session.compare_status_fonts()
+        assert all(s.capital_height == 7 for s in session.font_samples)
+        assert any(
+            b'\xff\xff' in session.frames[d.id][: d.width * 20 * 2]
+            for d in session.target.displays
+        )
         first = dict(session.frames)
         session.button('f', True)
         second = dict(session.frames)

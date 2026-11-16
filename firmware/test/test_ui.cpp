@@ -647,14 +647,40 @@ int main() {
     const auto title_x = (24 - std::strlen(view.lines[0].text) * 2) / 2;
     assert(display.pixels[view.lines[0].graphics.top * 24 + title_x] == 0xffff);
     pages.viewport({200, 128, 0, 0});
-    assert(std::strcmp(pages.view(0, 0, status).lines[6].text, "Starts: 42  Git:000a1b2") == 0);
+    const auto status_view = pages.view(0,0,status);
+    assert(std::strcmp(status_view.lines[6].text, "Starts:42  Git:000a1b2") == 0);
+    for (unsigned i = 1; i <= 6; ++i) assert(!std::strstr(status_view.lines[i].text,": "));
+    for (const auto *label : {"Starts:","Git:"}) {
+        const auto &line = status_view.lines[6];
+        const unsigned first = unsigned(std::strstr(line.text,label) - line.text);
+        for (unsigned i = first; i < first + std::strlen(label); ++i)
+            assert(!(line.color_mask & (uint64_t(1) << i)));
+        assert(line.color_mask & (uint64_t(1) << (first + std::strlen(label))));
+    }
+    {
+        auto tempo_settings = settings;
+        tempo_settings.words[cntrl::PageSettings::digits] = 3;
+        tempo_settings.words[cntrl::PageSettings::clocks_per_quarter] = 24;
+        tempo_settings.words[cntrl::PageSettings::clock_beats] = 1;
+        tempo_settings.words[cntrl::PageSettings::clock_timeout] = 2000;
+        tempo_settings.words[cntrl::PageSettings::tap_intervals] = 4;
+        tempo_settings.words[cntrl::PageSettings::minimum_taps] = 2;
+        tempo_settings.words[cntrl::PageSettings::reset_gap] = 2000;
+        cntrl::ui::Pages tempo(fonts,{200,128,0,0}); tempo.configure(tempo_settings);
+        auto tempo_layout = page_fixture(1,{unsigned(cntrl::ui::Pages::Page::tap),unsigned(cntrl::ui::Pages::Page::status)},{{0,1}});
+        tempo.layout({tempo_layout.data()}); tempo.tap(0); tempo.tap(1000); tempo.select(1);
+        for (unsigned i = 0; i <= 24; ++i) tempo.clock(0,i * 41667);
+        const auto text = tempo.view(1001,1000008,status);
+        assert(std::strcmp(text.lines[2].text,"Clock:60") == 0);
+        assert(std::strcmp(text.lines[3].text,"Tap:60") == 0);
+    }
     {
         cntrl::ui::Pages preview(fonts,{24,128,0,0});
         auto sample_settings = settings; sample_settings.words[cntrl::PageSettings::padding] = 2;
         preview.configure(sample_settings); preview.font_preview("UW ttyp0 R 6x12",12);
         const auto sample = preview.view(0,0,status);
-        assert(std::strcmp(sample.lines[0].text,"UW ttyp0 R 6x12") == 0);
-        assert(std::strcmp(sample.lines[6].text,"Starts: 42") == 0);
+        assert(std::strncmp(sample.lines[0].text,"UW ttyp",7) == 0);
+        assert(std::strcmp(sample.lines[6].text,"Starts:42 ") == 0);
         for (unsigned i = 1; i <= 6; ++i) {
             assert(sample.lines[i].graphics.font == 254);
             assert(sample.lines[i].graphics.size == 12);

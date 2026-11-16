@@ -426,12 +426,12 @@ public:
             pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
             char rows[5][64] = {};
-            std::snprintf(rows[0], sizeof(rows[0]), "Cycles: %u  Patches: %u", status.cycles, status.patches);
+            std::snprintf(rows[0], sizeof(rows[0]), "Cycles:%u  Patches:%u", status.cycles, status.patches);
             char tap[24], clock[24], tap_label[32];
             number_text(tap, sizeof(tap), tap_.period(), false, true);
             number_text(clock, sizeof(clock), clock_.period_us(), true, true);
-            std::snprintf(rows[1], sizeof(rows[1]), "Clock: %s", clock);
-            std::snprintf(rows[2], sizeof(rows[2]), "RAM: %lu/%luk %lu/%luk",
+            std::snprintf(rows[1], sizeof(rows[1]), "Clock:%s", clock + std::strspn(clock," "));
+            std::snprintf(rows[2], sizeof(rows[2]), "RAM:%lu/%luk %lu/%luk",
                 (unsigned long)(status.ram_used[0] / 1024),
                 (unsigned long)((status.ram_used[0] + status.ram_free[0]) / 1024),
                 (unsigned long)(status.ram_used[1] / 1024),
@@ -449,15 +449,15 @@ public:
                 (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
             if (status.starts_status == StartsStatus::ready) {
                 char number[21]; *std::to_chars(number, number + 20, status.starts).ptr = 0;
-                std::snprintf(rows[4], sizeof(rows[4]), "Starts: %s", number);
+                std::snprintf(rows[4], sizeof(rows[4]), "Starts:%s", number);
             }
-            else std::snprintf(rows[4], sizeof(rows[4]), "Starts: %s",
+            else std::snprintf(rows[4], sizeof(rows[4]), "Starts:%s",
                 status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : "error") : "--");
 #ifdef CNTRL_GIT_COMMIT
             const auto starts_length = std::strlen(rows[4]);
             std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", unsigned(CNTRL_GIT_COMMIT));
 #endif
-            std::snprintf(tap_label, sizeof(tap_label), "Tap: %s", tap);
+            std::snprintf(tap_label, sizeof(tap_label), "Tap:%s", tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
             const unsigned body_height = viewport_.height - pad - body_top;
             auto body = [&](unsigned maximum_size) {
@@ -483,7 +483,7 @@ public:
                 bool value = false;
                 for (unsigned j = 0; l.text[j]; ++j) {
                     if (l.text[j] == ':' && !value) { value = true; continue; }
-                    if ((i == 1 && l.text[j] == ' ' && l.text[j + 1] == ' ') || (i == 5 && l.text[j] == ' ')) value = false;
+                    if (((i == 1 || i == 6) && l.text[j] == ' ' && l.text[j + 1] == ' ') || (i == 5 && l.text[j] == ' ')) value = false;
                     if (value) l.color_mask |= uint64_t(1) << j;
                 }
             }
@@ -705,7 +705,11 @@ private:
         using R = cntrl::PageSettings;
         const unsigned pad = pane.graphics.pad;
         const unsigned height = std::min(unsigned(settings_[R::title_height]) * 3 / 2, (viewport_.height - 2 * pad) / 2);
-        line(pane, 0, text, pad + 2, height, settings_[R::title_font], true, "MIDI Cable Test");
+        const char *sample = "MIDI Cable Test";
+#ifdef CNTRL_EMULATOR
+        if (page_ == Page::status && preview_size_) sample = nullptr;
+#endif
+        line(pane, 0, text, pad + 2, height, settings_[R::title_font], true, sample);
         pane.heading_band = true;
         auto &header = pane.lines[0];
         header.graphics.line_height += 4;

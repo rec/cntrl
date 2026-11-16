@@ -4,7 +4,10 @@ These portable CFN2 assets preserve the upstream bitmap pixels and horizontal
 advances at their native sizes. They contain printable ASCII only. No outlines
 are rasterized, scaled, or automatically hinted for this comparison.
 
-The set contains 35 samples:
+The asset collection contains 35 samples. The emulator comparison selects only
+those whose visible capital `H` is seven pixels high, ignoring blank rows in
+the bitmap. Nominal cell sizes below include padding and descender space and
+can therefore be larger than seven pixels.
 
 * UW ttyp0: 6x11, 6x12, 7x13, 7x14, 8x15 and 8x16, regular and bold.
 * Cherry: 10, 11, 12 and 13 pixels high, regular and bold.
