@@ -11,7 +11,7 @@ import tomlkit
 from cntrl.fonts import assets, ui
 from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.catalogue import bundled_sources
-from cntrl.fonts.outline import Outline
+from cntrl.fonts.outline import Glyph, Outline
 from cntrl.patch_switcher import compiler, data_files, models, page_settings
 from scripts import native_tests
 
@@ -48,6 +48,26 @@ def test_ui_fonts_preserve_hinted_pixels_bearings_and_advances(
                 expected.top,
             )
             assert actual.advance == round(expected.advance)
+
+
+def test_tamzen_utility_asset_preserves_native_pixels_and_advances() -> None:
+    directory = ROOT / 'cntrl/fonts/bitmap_samples'
+    original = BitmapRaster(directory / 'Tamzen-Tamzen7x13b.cfont')
+    utility = BitmapRaster(directory / 'TamzenBold7x13.cfont')
+
+    def ink(glyph: Glyph) -> set[tuple[int, int]]:
+        return {
+            (x + glyph.left, y - glyph.top)
+            for y in range(glyph.height)
+            for x in range(glyph.width)
+            if glyph.pixels[y * ((glyph.width + 7) // 8) + x // 8] & (128 >> (x % 8))
+        }
+
+    for code in range(32, 127):
+        source, actual = original.glyph(13, code), utility.glyph(13, code)
+        assert ink(actual) == ink(source)
+        assert actual.advance == source.advance == 7
+    assert utility.glyph(13, ord('H')).height == 7
 
 
 def test_ui_font_header_compiles_and_renders_without_a_driver_sdk(
@@ -91,9 +111,16 @@ def test_page_fonts_use_declared_ui_families_without_entering_patch_picker() -> 
     assert not any(f.name == 'AtkinsonNextSemiBold' for f in target.fonts)
     show = models.Setup.model_validate({})
     words = page_settings.pack(show, target)
-    assert words[14] == 8 and words[15] == 16 and words[22] == 16
+    assert words[14] == 8 and words[15] == 19 and words[22] == 16
     restricted = target.model_copy(
-        update={'ui_fonts': ['classic', 'CourierPrime', 'AtkinsonNextSemiBold']}
+        update={
+            'ui_fonts': [
+                'classic',
+                'CourierPrime',
+                'AtkinsonNextSemiBold',
+                'TamzenBold7x13',
+            ]
+        }
     )
     show = models.Setup.model_validate({'page_settings': {'title_font': 'Arial'}})
     with pytest.raises(ValueError, match='title_font: unavailable font'):

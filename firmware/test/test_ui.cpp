@@ -673,6 +673,14 @@ int main() {
         const auto text = tempo.view(1001,1000008,status);
         assert(std::strcmp(text.lines[2].text,"Clock:60") == 0);
         assert(std::strcmp(text.lines[3].text,"Tap:60") == 0);
+        tempo_settings.words[cntrl::PageSettings::padding] = 2;
+        tempo_settings.words[cntrl::PageSettings::decimals] = 1;
+        cntrl::ui::Pages narrow(fonts,{48,128,0,0}); narrow.configure(tempo_settings);
+        narrow.layout({tempo_layout.data()}); narrow.tap(0); narrow.tap(500); narrow.select(1);
+        for (unsigned i = 0; i <= 24; ++i) narrow.clock(0,i * 20833);
+        const auto compact = narrow.view(501,499992,status);
+        assert(std::strcmp(compact.lines[2].text,"Clock:120.0") == 0);
+        assert(std::strcmp(compact.lines[3].text,"Tap:120.0") == 0);
     }
     {
         cntrl::ui::Pages preview(fonts,{24,128,0,0});

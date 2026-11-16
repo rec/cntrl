@@ -17,6 +17,11 @@ can therefore be larger than seven pixels.
 `R` and `B` in a sample label mean regular and bold. UW ttyp0 uses its upstream
 default plain zero; the other families retain their own zero designs.
 
+`TamzenBold7x13.cfont` is the selected utility font, generated from the same
+pinned Tamzen Bold 7x13 BDF. It removes only empty bitmap rows, preserving each
+glyph's baseline-relative pixels and character advance. The comparison samples
+retain their original cell padding.
+
 Regenerate from the repository root with:
 
 ```sh

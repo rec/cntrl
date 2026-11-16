@@ -17,7 +17,7 @@ hold_delay = 1.5
 repeat_interval = 1
 
 [page_settings]
-status_font = 'ArimoBold'
+status_font = 'TamzenBold7x13'
 refresh_interval = 1
 clocks_per_quarter = 24
 clock_timeout = 1

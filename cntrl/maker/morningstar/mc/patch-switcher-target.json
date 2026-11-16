@@ -4,6 +4,7 @@
     "runtime": 294912
   },
   "font_sources": {
+    "TamzenBold7x13": "../../../fonts/bitmap_samples/TamzenBold7x13.cfont",
     "Arimo": "font_sources/Arimo.cfont",
     "ArimoBold": "font_sources/ArimoBold.cfont",
     "classic": "font_sources/classic.cfont",
@@ -1098,6 +1099,7 @@
     "CourierPrimeBold",
     "AtkinsonNextSemiBold",
     "Arimo",
-    "ArimoBold"
+    "ArimoBold",
+    "TamzenBold7x13"
   ]
 }

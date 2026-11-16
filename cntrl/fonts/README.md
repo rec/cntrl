@@ -1,5 +1,14 @@
 # Additional font sources
 
+## Utility body font
+
+`TamzenBold7x13` is the default `page_settings.status_font`, shared by utility-page
+body text. It uses the native Tamzen Bold 7x13 bitmap, with seven-pixel visible
+capitals. Only blank bitmap rows are trimmed for compact layouts; pixels,
+baseline positions and seven-pixel character advances are preserved.
+Headings retain Atkinson Hyperlegible Next SemiBold.
+See [the pinned sources and regeneration command](bitmap_samples/README.md).
+
 ## Arimo UI trial
 
 `Arimo` and `ArimoBold` use the unmodified Regular and Bold TrueType outlines from
@@ -22,8 +31,8 @@ python -m cntrl.fonts.ui --name Arimo --hinting native --output cntrl/maker/morn
 python -m cntrl.fonts.ui --name ArimoBold --hinting native --output cntrl/maker/morningstar/mc/font_sources/ArimoBold.cfont
 ```
 
-`simple-setup.toml` selects Arimo Bold through the shared `page_settings.status_font`
-setting for the trial. Headings retain their existing font.
+Arimo Regular and Bold were previewed through the shared `page_settings.status_font`
+setting before selecting Tamzen Bold 7x13.
 In the emulator preview, native hinting improved readability compared with
 forced automatic hinting, but the small Status text was still unsatisfactory.
 

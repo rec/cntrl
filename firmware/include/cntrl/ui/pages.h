@@ -465,8 +465,11 @@ public:
                     const unsigned y = body_top + body_height * i / 5;
                     const unsigned height = body_height * (i + 1) / 5 - body_height * i / 5;
                     if (i == 1) {
+                        const auto inset = pane.graphics.pad;
+                        pane.graphics.pad = std::min<uint8_t>(inset,1);
                         line(pane, 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width / 2, maximum_size);
                         line(pane, 3, tap_label, y, height, settings_[R::status_font], false, nullptr, viewport_.width / 2, viewport_.width, maximum_size);
+                        pane.graphics.pad = inset;
                     } else {
                         line(pane, i == 0 ? 1 : i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size);
                     }
@@ -673,10 +676,11 @@ private:
         const char *fitting = sample ? sample : l.text;
         if (!right_edge) right_edge = viewport_.width;
         unsigned minimum_size = 0;
-        for (unsigned size = 8; size <= maximum_size && size <= 96; ++size)
+        for (unsigned size = 8; size <= 96; ++size)
             if (fonts_.supports(face, size)) { minimum_size = size; break; }
         for (unsigned size = 96; size >= 8; --size) {
-            if (size > maximum_size || !fonts_.supports(face, size)) continue;
+            // A fixed bitmap face may start above the requested size ceiling.
+            if ((size > maximum_size && size != minimum_size) || !fonts_.supports(face, size)) continue;
             auto measure = [&](const char *value) {
                 const auto b = fonts_.bounds(face, size, 0, value);
                 left = b.left; top = b.top; width = b.width; ink_height = b.height;

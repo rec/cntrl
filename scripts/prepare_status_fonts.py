@@ -89,6 +89,10 @@ def main() -> None:
             data = download(f'{base}/{entry.file}')
             filename = f'{family}-{Path(entry.file).stem}.cfont'
             (options.output / filename).write_bytes(prepare(data, entry.size))
+            if family == 'Tamzen' and entry.file == 'bdf/Tamzen7x13b.bdf':
+                (options.output / 'TamzenBold7x13.cfont').write_bytes(
+                    prepare(data, entry.size, trim=True)
+                )
             samples.append(
                 dict(name=f'{family} {entry.label}', file=filename, size=entry.size)
             )

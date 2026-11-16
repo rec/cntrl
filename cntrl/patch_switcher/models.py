@@ -1050,7 +1050,7 @@ class PageSettings(BaseModel, frozen=True):
         int, Field(strict=True, ge=0, le=64), units.unit_validator('pixel')
     ] = 2
     tempo_font: str = 'CourierPrime'
-    status_font: str = 'AtkinsonNextSemiBold'
+    status_font: str = 'TamzenBold7x13'
     title_font: str = 'AtkinsonNextSemiBold'
 
     @field_validator('tempo_font', 'status_font', 'title_font')

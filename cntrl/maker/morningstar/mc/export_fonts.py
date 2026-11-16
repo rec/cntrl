@@ -85,10 +85,17 @@ def export(options: FontExport) -> dict[str, str]:
         if name not in options.ui_fonts:
             continue
         embedded[name] = embedded_font(path, native, face)
-    for name in ('Arimo', 'ArimoBold'):
+    portable = {
+        'Arimo': Path(__file__).with_name('font_sources') / 'Arimo.cfont',
+        'ArimoBold': Path(__file__).with_name('font_sources') / 'ArimoBold.cfont',
+        'TamzenBold7x13': Path(__file__).parents[3]
+        / 'fonts'
+        / 'bitmap_samples'
+        / 'TamzenBold7x13.cfont',
+    }
+    for name, path in portable.items():
         if name in options.ui_fonts:
             resource = f'{name}.cfont'
-            path = Path(__file__).with_name('font_sources') / resource
             embedded[name] = path.read_bytes()
             (options.output / resource).write_bytes(embedded[name])
             sources[name] = resource

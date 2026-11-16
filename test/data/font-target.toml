@@ -1,4 +1,4 @@
-ui_fonts = ["classic", "CourierPrime", "AtkinsonNextSemiBold"]
+ui_fonts = ["classic", "CourierPrime", "AtkinsonNextSemiBold", "TamzenBold7x13"]
 memory = {capacity = 645776, runtime = 240000}
 functions = ["stock-firmware", "usb-hid-keyboard"]
 buttons = ["A", "B", "C", "D", "E", "F"]

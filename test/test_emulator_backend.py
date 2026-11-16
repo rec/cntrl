@@ -169,6 +169,35 @@ def test_status_font_samples_cycle_without_navigating_or_repeating_held_f(
         assert not any(e.kind == 'error' for e in session.messages)
 
 
+def test_fixed_size_utility_font_renders_monitor_body(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    sources = dict(files.target.font_sources)
+    sources['TamzenBold7x13'] = str(
+        Path(__file__).parents[1] / 'cntrl/fonts/bitmap_samples/TamzenBold7x13.cfont'
+    )
+    target = files.target.model_copy(update={'font_sources': sources})
+    setup = tmp_path / 'monitor.bin'
+    write_bundle(
+        {'monitor': {'pages': {'monitor': {'type': 'midi-monitor'}}}}, target, setup
+    )
+    with backend.Session(
+        files.layout, target, files.executable, tmp_path, setup
+    ) as session:
+        assert any(
+            sum(
+                session.frames[d.id][(y * d.width + x) * 2 : (y * d.width + x) * 2 + 2]
+                == b'\x00\x00'
+                for y in range(22, 110)
+                for x in range(4, d.width - 4)
+            )
+            > 20
+            for d in target.displays
+        )
+        assert not any(e.kind == 'error' for e in session.messages)
+
+
 def test_native_build_reuses_the_compiled_executable(
     backend_files: BackendFiles,
 ) -> None:

@@ -18,6 +18,7 @@ UI_FONTS = {
     'AtkinsonNextSemiBold': 16,
     'Arimo': 17,
     'ArimoBold': 18,
+    'TamzenBold7x13': 19,
 }
 OUTLINE_SOURCES = {
     'Arimo': 'arimo/Arimo-Regular.ttf',

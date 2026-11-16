@@ -54,8 +54,24 @@ class Bdf:
         )
 
 
-def prepare(data: bytes, size: int) -> bytes:
+def prepare(data: bytes, size: int, *, trim: bool = False) -> bytes:
     font = Bdf(data)
+    if trim:
+        for code, glyph in font.glyphs.items():
+            stride = (glyph.width + 7) // 8
+            rows = [
+                y
+                for y in range(glyph.height)
+                if any(glyph.pixels[y * stride : (y + 1) * stride])
+            ]
+            first, end = (rows[0], rows[-1] + 1) if rows else (0, 0)
+            font.glyphs[code] = glyph.model_copy(
+                update={
+                    'height': end - first,
+                    'top': glyph.top - first if rows else 0,
+                    'pixels': glyph.pixels[first * stride : end * stride],
+                }
+            )
     characters = ''.join(chr(c) for c in range(32, 127))
     return pack(
         font,
