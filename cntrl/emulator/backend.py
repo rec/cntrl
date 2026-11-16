@@ -21,6 +21,7 @@ from ..firmware.build_info import commit_id
 from ..firmware.capabilities import header
 from ..fonts.catalogue import UI_FONTS
 from ..patch_switcher.models import Target
+from . import font_comparison
 from .layout import EmulatorLayout
 from .replay import Event
 
@@ -157,6 +158,9 @@ class Session:
         self.events: list[Event] = []
         self.failed = False
         self.held: set[str] = set()
+        self.font_samples: list[font_comparison.FontSample] = []
+        self.font_sample_index = 0
+        self.font_sample_button = ''
         self.messages: list[OutputEvent] = []
         self.memory_usage: dict[str, int] = {}
         self.frames = {d.id: bytes(d.width * d.height * 2) for d in target.displays}
@@ -391,11 +395,19 @@ class Session:
     def button(self, control_id: str, pressed: bool) -> None:
         if control_id not in self.target.buttons:
             raise ValueError(f'unknown button: {control_id}')
+        was_held = control_id in self.held
         if pressed:
             self.held.add(control_id)
         else:
             self.held.discard(control_id)
-        self.request(bytes([2, self.target.buttons.index(control_id), pressed]))
+        if self.font_samples and control_id == self.font_sample_button:
+            if pressed and not was_held:
+                self.font_sample_index = (self.font_sample_index + 1) % len(
+                    self.font_samples
+                )
+                self.preview_font()
+        else:
+            self.request(bytes([2, self.target.buttons.index(control_id), pressed]))
         self.events.append(
             Event(
                 at=self.time_us / 1000000,
@@ -403,6 +415,26 @@ class Session:
                 target=control_id,
                 value=int(pressed),
             )
+        )
+
+    def compare_status_fonts(self) -> None:
+        button = next(
+            (c.id for c in self.controller.controls if c.name.upper() == 'F'), None
+        )
+        if button is None:
+            raise ValueError('Status font comparison requires a switch labelled F')
+        self.font_sample_button = button
+        self.font_samples = font_comparison.load()
+        self.font_sample_index = 0
+        self.preview_font()
+
+    def preview_font(self) -> None:
+        sample = self.font_samples[self.font_sample_index]
+        label = sample.name.encode('ascii')
+        self.request(
+            bytes([13, sample.size, len(label)])
+            + label
+            + (font_comparison.DIRECTORY / sample.file).read_bytes()
         )
 
     def release_all(self) -> None:

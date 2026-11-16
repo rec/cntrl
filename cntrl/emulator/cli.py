@@ -37,6 +37,10 @@ class Emulate(BaseModel, frozen=True):
     source_root: Path = Field(default_factory=Path.cwd)
     scenario: Path | None = None
     output: Path | None = None
+    compare_status_fonts: bool = Field(
+        default=False,
+        description='Preview native-size Status fonts; F cycles samples',
+    )
     interactive: bool = Field(
         default=False,
         description='Open the window after replaying the optional startup scenario',
@@ -174,6 +178,8 @@ def emulate(
                 copyfile(asset, destination)
     executable = build(target, storage / '.emulator-build', command.source_root)
     with Session(layout, target, executable, storage, setup) as session:
+        if command.compare_status_fonts:
+            session.compare_status_fonts()
         if command.scenario is not None:
             Scenario.load(command.scenario).run(session)
             save(session, command.output or storage / 'replay-output')

@@ -39,6 +39,7 @@ public:
 private:
     std::vector<std::vector<uint8_t>> data_;
     std::vector<ui::EmbeddedFont> faces_;
+public:
     static bool valid(const std::vector<uint8_t> &bytes) {
         if (std::memcmp(bytes.data(), "CFN2", 4)) return false;
         const unsigned count = cntrl::u32(bytes.data() + 4);
@@ -54,5 +55,31 @@ private:
         }
         return offset == bytes.size();
     }
+};
+
+// A comparison sample occupies an emulator-only identity, outside setup fonts.
+class PreviewFonts final : public ui::Fonts {
+public:
+    explicit PreviewFonts(const ui::Fonts &base) : base_(base), preview_(&face_,1) {}
+    void load(const uint8_t *data,unsigned length) {
+        std::vector<uint8_t> bytes(data,data + length);
+        if (bytes.size() < 8 || !FontFiles::valid(bytes)) throw std::runtime_error("invalid preview font");
+        bytes_ = std::move(bytes); face_ = {254,bytes_.data(),unsigned(bytes_.size())};
+    }
+    bool supports(unsigned face,unsigned size,uint32_t asset = 0) const override {
+        return provider(face).supports(face,size,asset);
+    }
+    ui::Bounds bounds(unsigned face,unsigned size,uint32_t asset,const char *text) const override {
+        return provider(face).bounds(face,size,asset,text);
+    }
+    bool glyph(unsigned face,unsigned size,uint32_t asset,const char *text,unsigned index,ui::Glyph &result) const override {
+        return provider(face).glyph(face,size,asset,text,index,result);
+    }
+private:
+    const ui::Fonts &base_;
+    std::vector<uint8_t> bytes_;
+    ui::EmbeddedFont face_{};
+    ui::AssetFonts preview_;
+    const ui::Fonts &provider(unsigned face) const { return face == 254 ? preview_ : base_; }
 };
 } // namespace cntrl::emulator

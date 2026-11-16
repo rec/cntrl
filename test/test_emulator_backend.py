@@ -133,6 +133,37 @@ def backend_files(
     )
 
 
+def test_status_font_samples_cycle_without_navigating_or_repeating_held_f(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    setup = tmp_path / 'comparison.bin'
+    write_bundle(
+        {'comparison': {'pages': {'status': {'type': 'status'}}}}, files.target, setup
+    )
+    with backend.Session(
+        files.layout, files.target, files.executable, tmp_path, setup
+    ) as session:
+        if 'f' not in files.target.buttons:
+            with pytest.raises(ValueError, match='switch labelled F'):
+                session.compare_status_fonts()
+            return
+        session.compare_status_fonts()
+        first = dict(session.frames)
+        session.button('f', True)
+        second = dict(session.frames)
+        assert second != first
+        session.button('f', True)
+        assert session.frames == second
+        session.button('f', False)
+        for _ in range(len(session.font_samples) - 1):
+            session.button('f', True)
+            session.button('f', False)
+        assert session.font_sample_index == 0
+        assert session.frames == first
+        assert not any(e.kind == 'error' for e in session.messages)
+
+
 def test_native_build_reuses_the_compiled_executable(
     backend_files: BackendFiles,
 ) -> None:

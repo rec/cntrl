@@ -1,0 +1,174 @@
+[[samples]]
+name = "UW ttyp0 R 6x12"
+file = "UW-ttyp0-12.cfont"
+size = 12
+
+[[samples]]
+name = "UW ttyp0 B 6x12"
+file = "UW-ttyp0-12b.cfont"
+size = 12
+
+[[samples]]
+name = "UW ttyp0 R 6x11"
+file = "UW-ttyp0-11.cfont"
+size = 11
+
+[[samples]]
+name = "UW ttyp0 B 6x11"
+file = "UW-ttyp0-11b.cfont"
+size = 11
+
+[[samples]]
+name = "UW ttyp0 R 7x13"
+file = "UW-ttyp0-13.cfont"
+size = 13
+
+[[samples]]
+name = "UW ttyp0 B 7x13"
+file = "UW-ttyp0-13b.cfont"
+size = 13
+
+[[samples]]
+name = "UW ttyp0 R 7x14"
+file = "UW-ttyp0-14.cfont"
+size = 14
+
+[[samples]]
+name = "UW ttyp0 B 7x14"
+file = "UW-ttyp0-14b.cfont"
+size = 14
+
+[[samples]]
+name = "UW ttyp0 R 8x15"
+file = "UW-ttyp0-15.cfont"
+size = 15
+
+[[samples]]
+name = "UW ttyp0 B 8x15"
+file = "UW-ttyp0-15b.cfont"
+size = 15
+
+[[samples]]
+name = "UW ttyp0 R 8x16"
+file = "UW-ttyp0-16.cfont"
+size = 16
+
+[[samples]]
+name = "UW ttyp0 B 8x16"
+file = "UW-ttyp0-16b.cfont"
+size = 16
+
+[[samples]]
+name = "Cherry R 10px"
+file = "Cherry-cherry-10-r.cfont"
+size = 10
+
+[[samples]]
+name = "Cherry B 10px"
+file = "Cherry-cherry-10-b.cfont"
+size = 10
+
+[[samples]]
+name = "Cherry R 11px"
+file = "Cherry-cherry-11-r.cfont"
+size = 11
+
+[[samples]]
+name = "Cherry B 11px"
+file = "Cherry-cherry-11-b.cfont"
+size = 11
+
+[[samples]]
+name = "Cherry R 12px"
+file = "Cherry-cherry-12-r.cfont"
+size = 12
+
+[[samples]]
+name = "Cherry B 12px"
+file = "Cherry-cherry-12-b.cfont"
+size = 12
+
+[[samples]]
+name = "Cherry R 13px"
+file = "Cherry-cherry-13-r.cfont"
+size = 13
+
+[[samples]]
+name = "Cherry B 13px"
+file = "Cherry-cherry-13-b.cfont"
+size = 13
+
+[[samples]]
+name = "Tamzen R 5x9"
+file = "Tamzen-Tamzen5x9r.cfont"
+size = 9
+
+[[samples]]
+name = "Tamzen B 5x9"
+file = "Tamzen-Tamzen5x9b.cfont"
+size = 9
+
+[[samples]]
+name = "Tamzen R 6x12"
+file = "Tamzen-Tamzen6x12r.cfont"
+size = 12
+
+[[samples]]
+name = "Tamzen B 6x12"
+file = "Tamzen-Tamzen6x12b.cfont"
+size = 12
+
+[[samples]]
+name = "Tamzen R 7x13"
+file = "Tamzen-Tamzen7x13r.cfont"
+size = 13
+
+[[samples]]
+name = "Tamzen B 7x13"
+file = "Tamzen-Tamzen7x13b.cfont"
+size = 13
+
+[[samples]]
+name = "Tamzen R 7x14"
+file = "Tamzen-Tamzen7x14r.cfont"
+size = 14
+
+[[samples]]
+name = "Tamzen B 7x14"
+file = "Tamzen-Tamzen7x14b.cfont"
+size = 14
+
+[[samples]]
+name = "Tamzen R 8x15"
+file = "Tamzen-Tamzen8x15r.cfont"
+size = 15
+
+[[samples]]
+name = "Tamzen B 8x15"
+file = "Tamzen-Tamzen8x15b.cfont"
+size = 15
+
+[[samples]]
+name = "Tamzen R 8x16"
+file = "Tamzen-Tamzen8x16r.cfont"
+size = 16
+
+[[samples]]
+name = "Tamzen B 8x16"
+file = "Tamzen-Tamzen8x16b.cfont"
+size = 16
+
+[[samples]]
+name = "Spleen 5x8"
+file = "Spleen-spleen-5x8.cfont"
+size = 8
+
+[[samples]]
+name = "Spleen 6x12"
+file = "Spleen-spleen-6x12.cfont"
+size = 12
+
+[[samples]]
+name = "Spleen 8x16"
+file = "Spleen-spleen-8x16.cfont"
+size = 16

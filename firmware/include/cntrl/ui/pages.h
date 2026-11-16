@@ -37,6 +37,12 @@ public:
     void outputs(cntrl::midi::Outputs value) { outputs_ = value; }
     void controls(Controls value) { controls_ = value; }
     void viewport(Viewport value) { viewport_ = value; }
+#ifdef CNTRL_EMULATOR
+    void font_preview(const char *label,unsigned size) {
+        std::snprintf(preview_label_,sizeof(preview_label_),"%s",label);
+        preview_size_ = size; revisit();
+    }
+#endif
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_window_view)
 #endif
@@ -313,6 +319,9 @@ public:
         const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
         const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::ports ? "TRS Ports" : page_ == Page::keyboard ? "Keyboard" : "Firmware";
+#ifdef CNTRL_EMULATOR
+        if (page_ == Page::status && preview_size_) heading = preview_label_;
+#endif
         page_heading(pane, heading);
         if (clock_page()) {
             const unsigned font = settings_[R::status_font];
@@ -652,6 +661,11 @@ private:
     }
     void line(cntrl::Pane &pane, unsigned index, const char *text, unsigned y, unsigned height,
               unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 0, unsigned maximum_size = 96) {
+        bool preview = false;
+#ifdef CNTRL_EMULATOR
+        preview = page_ == Page::status && preview_size_ && index > 0;
+        if (preview) { face = 254; maximum_size = preview_size_; }
+#endif
         auto &l = pane.lines[index];
         std::snprintf(l.text, sizeof(l.text), "%s", text);
         l.graphics = pane.graphics; l.graphics.font = uint8_t(face);
@@ -669,9 +683,12 @@ private:
             };
             measure(fitting);
             const int available = std::max(0, int(right_edge - left_edge) - 2 * int(pane.graphics.pad));
-            if ((width > available || ink_height > int(height)) && size > minimum_size) continue;
+            if (!preview && (width > available || ink_height > int(height)) && size > minimum_size) continue;
             l.graphics.size = uint8_t(size); l.graphics.line_height = uint16_t(height); l.graphics.top = 0;
-            if (!sample && width > available) {
+            if (preview && width > available) {
+                unsigned n = unsigned(std::strlen(l.text));
+                while (n && width > available) { l.text[--n] = 0; measure(l.text); }
+            } else if (!sample && width > available) {
                 unsigned n = unsigned(std::strlen(l.text));
                 while (n > 3 && width > available) {
                     --n; std::memcpy(l.text + n - 3, "...", 4); measure(l.text);
@@ -731,6 +748,10 @@ private:
     TextLine expression_layout_[5]; // Heading, three live values, and control hint.
     char expression_lines_[3][40] = {};
     cntrl::PageSettings settings_;
+#ifdef CNTRL_EMULATOR
+    char preview_label_[48] = {};
+    unsigned preview_size_ = 0;
+#endif
     cntrl::TapTempo tap_;
     cntrl::ClockTempo clock_;
     Page page_ = Page::status;

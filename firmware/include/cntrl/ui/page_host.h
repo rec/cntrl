@@ -33,6 +33,13 @@ public:
     }
     void looper_files(midi::MidiFiles &files, midi::Sink &sink) { looper_files_ = &files; looper_sink_ = &sink; pages_.looper = &files.looper; }
     void arpeggiator(midi::MidiArpeggiator &engine) { pages_.arpeggiator = &engine; }
+#ifdef CNTRL_EMULATOR
+    void font_preview(const char *label,unsigned size) {
+        pages_.font_preview(label,size);
+        for (auto &view : application_.views) view.dirty = true;
+        renderer_.invalidate();
+    }
+#endif
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_action)
 #endif

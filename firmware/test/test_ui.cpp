@@ -1,4 +1,5 @@
 #define CNTRL_GIT_COMMIT 0x000a1b2
+#define CNTRL_EMULATOR 1
 #include <cntrl/ui/renderer.h>
 #include <cntrl/ui/pages.h>
 #include <cntrl/ui/page_host.h>
@@ -647,6 +648,18 @@ int main() {
     assert(display.pixels[view.lines[0].graphics.top * 24 + title_x] == 0xffff);
     pages.viewport({200, 128, 0, 0});
     assert(std::strcmp(pages.view(0, 0, status).lines[6].text, "Starts: 42  Git:000a1b2") == 0);
+    {
+        cntrl::ui::Pages preview(fonts,{24,128,0,0});
+        auto sample_settings = settings; sample_settings.words[cntrl::PageSettings::padding] = 2;
+        preview.configure(sample_settings); preview.font_preview("UW ttyp0 R 6x12",12);
+        const auto sample = preview.view(0,0,status);
+        assert(std::strcmp(sample.lines[0].text,"UW ttyp0 R 6x12") == 0);
+        assert(std::strcmp(sample.lines[6].text,"Starts: 42") == 0);
+        for (unsigned i = 1; i <= 6; ++i) {
+            assert(sample.lines[i].graphics.font == 254);
+            assert(sample.lines[i].graphics.size == 12);
+        }
+    }
     uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0};
     layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::clock_tempo);
     layout[12 + 3 * 32 + 33] = 1;

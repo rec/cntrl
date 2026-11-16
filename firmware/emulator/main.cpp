@@ -1,4 +1,5 @@
 #define CNTRL_SWITCHES 1
+#define CNTRL_EMULATOR 1
 #define CNTRL_PANIC 0
 #define CNTRL_CABLE_TEST 0
 #define CNTRL_ORIGINAL_FIRMWARE 0
@@ -341,8 +342,8 @@ struct Actions {
 
 class Session {
 public:
-    Session(const char *directory,const char *setup,const ui::Fonts &fonts,bool replace_setup)
-        : filesystem(std::filesystem::u8path(directory)), movie_reader(filesystem), movie_writer(filesystem), movie_storage(filesystem,movie_reader,movie_writer),
+    Session(const char *directory,const char *setup,PreviewFonts &fonts,bool replace_setup)
+        : preview_fonts(fonts), filesystem(std::filesystem::u8path(directory)), movie_reader(filesystem), movie_writer(filesystem), movie_storage(filesystem,movie_reader,movie_writer),
           movie_assets(movie_storage,board), movie_output(display), movie_player(movie_assets,movie_output), movie_session(movie_assets,movie_player),
           reader(filesystem), writer(filesystem), history(filesystem),
           card(filesystem,reader,writer,history), storage(card,board), sources(storage.setups()), font_reader(filesystem), font_writer(filesystem), font_storage(filesystem,font_reader,font_writer), primary(board,board,board,Switches::capacity),
@@ -382,6 +383,7 @@ public:
         primary.executor().cancel(); song_sources.executor.cancel(); switches.close();
     }
     Board board;
+    PreviewFonts &preview_fonts;
     host::FileSystem filesystem;
     Display display;
     host::File movie_reader,movie_writer;
@@ -622,6 +624,12 @@ void Session::command(const std::vector<uint8_t> &bytes) {
         std::vector<uint8_t> result{5};
         integer(result,memory_used,4); integer(result,memory_peak,4); integer(result,memory_failures,4); frame(result);
     }
+    else if (p[0] == 13 && length > 3 && p[1] >= 8 && p[1] <= 96 && p[2] > 0 && p[2] < 48 && length > 3u + p[2]) {
+        const std::string label(bytes.begin() + 3,bytes.begin() + 3 + p[2]);
+        preview_fonts.load(p + 3 + p[2],length - 3 - p[2]);
+        if (!preview_fonts.supports(254,p[1])) throw std::runtime_error("preview font lacks native size");
+        host.font_preview(label.c_str(),p[1]); settle();
+    }
     else throw std::runtime_error("unsupported or malformed emulator command");
 }
 } // namespace cntrl::emulator
@@ -636,7 +644,8 @@ int main(int argc,char **argv) {
             throw std::runtime_error("usage: emulator SESSION_DIR COMPILED_SETUP REPLACE_SETUP FONT_ID FONT_FILE [...]");
         cntrl::memory_budget = 32u * 1024 * 1024;
         cntrl::emulator::FontFiles fonts(argc - 4,argv + 4);
-        cntrl::emulator::Session session(argv[1],argv[2],*fonts.fonts,argv[3][0] == '1'); cntrl::emulator::ack();
+        cntrl::emulator::PreviewFonts preview(*fonts.fonts);
+        cntrl::emulator::Session session(argv[1],argv[2],preview,argv[3][0] == '1'); cntrl::emulator::ack();
         std::vector<uint8_t> bytes;
         while (cntrl::emulator::request(bytes)) {
             try { session.command(bytes); }

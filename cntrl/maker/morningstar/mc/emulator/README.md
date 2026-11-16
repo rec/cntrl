@@ -2,6 +2,23 @@
 
 For the saved VL70 bank, see [the import workflow](importing.md).
 
+For a Status font comparison using the real setup contents:
+
+```sh
+cntrl emulate simple-setup.toml --controller mc6-pro --compare-status-fonts
+```
+
+Press or click F to cycle through 35 bitmap font samples. The Status heading
+shows the family, weight (`R` or `B`) and native pixel size. Each sample keeps
+its exact pixel size; overflowing text is cut off at the last complete glyph
+that fits, without shrinking or adding an ellipsis. After the last sample, F
+returns to the first. Other switches keep their normal actions. Open Status
+first if using a setup that starts on another page.
+
+This is an emulator-only preview. It changes neither the setup's saved font
+settings nor physical firmware. The comparison assets are bundled and load at
+runtime. See [font sources and regeneration](../../../../fonts/bitmap_samples/README.md).
+
 For three-screen Pong:
 
 ```sh
