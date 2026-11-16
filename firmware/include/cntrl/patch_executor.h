@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/messages.h"
 #include "document.h"
 #include "midi_file.h"
 #include "checked_array.h"
@@ -74,7 +75,7 @@ public:
     unsigned completed() const { return completed_; }
     uint32_t fingerprint() const { return fingerprint_; }
     const Document &document() const { return document_; }
-    const char *error() const { return error_; }
+    const char *error() const { return ui::i18n::text(error_); }
     bool reconstructing() const { return reconstructing_; }
     bool persistent() const { return persistent_; }
     void retain_counter_reservations() { retain_counters_ = true; }
@@ -95,7 +96,7 @@ public:
     bool start(const Document &document, unsigned node, bool persistent = false, bool selection = false) {
         if (!resume(document, node, 0, 0, persistent)) return false;
         if (selection && !outputs_.select_midi_streams(document_, root_))
-            return fail("Cannot select MIDI streams");
+            return fail(ui::i18n::Message::cannot_select_midi_streams);
         return true;
     }
     // Reconstruct the traversal without replaying completed effects. The caller
@@ -105,12 +106,12 @@ public:
         if (busy()) return false;
         Document source = document;
         reset(); document_ = source; root_ = node; persistent_ = persistent;
-        if (!outputs_.prepare_invocation(*this)) return fail("Patch memory unavailable");
+        if (!outputs_.prepare_invocation(*this)) return fail(ui::i18n::Message::patch_memory_unavailable);
         invocation_prepared_ = true;
         sources_.begin(); pinned_ = true;
         outputs_.validation_context(*this, true); validating_ = true;
         fingerprint_ = 2166136261u;
-        if (!document_.valid()) return fail("Invalid patch root");
+        if (!document_.valid()) return fail(ui::i18n::Message::invalid_patch_root);
         hash(checksum(document_.data(), document_.length()));
         if (!push(&document_, node)) return false;
         unsigned leaves = 0;
@@ -118,12 +119,12 @@ public:
             const uint8_t *n = next_leaf(true);
             if (!n) { if (status_ == Status::failed) return false; break; }
             if (persistent && (n[0] == 4 || n[0] == 10 || n[0] == 12 || n[0] == 17 || (n[0] == 3 && (n[4] == 9 || n[4] == 10 || n[4] == 13))))
-                return fail("Persistent switches cannot leave their context");
+                return fail(ui::i18n::Message::persistent_switch_context);
             if (!collect(n, *frames_[depth_ - 1].document)) return false;
             ++leaves; advance_leaf();
         }
         if (completed > leaves || (fingerprint && fingerprint != fingerprint_))
-            return fail("Patch sources changed since firmware visit");
+            return fail(ui::i18n::Message::patch_sources_changed);
         outputs_.validation_context(*this, false); validating_ = false;
         if (!push(&document_, root_)) return false;
         binding_cursor_ = 0;
@@ -132,7 +133,7 @@ public:
         reconstructing_ = completed != 0;
         if (reconstructing_) { outputs_.validation_context(*this, true); validating_ = true; }
         while (completed_ < completed) {
-            if (!next_leaf(true)) return fail("Invalid patch continuation");
+            if (!next_leaf(true)) return fail(ui::i18n::Message::invalid_patch_continuation);
             advance_leaf(); ++completed_;
         }
         if (validating_) { outputs_.validation_context(*this, false); validating_ = false; }
@@ -148,7 +149,7 @@ public:
             auto delivery = outputs_.midi_file_delivery(owner_);
             if (delivery == midi::Bridge::Delivery::pending) return;
             file_waiting_ = false;
-            if (delivery != midi::Bridge::Delivery::complete) { fail("MIDI file playback failed"); return; }
+            if (delivery != midi::Bridge::Delivery::complete) { fail(ui::i18n::Message::midi_file_playback_failed); return; }
             complete_leaf();
         }
         if (waiting_) {
@@ -174,21 +175,21 @@ public:
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
         case 18:
-            if (!hardware_.global_setting(p[0], u32(p + 2), p[1] != 0)) { fail("Global setting rejected"); return; }
+            if (!hardware_.global_setting(p[0], u32(p + 2), p[1] != 0)) { fail(ui::i18n::Message::global_setting_rejected); return; }
             started_ = true; complete_leaf(); return;
         case 17: {
             if (!leaving()) return;
             const auto &frame = frames_[depth_ - 1];
-            if (!outputs_.banked(*frame.document, frame.node)) { fail("Banked patch has no page in this setup"); return; }
+            if (!outputs_.banked(*frame.document, frame.node)) { fail(ui::i18n::Message::banked_patch_no_page); return; }
             started_ = true; complete_leaf(); return;
         }
         case 16: {
             const auto &document = *frames_[depth_ - 1].document;
             const uint8_t *definition = document.counter(u16(p));
             output = reinterpret_cast<const char *>(p + 2);
-            if (!outputs_.available(output)) { fail("MIDI output unavailable"); return; }
+            if (!outputs_.available(output)) { fail(ui::i18n::Message::midi_output_unavailable); return; }
             auto *state = hardware_.counters.state(u32(document.data() + document.core_offset() + 20), u16(p));
-            if (!state) { fail("Counter memory unavailable"); return; }
+            if (!state) { fail(ui::i18n::Message::counter_memory_unavailable); return; }
             int value = state->value + (p[35] == 1 ? 1 : p[35] == 2 ? -1 : 0);
             const int minimum = definition[99], maximum = definition[100];
             if (p[35]) value = p[36] ? (value > maximum ? minimum : value < minimum ? maximum : value) : std::clamp(value, minimum, maximum);
@@ -205,9 +206,9 @@ public:
             const auto &document = *frames_[depth_ - 1].document;
             const uint8_t *definition = document.counter(u16(p));
             output = reinterpret_cast<const char *>(definition + 64);
-            if (!outputs_.available(output)) { fail("MIDI output unavailable"); return; }
+            if (!outputs_.available(output)) { fail(ui::i18n::Message::midi_output_unavailable); return; }
             auto *state = hardware_.counters.state(u32(document.data() + document.core_offset() + 20), u16(p));
-            if (!state) { fail("Counter memory unavailable"); return; }
+            if (!state) { fail(ui::i18n::Message::counter_memory_unavailable); return; }
             auto step = Counters::next(*state, definition, p[2]);
             program_[0] = definition[96];
             length = definition[96] >> 4 == 12 ? 2 : 3;
@@ -220,24 +221,24 @@ public:
         }
         case 13:
             if (!outputs_.gate_midi_stream(reinterpret_cast<const char *>(p), p[72])) {
-                fail("Cannot change MIDI stream gate"); return;
+                fail(ui::i18n::Message::cannot_change_midi_gate); return;
             }
             started_ = true; complete_leaf(); return;
         case 12: {
             const auto &frame = frames_[depth_ - 1];
             if (!outputs_.select_midi_streams(*frame.document, frame.node)) {
-                fail("Cannot select MIDI streams"); return;
+                fail(ui::i18n::Message::cannot_select_midi_streams); return;
             }
             started_ = true; complete_leaf(); return;
         }
         case 11:
-            if (!hardware_.relays.execute(reinterpret_cast<const char *>(p), p[32], u32(p + 33), now)) { fail("Relay operation failed"); return; }
+            if (!hardware_.relays.execute(reinterpret_cast<const char *>(p), p[32], u32(p + 33), now)) { fail(ui::i18n::Message::relay_operation_failed); return; }
             started_ = true; complete_leaf(); return;
         case 10: {
             const auto &frame = frames_[depth_ - 1];
             auto delivery = outputs_.bind_controls(*frame.document, frame.node, *this);
             if (delivery == midi::Bridge::Delivery::pending) return;
-            if (delivery != midi::Bridge::Delivery::complete) { fail("Cannot install patch bindings"); return; }
+            if (delivery != midi::Bridge::Delivery::complete) { fail(ui::i18n::Message::cannot_install_patch_bindings); return; }
             started_ = true; complete_leaf(); return;
         }
         case 1: {
@@ -249,7 +250,7 @@ public:
         case 2: output = reinterpret_cast<const char *>(p); bytes = p + 32; length = u16(n + 2) - 32; break;
         case 3:
             if ((p[0] == 9 || p[0] == 10) && !leaving()) return;
-            if (!invoke(StatePatch{p[0], u32(p + 1)})) { fail("Application operation failed"); return; }
+            if (!invoke(StatePatch{p[0], u32(p + 1)})) { fail(ui::i18n::Message::application_operation_failed); return; }
             started_ = true;
             complete_leaf(); return;
         case 8: {
@@ -257,14 +258,14 @@ public:
             std::memcpy(settings.filename, p, 96); settings.outputs = u16(p + 96);
             settings.loops = u32(p + 98); settings.pre_delay = u32(p + 102); settings.post_delay = u32(p + 106);
             std::memcpy(&settings.speed, p + 110, 8); settings.reverse = p[118]; settings.transpose = int8_t(p[119]);
-            if (!outputs_.play_midi_file(owner_, settings)) { fail("Cannot open MIDI file"); return; }
+            if (!outputs_.play_midi_file(owner_, settings)) { fail(ui::i18n::Message::cannot_open_midi_file); return; }
             file_waiting_ = started_ = true; return;
         }
         case 9:
-            if (!outputs_.record_midi_file({u16(p), u16(p + 2)})) { fail("MIDI recording failed"); return; }
+            if (!outputs_.record_midi_file({u16(p), u16(p + 2)})) { fail(ui::i18n::Message::midi_recording_failed); return; }
             started_ = true; complete_leaf(); return;
         case 15:
-            if (!outputs_.looper_action(p[0],reinterpret_cast<const char *>(p + 1))) { fail("MIDI looper command rejected"); return; }
+            if (!outputs_.looper_action(p[0],reinterpret_cast<const char *>(p + 1))) { fail(ui::i18n::Message::looper_command_rejected); return; }
             started_ = true; complete_leaf(); return;
         case 7:
             delay_started_ = now; delay_duration_ = u32(p);
@@ -273,9 +274,9 @@ public:
         case 4:
             dispatch_stock(p[0]);
             return;
-        default: fail("Invalid executable patch"); return;
+        default: fail(ui::i18n::Message::invalid_executable_patch); return;
         }
-        if (!outputs_.available(output)) { fail("MIDI output unavailable"); return; }
+        if (!outputs_.available(output)) { fail(ui::i18n::Message::midi_output_unavailable); return; }
         if (outputs_.send_patch(owner_, output, bytes, length)) { waiting_ = started_ = true; waiting_output_ = output; }
     }
     void cancel() {
@@ -304,7 +305,7 @@ private:
     uint8_t program_[14] = {};
     uint8_t builtin_stock_ = 0;
     Status status_ = Status::idle;
-    const char *error_ = "";
+    ui::i18n::Message error_ = ui::i18n::Message(ui::i18n::message_count);
     const char *waiting_output_ = nullptr;
     bool file_waiting_ = false;
     bool waiting_ = false, pinned_ = false, persistent_ = false, validating_ = false, reconstructing_ = false, started_ = false;
@@ -314,7 +315,7 @@ private:
     bool retained_owner_ = false;
 
     void reset() {
-        cancel(); error_ = ""; root_ = completed_ = resource_count_ = binding_count_ = binding_cursor_ = 0; started_ = false; state_complete_ = true;
+        cancel(); error_ = ui::i18n::Message(ui::i18n::message_count); root_ = completed_ = resource_count_ = binding_count_ = binding_cursor_ = 0; started_ = false; state_complete_ = true;
     }
     void finish(Status status) {
         status_ = status;
@@ -329,21 +330,21 @@ private:
             counter_pins_.clear();
         }
     }
-    bool fail(const char *message) {
+    bool fail(ui::i18n::Message message) {
         if (file_waiting_) outputs_.cancel_midi_file(owner_);
         file_waiting_ = false;
         if (waiting_) outputs_.cancel_patch(owner_);
-        waiting_ = false; error_ = message; hardware_.error(message);
+        waiting_ = false; error_ = message; hardware_.error(ui::i18n::text(message));
         finish(Status::failed); return false;
     }
     bool push(const Document *document, unsigned node) {
-        if (node >= document->nodes()) return fail("Invalid patch node");
+        if (node >= document->nodes()) return fail(ui::i18n::Message::invalid_patch_node);
         for (unsigned i = 0; i < depth_; ++i)
             if (frames_[i].document->data() == document->data() && frames_[i].node == node)
-                return fail("Patch reference cycle");
+                return fail(ui::i18n::Message::patch_reference_cycle);
         if (depth_ == frames_.size()) {
-            if (!validating_ && !reconstructing_) return fail("Patch traversal was not prepared");
-            if (!frames_.resize(depth_ + 1)) return fail("Patch traversal memory exhausted");
+            if (!validating_ && !reconstructing_) return fail(ui::i18n::Message::patch_traversal_not_prepared);
+            if (!frames_.resize(depth_ + 1)) return fail(ui::i18n::Message::patch_traversal_memory_exhausted);
         }
         frames_[depth_++] = {document, node, 0};
         return true;
@@ -376,18 +377,18 @@ private:
                 ++f.child;
                 uint32_t revision = 0;
                 if (u16(p) != 65535 && document->names_signature() != sources_.names_signature()) {
-                    fail("Setup table changed; rebuild captured patches"); return nullptr;
+                    fail(ui::i18n::Message::setup_table_changed); return nullptr;
                 }
                 if (u16(p) != 65535 && !sources_.acquire(u16(p), document, revision)) {
-                    fail("Referenced setup is missing or invalid"); return nullptr;
+                    fail(ui::i18n::Message::referenced_setup_missing); return nullptr;
                 }
                 if (validating) hash(revision);
                 int node = document->named_patch(reinterpret_cast<const char *>(p + 2));
-                if (node < 0) { fail("Referenced patch does not exist"); return nullptr; }
+                if (node < 0) { fail(ui::i18n::Message::referenced_patch_missing); return nullptr; }
                 if (!push(document, unsigned(node))) return nullptr;
             } else {
                 if (validating && n[0] == 3 && !outputs_.preview_state(p[0], u32(p + 1))) {
-                    fail("Invalid application operation"); return nullptr;
+                    fail(ui::i18n::Message::invalid_application_operation); return nullptr;
                 }
                 return n;
             }
@@ -402,12 +403,12 @@ private:
     bool bind_selection(bool validating, unsigned operation, const Document *&document, unsigned &node) {
         if (!validating || reconstructing_) {
             if (binding_cursor_ >= binding_count_ || bindings_[binding_cursor_].operation != operation)
-                return fail("Invalid selected-patch binding");
+                return fail(ui::i18n::Message::invalid_selected_patch_binding);
             const Binding &binding = bindings_[binding_cursor_++];
             document = binding.document; node = binding.node; return true;
         }
-        if (!outputs_.selection(operation, document, node)) return fail("No patch selected for activation");
-        if (binding_count_ == bindings_.size() && !bindings_.resize(binding_count_ + 1)) return fail("Patch binding memory exhausted");
+        if (!outputs_.selection(operation, document, node)) return fail(ui::i18n::Message::no_patch_selected);
+        if (binding_count_ == bindings_.size() && !bindings_.resize(binding_count_ + 1)) return fail(ui::i18n::Message::patch_binding_memory_exhausted);
         bindings_[binding_count_++] = {document, node, operation};
         if (node != 65535) hash(checksum(document->data(), document->length()));
         return true;
@@ -417,7 +418,7 @@ private:
         // Count the visit before checkpointing, so a return resumes after it.
         ++completed_; if (depth_) --depth_;
         builtin_stock_ = 0; started_ = true; status_ = Status::suspended;
-        if (!outputs_.stock(buttons, *this)) fail("Firmware switch failed");
+        if (!outputs_.stock(buttons, *this)) fail(ui::i18n::Message::firmware_switch_failed);
     }
     bool resource(const char *output, unsigned channel, unsigned control, int expected = -1) {
         Resource value = {}; std::snprintf(value.output, sizeof(value.output), "%s", output); value.channel = channel; value.control = control;
@@ -425,7 +426,7 @@ private:
             if (resources_[i].channel == channel && resources_[i].control == control && !std::strcmp(resources_[i].output, output)) {
                 resources_[i].value = expected; return true;
             }
-        if (resource_count_ == resources_.size() && !resources_.resize(resource_count_ + 1)) return fail("Patch ownership memory exhausted");
+        if (resource_count_ == resources_.size() && !resources_.resize(resource_count_ + 1)) return fail(ui::i18n::Message::patch_ownership_memory_exhausted);
         value.value = expected; resources_[resource_count_++] = value; return true;
     }
     unsigned program_message(const uint8_t *instrument, const uint8_t *patch) {
@@ -438,7 +439,7 @@ private:
         cc(7, patch[5]); cc(10, patch[6]); return length;
     }
     bool prepare_message(const char *output, const uint8_t *bytes, unsigned length) {
-        return outputs_.prepare_message(*this, output, bytes, length) || fail("MIDI state memory unavailable");
+        return outputs_.prepare_message(*this, output, bytes, length) || fail(ui::i18n::Message::midi_state_memory_unavailable);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(patch_collect)
@@ -497,9 +498,9 @@ private:
             if (!counter_pins_.empty() && counter_pins_[0].generation != generation) counter_pins_.clear();
             auto *state = hardware_.counters.state(u32(document.data() + document.core_offset() + 20), u16(p));
             if (!state || std::none_of(counter_pins_.begin(), counter_pins_.end(), [state](const CounterPin &pin) { return pin.state == state; })) {
-                if (!counter_pins_.resize(counter_pins_.size() + 1)) return fail("Counter reservation memory unavailable");
+                if (!counter_pins_.resize(counter_pins_.size() + 1)) return fail(ui::i18n::Message::counter_reservation_memory_unavailable);
                 state = hardware_.counters.acquire(u32(document.data() + document.core_offset() + 20), u16(p), definition[98]);
-                if (!state) { counter_pins_.resize(counter_pins_.size() - 1); return fail("Counter memory unavailable"); }
+                if (!state) { counter_pins_.resize(counter_pins_.size() - 1); return fail(ui::i18n::Message::counter_memory_unavailable); }
                 counter_pins_.back() = {state, generation};
             }
             state_complete_ = false;
@@ -515,7 +516,7 @@ private:
     bool leaving() {
         auto delivery = outputs_.prepare_leave(*this);
         if (delivery == midi::Bridge::Delivery::pending) return false;
-        if (delivery != midi::Bridge::Delivery::complete) { fail("Switch cleanup has unknown remote state"); return false; }
+        if (delivery != midi::Bridge::Delivery::complete) { fail(ui::i18n::Message::switch_cleanup_unknown); return false; }
         return true;
     }
 };

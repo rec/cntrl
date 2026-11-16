@@ -1,5 +1,7 @@
 #pragma once
 #include <cntrl/hardware.h>
+#include "messages.h"
+#include "utf8.h"
 #include <cstdio>
 #include <cstring>
 
@@ -25,7 +27,8 @@ private:
     char bytes_[64] = {};
     void append(const char *label, const char *action, const char *separator) {
         const auto used = std::strlen(bytes_);
-        std::snprintf(bytes_ + used, sizeof(bytes_) - used, "%s%s %s", used ? separator : "", label, action);
+        i18n::format(bytes_ + used, unsigned(sizeof(bytes_) - used), i18n::Message::control_action,
+                     used ? separator : "", label, action);
     }
 };
 } // namespace cntrl::ui

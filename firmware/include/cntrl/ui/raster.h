@@ -34,6 +34,29 @@ public:
         return position(line, unsigned(std::strlen(line.text) - 1)).row + 1;
     }
     struct Position { int x = 0; unsigned row = 0; };
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(raster_localized_position)
+#endif
+    static Position localized_position(const Fonts &fonts, const TextLine &line, unsigned index, int width) {
+        Position result; Glyph current; int previous = 0; bool separated = true;
+        const char *cursor = line.text;
+        for (unsigned i = 0; i <= index; ++i) {
+            const char *start = cursor; uint32_t code;
+            if (!utf8::next(cursor, code) || !fonts.glyph(line.graphics.font, line.graphics.size, line.graphics.asset, line.text, i, current)) break;
+            result.x += i ? current.x - previous : 0; previous = current.x;
+            if (separated && code != ' ' && result.x > 0) {
+                const char *word = start; unsigned number = i; uint32_t character; Glyph next;
+                int right = current.x;
+                while (utf8::next(word, character) && character != ' '
+                    && fonts.glyph(line.graphics.font, line.graphics.size, line.graphics.asset, line.text, number++, next))
+                    right = std::max(right, next.x + int(next.width));
+                if (result.x + right - current.x > width) { result.x = 0; ++result.row; }
+            }
+            if (result.x + int(current.width) > width && result.x > 0) { result.x = 0; ++result.row; }
+            separated = code == ' ';
+        }
+        return result;
+    }
     bool intersects(const TextLine &line, int y) const {
         if (!line.text[0]) return false;
         const auto b = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);
@@ -43,6 +66,8 @@ public:
         return x < clip_.right && x + width > clip_.left && y + b.top < clip_.bottom && y + b.top + height > clip_.top;
     }
     Position position(const TextLine &line, unsigned index) const {
+        if (line.wrap && line.graphics.font == localized_face)
+            return localized_position(fonts_, line, index, int(viewport_.width) - int(settings_.pad) - int(line.x));
         Position result; Glyph current;
         int previous = 0;
         for (unsigned i = 0; i <= index; ++i) {

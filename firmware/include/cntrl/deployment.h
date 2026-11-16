@@ -14,7 +14,7 @@ CNTRL_FLASH_ROUTINE(persistent_path)
 #endif
 inline bool persistent_path(const char *path, char (&mapped)[224]) {
     bool mutable_store = false;
-    for (const char *store : {"/cntrl/setups", "/cntrl/history", "/cntrl/songs", "/cntrl/selection", "/cntrl/global"}) {
+    for (const char *store : {"/cntrl/setups", "/cntrl/history", "/cntrl/songs", "/cntrl/selection", "/cntrl/global", "/cntrl/languages"}) {
         const unsigned n = unsigned(std::strlen(store));
         if (!std::strncmp(path, store, n) && (!path[n] || path[n] == '/')) mutable_store = true;
     }

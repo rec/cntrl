@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/messages.h"
 #include <cntrl/usb_config.h>
 #include "controller.h"
 #include "setup_names.h"
@@ -59,8 +60,9 @@ public:
         uint64_t changed = target->values().known ^ values.known;
         for (unsigned i = 0; i < GlobalSettings::count; ++i)
             if (target->values().values[i] != values.values[i]) changed |= uint64_t(1) << i;
-        if (!changed) { last_error_[0] = 0; return true; }
-        if (busy() || dirty_ || ((changed & ~uint64_t(3)) && activity_busy)) return global_error("global-busy");
+        const bool language_changed = std::strcmp(target->values().language, values.language) != 0;
+        if (!changed && !language_changed) { last_error_[0] = 0; return true; }
+        if (changed && (busy() || dirty_ || ((changed & ~uint64_t(3)) && activity_busy))) return global_error("global-busy");
         if (changed & ~uint64_t(7)) {
             if (!validate_globals(values)) return false;
         }
@@ -76,11 +78,17 @@ public:
                 return global_error("global-resources");
             }
         }
+        if (language_changed && hardware_.prepare_language(values.language[0] ? values.language : "en") != LanguagePreparation::ready) {
+            if (reload) { target->values_ = previous; finish_resources(false); }
+            return global_error("global-language");
+        }
         if (!target->commit(values)) {
             if (reload) target->values_ = previous;
             if (reload) finish_resources(false);
+            if (language_changed) hardware_.finish_language(false);
             return global_error("global-write");
         }
+        if (language_changed) hardware_.finish_language(true);
         if (document_.valid()) {
             const uint64_t affected = changed & ~document_.explicit_settings();
             if (reload) {
@@ -668,7 +676,7 @@ private:
     }
     void empty() {
         document_ = Document(); controller_.deactivate();
-        if (!hardware_.relays.reset()) hardware_.error("Relay reset failed");
+        if (!hardware_.relays.reset()) hardware_.error(ui::i18n::text(ui::i18n::Message::relay_reset_failed));
         hardware_.configure_pages(document_);
         active_.clear();
         constexpr uint8_t off[4] = {}; hardware_.configure_trs_ports(off);
@@ -679,7 +687,8 @@ private:
         hardware_.set_animation_color_cycle(false);
         Pane view; view.lines[1].centered = true;
         view.lines[1].graphics.line_height = view.lines[1].graphics.size = 16;
-        std::snprintf(view.lines[1].text, sizeof(view.lines[1].text), "No setups");
+        std::snprintf(view.lines[1].text, sizeof(view.lines[1].text), "%s", ui::i18n::text(ui::i18n::Message::no_setups));
+        view.lines[1].graphics.font = 253;
         for (unsigned i = 0; i < 3; ++i) hardware_.show(i, view);
     }
     void activate(const Document &candidate) {
@@ -862,8 +871,8 @@ private:
         }
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
-            char response[96]; std::snprintf(response, sizeof(response), "CNTRL READY %u %u %08lx%s", document_version, document_.length(),
-                document_.valid() ? (unsigned long)checksum(active_.data, document_.length()) : 0ul, globals_ && globals_->ready() ? " device_globals=1" : "");
+            char response[112]; std::snprintf(response, sizeof(response), "CNTRL READY %u %u %08lx%s", document_version, document_.length(),
+                document_.valid() ? (unsigned long)checksum(active_.data, document_.length()) : 0ul, globals_ && globals_->ready() ? " device_globals=1 language=1" : "");
             replies_.reply(response); return;
         }
         if (!std::strcmp(line_, "CNTRL SETUP CURRENT")) {

@@ -1,4 +1,5 @@
 #pragma once
+#include "messages.h"
 #include <cntrl/controller.h>
 #include <cntrl/documents.h>
 #include <cntrl/module_menu.h>
@@ -173,9 +174,21 @@ public:
         }
         menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(), page_offset() + layout.regions() + layout.pages());
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_language_changed)
+#endif
+    void language_changed() {
+        tool_names_ = {i18n::text(i18n::Message::setups), i18n::text(i18n::Message::songs_and_setlists), i18n::text(i18n::Message::switches)};
+        if (names_.data) {
+            auto **names = reinterpret_cast<const char **>(names_.data);
+            for (unsigned i = 0; i < page_offset(); ++i) names[i] = tool_names_[i];
+        }
+        update_menu(); menu.refresh(); setups.refresh(); song_ui.refresh();
+        for (auto &view : views) { view.dirty = true; view.refreshed = 0; }
+    }
     void tick(uint32_t now) {
         if (stopping_setup_) return;
-        if (!hardware_.relays.tick(now)) hardware_.error("Relay pulse restore failed");
+        if (!hardware_.relays.tick(now)) hardware_.error(i18n::text(i18n::Message::relay_pulse_restore_failed));
         for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) { processing_index = i; at(i).tick(now); }
         processing_index = PageLayout::max_controllers;
         for (unsigned i = 0; i < banked_.size(); ++i) if (banked_[i]) { processing_banked_ = i; banked_[i]->tick(now, uint32_t(held)); }
@@ -298,7 +311,7 @@ public:
         return false;
     }
 private:
-    std::array<const char *, 3> tool_names_{"Setups", "Songs and setlists", "Switches"};
+    std::array<const char *, 3> tool_names_{i18n::text(i18n::Message::setups), i18n::text(i18n::Message::songs_and_setlists), i18n::text(i18n::Message::switches)};
     MemoryBuffer names_, pending_names_;
     CheckedArray<std::array<char,96>> labels_, pending_labels_;
     CheckedArray<Pages::ViewState> pending_views_;

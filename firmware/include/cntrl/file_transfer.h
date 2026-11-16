@@ -12,9 +12,10 @@ namespace cntrl {
 // a synced temporary file; a failed replacement retains/restores the old file.
 class FileTransfer {
 public:
+    enum class Namespace { midi, source, language };
     FileTransfer(files::FileSystem &filesystem, files::File &reader,
-                 files::File &writer, Replies &replies, bool source = false)
-        : filesystem_(filesystem), reader_(reader), writer_(writer), replies_(replies), source_(source) {}
+                 files::File &writer, Replies &replies, Namespace space = Namespace::midi)
+        : filesystem_(filesystem), reader_(reader), writer_(writer), replies_(replies), space_(space) {}
     bool busy() const { return uploading_; }
     void keepalive(uint32_t now) { last_ = now; }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -46,7 +47,7 @@ public:
     CNTRL_FLASH_ROUTINE(midi_file_command)
 #endif
     bool command(const char *line, uint32_t now) {
-        const char *prefix = source_ ? "CNTRL SOURCE " : "CNTRL MIDI_FILE ";
+        const char *prefix = space_ == Namespace::source ? "CNTRL SOURCE " : space_ == Namespace::language ? "CNTRL LANGUAGE " : "CNTRL MIDI_FILE ";
         const unsigned prefix_length = unsigned(std::strlen(prefix));
         if (std::strncmp(line, prefix, prefix_length)) return false;
         line += prefix_length;
@@ -69,11 +70,12 @@ public:
         if (std::sscanf(line, "BEGIN %190s %u %lx %u%n", hex, &length, &crc, &overwrite, &end) == 4
             && end && !line[end] && length && crc <= 0xfffffffful && overwrite <= 1) {
             cancel();
-            if (!decode(hex, name) || (source_ && (overwrite || !source_name(name)))) return error("midi-file-name");
+            if (!decode(hex, name) || (space_ == Namespace::source && (overwrite || !source_name(name)))
+                || (space_ == Namespace::language && (!language_name(name) || length > 262144))) return error("midi-file-name");
             paths(name);
             if (!filesystem_.available() || !recover()) return error("midi-file-storage");
             if (filesystem_.exists(path_) && !overwrite) return error("midi-file-exists");
-            const char *directory = source_ ? "/cntrl/source" : "/cntrl/midi";
+            const char *directory = folder();
             if (!filesystem_.exists(directory) && !filesystem_.make_directory(directory)) return error("midi-file-directory");
             if (!writer_.open(temporary_, files::Mode::truncate)) return error("midi-file-create");
             expected_ = length; received_ = 0; checksum_ = uint32_t(crc); crc_ = 0xffffffff; overwrite_ = overwrite; uploading_ = true;
@@ -86,12 +88,13 @@ public:
             if (std::sscanf(line, "READ %190s %u%n", hex, &length, &end) != 2 || !end || line[end]) return error("midi-file-command");
         }
         if (uploading_) return error("midi-file-busy");
-        if (!decode(hex, name) || (source_ && !source_name(name))) return error("midi-file-name");
+        if (!decode(hex, name) || (space_ == Namespace::source && !source_name(name))
+            || (space_ == Namespace::language && !language_name(name))) return error("midi-file-name");
         paths(name);
         if (!filesystem_.available() || !recover()) return error("midi-file-storage");
         if (!reader_.open(path_, files::Mode::read)) {
             if (filesystem_.exists(path_)) return error("midi-file-open");
-            replies_.reply(source_ ? "CNTRL SOURCE MISSING" : "CNTRL MIDI_FILE MISSING"); return true;
+            replies_.reply(space_ == Namespace::source ? "CNTRL SOURCE MISSING" : space_ == Namespace::language ? "CNTRL LANGUAGE MISSING" : "CNTRL MIDI_FILE MISSING"); return true;
         }
         if (size) {
             char response[64]; std::snprintf(response, sizeof(response), "%s%lu", prefix, (unsigned long)reader_.size());
@@ -109,7 +112,14 @@ private:
     char path_[128] = {}, temporary_[128] = {}, previous_[128] = {};
     uint32_t last_ = 0, expected_ = 0, received_ = 0, checksum_ = 0, crc_ = 0;
     bool uploading_ = false, overwrite_ = false;
-    bool source_;
+    Namespace space_;
+    const char *folder() const { return space_ == Namespace::source ? "/cntrl/source" : space_ == Namespace::language ? "/cntrl/languages" : "/cntrl/midi"; }
+    static bool language_name(const char *name) {
+        const unsigned length = unsigned(std::strlen(name));
+        if (length < 5 || length > 19 || std::strcmp(name + length - 4, ".bin")) return false;
+        char tag[16] = {}; std::memcpy(tag, name, length - 4);
+        return GlobalSettings::language_valid(tag);
+    }
     static bool source_name(const char *name) {
         if (std::strlen(name) != 68 || std::strcmp(name + 64, ".bin")) return false;
         for (unsigned i = 0; i < 64; ++i)
@@ -120,7 +130,7 @@ private:
     CNTRL_FLASH_ROUTINE(midi_file_error)
 #endif
     bool error(const char *message) {
-        cancel(); char response[80]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s%s", source_ ? "source-" : "midi-file-", message + 10); replies_.reply(response); return true;
+        cancel(); char response[80]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s%s", space_ == Namespace::source ? "source-" : space_ == Namespace::language ? "language-" : "midi-file-", message + 10); replies_.reply(response); return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_decode)
@@ -147,7 +157,7 @@ private:
     CNTRL_FLASH_ROUTINE(midi_file_paths)
 #endif
     void paths(const char *name) {
-        const char *directory = source_ ? "/cntrl/source" : "/cntrl/midi";
+        const char *directory = folder();
         std::snprintf(path_, sizeof(path_), "%s/%s", directory, name);
         std::snprintf(temporary_, sizeof(temporary_), "%s/.cntrl-upload-%s", directory, name);
         std::snprintf(previous_, sizeof(previous_), "%s/.cntrl-previous-%s", directory, name);

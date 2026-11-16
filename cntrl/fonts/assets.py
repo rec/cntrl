@@ -142,7 +142,10 @@ def decode(data: bytes, name: str, key: int) -> models.FontFace:
                 code, glyph, advance = CHARACTER.unpack_from(index, offset)
                 if (
                     glyph >= ng
-                    or not 32 <= code <= 126
+                    or code < 32
+                    or 127 <= code < 160
+                    or code > 0x10FFFF
+                    or 0xD800 <= code <= 0xDFFF
                     or chr(code) in characters
                     or advance < 0
                 ):

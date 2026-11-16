@@ -2,6 +2,7 @@
 #include "midi_bridge.h"
 #include "memory.h"
 #include "checked_list.h"
+#include "ui/messages.h"
 #include <algorithm>
 #include <cstdio>
 #include <new>
@@ -116,29 +117,33 @@ public:
         }
         decoders_.trim(8);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(monitor_describe)
+#endif
     static void describe(const Entry &e, char *text, unsigned size) {
-        if (e.flags & connected) { std::snprintf(text, size, "Connected / changed"); return; }
-        if (e.flags & disconnected) { std::snprintf(text, size, "Disconnected"); return; }
-        if (e.flags & raw) { std::snprintf(text, size, "%sraw / incomplete", e.flags & sysex ? "SysEx " : ""); return; }
+        using ui::i18n::Message;
+        if (e.flags & connected) { ui::utf8::copy(text, size, ui::i18n::text(Message::monitor_connected)); return; }
+        if (e.flags & disconnected) { ui::utf8::copy(text, size, ui::i18n::text(Message::monitor_disconnected)); return; }
+        if (e.flags & raw) { ui::i18n::format(text, size, Message::monitor_incomplete, e.flags & sysex ? "SysEx " : ""); return; }
         if (e.flags & sysex) {
-            std::snprintf(text, size, "SysEx %s%s %uB", e.flags & start ? "start" : "cont", e.flags & end ? "/end" : "", e.size); return;
+            ui::i18n::format(text, size, Message::monitor_sysex, ui::i18n::text(e.flags & start ? Message::monitor_sysex_start : Message::monitor_sysex_continue), e.flags & end ? ui::i18n::text(Message::monitor_sysex_end) : "", e.size); return;
         }
         const unsigned channel = (e.bytes[0] & 15) + 1;
         const unsigned a = e.bytes[1], b = e.bytes[2];
         switch (e.bytes[0] >> 4) {
-        case 8: std::snprintf(text, size, "Ch%u Off %u v%u", channel, a, b); return;
-        case 9: std::snprintf(text, size, "Ch%u On %u v%u", channel, a, b); return;
-        case 10: std::snprintf(text, size, "Ch%u Poly %u p%u", channel, a, b); return;
-        case 11: std::snprintf(text, size, "Ch%u CC %u = %u", channel, a, b); return;
-        case 12: std::snprintf(text, size, "Ch%u Program %u", channel, a + 1); return;
-        case 13: std::snprintf(text, size, "Ch%u Pressure %u", channel, a); return;
-        case 14: std::snprintf(text, size, "Ch%u Bend %d", channel, int(a | (b << 7)) - 8192); return;
+        case 8: ui::i18n::format(text, size, Message::monitor_note_off, channel, a, b); return;
+        case 9: ui::i18n::format(text, size, Message::monitor_note_on, channel, a, b); return;
+        case 10: ui::i18n::format(text, size, Message::monitor_poly_pressure, channel, a, b); return;
+        case 11: ui::i18n::format(text, size, Message::monitor_control, channel, a, b); return;
+        case 12: ui::i18n::format(text, size, Message::monitor_program, channel, a + 1); return;
+        case 13: ui::i18n::format(text, size, Message::monitor_pressure, channel, a); return;
+        case 14: ui::i18n::format(text, size, Message::monitor_bend, channel, int(a | (b << 7)) - 8192); return;
         }
-        const char *name = e.bytes[0] == 0xf1 ? "Time code" : e.bytes[0] == 0xf2 ? "Song position" : e.bytes[0] == 0xf3 ? "Song select"
-            : e.bytes[0] == 0xf6 ? "Tune request" : e.bytes[0] == 0xf8 ? "Clock" : e.bytes[0] == 0xfa ? "Start"
-            : e.bytes[0] == 0xfb ? "Continue" : e.bytes[0] == 0xfc ? "Stop" : e.bytes[0] == 0xfe ? "Active sensing" : "Reset";
-        if (e.size > 1) std::snprintf(text, size, "%s %u", name, e.size == 3 ? a | (b << 7) : a);
-        else std::snprintf(text, size, "%s", name);
+        const auto name = e.bytes[0] == 0xf1 ? Message::monitor_time_code : e.bytes[0] == 0xf2 ? Message::monitor_song_position : e.bytes[0] == 0xf3 ? Message::monitor_song_select
+            : e.bytes[0] == 0xf6 ? Message::monitor_tune_request : e.bytes[0] == 0xf8 ? Message::monitor_clock : e.bytes[0] == 0xfa ? Message::monitor_start
+            : e.bytes[0] == 0xfb ? Message::monitor_continue : e.bytes[0] == 0xfc ? Message::monitor_stop : e.bytes[0] == 0xfe ? Message::monitor_active_sensing : Message::monitor_reset;
+        if (e.size > 1) ui::i18n::format(text, size, Message::monitor_system_value, ui::i18n::text(name), e.size == 3 ? a | (b << 7) : a);
+        else ui::utf8::copy(text, size, ui::i18n::text(name));
     }
 private:
     struct Decoder { Parser parser; uint32_t last = 0; uint8_t bytes[3] = {}, used = 0, status = 0; bool diagnostic_traffic = false; };

@@ -11,7 +11,7 @@ import tyro
 from PIL import Image
 from pydantic import BaseModel, Field, model_validator
 
-from ..patch_switcher import data_files, device_globals
+from ..patch_switcher import data_files, device_globals, languages
 from ..patch_switcher.models import Target
 from ..patch_switcher.setup_bundle import SetupBundle
 from .backend import Session, bind_target, build
@@ -94,6 +94,16 @@ def prepare(
     target = load_target(target_path)
     bind_target(layout, target)
     storage.mkdir(parents=True, exist_ok=True)
+    language_folder = storage / 'cntrl' / 'languages'
+    language_folder.mkdir(parents=True, exist_ok=True)
+    recovered_languages = command.setup.resolve().parent / 'languages'
+    for tag in ('en', 'fr'):
+        destination = language_folder / f'{tag}.bin'
+        if not destination.exists():
+            recovered = recovered_languages / f'{tag}.bin'
+            destination.write_bytes(
+                recovered.read_bytes() if recovered.exists() else languages.pack(tag)
+            )
     overlay = command.setup.resolve().parent / 'device-globals.toml'
     global_folder = storage / 'cntrl' / 'global'
     if overlay.is_file() and not any(

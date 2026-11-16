@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/messages.h"
 #include "hardware.h"
 #include "midi_bridge.h"
 #include "midi_processing.h"
@@ -843,6 +844,10 @@ public:
             line.stippled = already_sent && p[1];
             if (p[0] == 22) std::snprintf(line.text, sizeof(line.text), "%s", state);
             else field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6), values);
+            if (ui::i18n::translated_ui && (p[0] == 17 || p[0] == 18 || p[0] == 22)) {
+                // Reserved localized UI face; authored labels retain their font.
+                line.graphics.font = 253; line.graphics.asset = 0;
+            }
         }
     }
     const uint8_t *instrument(unsigned i) const { return data_ + core_ + 76 + i * 68; }
@@ -1146,7 +1151,7 @@ private:
         case 4: if (p[7] == 255) return; std::snprintf(text, size, "%u", unsigned(p[7])); return;
         case 5: if (p[8] == 255) return; std::snprintf(text, size, "%d", int(p[8]) - 64); return;
         case 16: std::snprintf(text, size, "%u", unsigned(brightness())); return;
-        case 17: case 18: std::snprintf(text, size, "%s", (code == 17 ? splash() : is_midi_interface()) ? "true" : "false"); return;
+        case 17: case 18: std::snprintf(text, size, "%s", (code == 17 ? splash() : is_midi_interface()) ? ui::i18n::text(ui::i18n::Message::true_value) : ui::i18n::text(ui::i18n::Message::false_value)); return;
         case 19: std::snprintf(text, size, "%lu", (unsigned long)(screensaver_timeout() / 1000)); return;
         case 20: case 21: case 23: {
             unsigned ms = code == 20 ? navigation_hold_ms() : scroll_ms(code == 23);

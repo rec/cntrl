@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/messages.h"
 #include "switches.h"
 
 namespace cntrl {
@@ -95,7 +96,7 @@ public:
             page_ = (page_ + (pending_ == 16 ? 1 : pages - 1)) % pages;
         }
         pending_ = 0; leaving_ = false; waiting_ = 0;
-        if (!enter()) hardware_.error("Bank page memory unavailable");
+        if (!enter()) hardware_.error(ui::i18n::text(ui::i18n::Message::bank_page_memory_unavailable));
     }
 private:
     Hardware &hardware_;

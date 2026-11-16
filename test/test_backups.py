@@ -459,24 +459,24 @@ def test_failed_startup_still_allows_an_incomplete_raw_recovery_backup(
 
 @pytest.mark.parametrize('preserve', [False, True])
 @pytest.mark.parametrize('nonempty', [False, True])
-@pytest.mark.parametrize('global_overlay', [None, {}, {0: 88}])
+@pytest.mark.parametrize('overlay', [None, {}, {0: 88}])
 def test_restore_uploads_saved_data_before_restoring_selection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     preserve: bool,
     nonempty: bool,
-    global_overlay: dict[int, int] | None,
+    overlay: dict[int, int] | None,
 ) -> None:
     from contextlib import nullcontext
 
-    from cntrl.patch_switcher import models, songs, transport
+    from cntrl.patch_switcher import global_overlay, models, songs, transport
 
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
     )
-    if global_overlay is not None:
+    if overlay is not None:
         (tmp_path / 'device-globals.toml').write_bytes(
-            device_globals.dump(global_overlay)
+            device_globals.dump(global_overlay.Overlay(values=overlay))
         )
     sources: dict[str, object] = {
         'Aardvark': {
@@ -571,7 +571,7 @@ def test_restore_uploads_saved_data_before_restoring_selection(
             self.saved = b''
             self.selected = ''
             self.bundle = b''
-            self.globals: dict[int, int] | None = None
+            self.globals: global_overlay.Overlay | None = None
 
         def download_bundle(self) -> bytes:
             return current_bundle
@@ -629,10 +629,10 @@ def test_restore_uploads_saved_data_before_restoring_selection(
             assert bundle == self.bundle and songs == self.saved
             assert self.selected == 'Evening'
             assert self.globals == (
-                {0: 25} if global_overlay is None else global_overlay
+                global_overlay.Overlay(values={0: 25} if overlay is None else overlay)
             )
 
-        def replace_globals(self, values: dict[int, int]) -> None:
+        def replace_globals(self, values: global_overlay.Overlay) -> None:
             assert self.saved == library and self.selected == 'Evening'
             self.globals = values
 
@@ -641,7 +641,9 @@ def test_restore_uploads_saved_data_before_restoring_selection(
     def snapshot(directory: Path, port: Path, connection: object) -> None:
         directory.mkdir()
         (directory / 'backup-pending.toml').write_text('complete = false')
-        (directory / 'device-globals.toml').write_bytes(device_globals.dump({0: 25}))
+        (directory / 'device-globals.toml').write_bytes(
+            device_globals.dump(global_overlay.Overlay(values={0: 25}))
+        )
         backups.write_backup_manifest(directory, complete=True, raw_state=False)
 
     monkeypatch.setattr(backups, 'backup_pedal', snapshot)

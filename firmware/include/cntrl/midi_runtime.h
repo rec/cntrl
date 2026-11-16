@@ -114,7 +114,7 @@ public:
         auto &files = s.runtime_midi_files();
         auto &pages = s.runtime_pages();
         const bool topology_ready = prepare(s.midi_outputs());
-        if (!topology_ready && !topology_memory_failed_) { ++parser_memory_failures_; s.error("MIDI input memory unavailable"); }
+        if (!topology_ready && !topology_memory_failed_) { ++parser_memory_failures_; s.error(ui::i18n::text(ui::i18n::Message::midi_input_memory_unavailable)); }
         topology_memory_failed_ = !topology_ready;
         s.note_routing = &arpeggiator;
         bridge.host_connected(s.midi_host_connected());
@@ -284,7 +284,7 @@ public:
         if (monitor_.active()) monitor_.poll(s.microseconds());
         CNTRL_RUNTIME_TRACE(midi_files);
         files.recorder.poll(s.microseconds());
-        if (files.recorder.failed() && !recording_failed_) s.error("MIDI recording write failed");
+        if (files.recorder.failed() && !recording_failed_) s.error(ui::i18n::text(ui::i18n::Message::midi_recording_write_failed));
         recording_failed_ = files.recorder.failed();
         if (!files.looper.owned() && bridge.sysex_ready(files.player.sysex_outputs())) files.player.poll(s.microseconds(), s.clock_available(), s);
         files.loop_storage_poll();
@@ -360,7 +360,7 @@ private:
         auto &files = s.runtime_midi_files(); auto &pages = s.runtime_pages(); auto &bridge = s.midi_bridge();
         const unsigned available = s.clock_available();
         const bool stored = files.stop_setup(now);
-        if (files.recorder.failed() && !recording_failed_) s.error("MIDI recording write failed");
+        if (files.recorder.failed() && !recording_failed_) s.error(ui::i18n::text(ui::i18n::Message::midi_recording_write_failed));
         recording_failed_ = files.recorder.failed();
         pages.generator.poll(now, available, s);
         arpeggiator.poll(pages.arpeggiator_beat_position(now), available, 0, s, pages.clock_period());
@@ -389,7 +389,7 @@ private:
             && !streams_.recovery() && !streams_.lfo_status().stopping && !arpeggiator.cleaning()
             && !pages.generator.stopping() && s.output_idle();
         if (!stored || (!drained && !timed_out)) return;
-        if (timed_out && !drained) s.error("MIDI cleanup incomplete");
+        if (timed_out && !drained) s.error(ui::i18n::text(ui::i18n::Message::midi_cleanup_incomplete));
         streams_.discard_cleanup(); arpeggiator.discard_cleanup();
         files.player.discard_cleanup(); pages.generator.discard_cleanup();
         for (unsigned output = 0; output < 16; ++output) s.forget_output(output);

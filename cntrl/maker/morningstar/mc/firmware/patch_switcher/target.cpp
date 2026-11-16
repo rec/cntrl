@@ -1,15 +1,15 @@
 #include "target.h"
 #include "heap_trace.h"
 #include "qualification.h"
+// Capability declarations include shared UI headers, so placement comes first.
+#define CNTRL_FLASH_ROUTINE(name) __attribute__((section(".flashmem.cntrl_" #name), noinline))
+#define CNTRL_NOINLINE __attribute__((noinline))
 #include "target_capabilities.h"
 #if CNTRL_ORIGINAL_FIRMWARE
 #include "../boot_switch/selection.h"
 extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #endif
 #include <Arduino.h>
-// Inline shared routines need distinct sections alongside strong FLASHMEM functions.
-#define CNTRL_FLASH_ROUTINE(name) __attribute__((section(".flashmem.cntrl_" #name), noinline))
-#define CNTRL_NOINLINE __attribute__((noinline))
 #if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
 #define CNTRL_RUNTIME_TRACE(name) cntrl::device::qualification_phase(cntrl::device::QualificationPhase::name)
 #define CNTRL_RUNTIME_PACKET(route, packet) cntrl::device::qualification_packet(route, packet)
@@ -48,6 +48,7 @@ extern "C" char cntrl_memory_budget;
 #include <cntrl/usb_midi_forward.h>
 #include <cntrl/midi_runtime.h>
 #include <cntrl/module_menu.h>
+#include <cntrl/ui/languages.h>
 #if CNTRL_SWITCHES
 #include <cntrl/switches.h>
 #include <cntrl/auxiliary_switches.h>
@@ -94,6 +95,7 @@ ScrollTimingProbe scroll_timing;
 extern cntrl::Documents documents;
 extern cntrl::GlobalCommands global_commands;
 extern cntrl::GlobalSettings global_settings;
+extern cntrl::ui::Languages languages;
 extern cntrl::HistoryImport history_import;
 extern cntrl::SongsTransfer songs_transfer;
 extern cntrl::animation::Session splash_session;
@@ -414,7 +416,7 @@ public:
         trs_ports.configure(modes);
     }
     void begin() {
-        if (!bridge_.prepare() || !midi_runtime_.prepare(midi_outputs())) error("MIDI memory unavailable");
+        if (!bridge_.prepare() || !midi_runtime_.prepare(midi_outputs())) error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_midi_memory_unavailable));
         Serial1.begin(31250);
         Serial2.begin(31250);
         host.begin();
@@ -572,6 +574,14 @@ public:
     }
     bool global_setting(unsigned field, uint32_t value, bool clear) override { return global_commands.request(field, value, clear); }
     const cntrl::GlobalSettings::Values *global_values() const override { return &global_settings.values(); }
+    FLASHMEM cntrl::LanguagePreparation prepare_language(const char *tag) override { return languages.prepare(tag); }
+    void finish_language(bool commit) override;
+    bool request_language(const char *tag) override { return global_commands.request_language(tag); }
+    bool language_available(const char *tag) const override { return languages.available(tag); }
+    const char *current_language() const override { return languages.current(); }
+    FLASHMEM unsigned language_count() const override { return languages.count(); }
+    const char *language_tag(unsigned index) const override { return languages.tag(index); }
+    const char *language_name(unsigned index) const override { return languages.name(index); }
     FLASHMEM bool global_settings_busy() override {
         const auto loop = midi_files.looper.state();
         auto &streams = midi_runtime_.streams();
@@ -611,7 +621,7 @@ public:
 
 #endif
     void set_animation_color_cycle(bool enabled) override {
-        if (!splash_player.set_color_cycle(enabled)) error("Animation color memory unavailable");
+        if (!splash_player.set_color_cycle(enabled)) error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_animation_color_memory));
     }
     bool reply_ready() const override { return usb_session.reply_ready(); }
     void reply(const char *text) override {
@@ -631,7 +641,7 @@ public:
             else if (endpoint.transport == cntrl::midi::OutputTransport::usb_host) bridge_.discard_forwarded(endpoint.route);
     }
     void publish(const char *name) {
-        if (!cntrl::device::publish_hosted_midi(name)) error("USB MIDI descriptor failed");
+        if (!cntrl::device::publish_hosted_midi(name)) error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_usb_descriptor_failed));
     }
     void attach() { cntrl::device::attach_usb_device(); }
     void clear_device() {
@@ -654,7 +664,7 @@ public:
         const auto &setup = documents.document();
         bool enabled = setup.valid() && setup.forward_device_to_host() && setup.usb_device_midi() && setup.usb_host_midi();
         const auto *product = host_midi.product();
-        const char *name = product && product[0] ? reinterpret_cast<const char *>(product) : "USB MIDI";
+        const char *name = product && product[0] ? reinterpret_cast<const char *>(product) : "USB MIDI"; // i18n: preserve USB descriptor identity
         hosted_forward_.poll(enabled, bool(host_midi), host_midi.generation, name, millis(),
             documents.busy() || usb_session.active() || usb_session.output_pending(), *this);
     }
@@ -828,6 +838,7 @@ cntrl::Controller primary_controller(board, board, patch_sources, cntrl::Switche
 // Document bytes are allocated from RAM2's heap as needed.
 DMAMEM cntrl::Documents documents(setup_storage, board, primary_controller, board);
 cntrl::GlobalSettings global_settings(setup_filesystem);
+cntrl::ui::Languages languages(setup_filesystem);
 cntrl::GlobalCommands global_commands(global_settings, documents, board, board);
 cntrl::StoredPatchSources patch_sources(setup_storage.setups());
 cntrl::BundleTransfer bundle_transfer(setup_storage, documents, board, board);
@@ -840,6 +851,16 @@ cntrl::ui::SongSources song_sources(board, board, patch_sources, setup_storage.s
 DMAMEM cntrl::Songs songs(song_files, song_sources);
 DMAMEM cntrl::SongsTransfer songs_transfer(songs, board);
 cntrl::ui::Application application(board, documents, primary_controller, board, patch_sources, songs, song_sources, CNTRL_SWITCHES);
+FLASHMEM void Board::finish_language(bool commit) {
+    if (commit) ui_.invalidate_language();
+    languages.finish(commit);
+    if (commit) {
+        application.language_changed(); ui_.language_changed();
+#if CNTRL_SWITCHES
+        switches.language_changed();
+#endif
+    }
+}
 #if CNTRL_ORIGINAL_FIRMWARE
 cntrl::ui::FirmwareVisitRecord firmware_visit_record;
 cntrl::device::SdFile firmware_visit_file;
@@ -1002,7 +1023,9 @@ cntrl::device::SdFile counter_command_file, disk_speed_file, midi_asset_reader, 
 cntrl::DiskSpeedTransfer disk_speed_transfer(setup_filesystem, disk_speed_file, board);
 cntrl::FileTransfer midi_asset_transfer(setup_filesystem, midi_asset_reader, midi_asset_writer, board);
 cntrl::device::SdFile source_reader, source_writer;
-cntrl::FileTransfer source_transfer(setup_filesystem, source_reader, source_writer, board, true);
+cntrl::FileTransfer source_transfer(setup_filesystem, source_reader, source_writer, board, cntrl::FileTransfer::Namespace::source);
+cntrl::device::SdFile language_reader, language_writer;
+cntrl::FileTransfer language_transfer(setup_filesystem, language_reader, language_writer, board, cntrl::FileTransfer::Namespace::language);
 struct AssetServices {
     Board &hardware, &replies;
     cntrl::StartupCounter &counter;
@@ -1024,6 +1047,8 @@ cntrl::AssetCommands<AssetServices> asset_commands(asset_services);
 FLASHMEM bool reload_collection(bool initialize_empty = false) {
     global_commands.cancel();
     if (!global_settings.boot()) return false;
+    board.page_host().invalidate_language();
+    languages.boot(global_settings.values().language);
     documents.bind_globals(global_settings);
     patch_sources.release_all(); song_files.close();
     if (!setup_storage.boot() || !deployment.stores_complete(setup_storage.bundle_size() != 0, true)
@@ -1038,6 +1063,7 @@ FLASHMEM bool abort_deployment() {
     return true;
 }
 FLASHMEM bool asset_command(const char *line) {
+    if (language_transfer.command(line, millis())) return true;
     if (state_transfer.command(line, board)) return true;
     if (global_commands.command(line, deployment.pending())) return true;
     if (!std::strncmp(line, "CNTRL DEPLOY ", 13)) {
@@ -1098,7 +1124,10 @@ FLASHMEM bool asset_command(const char *line) {
     }
     return asset_commands.command(line, millis());
 }
-bool asset_data(cntrl::UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) { return asset_commands.data(kind, bytes, length, now); }
+bool asset_data(cntrl::UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) {
+    if (kind == cntrl::UsbKind::language) return language_transfer.data(bytes, length, now);
+    return asset_commands.data(kind, bytes, length, now);
+}
 DMAMEM cntrl::animation::Router serial_router(documents, splash_assets, splash_session, board, storage_info, midi_status, asset_command, midi_reset, asset_data, &board.text_messages());
 FLASHMEM bool midi_storage_idle() {
     return !documents.busy() && !history_import.busy() && !bundle_transfer.busy() && !disk_speed_transfer.busy()
@@ -1118,7 +1147,7 @@ FLASHMEM void initialize_target() {
 #endif
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     cntrl::device::initialize_heap_accounting(cntrl::memory_budget);
-    if (!auxiliary.prepare(board)) board.error("Auxiliary switch memory unavailable");
+    if (!auxiliary.prepare(board)) board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_auxiliary_memory));
     board.page_host().looper_files(midi_files,board);
     board.page_host().arpeggiator(board.arpeggiator());
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
@@ -1147,22 +1176,23 @@ FLASHMEM void initialize_target() {
     cntrl::device::initialize_heap_accounting(unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget)));
     randomSeed(Teensy3Clock.get() ^ ARM_DWT_CYCCNT);
     cntrl::device::heap_phase(cntrl::device::HeapPhase::setups);
-    if (card.ready && !deployment.boot()) { card.ready = false; board.error("Deployment recovery required"); }
+    if (card.ready && !deployment.boot()) { card.ready = false; board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_deployment_recovery)); }
     bool setup_valid = !card.ready || (setup_storage.boot()
         && deployment.stores_complete(setup_storage.bundle_size() != 0, true));
     if (!setup_valid) {
-        deployment.prepare_runtime(false); card.ready = false; board.error("Setup bundle invalid");
+        deployment.prepare_runtime(false); card.ready = false; board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_setup_bundle_invalid));
     }
     cntrl::device::heap_phase(cntrl::device::HeapPhase::documents);
-    if (card.ready && !global_settings.boot()) { card.ready = false; board.error("Global settings recovery required"); }
+    if (card.ready && !global_settings.boot()) { card.ready = false; board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_global_recovery)); }
+    languages.boot(global_settings.values().language);
     documents.bind_globals(global_settings);
     documents.boot();
     cntrl::device::heap_phase(cntrl::device::HeapPhase::songs);
     bool songs_valid = !card.ready || songs.boot(deployment.root() == 0);
-    if (!songs_valid) board.error("Song storage invalid");
+    if (!songs_valid) board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_song_storage_invalid));
     if (card.ready && !deployment.prepare_runtime(setup_valid && songs_valid
             && (!setup_storage.setups().total_setup_ram() || documents.document().valid()))) {
-        card.ready = false; board.error("Deployment recovery required");
+        card.ready = false; board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_deployment_recovery));
     }
     cntrl::device::heap_phase(cntrl::device::HeapPhase::runtime);
 }
@@ -1314,7 +1344,7 @@ public:
     }
     int serial_read() { return Serial.read(); }
     bool reply_ready() const { return board.reply_ready(); }
-    void cancel_listing() { storage_listing.cancel(); }
+    void cancel_listing() { storage_listing.cancel(); language_transfer.cancel(); global_commands.cancel(); }
     bool commands_allowed() const {
         if (midi_files.storage_busy()) return false;
 #if CNTRL_ORIGINAL_FIRMWARE
@@ -1325,7 +1355,14 @@ public:
     }
     bool expression_allowed() const { return !deployment.pending() && deployment.ready() && commands_allowed(); }
     void expression(uint32_t now) { CNTRL_RUNTIME_TRACE(expression); board.poll_expression(now); }
-    void navigation() { if (deployment.pending() || !deployment.ready()) return; CNTRL_RUNTIME_TRACE(navigation); if (!history_import.busy()) input_coordinator.finish(target_controls); global_commands.poll(application.patch_pending()); }
+    void navigation() {
+        if (usb_session.active()) language_transfer.keepalive(millis());
+        if (board.reply_ready()) language_transfer.poll(millis());
+        if (deployment.pending() || !deployment.ready()) { global_commands.poll(application.patch_pending()); return; }
+        CNTRL_RUNTIME_TRACE(navigation);
+        if (!history_import.busy()) input_coordinator.finish(target_controls);
+        global_commands.poll(application.patch_pending());
+    }
     void display(uint32_t now) { CNTRL_RUNTIME_TRACE(display); board.display(now, documents.busy() || application.feature_open(board) || application.patch_pending()); }
 };
 TargetRuntime target_runtime;

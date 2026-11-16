@@ -220,6 +220,30 @@ def backup_pedal(
         if ' starts=' in status:
             (directory / 'starts.toml').write_bytes(client.download_starts())
         backup_stored_assets(client, directory)
+        languages_valid = True
+        if 'language=1' in status.split():
+            report = storage_info.StorageInfo.model_validate(
+                tomlkit.parse((directory / 'storage.toml').read_text()).unwrap()
+            )
+            language_root = (persistent_prefix(status) or '/cntrl/') + 'languages'
+            for entry in report.entries:
+                stored = Path(entry.path)
+                if (
+                    entry.directory
+                    or stored.parent.as_posix() != language_root
+                    or stored.suffix != '.bin'
+                ):
+                    continue
+                tag = stored.stem
+                try:
+                    pack = client.download_language(tag)
+                except (OSError, ValueError) as error:
+                    languages_valid = False
+                    print(f'Retained raw language pack {tag}: {error}', file=sys.stderr)
+                    continue
+                path = directory / 'raw/cntrl/languages' / f'{tag}.bin'
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(pack)
         raw_state = backup_state(client, directory, status)
         if recovery_only:
             write_backup_manifest(directory, complete=False, raw_state=raw_state)
@@ -239,7 +263,7 @@ def backup_pedal(
         )
         fonts = {int(p.stem, 16) for p in (setups / 'fonts').glob('*.cfont')}
         movies = {int(p.stem, 16) for p in (setups / 'movies').glob('*.cnsa')}
-        healthy = all(e.valid for e in entries)
+        healthy = languages_valid and all(e.valid for e in entries)
         snapshots: list[dict[str, object]] = []
         source_snapshots: set[str] = set()
         current_entries = {e.name: e for e in entries}
@@ -353,13 +377,7 @@ def write_backup_manifest(directory: Path, *, complete: bool, raw_state: bool) -
     (directory / 'backup-pending.toml').unlink()
 
 
-def backup_state(client: transport.SetupClient, directory: Path, status: str) -> bool:
-    """Preserve active journals and adapter files without interpreting their bytes."""
-    if ' persistent_format=' not in status:
-        return False
-    report = storage_info.StorageInfo.model_validate(
-        tomlkit.parse((directory / 'storage.toml').read_text()).unwrap()
-    )
+def persistent_prefix(status: str) -> str:
     root = next(
         (
             int(v.split('=', 1)[1])
@@ -368,7 +386,17 @@ def backup_state(client: transport.SetupClient, directory: Path, status: str) ->
         ),
         0,
     )
-    prefix = f'/cntrl/generations/{root:08x}/' if root else ''
+    return f'/cntrl/generations/{root:08x}/' if root else ''
+
+
+def backup_state(client: transport.SetupClient, directory: Path, status: str) -> bool:
+    """Preserve active journals and adapter files without interpreting their bytes."""
+    if ' persistent_format=' not in status:
+        return False
+    report = storage_info.StorageInfo.model_validate(
+        tomlkit.parse((directory / 'storage.toml').read_text()).unwrap()
+    )
+    prefix = persistent_prefix(status)
     for entry in report.entries:
         if entry.directory or not entry.path.startswith('/cntrl/'):
             continue
@@ -380,7 +408,7 @@ def backup_state(client: transport.SetupClient, directory: Path, status: str) ->
             else entry.path
         )
         if (
-            root
+            prefix
             and logical == entry.path
             and logical.startswith(
                 (
@@ -388,11 +416,18 @@ def backup_state(client: transport.SetupClient, directory: Path, status: str) ->
                     '/cntrl/history/',
                     '/cntrl/songs/',
                     '/cntrl/selection/',
+                    '/cntrl/global/',
+                    '/cntrl/languages/',
                 )
             )
         ):
             continue
         asset = Path(logical)
+        if (
+            asset.parent.as_posix() == '/cntrl/languages'
+            and (directory / 'raw/cntrl/languages' / asset.name).exists()
+        ):
+            continue
         if (
             asset.parent.as_posix() == '/cntrl/fonts'
             and (directory / 'setups/fonts' / asset.name).exists()
@@ -589,6 +624,22 @@ def restore_setups(
         current_overlay = recovery / 'device-globals.toml'
         if restored_globals is None and current_overlay.exists():
             restored_globals = device_globals.load(current_overlay.read_bytes())
+        language_packs = {
+            p.stem: p.read_bytes()
+            for p in sorted((recovery / 'raw/cntrl/languages').glob('*.bin'))
+        }
+        language_packs.update(
+            {
+                p.stem: p.read_bytes()
+                for p in sorted((directory / 'raw/cntrl/languages').glob('*.bin'))
+            }
+        )
+        if language_packs:
+            from ..localization.catalogue import inspect
+
+            for tag, pack in language_packs.items():
+                if inspect(pack).language != tag:
+                    raise ValueError(f'{tag}: language pack tag differs from filename')
         snapshot = BackupManifest.model_validate(
             tomlkit.parse((recovery / 'backup.toml').read_text()).unwrap()
         )
@@ -694,6 +745,7 @@ def restore_setups(
             for path in (directory / 'raw/cntrl/source').glob('*.bin'):
                 if f'/cntrl/source/{path.name}' not in stored:
                     lengths.append(path.stat().st_size)
+            lengths.extend(len(p) for p in language_packs.values())
             for kind, pattern in (
                 ('fonts', '*.cfont'),
                 ('movies', '*.cnsa'),
@@ -706,6 +758,7 @@ def restore_setups(
             # Includes both activation slots, selection journals, directory
             # clusters, and a replacement/upload slot while journals advance.
             directories = 16 + len(combined) * 2 + len(reservations) + len(snapshots)
+            directories += bool(language_packs)
             if restored_globals is not None:
                 lengths.extend([len(device_globals.journal(restored_globals))] * 2)
                 directories += 1
@@ -730,6 +783,8 @@ def restore_setups(
                 flush=True,
             )
             client.begin_deployment(recovery=True)
+        for tag, pack in language_packs.items():
+            client.copy_language(tag, pack)
         if bundle_data:
             client.copy_bundle(bundle_data, overwrite=True)
         for name, revision, data in snapshots:
@@ -841,6 +896,9 @@ def verify_after_flashing(
         for p in sorted((directory / 'raw/cntrl/source').glob('*.bin')):
             if client.download_source(p.stem) != p.read_bytes():
                 raise ValueError(f'{p.name}: source archive differs from the backup')
+        for p in sorted((directory / 'raw/cntrl/languages').glob('*.bin')):
+            if client.download_language(p.stem) != p.read_bytes():
+                raise ValueError(f'{p.name}: language pack differs from the backup')
         listed: dict[str, list[history.Revision]] = {}
         for name, revision, data in read_history_binaries(directory):
             _, expected = history.normalize_revision(
@@ -895,6 +953,20 @@ def validate_assets(
 ) -> None:
     """Require every executable document's assets before deployment or conversion."""
     needed: set[str] = set()
+    overlay_path = directory / 'device-globals.toml'
+    language = (
+        device_globals.load(overlay_path.read_bytes()).language
+        if overlay_path.exists()
+        else None
+    )
+    if language is not None and language != 'en':
+        from ..localization.catalogue import inspect
+
+        pack = directory / 'raw/cntrl/languages' / f'{language}.bin'
+        if not pack.is_file() or inspect(pack.read_bytes()).language != language:
+            raise ValueError(
+                f'{language}: language pack is absent or invalid in the backup'
+            )
     sources: set[str] = set()
     for library in libraries:
         if library:

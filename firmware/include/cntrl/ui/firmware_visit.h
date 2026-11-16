@@ -1,4 +1,5 @@
 #pragma once
+#include "messages.h"
 #include <cntrl/navigation_snapshots.h>
 #include "song_sources.h"
 #include <cntrl/filesystem.h>
@@ -202,27 +203,27 @@ private:
     void fail() {
         file_.close(); encoded_.clear(); stage_ = Stage::idle; songs_.cancel_function();
         if (invocation) invocation->cancel();
-        invocation = nullptr; hardware_.error("Firmware switch failed");
+        invocation = nullptr; hardware_.error(i18n::text(i18n::Message::firmware_switch_failed));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(firmware_visit_resume)
 #endif
     void resume() {
         const auto continuation = record_.continuation; stage_ = Stage::idle;
-        if (record_.controller >= application_.layout.controllers()) { hardware_.error("Page return unavailable"); return; }
+        if (record_.controller >= application_.layout.controllers()) { hardware_.error(i18n::text(i18n::Message::page_return_unavailable)); return; }
         application_.visible_index = record_.controller;
-        if (!valid_ || !application_.controller().navigation(record_.initial_navigation)) { hardware_.error("Patch return unavailable"); return; }
+        if (!valid_ || !application_.controller().navigation(record_.initial_navigation)) { hardware_.error(i18n::text(i18n::Message::patch_return_unavailable)); return; }
         restoring = true;
         const bool resumed = continuation.caller == 1 ? songs_.resume(continuation)
             : application_.controller().executor().resume(documents_.document(), continuation.node, continuation.completed, continuation.sources_crc);
         restoring = false;
         if (!resumed || !application_.controller().navigation(record_.return_navigation)) {
-            application_.controller().executor().cancel(); sources_.executor.cancel(); hardware_.error("Patch return unavailable"); return;
+            application_.controller().executor().cancel(); sources_.executor.cancel(); hardware_.error(i18n::text(i18n::Message::patch_return_unavailable)); return;
         }
         const auto &execution = continuation.caller == 1 ? sources_.executor : application_.controller().executor();
         if (!navigation_.put(execution, record_.initial_navigation)) {
             application_.controller().executor().cancel(); sources_.executor.cancel();
-            hardware_.error("Patch return memory unavailable"); return;
+            hardware_.error(i18n::text(i18n::Message::patch_return_memory_unavailable)); return;
         }
         hardware_.set_brightness(record_.runtime.brightness); hardware_.set_midi_interface(record_.runtime.interface);
         application_.pending_operation = record_.ui_operation;

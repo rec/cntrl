@@ -3,6 +3,7 @@
 #include <algorithm>
 
 namespace cntrl::ui {
+inline constexpr unsigned localized_face = 253;
 struct Bounds { int left = 0, top = 0, width = 0, height = 0; };
 struct Glyph {
     const uint8_t *pixels = nullptr;
@@ -23,21 +24,56 @@ struct Fonts {
 class AssetFonts final : public Fonts {
 public:
     AssetFonts(const EmbeddedFont *fonts, unsigned count) : fonts_(fonts), count_(count) {}
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_valid_localized)
+#endif
+    static bool valid_localized(const uint8_t *bytes, unsigned length) {
+        if (!bytes || length < 8 || length > font_assets::max_file || std::memcmp(bytes, "CFN2", 4)) return false;
+        const unsigned count = cntrl::u32(bytes + 4); unsigned offset = 8; bool sizes[256] = {};
+        if (!count || count > 255) return false;
+        for (unsigned i = 0; i < count; ++i) {
+            font_assets::Entry entry;
+            if (offset > length || length - offset < sizeof(entry.bytes)) return false;
+            std::memcpy(entry.bytes, bytes + offset, sizeof(entry.bytes)); offset += sizeof(entry.bytes);
+            if (!entry.valid() || sizes[entry.size()] || entry.length() > length - offset
+                || !font_assets::valid_pixels(entry, bytes + offset)) return false;
+            sizes[entry.size()] = true; offset += entry.length();
+        }
+        return offset == length;
+    }
+    // The active language pack owns these bytes until its renderer is invalidated.
+    static void localized(const uint8_t *bytes, unsigned length) {
+        localized_bytes_ = bytes; localized_length_ = length;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_supports)
+#endif
     bool supports(unsigned face, unsigned size, uint32_t asset = 0) const override {
         font_assets::View view; return find(face, size, asset, view);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_bounds)
+#endif
     Bounds bounds(unsigned face, unsigned size, uint32_t asset, const char *text) const override {
         font_assets::View view; Bounds result;
         if (!find(face, size, asset, view)) return result;
         view.bounds(text, result.left, result.top, result.width, result.height, face == 255 ? 0 : view.entry.bytes[14]);
         return result;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_glyph)
+#endif
     bool glyph(unsigned face, unsigned size, uint32_t asset, const char *text, unsigned index, Glyph &result) const override {
         font_assets::View view; return find(face, size, asset, view) && make_glyph(view, text, index, result, face == 255);
     }
 private:
     const EmbeddedFont *fonts_;
     unsigned count_;
+    inline static const uint8_t *localized_bytes_ = nullptr;
+    inline static unsigned localized_length_ = 0;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_find)
+#endif
     bool find(unsigned face, unsigned size, uint32_t asset, font_assets::View &view) const {
         if (face == 255) {
             const auto *loaded = font_assets::cache.get(asset, size);
@@ -45,24 +81,35 @@ private:
             view.entry = loaded->entry; view.data = loaded->data.data;
             return true;
         }
+        if (face == localized_face) {
+            if (localized_bytes_) return find_size(localized_bytes_, localized_length_, size, view);
+            face = 0;
+        }
         for (unsigned f = 0; f < count_; ++f) {
             const auto &font = fonts_[f];
-            if (font.face != face || font.length < 8 || std::memcmp(font.bytes, "CFN2", 4)) continue;
-            unsigned offset = 8, count = cntrl::u32(font.bytes + 4);
-            for (unsigned i = 0; i < count; ++i) {
-                font_assets::Entry entry;
-                if (offset > font.length || font.length - offset < sizeof(entry.bytes)) return false;
-                std::memcpy(entry.bytes, font.bytes + offset, sizeof(entry.bytes)); offset += sizeof(entry.bytes);
-                if (!entry.valid() || entry.length() > font.length - offset) return false;
-                if (entry.size() == size) {
-                    view.entry = entry; view.data = font.bytes + offset;
-                    return true;
-                }
-                offset += entry.length();
-            }
+            if (font.face == face && find_size(font.bytes, font.length, size, view)) return true;
         }
         return false;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_find_size)
+#endif
+    static bool find_size(const uint8_t *bytes, unsigned length, unsigned size, font_assets::View &view) {
+        if (length < 8 || std::memcmp(bytes, "CFN2", 4)) return false;
+        unsigned offset = 8, count = cntrl::u32(bytes + 4);
+        for (unsigned i = 0; i < count; ++i) {
+            font_assets::Entry entry;
+            if (offset > length || length - offset < sizeof(entry.bytes)) return false;
+            std::memcpy(entry.bytes, bytes + offset, sizeof(entry.bytes)); offset += sizeof(entry.bytes);
+            if (!entry.valid() || entry.length() > length - offset) return false;
+            if (entry.size() == size) { view.entry = entry; view.data = bytes + offset; return true; }
+            offset += entry.length();
+        }
+        return false;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_make_glyph)
+#endif
     static bool make_glyph(const font_assets::View &font, const char *text, unsigned index, Glyph &result, bool asset) {
         unsigned number; int x, y;
         if (!font.position(text, index, number, x, y)) return false;

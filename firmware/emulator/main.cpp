@@ -10,6 +10,7 @@
 #include <cntrl/setup_files.h>
 #include <cntrl/bundled_storage.h>
 #include <cntrl/global_commands.h>
+#include <cntrl/ui/languages.h>
 #include <cntrl/slot_storage.h>
 #include <cntrl/ui/application_hardware.h>
 #include <cntrl/ui/page_host.h>
@@ -82,6 +83,19 @@ public:
     Documents *documents = nullptr;
     GlobalCommands *globals = nullptr;
     GlobalSettings *global_store = nullptr;
+    ui::Languages *languages = nullptr;
+    LanguagePreparation prepare_language(const char *tag) override { return languages->prepare(tag); }
+    void finish_language(bool commit) override {
+        if (commit) host->invalidate_language();
+        languages->finish(commit);
+        if (commit) { app->language_changed(); host->language_changed(); switches->language_changed(); }
+    }
+    bool request_language(const char *tag) override { return globals->request_language(tag); }
+    bool language_available(const char *tag) const override { return languages->available(tag); }
+    const char *current_language() const override { return languages->current(); }
+    unsigned language_count() const override { return languages->count(); }
+    const char *language_tag(unsigned index) const override { return languages->tag(index); }
+    const char *language_name(unsigned index) const override { return languages->name(index); }
     const GlobalSettings::Values *global_values() const override { return global_store ? &global_store->values() : nullptr; }
     bool global_setting(unsigned field, uint32_t value, bool clear) override { return globals && globals->request(field, value, clear); }
     bool global_settings_busy() override {
@@ -347,7 +361,7 @@ public:
           movie_assets(movie_storage,board), movie_output(display), movie_player(movie_assets,movie_output), movie_session(movie_assets,movie_player),
           reader(filesystem), writer(filesystem), history(filesystem),
           card(filesystem,reader,writer,history), storage(card,board), sources(storage.setups()), font_reader(filesystem), font_writer(filesystem), font_storage(filesystem,font_reader,font_writer), primary(board,board,board,Switches::capacity),
-          documents(storage,board,primary,board), global_settings(filesystem), global_commands(global_settings,documents,board,board), song_writer(filesystem), song_storage(filesystem,song_writer,4,"/cntrl/songs",card.ready),
+          documents(storage,board,primary,board), global_settings(filesystem), global_commands(global_settings,documents,board,board), languages(filesystem), song_writer(filesystem), song_storage(filesystem,song_writer,4,"/cntrl/songs",card.ready),
           songs(song_storage,board), application(board,documents,primary,board,board,songs,board,true),
           song_sources(board,board,board,storage.setups(),documents,application,songs),
           midi_source(filesystem), midi_index(filesystem), recording(filesystem), midi_directory(filesystem),
@@ -360,6 +374,7 @@ public:
         board.app = &application; board.documents = &documents; board.host = &host;
         board.globals = &global_commands;
         board.global_store = &global_settings;
+        board.languages = &languages;
         board.files = &midi_files; board.switches = &switches; board.song_sources = &song_sources; board.expression = &expression; board.font_storage = &font_storage;
         board.sources = &sources; card.ready = true;
         board.fonts = &fonts;
@@ -373,6 +388,7 @@ public:
         import(setup,replace_setup); import_movies(); expression.load_calibrations(); midi_files.boot();
         if (!storage.boot()) throw std::runtime_error("emulator setup bundle failed validation");
         if (!global_settings.boot()) throw std::runtime_error("emulator global settings journal is invalid");
+        languages.boot(global_settings.values().language);
         documents.bind_globals(global_settings);
         documents.boot(); songs.boot();
         if (!documents.document().valid()) throw std::runtime_error("emulator setup failed validation");
@@ -403,6 +419,7 @@ public:
     Documents documents;
     GlobalSettings global_settings;
     GlobalCommands global_commands;
+    ui::Languages languages;
     host::File song_writer;
     SlotStorage song_storage;
     Songs songs;

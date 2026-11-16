@@ -30,6 +30,7 @@ def prepare(
     path: Path | None = None,
     *,
     hinting: Literal['auto', 'native'] = 'auto',
+    characters: str = ''.join(chr(c) for c in range(32, 127)),
 ) -> bytes:
     """Use hinted monochrome glyph pixels and advances, without stretching."""
     if name not in UI_FONTS:
@@ -39,12 +40,17 @@ def prepare(
             raise ValueError(f'UI font {name!r} requires an outline source')
         path = sources[name]
     outline = Outline(path, hinting=hinting)
-    characters = ''.join(chr(c) for c in range(32, 127))
+    characters = ''.join(sorted(set(characters)))
+    if not characters or any(
+        ord(c) < 32 or 127 <= ord(c) < 160 or 0xD800 <= ord(c) <= 0xDFFF
+        for c in characters
+    ):
+        raise ValueError('UI font characters must be printable Unicode scalars')
     selected = {s: list(characters) for s in sizes}
     metrics = {}
     for size in sizes:
         glyphs = [
-            outline.glyph(size, outline.face.get_char_index(c)) for c in range(32, 127)
+            outline.glyph(size, outline.face.get_char_index(ord(c))) for c in characters
         ]
         cap = outline.glyph(size, outline.face.get_char_index(ord('H'))).top
         top = max(g.top for g in glyphs)

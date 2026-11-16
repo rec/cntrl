@@ -21,6 +21,7 @@ class Kind(IntEnum):
     disk = 22
     midi_file = 23
     source = 24
+    language = 25
     text = 128
     data = 129
     error = 255

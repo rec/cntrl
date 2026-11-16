@@ -7,6 +7,8 @@ from zlib import crc32
 
 import pytest
 import tomlkit
+from PIL import Image
+from pytest_regressions.file_regression import FileRegressionFixture
 
 from cntrl.fonts import assets, ui
 from cntrl.fonts.bitmap import BitmapRaster
@@ -102,6 +104,50 @@ def test_optional_classic_font_can_be_prepared_from_an_explicit_outline() -> Non
     assert ui.prepare(
         'classic', [12], bundled_sources()['AtkinsonNextSemiBold']
     ).startswith(b'CFN2')
+
+
+def test_french_runtime_glyphs_render_without_replacing_authored_fonts(
+    tmp_path: Path, file_regression: FileRegressionFixture
+) -> None:
+    characters = (
+        ''.join(chr(c) for c in range(32, 127)) + 'ÀÂÇÉÈÊËÎÏÔÙÛÜŒàâçéèêëîïôùûüœ…’'
+    )
+    english = tmp_path / 'english.cfont'
+    english.write_bytes(ui.prepare('Arimo', [8, 10, 12, 14, 16, 20], hinting='native'))
+    french = tmp_path / 'french.cfont'
+    data = ui.prepare(
+        'Arimo',
+        [8, 10, 12, 14, 16, 20],
+        hinting='native',
+        characters=characters,
+    )
+    french.write_bytes(data)
+    face = assets.decode(data, 'Français', crc32(data))
+    assert set(face.sizes[12].characters) == set(characters)
+    print(f'French UI font working set: {len(data)} bytes')
+    program = tmp_path / 'localized-fonts'
+    native_tests.compile_native(
+        [
+            'c++',
+            '-std=c++17',
+            '-Wall',
+            '-Wextra',
+            '-Werror',
+            '-fsanitize=address,undefined',
+            f'-I{ROOT / "firmware/include"}',
+            str(ROOT / 'firmware/test/test_localized_fonts.cpp'),
+            '-o',
+            str(program),
+        ],
+        check=True,
+    )
+    rendered = tmp_path / 'french.ppm'
+    native_tests.run_native(
+        [str(program), str(english), str(french), str(rendered)], check=True
+    )
+    screenshot = tmp_path / 'french.png'
+    Image.open(rendered).save(screenshot)
+    file_regression.check(screenshot.read_bytes(), binary=True, extension='.png')
 
 
 def test_page_fonts_use_declared_ui_families_without_entering_patch_picker() -> None:

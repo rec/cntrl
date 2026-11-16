@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/messages.h"
 #include "ui/presentation.h"
 #include "ui/prompts.h"
 #include "patch_executor.h"
@@ -15,6 +16,7 @@ public:
         : hardware_(hardware), outputs_(outputs), sources_(sources), page_(page), owner_(owner), rendering_(page == ~0u) {}
     ~Switches() { destroy_states(); unpin(); if (pending_invocation_) sources_.end(); }
     bool open() const { return open_ || pending_invocation_; }
+    void language_changed() { if (open_) render(); }
     bool performance() const { return bool(bindings_); }
     unsigned revision() const { return revision_; }
     ExpressionAssignment expression(unsigned input) const { return bindings_.expression(input); }
@@ -119,7 +121,7 @@ private:
 #endif
     void initialize(const Document &document, uint32_t held, ControlBindings bindings) {
         const unsigned count = bindings ? bindings.count() : document.switches();
-        if (!state_storage_.resize(count * sizeof(State))) { hardware_.error("Switch state memory exhausted"); return; }
+        if (!state_storage_.resize(count * sizeof(State))) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_state_memory_exhausted)); return; }
         states_ = reinterpret_cast<State *>(state_storage_.data);
         for (unsigned i = 0; i < count; ++i) new (states_ + i) State(hardware_, outputs_, sources_, owner_ + i);
         count_ = count;
@@ -131,7 +133,7 @@ private:
         selected_ = -1; clear_events(); transition_ = 0; hooks_enabled_ = false; exit_started_ = false;
         for (unsigned i = 0; i < count_; ++i) {
             State &s = states_[i]; s.executor.cancel();
-            if (!s.executor.retain_owner()) { hardware_.error("Switch delivery memory unavailable"); open_ = false; unpin(); return; }
+            if (!s.executor.retain_owner()) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_delivery_memory_unavailable)); open_ = false; unpin(); return; }
             s.record = bindings_ ? bindings_.record(i) : document_.switch_assignment(i);
             s.actions = s.record + 2; s.shifted = bindings_ ? (u16(s.record + binding_shifted_offset) != 65535 ? s.record + binding_shifted_offset : nullptr) : document_.switch_shifted(s.record[0]);
             s.layer = s.input_layer = false;
@@ -163,11 +165,11 @@ private:
                 if (branch < 2 * layer_actions && part < 2) {
                     Pattern &pattern = part ? s.off[layer] : s.on[layer];
                     if (!capture(pattern, s.executor)) {
-                        s.executor.cancel(); hardware_.error("Switch state memory exhausted"); open_ = false; unpin(); return;
+                        s.executor.cancel(); hardware_.error(ui::i18n::text(ui::i18n::Message::switch_state_memory_exhausted)); open_ = false; unpin(); return;
                     }
                 }
                 if (!s.resources.resize(s.resource_count + resources_count)) {
-                    s.executor.cancel(); hardware_.error("Switch ownership memory exhausted"); open_ = false; unpin(); return;
+                    s.executor.cancel(); hardware_.error(ui::i18n::text(ui::i18n::Message::switch_ownership_memory_exhausted)); open_ = false; unpin(); return;
                 }
                 if (resources_count) std::memcpy(s.resources.data() + s.resource_count, s.executor.resources(), resources_count * sizeof(PatchExecutor::Resource));
                 s.resource_count += resources_count; s.executor.cancel();
@@ -177,7 +179,7 @@ private:
                     for (unsigned b = 0; b < states_[j].resource_count; ++b)
                         if ((s.record[1] || states_[j].record[1]) && (s.resources[a].channel == 256 || states_[j].resources[b].channel == 256)
                             && s.resources[a].overlaps(states_[j].resources[b])) {
-                            hardware_.error("Switches reserve overlapping MIDI controls"); open_ = false; unpin(); return;
+                            hardware_.error(ui::i18n::text(ui::i18n::Message::switches_overlap)); open_ = false; unpin(); return;
                         }
             s.baseline_resources = s.resource_count;
             synchronize(s);
@@ -195,14 +197,14 @@ public:
             for (unsigned i = 0; i < count_; ++i) {
                 auto &state = states_[i];
                 if (state.record[0] == button && (!state.record[1] || (!state.requested && !state.active))
-                    && !outputs_.prepare_owner_cycle(state.executor)) { hardware_.error("Switch delivery memory unavailable"); return; }
+                    && !outputs_.prepare_owner_cycle(state.executor)) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_delivery_memory_unavailable)); return; }
             }
             // A tick can recognize three gesture actions. Reserve its release
             // bookkeeping before accepting the edge.
-            if (hooks_enabled_ && !events_.reserve(event_count_ + 3)) { hardware_.error("Switch event memory unavailable"); return; }
+            if (hooks_enabled_ && !events_.reserve(event_count_ + 3)) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_event_memory_unavailable)); return; }
             for (unsigned i = 0; i < count_; ++i) if (states_[i].record[0] == button
                 && (hooks_enabled_ || states_[i].settings || states_[i].hooks || states_[i].shifted))
-                    if (!states_[i].queue.reserve(states_[i].queued + 3)) { hardware_.error("Switch action memory unavailable"); return; }
+                    if (!states_[i].queue.reserve(states_[i].queued + 3)) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_action_memory_unavailable)); return; }
         }
         held_ = down ? held_ | bit : held_ & ~bit;
         if (!down) disarmed_ &= ~bit;
@@ -285,7 +287,7 @@ public:
             if (overflow) {
                 s.gesture.reset(); clear_queue(s); s.failed = true; dirty_ = true;
                 disarmed_ |= held_ & (1u << s.record[0]);
-                hardware_.error("Switch gesture queue full");
+                hardware_.error(ui::i18n::text(ui::i18n::Message::switch_gesture_queue_full));
             }
             bool unavailable = false;
             if (s.settings || s.active || s.requested || s.executor.busy() || s.queued)
@@ -320,7 +322,7 @@ public:
                         bool captured = true;
                         if (node == u16(s.actions)) captured = capture(s.on[s.layer], s.executor);
                         if (node == u16(s.actions + 2)) captured = capture(s.off[s.layer], s.executor) && captured;
-                        if (!captured) hardware_.error("Switch state memory exhausted");
+                        if (!captured) hardware_.error(ui::i18n::text(ui::i18n::Message::switch_state_memory_exhausted));
                         if (!captured || !reserve(i)) {
                             s.executor.cancel(); s.failed = true;
                             s.requested = s.active; s.presses = 0;
@@ -416,7 +418,7 @@ private:
     static void clear_queue(State &state) { state.queue.clear(); state.queued = 0; }
     bool queue_node(State &state, unsigned node) {
         if (state.queue.size() == state.queue.capacity() || !state.queue.append(uint16_t(node))) {
-            state.failed = true; hardware_.error("Switch action queue full"); return false;
+            state.failed = true; hardware_.error(ui::i18n::text(ui::i18n::Message::switch_action_queue_full)); return false;
         }
         ++state.queued; return true;
     }
@@ -475,9 +477,9 @@ private:
             return;
         }
         if (event_count_ == events_.capacity()) {
-            hardware_.error("Switch selection queue full"); states_[index].failed = true; return;
+            hardware_.error(ui::i18n::text(ui::i18n::Message::switch_selection_queue_full)); states_[index].failed = true; return;
         }
-        if (!events_.append(event)) { hardware_.error("Switch event memory unavailable"); return; }
+        if (!events_.append(event)) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_event_memory_unavailable)); return; }
         ++event_count_; dirty_ = true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -569,7 +571,7 @@ private:
                 if (j == index || (!state.record[1] && !states_[j].record[1])) continue;
                 for (unsigned r = 0; r < states_[j].resource_count; ++r)
                     if ((resource.channel == 256 || states_[j].resources[r].channel == 256) && resource.overlaps(states_[j].resources[r])) {
-                        hardware_.error("Selected patch overlaps another switch's MIDI controls"); return false;
+                        hardware_.error(ui::i18n::text(ui::i18n::Message::selected_patch_overlap)); return false;
                     }
             }
         }
@@ -579,7 +581,7 @@ private:
                 if (resource.channel == state.resources[j].channel && resource.control == state.resources[j].control
                     && !std::strcmp(resource.output, state.resources[j].output)) known = true;
             if (known) continue;
-            if (!state.resources.resize(state.resource_count + 1)) { hardware_.error("Switch ownership memory exhausted"); return false; }
+            if (!state.resources.resize(state.resource_count + 1)) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_ownership_memory_exhausted)); return false; }
             state.resources[state.resource_count++] = resource;
         }
         return true;
@@ -634,10 +636,11 @@ private:
                 const auto &s = states_[i];
                 auto &pane = panes[i % 3];
                 const unsigned row = 2 + i / 3;
-                const char *state = s.unknown ? "Unknown" : s.executor.busy() || s.queued ? "Pending" : s.record[1] ? (s.active ? "On" : "Off") : "";
+                const char *state = s.unknown ? ui::i18n::text(ui::i18n::Message::unknown_title) : s.executor.busy() || s.queued ? ui::i18n::text(ui::i18n::Message::pending) : s.record[1] ? (s.active ? ui::i18n::text(ui::i18n::Message::on) : ui::i18n::text(ui::i18n::Message::off)) : "";
                 char label[64];
                 document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
                 std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", document_.input_label(s.record[0]), label, state[0] ? " | " : "", state);
+                if (ui::i18n::translated_ui) pane.lines[row].graphics.font = 253;
             }
             present(panes); dirty_ = false; return;
         }
@@ -649,10 +652,10 @@ private:
             bool pending = false;
             for (unsigned e = 0; e < event_count_; ++e) if (events_[e].index == i) pending = true;
             int on = match(s.on[s.layer]), off = match(s.off[s.layer]);
-            const char *state = s.failed ? "Failed / unknown" : s.unknown ? "Unknown remote state" : pending || s.executor.busy() || s.presses || s.queued || s.requested != s.active
-                ? "Pending" : on == 1 ? "On" : off == 1 ? "Off" : on == 2 || off == 2 ? "Partial match"
-                : on == -1 || off == -1 ? "Unknown remote state" : on == 0 ? "Other values"
-                : s.record[1] == 0 ? "Completed locally" : s.active ? "On" : "Off";
+            const char *state = s.failed ? ui::i18n::text(ui::i18n::Message::failed_unknown) : s.unknown ? ui::i18n::text(ui::i18n::Message::unknown_remote_state) : pending || s.executor.busy() || s.presses || s.queued || s.requested != s.active
+                ? ui::i18n::text(ui::i18n::Message::pending) : on == 1 ? ui::i18n::text(ui::i18n::Message::on) : off == 1 ? ui::i18n::text(ui::i18n::Message::off) : on == 2 || off == 2 ? ui::i18n::text(ui::i18n::Message::partial_match)
+                : on == -1 || off == -1 ? ui::i18n::text(ui::i18n::Message::unknown_remote_state) : on == 0 ? ui::i18n::text(ui::i18n::Message::other_values)
+                : s.record[1] == 0 ? ui::i18n::text(ui::i18n::Message::completed_locally) : s.active ? ui::i18n::text(ui::i18n::Message::on) : ui::i18n::text(ui::i18n::Message::off);
             document_.page_record(view, u16(s.record + 70), 0, false, state, &hardware_.counters);
             unsigned pane = i % 3, group = i / 3;
             panes[pane].graphics = view.graphics;
@@ -662,9 +665,10 @@ private:
             }
         }
         auto &back = panes[2].lines[15]; back.graphics.size = 8; back.graphics.line_height = 8;
+        if (ui::i18n::translated_ui) back.graphics.font = 253;
         back.y = int16_t(hardware_.display_height() - 12);
-        std::snprintf(back.text, 64, "%s%.52s", closing_ ? "Closing: " : shifted_ ? "Shifted | " : "", prompt.add(Role::back, closing_ ? "abandon" : "Back").text());
-        if (!count_) std::snprintf(panes[1].lines[0].text, 64, "No switches");
+        std::snprintf(back.text, 64, "%s%.52s", closing_ ? ui::i18n::text(ui::i18n::Message::closing_prefix) : shifted_ ? ui::i18n::text(ui::i18n::Message::shifted_prefix) : "", prompt.add(Role::back, closing_ ? ui::i18n::text(ui::i18n::Message::abandon) : ui::i18n::text(ui::i18n::Message::back_title)).text());
+        if (!count_) ui::i18n::format(panes[1].lines[0].text, 64, ui::i18n::Message::no_switches);
         present(panes);
         dirty_ = false;
     }

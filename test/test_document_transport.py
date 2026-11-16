@@ -19,6 +19,7 @@ from cntrl.patch_switcher import (
     data_files,
     device_globals,
     device_settings,
+    global_overlay,
     midi_assets,
     models,
     resolved,
@@ -214,19 +215,23 @@ def test_portable_globals_bootstrap_the_native_runtime_journal(
     values = {0: 80, 1: 30, 9: 1}
     folder = tmp_path / 'cntrl/global'
     folder.mkdir(parents=True)
-    (folder / '0.bin').write_bytes(device_globals.journal(values))
+    (folder / '0.bin').write_bytes(
+        device_globals.journal(global_overlay.Overlay(values=values))
+    )
     with (
         NativePeer([str(bundle_peer), str(tmp_path)]) as port,
         transport.SerialConnection(Path(port)) as connection,
     ):
         client = transport.SetupClient(connection)
-        assert client.global_settings() == values
+        assert client.global_settings() == global_overlay.Overlay(values=values)
         client.clear_global(9)
     with (
         NativePeer([str(bundle_peer), str(tmp_path)]) as port,
         transport.SerialConnection(Path(port)) as connection,
     ):
-        assert transport.SetupClient(connection).global_settings() == {0: 80, 1: 30}
+        assert transport.SetupClient(
+            connection
+        ).global_settings() == global_overlay.Overlay(values={0: 80, 1: 30})
 
 
 def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
@@ -258,12 +263,13 @@ def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
             client = transport.SetupClient(connection)
             before = {n: client.download(n) for n in ('Show', 'Locked')}
             client.set_global(0, 100)
-            assert client.global_settings() == {0: 100}
+            assert client.global_settings() == global_overlay.Overlay(values={0: 100})
             assert {n: client.download(n) for n in before} == before
             files = cli.download_files(client, list(before))
             overlays = [d for p, d in files.items() if p.name == 'device-globals.toml']
             assert overlays and all(
-                device_globals.load(d) == {0: 100} for d in overlays
+                device_globals.load(d) == global_overlay.Overlay(values={0: 100})
+                for d in overlays
             )
             report = setup_sync.preview(inputs, client)
             review = setup_sync.Review.model_validate(
@@ -274,18 +280,96 @@ def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
             assert change.scope == 'device-global' and change.affects == ['Show']
             setup_sync.apply_review(report)
             overlay = tmp_path / 'device-globals.toml'
-            assert device_globals.load(overlay.read_bytes()) == {0: 100}
+            assert device_globals.load(overlay.read_bytes()) == global_overlay.Overlay(
+                values={0: 100}
+            )
             assert source.read_text() == '# Inherit the rig\n'
             assert global_file.read_text() == 'brightness=160\n'
             client.clear_global(0)
             setup_sync.apply_review(setup_sync.preview(inputs, client))
-            assert device_globals.load(overlay.read_bytes()) == {}
+            assert device_globals.load(overlay.read_bytes()) == global_overlay.Overlay()
             assert {n: client.download(n) for n in before} == before
-        overlay.write_bytes(device_globals.dump({0: 80, 1: 30}))
+        overlay.write_bytes(
+            device_globals.dump(global_overlay.Overlay(values={0: 80, 1: 30}))
+        )
         device_globals.run(device_globals.Restore(file=overlay, port=Path(port)))
     with NativePeer([str(bundle_peer), str(device)]) as port:
         with transport.SerialConnection(Path(port)) as connection:
-            assert transport.SetupClient(connection).global_settings() == {0: 80, 1: 30}
+            assert transport.SetupClient(
+                connection
+            ).global_settings() == global_overlay.Overlay(values={0: 80, 1: 30})
+
+
+def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
+    bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cntrl.patch_switcher import global_config
+
+    defaults = tmp_path / 'global.toml'
+    monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
+    source = tmp_path / 'Show.toml'
+    source.write_text('# A language-independent setup\n')
+    inputs = data_files.Sources(
+        document=[f'Show={source}'], target=[str(ROOT / 'firmware/test/target.json')]
+    )
+    pack = (ROOT / 'cntrl/localization/packs/fr.bin').read_bytes()
+    device = tmp_path / 'device'
+    device.mkdir()
+    with NativePeer([str(bundle_peer), str(device)]) as port:
+        cli.run_setup(
+            cli.Copy(document=inputs.document, target=inputs.target, port=Path(port))
+        )
+        with transport.SerialConnection(Path(port)) as connection:
+            client = transport.SetupClient(connection)
+            original = client.download('Show')
+            client.copy_language('fr', pack)
+            client.set_language('fr')
+            assert client.global_settings().language == 'fr'
+            assert client.download_language('fr') == pack
+            recovered = cli.download_files(client, ['Show'])
+            assert recovered[Path('languages/fr.bin')] == pack
+            assert any(
+                p.parts[0] == 'sessions' and p.parts[-2:] == ('languages', 'fr.bin')
+                for p in recovered
+            )
+            report = setup_sync.preview(inputs, client)
+            review = setup_sync.Review.model_validate(
+                tomlkit.parse(report.read_text()).unwrap()
+            )
+            assert len(review.changes) == 1
+            assert review.changes[0].scope == 'device-global' and review.changes[
+                0
+            ].path == ['language']
+            setup_sync.apply_review(report)
+            overlay = tmp_path / 'device-globals.toml'
+            assert device_globals.load(overlay.read_bytes()).language == 'fr'
+            assert source.read_text() == '# A language-independent setup\n'
+            assert client.download('Show') == original
+            (device / 'cntrl/languages/fr.bin').unlink()
+            recovered = cli.download_files(client, ['Show'])
+            assert Path('languages/fr.bin') not in recovered
+            assert all(
+                device_globals.load(d).language == 'fr'
+                for p, d in recovered.items()
+                if p.name == 'device-globals.toml'
+            )
+            client.clear_language()
+            setup_sync.apply_review(setup_sync.preview(inputs, client))
+            assert device_globals.load(overlay.read_bytes()).language is None
+            assert client.download('Show') == original
+            client.copy_language('fr', pack)
+            client.set_language('fr')
+    (device / 'cntrl/languages/fr.bin').unlink()
+    with (
+        NativePeer([str(bundle_peer), str(device)]) as port,
+        transport.SerialConnection(Path(port)) as connection,
+    ):
+        client = transport.SetupClient(connection)
+        assert client.global_settings().language == 'fr'
+        client.copy_language('fr', pack)
+        client.set_language('fr')
+        client.clear_language()
+        assert client.global_settings().language is None
 
 
 def test_sync_preserves_mask_only_local_settings_edits_and_restored_inheritance(
@@ -328,7 +412,7 @@ def test_sync_preserves_mask_only_local_settings_edits_and_restored_inheritance(
             client.ok('CNTRL SETUP FINISH')
             setup_sync.apply_review(setup_sync.preview(inputs, client))
             assert 'brightness' not in tomlkit.parse(source.read_text())
-            assert client.global_settings() == {0: 100}
+            assert client.global_settings() == global_overlay.Overlay(values={0: 100})
 
 
 ROOT = Path(__file__).resolve().parents[1]

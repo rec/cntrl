@@ -17,6 +17,7 @@ from cntrl.emulator.replay import Scenario
 from cntrl.fonts import assets, catalogue, ui
 from cntrl.patch_switcher import compiler, device_globals, models, setup_bundle
 from cntrl.patch_switcher.cli import compile_to_file
+from cntrl.patch_switcher.global_overlay import Overlay
 
 
 class BackendFiles(BaseModel, frozen=True):
@@ -223,7 +224,7 @@ def test_recovered_globals_initialize_only_fresh_emulator_storage(
         tomlkit.dumps(backend_files.target.model_dump(mode='json', exclude_none=True))
     )
     overlay = tmp_path / 'device-globals.toml'
-    overlay.write_bytes(device_globals.dump({0: 80}))
+    overlay.write_bytes(device_globals.dump(Overlay(values={0: 80})))
     storage = tmp_path / 'storage'
     command = cli.Emulate(
         setup=setup,
@@ -233,10 +234,10 @@ def test_recovered_globals_initialize_only_fresh_emulator_storage(
     )
     cli.prepare(command, compile_to_file)
     journal = storage / 'cntrl/global/0.bin'
-    assert journal.read_bytes() == device_globals.journal({0: 80})
-    overlay.write_bytes(device_globals.dump({0: 160}))
+    assert journal.read_bytes() == device_globals.journal(Overlay(values={0: 80}))
+    overlay.write_bytes(device_globals.dump(Overlay(values={0: 160})))
     cli.prepare(command, compile_to_file)
-    assert journal.read_bytes() == device_globals.journal({0: 80})
+    assert journal.read_bytes() == device_globals.journal(Overlay(values={0: 80}))
 
 
 def test_font_replacement_changes_rendering_without_recompiling(

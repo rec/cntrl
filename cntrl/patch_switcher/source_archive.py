@@ -11,7 +11,7 @@ import tomlkit
 from pydantic import BaseModel, ConfigDict, Field
 
 from .. import source_files
-from . import binary_format, data_files, device_globals, transport
+from . import binary_format, data_files, device_globals, global_overlay, transport
 
 
 def compiler_identity() -> str:
@@ -184,10 +184,19 @@ def download(
     client: transport.SetupClient,
     setups: dict[str, bytes],
     *,
-    live_globals: dict[int, int] | None = None,
+    live_globals: global_overlay.Overlay | None = None,
 ) -> dict[Path, bytes]:
     """Return portable recovered sources and saved images for publish_download."""
     result: dict[Path, bytes] = {}
+    language: tuple[str, bytes] | None = None
+    if live_globals is not None and live_globals.language not in (None, 'en'):
+        try:
+            language = (
+                live_globals.language,
+                client.download_language(live_globals.language),
+            )
+        except FileNotFoundError:
+            pass
     snapshots = {v for d in setups.values() if (v := identifier(d)) is not None}
     for snapshot in sorted(snapshots):
         data = client.download_source(snapshot)
@@ -228,6 +237,8 @@ def download(
             result[base / 'pedal/device-globals.toml'] = device_globals.dump(
                 live_globals
             )
+        if language is not None:
+            result[base / 'languages' / f'{language[0]}.bin'] = language[1]
         for name, key in manifest.baselines.items():
             result[base / baselines[name]] = entries[key]
         for name, current in setups.items():

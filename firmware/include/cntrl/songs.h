@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/messages.h"
 #include "documents.h"
 #include <algorithm>
 #include <type_traits>
@@ -101,8 +102,8 @@ public:
             if (state == SongExecution::suspended) { pending_function_ = true; error_ = "Visiting stock firmware"; }
             else if (state != SongExecution::pending) {
                 invocation_pending_ = false;
-                error_ = state == SongExecution::completed ? "Completed locally"
-                    : state == SongExecution::unknown ? "Remote state unknown" : "Patch failed";
+                error_ = state == SongExecution::completed ? ui::i18n::text(ui::i18n::Message::completed_locally)
+                    : state == SongExecution::unknown ? ui::i18n::text(ui::i18n::Message::remote_state_unknown) : "Patch failed";
             }
         }
         if (resume_pending_) {
@@ -111,7 +112,7 @@ public:
                 resume_pending_ = false;
                 advance_after_return();
             } else if (state == SongExecution::failed || state == SongExecution::unknown) {
-                resume_pending_ = false; error_ = state == SongExecution::unknown ? "Remote state unknown" : "Patch failed";
+                resume_pending_ = false; error_ = state == SongExecution::unknown ? ui::i18n::text(ui::i18n::Message::remote_state_unknown) : "Patch failed";
             }
         }
     }
@@ -249,7 +250,7 @@ public:
     bool new_setlist(char *name) {
         Setlist s;
         for (unsigned n = counts_.sets + 1;; ++n) {
-            std::snprintf(s.name, 64, "Setlist %u", n);
+            ui::i18n::format(s.name, 64, ui::i18n::Message::setlist_number, n);
             if (!setlist(s.name)) break;
         }
         SongCounts counts = counts_; ++counts.sets;
@@ -319,7 +320,7 @@ public:
     void cancel_function() {
         if (!pending_function_) return;
         restore_cursor(previous_cursor_); removed_ = previous_removed_;
-        pending_function_ = invocation_pending_ = false; error_ = "Firmware switch failed";
+        pending_function_ = invocation_pending_ = false; error_ = ui::i18n::text(ui::i18n::Message::firmware_switch_failed);
     }
     bool resume(const SongContinuation &saved) {
         if (saved.generation != generation_ || saved.crc != crc_) { error_ = "Song data changed"; return false; }
@@ -335,7 +336,7 @@ public:
             uint32_t revision = 0;
             if (upcoming.document[0] && (!resolver_.revision(upcoming, revision) || revision != saved.source_crc)) { error_ = "Source changed"; return false; }
         }
-        if (!resolver_.activate(current, saved, true)) { error_ = "Patch return unavailable"; return false; }
+        if (!resolver_.activate(current, saved, true)) { error_ = ui::i18n::text(ui::i18n::Message::patch_return_unavailable); return false; }
         restore_cursor(saved); removed_ = false;
         resume_pending_ = true;
         if (resolver_.execution_status() == SongExecution::completed) { resume_pending_ = false; return advance_after_return(); }
@@ -353,7 +354,7 @@ public:
         if (!set) { error_ = active_set_[0] ? "Setlist read failed" : "Choose a setlist"; return false; }
         unsigned count = set->count, position = next_position();
         if (position == 0xffffffffu) { error_ = "Setlist read failed"; return false; }
-        if (position >= count) { error_ = "End of set"; return false; }
+        if (position >= count) { error_ = ui::i18n::text(ui::i18n::Message::end_of_set); return false; }
         if (!entry(active_set_, position, value)) { error_ = "Setlist read failed"; return false; }
         const auto *p = song(value.song); if (!p) { error_ = "Song missing"; return false; }
         return activate_patch(value.song, 0, position);
@@ -617,7 +618,7 @@ private:
         invocation_pending_ = executing();
         std::memcpy(current_song_, saved.song, 64);
         patch_position_ = position; position_ = entry_index; removed_ = false;
-        error_ = resolver_.execution_status() == SongExecution::completed ? "Completed locally" : "Pending"; return true;
+        error_ = resolver_.execution_status() == SongExecution::completed ? ui::i18n::text(ui::i18n::Message::completed_locally) : ui::i18n::text(ui::i18n::Message::pending); return true;
     }
     static bool valid_song(const Song &s) {
         return s.count && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64) && valid_selection(s);
@@ -883,7 +884,7 @@ private:
     }
     void finish_job(bool good) {
         if (job_.opened) { storage_.finish(); job_.opened = false; }
-        good_ = good; if (!good) error_ = "Not saved";
+        good_ = good; if (!good) error_ = ui::i18n::text(ui::i18n::Message::not_saved);
         phase_ = Phase::idle;
     }
     void header(uint8_t *bytes) const {

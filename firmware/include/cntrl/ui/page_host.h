@@ -1,4 +1,5 @@
 #pragma once
+#include "messages.h"
 #include "application.h"
 #include "pages.h"
 #include "renderer.h"
@@ -33,6 +34,15 @@ public:
     }
     void looper_files(midi::MidiFiles &files, midi::Sink &sink) { looper_files_ = &files; looper_sink_ = &sink; pages_.looper = &files.looper; }
     void arpeggiator(midi::MidiArpeggiator &engine) { pages_.arpeggiator = &engine; }
+    void invalidate_language() { renderer_.invalidate_language(); }
+    void language_changed() {
+        refresh_looper_prompt(); pages_.revisit();
+        for (auto &view : application_.views) {
+            view.dirty = true; view.refreshed = 0;
+            if (view.page == Pages::Page::midi_looper)
+                utf8::copy(view.looper_prompt, sizeof(view.looper_prompt), pages_.looper_prompt);
+        }
+    }
 #ifdef CNTRL_EMULATOR
     void font_preview(const char *label,unsigned size) {
         pages_.font_preview(label,size);
@@ -118,7 +128,7 @@ public:
         else if (input == controls_.confirm) ok = looper_action(2,"");
         else if (input == controls_.previous_section) looper_menu_ = LooperMenu::clear;
         else if (input == controls_.next_section) { looper_choice_ = 0; looper_menu_ = LooperMenu::more; }
-        if (!ok) error("MIDI looper command rejected");
+        if (!ok) error(i18n::text(i18n::Message::looper_command_rejected));
         refresh_looper_prompt(); pages_.revisit(); return true;
     }
     bool monitor_button(unsigned input, bool pressed) {
@@ -193,7 +203,7 @@ public:
         port_save_pending_ = management_visible_ = false;
         if (pages_.arpeggiator) pages_.arpeggiator->configure(document.valid() ? document.arpeggiator_settings() : nullptr);
         pages_.outputs(platform_.midi_outputs());
-        if (!configure_ports()) { error("Port memory unavailable"); return; }
+        if (!configure_ports()) { error(i18n::text(i18n::Message::port_memory_unavailable)); return; }
         pages_.layout(document.valid() ? document.page_layout() : cntrl::PageLayout{});
         if (looper_files_) {
             looper_sink_->configure_loop_controls(document.valid() ? document.loop_stop_settings() : nullptr, document.valid() && document.loop_stop_reset_controls());
@@ -201,7 +211,7 @@ public:
             if (looper_files_->looper.clear()) {
                 if (const auto *p = document.valid() ? document.looper_settings() : nullptr) {
                     midi::LooperSettings settings{u16(p + 8),u16(p + 6),u16(p + 10),u16(p + 12)};
-                    if (!looper_files_->looper.configure(settings,*looper_sink_)) error("MIDI looper memory unavailable");
+                    if (!looper_files_->looper.configure(settings,*looper_sink_)) error(i18n::text(i18n::Message::looper_memory_unavailable));
                 } else looper_files_->looper.disable();
             }
         }
@@ -225,13 +235,13 @@ public:
     void select_trs_jack() {
         auto &page = pages_;
         if (ports_.empty()) {
-            page.port_name("No configurable ports", false); page.port_status(Pages::PortMode::off, "Unavailable"); return;
+            page.port_name(i18n::text(i18n::Message::no_configurable_ports), false); page.port_status(Pages::PortMode::off, i18n::text(i18n::Message::unavailable)); return;
         }
         auto port = std::find_if(ports_.begin(), ports_.end(), [&](const Port &p) { return p.index == page.jack; });
         if (port == ports_.end()) { port = ports_.begin(); page.jack = port->index; }
         page.port_name(port->label, true);
         page.candidate = platform_.port_mode(page.jack);
-        page.port_status(page.candidate, documents_.document().valid() && documents_.document().trs_modes()[page.jack] != uint8_t(page.candidate) ? "Driver failed" : nullptr);
+        page.port_status(page.candidate, documents_.document().valid() && documents_.document().trs_modes()[page.jack] != uint8_t(page.candidate) ? i18n::text(i18n::Message::driver_failed) : nullptr);
     }
     bool trs_button(unsigned i) {
         if (pages_.page() != Pages::Page::ports || (i != controls_.previous && i != controls_.next)) return false;
@@ -252,18 +262,18 @@ public:
         if (pages_.page() == Pages::Page::pong) pages_.pong.clock(platform_.milliseconds());
         expression_bank_ = nullptr;
         if (auto *bank = application_.focused_bank()) {
-            if (!bank->activate(uint32_t(application_.held))) error("Banked patch memory unavailable");
+            if (!bank->activate(uint32_t(application_.held))) error(i18n::text(i18n::Message::banked_memory_unavailable));
             else bank->refresh();
         }
         if (pages_.page() == Pages::Page::midi_monitor) {
             if (!platform_.midi_monitor().active()) {
                 monitor_unavailable_ = !platform_.midi_monitor().open(platform_.microseconds());
-                if (monitor_unavailable_) error("MIDI monitor memory unavailable");
+                if (monitor_unavailable_) error(i18n::text(i18n::Message::monitor_memory_unavailable));
             }
         }
         if (pages_.page() == Pages::Page::ports && documents_.document().valid()) select_trs_jack();
         if (pages_.page() == Pages::Page::expression) {
-            if (expression_ports_.empty()) pages_.expression_status("No configurable ports", "", "");
+            if (expression_ports_.empty()) pages_.expression_status(i18n::text(i18n::Message::no_configurable_ports), "", "");
             else if (std::find(expression_ports_.begin(), expression_ports_.end(), platform_.expression_controls().selected()) == expression_ports_.end())
                 platform_.expression_controls().select(expression_ports_[0]);
         }
@@ -318,7 +328,7 @@ public:
         platform_.midi_monitor().close();
         brightness_feedback_ = false; pending_patch_ = -1;
         throb_.configure(0, 0, 0, 0);
-        if (!platform_.relays.reset()) platform_.error("Relay reset failed");
+        if (!platform_.relays.reset()) platform_.error(i18n::text(i18n::Message::relay_reset_failed));
     }
     bool clock_control(unsigned button, bool pressed) {
         if (!pages_.clock_page()) return false;
@@ -330,7 +340,7 @@ public:
 #endif
     void configure_page_settings(const cntrl::PageSettings &settings) {
         pages_.outputs(platform_.midi_outputs());
-        if (!configure_ports()) { error("Port memory unavailable"); return; }
+        if (!configure_ports()) { error(i18n::text(i18n::Message::port_memory_unavailable)); return; }
         leave_page();
         platform_.expression_controls().configure(settings.expression, platform_.midi_outputs());
         pages_.configure(settings);
@@ -345,7 +355,7 @@ public:
             && controls_.confirm < 64 && (application_.held & (uint64_t(1) << controls_.confirm))) return;
         auto previous = pages_.save_view();
         if (pages_.browse(reverse)) {
-            if (!platform_.switch_firmware()) error("Firmware switch failed");
+            if (!platform_.switch_firmware()) error(i18n::text(i18n::Message::firmware_switch_failed));
         } else {
             unsigned selected = pages_.index();
             pages_.restore_view(previous);
@@ -391,10 +401,10 @@ public:
         if (page.page() == Pages::Page::ports) {
             if (ports_.empty()) { select_trs_jack(); return; }
             auto active = platform_.port_mode(page.jack);
-            if (!platform_.output_idle() || platform_.configuration_locked() || documents_.busy() || documents_.dirty()) page.port_status(active, "Busy");
-            else if (active == page.candidate && documents_.document().trs_modes()[page.jack] == uint8_t(active)) page.port_status(active, "Already set");
-            else if (!documents_.save_trs_mode(page.jack, page.candidate, now)) page.port_status(active, "Cannot apply");
-            else { port_save_pending_ = true; port_save_page_ = pages_.index(); page.port_status(active, "Saving"); }
+            if (!platform_.output_idle() || platform_.configuration_locked() || documents_.busy() || documents_.dirty()) page.port_status(active, i18n::text(i18n::Message::busy));
+            else if (active == page.candidate && documents_.document().trs_modes()[page.jack] == uint8_t(active)) page.port_status(active, i18n::text(i18n::Message::already_set));
+            else if (!documents_.save_trs_mode(page.jack, page.candidate, now)) page.port_status(active, i18n::text(i18n::Message::cannot_apply));
+            else { port_save_pending_ = true; port_save_page_ = pages_.index(); page.port_status(active, i18n::text(i18n::Message::saving)); }
             return;
         }
 #if CNTRL_CABLE_TEST
@@ -416,7 +426,7 @@ public:
         }
 #endif
         if (pages_.page() == Pages::Page::expression) {
-            if (expression_ports_.empty()) { pages_.expression_status("No configurable ports", "", ""); return; }
+            if (expression_ports_.empty()) { pages_.expression_status(i18n::text(i18n::Message::no_configurable_ports), "", ""); return; }
             platform_.expression_controls().calibrate(platform_.expression_available(platform_.expression_controls().selected()));
             return;
         }
@@ -461,7 +471,7 @@ public:
     }
     bool expression_button(unsigned i) {
         if (pages_.page() != Pages::Page::expression || (i != controls_.previous && i != controls_.next)) return false;
-        if (expression_ports_.empty()) { pages_.expression_status("No configurable ports", "", ""); return true; }
+        if (expression_ports_.empty()) { pages_.expression_status(i18n::text(i18n::Message::no_configurable_ports), "", ""); return true; }
         if (i == controls_.previous) platform_.expression_controls().select(next_port(platform_.expression_controls().selected(), true));
         else platform_.expression_controls().cancel();
         return true;
@@ -506,7 +516,7 @@ public:
             if (documents_.dirty()) {
                 documents_.edit_cancel();
                 save_view(); const unsigned focused = pages_.index(); load_view(port_save_page_);
-                pages_.port_status(platform_.port_mode(pages_.jack), "Save failed");
+                pages_.port_status(platform_.port_mode(pages_.jack), i18n::text(i18n::Message::save_failed));
                 save_view(); load_view(focused);
             }
         }
@@ -529,7 +539,7 @@ public:
             if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_switcher || application_.layout.page(region.selected)[0] == PageLayout::banked) continue;
             load_view(region.selected);
             if (pages_.page() == Pages::Page::expression && pages_.expression_status_due(now)) {
-                if (expression_ports_.empty()) pages_.expression_status("No configurable ports", "", "");
+                if (expression_ports_.empty()) pages_.expression_status(i18n::text(i18n::Message::no_configurable_ports), "", "");
                 else {
                     const unsigned selected = platform_.expression_controls().selected();
                     const auto port = std::find_if(ports_.begin(), ports_.end(), [&](const Port &p) { return p.index == selected; });
@@ -631,12 +641,12 @@ private:
     CNTRL_FLASH_ROUTINE(looper_prompt)
 #endif
     void refresh_looper_prompt() {
-        const char *choices[] = {"Save: Confirm","Load: Confirm","Reverse phrase: Confirm","Toggle direction: Confirm"};
+        const char *choices[] = {i18n::text(i18n::Message::save_confirm),i18n::text(i18n::Message::load_confirm),i18n::text(i18n::Message::reverse_phrase_confirm),i18n::text(i18n::Message::toggle_direction_confirm)};
         const char *text = looper_menu_ == LooperMenu::more ? choices[looper_choice_]
-            : looper_menu_ == LooperMenu::clear ? "Confirm clear?"
-            : looper_menu_ == LooperMenu::replace ? "Replace unsaved loop?"
-            : looper_menu_ == LooperMenu::files ? (looper_files_->browsing() ? "Scanning..." : looper_files_->loop_filename()[0] ? looper_files_->loop_filename() : "No MIDI files")
-            : looper_files_->storage_busy() ? "Storage busy" : "";
+            : looper_menu_ == LooperMenu::clear ? i18n::text(i18n::Message::confirm_clear)
+            : looper_menu_ == LooperMenu::replace ? i18n::text(i18n::Message::replace_unsaved_loop)
+            : looper_menu_ == LooperMenu::files ? (looper_files_->browsing() ? i18n::text(i18n::Message::scanning) : looper_files_->loop_filename()[0] ? looper_files_->loop_filename() : i18n::text(i18n::Message::no_midi_files))
+            : looper_files_->storage_busy() ? i18n::text(i18n::Message::storage_busy) : "";
         std::snprintf(pages_.looper_prompt,sizeof(pages_.looper_prompt),"%s",text);
     }
     void focus_controller() {

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <new>
+#include "utf8.h"
 
 namespace font_assets {
 constexpr unsigned max_file = 256 * 1024;
@@ -23,7 +24,12 @@ struct Entry {
             && glyphs() * 16 + characters() * 8 <= index_length();
     }
 };
-inline bool printable(unsigned c) { return c >= 32 && c <= 126; }
+inline bool printable(unsigned c) {
+    return c >= 32 && !(c >= 127 && c < 160) && c <= 0x10ffff && !(c >= 0xd800 && c <= 0xdfff);
+}
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(font_valid_pixels)
+#endif
 inline bool valid_pixels(const Entry &e, const uint8_t *data) {
     if (!e.valid()) return false;
     unsigned end = 0; uint32_t previous = 0;
@@ -36,13 +42,11 @@ inline bool valid_pixels(const Entry &e, const uint8_t *data) {
         previous = cntrl::u32(g);
     }
     if (end != e.data_length()) return false;
-    unsigned offset = e.glyphs() * 16; bool seen[95] = {};
+    unsigned offset = e.glyphs() * 16; uint32_t previous_character = 0;
     for (unsigned i = 0; i < e.characters(); ++i, offset += 8) {
         const auto *c = data + offset; unsigned code = cntrl::u32(c);
-        if (!printable(code) || cntrl::u16(c + 4) >= e.glyphs() || signed16(c + 6) < 0) return false;
-        unsigned slot = code - 32;
-        if (seen[slot]) return false;
-        seen[slot] = true;
+        if (!printable(code) || code <= previous_character || cntrl::u16(c + 4) >= e.glyphs() || signed16(c + 6) < 0) return false;
+        previous_character = code;
     }
     for (unsigned i = 0; i < e.runs(); ++i) {
         if (offset + 8 > e.index_length()) return false;
@@ -59,6 +63,9 @@ inline bool valid_pixels(const Entry &e, const uint8_t *data) {
 struct View {
     Entry entry;
     const uint8_t *data = nullptr;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_view_run)
+#endif
     const uint8_t *run(const char *text) const {
         unsigned offset = entry.glyphs() * 16 + entry.characters() * 8;
         auto length = std::strlen(text);
@@ -69,6 +76,9 @@ struct View {
         }
         return nullptr;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_view_character)
+#endif
     const uint8_t *character(unsigned code) const {
         for (unsigned i = 0; i < entry.characters(); ++i) {
             const auto *c = data + entry.glyphs() * 16 + i * 8;
@@ -76,6 +86,9 @@ struct View {
         }
         return nullptr;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_view_position)
+#endif
     bool position(const char *text, unsigned index, unsigned &glyph, int &x, int &y) const {
         if (const auto *r = run(text)) {
             if (index >= cntrl::u16(r + 6)) return false;
@@ -83,14 +96,18 @@ struct View {
             glyph = cntrl::u16(p); x = signed16(p + 2); y = signed16(p + 4); return true;
         }
         x = y = 0;
-        for (unsigned i = 0; text[i]; ++i) {
-            const auto *c = character(uint8_t(text[i]));
+        const char *cursor = text; uint32_t code;
+        for (unsigned i = 0; cntrl::ui::utf8::next(cursor, code); ++i) {
+            const auto *c = character(code);
             if (!c) return false;
             if (i == index) { glyph = cntrl::u16(c + 4); return true; }
             x += signed16(c + 6);
         }
         return false;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(font_view_bounds)
+#endif
     void bounds(const char *text, int &left, int &top, int &width, int &height, int origin) const {
         left = top = width = height = 0;
         bool first = true;
@@ -109,8 +126,9 @@ struct View {
             return;
         }
         int cursor = 0, right = 0;
-        for (unsigned i = 0; text[i]; ++i) {
-            const auto *c = character(uint8_t(text[i])); if (!c) return;
+        const char *text_cursor = text; uint32_t code;
+        while (cntrl::ui::utf8::next(text_cursor, code)) {
+            const auto *c = character(code); if (!c) return;
             const auto *g = data + cntrl::u16(c + 4) * 16;
             include(g, 0);
             int l = cursor + signed16(g + 8), r = l + cntrl::u16(g + 4);

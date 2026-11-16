@@ -10,7 +10,7 @@ from zlib import crc32
 from pydantic import BaseModel
 from serial import Serial, SerialTimeoutException
 
-from . import binary_format, device_settings
+from . import binary_format, device_settings, global_overlay
 from .data_files import validate_name
 from .models import PlayMidiFile, TargetMemory
 from .usb_frames import HEADER, MAGIC, Frame, Kind, Status
@@ -353,13 +353,19 @@ class SetupClient:
             raise ValueError(f'invalid memory response: {response}')
         return TargetMemory(capacity=int(fields[2]), runtime=int(fields[3]))
 
-    def global_settings(self) -> dict[int, int]:
+    def global_settings(self) -> global_overlay.Overlay:
         fields = self.request('CNTRL GLOBAL GET').split()
         if fields[:2] != ['CNTRL', 'GLOBAL']:
             raise ValueError('invalid device-global settings response')
         result: dict[int, int] = {}
+        language: str | None = None
         for item in fields[2:]:
             key, separator, value = item.partition('=')
+            if key == 'language' and separator:
+                if language is not None:
+                    raise ValueError('duplicate device-global language response')
+                language = value
+                continue
             if (
                 not separator
                 or not key.isascii()
@@ -373,7 +379,16 @@ class SetupClient:
             if field in result:
                 raise ValueError('duplicate device-global settings response')
             result[field] = raw
-        return result
+        return global_overlay.Overlay.model_validate(
+            {'values': result, 'language': language}
+        )
+
+    def set_language(self, tag: str) -> None:
+        global_overlay.Overlay.model_validate({'language': tag})
+        self.ok(f'CNTRL GLOBAL SET language {tag}')
+
+    def clear_language(self) -> None:
+        self.ok('CNTRL GLOBAL CLEAR language')
 
     def set_global(self, field: int, value: int) -> None:
         device_settings.decode_value(field, value)
@@ -383,10 +398,10 @@ class SetupClient:
         device_settings.definition(field)
         self.ok(f'CNTRL GLOBAL CLEAR {field}')
 
-    def replace_globals(self, values: dict[int, int]) -> None:
-        for field, value in values.items():
-            device_settings.decode_value(field, value)
-        suffix = ''.join(f' {k}={v}' for k, v in sorted(values.items()))
+    def replace_globals(self, overlay: global_overlay.Overlay) -> None:
+        suffix = ''.join(f' {k}={v}' for k, v in sorted(overlay.values.items()))
+        if overlay.language is not None:
+            suffix += f' language={overlay.language}'
         self.ok('CNTRL GLOBAL PUT' + suffix)
 
     def catalogue(self) -> list[SetupEntry]:
@@ -616,6 +631,23 @@ class SetupClient:
             raise ValueError('invalid source snapshot checksum or size')
         self._copy_asset('SOURCE', Kind.source, snapshot + '.bin', data, False)
 
+    def copy_language(self, tag: str, data: bytes) -> None:
+        from ..localization.catalogue import inspect
+
+        global_overlay.Overlay.model_validate({'language': tag})
+        if inspect(data).language != tag:
+            raise ValueError('language pack tag differs from its filename')
+        self._copy_asset('LANGUAGE', Kind.language, tag + '.bin', data, True)
+
+    def download_language(self, tag: str) -> bytes:
+        from ..localization.catalogue import inspect
+
+        global_overlay.Overlay.model_validate({'language': tag})
+        data = self._download_asset('LANGUAGE', tag + '.bin')
+        if inspect(data).language != tag:
+            raise ValueError('downloaded language pack tag differs')
+        return data
+
     def download_source(self, snapshot: str) -> bytes:
         if len(snapshot) != 64 or any(c not in '0123456789abcdef' for c in snapshot):
             raise ValueError('invalid source snapshot identifier')
@@ -627,7 +659,9 @@ class SetupClient:
     def _copy_asset(
         self, protocol: str, kind: Kind, name: str, data: bytes, overwrite: bool
     ) -> None:
-        label = 'MIDI' if protocol == 'MIDI_FILE' else 'source'
+        label = {'MIDI_FILE': 'MIDI', 'LANGUAGE': 'language pack'}.get(
+            protocol, 'source'
+        )
         try:
             existing = self._download_asset(protocol, name)
         except FileNotFoundError:

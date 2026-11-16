@@ -46,6 +46,18 @@ void test_every_message_category_and_literal_releases() {
     assert(summary(monitor, 15) == "Active sensing");
 }
 
+void test_existing_traffic_is_described_in_the_selected_language() {
+    Monitor monitor; assert(monitor.open(0)); receive(monitor, {0xd2, 99});
+    assert(summary(monitor, 0) == "Ch3 Pressure 99");
+    cntrl::ui::i18n::lookup = [](cntrl::ui::i18n::Message message, bool) -> const char * {
+        return message == cntrl::ui::i18n::Message::monitor_pressure ? "Can{channel:u} Pression {pressure:u}" : nullptr;
+    };
+    assert(summary(monitor, 0) == "Can3 Pression 99");
+    assert(monitor.tail() == 1 && monitor.entry(0)->bytes[0] == 0xd2 && monitor.entry(0)->bytes[1] == 99);
+    cntrl::ui::i18n::lookup = nullptr;
+    assert(summary(monitor, 0) == "Ch3 Pressure 99");
+}
+
 void test_running_status_cables_and_malformed_input_are_independent() {
     Monitor monitor; assert(monitor.open(0));
     receive(monitor, {0x90,60}, 6, 1);
@@ -181,6 +193,7 @@ void test_window_layouts_history_and_bounded_refresh() {
 int main() {
     cntrl::memory_budget = 128 * 1024;
     test_every_message_category_and_literal_releases();
+    test_existing_traffic_is_described_in_the_selected_language();
     test_running_status_cables_and_malformed_input_are_independent();
     test_sysex_chunks_realtime_and_partial_input();
     test_successful_writes_only_and_closed_capture();

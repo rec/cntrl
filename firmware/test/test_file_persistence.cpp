@@ -58,10 +58,27 @@ void test_calibration_survives_reload(TestFileSystem &filesystem) {
     assert(!std::strstr(position, "Uncalibrated"));
     assert(!std::strcmp(prompt, "Confirm: Calibrate"));
 }
+void test_calibration_error_follows_the_current_language(TestFileSystem &filesystem) {
+    TestFile file(filesystem);
+    cntrl::ExpressionPedals pedals(1, file, calibration_name, "Confirm", 8, 2);
+    pedals.calibrate(true); pedals.calibrate(true); // Retain the no-pedal error.
+    char title[40], position[40], prompt[40];
+    pedals.status("Pedal", true, title, position, prompt);
+    assert(!std::strcmp(prompt, "No pedal"));
+    cntrl::ui::i18n::lookup = [](cntrl::ui::i18n::Message message, bool) -> const char * {
+        return message == cntrl::ui::i18n::Message::no_pedal ? "Aucune pédale" : nullptr;
+    };
+    pedals.status("Pedal", true, title, position, prompt);
+    assert(!std::strcmp(prompt, "Aucune pédale") && !std::strcmp(position, "Aucune pédale"));
+    cntrl::ui::i18n::lookup = nullptr;
+    pedals.status("Pedal", true, title, position, prompt);
+    assert(!std::strcmp(prompt, "No pedal"));
+}
 int main(int argc, char **argv) {
     cntrl::memory_budget = 524288;
     assert(argc == 2);
     TestFileSystem filesystem(argv[1]);
     test_recording_selection(filesystem);
     test_calibration_survives_reload(filesystem);
+    test_calibration_error_follows_the_current_language(filesystem);
 }

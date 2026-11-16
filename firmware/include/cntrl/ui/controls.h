@@ -1,4 +1,5 @@
 #pragma once
+#include "messages.h"
 #include <cstdint>
 #include <limits>
 
@@ -88,7 +89,7 @@ public:
             bool performance = services.leave_switches();
             services.invoke(pending == 10 || (performance && pending != 9) ? Operation::performance_show : Operation::menu_open);
             pending = 0; locked = true;
-            if (services.abandoned()) services.error("Switch state unknown");
+            if (services.abandoned()) services.error(i18n::text(i18n::Message::switch_state_unknown));
         }
         switches_open_ = services.switches_open();
         if ((pending || !services.patch_pending()) && !services.switches_open()) {

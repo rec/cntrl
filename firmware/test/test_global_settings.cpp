@@ -17,6 +17,9 @@ struct Board : TestPatchHardware, cntrl::Replies {
     uint8_t brightness = 0;
     bool resources = true;
     bool activity_busy = false;
+    bool language_pending = false, language_failed = false;
+    unsigned prepared_pages = 0;
+    std::string active_language = "en", pending_language;
     cntrl::GlobalCommands *globals = nullptr;
     const cntrl::GlobalSettings::Values *values = nullptr;
     std::string last_error, last_reply;
@@ -29,7 +32,17 @@ struct Board : TestPatchHardware, cntrl::Replies {
     bool supports_trs_mode(unsigned port, cntrl::midi::TrsMode mode) const override { return port < 4 && mode <= cntrl::midi::TrsMode::aux; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
-    bool prepare_pages(const cntrl::Document &) override { return resources; }
+    bool prepare_pages(const cntrl::Document &) override { ++prepared_pages; return resources; }
+    cntrl::LanguagePreparation prepare_language(const char *tag) override {
+        pending_language = tag;
+        return language_failed ? cntrl::LanguagePreparation::failed
+            : language_pending ? cntrl::LanguagePreparation::pending : cntrl::LanguagePreparation::ready;
+    }
+    void finish_language(bool commit) override {
+        if (commit) active_language = pending_language;
+        pending_language.clear();
+    }
+    const char *current_language() const override { return active_language.c_str(); }
     void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t value, bool = false) override { brightness = value; ++brightness_writes; }
     void set_splash(bool, uint32_t) override {}
@@ -59,6 +72,24 @@ void journal_recovers_the_previous_valid_generation(const std::filesystem::path 
     cntrl::GlobalSettings invalid(filesystem); assert(!invalid.boot());
 }
 
+void old_journals_upgrade_without_changing_preferences(const std::filesystem::path &directory) {
+    Files filesystem(directory); assert(filesystem.make_directory("/cntrl/global"));
+    uint8_t old[cntrl::GlobalSettings::old_record_size] = {};
+    std::memcpy(old, "CGLO", 4); old[4] = 1; old[8] = 5; old[12] = 1; old[20] = 77;
+    cntrl::binary::write32(old + sizeof(old) - 8, cntrl::binary::crc(old, sizeof(old) - 8));
+    std::memcpy(old + sizeof(old) - 4, "DONE", 4);
+    auto file = filesystem.file(); assert(file->open("/cntrl/global/0.bin", cntrl::files::Mode::create));
+    assert(file->write(0, old, sizeof(old)) && file->sync()); file->close();
+    cntrl::GlobalSettings settings(filesystem); assert(settings.boot());
+    assert(settings.values().known == 1 && settings.values().values[0] == 77 && !settings.values().language[0]);
+    auto value = settings.values(); std::strcpy(value.language, "fr"); assert(settings.commit(value));
+    cntrl::GlobalSettings restarted(filesystem); assert(restarted.boot());
+    assert(restarted.values().values[0] == 77 && !std::strcmp(restarted.values().language, "fr"));
+    value = restarted.values(); std::strcpy(value.language, "fr-CA"); assert(restarted.commit(value));
+    cntrl::GlobalSettings future(filesystem); assert(future.boot());
+    assert(!std::strcmp(future.values().language, "fr-CA"));
+}
+
 void inherited_settings_remain_separate_from_authored_setups(const char *bundle, const std::filesystem::path &directory) {
     Board board; TestStorage disk; cntrl::BundledStorage storage(disk, board); assert(storage.boot());
     std::ifstream input(bundle, std::ios::binary);
@@ -74,6 +105,33 @@ void inherited_settings_remain_separate_from_authored_setups(const char *bundle,
     cntrl::GlobalCommands commands(settings, documents, board, board);
     board.globals = &commands; board.values = &settings.values();
     assert(!std::strcmp(documents.selected(), "a") && documents.document().brightness() == 192);
+    {
+        const auto *data = documents.document().data(); const unsigned prepared = board.prepared_pages;
+        assert(commands.command("CNTRL GLOBAL PUT 7=1 language=fr")); commands.poll(true);
+        assert(board.last_reply == "CNTRL ERROR global-busy" && !settings.values().language[0] && !settings.values().known);
+        board.language_pending = board.activity_busy = true;
+        board.last_reply.clear(); assert(commands.command("CNTRL GLOBAL SET language fr"));
+        commands.poll(true); assert(board.last_reply.empty() && !settings.values().language[0]);
+        board.language_pending = false; commands.poll(true);
+        assert(board.last_reply == "CNTRL OK" && board.active_language == "fr");
+        assert(!std::strcmp(settings.values().language, "fr") && documents.document().data() == data && board.prepared_pages == prepared);
+        board.active_language = "en"; // A boot fallback must be recoverable after reinstalling its pack.
+        assert(commands.request_language("fr")); commands.poll(true);
+        assert(board.active_language == "fr");
+        cntrl::GlobalSettings restarted(filesystem); assert(restarted.boot());
+        assert(!std::strcmp(restarted.values().language, "fr"));
+        board.activity_busy = false;
+        assert(commands.command("CNTRL GLOBAL PUT 3=0 language=en")); commands.poll(false);
+        assert(board.last_reply == "CNTRL ERROR global-invalid-setup" && board.active_language == "fr" && !settings.values().known);
+        filesystem.blocked = true; assert(commands.command("CNTRL GLOBAL CLEAR language")); commands.poll(false);
+        assert(board.last_reply == "CNTRL ERROR global-write" && board.active_language == "fr");
+        filesystem.blocked = false; board.language_failed = true;
+        assert(commands.command("CNTRL GLOBAL CLEAR language")); commands.poll(false);
+        assert(board.last_reply == "CNTRL ERROR global-language" && board.active_language == "fr");
+        board.language_failed = false; assert(commands.command("CNTRL GLOBAL CLEAR language")); commands.poll(false);
+        assert(board.last_reply == "CNTRL OK" && board.active_language == "en" && !settings.values().language[0]);
+        assert(!commands.request_language("../fr"));
+    }
     {
         const auto &original = documents.document();
         std::vector<uint8_t> clock_bytes(original.data(), original.data() + original.length());
@@ -167,5 +225,6 @@ int main(int argc, char **argv) {
     assert(argc == 3); cntrl::memory_budget = 16 * 1024 * 1024;
     const std::filesystem::path root(argv[2]);
     journal_recovers_the_previous_valid_generation(root / "journal");
+    old_journals_upgrade_without_changing_preferences(root / "legacy");
     inherited_settings_remain_separate_from_authored_setups(argv[1], root / "settings");
 }

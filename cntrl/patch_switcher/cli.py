@@ -26,6 +26,7 @@ from . import (
     disk_speed,
     global_config,
     history,
+    languages,
     midi_assets,
     models,
     resolved,
@@ -578,6 +579,11 @@ def download_files(
     live_globals = device_globals.capture(client)
     if live_globals is not None:
         files[Path('device-globals.toml')] = device_globals.dump(live_globals)
+        if live_globals.language == 'fr':
+            try:
+                files[Path('languages/fr.bin')] = client.download_language('fr')
+            except FileNotFoundError:
+                pass  # Keep the saved preference; the device uses English recovery UI.
     files.update(source_archive.download(client, setups, live_globals=live_globals))
     return files
 
@@ -704,6 +710,7 @@ def main() -> None:
         | Annotated[SetupCLI, tyro.conf.subcommand(name='setup')]
         | Annotated[Status, tyro.conf.subcommand(name='status')]
         | Annotated[device_globals.GlobalCLI, tyro.conf.subcommand(name='global')]
+        | Annotated[languages.LanguageCLI, tyro.conf.subcommand(name='language')]
         | Annotated[Songs, tyro.conf.subcommand(name='songs')]
         | Annotated[build.Build, tyro.conf.subcommand(name='build')]
         | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
@@ -735,6 +742,8 @@ def main() -> None:
             run_setup(command.command)
         elif isinstance(command, device_globals.GlobalCLI):
             device_globals.run(command.command)
+        elif isinstance(command, languages.LanguageCLI):
+            languages.run(command.command)
         elif command.command is not None:
             if command.reset_starts:
                 raise ValueError('--reset-starts cannot be combined with disk-speed')

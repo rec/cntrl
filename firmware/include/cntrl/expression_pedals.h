@@ -1,6 +1,7 @@
 #pragma once
 #include <cntrl/document.h>
 #include <cntrl/filesystem.h>
+#include <cntrl/ui/messages.h>
 #include <vector>
 #include <array>
 #include <cstdio>
@@ -45,28 +46,28 @@ public:
     void cancel() {
         if (stage_ != Capture::idle) { inputs_[selected_].disarm(); delivered_[selected_] = {-1, -1}; }
         stage_ = Capture::idle;
-        message_ = nullptr;
+        message_ = no_message;
     }
     void select(unsigned index) { cancel(); selected_ = index; }
     void calibrate(bool enabled) {
         if (!enabled) { cancel(); return; }
         if (stage_ == Capture::idle) {
             stage_ = Capture::heel;
-            message_ = nullptr;
+            message_ = no_message;
             inputs_[selected_].reset();
             return;
         }
         int reading = inputs_[selected_].reading();
-        if (reading < 0) { message_ = "No pedal"; return; }
+        if (reading < 0) { message_ = ui::i18n::Message::no_pedal; return; }
         if (stage_ == Capture::heel) {
             heel_ = reading;
             stage_ = Capture::toe;
-            message_ = nullptr;
+            message_ = no_message;
             return;
         }
         cntrl::ExpressionCalibration cal{uint16_t(heel_), uint16_t(reading)};
-        if (!cal.valid()) { message_ = "Travel too short"; return; }
-        if (!save(selected_, cal)) { message_ = "Save failed"; return; }
+        if (!cal.valid()) { message_ = ui::i18n::Message::travel_too_short; return; }
+        if (!save(selected_, cal)) { message_ = ui::i18n::Message::save_failed; return; }
         cancel(); inputs_[selected_].reset();
     }
 
@@ -90,7 +91,7 @@ public:
             if (stage_ != Capture::idle && i == selected_) {
                 if (inputs_[i].reading() < 0 && stage_ == Capture::toe) {
                     stage_ = Capture::heel;
-                    message_ = "Reconnect: heel";
+                    message_ = ui::i18n::Message::reconnect_heel;
                 }
                 continue;
             }
@@ -110,20 +111,24 @@ public:
         if (!phase_) first_ = (first_ + 1) % inputs_.size();
     }
     unsigned selected() const { return selected_; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(expression_status)
+#endif
     void status(const char *label, bool enabled, char (&title)[40], char (&position)[40], char (&prompt)[40]) const {
+        using ui::i18n::Message;
         const auto &a = assignments_[selected_];
-        if (a.channel) std::snprintf(title, sizeof(title), "%.20s  CC %u Ch %u", label, a.controller, a.channel);
-        else std::snprintf(title, sizeof(title), "%.24s  Unassigned", label);
+        if (a.channel) ui::i18n::format(title, sizeof(title), Message::expression_assigned, label, a.controller, a.channel);
+        else ui::i18n::format(title, sizeof(title), Message::unassigned_port, label);
         const auto &input = inputs_[selected_];
-        if (!enabled) std::strcpy(position, "Select expression role");
-        else if (input.reading() < 0) std::strcpy(position, "No pedal");
-        else if (!saved_[selected_].cal.valid()) std::snprintf(position, sizeof(position), "Raw %d  Uncalibrated", input.reading());
-        else std::snprintf(position, sizeof(position), "%d%%  Calibrated", (input.position() * 100 + 511) / 1023);
-        if (message_) std::snprintf(prompt, sizeof(prompt), "%s", message_);
-        else if (!enabled) std::strcpy(prompt, "Select expression role");
+        if (!enabled) ui::utf8::copy(position, sizeof(position), ui::i18n::text(Message::select_expression_role));
+        else if (input.reading() < 0) ui::utf8::copy(position, sizeof(position), ui::i18n::text(Message::no_pedal));
+        else if (!saved_[selected_].cal.valid()) ui::i18n::format(position, sizeof(position), Message::raw_uncalibrated, input.reading());
+        else ui::i18n::format(position, sizeof(position), Message::calibrated_position, (input.position() * 100 + 511) / 1023);
+        if (message_ != no_message) ui::utf8::copy(prompt, sizeof(prompt), ui::i18n::text(message_));
+        else if (!enabled) ui::utf8::copy(prompt, sizeof(prompt), ui::i18n::text(Message::select_expression_role));
         else if (!confirm_[0]) prompt[0] = 0;
-        else std::snprintf(prompt, sizeof(prompt), "%s: %s", confirm_,
-            stage_ == Capture::heel ? "Heel down" : stage_ == Capture::toe ? "Toe down" : "Calibrate");
+        else ui::i18n::format(prompt, sizeof(prompt), Message::expression_step, confirm_,
+            ui::i18n::text(stage_ == Capture::heel ? Message::heel_down : stage_ == Capture::toe ? Message::toe_down : Message::calibrate));
     }
 
 private:
@@ -175,7 +180,8 @@ private:
     unsigned selected_ = 0, phase_ = 0, first_ = 0;
     uint32_t tick_ = 0;
     int heel_ = 0;
-    const char *message_ = nullptr;
+    static constexpr auto no_message = ui::i18n::Message(ui::i18n::message_count);
+    ui::i18n::Message message_ = no_message;
 };
 
 } // namespace cntrl

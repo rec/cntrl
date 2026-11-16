@@ -1,4 +1,5 @@
 #pragma once
+#include "messages.h"
 #include <cntrl/hardware.h>
 #include <cntrl/tempo.h>
 #include <cntrl/clock_generator.h>
@@ -72,7 +73,7 @@ public:
         unsigned index = 0, jack = 0, shortcut = 0;
         Page page = Page::none;
         midi::TrsMode candidate = midi::TrsMode::off, active_port = midi::TrsMode::off;
-        const char *port_message = nullptr, *port_name = "No configurable ports";
+        const char *port_message = nullptr, *port_name = i18n::definitions[unsigned(i18n::Message::no_configurable_ports)].text;
         bool port_available = false, shortcut_held = false, dirty = true, flashing = false, held = false;
         uint32_t refreshed = 0;
         char expression[3][40] = {}, looper_prompt[96] = {};
@@ -158,9 +159,9 @@ public:
     unsigned jack = 0;
     PortMode candidate = PortMode::off;
     void port_status(PortMode active, const char *message = nullptr) {
-        active_port_ = active; port_message_ = message; dirty_ = true;
+        active_port_ = active; port_message_ = i18n::stable(message); dirty_ = true;
     }
-    void port_name(const char *label, bool available) { port_name_ = label; port_available_ = available; dirty_ = true; }
+    void port_name(const char *label, bool available) { port_name_ = i18n::stable(label); port_available_ = available; dirty_ = true; }
     void next_port_mode() {
         candidate = PortMode((unsigned(candidate) + 1) % 5);
         port_message_ = nullptr; dirty_ = true;
@@ -295,8 +296,8 @@ public:
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
         if (page_ == Page::confirm_firmware) {
             const unsigned height = title * 3 / 2;
-            line(pane, 0, prompt("%s for stock firmware.", controls_.next_page), viewport_.height / 2 - height, height, settings_[R::title_font], true);
-            line(pane, 1, prompt("%s to cancel", controls_.confirm), viewport_.height / 2, height, settings_[R::title_font], true, nullptr, 0, viewport_.width, pane.lines[0].graphics.size);
+            line(pane, 0, prompt(i18n::Message::stock_firmware_prompt, controls_.next_page), viewport_.height / 2 - height, height, settings_[R::title_font], true);
+            line(pane, 1, prompt(i18n::Message::cancel_prompt, controls_.confirm), viewport_.height / 2, height, settings_[R::title_font], true, nullptr, 0, viewport_.width, pane.lines[0].graphics.size);
             return pane;
         }
         if (page_ == Page::panic) {
@@ -311,14 +312,14 @@ public:
             if (pressed) {
                 pane.graphics.foreground = red;
                 const unsigned height = vertical(24);
-                line(pane, 1, panic == cntrl::Panic::Status::notes_off ? "Notes off" : "All off",
-                     (viewport_.height - height) / 2, height, settings_[R::status_font], true, "Notes off");
+                line(pane, 1, panic == cntrl::Panic::Status::notes_off ? i18n::text(i18n::Message::notes_off) : i18n::text(i18n::Message::all_off),
+                     (viewport_.height - height) / 2, height, settings_[R::status_font], true, i18n::text(i18n::Message::notes_off));
             }
             return pane;
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::clock_transport ? "MIDI Clock" : page_ == Page::clock_tempo ? "Clock Tempo" : page_ == Page::tap ? "Tap Tempo" : page_ == Page::status ? "Status" : page_ == Page::cable ? "MIDI Cable Test" : page_ == Page::ports ? "TRS Ports" : page_ == Page::keyboard ? "Keyboard" : "Firmware";
+        const char *heading = page_ == Page::clock_transport ? i18n::text(i18n::Message::midi_clock) : page_ == Page::clock_tempo ? i18n::text(i18n::Message::clock_tempo) : page_ == Page::tap ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : page_ == Page::ports ? i18n::text(i18n::Message::trs_ports) : page_ == Page::keyboard ? i18n::text(i18n::Message::keyboard) : i18n::text(i18n::Message::firmware);
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) heading = preview_label_;
 #endif
@@ -328,8 +329,8 @@ public:
             char tempo[32], detail[64];
             std::snprintf(tempo, sizeof(tempo), "%u BPM", generator.bpm());
             if (page_ == Page::clock_transport) {
-                const char *state = external_ ? (clock_.active() ? "External: receiving" : "External: waiting")
-                    : !clock_outputs() ? "No outputs configured" : !available_outputs_ ? "Outputs offline" : generator.running() ? "Internal: running" : "Internal: stopped";
+                const char *state = external_ ? (clock_.active() ? i18n::text(i18n::Message::external_receiving) : i18n::text(i18n::Message::external_waiting))
+                    : !clock_outputs() ? i18n::text(i18n::Message::no_outputs_configured) : !available_outputs_ ? i18n::text(i18n::Message::outputs_offline) : generator.running() ? i18n::text(i18n::Message::internal_running) : i18n::text(i18n::Message::internal_stopped);
                 line(pane, 1, state, vertical(30), vertical(19), font, true);
                 if (external_) number_text(tempo, sizeof(tempo), clock_.period_us(), true, true);
                 line(pane, 2, tempo, vertical(48), vertical(19), font, true);
@@ -342,14 +343,14 @@ public:
                 };
                 for (const auto &port : outputs_) output(port);
                 line(pane, 3, detail, vertical(67), vertical(14), font, true);
-                line(pane, 4, prompt("%s Start  %s Continue", controls_.previous, controls_.next), vertical(82), vertical(16), font, true);
-                line(pane, 5, prompt("%s Stop  %s Source", controls_.confirm, controls_.next_section), vertical(102), vertical(16), font, true);
+                line(pane, 4, prompt(i18n::Message::start_continue_prompt, controls_.previous, controls_.next), vertical(82), vertical(16), font, true);
+                line(pane, 5, prompt(i18n::Message::stop_source_prompt, controls_.confirm, controls_.next_section), vertical(102), vertical(16), font, true);
             } else {
-                std::snprintf(detail, sizeof(detail), "Slot %u: %u BPM", slot_ + 1, settings_.words[R::slot1 + slot_]);
+                i18n::format(detail, sizeof(detail), i18n::Message::tempo_slot, slot_ + 1, settings_.words[R::slot1 + slot_]);
                 line(pane, 1, detail, vertical(28), vertical(18), font, true);
                 line(pane, 2, tempo, vertical(50), vertical(24), font, true);
-                line(pane, 3, prompt("%s -1   %s +1   %s Slot", controls_.previous, controls_.next, controls_.confirm), vertical(80), vertical(17), font, true);
-                std::snprintf(detail, sizeof(detail), "Late %uus  Lost %u", generator.late_us, generator.skipped + generator.blocked);
+                line(pane, 3, prompt(i18n::Message::tempo_adjust_prompt, controls_.previous, controls_.next, controls_.confirm), vertical(80), vertical(17), font, true);
+                i18n::format(detail, sizeof(detail), i18n::Message::clock_late_lost, generator.late_us, generator.skipped + generator.blocked);
                 line(pane, 4, detail, vertical(102), vertical(16), font, true);
             }
             return pane;
@@ -357,13 +358,13 @@ public:
         if (page_ == Page::cable) {
             const bool active = cable.enabled;
             const unsigned font = settings_[R::status_font];
-            line(pane, 1, "Out", vertical(32), vertical(18), font, true, nullptr, horizontal(56), horizontal(100));
-            line(pane, 2, "In", vertical(32), vertical(18), font, true, nullptr, horizontal(106), horizontal(154));
+            line(pane, 1, i18n::text(i18n::Message::output_heading), vertical(32), vertical(18), font, true, nullptr, horizontal(56), horizontal(100));
+            line(pane, 2, i18n::text(i18n::Message::input_heading), vertical(32), vertical(18), font, true, nullptr, horizontal(106), horizontal(154));
             unsigned rows = std::max(cable.output_count, cable.input_count);
             if (rows > cntrl::max_lines - 3) rows = cntrl::max_lines - 3;
             for (unsigned i = 0; i < rows; ++i) {
                 unsigned y = vertical(59 + i * 52 / std::max(1u, rows));
-                const char *label = i < cable.output_count ? cable.connections[i].label : "Input";
+                const char *label = i < cable.output_count ? cable.connections[i].label : i18n::text(i18n::Message::input);
                 line(pane, 3 + i, label, y, vertical(18), font, false, nullptr, horizontal(8), horizontal(54));
                 pane.lines[3 + i].graphics.foreground = active ? 0 : 0x8410;
                 if (i < cable.output_count && i < sizeof(pane.circles) / sizeof(pane.circles[0])) {
@@ -382,30 +383,30 @@ public:
         if (page_ == Page::keyboard) {
             const auto selected_shortcut = keyboard_shortcut();
             const unsigned font = settings_[R::status_font];
-            line(pane, 1, selected_shortcut.name[0] ? selected_shortcut.name : "No shortcuts", vertical(38), vertical(24), font, true);
-            line(pane, 2, shortcut_held ? "Held" : "Ready", vertical(66), vertical(20), font, true);
-            line(pane, 3, prompt("%s/%s: Select", controls_.previous, controls_.next), vertical(91), vertical(16), font, true);
-            line(pane, 4, prompt("Hold %s: Send", controls_.confirm), vertical(109), vertical(16), font, true);
+            line(pane, 1, selected_shortcut.name[0] ? selected_shortcut.name : i18n::text(i18n::Message::no_shortcuts), vertical(38), vertical(24), font, true);
+            line(pane, 2, shortcut_held ? i18n::text(i18n::Message::held) : i18n::text(i18n::Message::ready), vertical(66), vertical(20), font, true);
+            line(pane, 3, prompt(i18n::Message::select_pair_prompt, controls_.previous, controls_.next), vertical(91), vertical(16), font, true);
+            line(pane, 4, prompt(i18n::Message::hold_send_prompt, controls_.confirm), vertical(109), vertical(16), font, true);
             return pane;
         }
         if (page_ == Page::ports) {
-            constexpr const char *names[] = {"Off", "MIDI Type A", "MIDI Type B", "Expression", "Aux switch"};
+            const char *names[] = {i18n::text(i18n::Message::off), i18n::text(i18n::Message::midi_type_a), i18n::text(i18n::Message::midi_type_b), i18n::text(i18n::Message::expression), i18n::text(i18n::Message::aux_switch)};
             char current[40];
-            if (port_available_) std::snprintf(current, sizeof(current), "%.23s: %s", port_name_, names[unsigned(active_port_)]);
-            else std::snprintf(current, sizeof(current), "%s", port_name_);
+            if (port_available_) std::snprintf(current, sizeof(current), "%.23s: %s", i18n::translated(port_name_), names[unsigned(active_port_)]);
+            else std::snprintf(current, sizeof(current), "%s", i18n::translated(port_name_));
             const unsigned font = settings_[R::status_font];
             line(pane, 1, current, vertical(34), vertical(22), font, true);
-            line(pane, 2, port_message_ ? port_message_ : names[unsigned(candidate)], vertical(60), vertical(22), font, true);
+            line(pane, 2, port_message_ ? i18n::translated(port_message_) : names[unsigned(candidate)], vertical(60), vertical(22), font, true);
             if (port_available_) {
-                line(pane, 3, prompt("%s: Jack   %s: Mode", controls_.previous, controls_.next), vertical(87), vertical(17), font, true);
-                line(pane, 4, prompt("%s: Apply", controls_.confirm), vertical(106), vertical(17), font, true);
+                line(pane, 3, prompt(i18n::Message::jack_mode_prompt, controls_.previous, controls_.next), vertical(87), vertical(17), font, true);
+                line(pane, 4, prompt(i18n::Message::apply_prompt, controls_.confirm), vertical(106), vertical(17), font, true);
             }
             return pane;
         }
         if (page_ == Page::firmware) {
             const unsigned label_height = std::min(title * 2, (viewport_.height - 2 * pad) / 4);
-            line(pane, 1, "Use stock", viewport_.height - pad - label_height * 2, label_height, 0, true);
-            line(pane, 2, "firmware", viewport_.height - pad - label_height, label_height, 0, true);
+            line(pane, 1, i18n::text(i18n::Message::use_stock), viewport_.height - pad - label_height * 2, label_height, 0, true);
+            line(pane, 2, i18n::text(i18n::Message::firmware_caption), viewport_.height - pad - label_height, label_height, 0, true);
             return pane;
         }
         if (page_ == Page::tap) {
@@ -426,11 +427,11 @@ public:
             pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
             char rows[5][64] = {};
-            std::snprintf(rows[0], sizeof(rows[0]), "Cycles:%u  Patches:%u", status.cycles, status.patches);
+            i18n::format(rows[0], sizeof(rows[0]), i18n::Message::cycles_patches, status.cycles, status.patches);
             char tap[24], clock[24], tap_label[32];
             number_text(tap, sizeof(tap), tap_.period(), false, true);
             number_text(clock, sizeof(clock), clock_.period_us(), true, true);
-            std::snprintf(rows[1], sizeof(rows[1]), "Clock:%s", clock + std::strspn(clock," "));
+            i18n::format(rows[1], sizeof(rows[1]), i18n::Message::clock_value, clock + std::strspn(clock," "));
             std::snprintf(rows[2], sizeof(rows[2]), "RAM:%lu/%luk %lu/%luk",
                 (unsigned long)(status.ram_used[0] / 1024),
                 (unsigned long)((status.ram_used[0] + status.ram_free[0]) / 1024),
@@ -439,25 +440,21 @@ public:
             constexpr uint64_t gibibyte = 1024ull * 1024 * 1024;
             if (status.disk_valid) {
                 uint64_t tenths = (status.disk_used * 10 + gibibyte / 2) / gibibyte;
-                std::snprintf(rows[3], sizeof(rows[3]), "Disk:%lu.%lu/%luG",
-                    (unsigned long)(tenths / 10), (unsigned long)(tenths % 10),
-                    (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
-            } else std::snprintf(rows[3], sizeof(rows[3]), "Disk:--/--G");
+                i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_value, (unsigned long)(tenths / 10), (unsigned long)(tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
+            } else i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_unknown);
             uint64_t seconds = uptime_ / 1000;
             auto disk_length = std::strlen(rows[3]);
-            std::snprintf(rows[3] + disk_length, sizeof(rows[3]) - disk_length, " Up:%lu:%02u:%02u",
-                (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
+            i18n::format(rows[3] + disk_length, sizeof(rows[3]) - disk_length, i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
             if (status.starts_status == StartsStatus::ready) {
                 char number[21]; *std::to_chars(number, number + 20, status.starts).ptr = 0;
-                std::snprintf(rows[4], sizeof(rows[4]), "Starts:%s", number);
+                i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, number);
             }
-            else std::snprintf(rows[4], sizeof(rows[4]), "Starts:%s",
-                status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : "error") : "--");
+            else i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
 #ifdef CNTRL_GIT_COMMIT
             const auto starts_length = std::strlen(rows[4]);
             std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", unsigned(CNTRL_GIT_COMMIT));
 #endif
-            std::snprintf(tap_label, sizeof(tap_label), "Tap:%s", tap + std::strspn(tap," "));
+            i18n::format(tap_label, sizeof(tap_label), i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
             const unsigned body_height = viewport_.height - pad - body_top;
             auto body = [&](unsigned maximum_size) {
@@ -484,9 +481,11 @@ public:
                 l.graphics.foreground = 0x0011; // Dark blue, #00008B.
                 l.alternate_color = 0x0400; // Green, #008000.
                 bool value = false;
-                for (unsigned j = 0; l.text[j]; ++j) {
-                    if (l.text[j] == ':' && !value) { value = true; continue; }
-                    if (((i == 1 || i == 6) && l.text[j] == ' ' && l.text[j + 1] == ' ') || (i == 5 && l.text[j] == ' ')) value = false;
+                const char *cursor = l.text;
+                for (unsigned j = 0; *cursor; ++j) {
+                    uint32_t code; if (!utf8::next(cursor, code)) break;
+                    if (code == ':' && !value) { value = true; continue; }
+                    if (((i == 1 || i == 6) && code == ' ' && *cursor == ' ') || (i == 5 && code == ' ')) value = false;
                     if (value) l.color_mask |= uint64_t(1) << j;
                 }
             }
@@ -515,15 +514,15 @@ private:
         rectangle(3, pong.x - 2, pong.y - 2, 4, 4, 0xffe0);
         const unsigned font = settings_[cntrl::PageSettings::status_font];
         char score[32];
-        std::snprintf(score, sizeof(score), "PLAYER %u   %u", window == 0 ? 1 : 2, window == 0 ? pong.left_score : pong.right_score);
+        i18n::format(score, sizeof(score), i18n::Message::player_score, window == 0 ? 1 : 2, window == 0 ? pong.left_score : pong.right_score);
         line(pane, 0, window == 1 ? "PONG" : score, vertical(3), vertical(18), font, true, nullptr, 0, 0, 16);
         pane.lines[0].graphics.foreground = window == 0 ? 0x07ff : window == 2 ? 0xf81f : 0xffff;
-        const char *hint = window == 0 ? prompt("%s Up / %s Down", controls_.previous_section, controls_.previous)
-            : window == 2 ? prompt("%s Up / %s Down", controls_.back, controls_.confirm)
-            : prompt("%s Serve/Pause  %s Exit", controls_.next, controls_.next_section);
+        const char *hint = window == 0 ? prompt(i18n::Message::up_down_prompt, controls_.previous_section, controls_.previous)
+            : window == 2 ? prompt(i18n::Message::up_down_prompt, controls_.back, controls_.confirm)
+            : prompt(i18n::Message::serve_exit_prompt, controls_.next, controls_.next_section);
         line(pane, 1, hint, vertical(115), vertical(11), font, true, nullptr, 0, 0, 10);
         if (window == 1 && pong.state != Pong::State::playing) {
-            const char *message = pong.state == Pong::State::paused ? "PAUSED" : pong.state == Pong::State::finished ? (pong.left_score == 11 ? "PLAYER 1 WINS" : "PLAYER 2 WINS") : "PRESS TO SERVE";
+            const char *message = pong.state == Pong::State::paused ? i18n::text(i18n::Message::paused) : pong.state == Pong::State::finished ? (pong.left_score == 11 ? i18n::text(i18n::Message::player_one_wins) : i18n::text(i18n::Message::player_two_wins)) : i18n::text(i18n::Message::press_to_serve);
             line(pane, 2, message, vertical(45), vertical(15), font, true, nullptr, 0, 0, 12);
         }
     }
@@ -532,40 +531,40 @@ private:
 #endif
     void arpeggiator_view(Pane &pane) {
         using R = cntrl::PageSettings;
-        line(pane,0,"Arpeggiator",2,18,settings_[R::title_font],true);
-        const char *states[] = {"Off","Waiting","Playing","Record armed","Recording","Finish armed"};
-        const char *selections[] = {"Forward","Reverse","Played","Back and forth","Random","Random walk","Mod","Shuffle","Outside in"};
-        const char *errors[] = {"","Capacity exceeded","Clock unavailable","Output blocked"};
+        line(pane,0,i18n::text(i18n::Message::arpeggiator),2,18,settings_[R::title_font],true);
+        const char *states[] = {i18n::text(i18n::Message::off),i18n::text(i18n::Message::waiting),i18n::text(i18n::Message::playing),i18n::text(i18n::Message::record_armed),i18n::text(i18n::Message::recording),i18n::text(i18n::Message::finish_armed)};
+        const char *selections[] = {i18n::text(i18n::Message::forward),i18n::text(i18n::Message::reverse),i18n::text(i18n::Message::played),i18n::text(i18n::Message::back_and_forth),i18n::text(i18n::Message::random),i18n::text(i18n::Message::random_walk),i18n::text(i18n::Message::mod),i18n::text(i18n::Message::shuffle),i18n::text(i18n::Message::outside_in)};
+        const char *errors[] = {"",i18n::text(i18n::Message::capacity_exceeded),i18n::text(i18n::Message::clock_unavailable),i18n::text(i18n::Message::output_blocked)};
         char text[96];
-        std::snprintf(text,sizeof(text),"%s %s",arpeggiator && arpeggiator->mono() ? "Mono" : "Poly",arpeggiator && arpeggiator->configured() ? states[unsigned(arpeggiator->state())] : "Unavailable");
+        std::snprintf(text,sizeof(text),"%s %s",arpeggiator && arpeggiator->mono() ? "Mono" : "Poly",arpeggiator && arpeggiator->configured() ? states[unsigned(arpeggiator->state())] : i18n::text(i18n::Message::unavailable));
         line(pane,1,text,24,14,settings_[R::status_font],true);
         line(pane,2,arpeggiator ? selections[arpeggiator->selection()] : "",42,12,settings_[R::status_font],true);
-        std::snprintf(text,sizeof(text),"%u entries",arpeggiator ? arpeggiator->size() : 0);
+        i18n::format(text, sizeof(text), i18n::Message::entries_count, arpeggiator ? arpeggiator->size() : 0);
         line(pane,3,text,58,12,settings_[R::status_font],true);
         line(pane,4,arpeggiator ? errors[unsigned(arpeggiator->error())] : "",74,12,settings_[R::status_font],true);
-        line(pane,5,arpeggiator && arpeggiator->mono() ? prompt("%s Rec/Finish %s Play/Stop",controls_.previous,controls_.next) : prompt("%s On/Off",controls_.next),90,12,settings_[R::status_font],true);
+        line(pane,5,arpeggiator && arpeggiator->mono() ? prompt(i18n::Message::record_finish_play_stop_prompt, controls_.previous, controls_.next) : prompt(i18n::Message::on_off_prompt, controls_.next),90,12,settings_[R::status_font],true);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(looper_view)
 #endif
     void looper_view(Pane &pane, midi::BeatPosition clock) {
         using R = cntrl::PageSettings;
-        line(pane,0,"MIDI Looper",2,18,settings_[R::title_font],true);
-        const char *states[] = {"Empty","Armed","Recording","Closing","Playing","Overdub armed","Overdubbing","Preparing","Stopped","Launch armed","Undo pending","Loading"};
-        const char *errors[] = {"","Busy","Clock unavailable","Capacity exceeded","Memory unavailable","Late boundary","Output retired","File error","Input changed"};
+        line(pane,0,i18n::text(i18n::Message::midi_looper),2,18,settings_[R::title_font],true);
+        const char *states[] = {i18n::text(i18n::Message::empty),i18n::text(i18n::Message::armed),i18n::text(i18n::Message::recording),i18n::text(i18n::Message::closing),i18n::text(i18n::Message::playing),i18n::text(i18n::Message::overdub_armed),i18n::text(i18n::Message::overdubbing),i18n::text(i18n::Message::preparing),i18n::text(i18n::Message::stopped),i18n::text(i18n::Message::launch_armed),i18n::text(i18n::Message::undo_pending),i18n::text(i18n::Message::loading)};
+        const char *errors[] = {"",i18n::text(i18n::Message::busy),i18n::text(i18n::Message::clock_unavailable),i18n::text(i18n::Message::capacity_exceeded),i18n::text(i18n::Message::memory_unavailable),i18n::text(i18n::Message::late_boundary),i18n::text(i18n::Message::output_retired),i18n::text(i18n::Message::file_error),i18n::text(i18n::Message::input_changed)};
         char text[96];
-        std::snprintf(text,sizeof(text),"%s%s%s",looper ? states[unsigned(looper->state())] : "Unavailable",
+        std::snprintf(text,sizeof(text),"%s%s%s",looper ? states[unsigned(looper->state())] : i18n::text(i18n::Message::unavailable),
             looper && looper->error() != midi::MidiLooper::Error::none ? ": " : "",looper ? errors[unsigned(looper->error())] : "");
         line(pane,1,text,24,14,settings_[R::status_font],true);
         uint64_t length = looper ? looper->length() : 0;
         uint64_t position = looper ? looper->position(clock) : 0;
-        std::snprintf(text,sizeof(text),"%llu.%02u / %llu.%02u beats",(unsigned long long)(position >> 32),unsigned((position & 0xffffffffu) * 100 >> 32),(unsigned long long)(length >> 32),unsigned((length & 0xffffffffu) * 100 >> 32));
+        i18n::format(text, sizeof(text), i18n::Message::loop_beats, (unsigned long long)(position >> 32), unsigned((position & 0xffffffffu) * 100 >> 32), (unsigned long long)(length >> 32), unsigned((length & 0xffffffffu) * 100 >> 32));
         line(pane,2,text,42,12,settings_[R::status_font],true);
-        std::snprintf(text,sizeof(text),"%u/%u events%s%s",looper ? looper->events() : 0,looper ? looper->capacity() : 0,!clock.running ? " Clock waiting" : looper && looper->unsaved() ? " Unsaved" : "",looper && looper->backward() ? " Backward" : " Forward");
+        i18n::format(text, sizeof(text), i18n::Message::loop_events, looper ? looper->events() : 0, looper ? looper->capacity() : 0, !clock.running ? i18n::text(i18n::Message::clock_waiting_suffix) : looper && looper->unsaved() ? i18n::text(i18n::Message::unsaved_suffix) : "", looper && looper->backward() ? i18n::text(i18n::Message::backward_suffix) : i18n::text(i18n::Message::forward_suffix));
         line(pane,3,text,58,12,settings_[R::status_font],true);
-        line(pane,4,looper_prompt[0] ? looper_prompt : looper && looper->direction_pending() ? "Direction change pending" : "",74,12,settings_[R::status_font],true);
-        line(pane,5,prompt("%s Rec %s Play %s Undo",controls_.previous,controls_.next,controls_.confirm),90,12,settings_[R::status_font],true);
-        line(pane,6,prompt("%s Clear %s More",controls_.previous_section,controls_.next_section),106,12,settings_[R::status_font],true);
+        line(pane,4,looper_prompt[0] ? looper_prompt : looper && looper->direction_pending() ? i18n::text(i18n::Message::direction_change_pending) : "",74,12,settings_[R::status_font],true);
+        line(pane,5,prompt(i18n::Message::record_play_undo_prompt, controls_.previous, controls_.next, controls_.confirm),90,12,settings_[R::status_font],true);
+        line(pane,6,prompt(i18n::Message::clear_more_prompt, controls_.previous_section, controls_.next_section),106,12,settings_[R::status_font],true);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(monitor_view)
@@ -574,7 +573,7 @@ private:
         using Direction = midi::Monitor::Direction;
         using R = cntrl::PageSettings;
         const Direction direction = count == 1 || (count == 3 && window == 1) ? Direction::both : window == 0 ? Direction::incoming : Direction::outgoing;
-        const char *heading = direction == Direction::both ? "Combined" : direction == Direction::incoming ? "Incoming" : "Outgoing";
+        const char *heading = direction == Direction::both ? i18n::text(i18n::Message::combined) : direction == Direction::incoming ? i18n::text(i18n::Message::incoming) : i18n::text(i18n::Message::outgoing);
         const unsigned pad = pane.graphics.pad;
         const unsigned title = std::min(unsigned(settings_[R::title_height]) + 4, viewport_.height / 4);
         line(pane, 0, heading, pad, title, settings_[R::title_font], true);
@@ -584,19 +583,19 @@ private:
         const unsigned bottom = viewport_.height > pad + row_height ? viewport_.height - pad - row_height : 0;
         const unsigned rows = std::min(4u, bottom > body_top ? (bottom - body_top) / (3 * row_height) : 0u);
         char text[64];
-        if (!monitor || !monitor->active()) std::snprintf(text, sizeof(text), "Unavailable: memory");
-        else std::snprintf(text, sizeof(text), "%s%s Hist-%llu Drop-%u", monitor->frozen() ? "Frozen" : "Live", monitor->advanced() ? " advanced" : "", (unsigned long long)monitor->overwritten(), monitor->dropped());
+        if (!monitor || !monitor->active()) i18n::format(text, sizeof(text), i18n::Message::unavailable_memory);
+        else i18n::format(text, sizeof(text), i18n::Message::monitor_history, monitor->frozen() ? i18n::text(i18n::Message::frozen) : i18n::text(i18n::Message::live), monitor->advanced() ? i18n::text(i18n::Message::advanced_suffix) : "", (unsigned long long)monitor->overwritten(), monitor->dropped());
         line(pane, 1, text, body_top - row_height, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
         const midi::Monitor::Entry *entries[4] = {}; unsigned used = 0;
         if (monitor && monitor->active()) for (uint64_t position = monitor->cursor(); position > monitor->oldest() && used < rows;) {
             const auto *e = monitor->entry(--position);
             if (e && (direction == Direction::both || e->direction == direction || e->direction == Direction::both)) entries[used++] = e;
         }
-        if (!used) line(pane, 2, direction == Direction::both ? "No traffic" : direction == Direction::incoming ? "No input" : "No output", body_top, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
+        if (!used) line(pane, 2, direction == Direction::both ? i18n::text(i18n::Message::no_traffic) : direction == Direction::incoming ? i18n::text(i18n::Message::no_input) : i18n::text(i18n::Message::no_output), body_top, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
         for (unsigned i = 0; i < used; ++i) {
             const auto &e = *entries[used - i - 1];
             const auto *endpoint = outputs_.route(e.route);
-            const char *alias = endpoint ? endpoint->name : "unknown";
+            const char *alias = endpoint ? endpoint->name : i18n::text(i18n::Message::unknown);
             const char *direction_label = e.direction == Direction::incoming ? "I" : e.direction == Direction::outgoing ? "O" : "-";
             std::snprintf(text, sizeof(text), "%llu.%03u %s%s %.12s%s/%u", (unsigned long long)(e.time / 1000000), unsigned(e.time / 1000 % 1000), direction_label,
                 e.flags & midi::Monitor::diagnostic ? "/test" : "", alias, std::strlen(alias) > 12 ? "~" : "", unsigned(e.cable));
@@ -610,10 +609,10 @@ private:
                 const auto used_bytes = std::strlen(text);
                 std::snprintf(text + used_bytes, sizeof(text) - used_bytes, "%s%02X", used_bytes ? " " : "", unsigned(e.bytes[j]));
             }
-            if (e.flags & midi::Monitor::running) std::strcat(text, " (running)");
+            if (e.flags & midi::Monitor::running) std::strcat(text, i18n::text(i18n::Message::running_suffix));
             line(pane, first + 2, text, y + 2 * row_height, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
         }
-        const char *help = monitor && monitor->frozen() ? prompt("%s/%s History %s Live", controls_.previous, controls_.next, controls_.confirm) : prompt("%s Freeze", controls_.confirm);
+        const char *help = monitor && monitor->frozen() ? prompt(i18n::Message::history_live_prompt, controls_.previous, controls_.next, controls_.confirm) : prompt(i18n::Message::freeze_prompt, controls_.confirm);
         line(pane, 14, help, bottom, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
     }
     bool clock_changed_ = false, beat_external_ = false;
@@ -621,9 +620,9 @@ private:
     static constexpr unsigned design_width = 5 * 32, design_height = 4 * 32;
     Controls controls_;
     char prompt_[64] = {};
-    template<class... Indices> const char *prompt(const char *format, Indices... indices) {
+    template<class... Indices> const char *prompt(i18n::Message message, Indices... indices) {
         if (((!label(indices)[0]) || ...)) return "";
-        std::snprintf(prompt_, sizeof(prompt_), format, label(indices)...); return prompt_;
+        i18n::format(prompt_, sizeof(prompt_), message, label(indices)...); return prompt_;
     }
     const char *label(unsigned index) const { return index < controls_.count ? controls_.bindings[index].label : ""; }
     cntrl::midi::Outputs outputs_;
@@ -633,7 +632,7 @@ private:
     unsigned index_ = 0;
     PortMode active_port_ = PortMode::off;
     const char *port_message_ = nullptr;
-    const char *port_name_ = "No configurable ports";
+    const char *port_name_ = i18n::definitions[unsigned(i18n::Message::no_configurable_ports)].text;
     bool port_available_ = false;
     unsigned available_outputs_ = 0, slot_ = 0;
     bool external_ = false;
@@ -657,7 +656,7 @@ private:
         for (unsigned i = 0; i < decimals; ++i) scale *= 10;
         for (unsigned i = 0; i < digits; ++i) limit *= 10;
         uint64_t value = ((microseconds ? 60000000ull : 60000ull) * scale + period / 2) / period;
-        if (fixed && value / scale >= limit) { std::snprintf(text, length, "OVER"); return; }
+        if (fixed && value / scale >= limit) { i18n::format(text, length, i18n::Message::over); return; }
         if (decimals) std::snprintf(text, length, "%*lu.%0*lu", fixed ? int(digits) : 1,
             (unsigned long)(value / scale), int(decimals), (unsigned long)(value % scale));
         else std::snprintf(text, length, "%*lu", fixed ? int(digits) : 1, (unsigned long)value);
@@ -670,8 +669,10 @@ private:
         if (preview) { face = 254; maximum_size = preview_size_; }
 #endif
         auto &l = pane.lines[index];
-        std::snprintf(l.text, sizeof(l.text), "%s", text);
+        utf8::copy(l.text, sizeof(l.text), text);
+        if (!preview && i18n::translated_ui) face = localized_face;
         l.graphics = pane.graphics; l.graphics.font = uint8_t(face);
+        l.graphics.asset = preview ? 0 : i18n::identity(text);
         int left = 0, top = 0, width = 0, ink_height = 0;
         const char *fitting = sample ? sample : l.text;
         if (!right_edge) right_edge = viewport_.width;
@@ -693,9 +694,15 @@ private:
                 unsigned n = unsigned(std::strlen(l.text));
                 while (n && width > available) { l.text[--n] = 0; measure(l.text); }
             } else if (!sample && width > available) {
-                unsigned n = unsigned(std::strlen(l.text));
-                while (n > 3 && width > available) {
-                    --n; std::memcpy(l.text + n - 3, "...", 4); measure(l.text);
+                if (l.graphics.asset) {
+                    const char *short_form = i18n::short_text(i18n::Message(l.graphics.asset - 1));
+                    if (*short_form) { utf8::copy(l.text, sizeof(l.text), short_form); measure(l.text); }
+                }
+                while (l.text[0] && width > available) {
+                    utf8::erase_last(l.text);
+                    char shortened[64]; std::snprintf(shortened, sizeof(shortened), "%s...", l.text);
+                    measure(shortened);
+                    if (width <= available) utf8::copy(l.text, sizeof(l.text), shortened);
                 }
             }
             if (centered && sample) measure(l.text);
@@ -709,7 +716,7 @@ private:
         using R = cntrl::PageSettings;
         const unsigned pad = pane.graphics.pad;
         const unsigned height = std::min(unsigned(settings_[R::title_height]) * 3 / 2, (viewport_.height - 2 * pad) / 2);
-        const char *sample = "MIDI Cable Test";
+        const char *sample = i18n::text(i18n::Message::midi_cable_test);
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) sample = nullptr;
 #endif
@@ -728,7 +735,7 @@ private:
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
-        page_heading(pane, "Expression");
+        page_heading(pane, i18n::text(i18n::Message::expression));
         const unsigned font = settings_[R::status_font];
         // Fit port labels and status messages once, sharing one stable body size.
         unsigned size = 96;
@@ -736,21 +743,21 @@ private:
             line(pane, 1, text, vertical(30), vertical(20), font, false, nullptr, 0, 0, size);
             size = pane.lines[1].graphics.size;
         };
-        fit("No configurable ports");
-        fit("Raw 8888  Uncalibrated");
-        fit("Select expression role");
-        fit("Reconnect: heel");
-        fit(prompt("%s: Calibrate", controls_.confirm));
+        fit(i18n::text(i18n::Message::no_configurable_ports));
+        fit(i18n::text(i18n::Message::raw_uncalibrated_sample));
+        fit(i18n::text(i18n::Message::select_expression_role));
+        fit(i18n::text(i18n::Message::reconnect_heel));
+        fit(prompt(i18n::Message::calibrate_prompt, controls_.confirm));
         for (const auto &port : outputs_) if (port.port != midi::no_port) {
             char text[40];
-            std::snprintf(text, sizeof(text), "%.24s  Unassigned", port.label); fit(text);
+            i18n::format(text, sizeof(text), i18n::Message::unassigned_port, port.label); fit(text);
             std::snprintf(text, sizeof(text), "%.20s  CC 888 Ch 88", port.label); fit(text);
         }
         for (unsigned i = 0; i < 3; ++i) {
             line(pane, i + 1, "Ag0123456789", vertical(30 + 24 * i), vertical(20), font, false, nullptr, 0, 0, size);
             pane.lines[i + 1].text[0] = 0;
         }
-        line(pane, 4, prompt("%s: Jack   %s: Cancel", controls_.previous, controls_.next), vertical(105), vertical(18), font, true);
+        line(pane, 4, prompt(i18n::Message::jack_cancel_prompt, controls_.previous, controls_.next), vertical(105), vertical(18), font, true);
         std::copy_n(pane.lines, 5, expression_layout_);
     }
     TextLine expression_layout_[5]; // Heading, three live values, and control hint.

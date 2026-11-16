@@ -313,11 +313,13 @@ def install_starter(directory: Path, port: Path) -> None:
     bundle = (starter / 'bundle.bin').read_bytes()
     library = (starter / 'songs.bin').read_bytes()
     fonts = sorted((starter / 'fonts').glob('*.cfont'))
+    language_packs = sorted((directory / 'languages').glob('*.bin'))
     backups.check_deployment_space(
         report,
         [len(bundle) + 100] * 2
         + [len(library) + 28] * 2
         + [p.stat().st_size for p in fonts]
+        + [p.stat().st_size for p in language_packs]
         + [96, 96, 24, 24],
         20,
     )
@@ -328,6 +330,8 @@ def install_starter(directory: Path, port: Path) -> None:
         for path in fonts:
             client.copy_font(int(path.stem, 16), path.read_bytes())
         client.begin_deployment()
+        for path in language_packs:
+            client.copy_language(path.stem, path.read_bytes())
         client.copy_bundle(bundle, overwrite=True)
         songs.upload(client, library, overwrite=True)
         client.ok('CNTRL SETUP FINISH')

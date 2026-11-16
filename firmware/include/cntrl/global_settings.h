@@ -14,6 +14,7 @@ public:
     struct Values {
         uint64_t known = 0;
         uint32_t values[count] = {};
+        char language[16] = {};
     };
     explicit GlobalSettings(files::FileSystem &filesystem) : filesystem_(filesystem) {}
     const Values &values() const { return values_; }
@@ -44,9 +45,29 @@ public:
 #endif
     static bool valid(const Values &values) {
         if (values.known & ~fields) return false;
+        if (!std::memchr(values.language, 0, sizeof(values.language)) || !language_valid(values.language)) return false;
         for (unsigned i = 0; i < count; ++i)
             if ((values.known & (uint64_t(1) << i)) ? !valid(i, values.values[i]) : values.values[i] != 0) return false;
         return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(global_settings_language_valid)
+#endif
+    static bool language_valid(const char *tag) {
+        if (!tag) return false;
+        if (!tag[0]) return true;
+        unsigned length = 0, part = 0; bool first = true;
+        for (const char *p = tag; *p; ++p) {
+            if (++length > 15) return false;
+            if (*p == '-') {
+                if (part < 2 || part > (first ? 3u : 8u)) return false;
+                first = false; part = 0; continue;
+            }
+            const bool lower = *p >= 'a' && *p <= 'z';
+            if (first ? !lower : !(lower || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9'))) return false;
+            ++part;
+        }
+        return part >= 2 && part <= (first ? 3u : 8u);
     }
     static bool reload(unsigned field) { return field > 2; }
     bool candidate(unsigned field, uint32_t value, bool clear, Values &result) const {
@@ -78,10 +99,11 @@ public:
         if (!ready_ || !valid(values) || sequence_ == std::numeric_limits<uint32_t>::max()) return false;
         if (!filesystem_.exists("/cntrl/global") && !filesystem_.make_directory("/cntrl/global")) return false;
         uint8_t bytes[record_size] = {};
-        std::memcpy(bytes, "CGLO", 4); bytes[4] = 1;
+        std::memcpy(bytes, "CGLO", 4); bytes[4] = 2;
         binary::write32(bytes + 8, sequence_ + 1);
         for (unsigned i = 0; i < 8; ++i) bytes[12 + i] = uint8_t(values.known >> (8 * i));
         for (unsigned i = 0; i < count; ++i) binary::write32(bytes + 20 + i * 4, values.values[i]);
+        std::memcpy(bytes + language_offset, values.language, sizeof(values.language));
         binary::write32(bytes + record_size - 8, binary::crc(bytes, record_size - 8));
         std::memcpy(bytes + record_size - 4, "DONE", 4);
         const unsigned slot = slot_ == 0 ? 1 : 0; char path[32]; filename(slot, path);
@@ -89,10 +111,12 @@ public:
         if (!file || !file->open(path, files::Mode::create) || !file->write(0, bytes, sizeof(bytes)) || !file->sync()) return false;
         file->close(); Values checked; uint32_t sequence;
         if (!read(slot, checked, sequence) || sequence != sequence_ + 1 || checked.known != values.known
-            || std::memcmp(checked.values, values.values, sizeof(values.values))) return false;
+            || std::memcmp(checked.values, values.values, sizeof(values.values)) || std::strcmp(checked.language, values.language)) return false;
         values_ = values; ++sequence_; slot_ = int(slot); return true;
     }
-    static constexpr unsigned record_size = 20 + count * 4 + 8;
+    static constexpr unsigned language_offset = 20 + count * 4;
+    static constexpr unsigned old_record_size = language_offset + 8;
+    static constexpr unsigned record_size = language_offset + 16 + 8;
 private:
     friend class Documents;
     files::FileSystem &filesystem_;
@@ -106,15 +130,18 @@ private:
 #endif
     bool read(unsigned slot, Values &values, uint32_t &sequence) {
         char path[32]; filename(slot, path); auto file = filesystem_.file(); uint8_t bytes[record_size];
-        if (!file || !file->open(path, files::Mode::read) || file->size() != sizeof(bytes) || !file->read(0, bytes, sizeof(bytes))) return false;
+        if (!file || !file->open(path, files::Mode::read)) return false;
+        const unsigned size = file->size();
+        if ((size != old_record_size && size != record_size) || !file->read(0, bytes, size)) return false;
         file->close();
-        if (std::memcmp(bytes, "CGLO", 4) || bytes[4] != 1 || bytes[5] || bytes[6] || bytes[7]
-            || std::memcmp(bytes + record_size - 4, "DONE", 4)
-            || binary::read32(bytes + record_size - 8) != binary::crc(bytes, record_size - 8)) return false;
+        if (std::memcmp(bytes, "CGLO", 4) || bytes[4] != (size == old_record_size ? 1 : 2) || bytes[5] || bytes[6] || bytes[7]
+            || std::memcmp(bytes + size - 4, "DONE", 4)
+            || binary::read32(bytes + size - 8) != binary::crc(bytes, size - 8)) return false;
         sequence = binary::read32(bytes + 8); if (!sequence) return false;
         values = Values();
         for (unsigned i = 0; i < 8; ++i) values.known |= uint64_t(bytes[12 + i]) << (8 * i);
         for (unsigned i = 0; i < count; ++i) values.values[i] = binary::read32(bytes + 20 + i * 4);
+        if (size == record_size) std::memcpy(values.language, bytes + language_offset, sizeof(values.language));
         return valid(values);
     }
 };

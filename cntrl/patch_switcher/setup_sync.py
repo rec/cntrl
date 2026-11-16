@@ -22,6 +22,7 @@ from . import (
     device_globals,
     device_settings,
     global_config,
+    global_overlay,
     models,
     resolved,
     setup_bundle,
@@ -266,7 +267,7 @@ def baseline(root: Path) -> dict[str, bytes]:
     return result
 
 
-def global_baseline(root: Path) -> dict[int, int] | None:
+def global_baseline(root: Path) -> global_overlay.Overlay | None:
     record = base_record(root)
     if record:
         entry = tomlkit.parse(record.decode()).unwrap().get('device_globals')
@@ -596,7 +597,7 @@ def apply_change(document: MutableMapping[str, object], change: Change) -> None:
             f'{change.setup}: {change.path}: manual source placement required'
         )
     if change.scope == 'device-global':
-        document['format'] = 1
+        document['format'] = 2
         assign(document, change.destination.path, change.pedal)
         return
     if change.remove_inherited:
@@ -758,22 +759,33 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
         (folder / 'device-globals.toml').write_bytes(captured)
         global_checksum = digest(captured)
         overlay_bytes = overlay.read_bytes() if overlay_present else b''
-        host_globals = device_globals.load(overlay_bytes) if overlay_present else {}
-        base_globals = global_baseline(root) if overlay_present else {}
+        host_globals = (
+            device_globals.load(overlay_bytes)
+            if overlay_present
+            else global_overlay.Overlay()
+        )
+        base_globals = (
+            global_baseline(root) if overlay_present else global_overlay.Overlay()
+        )
         base_values = base_globals if base_globals is not None else host_globals
         for field in sorted(
-            base_values.keys() | host_globals.keys() | live_globals.keys()
+            base_values.values.keys()
+            | host_globals.values.keys()
+            | live_globals.values.keys()
         ):
             key = str(field)
             path: list[str | int] = ['values', key]
             base_value = Value(
-                present=field in base_values, value=base_values.get(field, '')
+                present=field in base_values.values,
+                value=base_values.values.get(field, ''),
             )
             host_value = Value(
-                present=field in host_globals, value=host_globals.get(field, '')
+                present=field in host_globals.values,
+                value=host_globals.values.get(field, ''),
             )
             pedal_value = Value(
-                present=field in live_globals, value=live_globals.get(field, '')
+                present=field in live_globals.values,
+                value=live_globals.values.get(field, ''),
             )
             for change in merge_changes(
                 'device-global', base_value, host_value, pedal_value, path
@@ -798,6 +810,38 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
                         }
                     )
                 )
+        for change in merge_changes(
+            'device-global',
+            Value(
+                present=base_values.language is not None,
+                value=base_values.language or '',
+            ),
+            Value(
+                present=host_globals.language is not None,
+                value=host_globals.language or '',
+            ),
+            Value(
+                present=live_globals.language is not None,
+                value=live_globals.language or '',
+            ),
+            ['language'],
+        ):
+            changes.append(
+                change.model_copy(
+                    update={
+                        'scope': 'device-global',
+                        'destination': data_files.Location(
+                            file=overlay, path=['language']
+                        ),
+                        'affects': list(host_bundle.names),
+                        'choice': Choice.unresolved
+                        if base_globals is None
+                        else change.choice,
+                        'note': 'Device-wide UI language; '
+                        'preserve compiled setup defaults.',
+                    }
+                )
+            )
         trace.files[overlay] = overlay_bytes
     review = Review(
         root=root,

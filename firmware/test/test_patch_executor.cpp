@@ -142,7 +142,23 @@ void test_file_operations(const Bytes &base) {
     assert(executor.start(document, root + 1)); executor.tick(); assert(!board.recording);
 }
 
+std::string translated_error;
+const char *error_translation(cntrl::ui::i18n::Message message, bool short_form) {
+    return !short_form && message == cntrl::ui::i18n::Message::invalid_patch_root ? translated_error.c_str() : nullptr;
+}
+void failed_patch_follows_language_without_retaining_catalogue_memory() {
+    PatchBoard board; cntrl::PatchExecutor executor(board, board, board, 0);
+    translated_error = "Racine de son invalide";
+    cntrl::ui::i18n::lookup = error_translation;
+    assert(!executor.start(cntrl::Document{}, 0));
+    assert(!std::strcmp(executor.error(), translated_error.c_str()));
+    cntrl::ui::i18n::lookup = nullptr;
+    std::string().swap(translated_error);
+    assert(!std::strcmp(executor.error(), "Invalid patch root"));
+}
+
 int main(int argc, char **argv) {
+    failed_patch_follows_language_without_retaining_catalogue_memory();
     assert(argc == 2); std::ifstream file(argv[1]); std::string hex; file >> hex;
     Bytes base; for (unsigned i = 0; i < hex.size(); i += 2) base.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     test_file_operations(base);

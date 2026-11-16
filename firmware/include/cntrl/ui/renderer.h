@@ -1,5 +1,6 @@
 #pragma once
 #include "raster.h"
+#include "messages.h"
 #include <cntrl/text_messages.h>
 #include <cntrl/checked_array.h>
 #include <optional>
@@ -88,7 +89,10 @@ public:
         const char *text = message.text();
         for (unsigned row = 0; row < rows; ++row) {
             auto &line = pane.lines[row]; line.graphics = pane.graphics;
-            if (!row) std::snprintf(line.text, sizeof(line.text), "%s", message.kind() == TextMessages::Kind::cue ? "Cue" : "Warning");
+            if (!row) {
+                line.graphics.font = localized_face;
+                utf8::copy(line.text, sizeof(line.text), i18n::text(message.kind() == TextMessages::Kind::cue ? i18n::Message::cue : i18n::Message::warning));
+            }
             else {
                 unsigned used = 0;
                 while (*text && used + 1 < sizeof(line.text)) {
@@ -105,7 +109,7 @@ public:
                     } while (true);
                 }
             }
-            line.y = int16_t(4 + row * 10 - fonts_.bounds(0, 8, 0, line.text).top);
+            line.y = int16_t(4 + row * 10 - fonts_.bounds(line.graphics.font, 8, 0, line.text).top);
         }
         message_revision_ = message.revision();
         message_ = pane; invalidate();
@@ -121,6 +125,7 @@ public:
         for (auto &screen : screens_) { screen.dirty = true; screen.valid = false; screen.ring = 0; }
         reset_scroll_ = true;
     }
+    void invalidate_language() { message_.reset(); message_revision_ = 0; invalidate(); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_show)
 #endif
@@ -129,13 +134,16 @@ public:
         auto &screen = screens_[pane];
         if (!std::memcmp(&screen.requested, &content, sizeof(content))) return;
         damage(screen, content);
+        for (const auto &line : content.lines) if (line.text[0] && line.graphics.font == localized_face) {
+            screen.valid = false; break;
+        }
         screen.requested = content; screen.dirty = true;
     }
     void error(const char *message) {
         if (screens_.empty()) return;
         const unsigned screen = unsigned(screens_.size() / 2);
         Pane pane; pane.graphics = screens_[screen].requested.graphics;
-        pane.graphics.font = 0; pane.graphics.size = 8; pane.graphics.asset = 0;
+        pane.graphics.font = localized_face; pane.graphics.size = 8; pane.graphics.asset = 0;
         pane.lines[0].graphics = pane.graphics;
         std::snprintf(pane.lines[0].text, sizeof(pane.lines[0].text), "%s", message); show(screen, pane);
     }
@@ -152,7 +160,7 @@ public:
     void draw(uint32_t now = 0) {
         display_.poll();
         if (!usable_ || display_.priority_due()) return;
-        if (display_.failed()) { invalidate(); error("Display transfer failed"); }
+        if (display_.failed()) { invalidate(); error(i18n::text(i18n::Message::display_transfer_failed)); }
         if (!display_.ready()) return;
         if (reset_scroll_) { display_.reset_scroll(); reset_scroll_ = false; }
         if (preparing_ && frame_count_ == 1) {
@@ -254,6 +262,7 @@ private:
     void begin_paint(unsigned screen, const Pane &content) {
         drawing_ = int(screen); painting_ = content;
         auto &s = screens_[screen]; const auto v = s.viewport;
+        fit_localized(painting_, v);
         painting_region_ = !s.valid || preparing_ || animating_ ? Region{0, 0, int(v.width), int(v.height)} : s.damage;
         s.damage = {};
         painting_region_ = {std::max(0, painting_region_.left), std::max(0, painting_region_.top), std::min(int(v.width), painting_region_.right), std::min(int(v.height), painting_region_.bottom)};
@@ -263,6 +272,59 @@ private:
         for (const auto &circle : painting_.circles) raster_.circle(circle);
         for (const auto &r : painting_.rectangles) raster_.rectangle(r.x, r.y, r.width, r.height, r.color, r.stippled);
         raster_.toggle(painting_.toggle); rendering_ = true; incoming_screen_ = -1;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_fit_localized)
+#endif
+    void fit_localized(Pane &pane, Viewport viewport) const {
+        unsigned count = 0;
+        for (const auto &line : pane.lines) if (line.text[0]) ++count;
+        const unsigned pad = pane.graphics.pad;
+        const unsigned available_height = viewport.height > 2 * pad ? viewport.height - 2 * pad : 0;
+        for (unsigned index = 0; index < max_lines; ++index) {
+            auto &line = pane.lines[index];
+            if (!line.text[0] || line.graphics.font != localized_face) continue;
+            const unsigned maximum = std::min(96u, unsigned(line.graphics.size));
+            const unsigned height = pane.three_bands ? viewport.height / 3
+                : line.y < 0 ? available_height / std::max(1u, count) : line.graphics.line_height;
+            const int left = line.centered ? int(pad) : std::max(int(pad), int(line.x));
+            const int width = std::max(0, int(viewport.width) - int(pad) - left);
+            const auto original = fonts_.bounds(localized_face, line.graphics.size, 0, line.text);
+            auto choose = [&]() {
+                for (unsigned size = maximum; size >= 8; --size) {
+                    if (!fonts_.supports(localized_face, size)) continue;
+                    const auto bounds = fonts_.bounds(localized_face, size, 0, line.text);
+                    unsigned rows = 1;
+                    const unsigned line_height = std::max(size, unsigned(std::max(0, bounds.height)));
+                    if (line.wrap) {
+                        TextLine candidate = line; candidate.graphics.size = uint8_t(size);
+                        rows = Raster::localized_position(fonts_, candidate, UINT_MAX, width).row + 1;
+                    }
+                    if ((!line.wrap && bounds.width > width) || rows * line_height > height) continue;
+                    line.graphics.size = uint8_t(size);
+                    if (line.y < 0) {
+                        line.graphics.line_height = uint16_t(line_height);
+                        line.graphics.top = uint16_t(std::max(0, -bounds.top));
+                    } else if (size != maximum) {
+                        line.y = int16_t(int(line.y) + original.top + (int(height) - bounds.height) / 2 - bounds.top);
+                    }
+                    return true;
+                }
+                return false;
+            };
+            if (choose()) continue;
+            if (line.graphics.asset) {
+                const char *shorter = i18n::short_text(static_cast<i18n::Message>(line.graphics.asset - 1));
+                if (shorter && *shorter) { utf8::copy(line.text, sizeof(line.text), shorter); if (choose()) continue; }
+            }
+            char prefix[sizeof(line.text)]; utf8::copy(prefix, sizeof(prefix), line.text);
+            while (*prefix) {
+                utf8::erase_last(prefix);
+                if (std::strlen(prefix) + 3 >= sizeof(line.text)) continue;
+                std::snprintf(line.text, sizeof(line.text), "%s...", prefix);
+                if (choose()) break;
+            }
+        }
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_paint_step)

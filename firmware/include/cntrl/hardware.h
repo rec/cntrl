@@ -11,6 +11,7 @@
 #include "counters.h"
 
 namespace cntrl {
+enum class LanguagePreparation { pending, ready, failed };
 constexpr unsigned max_instruments = UINT16_MAX;
 constexpr unsigned max_patch_cycles = UINT16_MAX;
 constexpr unsigned max_lines = 16;
@@ -123,6 +124,16 @@ struct Hardware : RelayDriver {
     virtual bool global_setting(unsigned, uint32_t, bool) { return false; }
     virtual bool global_settings_busy() { return !output_idle(); }
     virtual const GlobalSettings::Values *global_values() const { return nullptr; }
+    virtual LanguagePreparation prepare_language(const char *tag) {
+        return !std::strcmp(tag, "en") ? LanguagePreparation::ready : LanguagePreparation::failed;
+    }
+    virtual void finish_language(bool) {}
+    virtual bool language_available(const char *tag) const { return !std::strcmp(tag, "en"); }
+    virtual bool request_language(const char *) { return false; }
+    virtual const char *current_language() const { return "en"; }
+    virtual unsigned language_count() const { return 1; }
+    virtual const char *language_tag(unsigned) const { return "en"; }
+    virtual const char *language_name(unsigned) const { return "English"; }
     virtual void error(const char *message) = 0;
 };
 

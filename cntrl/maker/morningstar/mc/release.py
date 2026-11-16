@@ -9,6 +9,7 @@ import tomlkit
 
 from ....firmware import distribution
 from ....firmware.intel_hex import AddressRange, FirmwareImage, encode_hex, read_hex
+from ....localization import catalogue
 from ....patch_switcher import data_files, models, resolved, setup_bundle, songs
 from ....patch_switcher.cli import compile_to_file
 from . import boot_switch, upload_helper
@@ -27,6 +28,7 @@ def input_names(source_root: Path) -> list[str]:
                 'firmware',
                 'cntrl/firmware',
                 'cntrl/fonts',
+                'cntrl/localization',
                 'cntrl/patch_switcher',
                 'cntrl/maker/morningstar/mc',
             ],
@@ -89,6 +91,12 @@ def export(
     shutil.copyfile(components.hook, destination / 'hook.bin')
     shutil.copyfile(directory / 'target.toml', destination / 'target.toml')
     shutil.copytree(directory / 'fonts', destination / 'fonts')
+    shutil.copytree(
+        Path(__file__).parents[3] / 'localization' / 'packs', destination / 'languages'
+    )
+    for pack in (destination / 'languages').glob('*.bin'):
+        if catalogue.inspect(pack.read_bytes()).language != pack.stem:
+            raise ValueError('language pack identity differs from its filename')
     shutil.copyfile(directory / 'toolchain.toml', destination / 'toolchain.toml')
     shutil.copyfile(
         directory / 'compiler-options.toml', destination / 'compiler-options.toml'

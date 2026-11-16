@@ -7,11 +7,15 @@
 #include <cntrl/file_transfer.h>
 #include <cntrl/songs_transfer.h>
 #include <cntrl/global_commands.h>
+#include <cntrl/ui/languages.h>
 
 struct Peer : TestPatchHardware, cntrl::SongResolver, cntrl::Replies {
     cntrl::UsbSession usb;
     cntrl::GlobalCommands *globals = nullptr;
     cntrl::GlobalSettings *global_store = nullptr;
+    cntrl::ui::Languages *languages = nullptr;
+    cntrl::LanguagePreparation prepare_language(const char *tag) override { return languages->prepare(tag); }
+    void finish_language(bool commit) override { languages->finish(commit); }
     const cntrl::GlobalSettings::Values *global_values() const override { return global_store ? &global_store->values() : nullptr; }
     bool global_setting(unsigned field, uint32_t value, bool clear) override { return globals && globals->request(field, value, clear); }
     bool reply_ready() const override { return usb.reply_ready(); }
@@ -49,12 +53,15 @@ int main(int argc, char **argv) {
     std::filesystem::create_directories(root);
     TestFileSystem filesystem(root);
     cntrl::GlobalSettings global_settings(filesystem); assert(global_settings.boot());
+    cntrl::ui::Languages languages(filesystem); peer.languages = &languages; languages.boot(global_settings.values().language);
     documents.bind_globals(global_settings); documents.boot();
     cntrl::GlobalCommands global_commands(global_settings, documents, peer, peer); peer.globals = &global_commands; peer.global_store = &global_settings;
     TestFile reader(filesystem), writer(filesystem);
     cntrl::FileTransfer midi(filesystem, reader, writer, peer);
     TestFile source_reader(filesystem), source_writer(filesystem);
-    cntrl::FileTransfer source(filesystem, source_reader, source_writer, peer, true);
+    cntrl::FileTransfer source(filesystem, source_reader, source_writer, peer, cntrl::FileTransfer::Namespace::source);
+    TestFile language_reader(filesystem), language_writer(filesystem);
+    cntrl::FileTransfer language(filesystem, language_reader, language_writer, peer, cntrl::FileTransfer::Namespace::language);
     cntrl::Songs songs(disk, peer); assert(songs.boot());
     cntrl::SongsTransfer song_transfer(songs, peer);
     char line[cntrl::usb_text_size] = {}; unsigned used = 0;
@@ -65,20 +72,21 @@ int main(int argc, char **argv) {
             if (!std::strcmp(line, "CNTRL MEMORY")) {
                 char response[64]; std::snprintf(response, sizeof(response), "CNTRL MEMORY %u %u", peer.memory_capacity(), peer.memory_runtime());
                 peer.reply(response);
-            } else if (!global_commands.command(line) && !song_transfer.command(line) && !source.command(line, 0) && !midi.command(line, 0) && !history.command(line, 0) && !transfer.command(line, 0)) {
+            } else if (!global_commands.command(line) && !language.command(line, 0) && !song_transfer.command(line) && !source.command(line, 0) && !midi.command(line, 0) && !history.command(line, 0) && !transfer.command(line, 0)) {
                 for (unsigned i = 0; i < used; ++i) documents.receive(uint8_t(line[i]), 0);
                 documents.receive('\n', 0);
             }
             used = 0;
         } else if (used + 1 < sizeof(line)) line[used++] = char(byte);
-    }, [&]() { documents.tick(0); transfer.poll(0); history.tick(0); midi.poll(0); source.poll(0); songs.tick(); song_transfer.poll(0); global_commands.poll(controller.executor().busy()); },
+    }, [&]() { documents.tick(0); transfer.poll(0); history.tick(0); midi.poll(0); source.poll(0); language.poll(0); songs.tick(); song_transfer.poll(0); global_commands.poll(controller.executor().busy()); },
        [&]() { return documents.accepts_input() && !song_transfer.processing(); },
-       [&]() { documents.cancel_transfer(); transfer.cancel(); history.cancel(); midi.cancel(); source.cancel(); song_transfer.cancel_transfer(); },
+       [&]() { documents.cancel_transfer(); transfer.cancel(); history.cancel(); midi.cancel(); source.cancel(); language.cancel(); global_commands.cancel(); song_transfer.cancel_transfer(); },
        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) {
            if (kind == cntrl::UsbKind::bundle) transfer.data(bytes, n, 0);
            else if (kind == cntrl::UsbKind::history) history.data(bytes, n, 0);
            else if (kind == cntrl::UsbKind::midi_file) midi.data(bytes, n, 0);
            else if (kind == cntrl::UsbKind::source) source.data(bytes, n, 0);
+           else if (kind == cntrl::UsbKind::language) language.data(bytes, n, 0);
            else if (kind == cntrl::UsbKind::songs) song_transfer.data(bytes, n, 0);
            else { assert(kind == cntrl::UsbKind::setup); documents.receive_data(bytes, n, 0); }
        });

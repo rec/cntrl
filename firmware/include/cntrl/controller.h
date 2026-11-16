@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/messages.h"
 #include "patch_executor.h"
 #include "checked_list.h"
 #include <algorithm>
@@ -215,7 +216,7 @@ public:
     CNTRL_FLASH_ROUTINE(controller_activate)
 #endif
     bool activate(const Document &document, bool configure = true) {
-        if (!state_prepared_ && !prepare(document)) { hardware_.error("Controller memory unavailable"); return false; }
+        if (!state_prepared_ && !prepare(document)) { hardware_.error(ui::i18n::text(ui::i18n::Message::controller_memory_unavailable)); return false; }
         executor_.cancel(); sending_ = -1;
         cancel_gesture();
         if (state_prepared_) { state_.swap(pending_state_); cancel_preparation(); }
@@ -233,7 +234,7 @@ public:
         if (configure) {
             hardware_.counters.reset();
             hardware_.configure_midi_streams(document);
-            if (!hardware_.relays.configure(document.relay_records(), document.relay_count())) hardware_.error("Relay setup failed");
+            if (!hardware_.relays.configure(document.relay_records(), document.relay_count())) hardware_.error(ui::i18n::text(ui::i18n::Message::relay_setup_failed));
             hardware_.configure_trs_ports(document.trs_modes());
             hardware_.configure_page_settings(document.page_settings());
             hardware_.set_target_pulse(document.pulse_period_ms(), document.pulse_minimum(), document.pulse_maximum(), document.pulse_delay_ms());
@@ -326,7 +327,7 @@ public:
             unsigned p = candidate();
             if (already_sent(p)) return true;
             NavigationState before = navigation();
-            if (!before.valid || depth_ == UINT_MAX || !history_.reserve(depth_ + 1)) { hardware_.error("Navigation memory unavailable"); return false; }
+            if (!before.valid || depth_ == UINT_MAX || !history_.reserve(depth_ + 1)) { hardware_.error(ui::i18n::text(ui::i18n::Message::navigation_memory_unavailable)); return false; }
             if (u16(document_.patch(p)) == 65535) {
                 depth_ = 0;
                 history_.clear();
@@ -426,7 +427,7 @@ private:
                 history_.clear();
                 clear_programs();
                 if (executor_.status() == PatchExecutor::Status::unknown) {
-                    render(); hardware_.error("Remote state unknown");
+                    render(); hardware_.error(ui::i18n::text(ui::i18n::Message::remote_state_unknown));
                 }
             }
             return;
