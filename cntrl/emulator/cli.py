@@ -11,6 +11,7 @@ import tyro
 from PIL import Image
 from pydantic import BaseModel, Field, model_validator
 
+from ..localization import catalogue
 from ..patch_switcher import data_files, device_globals, languages
 from ..patch_switcher.models import Target
 from ..patch_switcher.setup_bundle import SetupBundle
@@ -97,7 +98,7 @@ def prepare(
     language_folder = storage / 'cntrl' / 'languages'
     language_folder.mkdir(parents=True, exist_ok=True)
     recovered_languages = command.setup.resolve().parent / 'languages'
-    for tag in ('en', 'fr'):
+    for tag in catalogue.locales():
         destination = language_folder / f'{tag}.bin'
         if not destination.exists():
             recovered = recovered_languages / f'{tag}.bin'

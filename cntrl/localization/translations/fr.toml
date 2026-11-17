@@ -1,0 +1,1122 @@
+language = 'fr'
+name = 'Français'
+
+[messages.pages_and_tools]
+text = 'Pages et outils'
+
+[messages.browse]
+text = 'parcourir'
+
+[messages.ok]
+text = 'OK'
+
+[messages.back]
+text = 'retour'
+
+[messages.setups]
+text = 'Configurations'
+short = 'Configs'
+
+[messages.songs_and_setlists]
+text = 'Morceaux et listes'
+
+[messages.switches]
+text = 'Commutateurs'
+
+[messages.language]
+text = 'Langue'
+
+[messages.control_action]
+text = '{separator:s}{label:s} {action:s}'
+
+[messages.setlist_number]
+text = 'Liste {number:u}'
+
+[messages.true_value]
+text = 'vrai'
+
+[messages.false_value]
+text = 'faux'
+
+[messages.no_configurable_ports]
+text = 'Aucun port configurable'
+short = 'Aucun port'
+
+[messages.unavailable]
+text = 'Indisponible'
+
+[messages.driver_failed]
+text = 'Échec du pilote'
+
+[messages.busy]
+text = 'Occupé'
+
+[messages.already_set]
+text = 'Déjà défini'
+
+[messages.cannot_apply]
+text = 'Application impossible'
+short = 'Échec'
+
+[messages.saving]
+text = 'Enregistrement'
+
+[messages.save_failed]
+text = 'Échec enregistrement'
+short = 'Échec sauvegarde'
+
+[messages.save_confirm]
+text = 'Enregistrer : confirmer'
+short = 'Sauver : confirmer'
+
+[messages.load_confirm]
+text = 'Charger : confirmer'
+
+[messages.reverse_phrase_confirm]
+text = 'Inverser : confirmer'
+
+[messages.toggle_direction_confirm]
+text = 'Changer sens : confirmer'
+
+[messages.confirm_clear]
+text = 'Confirmer effacement ?'
+
+[messages.replace_unsaved_loop]
+text = 'Écraser boucle non sauvée ?'
+
+[messages.scanning]
+text = 'Recherche...'
+
+[messages.no_midi_files]
+text = 'Aucun fichier MIDI'
+
+[messages.storage_busy]
+text = 'Stockage occupé'
+
+[messages.stock_firmware_prompt]
+text = '{button:s} : micrologiciel initial.'
+short = '{button:s} : système initial.'
+
+[messages.cancel_prompt]
+text = '{button:s} : annuler'
+
+[messages.notes_off]
+text = 'Notes coupées'
+
+[messages.all_off]
+text = 'Tout coupé'
+
+[messages.midi_clock]
+text = 'Horloge MIDI'
+
+[messages.clock_tempo]
+text = 'Tempo horloge'
+
+[messages.tap_tempo]
+text = 'Tempo frappé'
+
+[messages.status]
+text = 'État'
+
+[messages.midi_cable_test]
+text = 'Test câble MIDI'
+
+[messages.trs_ports]
+text = 'Ports TRS'
+
+[messages.keyboard]
+text = 'Clavier'
+
+[messages.firmware]
+text = 'Micrologiciel'
+short = 'Système'
+
+[messages.external_receiving]
+text = 'Externe : réception'
+
+[messages.external_waiting]
+text = 'Externe : attente'
+
+[messages.no_outputs_configured]
+text = 'Aucune sortie configurée'
+short = 'Aucune sortie'
+
+[messages.outputs_offline]
+text = 'Sorties déconnectées'
+
+[messages.internal_running]
+text = 'Interne : en marche'
+
+[messages.internal_stopped]
+text = 'Interne : arrêt'
+
+[messages.start_continue_prompt]
+text = '{start:s} Démarrer  {resume:s} Reprendre'
+short = '{start:s} Début {resume:s} Suite'
+
+[messages.stop_source_prompt]
+text = '{stop:s} Arrêt  {source:s} Source'
+
+[messages.tempo_slot]
+text = 'Mémoire {slot:u} : {tempo:u} BPM'
+
+[messages.tempo_adjust_prompt]
+text = '{minus:s} -1 {plus:s} +1 {slot:s} Mémoire'
+
+[messages.clock_late_lost]
+text = 'Retard {late:u}us Perdus {lost:u}'
+
+[messages.output_heading]
+text = 'Sortie'
+
+[messages.input_heading]
+text = 'Entrée'
+
+[messages.input]
+text = 'Entrée'
+
+[messages.no_shortcuts]
+text = 'Aucun raccourci'
+
+[messages.held]
+text = 'Maintenu'
+
+[messages.ready]
+text = 'Prêt'
+
+[messages.select_pair_prompt]
+text = '{previous:s}/{next:s} : choisir'
+
+[messages.hold_send_prompt]
+text = 'Maintenir {button:s} : envoyer'
+
+[messages.off]
+text = 'Arrêt'
+
+[messages.on]
+text = 'Marche'
+
+[messages.midi_type_a]
+text = 'MIDI type A'
+
+[messages.midi_type_b]
+text = 'MIDI type B'
+
+[messages.expression]
+text = 'Expression'
+
+[messages.aux_switch]
+text = 'Commutateur auxiliaire'
+short = 'Contact auxiliaire'
+
+[messages.jack_mode_prompt]
+text = '{jack:s} : prise {mode:s} : mode'
+
+[messages.apply_prompt]
+text = '{button:s} : appliquer'
+
+[messages.use_stock]
+text = 'Utiliser le'
+
+[messages.cycles_patches]
+text = 'Cycles : {cycles:u} Sons : {patches:u}'
+
+[messages.clock_value]
+text = 'Horloge : {clock:s}'
+
+[messages.disk_value]
+text = 'Disque:{whole:lu}.{fraction:lu}/{total:lu}G'
+
+[messages.disk_unknown]
+text = 'Disque:--/--G'
+
+[messages.uptime_value]
+text = ' Durée:{hours:lu}:{minutes:02u}:{seconds:02u}'
+
+[messages.starts_value]
+text = 'Démarrages : {starts:s}'
+
+[messages.error]
+text = 'erreur'
+
+[messages.tap_value]
+text = 'Frappe : {tempo:s}'
+
+[messages.player_score]
+text = 'JOUEUR {player:u}   {score:u}'
+
+[messages.up_down_prompt]
+text = '{up:s} Haut / {down:s} Bas'
+
+[messages.serve_exit_prompt]
+text = '{serve:s} Jouer/Pause {exit:s} Quitter'
+
+[messages.paused]
+text = 'PAUSE'
+
+[messages.player_one_wins]
+text = 'JOUEUR 1 GAGNE'
+
+[messages.player_two_wins]
+text = 'JOUEUR 2 GAGNE'
+
+[messages.press_to_serve]
+text = 'APPUYER POUR JOUER'
+
+[messages.arpeggiator]
+text = 'Arpégiateur'
+
+[messages.waiting]
+text = 'En attente'
+
+[messages.playing]
+text = 'Lecture'
+
+[messages.record_armed]
+text = 'Enregistrement armé'
+
+[messages.recording]
+text = 'Enregistrement'
+
+[messages.finish_armed]
+text = 'Fin armée'
+
+[messages.forward]
+text = 'Avant'
+
+[messages.reverse]
+text = 'Inverse'
+
+[messages.played]
+text = 'Ordre joué'
+
+[messages.back_and_forth]
+text = 'Aller-retour'
+
+[messages.random]
+text = 'Aléatoire'
+
+[messages.random_walk]
+text = 'Marche aléatoire'
+
+[messages.mod]
+text = 'Modulo'
+
+[messages.shuffle]
+text = 'Mélange'
+
+[messages.outside_in]
+text = 'Vers le centre'
+
+[messages.capacity_exceeded]
+text = 'Capacité dépassée'
+
+[messages.clock_unavailable]
+text = 'Horloge indisponible'
+
+[messages.output_blocked]
+text = 'Sortie bloquée'
+
+[messages.entries_count]
+text = 'Entrées : {count:u}'
+
+[messages.record_finish_play_stop_prompt]
+text = '{record:s} Enr/Fin {play:s} Lire/Arrêt'
+
+[messages.on_off_prompt]
+text = '{button:s} Marche/Arrêt'
+
+[messages.midi_looper]
+text = 'Boucleur MIDI'
+
+[messages.empty]
+text = 'Vide'
+
+[messages.armed]
+text = 'Armé'
+
+[messages.closing]
+text = 'Fermeture'
+
+[messages.overdub_armed]
+text = 'Superposition armée'
+
+[messages.overdubbing]
+text = 'Superposition'
+
+[messages.preparing]
+text = 'Préparation'
+
+[messages.stopped]
+text = 'Arrêté'
+
+[messages.launch_armed]
+text = 'Lancement armé'
+
+[messages.undo_pending]
+text = 'Annulation en attente'
+
+[messages.loading]
+text = 'Chargement'
+
+[messages.memory_unavailable]
+text = 'Mémoire indisponible'
+
+[messages.late_boundary]
+text = 'Limite en retard'
+
+[messages.output_retired]
+text = 'Sortie retirée'
+
+[messages.file_error]
+text = 'Erreur fichier'
+
+[messages.input_changed]
+text = 'Entrée modifiée'
+
+[messages.loop_beats]
+text = '{position:llu}.{fraction:02u} / {length:llu}.{end_fraction:02u} temps'
+
+[messages.loop_events]
+text = '{events:u}/{capacity:u} événements{state:s}{direction:s}'
+
+[messages.clock_waiting_suffix]
+text = ' Horloge attendue'
+
+[messages.unsaved_suffix]
+text = ' Non sauvé'
+
+[messages.backward_suffix]
+text = ' Arrière'
+
+[messages.forward_suffix]
+text = ' Avant'
+
+[messages.direction_change_pending]
+text = 'Changement sens en attente'
+
+[messages.record_play_undo_prompt]
+text = '{record:s} Enr {play:s} Lire {undo:s} Annuler'
+
+[messages.clear_more_prompt]
+text = '{clear:s} Effacer {more:s} Plus'
+
+[messages.combined]
+text = 'Combiné'
+
+[messages.incoming]
+text = 'Entrant'
+
+[messages.outgoing]
+text = 'Sortant'
+
+[messages.unavailable_memory]
+text = 'Indisponible : mémoire'
+
+[messages.monitor_history]
+text = '{state:s}{advanced:s} Hist-{history:llu} Perdus-{dropped:u}'
+
+[messages.frozen]
+text = 'Figé'
+
+[messages.live]
+text = 'Direct'
+
+[messages.advanced_suffix]
+text = ' avancé'
+
+[messages.no_traffic]
+text = 'Aucun trafic'
+
+[messages.no_input]
+text = 'Aucune entrée'
+
+[messages.no_output]
+text = 'Aucune sortie'
+
+[messages.unknown]
+text = 'inconnu'
+
+[messages.running_suffix]
+text = ' (continu)'
+
+[messages.history_live_prompt]
+text = '{previous:s}/{next:s} Historique {live:s} Direct'
+
+[messages.freeze_prompt]
+text = '{button:s} Figer'
+
+[messages.over]
+text = 'EXCÈS'
+
+[messages.raw_uncalibrated_sample]
+text = 'Brut 8888 Non étalonné'
+
+[messages.select_expression_role]
+text = 'Choisir rôle expression'
+
+[messages.reconnect_heel]
+text = 'Reconnecter : talon'
+
+[messages.calibrate_prompt]
+text = '{button:s} : étalonner'
+
+[messages.unassigned_port]
+text = '{port:.24s} Non affecté'
+
+[messages.jack_cancel_prompt]
+text = '{jack:s} : prise {cancel:s} : annuler'
+
+[messages.working]
+text = 'Traitement...'
+
+[messages.no_setups]
+text = 'Aucune configuration'
+short = 'Aucune config'
+
+[messages.action]
+text = 'Action'
+
+[messages.history]
+text = 'Historique'
+
+[messages.edit]
+text = 'Modifier'
+
+[messages.select]
+text = 'Choisir'
+
+[messages.patch]
+text = 'Son'
+
+[messages.program]
+text = 'Programme'
+
+[messages.bank]
+text = 'Banque'
+
+[messages.channel]
+text = 'Canal'
+
+[messages.volume]
+text = 'Volume'
+
+[messages.pan]
+text = 'Panoramique'
+
+[messages.brightness]
+text = 'Luminosité'
+
+[messages.idle_seconds]
+text = 'Veille (secondes)'
+
+[messages.usb_midi]
+text = 'USB MIDI'
+
+[messages.none]
+text = 'Aucun'
+
+[messages.value]
+text = 'Valeur'
+
+[messages.unsaved_edits]
+text = 'Modifications non sauvées'
+short = 'Non enregistré'
+
+[messages.save]
+text = 'Enregistrer'
+short = 'Sauver'
+
+[messages.discard]
+text = 'Abandonner'
+
+[messages.cancel]
+text = 'Annuler'
+
+[messages.please_wait]
+text = 'Veuillez patienter'
+
+[messages.changing_setup]
+text = 'Changement de configuration'
+short = 'Changement config'
+
+[messages.operation_failed]
+text = 'Échec de l’opération'
+
+[messages.revision]
+text = 'Révision'
+
+[messages.current_snapshot]
+text = 'Actuelle : {prompt:.54s}'
+
+[messages.snapshot]
+text = 'instantané'
+
+[messages.compare_current]
+text = 'Comparer à l’actuelle'
+
+[messages.change]
+text = 'Différence'
+
+[messages.changed_patches]
+text = 'Sons modifiés : {count:u}'
+
+[messages.changed_routes]
+text = 'Routes modifiées : {count:u}'
+
+[messages.settings_change]
+text = 'Réglages : {state:s}'
+
+[messages.authored_data_change]
+text = 'Données : {state:s}'
+
+[messages.changed]
+text = 'modifiés'
+
+[messages.same]
+text = 'identiques'
+
+[messages.restore]
+text = 'Restaurer'
+
+[messages.back_title]
+text = 'Retour'
+
+[messages.adjust]
+text = 'régler'
+
+[messages.setup_menu]
+text = 'Menu configuration'
+
+[messages.no_midi_sent]
+text = 'Aucun MIDI envoyé'
+
+[messages.setup]
+text = 'Configuration'
+short = 'Config'
+
+[messages.patch_cycle]
+text = 'Cycle de sons'
+
+[messages.field]
+text = 'Champ'
+
+[messages.saved]
+text = 'Enregistré'
+
+[messages.song_read_failed]
+text = 'Échec lecture morceau'
+
+[messages.song_added]
+text = 'Ajouté : {name:.57s}'
+
+[messages.not_saved]
+text = 'Non enregistré'
+
+[messages.saving_wait]
+text = 'Enregistrement...'
+
+[messages.current_removed]
+text = 'Actuel (retiré)'
+
+[messages.current]
+text = 'Actuel'
+
+[messages.next]
+text = 'Suivant'
+
+[messages.add_songs]
+text = 'Ajouter des morceaux'
+
+[messages.end_of_set]
+text = 'Fin de liste'
+
+[messages.next_patch]
+text = 'Son suivant'
+
+[messages.perform_setlist]
+text = 'Jouer la liste'
+
+[messages.setlists]
+text = 'Listes'
+
+[messages.songs]
+text = 'Morceaux'
+
+[messages.save_as_song]
+text = 'Sauver comme morceau'
+
+[messages.save_reference]
+text = 'Sauver référence'
+
+[messages.add_next]
+text = 'Ajouter ensuite'
+
+[messages.add_to_end]
+text = 'Ajouter à la fin'
+
+[messages.remove_from_setlist]
+text = 'Retirer de la liste'
+
+[messages.move]
+text = 'Déplacer'
+
+[messages.rename_setlist]
+text = 'Renommer la liste'
+
+[messages.undo_edit]
+text = 'Annuler modification'
+
+[messages.restart_setlist]
+text = 'Recommencer la liste'
+
+[messages.done]
+text = 'Terminé'
+
+[messages.rename]
+text = 'Renommer'
+
+[messages.new_setlist]
+text = 'Nouvelle liste'
+
+[messages.character_number]
+text = 'Caractère {character:u}'
+
+[messages.rename_song]
+text = 'Renommer morceau'
+
+[messages.use_selected_patch]
+text = 'Utiliser le son choisi'
+
+[messages.edit_patches]
+text = 'Modifier les sons'
+
+[messages.patch_position]
+text = 'Son {position:u}/{count:lu}'
+
+[messages.replace_with_selected]
+text = 'Remplacer par la sélection'
+short = 'Remplacer par choix'
+
+[messages.insert_selected_after]
+text = 'Insérer la sélection après'
+short = 'Insérer après'
+
+[messages.remove_patch]
+text = 'Retirer le son'
+
+[messages.move_earlier]
+text = 'Déplacer avant'
+
+[messages.move_later]
+text = 'Déplacer après'
+
+[messages.save_song_first]
+text = 'Enregistrer un morceau'
+
+[messages.patches_count]
+text = 'Sons : {count:lu}'
+
+[messages.missing_song]
+text = 'Morceau absent'
+
+[messages.entry_action]
+text = 'entrée'
+
+[messages.letter_action]
+text = 'lettre'
+
+[messages.edit_action]
+text = 'modifier'
+
+[messages.position_action]
+text = 'pos'
+
+[messages.jump_action]
+text = 'saut'
+
+[messages.next_action]
+text = 'suivant'
+
+[messages.add_action]
+text = 'ajouter'
+
+[messages.menu_action]
+text = 'menu'
+
+[messages.done_action]
+text = 'terminer'
+
+[messages.port_memory_unavailable]
+text = 'Mémoire ports indisponible'
+
+[messages.looper_command_rejected]
+text = 'Commande boucleur refusée'
+
+[messages.looper_memory_unavailable]
+text = 'Mémoire boucleur indisponible'
+
+[messages.banked_memory_unavailable]
+text = 'Mémoire sons indisponible'
+
+[messages.monitor_memory_unavailable]
+text = 'Mémoire moniteur indisponible'
+
+[messages.relay_reset_failed]
+text = 'Échec réinitialisation relais'
+
+[messages.relay_pulse_restore_failed]
+text = 'Échec restauration relais'
+
+[messages.firmware_switch_failed]
+text = 'Échec changement système'
+
+[messages.language_change_rejected]
+text = 'Changement de langue refusé'
+
+[messages.global_setting_rejected]
+text = 'Réglage global refusé'
+
+[messages.midi_input_memory_unavailable]
+text = 'Mémoire entrée MIDI indisponible'
+
+[messages.midi_recording_write_failed]
+text = 'Échec écriture enregistrement MIDI'
+
+[messages.midi_cleanup_incomplete]
+text = 'Libération MIDI incomplète'
+
+[messages.bank_page_memory_unavailable]
+text = 'Mémoire page banque indisponible'
+
+[messages.switch_state_unknown]
+text = 'État commutateur inconnu'
+
+[messages.page_return_unavailable]
+text = 'Retour page indisponible'
+
+[messages.patch_return_unavailable]
+text = 'Retour son indisponible'
+
+[messages.patch_return_memory_unavailable]
+text = 'Mémoire retour son indisponible'
+
+[messages.selection_failed]
+text = 'Échec sélection'
+
+[messages.snapshot_failed]
+text = 'Échec instantané'
+
+[messages.cannot_compare_revision]
+text = 'Comparaison révision impossible'
+
+[messages.restore_failed]
+text = 'Échec restauration'
+
+[messages.controller_memory_unavailable]
+text = 'Mémoire contrôle indisponible'
+
+[messages.relay_setup_failed]
+text = 'Échec configuration relais'
+
+[messages.navigation_memory_unavailable]
+text = 'Mémoire navigation indisponible'
+
+[messages.remote_state_unknown]
+text = 'État distant inconnu'
+
+[messages.switch_state_memory_exhausted]
+text = 'Mémoire état commutateur épuisée'
+
+[messages.switch_delivery_memory_unavailable]
+text = 'Mémoire envoi commutateur indisponible'
+
+[messages.switch_ownership_memory_exhausted]
+text = 'Mémoire attribution commutateur épuisée'
+
+[messages.switches_overlap]
+text = 'Commandes MIDI partagées entre commutateurs'
+
+[messages.switch_event_memory_unavailable]
+text = 'Mémoire événements commutateur indisponible'
+
+[messages.switch_action_memory_unavailable]
+text = 'Mémoire action commutateur indisponible'
+
+[messages.switch_gesture_queue_full]
+text = 'File gestes commutateur pleine'
+
+[messages.switch_action_queue_full]
+text = 'File actions commutateur pleine'
+
+[messages.switch_selection_queue_full]
+text = 'File sélections commutateur pleine'
+
+[messages.selected_patch_overlap]
+text = 'Le son sélectionné partage les commandes MIDI'
+
+[messages.cannot_select_midi_streams]
+text = 'Sélection flux MIDI impossible'
+
+[messages.patch_memory_unavailable]
+text = 'Mémoire son indisponible'
+
+[messages.invalid_patch_root]
+text = 'Racine de son invalide'
+
+[messages.persistent_switch_context]
+text = 'Un commutateur persistant doit garder son contexte'
+
+[messages.patch_sources_changed]
+text = 'Sources du son modifiées pendant le changement système'
+
+[messages.invalid_patch_continuation]
+text = 'Continuation du son invalide'
+
+[messages.midi_file_playback_failed]
+text = 'Échec lecture fichier MIDI'
+
+[messages.banked_patch_no_page]
+text = 'Aucune page de banque pour ce son'
+
+[messages.midi_output_unavailable]
+text = 'Sortie MIDI indisponible'
+
+[messages.counter_memory_unavailable]
+text = 'Mémoire compteur indisponible'
+
+[messages.cannot_change_midi_gate]
+text = 'Modification porte flux MIDI impossible'
+
+[messages.relay_operation_failed]
+text = 'Échec opération relais'
+
+[messages.cannot_install_patch_bindings]
+text = 'Installation commandes du son impossible'
+
+[messages.application_operation_failed]
+text = 'Échec opération application'
+
+[messages.cannot_open_midi_file]
+text = 'Ouverture fichier MIDI impossible'
+
+[messages.midi_recording_failed]
+text = 'Échec enregistrement MIDI'
+
+[messages.invalid_executable_patch]
+text = 'Son exécutable invalide'
+
+[messages.invalid_patch_node]
+text = 'Nœud de son invalide'
+
+[messages.patch_reference_cycle]
+text = 'Références de sons circulaires'
+
+[messages.patch_traversal_not_prepared]
+text = 'Parcours du son non préparé'
+
+[messages.patch_traversal_memory_exhausted]
+text = 'Mémoire parcours du son épuisée'
+
+[messages.setup_table_changed]
+text = 'Configurations modifiées : recréer les sons capturés'
+
+[messages.referenced_setup_missing]
+text = 'Configuration référencée absente ou invalide'
+
+[messages.referenced_patch_missing]
+text = 'Son référencé absent'
+
+[messages.invalid_application_operation]
+text = 'Opération application invalide'
+
+[messages.invalid_selected_patch_binding]
+text = 'Commande du son sélectionné invalide'
+
+[messages.no_patch_selected]
+text = 'Aucun son sélectionné à activer'
+
+[messages.patch_binding_memory_exhausted]
+text = 'Mémoire commandes du son épuisée'
+
+[messages.patch_ownership_memory_exhausted]
+text = 'Mémoire attribution du son épuisée'
+
+[messages.midi_state_memory_unavailable]
+text = 'Mémoire état MIDI indisponible'
+
+[messages.counter_reservation_memory_unavailable]
+text = 'Mémoire réservation compteur indisponible'
+
+[messages.switch_cleanup_unknown]
+text = 'État distant inconnu après libération commutateur'
+
+[messages.unknown_title]
+text = 'Inconnu'
+
+[messages.pending]
+text = 'En attente'
+
+[messages.failed_unknown]
+text = 'Échec / inconnu'
+
+[messages.unknown_remote_state]
+text = 'État distant inconnu'
+
+[messages.partial_match]
+text = 'Correspondance partielle'
+
+[messages.other_values]
+text = 'Autres valeurs'
+
+[messages.completed_locally]
+text = 'Terminé localement'
+
+[messages.closing_prefix]
+text = 'Fermeture : '
+
+[messages.shifted_prefix]
+text = 'Décalé | '
+
+[messages.abandon]
+text = 'abandonner'
+
+[messages.no_switches]
+text = 'Aucun commutateur'
+
+[messages.firmware_caption]
+text = 'micrologiciel'
+
+[messages.expression_assigned]
+text = '{port:.20s} CC {controller:u} Can {channel:u}'
+
+[messages.no_pedal]
+text = 'Aucune pédale'
+
+[messages.travel_too_short]
+text = 'Course trop courte'
+
+[messages.raw_uncalibrated]
+text = 'Brut {value:d} Non étalonné'
+
+[messages.calibrated_position]
+text = '{value:d}% Étalonnée'
+
+[messages.expression_step]
+text = '{button:s} : {action:s}'
+
+[messages.heel_down]
+text = 'Talon baissé'
+
+[messages.toe_down]
+text = 'Pointe baissée'
+
+[messages.calibrate]
+text = 'Étalonner'
+
+[messages.monitor_connected]
+text = 'Connecté / modifié'
+
+[messages.monitor_disconnected]
+text = 'Déconnecté'
+
+[messages.monitor_incomplete]
+text = '{prefix:s}brut / incomplet'
+
+[messages.monitor_sysex]
+text = 'SysEx {part:s}{ending:s} {bytes:u}o'
+
+[messages.monitor_sysex_start]
+text = 'début'
+
+[messages.monitor_sysex_continue]
+text = 'suite'
+
+[messages.monitor_sysex_end]
+text = '/fin'
+
+[messages.monitor_note_off]
+text = 'Can{channel:u} Fin {note:u} v{velocity:u}'
+
+[messages.monitor_note_on]
+text = 'Can{channel:u} Début {note:u} v{velocity:u}'
+
+[messages.monitor_poly_pressure]
+text = 'Can{channel:u} Poly {note:u} p{pressure:u}'
+
+[messages.monitor_control]
+text = 'Can{channel:u} CC {controller:u} = {value:u}'
+
+[messages.monitor_program]
+text = 'Can{channel:u} Programme {program:u}'
+
+[messages.monitor_pressure]
+text = 'Can{channel:u} Pression {pressure:u}'
+
+[messages.monitor_bend]
+text = 'Can{channel:u} Pitch {value:d}'
+
+[messages.monitor_time_code]
+text = 'Code temporel'
+
+[messages.monitor_song_position]
+text = 'Position morceau'
+
+[messages.monitor_song_select]
+text = 'Choix morceau'
+
+[messages.monitor_tune_request]
+text = 'Accordage'
+
+[messages.monitor_clock]
+text = 'Horloge'
+
+[messages.monitor_start]
+text = 'Départ'
+
+[messages.monitor_continue]
+text = 'Continuer'
+
+[messages.monitor_stop]
+text = 'Arrêt'
+
+[messages.monitor_active_sensing]
+text = 'Détection active'
+
+[messages.monitor_reset]
+text = 'Réinitialisation'
+
+[messages.monitor_system_value]
+text = '{name:s} {value:u}'
+
+[messages.cue]
+text = 'Repère'
+
+[messages.warning]
+text = 'Avertissement'
+
+[messages.display_transfer_failed]
+text = 'Échec transfert écran'
+[messages.target_midi_memory_unavailable]
+text = 'Mémoire MIDI indisponible'
+
+[messages.target_animation_color_memory]
+text = 'Mémoire des couleurs indisponible'
+
+[messages.target_usb_descriptor_failed]
+text = 'Descripteur USB MIDI invalide'
+
+[messages.target_auxiliary_memory]
+text = 'Mémoire des commutateurs indisponible'
+
+[messages.target_deployment_recovery]
+text = 'Restauration du déploiement requise'
+
+[messages.target_setup_bundle_invalid]
+text = 'Collection de configurations invalide'
+
+[messages.target_global_recovery]
+text = 'Restauration des réglages globaux requise'
+
+[messages.target_song_storage_invalid]
+text = 'Stockage des morceaux invalide'

@@ -55,6 +55,39 @@ static void render(const cntrl::ui::Fonts &fonts, const char *path) {
     }
 }
 
+static void error_captions(const cntrl::ui::Fonts &fonts) {
+    using cntrl::ui::i18n::Message;
+    cntrl::ui::i18n::lookup = [](Message message, bool shorter) -> const char * {
+        if (message != Message::selected_patch_overlap) return nullptr;
+        return shorter ? "Conflit de commandes MIDI" : "Éléments enregistrés Éléments enregistrés Éléments enregistrés";
+    };
+    for (bool localized : {false, true}) {
+        std::vector<uint16_t> expected;
+        std::string accented;
+        for (unsigned i = 0; i < 40; ++i) accented += "é";
+        for (bool error : {false, true}) {
+            Display display; uint16_t work[96 * 64];
+            cntrl::ui::Renderer renderer(display, fonts, work, 96 * 64);
+            assert(renderer.prepare(0, false)); renderer.finish(true);
+            if (error) renderer.error(localized ? cntrl::ui::i18n::text(Message::selected_patch_overlap) : accented.c_str());
+            else {
+                cntrl::Pane pane; auto &line = pane.lines[0]; line.graphics = pane.graphics;
+                line.graphics.font = cntrl::ui::localized_face; line.graphics.size = 8; line.wrap = true;
+                std::string caption;
+                if (localized) caption = "Conflit de commandes MIDI";
+                else { for (unsigned i = 0; i < 30; ++i) caption += "é"; caption += "..."; }
+                cntrl::ui::utf8::copy(line.text, sizeof(line.text), caption.c_str());
+                renderer.show(0, pane);
+            }
+            for (unsigned i = 0; i < 10000 && !renderer.ready(); ++i) renderer.draw(i);
+            assert(renderer.ready());
+            if (expected.empty()) expected = display.pixels;
+            else assert(expected == display.pixels);
+        }
+    }
+    cntrl::ui::i18n::lookup = nullptr;
+}
+
 int main(int argc, char **argv) {
     assert(argc == 5);
     cntrl::memory_budget = 1024 * 1024;
@@ -86,6 +119,7 @@ int main(int argc, char **argv) {
         assert(actual.y >= mixed.top && actual.y + int(actual.height) <= mixed.top + mixed.height);
     }
     assert(fonts.glyph(cntrl::ui::localized_face, 12, 0, "Café", 3, actual));
+    error_captions(fonts);
     assert(fonts.glyph(cntrl::ui::localized_face, 12, 0, "é", 0, accent));
     assert(actual.pixels == accent.pixels && actual.width == accent.width && actual.height == accent.height);
     assert(!fonts.glyph(cntrl::ui::localized_face, 12, 0, "Café", 4, actual));

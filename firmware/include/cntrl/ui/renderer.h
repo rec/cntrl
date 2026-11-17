@@ -139,13 +139,25 @@ public:
         }
         screen.requested = content; screen.dirty = true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_error)
+#endif
     void error(const char *message) {
         if (screens_.empty()) return;
         const unsigned screen = unsigned(screens_.size() / 2);
         Pane pane; pane.graphics = screens_[screen].requested.graphics;
         pane.graphics.font = localized_face; pane.graphics.size = 8; pane.graphics.asset = 0;
-        pane.lines[0].graphics = pane.graphics;
-        std::snprintf(pane.lines[0].text, sizeof(pane.lines[0].text), "%s", message); show(screen, pane);
+        auto &line = pane.lines[0]; line.graphics = pane.graphics; line.wrap = true;
+        line.graphics.asset = i18n::identity(message);
+        if (line.graphics.asset && std::strlen(message) >= sizeof(line.text)) {
+            const char *shorter = i18n::short_text(i18n::Message(line.graphics.asset - 1));
+            if (shorter && *shorter) message = shorter;
+        }
+        if (!utf8::copy(line.text, sizeof(line.text), message)) {
+            while (std::strlen(line.text) > sizeof(line.text) - 4) utf8::erase_last(line.text);
+            std::strcat(line.text, "...");
+        }
+        show(screen, pane);
     }
     void transition(bool undo, std::optional<unsigned> duration, int pane = -1, unsigned reserved = 0, bool vertical = false, bool panorama = true, unsigned pane_count = 1, bool fixed_heading = false) {
         if (message_) return;

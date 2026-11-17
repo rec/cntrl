@@ -1,0 +1,372 @@
+language = 'sv'
+name = 'Svenska'
+
+[messages]
+pages_and_tools = { text = 'Sidor och verktyg' }
+browse = { text = 'bläddra' }
+ok = { text = 'OK' }
+back = { text = 'tillbaka' }
+setups = { text = 'Konfigurationer', short = 'Konfig.' }
+songs_and_setlists = { text = 'Låtar och låtlistor' }
+switches = { text = 'Fotknappar' }
+language = { text = 'Språk' }
+control_action = { text = '{separator:s}{label:s} {action:s}' }
+setlist_number = { text = 'Låtlista {number:u}' }
+true_value = { text = 'sant' }
+false_value = { text = 'falskt' }
+no_configurable_ports = { text = 'Inga konfigurerbara portar', short = 'Inga portar' }
+unavailable = { text = 'Ej tillgänglig' }
+driver_failed = { text = 'Drivrutinsfel' }
+busy = { text = 'Upptagen' }
+already_set = { text = 'Redan inställd' }
+cannot_apply = { text = 'Kan inte tillämpa' }
+saving = { text = 'Sparar' }
+save_failed = { text = 'Kunde inte spara' }
+save_confirm = { text = 'Spara: Bekräfta' }
+load_confirm = { text = 'Läs in: Bekräfta' }
+reverse_phrase_confirm = { text = 'Vänd frasen: Bekräfta' }
+toggle_direction_confirm = { text = 'Byt riktning: Bekräfta' }
+confirm_clear = { text = 'Bekräfta radering?' }
+replace_unsaved_loop = { text = 'Ersätt osparad loop?' }
+scanning = { text = 'Söker...' }
+no_midi_files = { text = 'Inga MIDI-filer' }
+storage_busy = { text = 'Lagringen upptagen' }
+stock_firmware_prompt = { text = '{button:s} för originalfirmware.' }
+cancel_prompt = { text = '{button:s} för att avbryta' }
+notes_off = { text = 'Toner av' }
+all_off = { text = 'Allt av' }
+midi_clock = { text = 'MIDI-klocka' }
+clock_tempo = { text = 'Klocktempo' }
+tap_tempo = { text = 'Trycktempo' }
+status = { text = 'Status' }
+midi_cable_test = { text = 'MIDI-kabeltest' }
+trs_ports = { text = 'TRS-portar' }
+keyboard = { text = 'Tangentbord' }
+firmware = { text = 'Firmware' }
+external_receiving = { text = 'Extern: tar emot' }
+external_waiting = { text = 'Extern: väntar' }
+no_outputs_configured = { text = 'Inga utgångar konfigurerade', short = 'Inga utgångar' }
+outputs_offline = { text = 'Utgångar frånkopplade' }
+internal_running = { text = 'Intern: kör' }
+internal_stopped = { text = 'Intern: stoppad' }
+start_continue_prompt = { text = '{start:s} Starta  {resume:s} Fortsätt' }
+stop_source_prompt = { text = '{stop:s} Stopp  {source:s} Källa' }
+tempo_slot = { text = 'Plats {slot:u}: {tempo:u} BPM' }
+tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Plats' }
+clock_late_lost = { text = 'Sent {late:u}us Tappat {lost:u}' }
+output_heading = { text = 'Ut' }
+input_heading = { text = 'In' }
+input = { text = 'Ingång' }
+no_shortcuts = { text = 'Inga genvägar' }
+held = { text = 'Nedtryckt' }
+ready = { text = 'Redo' }
+select_pair_prompt = { text = '{previous:s}/{next:s}: Välj' }
+hold_send_prompt = { text = 'Håll {button:s}: Skicka' }
+off = { text = 'Av' }
+on = { text = 'På' }
+midi_type_a = { text = 'MIDI typ A' }
+midi_type_b = { text = 'MIDI typ B' }
+expression = { text = 'Expression' }
+aux_switch = { text = 'Extra fotknapp' }
+jack_mode_prompt = { text = '{jack:s}: Uttag {mode:s}: Läge' }
+apply_prompt = { text = '{button:s}: Tillämpa' }
+use_stock = { text = 'Använd originalets' }
+cycles_patches = { text = 'Cykler:{cycles:u} Ljud:{patches:u}' }
+clock_value = { text = 'Klocka:{clock:s}' }
+disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
+disk_unknown = { text = 'Disk:--/--G' }
+uptime_value = { text = ' Tid:{hours:lu}:{minutes:02u}:{seconds:02u}' }
+starts_value = { text = 'Starter:{starts:s}' }
+error = { text = 'fel' }
+tap_value = { text = 'Tryck:{tempo:s}' }
+player_score = { text = 'SPELARE {player:u}   {score:u}' }
+up_down_prompt = { text = '{up:s} Upp / {down:s} Ned' }
+serve_exit_prompt = { text = '{serve:s} Serve/Paus {exit:s} Avsluta' }
+paused = { text = 'PAUSAD' }
+player_one_wins = { text = 'SPELARE 1 VINNER' }
+player_two_wins = { text = 'SPELARE 2 VINNER' }
+press_to_serve = { text = 'TRYCK FÖR SERVE' }
+arpeggiator = { text = 'Arpeggiator' }
+waiting = { text = 'Väntar' }
+playing = { text = 'Spelar' }
+record_armed = { text = 'Inspelning väntar' }
+recording = { text = 'Spelar in' }
+finish_armed = { text = 'Avslut väntar' }
+forward = { text = 'Framåt' }
+reverse = { text = 'Bakåt' }
+played = { text = 'Spelordning' }
+back_and_forth = { text = 'Fram och tillbaka' }
+random = { text = 'Slump' }
+random_walk = { text = 'Slumpvandring' }
+mod = { text = 'Modulo' }
+shuffle = { text = 'Blandning' }
+outside_in = { text = 'Utifrån och in' }
+capacity_exceeded = { text = 'Kapacitet överskriden' }
+clock_unavailable = { text = 'Klocka ej tillgänglig' }
+output_blocked = { text = 'Utgång blockerad' }
+entries_count = { text = '{count:u} poster' }
+record_finish_play_stop_prompt = { text = '{record:s} Insp/Slut {play:s} Spela/Stopp' }
+on_off_prompt = { text = '{button:s} På/Av' }
+midi_looper = { text = 'MIDI-looper' }
+empty = { text = 'Tom' }
+armed = { text = 'Redo att starta' }
+closing = { text = 'Avslutar' }
+overdub_armed = { text = 'Pålägg väntar' }
+overdubbing = { text = 'Spelar in pålägg' }
+preparing = { text = 'Förbereder' }
+stopped = { text = 'Stoppad' }
+launch_armed = { text = 'Start väntar' }
+undo_pending = { text = 'Ångra väntar' }
+loading = { text = 'Läser in' }
+memory_unavailable = { text = 'Minne ej tillgängligt' }
+late_boundary = { text = 'Försenad gräns' }
+output_retired = { text = 'Utgång borttagen' }
+file_error = { text = 'Filfel' }
+input_changed = { text = 'Ingång ändrad' }
+loop_beats = { text = '{position:llu}.{fraction:02u} / {length:llu}.{end_fraction:02u} slag' }
+loop_events = { text = '{events:u}/{capacity:u} händelser{state:s}{direction:s}' }
+clock_waiting_suffix = { text = ' Väntar på klocka' }
+unsaved_suffix = { text = ' Osparad' }
+backward_suffix = { text = ' Bakåt' }
+forward_suffix = { text = ' Framåt' }
+direction_change_pending = { text = 'Riktningsbyte väntar' }
+record_play_undo_prompt = { text = '{record:s} Insp {play:s} Spela {undo:s} Ångra' }
+clear_more_prompt = { text = '{clear:s} Radera {more:s} Mer' }
+combined = { text = 'Kombinerat' }
+incoming = { text = 'Inkommande' }
+outgoing = { text = 'Utgående' }
+unavailable_memory = { text = 'Ej tillgänglig: minne' }
+monitor_history = { text = '{state:s}{advanced:s} Hist-{history:llu} Tappat-{dropped:u}' }
+frozen = { text = 'Fryst' }
+live = { text = 'Direkt' }
+advanced_suffix = { text = ' avancerad' }
+no_traffic = { text = 'Ingen trafik' }
+no_input = { text = 'Ingen ingång' }
+no_output = { text = 'Ingen utgång' }
+unknown = { text = 'okänd' }
+running_suffix = { text = ' (löpande)' }
+history_live_prompt = { text = '{previous:s}/{next:s} Historik {live:s} Direkt' }
+freeze_prompt = { text = '{button:s} Frys' }
+over = { text = 'ÖVER' }
+raw_uncalibrated_sample = { text = 'Rå 8888 Okalibrerad' }
+select_expression_role = { text = 'Välj expressionsroll' }
+reconnect_heel = { text = 'Återanslut: häl' }
+calibrate_prompt = { text = '{button:s}: Kalibrera' }
+unassigned_port = { text = '{port:.24s} Ej tilldelad' }
+jack_cancel_prompt = { text = '{jack:s}: Uttag {cancel:s}: Avbryt' }
+working = { text = 'Arbetar...' }
+no_setups = { text = 'Inga konfigurationer', short = 'Inga konfig.' }
+action = { text = 'Åtgärd' }
+history = { text = 'Historik' }
+edit = { text = 'Redigera' }
+select = { text = 'Välj' }
+patch = { text = 'Ljud' }
+program = { text = 'Program' }
+bank = { text = 'Bank' }
+channel = { text = 'Kanal' }
+volume = { text = 'Volym' }
+pan = { text = 'Panorering' }
+brightness = { text = 'Ljusstyrka' }
+idle_seconds = { text = 'Viloläge (sek)' }
+usb_midi = { text = 'USB MIDI' }
+none = { text = 'Ingen' }
+value = { text = 'Värde' }
+unsaved_edits = { text = 'Osparade ändringar' }
+save = { text = 'Spara' }
+discard = { text = 'Kasta' }
+cancel = { text = 'Avbryt' }
+please_wait = { text = 'Vänta' }
+changing_setup = { text = 'Byter konfiguration' }
+operation_failed = { text = 'Åtgärden misslyckades' }
+revision = { text = 'Version' }
+current_snapshot = { text = 'Aktuell: {prompt:.54s}' }
+snapshot = { text = 'ögonblicksbild' }
+compare_current = { text = 'Jämför med aktuell' }
+change = { text = 'Ändring' }
+changed_patches = { text = '{count:u} ändrade ljud' }
+changed_routes = { text = '{count:u} ändrade routningar' }
+settings_change = { text = 'Inställningar: {state:s}' }
+authored_data_change = { text = 'Egna data: {state:s}' }
+changed = { text = 'ändrat' }
+same = { text = 'oförändrat' }
+restore = { text = 'Återställ' }
+back_title = { text = 'Tillbaka' }
+adjust = { text = 'justera' }
+setup_menu = { text = 'Konfigurationsmeny' }
+no_midi_sent = { text = 'Ingen MIDI skickad' }
+setup = { text = 'Konfiguration' }
+patch_cycle = { text = 'Ljudcykel' }
+field = { text = 'Fält' }
+saved = { text = 'Sparad' }
+song_read_failed = { text = 'Kunde inte läsa låten' }
+song_added = { text = 'Tillagd {name:.57s}' }
+not_saved = { text = 'Ej sparad' }
+saving_wait = { text = 'Sparar...' }
+current_removed = { text = 'Aktuell (borttagen)' }
+current = { text = 'Aktuell' }
+next = { text = 'Nästa' }
+add_songs = { text = 'Lägg till låtar' }
+end_of_set = { text = 'Slut på låtlistan' }
+next_patch = { text = 'Nästa ljud' }
+perform_setlist = { text = 'Spela låtlista' }
+setlists = { text = 'Låtlistor' }
+songs = { text = 'Låtar' }
+save_as_song = { text = 'Spara som låt' }
+save_reference = { text = 'Spara referens' }
+add_next = { text = 'Lägg till härnäst' }
+add_to_end = { text = 'Lägg till sist' }
+remove_from_setlist = { text = 'Ta bort ur låtlistan' }
+move = { text = 'Flytta' }
+rename_setlist = { text = 'Byt namn på låtlista' }
+undo_edit = { text = 'Ångra ändring' }
+restart_setlist = { text = 'Starta om låtlista' }
+done = { text = 'Klar' }
+rename = { text = 'Byt namn' }
+new_setlist = { text = 'Ny låtlista' }
+character_number = { text = 'Tecken {character:u}' }
+rename_song = { text = 'Byt namn på låt' }
+use_selected_patch = { text = 'Använd valt ljud' }
+edit_patches = { text = 'Redigera ljud' }
+patch_position = { text = 'Ljud {position:u}/{count:lu}' }
+replace_with_selected = { text = 'Ersätt med valt' }
+insert_selected_after = { text = 'Infoga valt efter' }
+remove_patch = { text = 'Ta bort ljud' }
+move_earlier = { text = 'Flytta tidigare' }
+move_later = { text = 'Flytta senare' }
+save_song_first = { text = 'Spara en låt först' }
+patches_count = { text = '{count:lu} ljud' }
+missing_song = { text = 'Låt saknas' }
+entry_action = { text = 'post' }
+letter_action = { text = 'bokstav' }
+edit_action = { text = 'redigera' }
+position_action = { text = 'pos' }
+jump_action = { text = 'hoppa' }
+next_action = { text = 'nästa' }
+add_action = { text = 'lägg till' }
+menu_action = { text = 'meny' }
+done_action = { text = 'klar' }
+port_memory_unavailable = { text = 'Portminne ej tillgängligt' }
+looper_command_rejected = { text = 'MIDI-looperkommandot avvisat' }
+looper_memory_unavailable = { text = 'MIDI-looperminne ej tillgängligt' }
+banked_memory_unavailable = { text = 'Bankljudsminne ej tillgängligt' }
+monitor_memory_unavailable = { text = 'MIDI-monitorminne ej tillgängligt' }
+relay_reset_failed = { text = 'Reläåterställning misslyckades' }
+relay_pulse_restore_failed = { text = 'Återställning efter reläpuls misslyckades' }
+firmware_switch_failed = { text = 'Firmwarebyte misslyckades' }
+language_change_rejected = { text = 'Språkbyte avvisat' }
+global_setting_rejected = { text = 'Global inställning avvisad' }
+midi_input_memory_unavailable = { text = 'MIDI-ingångsminne ej tillgängligt' }
+midi_recording_write_failed = { text = 'MIDI-inspelning kunde inte skrivas' }
+midi_cleanup_incomplete = { text = 'MIDI-frisläppning ofullständig' }
+bank_page_memory_unavailable = { text = 'Minne för banksida ej tillgängligt' }
+switch_state_unknown = { text = 'Okänt fotknappstillstånd' }
+page_return_unavailable = { text = 'Återgång till sida ej tillgänglig' }
+patch_return_unavailable = { text = 'Återgång till ljud ej tillgänglig' }
+patch_return_memory_unavailable = { text = 'Minne för ljudåtergång ej tillgängligt' }
+selection_failed = { text = 'Val misslyckades' }
+snapshot_failed = { text = 'Ögonblicksbild misslyckades' }
+cannot_compare_revision = { text = 'Kan inte jämföra version' }
+restore_failed = { text = 'Återställning misslyckades' }
+controller_memory_unavailable = { text = 'Kontrollminne ej tillgängligt' }
+relay_setup_failed = { text = 'Reläinställning misslyckades' }
+navigation_memory_unavailable = { text = 'Navigeringsminne ej tillgängligt' }
+remote_state_unknown = { text = 'Okänt fjärrtillstånd' }
+switch_state_memory_exhausted = { text = 'Minne för fotknappstillstånd slut' }
+switch_delivery_memory_unavailable = { text = 'Sändningsminne för fotknapp ej tillgängligt' }
+switch_ownership_memory_exhausted = { text = 'Ägarskapsminne för fotknapp slut' }
+switches_overlap = { text = 'Fotknappar reserverar samma MIDI-kontroller' }
+switch_event_memory_unavailable = { text = 'Händelseminne för fotknapp ej tillgängligt' }
+switch_action_memory_unavailable = { text = 'Åtgärdsminne för fotknapp ej tillgängligt' }
+switch_gesture_queue_full = { text = 'Gestkö för fotknapp full' }
+switch_action_queue_full = { text = 'Åtgärdskö för fotknapp full' }
+switch_selection_queue_full = { text = 'Valkö för fotknapp full' }
+selected_patch_overlap = { text = 'Valt ljud överlappar en annan fotknapps MIDI-kontroller' }
+cannot_select_midi_streams = { text = 'Kan inte välja MIDI-strömmar' }
+patch_memory_unavailable = { text = 'Ljudminne ej tillgängligt' }
+invalid_patch_root = { text = 'Ogiltig ljudrot' }
+persistent_switch_context = { text = 'Beständiga fotknappar kan inte lämna sin kontext' }
+patch_sources_changed = { text = 'Ljudkällor ändrade sedan firmwarebesöket' }
+invalid_patch_continuation = { text = 'Ogiltig ljudfortsättning' }
+midi_file_playback_failed = { text = 'MIDI-fil kunde inte spelas' }
+banked_patch_no_page = { text = 'Bankljudet saknar sida i konfigurationen' }
+midi_output_unavailable = { text = 'MIDI-utgång ej tillgänglig' }
+counter_memory_unavailable = { text = 'Räknarminne ej tillgängligt' }
+cannot_change_midi_gate = { text = 'Kan inte ändra MIDI-strömspärr' }
+relay_operation_failed = { text = 'Reläåtgärd misslyckades' }
+cannot_install_patch_bindings = { text = 'Kan inte installera ljudbindningar' }
+application_operation_failed = { text = 'Programåtgärd misslyckades' }
+cannot_open_midi_file = { text = 'Kan inte öppna MIDI-fil' }
+midi_recording_failed = { text = 'MIDI-inspelning misslyckades' }
+invalid_executable_patch = { text = 'Ogiltigt körbart ljud' }
+invalid_patch_node = { text = 'Ogiltig ljudnod' }
+patch_reference_cycle = { text = 'Cirkulära ljudreferenser' }
+patch_traversal_not_prepared = { text = 'Ljudgenomgång ej förberedd' }
+patch_traversal_memory_exhausted = { text = 'Minne för ljudgenomgång slut' }
+setup_table_changed = { text = 'Konfigurationstabell ändrad; bygg om fångade ljud' }
+referenced_setup_missing = { text = 'Refererad konfiguration saknas eller är ogiltig' }
+referenced_patch_missing = { text = 'Refererat ljud saknas' }
+invalid_application_operation = { text = 'Ogiltig programåtgärd' }
+invalid_selected_patch_binding = { text = 'Ogiltig bindning för valt ljud' }
+no_patch_selected = { text = 'Inget ljud valt för aktivering' }
+patch_binding_memory_exhausted = { text = 'Minne för ljudbindningar slut' }
+patch_ownership_memory_exhausted = { text = 'Minne för ljudägarskap slut' }
+midi_state_memory_unavailable = { text = 'MIDI-tillståndsminne ej tillgängligt' }
+counter_reservation_memory_unavailable = { text = 'Minne för räknarreservation ej tillgängligt' }
+switch_cleanup_unknown = { text = 'Okänt fjärrtillstånd vid fotknappsfrisläppning' }
+unknown_title = { text = 'Okänd' }
+pending = { text = 'Väntar' }
+failed_unknown = { text = 'Misslyckad / okänd' }
+unknown_remote_state = { text = 'Okänt fjärrtillstånd' }
+partial_match = { text = 'Delvis matchning' }
+other_values = { text = 'Andra värden' }
+completed_locally = { text = 'Slutförd lokalt' }
+closing_prefix = { text = 'Avslutar: ' }
+shifted_prefix = { text = 'Skiftad | ' }
+abandon = { text = 'överge' }
+no_switches = { text = 'Inga fotknappar' }
+firmware_caption = { text = 'firmware' }
+expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
+no_pedal = { text = 'Ingen pedal' }
+travel_too_short = { text = 'För kort rörelse' }
+raw_uncalibrated = { text = 'Rå {value:d} Okalibrerad' }
+calibrated_position = { text = '{value:d}% Kalibrerad' }
+expression_step = { text = '{button:s}: {action:s}' }
+heel_down = { text = 'Häl ned' }
+toe_down = { text = 'Tå ned' }
+calibrate = { text = 'Kalibrera' }
+monitor_connected = { text = 'Ansluten / ändrad' }
+monitor_disconnected = { text = 'Frånkopplad' }
+monitor_incomplete = { text = '{prefix:s}rå / ofullständig' }
+monitor_sysex = { text = 'SysEx {part:s}{ending:s} {bytes:u}B' }
+monitor_sysex_start = { text = 'start' }
+monitor_sysex_continue = { text = 'forts' }
+monitor_sysex_end = { text = '/slut' }
+monitor_note_off = { text = 'Kan{channel:u} Av {note:u} v{velocity:u}' }
+monitor_note_on = { text = 'Kan{channel:u} På {note:u} v{velocity:u}' }
+monitor_poly_pressure = { text = 'Kan{channel:u} Poly {note:u} p{pressure:u}' }
+monitor_control = { text = 'Kan{channel:u} CC {controller:u} = {value:u}' }
+monitor_program = { text = 'Kan{channel:u} Program {program:u}' }
+monitor_pressure = { text = 'Kan{channel:u} Tryck {pressure:u}' }
+monitor_bend = { text = 'Kan{channel:u} Tonhöjd {value:d}' }
+monitor_time_code = { text = 'Tidskod' }
+monitor_song_position = { text = 'Låtposition' }
+monitor_song_select = { text = 'Låtval' }
+monitor_tune_request = { text = 'Stämningsbegäran' }
+monitor_clock = { text = 'Klocka' }
+monitor_start = { text = 'Start' }
+monitor_continue = { text = 'Fortsätt' }
+monitor_stop = { text = 'Stopp' }
+monitor_active_sensing = { text = 'Aktiv avkänning' }
+monitor_reset = { text = 'Återställ' }
+monitor_system_value = { text = '{name:s} {value:u}' }
+cue = { text = 'Signal' }
+warning = { text = 'Varning' }
+display_transfer_failed = { text = 'Skärmöverföring misslyckades' }
+target_midi_memory_unavailable = { text = 'MIDI-minne ej tillgängligt' }
+target_animation_color_memory = { text = 'Färgminne för animering ej tillgängligt' }
+target_usb_descriptor_failed = { text = 'USB MIDI-deskriptor misslyckades' }
+target_auxiliary_memory = { text = 'Minne för extra fotknappar ej tillgängligt' }
+target_deployment_recovery = { text = 'Installationen måste återställas' }
+target_setup_bundle_invalid = { text = 'Ogiltigt konfigurationspaket' }
+target_global_recovery = { text = 'Globala inställningar måste återställas' }
+target_song_storage_invalid = { text = 'Ogiltig låtlagring' }

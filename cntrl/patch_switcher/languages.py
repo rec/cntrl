@@ -6,7 +6,7 @@ from typing import Annotated
 import tyro
 from pydantic import BaseModel, Field
 
-from ..localization import catalogue
+from ..localization import build, catalogue
 from . import devices, transport
 
 
@@ -20,7 +20,10 @@ class Install(BaseModel, frozen=True):
 
 
 class LanguageCLI(BaseModel, frozen=True):
-    command: Annotated[Install, tyro.conf.subcommand(name='install')]
+    command: (
+        Annotated[Install, tyro.conf.subcommand(name='install')]
+        | Annotated[build.Build, tyro.conf.subcommand(name='build')]
+    )
 
 
 def pack(language: str) -> bytes:
@@ -30,7 +33,11 @@ def pack(language: str) -> bytes:
     return data
 
 
-def run(command: Install) -> None:
+def run(command: Install | build.Build) -> None:
+    if isinstance(command, build.Build):
+        build.build(command.output)
+        catalogue.generate(command.header)
+        return
     with transport.SerialConnection(devices.select_port(command.port)) as connection:
         client = transport.SetupClient(connection)
         # Include English so the picker can show native names before switching.

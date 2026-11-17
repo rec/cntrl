@@ -1,6 +1,10 @@
 # UI languages
 
-The pedal can use English or French. Language is a device-wide preference and
+The pedal supports these Latin-script UI languages: English, French, German,
+Spanish, Italian, European Portuguese (`pt-PT`), Dutch, Polish, Czech, Slovak,
+Hungarian, Romanian, Swedish, Danish, Norwegian Bokmål (`nb`), Finnish and Turkish.
+The new translations are complete drafts awaiting native-speaker review.
+Language is a device-wide preference and
 remains selected when you change setups. Patch names, filenames, MIDI messages
 and authored text stay as written.
 
@@ -26,9 +30,12 @@ can wrap, use a reviewed short caption or end with an ellipsis when necessary;
 it does not depend on scrolling or frame buffers. Built-in UI translation uses
 its own font, preserving the fonts chosen for authored performance text.
 
-The default Tamzen Status/body font stays selected in French. It includes the
+The default Tamzen Status/body font stays selected for captions it can render.
+If any character in a caption is missing, the entire caption uses embedded Arimo
+at the same size. This avoids mixing glyph styles or loading another font into
+RAM. Tamzen includes the
 139 base characters and every other supported drawable character from the
-373-character comparison set, including the curly apostrophe. English and French
+373-character comparison set, including the curly apostrophe. All supplied locales
 reuse embedded Arimo and Tamzen glyphs, so their packs contain translations only.
 Packs can still supply a language-specific font or size-13 Status supplement.
 This uses language-pack format version 3. Install the supplied packs
@@ -49,7 +56,9 @@ import it without modifying the setup source. A full restore of a selected
 non-English language needs a valid matching pack. Packs are matched to the
 firmware's message schema; install updated packs with updated firmware.
 
-English and French are the supplied language choices for this implementation.
+Install a locale by its tag, for example `cntrl language install de --port PORT`.
+The additional tags are `de`, `es`, `it`, `pt-PT`, `nl`, `pl`, `cs`, `sk`, `hu`,
+`ro`, `sv`, `da`, `nb`, `fi` and `tr`. English and French use `en` and `fr`.
 Locale tags and installed-pack discovery are not tied to menu positions. Other
 scripts require the shaping and readability qualification described in
 `plan/18n.md` before they can be supported.
@@ -57,9 +66,17 @@ scripts require the shaping and readability qualification described in
 To regenerate the shipped packs from the tracked catalogue and font sources:
 
 ```sh
-uv run --no-sync python -m cntrl.localization.catalogue
-uv run --no-sync python -m cntrl.localization.build
+cntrl language build
 ```
 
-The catalogue uses stable semantic IDs and typed named placeholders. French
+The English reference is `cntrl/localization/messages.toml`; each additional
+locale has a file in `cntrl/localization/translations/` with its native name and
+all reference message IDs. The builder rejects missing or unknown IDs, invalid
+placeholders and glyphs absent from the shared UI font. It preserves reference
+message order in the binary, independently of translation file order.
+Static captions longer than the 63-byte text field require a complete short
+form within that UTF-8 byte limit. Error dialogs use that form when necessary,
+wrap their text and preserve UTF-8 boundaries when shortening dynamic errors.
+
+The catalogue uses stable semantic IDs and typed named placeholders. Translated
 templates may reorder placeholders; they cannot add values or change types.

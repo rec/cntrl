@@ -1,0 +1,372 @@
+language = 'pl'
+name = 'Polski'
+
+[messages]
+pages_and_tools = { text = 'Strony i narzędzia' }
+browse = { text = 'przeglądaj' }
+ok = { text = 'OK' }
+back = { text = 'wstecz' }
+setups = { text = 'Konfiguracje' }
+songs_and_setlists = { text = 'Utwory i setlisty' }
+switches = { text = 'Przełączniki' }
+language = { text = 'Język' }
+control_action = { text = '{separator:s}{label:s} {action:s}' }
+setlist_number = { text = 'Setlista {number:u}' }
+true_value = { text = 'prawda' }
+false_value = { text = 'fałsz' }
+no_configurable_ports = { text = 'Brak konfigurowalnych portów', short = 'Brak portów' }
+unavailable = { text = 'Niedostępne' }
+driver_failed = { text = 'Błąd sterownika' }
+busy = { text = 'Zajęte' }
+already_set = { text = 'Już ustawiono' }
+cannot_apply = { text = 'Nie można zastosować' }
+saving = { text = 'Zapisywanie' }
+save_failed = { text = 'Błąd zapisu' }
+save_confirm = { text = 'Zapis: potwierdź' }
+load_confirm = { text = 'Wczytanie: potwierdź' }
+reverse_phrase_confirm = { text = 'Odwrócenie frazy: potwierdź' }
+toggle_direction_confirm = { text = 'Zmiana kierunku: potwierdź' }
+confirm_clear = { text = 'Potwierdzić wyczyszczenie?' }
+replace_unsaved_loop = { text = 'Zastąpić niezapisaną pętlę?' }
+scanning = { text = 'Wyszukiwanie...' }
+no_midi_files = { text = 'Brak plików MIDI' }
+storage_busy = { text = 'Pamięć zajęta' }
+stock_firmware_prompt = { text = '{button:s}: oryginalny firmware.' }
+cancel_prompt = { text = '{button:s}: anuluj' }
+notes_off = { text = 'Nuty wyłączone' }
+all_off = { text = 'Wszystko wyłączone' }
+midi_clock = { text = 'Zegar MIDI' }
+clock_tempo = { text = 'Tempo zegara' }
+tap_tempo = { text = 'Wystukaj tempo' }
+status = { text = 'Stan' }
+midi_cable_test = { text = 'Test kabla MIDI' }
+trs_ports = { text = 'Porty TRS' }
+keyboard = { text = 'Klawiatura' }
+firmware = { text = 'Firmware' }
+external_receiving = { text = 'Zewnętrzny: odbiór' }
+external_waiting = { text = 'Zewnętrzny: oczekiwanie' }
+no_outputs_configured = { text = 'Brak skonfigurowanych wyjść', short = 'Brak wyjść' }
+outputs_offline = { text = 'Wyjścia odłączone' }
+internal_running = { text = 'Wewnętrzny: działa' }
+internal_stopped = { text = 'Wewnętrzny: zatrzymany' }
+start_continue_prompt = { text = '{start:s} Start {resume:s} Wznów' }
+stop_source_prompt = { text = '{stop:s} Stop {source:s} Źródło' }
+tempo_slot = { text = 'Pamięć {slot:u}: {tempo:u} BPM' }
+tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Pamięć' }
+clock_late_lost = { text = 'Opóźn. {late:u}us Utrac. {lost:u}' }
+output_heading = { text = 'Wyj.' }
+input_heading = { text = 'Wej.' }
+input = { text = 'Wejście' }
+no_shortcuts = { text = 'Brak skrótów' }
+held = { text = 'Przytrzymane' }
+ready = { text = 'Gotowe' }
+select_pair_prompt = { text = '{previous:s}/{next:s}: wybierz' }
+hold_send_prompt = { text = 'Przytrzymaj {button:s}: wyślij' }
+off = { text = 'Wył.' }
+on = { text = 'Wł.' }
+midi_type_a = { text = 'MIDI typ A' }
+midi_type_b = { text = 'MIDI typ B' }
+expression = { text = 'Ekspresja' }
+aux_switch = { text = 'Przełącznik dodatkowy', short = 'Przełącznik dod.' }
+jack_mode_prompt = { text = '{jack:s}: gniazdo {mode:s}: tryb' }
+apply_prompt = { text = '{button:s}: zastosuj' }
+use_stock = { text = 'Użyj oryginalnego' }
+cycles_patches = { text = 'Cykle:{cycles:u} Brzmienia:{patches:u}' }
+clock_value = { text = 'Zegar:{clock:s}' }
+disk_value = { text = 'Dysk:{whole:lu}.{fraction:lu}/{total:lu}G' }
+disk_unknown = { text = 'Dysk:--/--G' }
+uptime_value = { text = ' Czas:{hours:lu}:{minutes:02u}:{seconds:02u}' }
+starts_value = { text = 'Uruchomienia:{starts:s}' }
+error = { text = 'błąd' }
+tap_value = { text = 'Tempo:{tempo:s}' }
+player_score = { text = 'GRACZ {player:u} {score:u}' }
+up_down_prompt = { text = '{up:s} Góra / {down:s} Dół' }
+serve_exit_prompt = { text = '{serve:s} Serwuj/Pauza {exit:s} Wyjdź' }
+paused = { text = 'PAUZA' }
+player_one_wins = { text = 'WYGRYWA GRACZ 1' }
+player_two_wins = { text = 'WYGRYWA GRACZ 2' }
+press_to_serve = { text = 'NACIŚNIJ, ABY SERWOWAĆ' }
+arpeggiator = { text = 'Arpeggiator' }
+waiting = { text = 'Oczekiwanie' }
+playing = { text = 'Odtwarzanie' }
+record_armed = { text = 'Nagrywanie uzbrojone' }
+recording = { text = 'Nagrywanie' }
+finish_armed = { text = 'Zakończenie uzbrojone' }
+forward = { text = 'Do przodu' }
+reverse = { text = 'Odwrotnie' }
+played = { text = 'Kolejność gry' }
+back_and_forth = { text = 'Tam i z powrotem' }
+random = { text = 'Losowo' }
+random_walk = { text = 'Błądzenie losowe' }
+mod = { text = 'Modulo' }
+shuffle = { text = 'Tasowanie' }
+outside_in = { text = 'Do środka' }
+capacity_exceeded = { text = 'Przekroczona pojemność' }
+clock_unavailable = { text = 'Zegar niedostępny' }
+output_blocked = { text = 'Wyjście zablokowane' }
+entries_count = { text = 'Wpisy: {count:u}' }
+record_finish_play_stop_prompt = { text = '{record:s} Nagr./Koniec {play:s} Graj/Stop' }
+on_off_prompt = { text = '{button:s} Wł./Wył.' }
+midi_looper = { text = 'Looper MIDI' }
+empty = { text = 'Puste' }
+armed = { text = 'Uzbrojone' }
+closing = { text = 'Zamykanie' }
+overdub_armed = { text = 'Dogrywanie uzbrojone' }
+overdubbing = { text = 'Dogrywanie' }
+preparing = { text = 'Przygotowanie' }
+stopped = { text = 'Zatrzymane' }
+launch_armed = { text = 'Start uzbrojony' }
+undo_pending = { text = 'Cofnięcie oczekuje' }
+loading = { text = 'Wczytywanie' }
+memory_unavailable = { text = 'Pamięć niedostępna' }
+late_boundary = { text = 'Spóźniona granica' }
+output_retired = { text = 'Wyjście wycofane' }
+file_error = { text = 'Błąd pliku' }
+input_changed = { text = 'Wejście zmienione' }
+loop_beats = { text = '{position:llu}.{fraction:02u} / {length:llu}.{end_fraction:02u} miar' }
+loop_events = { text = '{events:u}/{capacity:u} zdarzeń{state:s}{direction:s}' }
+clock_waiting_suffix = { text = ' Oczekiwanie na zegar' }
+unsaved_suffix = { text = ' Niezapisane' }
+backward_suffix = { text = ' Wstecz' }
+forward_suffix = { text = ' Do przodu' }
+direction_change_pending = { text = 'Oczekiwanie na zmianę kierunku' }
+record_play_undo_prompt = { text = '{record:s} Nagr. {play:s} Graj {undo:s} Cofnij' }
+clear_more_prompt = { text = '{clear:s} Wyczyść {more:s} Więcej' }
+combined = { text = 'Łącznie' }
+incoming = { text = 'Przychodzące' }
+outgoing = { text = 'Wychodzące' }
+unavailable_memory = { text = 'Niedostępne: pamięć' }
+monitor_history = { text = '{state:s}{advanced:s} Hist-{history:llu} Utrac.-{dropped:u}' }
+frozen = { text = 'Zamrożone' }
+live = { text = 'Na żywo' }
+advanced_suffix = { text = ' szczegóły' }
+no_traffic = { text = 'Brak ruchu' }
+no_input = { text = 'Brak wejścia' }
+no_output = { text = 'Brak wyjścia' }
+unknown = { text = 'nieznane' }
+running_suffix = { text = ' (status bieżący)' }
+history_live_prompt = { text = '{previous:s}/{next:s} Historia {live:s} Na żywo' }
+freeze_prompt = { text = '{button:s} Zamroź' }
+over = { text = 'NADMIAR' }
+raw_uncalibrated_sample = { text = 'Surowe 8888 Nieskalibrowane' }
+select_expression_role = { text = 'Wybierz rolę ekspresji' }
+reconnect_heel = { text = 'Podłącz ponownie: pięta' }
+calibrate_prompt = { text = '{button:s}: kalibruj' }
+unassigned_port = { text = '{port:.24s} Nieprzypisane' }
+jack_cancel_prompt = { text = '{jack:s}: gniazdo {cancel:s}: anuluj' }
+working = { text = 'Przetwarzanie...' }
+no_setups = { text = 'Brak konfiguracji' }
+action = { text = 'Działanie' }
+history = { text = 'Historia' }
+edit = { text = 'Edytuj' }
+select = { text = 'Wybierz' }
+patch = { text = 'Brzmienie' }
+program = { text = 'Program' }
+bank = { text = 'Bank' }
+channel = { text = 'Kanał' }
+volume = { text = 'Głośność' }
+pan = { text = 'Panorama' }
+brightness = { text = 'Jasność' }
+idle_seconds = { text = 'Bezczynność (s)' }
+usb_midi = { text = 'USB MIDI' }
+none = { text = 'Brak' }
+value = { text = 'Wartość' }
+unsaved_edits = { text = 'Niezapisane zmiany' }
+save = { text = 'Zapisz' }
+discard = { text = 'Odrzuć' }
+cancel = { text = 'Anuluj' }
+please_wait = { text = 'Proszę czekać' }
+changing_setup = { text = 'Zmiana konfiguracji' }
+operation_failed = { text = 'Operacja nieudana' }
+revision = { text = 'Wersja' }
+current_snapshot = { text = 'Bieżące: {prompt:.54s}' }
+snapshot = { text = 'migawka' }
+compare_current = { text = 'Porównaj z bieżącym' }
+change = { text = 'Zmiana' }
+changed_patches = { text = 'Zmienione brzmienia: {count:u}' }
+changed_routes = { text = 'Zmienione trasy: {count:u}' }
+settings_change = { text = 'Ustawienia: {state:s}' }
+authored_data_change = { text = 'Dane użytkownika: {state:s}' }
+changed = { text = 'zmienione' }
+same = { text = 'bez zmian' }
+restore = { text = 'Przywróć' }
+back_title = { text = 'Wstecz' }
+adjust = { text = 'dostosuj' }
+setup_menu = { text = 'Menu konfiguracji' }
+no_midi_sent = { text = 'Nie wysłano MIDI' }
+setup = { text = 'Konfiguracja' }
+patch_cycle = { text = 'Cykl brzmień' }
+field = { text = 'Pole' }
+saved = { text = 'Zapisano' }
+song_read_failed = { text = 'Błąd odczytu utworu' }
+song_added = { text = 'Dodano {name:.57s}' }
+not_saved = { text = 'Nie zapisano' }
+saving_wait = { text = 'Zapisywanie...' }
+current_removed = { text = 'Bieżące (usunięte)' }
+current = { text = 'Bieżące' }
+next = { text = 'Następne' }
+add_songs = { text = 'Dodaj utwory' }
+end_of_set = { text = 'Koniec setlisty' }
+next_patch = { text = 'Następne brzmienie' }
+perform_setlist = { text = 'Graj setlistę' }
+setlists = { text = 'Setlisty' }
+songs = { text = 'Utwory' }
+save_as_song = { text = 'Zapisz jako utwór' }
+save_reference = { text = 'Zapisz odwołanie' }
+add_next = { text = 'Dodaj jako następny' }
+add_to_end = { text = 'Dodaj na końcu' }
+remove_from_setlist = { text = 'Usuń z setlisty' }
+move = { text = 'Przenieś' }
+rename_setlist = { text = 'Zmień nazwę setlisty' }
+undo_edit = { text = 'Cofnij edycję' }
+restart_setlist = { text = 'Zacznij setlistę od nowa' }
+done = { text = 'Gotowe' }
+rename = { text = 'Zmień nazwę' }
+new_setlist = { text = 'Nowa setlista' }
+character_number = { text = 'Znak {character:u}' }
+rename_song = { text = 'Zmień nazwę utworu' }
+use_selected_patch = { text = 'Użyj wybranego brzmienia' }
+edit_patches = { text = 'Edytuj brzmienia' }
+patch_position = { text = 'Brzmienie {position:u}/{count:lu}' }
+replace_with_selected = { text = 'Zastąp wybranym' }
+insert_selected_after = { text = 'Wstaw wybrane za' }
+remove_patch = { text = 'Usuń brzmienie' }
+move_earlier = { text = 'Przenieś wcześniej' }
+move_later = { text = 'Przenieś później' }
+save_song_first = { text = 'Najpierw zapisz utwór' }
+patches_count = { text = 'Brzmienia: {count:lu}' }
+missing_song = { text = 'Brak utworu' }
+entry_action = { text = 'wpis' }
+letter_action = { text = 'litera' }
+edit_action = { text = 'edytuj' }
+position_action = { text = 'poz.' }
+jump_action = { text = 'skok' }
+next_action = { text = 'dalej' }
+add_action = { text = 'dodaj' }
+menu_action = { text = 'menu' }
+done_action = { text = 'gotowe' }
+port_memory_unavailable = { text = 'Pamięć portów niedostępna' }
+looper_command_rejected = { text = 'Polecenie loopera MIDI odrzucone' }
+looper_memory_unavailable = { text = 'Pamięć loopera MIDI niedostępna' }
+banked_memory_unavailable = { text = 'Pamięć banku brzmień niedostępna' }
+monitor_memory_unavailable = { text = 'Pamięć monitora MIDI niedostępna' }
+relay_reset_failed = { text = 'Błąd resetu przekaźnika' }
+relay_pulse_restore_failed = { text = 'Błąd przywrócenia impulsu przekaźnika' }
+firmware_switch_failed = { text = 'Błąd zmiany firmware' }
+language_change_rejected = { text = 'Zmiana języka odrzucona' }
+global_setting_rejected = { text = 'Ustawienie globalne odrzucone' }
+midi_input_memory_unavailable = { text = 'Pamięć wejścia MIDI niedostępna' }
+midi_recording_write_failed = { text = 'Błąd zapisu nagrania MIDI' }
+midi_cleanup_incomplete = { text = 'Zwalnianie MIDI niepełne' }
+bank_page_memory_unavailable = { text = 'Pamięć strony banku niedostępna' }
+switch_state_unknown = { text = 'Stan przełącznika nieznany' }
+page_return_unavailable = { text = 'Powrót do strony niedostępny' }
+patch_return_unavailable = { text = 'Powrót do brzmienia niedostępny' }
+patch_return_memory_unavailable = { text = 'Pamięć powrotu do brzmienia niedostępna' }
+selection_failed = { text = 'Błąd wyboru' }
+snapshot_failed = { text = 'Błąd migawki' }
+cannot_compare_revision = { text = 'Nie można porównać wersji' }
+restore_failed = { text = 'Błąd przywracania' }
+controller_memory_unavailable = { text = 'Pamięć kontrolera niedostępna' }
+relay_setup_failed = { text = 'Błąd konfiguracji przekaźnika' }
+navigation_memory_unavailable = { text = 'Pamięć nawigacji niedostępna' }
+remote_state_unknown = { text = 'Stan zdalny nieznany' }
+switch_state_memory_exhausted = { text = 'Pamięć stanu przełączników wyczerpana' }
+switch_delivery_memory_unavailable = { text = 'Pamięć wysyłania przełącznika niedostępna' }
+switch_ownership_memory_exhausted = { text = 'Pamięć przypisań przełączników wyczerpana' }
+switches_overlap = { text = 'Przełączniki rezerwują te same kontrolery MIDI' }
+switch_event_memory_unavailable = { text = 'Pamięć zdarzeń przełącznika niedostępna' }
+switch_action_memory_unavailable = { text = 'Pamięć działań przełącznika niedostępna' }
+switch_gesture_queue_full = { text = 'Kolejka gestów przełącznika pełna' }
+switch_action_queue_full = { text = 'Kolejka działań przełącznika pełna' }
+switch_selection_queue_full = { text = 'Kolejka wyborów przełącznika pełna' }
+selected_patch_overlap = { text = 'Wybrane brzmienie używa kontrolerów MIDI innego przełącznika', short = 'Brzmienie dzieli kontrolery MIDI z innym przełącznikiem' }
+cannot_select_midi_streams = { text = 'Nie można wybrać strumieni MIDI' }
+patch_memory_unavailable = { text = 'Pamięć brzmienia niedostępna' }
+invalid_patch_root = { text = 'Nieprawidłowy korzeń brzmienia' }
+persistent_switch_context = { text = 'Trwałe przełączniki nie mogą opuścić kontekstu' }
+patch_sources_changed = { text = 'Źródła brzmienia zmieniły się od przełączenia firmware' }
+invalid_patch_continuation = { text = 'Nieprawidłowa kontynuacja brzmienia' }
+midi_file_playback_failed = { text = 'Błąd odtwarzania pliku MIDI' }
+banked_patch_no_page = { text = 'Brzmienie bankowe nie ma strony w tej konfiguracji' }
+midi_output_unavailable = { text = 'Wyjście MIDI niedostępne' }
+counter_memory_unavailable = { text = 'Pamięć licznika niedostępna' }
+cannot_change_midi_gate = { text = 'Nie można zmienić bramki strumienia MIDI' }
+relay_operation_failed = { text = 'Błąd działania przekaźnika' }
+cannot_install_patch_bindings = { text = 'Nie można zainstalować przypisań brzmienia' }
+application_operation_failed = { text = 'Błąd operacji aplikacji' }
+cannot_open_midi_file = { text = 'Nie można otworzyć pliku MIDI' }
+midi_recording_failed = { text = 'Błąd nagrywania MIDI' }
+invalid_executable_patch = { text = 'Nieprawidłowe wykonywalne brzmienie' }
+invalid_patch_node = { text = 'Nieprawidłowy węzeł brzmienia' }
+patch_reference_cycle = { text = 'Cykl odwołań brzmień' }
+patch_traversal_not_prepared = { text = 'Przechodzenie brzmienia nieprzygotowane' }
+patch_traversal_memory_exhausted = { text = 'Pamięć przechodzenia brzmienia wyczerpana' }
+setup_table_changed = { text = 'Tabela konfiguracji zmieniona; odtwórz przechwycone brzmienia' }
+referenced_setup_missing = { text = 'Wskazana konfiguracja nie istnieje lub jest nieprawidłowa' }
+referenced_patch_missing = { text = 'Wskazane brzmienie nie istnieje' }
+invalid_application_operation = { text = 'Nieprawidłowa operacja aplikacji' }
+invalid_selected_patch_binding = { text = 'Nieprawidłowe przypisanie wybranego brzmienia' }
+no_patch_selected = { text = 'Nie wybrano brzmienia do aktywacji' }
+patch_binding_memory_exhausted = { text = 'Pamięć przypisań brzmienia wyczerpana' }
+patch_ownership_memory_exhausted = { text = 'Pamięć własności brzmienia wyczerpana' }
+midi_state_memory_unavailable = { text = 'Pamięć stanu MIDI niedostępna' }
+counter_reservation_memory_unavailable = { text = 'Pamięć rezerwacji licznika niedostępna' }
+switch_cleanup_unknown = { text = 'Zwalnianie przełącznika: nieznany stan zdalny' }
+unknown_title = { text = 'Nieznane' }
+pending = { text = 'Oczekujące' }
+failed_unknown = { text = 'Błąd / nieznane' }
+unknown_remote_state = { text = 'Nieznany stan zdalny' }
+partial_match = { text = 'Częściowa zgodność' }
+other_values = { text = 'Inne wartości' }
+completed_locally = { text = 'Zakończone lokalnie' }
+closing_prefix = { text = 'Zamykanie: ' }
+shifted_prefix = { text = 'Przesunięte | ' }
+abandon = { text = 'porzuć' }
+no_switches = { text = 'Brak przełączników' }
+firmware_caption = { text = 'firmware' }
+expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
+no_pedal = { text = 'Brak pedału' }
+travel_too_short = { text = 'Za mały zakres ruchu' }
+raw_uncalibrated = { text = 'Surowe {value:d} Nieskalibrowane' }
+calibrated_position = { text = '{value:d}% Skalibrowane' }
+expression_step = { text = '{button:s}: {action:s}' }
+heel_down = { text = 'Pięta w dół' }
+toe_down = { text = 'Palce w dół' }
+calibrate = { text = 'Kalibruj' }
+monitor_connected = { text = 'Połączono / zmieniono' }
+monitor_disconnected = { text = 'Rozłączono' }
+monitor_incomplete = { text = '{prefix:s}surowe / niepełne' }
+monitor_sysex = { text = 'SysEx {part:s}{ending:s} {bytes:u}B' }
+monitor_sysex_start = { text = 'pocz.' }
+monitor_sysex_continue = { text = 'cd.' }
+monitor_sysex_end = { text = '/koniec' }
+monitor_note_off = { text = 'Kan{channel:u} Wył. {note:u} v{velocity:u}' }
+monitor_note_on = { text = 'Kan{channel:u} Wł. {note:u} v{velocity:u}' }
+monitor_poly_pressure = { text = 'Kan{channel:u} Poly {note:u} p{pressure:u}' }
+monitor_control = { text = 'Kan{channel:u} CC {controller:u} = {value:u}' }
+monitor_program = { text = 'Kan{channel:u} Program {program:u}' }
+monitor_pressure = { text = 'Kan{channel:u} Docisk {pressure:u}' }
+monitor_bend = { text = 'Kan{channel:u} Bend {value:d}' }
+monitor_time_code = { text = 'Kod czasowy' }
+monitor_song_position = { text = 'Pozycja utworu' }
+monitor_song_select = { text = 'Wybór utworu' }
+monitor_tune_request = { text = 'Żądanie strojenia' }
+monitor_clock = { text = 'Zegar' }
+monitor_start = { text = 'Start' }
+monitor_continue = { text = 'Kontynuuj' }
+monitor_stop = { text = 'Stop' }
+monitor_active_sensing = { text = 'Aktywne wykrywanie' }
+monitor_reset = { text = 'Reset' }
+monitor_system_value = { text = '{name:s} {value:u}' }
+cue = { text = 'Sygnał' }
+warning = { text = 'Ostrzeżenie' }
+display_transfer_failed = { text = 'Błąd przesyłania do ekranu' }
+target_midi_memory_unavailable = { text = 'Pamięć MIDI niedostępna' }
+target_animation_color_memory = { text = 'Pamięć kolorów animacji niedostępna' }
+target_usb_descriptor_failed = { text = 'Błąd deskryptora USB MIDI' }
+target_auxiliary_memory = { text = 'Pamięć przełączników dodatkowych niedostępna' }
+target_deployment_recovery = { text = 'Wymagane odzyskanie wdrożenia' }
+target_setup_bundle_invalid = { text = 'Nieprawidłowy pakiet konfiguracji' }
+target_global_recovery = { text = 'Wymagane odzyskanie ustawień globalnych' }
+target_song_storage_invalid = { text = 'Nieprawidłowa pamięć utworów' }

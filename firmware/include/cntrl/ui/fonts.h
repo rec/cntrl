@@ -58,7 +58,7 @@ public:
     Bounds bounds(unsigned face, unsigned size, uint32_t asset, const char *text) const override {
         font_assets::View view; Bounds result;
         if (!find(face, size, asset, view)) return result;
-        if (face == status_face) return status_bounds(view, text);
+        if (face == status_face) { status_view(view, text); return status_bounds(view, text); }
         view.bounds(text, result.left, result.top, result.width, result.height, face == 255 ? 0 : view.entry.bytes[14]);
         return result;
     }
@@ -69,6 +69,7 @@ public:
         font_assets::View view;
         if (!find(face, size, asset, view)) return false;
         if (face == status_face) {
+            status_view(view, text);
             const char *cursor = text; uint32_t code; int x = 0;
             for (unsigned i = 0; utf8::next(cursor, code); ++i) {
                 font_assets::View selected;
@@ -93,6 +94,19 @@ private:
     unsigned count_;
     inline static const uint8_t *localized_bytes_ = nullptr;
     inline static unsigned localized_length_ = 0;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(fonts_status_view)
+#endif
+    void status_view(font_assets::View &view, const char *text) const {
+        const char *cursor = text; uint32_t code;
+        while (utf8::next(cursor, code)) {
+            font_assets::View selected;
+            if (status_character(view, code, selected)) continue;
+            font_assets::View fallback;
+            if (find(17, status_size, 0, fallback)) view = fallback;
+            return;
+        }
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(fonts_status_character)
 #endif

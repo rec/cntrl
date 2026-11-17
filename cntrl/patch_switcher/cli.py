@@ -580,9 +580,11 @@ def download_files(
     live_globals = device_globals.capture(client)
     if live_globals is not None:
         files[Path('device-globals.toml')] = device_globals.dump(live_globals)
-        if live_globals.language == 'fr':
+        if live_globals.language:
             try:
-                files[Path('languages/fr.bin')] = client.download_language('fr')
+                files[Path('languages') / f'{live_globals.language}.bin'] = (
+                    client.download_language(live_globals.language)
+                )
             except FileNotFoundError:
                 pass  # Keep the saved preference; the device uses English recovery UI.
     files.update(source_archive.download(client, setups, live_globals=live_globals))

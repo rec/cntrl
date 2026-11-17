@@ -1,0 +1,372 @@
+language = 'tr'
+name = 'Türkçe'
+
+[messages]
+pages_and_tools = { text = 'Sayfalar ve araçlar' }
+browse = { text = 'gözat' }
+ok = { text = 'Tamam' }
+back = { text = 'geri' }
+setups = { text = 'Kurulumlar' }
+songs_and_setlists = { text = 'Şarkılar ve çalma listeleri', short = 'Şarkılar ve listeler' }
+switches = { text = 'Ayak düğmeleri' }
+language = { text = 'Dil' }
+control_action = { text = '{separator:s}{label:s} {action:s}' }
+setlist_number = { text = 'Çalma listesi {number:u}' }
+true_value = { text = 'doğru' }
+false_value = { text = 'yanlış' }
+no_configurable_ports = { text = 'Ayarlanabilir port yok', short = 'Port yok' }
+unavailable = { text = 'Kullanılamıyor' }
+driver_failed = { text = 'Sürücü hatası' }
+busy = { text = 'Meşgul' }
+already_set = { text = 'Zaten ayarlı' }
+cannot_apply = { text = 'Uygulanamıyor' }
+saving = { text = 'Kaydediliyor' }
+save_failed = { text = 'Kayıt başarısız' }
+save_confirm = { text = 'Kaydet: Onayla' }
+load_confirm = { text = 'Yükle: Onayla' }
+reverse_phrase_confirm = { text = 'Cümleyi ters çevir: Onayla' }
+toggle_direction_confirm = { text = 'Yön değiştir: Onayla' }
+confirm_clear = { text = 'Silme onaylansın mı?' }
+replace_unsaved_loop = { text = 'Kaydedilmemiş döngü değiştirilsin mi?' }
+scanning = { text = 'Taranıyor...' }
+no_midi_files = { text = 'MIDI dosyası yok' }
+storage_busy = { text = 'Depolama meşgul' }
+stock_firmware_prompt = { text = '{button:s}: özgün aygıt yazılımı.' }
+cancel_prompt = { text = '{button:s}: iptal' }
+notes_off = { text = 'Notalar kapalı' }
+all_off = { text = 'Tümü kapalı' }
+midi_clock = { text = 'MIDI saati' }
+clock_tempo = { text = 'Saat temposu' }
+tap_tempo = { text = 'Vuruş temposu' }
+status = { text = 'Durum' }
+midi_cable_test = { text = 'MIDI kablo testi' }
+trs_ports = { text = 'TRS portları' }
+keyboard = { text = 'Klavye' }
+firmware = { text = 'Aygıt yazılımı' }
+external_receiving = { text = 'Harici: alınıyor' }
+external_waiting = { text = 'Harici: bekleniyor' }
+no_outputs_configured = { text = 'Ayarlanmış çıkış yok', short = 'Çıkış yok' }
+outputs_offline = { text = 'Çıkışlar çevrimdışı' }
+internal_running = { text = 'Dahili: çalışıyor' }
+internal_stopped = { text = 'Dahili: durdu' }
+start_continue_prompt = { text = '{start:s} Başlat {resume:s} Devam' }
+stop_source_prompt = { text = '{stop:s} Durdur {source:s} Kaynak' }
+tempo_slot = { text = 'Yuva {slot:u}: {tempo:u} BPM' }
+tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Yuva' }
+clock_late_lost = { text = 'Geç {late:u}us Kayıp {lost:u}' }
+output_heading = { text = 'Çıkış' }
+input_heading = { text = 'Giriş' }
+input = { text = 'Giriş' }
+no_shortcuts = { text = 'Kısayol yok' }
+held = { text = 'Basılı' }
+ready = { text = 'Hazır' }
+select_pair_prompt = { text = '{previous:s}/{next:s}: Seç' }
+hold_send_prompt = { text = '{button:s} basılı: Gönder' }
+off = { text = 'Kapalı' }
+on = { text = 'Açık' }
+midi_type_a = { text = 'MIDI Tip A' }
+midi_type_b = { text = 'MIDI Tip B' }
+expression = { text = 'Ekspresyon' }
+aux_switch = { text = 'Yardımcı düğme' }
+jack_mode_prompt = { text = '{jack:s}: Jak {mode:s}: Kip' }
+apply_prompt = { text = '{button:s}: Uygula' }
+use_stock = { text = 'Özgün' }
+cycles_patches = { text = 'Çevrim:{cycles:u} Ses:{patches:u}' }
+clock_value = { text = 'Saat:{clock:s}' }
+disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
+disk_unknown = { text = 'Disk:--/--G' }
+uptime_value = { text = ' Süre:{hours:lu}:{minutes:02u}:{seconds:02u}' }
+starts_value = { text = 'Başlatma:{starts:s}' }
+error = { text = 'hata' }
+tap_value = { text = 'Vuruş:{tempo:s}' }
+player_score = { text = 'OYUNCU {player:u}   {score:u}' }
+up_down_prompt = { text = '{up:s} Yukarı / {down:s} Aşağı' }
+serve_exit_prompt = { text = '{serve:s} Servis/Duraklat {exit:s} Çıkış' }
+paused = { text = 'DURAKLATILDI' }
+player_one_wins = { text = 'OYUNCU 1 KAZANDI' }
+player_two_wins = { text = 'OYUNCU 2 KAZANDI' }
+press_to_serve = { text = 'SERVİS İÇİN BASIN' }
+arpeggiator = { text = 'Arpejleyici' }
+waiting = { text = 'Bekleniyor' }
+playing = { text = 'Çalıyor' }
+record_armed = { text = 'Kayıt hazır' }
+recording = { text = 'Kaydediyor' }
+finish_armed = { text = 'Bitirme hazır' }
+forward = { text = 'İleri' }
+reverse = { text = 'Ters' }
+played = { text = 'Çalınma sırası' }
+back_and_forth = { text = 'İleri geri' }
+random = { text = 'Rastgele' }
+random_walk = { text = 'Rastgele yürüyüş' }
+mod = { text = 'Mod' }
+shuffle = { text = 'Karıştır' }
+outside_in = { text = 'Dıştan içe' }
+capacity_exceeded = { text = 'Kapasite aşıldı' }
+clock_unavailable = { text = 'Saat kullanılamıyor' }
+output_blocked = { text = 'Çıkış engellendi' }
+entries_count = { text = '{count:u} öğe' }
+record_finish_play_stop_prompt = { text = '{record:s} Kayıt/Bitir {play:s} Çal/Dur' }
+on_off_prompt = { text = '{button:s} Aç/Kapat' }
+midi_looper = { text = 'MIDI döngüleyici' }
+empty = { text = 'Boş' }
+armed = { text = 'Hazır' }
+closing = { text = 'Kapatılıyor' }
+overdub_armed = { text = 'Üst kayıt hazır' }
+overdubbing = { text = 'Üst kayıt yapılıyor' }
+preparing = { text = 'Hazırlanıyor' }
+stopped = { text = 'Durdu' }
+launch_armed = { text = 'Başlatma hazır' }
+undo_pending = { text = 'Geri alma bekliyor' }
+loading = { text = 'Yükleniyor' }
+memory_unavailable = { text = 'Bellek kullanılamıyor' }
+late_boundary = { text = 'Sınır gecikti' }
+output_retired = { text = 'Çıkış kaldırıldı' }
+file_error = { text = 'Dosya hatası' }
+input_changed = { text = 'Giriş değişti' }
+loop_beats = { text = '{position:llu}.{fraction:02u} / {length:llu}.{end_fraction:02u} vuruş' }
+loop_events = { text = '{events:u}/{capacity:u} olay{state:s}{direction:s}' }
+clock_waiting_suffix = { text = ' Saat bekleniyor' }
+unsaved_suffix = { text = ' Kaydedilmemiş' }
+backward_suffix = { text = ' Geri' }
+forward_suffix = { text = ' İleri' }
+direction_change_pending = { text = 'Yön değişikliği bekliyor' }
+record_play_undo_prompt = { text = '{record:s} Kayıt {play:s} Çal {undo:s} Geri al' }
+clear_more_prompt = { text = '{clear:s} Sil {more:s} Diğer' }
+combined = { text = 'Birleşik' }
+incoming = { text = 'Gelen' }
+outgoing = { text = 'Giden' }
+unavailable_memory = { text = 'Kullanılamıyor: bellek' }
+monitor_history = { text = '{state:s}{advanced:s} Geç-{history:llu} Kayıp-{dropped:u}' }
+frozen = { text = 'Dondurulmuş' }
+live = { text = 'Canlı' }
+advanced_suffix = { text = ' gelişmiş' }
+no_traffic = { text = 'Trafik yok' }
+no_input = { text = 'Giriş yok' }
+no_output = { text = 'Çıkış yok' }
+unknown = { text = 'bilinmiyor' }
+running_suffix = { text = ' (süren durum)' }
+history_live_prompt = { text = '{previous:s}/{next:s} Geçmiş {live:s} Canlı' }
+freeze_prompt = { text = '{button:s} Dondur' }
+over = { text = 'AŞIM' }
+raw_uncalibrated_sample = { text = 'Ham 8888 Kalibre edilmemiş' }
+select_expression_role = { text = 'Ekspresyon rolünü seç' }
+reconnect_heel = { text = 'Yeniden bağla: topuk' }
+calibrate_prompt = { text = '{button:s}: Kalibre et' }
+unassigned_port = { text = '{port:.24s} Atanmamış' }
+jack_cancel_prompt = { text = '{jack:s}: Jak {cancel:s}: İptal' }
+working = { text = 'İşleniyor...' }
+no_setups = { text = 'Kurulum yok' }
+action = { text = 'Eylem' }
+history = { text = 'Geçmiş' }
+edit = { text = 'Düzenle' }
+select = { text = 'Seç' }
+patch = { text = 'Ses' }
+program = { text = 'Program' }
+bank = { text = 'Banka' }
+channel = { text = 'Kanal' }
+volume = { text = 'Ses düzeyi' }
+pan = { text = 'Pan' }
+brightness = { text = 'Parlaklık' }
+idle_seconds = { text = 'Boşta süre (sn)' }
+usb_midi = { text = 'USB MIDI' }
+none = { text = 'Yok' }
+value = { text = 'Değer' }
+unsaved_edits = { text = 'Kaydedilmemiş değişiklikler', short = 'Kaydedilmemiş' }
+save = { text = 'Kaydet' }
+discard = { text = 'Vazgeç' }
+cancel = { text = 'İptal' }
+please_wait = { text = 'Lütfen bekleyin' }
+changing_setup = { text = 'Kurulum değiştiriliyor' }
+operation_failed = { text = 'İşlem başarısız' }
+revision = { text = 'Sürüm' }
+current_snapshot = { text = 'Geçerli: {prompt:.54s}' }
+snapshot = { text = 'anlık görüntü' }
+compare_current = { text = 'Geçerliyle karşılaştır' }
+change = { text = 'Değişiklik' }
+changed_patches = { text = '{count:u} ses değişti' }
+changed_routes = { text = '{count:u} yönlendirme değişti' }
+settings_change = { text = 'Ayarlar: {state:s}' }
+authored_data_change = { text = 'Kullanıcı verisi: {state:s}' }
+changed = { text = 'değişti' }
+same = { text = 'aynı' }
+restore = { text = 'Geri yükle' }
+back_title = { text = 'Geri' }
+adjust = { text = 'ayarla' }
+setup_menu = { text = 'Kurulum menüsü' }
+no_midi_sent = { text = 'MIDI gönderilmedi' }
+setup = { text = 'Kurulum' }
+patch_cycle = { text = 'Ses çevrimi' }
+field = { text = 'Alan' }
+saved = { text = 'Kaydedildi' }
+song_read_failed = { text = 'Şarkı okunamadı' }
+song_added = { text = 'Eklendi: {name:.57s}' }
+not_saved = { text = 'Kaydedilmedi' }
+saving_wait = { text = 'Kaydediliyor...' }
+current_removed = { text = 'Geçerli (kaldırıldı)' }
+current = { text = 'Geçerli' }
+next = { text = 'Sonraki' }
+add_songs = { text = 'Şarkı ekle' }
+end_of_set = { text = 'Liste sonu' }
+next_patch = { text = 'Sonraki ses' }
+perform_setlist = { text = 'Listeyi çal' }
+setlists = { text = 'Çalma listeleri' }
+songs = { text = 'Şarkılar' }
+save_as_song = { text = 'Şarkı olarak kaydet' }
+save_reference = { text = 'Başvuru kaydet' }
+add_next = { text = 'Sonraki olarak ekle' }
+add_to_end = { text = 'Sona ekle' }
+remove_from_setlist = { text = 'Listeden kaldır' }
+move = { text = 'Taşı' }
+rename_setlist = { text = 'Listeyi yeniden adlandır' }
+undo_edit = { text = 'Düzenlemeyi geri al' }
+restart_setlist = { text = 'Listeyi yeniden başlat' }
+done = { text = 'Bitti' }
+rename = { text = 'Yeniden adlandır' }
+new_setlist = { text = 'Yeni çalma listesi' }
+character_number = { text = 'Karakter {character:u}' }
+rename_song = { text = 'Şarkıyı yeniden adlandır' }
+use_selected_patch = { text = 'Seçili sesi kullan' }
+edit_patches = { text = 'Sesleri düzenle' }
+patch_position = { text = 'Ses {position:u}/{count:lu}' }
+replace_with_selected = { text = 'Seçiliyle değiştir' }
+insert_selected_after = { text = 'Seçiliyi sonrasına ekle' }
+remove_patch = { text = 'Sesi kaldır' }
+move_earlier = { text = 'Öne taşı' }
+move_later = { text = 'Sonraya taşı' }
+save_song_first = { text = 'Önce bir şarkı kaydet' }
+patches_count = { text = '{count:lu} ses' }
+missing_song = { text = 'Şarkı eksik' }
+entry_action = { text = 'öğe' }
+letter_action = { text = 'harf' }
+edit_action = { text = 'düzenle' }
+position_action = { text = 'konum' }
+jump_action = { text = 'atla' }
+next_action = { text = 'sonraki' }
+add_action = { text = 'ekle' }
+menu_action = { text = 'menü' }
+done_action = { text = 'bitti' }
+port_memory_unavailable = { text = 'Port belleği kullanılamıyor' }
+looper_command_rejected = { text = 'MIDI döngüleyici komutu reddedildi' }
+looper_memory_unavailable = { text = 'MIDI döngüleyici belleği kullanılamıyor' }
+banked_memory_unavailable = { text = 'Banka sesi belleği kullanılamıyor' }
+monitor_memory_unavailable = { text = 'MIDI izleyici belleği kullanılamıyor' }
+relay_reset_failed = { text = 'Röle sıfırlanamadı' }
+relay_pulse_restore_failed = { text = 'Röle darbesi sonrası geri yükleme başarısız' }
+firmware_switch_failed = { text = 'Aygıt yazılımı değiştirilemedi' }
+language_change_rejected = { text = 'Dil değişikliği reddedildi' }
+global_setting_rejected = { text = 'Genel ayar reddedildi' }
+midi_input_memory_unavailable = { text = 'MIDI giriş belleği kullanılamıyor' }
+midi_recording_write_failed = { text = 'MIDI kaydı yazılamadı' }
+midi_cleanup_incomplete = { text = 'MIDI bırakma işlemi tamamlanmadı' }
+bank_page_memory_unavailable = { text = 'Banka sayfası belleği kullanılamıyor' }
+switch_state_unknown = { text = 'Düğme durumu bilinmiyor' }
+page_return_unavailable = { text = 'Sayfaya dönüş kullanılamıyor' }
+patch_return_unavailable = { text = 'Sese dönüş kullanılamıyor' }
+patch_return_memory_unavailable = { text = 'Sese dönüş belleği kullanılamıyor' }
+selection_failed = { text = 'Seçim başarısız' }
+snapshot_failed = { text = 'Anlık görüntü alınamadı' }
+cannot_compare_revision = { text = 'Sürüm karşılaştırılamıyor' }
+restore_failed = { text = 'Geri yükleme başarısız' }
+controller_memory_unavailable = { text = 'Denetleyici belleği kullanılamıyor' }
+relay_setup_failed = { text = 'Röle kurulumu başarısız' }
+navigation_memory_unavailable = { text = 'Gezinme belleği kullanılamıyor' }
+remote_state_unknown = { text = 'Uzak durum bilinmiyor' }
+switch_state_memory_exhausted = { text = 'Düğme durum belleği tükendi' }
+switch_delivery_memory_unavailable = { text = 'Düğme gönderim belleği kullanılamıyor' }
+switch_ownership_memory_exhausted = { text = 'Düğme sahiplik belleği tükendi' }
+switches_overlap = { text = 'Düğmeler aynı MIDI denetimlerini ayırıyor' }
+switch_event_memory_unavailable = { text = 'Düğme olay belleği kullanılamıyor' }
+switch_action_memory_unavailable = { text = 'Düğme eylem belleği kullanılamıyor' }
+switch_gesture_queue_full = { text = 'Düğme hareket kuyruğu dolu' }
+switch_action_queue_full = { text = 'Düğme eylem kuyruğu dolu' }
+switch_selection_queue_full = { text = 'Düğme seçim kuyruğu dolu' }
+selected_patch_overlap = { text = 'Seçili ses başka bir düğmenin MIDI denetimleriyle çakışıyor', short = 'Seçili ses başka düğmenin MIDI denetimiyle çakışıyor' }
+cannot_select_midi_streams = { text = 'MIDI akışları seçilemiyor' }
+patch_memory_unavailable = { text = 'Ses belleği kullanılamıyor' }
+invalid_patch_root = { text = 'Geçersiz ses kökü' }
+persistent_switch_context = { text = 'Kalıcı düğmeler bağlamlarından ayrılamaz' }
+patch_sources_changed = { text = 'Aygıt yazılımı ziyaretinden sonra ses kaynakları değişti' }
+invalid_patch_continuation = { text = 'Geçersiz ses devamı' }
+midi_file_playback_failed = { text = 'MIDI dosyası çalınamadı' }
+banked_patch_no_page = { text = 'Banka sesinin bu kurulumda sayfası yok' }
+midi_output_unavailable = { text = 'MIDI çıkışı kullanılamıyor' }
+counter_memory_unavailable = { text = 'Sayaç belleği kullanılamıyor' }
+cannot_change_midi_gate = { text = 'MIDI akış kapısı değiştirilemiyor' }
+relay_operation_failed = { text = 'Röle işlemi başarısız' }
+cannot_install_patch_bindings = { text = 'Ses bağlamaları kurulamıyor' }
+application_operation_failed = { text = 'Uygulama işlemi başarısız' }
+cannot_open_midi_file = { text = 'MIDI dosyası açılamıyor' }
+midi_recording_failed = { text = 'MIDI kaydı başarısız' }
+invalid_executable_patch = { text = 'Geçersiz çalıştırılabilir ses' }
+invalid_patch_node = { text = 'Geçersiz ses düğümü' }
+patch_reference_cycle = { text = 'Döngüsel ses başvurusu' }
+patch_traversal_not_prepared = { text = 'Ses dolaşımı hazırlanmadı' }
+patch_traversal_memory_exhausted = { text = 'Ses dolaşım belleği tükendi' }
+setup_table_changed = { text = 'Kurulum tablosu değişti; yakalanan sesleri yeniden oluşturun' }
+referenced_setup_missing = { text = 'Başvurulan kurulum eksik veya geçersiz' }
+referenced_patch_missing = { text = 'Başvurulan ses yok' }
+invalid_application_operation = { text = 'Geçersiz uygulama işlemi' }
+invalid_selected_patch_binding = { text = 'Geçersiz seçili ses bağlaması' }
+no_patch_selected = { text = 'Etkinleştirmek için ses seçilmedi' }
+patch_binding_memory_exhausted = { text = 'Ses bağlama belleği tükendi' }
+patch_ownership_memory_exhausted = { text = 'Ses sahiplik belleği tükendi' }
+midi_state_memory_unavailable = { text = 'MIDI durum belleği kullanılamıyor' }
+counter_reservation_memory_unavailable = { text = 'Sayaç ayırma belleği kullanılamıyor' }
+switch_cleanup_unknown = { text = 'Düğme bırakılırken uzak durum bilinmiyor' }
+unknown_title = { text = 'Bilinmiyor' }
+pending = { text = 'Bekliyor' }
+failed_unknown = { text = 'Başarısız / bilinmiyor' }
+unknown_remote_state = { text = 'Uzak durum bilinmiyor' }
+partial_match = { text = 'Kısmi eşleşme' }
+other_values = { text = 'Diğer değerler' }
+completed_locally = { text = 'Yerel olarak tamamlandı' }
+closing_prefix = { text = 'Kapatılıyor: ' }
+shifted_prefix = { text = 'Shift etkin | ' }
+abandon = { text = 'vazgeç' }
+no_switches = { text = 'Düğme yok' }
+firmware_caption = { text = 'yazılımı kullan' }
+expression_assigned = { text = '{port:.20s} CC {controller:u} Kn {channel:u}' }
+no_pedal = { text = 'Pedal yok' }
+travel_too_short = { text = 'Hareket aralığı çok kısa' }
+raw_uncalibrated = { text = 'Ham {value:d} Kalibre edilmemiş' }
+calibrated_position = { text = '{value:d}% Kalibre edilmiş' }
+expression_step = { text = '{button:s}: {action:s}' }
+heel_down = { text = 'Topuk aşağı' }
+toe_down = { text = 'Parmak ucu aşağı' }
+calibrate = { text = 'Kalibre et' }
+monitor_connected = { text = 'Bağlandı / değişti' }
+monitor_disconnected = { text = 'Bağlantı kesildi' }
+monitor_incomplete = { text = '{prefix:s}ham / eksik' }
+monitor_sysex = { text = 'SysEx {part:s}{ending:s} {bytes:u}B' }
+monitor_sysex_start = { text = 'baş' }
+monitor_sysex_continue = { text = 'devam' }
+monitor_sysex_end = { text = '/son' }
+monitor_note_off = { text = 'Kn{channel:u} Kapat {note:u} v{velocity:u}' }
+monitor_note_on = { text = 'Kn{channel:u} Aç {note:u} v{velocity:u}' }
+monitor_poly_pressure = { text = 'Kn{channel:u} Poli {note:u} p{pressure:u}' }
+monitor_control = { text = 'Kn{channel:u} CC {controller:u} = {value:u}' }
+monitor_program = { text = 'Kn{channel:u} Program {program:u}' }
+monitor_pressure = { text = 'Kn{channel:u} Basınç {pressure:u}' }
+monitor_bend = { text = 'Kn{channel:u} Perde {value:d}' }
+monitor_time_code = { text = 'Zaman kodu' }
+monitor_song_position = { text = 'Şarkı konumu' }
+monitor_song_select = { text = 'Şarkı seçimi' }
+monitor_tune_request = { text = 'Akort isteği' }
+monitor_clock = { text = 'Saat' }
+monitor_start = { text = 'Başlat' }
+monitor_continue = { text = 'Devam' }
+monitor_stop = { text = 'Durdur' }
+monitor_active_sensing = { text = 'Etkin algılama' }
+monitor_reset = { text = 'Sıfırla' }
+monitor_system_value = { text = '{name:s} {value:u}' }
+cue = { text = 'İşaret' }
+warning = { text = 'Uyarı' }
+display_transfer_failed = { text = 'Ekran aktarımı başarısız' }
+target_midi_memory_unavailable = { text = 'MIDI belleği kullanılamıyor' }
+target_animation_color_memory = { text = 'Animasyon renk belleği kullanılamıyor' }
+target_usb_descriptor_failed = { text = 'USB MIDI tanımlayıcısı başarısız' }
+target_auxiliary_memory = { text = 'Yardımcı düğme belleği kullanılamıyor' }
+target_deployment_recovery = { text = 'Dağıtımın kurtarılması gerekiyor' }
+target_setup_bundle_invalid = { text = 'Kurulum paketi geçersiz' }
+target_global_recovery = { text = 'Genel ayarların kurtarılması gerekiyor' }
+target_song_storage_invalid = { text = 'Şarkı depolaması geçersiz' }

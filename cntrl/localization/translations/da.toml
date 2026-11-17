@@ -1,0 +1,372 @@
+language = 'da'
+name = 'Dansk'
+
+[messages]
+pages_and_tools = { text = 'Sider og værktøjer' }
+browse = { text = 'gennemse' }
+ok = { text = 'OK' }
+back = { text = 'tilbage' }
+setups = { text = 'Opsætninger' }
+songs_and_setlists = { text = 'Sange og sætlister' }
+switches = { text = 'Fodkontakter' }
+language = { text = 'Sprog' }
+control_action = { text = '{separator:s}{label:s} {action:s}' }
+setlist_number = { text = 'Sætliste {number:u}' }
+true_value = { text = 'sand' }
+false_value = { text = 'falsk' }
+no_configurable_ports = { text = 'Ingen indstillelige porte', short = 'Ingen porte' }
+unavailable = { text = 'Utilgængelig' }
+driver_failed = { text = 'Driverfejl' }
+busy = { text = 'Optaget' }
+already_set = { text = 'Allerede indstillet' }
+cannot_apply = { text = 'Kan ikke anvende' }
+saving = { text = 'Gemmer' }
+save_failed = { text = 'Kunne ikke gemme' }
+save_confirm = { text = 'Gem: Bekræft' }
+load_confirm = { text = 'Indlæs: Bekræft' }
+reverse_phrase_confirm = { text = 'Vend frase: Bekræft' }
+toggle_direction_confirm = { text = 'Skift retning: Bekræft' }
+confirm_clear = { text = 'Bekræft sletning?' }
+replace_unsaved_loop = { text = 'Erstat ugemt loop?' }
+scanning = { text = 'Søger...' }
+no_midi_files = { text = 'Ingen MIDI-filer' }
+storage_busy = { text = 'Lager optaget' }
+stock_firmware_prompt = { text = '{button:s} for original firmware.' }
+cancel_prompt = { text = '{button:s} for at annullere' }
+notes_off = { text = 'Toner fra' }
+all_off = { text = 'Alt fra' }
+midi_clock = { text = 'MIDI-ur' }
+clock_tempo = { text = 'Urtempo' }
+tap_tempo = { text = 'Tryktempo' }
+status = { text = 'Status' }
+midi_cable_test = { text = 'MIDI-kabeltest' }
+trs_ports = { text = 'TRS-porte' }
+keyboard = { text = 'Tastatur' }
+firmware = { text = 'Firmware' }
+external_receiving = { text = 'Ekstern: modtager' }
+external_waiting = { text = 'Ekstern: venter' }
+no_outputs_configured = { text = 'Ingen udgange indstillet', short = 'Ingen udgange' }
+outputs_offline = { text = 'Udgange frakoblet' }
+internal_running = { text = 'Intern: kører' }
+internal_stopped = { text = 'Intern: stoppet' }
+start_continue_prompt = { text = '{start:s} Start {resume:s} Fortsæt' }
+stop_source_prompt = { text = '{stop:s} Stop {source:s} Kilde' }
+tempo_slot = { text = 'Plads {slot:u}: {tempo:u} BPM' }
+tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Plads' }
+clock_late_lost = { text = 'Sent {late:u}us Tabt {lost:u}' }
+output_heading = { text = 'Ud' }
+input_heading = { text = 'Ind' }
+input = { text = 'Indgang' }
+no_shortcuts = { text = 'Ingen genveje' }
+held = { text = 'Holdt nede' }
+ready = { text = 'Klar' }
+select_pair_prompt = { text = '{previous:s}/{next:s}: Vælg' }
+hold_send_prompt = { text = 'Hold {button:s}: Send' }
+off = { text = 'Fra' }
+on = { text = 'Til' }
+midi_type_a = { text = 'MIDI-type A' }
+midi_type_b = { text = 'MIDI-type B' }
+expression = { text = 'Expression' }
+aux_switch = { text = 'Ekstra fodkontakt' }
+jack_mode_prompt = { text = '{jack:s}: Stik {mode:s}: Tilstand' }
+apply_prompt = { text = '{button:s}: Anvend' }
+use_stock = { text = 'Brug original' }
+cycles_patches = { text = 'Cyklusser:{cycles:u} Lyde:{patches:u}' }
+clock_value = { text = 'Ur:{clock:s}' }
+disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
+disk_unknown = { text = 'Disk:--/--G' }
+uptime_value = { text = ' Tid:{hours:lu}:{minutes:02u}:{seconds:02u}' }
+starts_value = { text = 'Starter:{starts:s}' }
+error = { text = 'fejl' }
+tap_value = { text = 'Tryk:{tempo:s}' }
+player_score = { text = 'SPILLER {player:u}   {score:u}' }
+up_down_prompt = { text = '{up:s} Op / {down:s} Ned' }
+serve_exit_prompt = { text = '{serve:s} Serv/Pause {exit:s} Afslut' }
+paused = { text = 'PAUSE' }
+player_one_wins = { text = 'SPILLER 1 VINDER' }
+player_two_wins = { text = 'SPILLER 2 VINDER' }
+press_to_serve = { text = 'TRYK FOR AT SERVE' }
+arpeggiator = { text = 'Arpeggiator' }
+waiting = { text = 'Venter' }
+playing = { text = 'Afspiller' }
+record_armed = { text = 'Optagelse klar' }
+recording = { text = 'Optager' }
+finish_armed = { text = 'Afslutning klar' }
+forward = { text = 'Fremad' }
+reverse = { text = 'Baglæns' }
+played = { text = 'Spillet rækkefølge' }
+back_and_forth = { text = 'Frem og tilbage' }
+random = { text = 'Tilfældig' }
+random_walk = { text = 'Tilfældig vandring' }
+mod = { text = 'Modulo' }
+shuffle = { text = 'Blanding' }
+outside_in = { text = 'Udefra og ind' }
+capacity_exceeded = { text = 'Kapacitet overskredet' }
+clock_unavailable = { text = 'Ur utilgængeligt' }
+output_blocked = { text = 'Udgang blokeret' }
+entries_count = { text = '{count:u} poster' }
+record_finish_play_stop_prompt = { text = '{record:s} Opt/Slut {play:s} Spil/Stop' }
+on_off_prompt = { text = '{button:s} Til/Fra' }
+midi_looper = { text = 'MIDI-looper' }
+empty = { text = 'Tom' }
+armed = { text = 'Klar til start' }
+closing = { text = 'Afslutter' }
+overdub_armed = { text = 'Overdub klar' }
+overdubbing = { text = 'Optager overdub' }
+preparing = { text = 'Forbereder' }
+stopped = { text = 'Stoppet' }
+launch_armed = { text = 'Start klar' }
+undo_pending = { text = 'Fortryd afventer' }
+loading = { text = 'Indlæser' }
+memory_unavailable = { text = 'Hukommelse utilgængelig' }
+late_boundary = { text = 'Forsinket grænse' }
+output_retired = { text = 'Udgang fjernet' }
+file_error = { text = 'Filfejl' }
+input_changed = { text = 'Indgang ændret' }
+loop_beats = { text = '{position:llu}.{fraction:02u} / {length:llu}.{end_fraction:02u} slag' }
+loop_events = { text = '{events:u}/{capacity:u} hændelser{state:s}{direction:s}' }
+clock_waiting_suffix = { text = ' Venter på ur' }
+unsaved_suffix = { text = ' Ikke gemt' }
+backward_suffix = { text = ' Baglæns' }
+forward_suffix = { text = ' Fremad' }
+direction_change_pending = { text = 'Retningsskift afventer' }
+record_play_undo_prompt = { text = '{record:s} Opt {play:s} Spil {undo:s} Fortryd' }
+clear_more_prompt = { text = '{clear:s} Slet {more:s} Mere' }
+combined = { text = 'Kombineret' }
+incoming = { text = 'Indgående' }
+outgoing = { text = 'Udgående' }
+unavailable_memory = { text = 'Utilgængelig: hukommelse' }
+monitor_history = { text = '{state:s}{advanced:s} Hist-{history:llu} Tabt-{dropped:u}' }
+frozen = { text = 'Frosset' }
+live = { text = 'Direkte' }
+advanced_suffix = { text = ' avanceret' }
+no_traffic = { text = 'Ingen trafik' }
+no_input = { text = 'Ingen indgang' }
+no_output = { text = 'Ingen udgang' }
+unknown = { text = 'ukendt' }
+running_suffix = { text = ' (løbende)' }
+history_live_prompt = { text = '{previous:s}/{next:s} Historik {live:s} Direkte' }
+freeze_prompt = { text = '{button:s} Frys' }
+over = { text = 'OVER' }
+raw_uncalibrated_sample = { text = 'Rå 8888 Ukalibreret' }
+select_expression_role = { text = 'Vælg expressionrolle' }
+reconnect_heel = { text = 'Tilslut igen: hæl' }
+calibrate_prompt = { text = '{button:s}: Kalibrer' }
+unassigned_port = { text = '{port:.24s} Ikke tildelt' }
+jack_cancel_prompt = { text = '{jack:s}: Stik {cancel:s}: Annuller' }
+working = { text = 'Arbejder...' }
+no_setups = { text = 'Ingen opsætninger' }
+action = { text = 'Handling' }
+history = { text = 'Historik' }
+edit = { text = 'Rediger' }
+select = { text = 'Vælg' }
+patch = { text = 'Lyd' }
+program = { text = 'Program' }
+bank = { text = 'Bank' }
+channel = { text = 'Kanal' }
+volume = { text = 'Lydstyrke' }
+pan = { text = 'Panorering' }
+brightness = { text = 'Lysstyrke' }
+idle_seconds = { text = 'Hviletid (sek)' }
+usb_midi = { text = 'USB MIDI' }
+none = { text = 'Ingen' }
+value = { text = 'Værdi' }
+unsaved_edits = { text = 'Ændringer ikke gemt' }
+save = { text = 'Gem' }
+discard = { text = 'Kassér' }
+cancel = { text = 'Annuller' }
+please_wait = { text = 'Vent venligst' }
+changing_setup = { text = 'Skifter opsætning' }
+operation_failed = { text = 'Handlingen mislykkedes' }
+revision = { text = 'Revision' }
+current_snapshot = { text = 'Aktuel: {prompt:.54s}' }
+snapshot = { text = 'øjebliksbillede' }
+compare_current = { text = 'Sammenlign med aktuel' }
+change = { text = 'Ændring' }
+changed_patches = { text = '{count:u} ændrede lyde' }
+changed_routes = { text = '{count:u} ændrede routinger' }
+settings_change = { text = 'Indstillinger: {state:s}' }
+authored_data_change = { text = 'Egne data: {state:s}' }
+changed = { text = 'ændret' }
+same = { text = 'uændret' }
+restore = { text = 'Gendan' }
+back_title = { text = 'Tilbage' }
+adjust = { text = 'juster' }
+setup_menu = { text = 'Opsætningsmenu' }
+no_midi_sent = { text = 'Ingen MIDI sendt' }
+setup = { text = 'Opsætning' }
+patch_cycle = { text = 'Lydcyklus' }
+field = { text = 'Felt' }
+saved = { text = 'Gemt' }
+song_read_failed = { text = 'Kunne ikke læse sang' }
+song_added = { text = 'Tilføjet {name:.57s}' }
+not_saved = { text = 'Ikke gemt' }
+saving_wait = { text = 'Gemmer...' }
+current_removed = { text = 'Aktuel (fjernet)' }
+current = { text = 'Aktuel' }
+next = { text = 'Næste' }
+add_songs = { text = 'Tilføj sange' }
+end_of_set = { text = 'Slut på sætlisten' }
+next_patch = { text = 'Næste lyd' }
+perform_setlist = { text = 'Spil sætliste' }
+setlists = { text = 'Sætlister' }
+songs = { text = 'Sange' }
+save_as_song = { text = 'Gem som sang' }
+save_reference = { text = 'Gem reference' }
+add_next = { text = 'Tilføj som næste' }
+add_to_end = { text = 'Tilføj til slut' }
+remove_from_setlist = { text = 'Fjern fra sætliste' }
+move = { text = 'Flyt' }
+rename_setlist = { text = 'Omdøb sætliste' }
+undo_edit = { text = 'Fortryd ændring' }
+restart_setlist = { text = 'Genstart sætliste' }
+done = { text = 'Færdig' }
+rename = { text = 'Omdøb' }
+new_setlist = { text = 'Ny sætliste' }
+character_number = { text = 'Tegn {character:u}' }
+rename_song = { text = 'Omdøb sang' }
+use_selected_patch = { text = 'Brug valgt lyd' }
+edit_patches = { text = 'Rediger lyde' }
+patch_position = { text = 'Lyd {position:u}/{count:lu}' }
+replace_with_selected = { text = 'Erstat med valgte' }
+insert_selected_after = { text = 'Indsæt valgte efter' }
+remove_patch = { text = 'Fjern lyd' }
+move_earlier = { text = 'Flyt frem' }
+move_later = { text = 'Flyt tilbage' }
+save_song_first = { text = 'Gem først en sang' }
+patches_count = { text = '{count:lu} lyde' }
+missing_song = { text = 'Sang mangler' }
+entry_action = { text = 'post' }
+letter_action = { text = 'bogstav' }
+edit_action = { text = 'rediger' }
+position_action = { text = 'pos' }
+jump_action = { text = 'spring' }
+next_action = { text = 'næste' }
+add_action = { text = 'tilføj' }
+menu_action = { text = 'menu' }
+done_action = { text = 'færdig' }
+port_memory_unavailable = { text = 'Porthukommelse utilgængelig' }
+looper_command_rejected = { text = 'MIDI-looperkommando afvist' }
+looper_memory_unavailable = { text = 'MIDI-looperhukommelse utilgængelig' }
+banked_memory_unavailable = { text = 'Hukommelse til banklyde utilgængelig' }
+monitor_memory_unavailable = { text = 'MIDI-monitorhukommelse utilgængelig' }
+relay_reset_failed = { text = 'Nulstilling af relæ mislykkedes' }
+relay_pulse_restore_failed = { text = 'Gendannelse efter relæpuls mislykkedes' }
+firmware_switch_failed = { text = 'Firmwareskift mislykkedes' }
+language_change_rejected = { text = 'Sprogskift afvist' }
+global_setting_rejected = { text = 'Global indstilling afvist' }
+midi_input_memory_unavailable = { text = 'MIDI-indgangshukommelse utilgængelig' }
+midi_recording_write_failed = { text = 'Skrivning af MIDI-optagelse mislykkedes' }
+midi_cleanup_incomplete = { text = 'MIDI-frigørelse ufuldstændig' }
+bank_page_memory_unavailable = { text = 'Hukommelse til bankside utilgængelig' }
+switch_state_unknown = { text = 'Ukendt fodkontakttilstand' }
+page_return_unavailable = { text = 'Tilbage til side utilgængelig' }
+patch_return_unavailable = { text = 'Tilbage til lyd utilgængelig' }
+patch_return_memory_unavailable = { text = 'Hukommelse til lydretur utilgængelig' }
+selection_failed = { text = 'Valg mislykkedes' }
+snapshot_failed = { text = 'Øjebliksbillede mislykkedes' }
+cannot_compare_revision = { text = 'Kan ikke sammenligne revision' }
+restore_failed = { text = 'Gendannelse mislykkedes' }
+controller_memory_unavailable = { text = 'Controllerhukommelse utilgængelig' }
+relay_setup_failed = { text = 'Relæopsætning mislykkedes' }
+navigation_memory_unavailable = { text = 'Navigationshukommelse utilgængelig' }
+remote_state_unknown = { text = 'Ukendt fjerntilstand' }
+switch_state_memory_exhausted = { text = 'Hukommelse til fodkontakttilstand opbrugt' }
+switch_delivery_memory_unavailable = { text = 'Sendehukommelse til fodkontakt utilgængelig' }
+switch_ownership_memory_exhausted = { text = 'Ejerskabshukommelse til fodkontakt opbrugt' }
+switches_overlap = { text = 'Fodkontakter reserverer samme MIDI-kontroller' }
+switch_event_memory_unavailable = { text = 'Hændelseshukommelse til fodkontakt utilgængelig' }
+switch_action_memory_unavailable = { text = 'Handlingshukommelse til fodkontakt utilgængelig' }
+switch_gesture_queue_full = { text = 'Gestuskø til fodkontakt fuld' }
+switch_action_queue_full = { text = 'Handlingskø til fodkontakt fuld' }
+switch_selection_queue_full = { text = 'Valgkø til fodkontakt fuld' }
+selected_patch_overlap = { text = 'Valgt lyd overlapper en anden fodkontakts MIDI-kontroller' }
+cannot_select_midi_streams = { text = 'Kan ikke vælge MIDI-strømme' }
+patch_memory_unavailable = { text = 'Lydhukommelse utilgængelig' }
+invalid_patch_root = { text = 'Ugyldig lydrod' }
+persistent_switch_context = { text = 'Vedvarende fodkontakter kan ikke forlade deres kontekst' }
+patch_sources_changed = { text = 'Lydkilder ændret siden firmwarebesøg' }
+invalid_patch_continuation = { text = 'Ugyldig lydfortsættelse' }
+midi_file_playback_failed = { text = 'Afspilning af MIDI-fil mislykkedes' }
+banked_patch_no_page = { text = 'Banklyd har ingen side i opsætningen' }
+midi_output_unavailable = { text = 'MIDI-udgang utilgængelig' }
+counter_memory_unavailable = { text = 'Tællerhukommelse utilgængelig' }
+cannot_change_midi_gate = { text = 'Kan ikke ændre MIDI-strømspærre' }
+relay_operation_failed = { text = 'Relæhandling mislykkedes' }
+cannot_install_patch_bindings = { text = 'Kan ikke installere lydbindinger' }
+application_operation_failed = { text = 'Programhandling mislykkedes' }
+cannot_open_midi_file = { text = 'Kan ikke åbne MIDI-fil' }
+midi_recording_failed = { text = 'MIDI-optagelse mislykkedes' }
+invalid_executable_patch = { text = 'Ugyldig eksekverbar lyd' }
+invalid_patch_node = { text = 'Ugyldig lydnode' }
+patch_reference_cycle = { text = 'Cirkulære lydreferencer' }
+patch_traversal_not_prepared = { text = 'Lydgennemgang ikke forberedt' }
+patch_traversal_memory_exhausted = { text = 'Hukommelse til lydgennemgang opbrugt' }
+setup_table_changed = { text = 'Opsætningstabel ændret; genopbyg indfangede lyde' }
+referenced_setup_missing = { text = 'Refereret opsætning mangler eller er ugyldig' }
+referenced_patch_missing = { text = 'Refereret lyd findes ikke' }
+invalid_application_operation = { text = 'Ugyldig programhandling' }
+invalid_selected_patch_binding = { text = 'Ugyldig binding til valgt lyd' }
+no_patch_selected = { text = 'Ingen lyd valgt til aktivering' }
+patch_binding_memory_exhausted = { text = 'Hukommelse til lydbindinger opbrugt' }
+patch_ownership_memory_exhausted = { text = 'Hukommelse til lydejerskab opbrugt' }
+midi_state_memory_unavailable = { text = 'MIDI-tilstandshukommelse utilgængelig' }
+counter_reservation_memory_unavailable = { text = 'Hukommelse til tællerreservation utilgængelig' }
+switch_cleanup_unknown = { text = 'Ukendt fjerntilstand ved frigørelse af fodkontakt' }
+unknown_title = { text = 'Ukendt' }
+pending = { text = 'Afventer' }
+failed_unknown = { text = 'Mislykket / ukendt' }
+unknown_remote_state = { text = 'Ukendt fjerntilstand' }
+partial_match = { text = 'Delvist match' }
+other_values = { text = 'Andre værdier' }
+completed_locally = { text = 'Udført lokalt' }
+closing_prefix = { text = 'Afslutter: ' }
+shifted_prefix = { text = 'Forskudt | ' }
+abandon = { text = 'opgiv' }
+no_switches = { text = 'Ingen fodkontakter' }
+firmware_caption = { text = 'firmware' }
+expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
+no_pedal = { text = 'Ingen pedal' }
+travel_too_short = { text = 'Vandring for kort' }
+raw_uncalibrated = { text = 'Rå {value:d} Ukalibreret' }
+calibrated_position = { text = '{value:d}% Kalibreret' }
+expression_step = { text = '{button:s}: {action:s}' }
+heel_down = { text = 'Hæl ned' }
+toe_down = { text = 'Tå ned' }
+calibrate = { text = 'Kalibrer' }
+monitor_connected = { text = 'Tilsluttet / ændret' }
+monitor_disconnected = { text = 'Frakoblet' }
+monitor_incomplete = { text = '{prefix:s}rå / ufuldstændig' }
+monitor_sysex = { text = 'SysEx {part:s}{ending:s} {bytes:u}B' }
+monitor_sysex_start = { text = 'start' }
+monitor_sysex_continue = { text = 'forts' }
+monitor_sysex_end = { text = '/slut' }
+monitor_note_off = { text = 'Kan{channel:u} Fra {note:u} v{velocity:u}' }
+monitor_note_on = { text = 'Kan{channel:u} Til {note:u} v{velocity:u}' }
+monitor_poly_pressure = { text = 'Kan{channel:u} Poly {note:u} p{pressure:u}' }
+monitor_control = { text = 'Kan{channel:u} CC {controller:u} = {value:u}' }
+monitor_program = { text = 'Kan{channel:u} Program {program:u}' }
+monitor_pressure = { text = 'Kan{channel:u} Tryk {pressure:u}' }
+monitor_bend = { text = 'Kan{channel:u} Tonebøjning {value:d}' }
+monitor_time_code = { text = 'Tidskode' }
+monitor_song_position = { text = 'Sangposition' }
+monitor_song_select = { text = 'Sangvalg' }
+monitor_tune_request = { text = 'Stemningsanmodning' }
+monitor_clock = { text = 'Ur' }
+monitor_start = { text = 'Start' }
+monitor_continue = { text = 'Fortsæt' }
+monitor_stop = { text = 'Stop' }
+monitor_active_sensing = { text = 'Aktiv registrering' }
+monitor_reset = { text = 'Nulstil' }
+monitor_system_value = { text = '{name:s} {value:u}' }
+cue = { text = 'Signal' }
+warning = { text = 'Advarsel' }
+display_transfer_failed = { text = 'Skærmoverførsel mislykkedes' }
+target_midi_memory_unavailable = { text = 'MIDI-hukommelse utilgængelig' }
+target_animation_color_memory = { text = 'Animationsfarvehukommelse utilgængelig' }
+target_usb_descriptor_failed = { text = 'USB MIDI-deskriptor mislykkedes' }
+target_auxiliary_memory = { text = 'Hukommelse til ekstra fodkontakter utilgængelig' }
+target_deployment_recovery = { text = 'Installation skal gendannes' }
+target_setup_bundle_invalid = { text = 'Ugyldig opsætningspakke' }
+target_global_recovery = { text = 'Globale indstillinger skal gendannes' }
+target_song_storage_invalid = { text = 'Ugyldigt sanglager' }

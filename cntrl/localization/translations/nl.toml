@@ -1,0 +1,372 @@
+language = 'nl'
+name = 'Nederlands'
+
+[messages]
+pages_and_tools = { text = 'Pagina’s en gereedschap', short = 'Pagina’s / tools' }
+browse = { text = 'bladeren' }
+ok = { text = 'OK' }
+back = { text = 'terug' }
+setups = { text = 'Configuraties', short = 'Configs' }
+songs_and_setlists = { text = 'Nummers en setlijsten' }
+switches = { text = 'Schakelaars' }
+language = { text = 'Taal' }
+control_action = { text = '{separator:s}{label:s} {action:s}' }
+setlist_number = { text = 'Setlijst {number:u}' }
+true_value = { text = 'waar' }
+false_value = { text = 'onwaar' }
+no_configurable_ports = { text = 'Geen instelbare poorten', short = 'Geen poorten' }
+unavailable = { text = 'Niet beschikbaar' }
+driver_failed = { text = 'Stuurprogramma mislukt' }
+busy = { text = 'Bezet' }
+already_set = { text = 'Al ingesteld' }
+cannot_apply = { text = 'Kan niet toepassen' }
+saving = { text = 'Opslaan' }
+save_failed = { text = 'Opslaan mislukt' }
+save_confirm = { text = 'Opslaan: bevestigen' }
+load_confirm = { text = 'Laden: bevestigen' }
+reverse_phrase_confirm = { text = 'Frase omkeren: bevestigen' }
+toggle_direction_confirm = { text = 'Richting wisselen: bevestigen' }
+confirm_clear = { text = 'Wissen bevestigen?' }
+replace_unsaved_loop = { text = 'Niet-opgeslagen lus vervangen?' }
+scanning = { text = 'Zoeken...' }
+no_midi_files = { text = 'Geen MIDI-bestanden' }
+storage_busy = { text = 'Opslag bezet' }
+stock_firmware_prompt = { text = '{button:s} voor originele firmware.' }
+cancel_prompt = { text = '{button:s} om te annuleren' }
+notes_off = { text = 'Noten uit' }
+all_off = { text = 'Alles uit' }
+midi_clock = { text = 'MIDI-klok' }
+clock_tempo = { text = 'Kloktempo' }
+tap_tempo = { text = 'Tiktempo' }
+status = { text = 'Status' }
+midi_cable_test = { text = 'MIDI-kabeltest' }
+trs_ports = { text = 'TRS-poorten' }
+keyboard = { text = 'Toetsenbord' }
+firmware = { text = 'Firmware' }
+external_receiving = { text = 'Extern: ontvangt' }
+external_waiting = { text = 'Extern: wacht' }
+no_outputs_configured = { text = 'Geen uitgangen ingesteld', short = 'Geen uitgangen' }
+outputs_offline = { text = 'Uitgangen losgekoppeld' }
+internal_running = { text = 'Intern: loopt' }
+internal_stopped = { text = 'Intern: gestopt' }
+start_continue_prompt = { text = '{start:s} Start {resume:s} Hervatten' }
+stop_source_prompt = { text = '{stop:s} Stop {source:s} Bron' }
+tempo_slot = { text = 'Geheugen {slot:u}: {tempo:u} BPM' }
+tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Geheugen' }
+clock_late_lost = { text = 'Laat {late:u}us Verloren {lost:u}' }
+output_heading = { text = 'Uit' }
+input_heading = { text = 'In' }
+input = { text = 'Ingang' }
+no_shortcuts = { text = 'Geen sneltoetsen' }
+held = { text = 'Ingedrukt' }
+ready = { text = 'Gereed' }
+select_pair_prompt = { text = '{previous:s}/{next:s}: Kiezen' }
+hold_send_prompt = { text = 'Houd {button:s} vast: Verzenden' }
+off = { text = 'Uit' }
+on = { text = 'Aan' }
+midi_type_a = { text = 'MIDI type A' }
+midi_type_b = { text = 'MIDI type B' }
+expression = { text = 'Expressie' }
+aux_switch = { text = 'Hulpschakelaar' }
+jack_mode_prompt = { text = '{jack:s}: Aansluiting {mode:s}: Modus' }
+apply_prompt = { text = '{button:s}: Toepassen' }
+use_stock = { text = 'Gebruik originele' }
+cycles_patches = { text = 'Cycli:{cycles:u} Patches:{patches:u}' }
+clock_value = { text = 'Klok:{clock:s}' }
+disk_value = { text = 'Schijf:{whole:lu}.{fraction:lu}/{total:lu}G' }
+disk_unknown = { text = 'Schijf:--/--G' }
+uptime_value = { text = ' Actief:{hours:lu}:{minutes:02u}:{seconds:02u}' }
+starts_value = { text = 'Starts:{starts:s}' }
+error = { text = 'fout' }
+tap_value = { text = 'Tik:{tempo:s}' }
+player_score = { text = 'SPELER {player:u} {score:u}' }
+up_down_prompt = { text = '{up:s} Omhoog / {down:s} Omlaag' }
+serve_exit_prompt = { text = '{serve:s} Service/Pauze {exit:s} Sluiten' }
+paused = { text = 'PAUZE' }
+player_one_wins = { text = 'SPELER 1 WINT' }
+player_two_wins = { text = 'SPELER 2 WINT' }
+press_to_serve = { text = 'DRUK VOOR SERVICE' }
+arpeggiator = { text = 'Arpeggiator' }
+waiting = { text = 'Wachten' }
+playing = { text = 'Afspelen' }
+record_armed = { text = 'Opname klaargezet' }
+recording = { text = 'Opnemen' }
+finish_armed = { text = 'Afronding klaargezet' }
+forward = { text = 'Vooruit' }
+reverse = { text = 'Achteruit' }
+played = { text = 'Gespeelde volgorde' }
+back_and_forth = { text = 'Heen en weer' }
+random = { text = 'Willekeurig' }
+random_walk = { text = 'Willekeurige wandeling' }
+mod = { text = 'Modulo' }
+shuffle = { text = 'Schudden' }
+outside_in = { text = 'Van buiten naar binnen' }
+capacity_exceeded = { text = 'Capaciteit overschreden' }
+clock_unavailable = { text = 'Klok niet beschikbaar' }
+output_blocked = { text = 'Uitgang geblokkeerd' }
+entries_count = { text = '{count:u} items' }
+record_finish_play_stop_prompt = { text = '{record:s} Opn/Einde {play:s} Speel/Stop' }
+on_off_prompt = { text = '{button:s} Aan/Uit' }
+midi_looper = { text = 'MIDI-looper' }
+empty = { text = 'Leeg' }
+armed = { text = 'Klaargezet' }
+closing = { text = 'Afronden' }
+overdub_armed = { text = 'Overdub klaargezet' }
+overdubbing = { text = 'Overdub opnemen' }
+preparing = { text = 'Voorbereiden' }
+stopped = { text = 'Gestopt' }
+launch_armed = { text = 'Start klaargezet' }
+undo_pending = { text = 'Herstel wacht' }
+loading = { text = 'Laden' }
+memory_unavailable = { text = 'Geheugen niet beschikbaar' }
+late_boundary = { text = 'Tijdgrens gemist' }
+output_retired = { text = 'Uitgang buiten gebruik' }
+file_error = { text = 'Bestandsfout' }
+input_changed = { text = 'Ingang gewijzigd' }
+loop_beats = { text = '{position:llu}.{fraction:02u} / {length:llu}.{end_fraction:02u} tellen' }
+loop_events = { text = '{events:u}/{capacity:u} gebeurtenissen{state:s}{direction:s}' }
+clock_waiting_suffix = { text = ' Wacht op klok' }
+unsaved_suffix = { text = ' Niet opgeslagen' }
+backward_suffix = { text = ' Achteruit' }
+forward_suffix = { text = ' Vooruit' }
+direction_change_pending = { text = 'Richtingswijziging wacht' }
+record_play_undo_prompt = { text = '{record:s} Opn {play:s} Speel {undo:s} Herstel' }
+clear_more_prompt = { text = '{clear:s} Wis {more:s} Meer' }
+combined = { text = 'Gecombineerd' }
+incoming = { text = 'Inkomend' }
+outgoing = { text = 'Uitgaand' }
+unavailable_memory = { text = 'Niet beschikbaar: geheugen' }
+monitor_history = { text = '{state:s}{advanced:s} Hist-{history:llu} Verlies-{dropped:u}' }
+frozen = { text = 'Stilgezet' }
+live = { text = 'Live' }
+advanced_suffix = { text = ' uitgebreid' }
+no_traffic = { text = 'Geen verkeer' }
+no_input = { text = 'Geen ingang' }
+no_output = { text = 'Geen uitgang' }
+unknown = { text = 'onbekend' }
+running_suffix = { text = ' (lopende status)' }
+history_live_prompt = { text = '{previous:s}/{next:s} Historie {live:s} Live' }
+freeze_prompt = { text = '{button:s} Stilzetten' }
+over = { text = 'OVERLOOP' }
+raw_uncalibrated_sample = { text = 'Ruw 8888 Niet gekalibreerd' }
+select_expression_role = { text = 'Expressiefunctie kiezen' }
+reconnect_heel = { text = 'Opnieuw aansluiten: hiel' }
+calibrate_prompt = { text = '{button:s}: Kalibreren' }
+unassigned_port = { text = '{port:.24s} Niet toegewezen' }
+jack_cancel_prompt = { text = '{jack:s}: Aansluiting {cancel:s}: Annuleer' }
+working = { text = 'Bezig...' }
+no_setups = { text = 'Geen configuraties' }
+action = { text = 'Actie' }
+history = { text = 'Geschiedenis' }
+edit = { text = 'Bewerken' }
+select = { text = 'Kiezen' }
+patch = { text = 'Patch' }
+program = { text = 'Programma' }
+bank = { text = 'Bank' }
+channel = { text = 'Kanaal' }
+volume = { text = 'Volume' }
+pan = { text = 'Panorama' }
+brightness = { text = 'Helderheid' }
+idle_seconds = { text = 'Inactiviteit in seconden' }
+usb_midi = { text = 'USB MIDI' }
+none = { text = 'Geen' }
+value = { text = 'Waarde' }
+unsaved_edits = { text = 'Niet-opgeslagen wijzigingen' }
+save = { text = 'Opslaan' }
+discard = { text = 'Verwerpen' }
+cancel = { text = 'Annuleren' }
+please_wait = { text = 'Even geduld' }
+changing_setup = { text = 'Configuratie wisselen' }
+operation_failed = { text = 'Bewerking mislukt' }
+revision = { text = 'Revisie' }
+current_snapshot = { text = 'Huidig: {prompt:.54s}' }
+snapshot = { text = 'momentopname' }
+compare_current = { text = 'Met huidige vergelijken' }
+change = { text = 'Wijziging' }
+changed_patches = { text = '{count:u} gewijzigde patches' }
+changed_routes = { text = '{count:u} gewijzigde routes' }
+settings_change = { text = 'Instellingen: {state:s}' }
+authored_data_change = { text = 'Eigen gegevens: {state:s}' }
+changed = { text = 'gewijzigd' }
+same = { text = 'gelijk' }
+restore = { text = 'Herstellen' }
+back_title = { text = 'Terug' }
+adjust = { text = 'aanpassen' }
+setup_menu = { text = 'Configuratiemenu' }
+no_midi_sent = { text = 'Geen MIDI verzonden' }
+setup = { text = 'Configuratie' }
+patch_cycle = { text = 'Patchcyclus' }
+field = { text = 'Veld' }
+saved = { text = 'Opgeslagen' }
+song_read_failed = { text = 'Nummer lezen mislukt' }
+song_added = { text = '{name:.57s} toegevoegd' }
+not_saved = { text = 'Niet opgeslagen' }
+saving_wait = { text = 'Opslaan...' }
+current_removed = { text = 'Huidig (verwijderd)' }
+current = { text = 'Huidig' }
+next = { text = 'Volgende' }
+add_songs = { text = 'Nummers toevoegen' }
+end_of_set = { text = 'Einde setlijst' }
+next_patch = { text = 'Volgende patch' }
+perform_setlist = { text = 'Setlijst spelen' }
+setlists = { text = 'Setlijsten' }
+songs = { text = 'Nummers' }
+save_as_song = { text = 'Als nummer opslaan' }
+save_reference = { text = 'Verwijzing opslaan' }
+add_next = { text = 'Als volgende toevoegen' }
+add_to_end = { text = 'Aan einde toevoegen' }
+remove_from_setlist = { text = 'Uit setlijst verwijderen' }
+move = { text = 'Verplaatsen' }
+rename_setlist = { text = 'Setlijst hernoemen' }
+undo_edit = { text = 'Wijziging ongedaan maken' }
+restart_setlist = { text = 'Setlijst herstarten' }
+done = { text = 'Klaar' }
+rename = { text = 'Hernoemen' }
+new_setlist = { text = 'Nieuwe setlijst' }
+character_number = { text = 'Teken {character:u}' }
+rename_song = { text = 'Nummer hernoemen' }
+use_selected_patch = { text = 'Gekozen patch gebruiken' }
+edit_patches = { text = 'Patches bewerken' }
+patch_position = { text = 'Patch {position:u}/{count:lu}' }
+replace_with_selected = { text = 'Door selectie vervangen' }
+insert_selected_after = { text = 'Selectie erna invoegen' }
+remove_patch = { text = 'Patch verwijderen' }
+move_earlier = { text = 'Eerder plaatsen' }
+move_later = { text = 'Later plaatsen' }
+save_song_first = { text = 'Sla eerst een nummer op' }
+patches_count = { text = '{count:lu} patches' }
+missing_song = { text = 'Nummer ontbreekt' }
+entry_action = { text = 'item' }
+letter_action = { text = 'letter' }
+edit_action = { text = 'bewerk' }
+position_action = { text = 'pos' }
+jump_action = { text = 'spring' }
+next_action = { text = 'volgende' }
+add_action = { text = 'voeg toe' }
+menu_action = { text = 'menu' }
+done_action = { text = 'klaar' }
+port_memory_unavailable = { text = 'Poortgeheugen niet beschikbaar' }
+looper_command_rejected = { text = 'MIDI-looperopdracht geweigerd' }
+looper_memory_unavailable = { text = 'MIDI-loopergeheugen niet beschikbaar' }
+banked_memory_unavailable = { text = 'Bankpatchgeheugen niet beschikbaar' }
+monitor_memory_unavailable = { text = 'MIDI-monitorgeheugen niet beschikbaar' }
+relay_reset_failed = { text = 'Relais herstellen mislukt' }
+relay_pulse_restore_failed = { text = 'Relaispuls herstellen mislukt' }
+firmware_switch_failed = { text = 'Firmware wisselen mislukt' }
+language_change_rejected = { text = 'Taalwijziging geweigerd' }
+global_setting_rejected = { text = 'Globale instelling geweigerd' }
+midi_input_memory_unavailable = { text = 'MIDI-ingangsgeheugen niet beschikbaar' }
+midi_recording_write_failed = { text = 'MIDI-opname schrijven mislukt' }
+midi_cleanup_incomplete = { text = 'MIDI-vrijgave onvolledig' }
+bank_page_memory_unavailable = { text = 'Bankpaginageheugen niet beschikbaar' }
+switch_state_unknown = { text = 'Schakelaarstatus onbekend' }
+page_return_unavailable = { text = 'Paginaterugkeer niet beschikbaar' }
+patch_return_unavailable = { text = 'Patchterugkeer niet beschikbaar' }
+patch_return_memory_unavailable = { text = 'Patchterugkeergeheugen niet beschikbaar' }
+selection_failed = { text = 'Selectie mislukt' }
+snapshot_failed = { text = 'Momentopname mislukt' }
+cannot_compare_revision = { text = 'Kan revisie niet vergelijken' }
+restore_failed = { text = 'Herstellen mislukt' }
+controller_memory_unavailable = { text = 'Controllergeheugen niet beschikbaar' }
+relay_setup_failed = { text = 'Relais instellen mislukt' }
+navigation_memory_unavailable = { text = 'Navigatiegeheugen niet beschikbaar' }
+remote_state_unknown = { text = 'Externe status onbekend' }
+switch_state_memory_exhausted = { text = 'Schakelaarstatusgeheugen uitgeput' }
+switch_delivery_memory_unavailable = { text = 'Schakelaarverzendgeheugen niet beschikbaar' }
+switch_ownership_memory_exhausted = { text = 'Schakelaartoewijzingsgeheugen uitgeput' }
+switches_overlap = { text = 'Schakelaars reserveren overlappende MIDI-regelaars' }
+switch_event_memory_unavailable = { text = 'Schakelaargebeurtenisgeheugen niet beschikbaar' }
+switch_action_memory_unavailable = { text = 'Schakelaaractiegeheugen niet beschikbaar' }
+switch_gesture_queue_full = { text = 'Wachtrij schakelaargebaren vol' }
+switch_action_queue_full = { text = 'Wachtrij schakelaaracties vol' }
+switch_selection_queue_full = { text = 'Wachtrij schakelaarselecties vol' }
+selected_patch_overlap = { text = 'Gekozen patch overlapt MIDI-regelaars van een andere schakelaar' }
+cannot_select_midi_streams = { text = 'Kan MIDI-stromen niet kiezen' }
+patch_memory_unavailable = { text = 'Patchgeheugen niet beschikbaar' }
+invalid_patch_root = { text = 'Ongeldig begin van patch' }
+persistent_switch_context = { text = 'Blijvende schakelaars moeten hun context behouden' }
+patch_sources_changed = { text = 'Patchbronnen gewijzigd sinds firmwarebezoek' }
+invalid_patch_continuation = { text = 'Ongeldige patchvoortzetting' }
+midi_file_playback_failed = { text = 'MIDI-bestand afspelen mislukt' }
+banked_patch_no_page = { text = 'Bankpatch heeft geen pagina in deze configuratie' }
+midi_output_unavailable = { text = 'MIDI-uitgang niet beschikbaar' }
+counter_memory_unavailable = { text = 'Tellergeheugen niet beschikbaar' }
+cannot_change_midi_gate = { text = 'Kan MIDI-stroomvrijgave niet wijzigen' }
+relay_operation_failed = { text = 'Relaisbewerking mislukt' }
+cannot_install_patch_bindings = { text = 'Kan patchtoewijzingen niet installeren' }
+application_operation_failed = { text = 'Toepassingsbewerking mislukt' }
+cannot_open_midi_file = { text = 'Kan MIDI-bestand niet openen' }
+midi_recording_failed = { text = 'MIDI-opname mislukt' }
+invalid_executable_patch = { text = 'Ongeldige uitvoerbare patch' }
+invalid_patch_node = { text = 'Ongeldige patchknoop' }
+patch_reference_cycle = { text = 'Cirkel in patchverwijzingen' }
+patch_traversal_not_prepared = { text = 'Patchdoorloop niet voorbereid' }
+patch_traversal_memory_exhausted = { text = 'Patchdoorloopgeheugen uitgeput' }
+setup_table_changed = { text = 'Configuraties gewijzigd; vastgelegde patches opnieuw opbouwen' }
+referenced_setup_missing = { text = 'Verwezen configuratie ontbreekt of is ongeldig' }
+referenced_patch_missing = { text = 'Verwezen patch bestaat niet' }
+invalid_application_operation = { text = 'Ongeldige toepassingsbewerking' }
+invalid_selected_patch_binding = { text = 'Ongeldige toewijzing van gekozen patch' }
+no_patch_selected = { text = 'Geen patch gekozen om te activeren' }
+patch_binding_memory_exhausted = { text = 'Patchtoewijzingsgeheugen uitgeput' }
+patch_ownership_memory_exhausted = { text = 'Patcheigenaarschapsgeheugen uitgeput' }
+midi_state_memory_unavailable = { text = 'MIDI-statusgeheugen niet beschikbaar' }
+counter_reservation_memory_unavailable = { text = 'Tellerreserveringsgeheugen niet beschikbaar' }
+switch_cleanup_unknown = { text = 'Schakelaarvrijgave heeft onbekende externe status' }
+unknown_title = { text = 'Onbekend' }
+pending = { text = 'In afwachting' }
+failed_unknown = { text = 'Mislukt / onbekend' }
+unknown_remote_state = { text = 'Onbekende externe status' }
+partial_match = { text = 'Gedeeltelijke overeenkomst' }
+other_values = { text = 'Andere waarden' }
+completed_locally = { text = 'Lokaal voltooid' }
+closing_prefix = { text = 'Afronden: ' }
+shifted_prefix = { text = 'Tweede laag | ' }
+abandon = { text = 'verwerpen' }
+no_switches = { text = 'Geen schakelaars' }
+firmware_caption = { text = 'firmware' }
+expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
+no_pedal = { text = 'Geen pedaal' }
+travel_too_short = { text = 'Pedaalweg te kort' }
+raw_uncalibrated = { text = 'Ruw {value:d} Niet gekalibreerd' }
+calibrated_position = { text = '{value:d}% Gekalibreerd' }
+expression_step = { text = '{button:s}: {action:s}' }
+heel_down = { text = 'Hiel omlaag' }
+toe_down = { text = 'Teen omlaag' }
+calibrate = { text = 'Kalibreren' }
+monitor_connected = { text = 'Verbonden / gewijzigd' }
+monitor_disconnected = { text = 'Losgekoppeld' }
+monitor_incomplete = { text = '{prefix:s}ruw / onvolledig' }
+monitor_sysex = { text = 'SysEx {part:s}{ending:s} {bytes:u}B' }
+monitor_sysex_start = { text = 'begin' }
+monitor_sysex_continue = { text = 'vervolg' }
+monitor_sysex_end = { text = '/einde' }
+monitor_note_off = { text = 'Kan{channel:u} Uit {note:u} v{velocity:u}' }
+monitor_note_on = { text = 'Kan{channel:u} Aan {note:u} v{velocity:u}' }
+monitor_poly_pressure = { text = 'Kan{channel:u} Poly {note:u} p{pressure:u}' }
+monitor_control = { text = 'Kan{channel:u} CC {controller:u} = {value:u}' }
+monitor_program = { text = 'Kan{channel:u} Programma {program:u}' }
+monitor_pressure = { text = 'Kan{channel:u} Druk {pressure:u}' }
+monitor_bend = { text = 'Kan{channel:u} Bend {value:d}' }
+monitor_time_code = { text = 'Tijdcode' }
+monitor_song_position = { text = 'Nummerpositie' }
+monitor_song_select = { text = 'Nummerkeuze' }
+monitor_tune_request = { text = 'Stemverzoek' }
+monitor_clock = { text = 'Klok' }
+monitor_start = { text = 'Start' }
+monitor_continue = { text = 'Doorgaan' }
+monitor_stop = { text = 'Stop' }
+monitor_active_sensing = { text = 'Activiteitsdetectie' }
+monitor_reset = { text = 'Herstellen' }
+monitor_system_value = { text = '{name:s} {value:u}' }
+cue = { text = 'Inzet' }
+warning = { text = 'Waarschuwing' }
+display_transfer_failed = { text = 'Schermoverdracht mislukt' }
+target_midi_memory_unavailable = { text = 'MIDI-geheugen niet beschikbaar' }
+target_animation_color_memory = { text = 'Animatiekleurgeheugen niet beschikbaar' }
+target_usb_descriptor_failed = { text = 'USB-MIDI-descriptor mislukt' }
+target_auxiliary_memory = { text = 'Hulpschakelaargeheugen niet beschikbaar' }
+target_deployment_recovery = { text = 'Installatieherstel vereist' }
+target_setup_bundle_invalid = { text = 'Ongeldig configuratiepakket' }
+target_global_recovery = { text = 'Herstel globale instellingen vereist' }
+target_song_storage_invalid = { text = 'Ongeldige nummeropslag' }

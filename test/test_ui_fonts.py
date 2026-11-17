@@ -107,7 +107,11 @@ def test_ui_font_header_compiles_and_renders_without_a_driver_sdk(
     data = ui.prepare('AtkinsonNextSemiBold', [12])
     (tmp_path / 'ui_fonts.h').write_text(
         ui.embedded_header(
-            {'AtkinsonNextSemiBold': data, 'Arimo': ui.prepare('Arimo', [12])}
+            {
+                'AtkinsonNextSemiBold': data,
+                'Arimo': ui.prepare('Arimo', [12, 13]),
+                'TamzenBold7x13': status.prepare(),
+            }
         )
     )
     executable = tmp_path / 'font-provider'

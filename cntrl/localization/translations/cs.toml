@@ -1,0 +1,372 @@
+language = 'cs'
+name = 'Čeština'
+
+[messages]
+pages_and_tools = { text = 'Stránky a nástroje' }
+browse = { text = 'procházet' }
+ok = { text = 'OK' }
+back = { text = 'zpět' }
+setups = { text = 'Konfigurace' }
+songs_and_setlists = { text = 'Skladby a seznamy' }
+switches = { text = 'Spínače' }
+language = { text = 'Jazyk' }
+control_action = { text = '{separator:s}{label:s} {action:s}' }
+setlist_number = { text = 'Seznam {number:u}' }
+true_value = { text = 'pravda' }
+false_value = { text = 'nepravda' }
+no_configurable_ports = { text = 'Žádné nastavitelné porty', short = 'Žádné porty' }
+unavailable = { text = 'Nedostupné' }
+driver_failed = { text = 'Chyba ovladače' }
+busy = { text = 'Zaneprázdněno' }
+already_set = { text = 'Již nastaveno' }
+cannot_apply = { text = 'Nelze použít' }
+saving = { text = 'Ukládání' }
+save_failed = { text = 'Uložení selhalo' }
+save_confirm = { text = 'Uložit: potvrdit' }
+load_confirm = { text = 'Načíst: potvrdit' }
+reverse_phrase_confirm = { text = 'Obrátit frázi: potvrdit' }
+toggle_direction_confirm = { text = 'Změnit směr: potvrdit' }
+confirm_clear = { text = 'Potvrdit vymazání?' }
+replace_unsaved_loop = { text = 'Nahradit neuloženou smyčku?' }
+scanning = { text = 'Hledání...' }
+no_midi_files = { text = 'Žádné soubory MIDI' }
+storage_busy = { text = 'Úložiště je zaneprázdněné' }
+stock_firmware_prompt = { text = '{button:s}: původní firmware.' }
+cancel_prompt = { text = '{button:s}: zrušit' }
+notes_off = { text = 'Noty vypnuty' }
+all_off = { text = 'Vše vypnuto' }
+midi_clock = { text = 'MIDI hodiny' }
+clock_tempo = { text = 'Tempo hodin' }
+tap_tempo = { text = 'Vyťukání tempa' }
+status = { text = 'Stav' }
+midi_cable_test = { text = 'Test MIDI kabelu' }
+trs_ports = { text = 'Porty TRS' }
+keyboard = { text = 'Klávesnice' }
+firmware = { text = 'Firmware' }
+external_receiving = { text = 'Externí: příjem' }
+external_waiting = { text = 'Externí: čekání' }
+no_outputs_configured = { text = 'Žádné nastavené výstupy', short = 'Žádné výstupy' }
+outputs_offline = { text = 'Výstupy odpojeny' }
+internal_running = { text = 'Interní: běží' }
+internal_stopped = { text = 'Interní: zastaveno' }
+start_continue_prompt = { text = '{start:s} Spustit {resume:s} Pokračovat' }
+stop_source_prompt = { text = '{stop:s} Stop {source:s} Zdroj' }
+tempo_slot = { text = 'Paměť {slot:u}: {tempo:u} BPM' }
+tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Paměť' }
+clock_late_lost = { text = 'Pozdě {late:u}us Ztráty {lost:u}' }
+output_heading = { text = 'Výst.' }
+input_heading = { text = 'Vst.' }
+input = { text = 'Vstup' }
+no_shortcuts = { text = 'Žádné zkratky' }
+held = { text = 'Drženo' }
+ready = { text = 'Připraveno' }
+select_pair_prompt = { text = '{previous:s}/{next:s}: vybrat' }
+hold_send_prompt = { text = 'Držet {button:s}: odeslat' }
+off = { text = 'Vyp.' }
+on = { text = 'Zap.' }
+midi_type_a = { text = 'MIDI typ A' }
+midi_type_b = { text = 'MIDI typ B' }
+expression = { text = 'Expression' }
+aux_switch = { text = 'Pomocný spínač' }
+jack_mode_prompt = { text = '{jack:s}: zdířka {mode:s}: režim' }
+apply_prompt = { text = '{button:s}: použít' }
+use_stock = { text = 'Použít původní' }
+cycles_patches = { text = 'Cykly:{cycles:u} Zvuky:{patches:u}' }
+clock_value = { text = 'Hodiny:{clock:s}' }
+disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
+disk_unknown = { text = 'Disk:--/--G' }
+uptime_value = { text = ' Běh:{hours:lu}:{minutes:02u}:{seconds:02u}' }
+starts_value = { text = 'Spuštění:{starts:s}' }
+error = { text = 'chyba' }
+tap_value = { text = 'Tempo:{tempo:s}' }
+player_score = { text = 'HRÁČ {player:u} {score:u}' }
+up_down_prompt = { text = '{up:s} Nahoru / {down:s} Dolů' }
+serve_exit_prompt = { text = '{serve:s} Podat/Pauza {exit:s} Konec' }
+paused = { text = 'PAUZA' }
+player_one_wins = { text = 'HRÁČ 1 VYHRÁL' }
+player_two_wins = { text = 'HRÁČ 2 VYHRÁL' }
+press_to_serve = { text = 'STISKNĚTE PRO PODÁNÍ' }
+arpeggiator = { text = 'Arpeggiátor' }
+waiting = { text = 'Čekání' }
+playing = { text = 'Přehrávání' }
+record_armed = { text = 'Záznam připraven' }
+recording = { text = 'Nahrávání' }
+finish_armed = { text = 'Ukončení připraveno' }
+forward = { text = 'Vpřed' }
+reverse = { text = 'Obráceně' }
+played = { text = 'Podle hry' }
+back_and_forth = { text = 'Tam a zpět' }
+random = { text = 'Náhodně' }
+random_walk = { text = 'Náhodná procházka' }
+mod = { text = 'Modulo' }
+shuffle = { text = 'Promíchat' }
+outside_in = { text = 'Zvenku dovnitř' }
+capacity_exceeded = { text = 'Překročena kapacita' }
+clock_unavailable = { text = 'Hodiny nedostupné' }
+output_blocked = { text = 'Výstup blokován' }
+entries_count = { text = 'Položky: {count:u}' }
+record_finish_play_stop_prompt = { text = '{record:s} Záz./Konec {play:s} Hrát/Stop' }
+on_off_prompt = { text = '{button:s} Zap./Vyp.' }
+midi_looper = { text = 'MIDI looper' }
+empty = { text = 'Prázdné' }
+armed = { text = 'Připraveno' }
+closing = { text = 'Uzavírání' }
+overdub_armed = { text = 'Vrstvení připraveno' }
+overdubbing = { text = 'Vrstvení záznamu' }
+preparing = { text = 'Příprava' }
+stopped = { text = 'Zastaveno' }
+launch_armed = { text = 'Spuštění připraveno' }
+undo_pending = { text = 'Čeká vrácení' }
+loading = { text = 'Načítání' }
+memory_unavailable = { text = 'Paměť nedostupná' }
+late_boundary = { text = 'Opožděná hranice' }
+output_retired = { text = 'Výstup vyřazen' }
+file_error = { text = 'Chyba souboru' }
+input_changed = { text = 'Vstup změněn' }
+loop_beats = { text = '{position:llu}.{fraction:02u} / {length:llu}.{end_fraction:02u} dob' }
+loop_events = { text = '{events:u}/{capacity:u} událostí{state:s}{direction:s}' }
+clock_waiting_suffix = { text = ' Čeká na hodiny' }
+unsaved_suffix = { text = ' Neuloženo' }
+backward_suffix = { text = ' Zpět' }
+forward_suffix = { text = ' Vpřed' }
+direction_change_pending = { text = 'Čeká změna směru' }
+record_play_undo_prompt = { text = '{record:s} Záz. {play:s} Hrát {undo:s} Zpět' }
+clear_more_prompt = { text = '{clear:s} Smazat {more:s} Více' }
+combined = { text = 'Sloučené' }
+incoming = { text = 'Příchozí' }
+outgoing = { text = 'Odchozí' }
+unavailable_memory = { text = 'Nedostupné: paměť' }
+monitor_history = { text = '{state:s}{advanced:s} Hist-{history:llu} Ztráty-{dropped:u}' }
+frozen = { text = 'Zmrazeno' }
+live = { text = 'Živě' }
+advanced_suffix = { text = ' podrobně' }
+no_traffic = { text = 'Žádný provoz' }
+no_input = { text = 'Žádný vstup' }
+no_output = { text = 'Žádný výstup' }
+unknown = { text = 'neznámé' }
+running_suffix = { text = ' (průběžný stav)' }
+history_live_prompt = { text = '{previous:s}/{next:s} Historie {live:s} Živě' }
+freeze_prompt = { text = '{button:s} Zmrazit' }
+over = { text = 'PŘETEČENÍ' }
+raw_uncalibrated_sample = { text = 'Surové 8888 Nekalibrováno' }
+select_expression_role = { text = 'Vyberte roli expression' }
+reconnect_heel = { text = 'Znovu připojit: pata' }
+calibrate_prompt = { text = '{button:s}: kalibrovat' }
+unassigned_port = { text = '{port:.24s} Nepřiřazeno' }
+jack_cancel_prompt = { text = '{jack:s}: zdířka {cancel:s}: zrušit' }
+working = { text = 'Zpracování...' }
+no_setups = { text = 'Žádné konfigurace' }
+action = { text = 'Akce' }
+history = { text = 'Historie' }
+edit = { text = 'Upravit' }
+select = { text = 'Vybrat' }
+patch = { text = 'Zvuk' }
+program = { text = 'Program' }
+bank = { text = 'Banka' }
+channel = { text = 'Kanál' }
+volume = { text = 'Hlasitost' }
+pan = { text = 'Panorama' }
+brightness = { text = 'Jas' }
+idle_seconds = { text = 'Nečinnost (s)' }
+usb_midi = { text = 'USB MIDI' }
+none = { text = 'Žádné' }
+value = { text = 'Hodnota' }
+unsaved_edits = { text = 'Neuložené změny' }
+save = { text = 'Uložit' }
+discard = { text = 'Zahodit' }
+cancel = { text = 'Zrušit' }
+please_wait = { text = 'Čekejte prosím' }
+changing_setup = { text = 'Změna konfigurace' }
+operation_failed = { text = 'Operace selhala' }
+revision = { text = 'Revize' }
+current_snapshot = { text = 'Aktuální: {prompt:.54s}' }
+snapshot = { text = 'snímek' }
+compare_current = { text = 'Porovnat s aktuálním' }
+change = { text = 'Změna' }
+changed_patches = { text = 'Změněné zvuky: {count:u}' }
+changed_routes = { text = 'Změněné trasy: {count:u}' }
+settings_change = { text = 'Nastavení: {state:s}' }
+authored_data_change = { text = 'Vlastní data: {state:s}' }
+changed = { text = 'změněno' }
+same = { text = 'stejné' }
+restore = { text = 'Obnovit' }
+back_title = { text = 'Zpět' }
+adjust = { text = 'upravit' }
+setup_menu = { text = 'Menu konfigurace' }
+no_midi_sent = { text = 'MIDI neodesláno' }
+setup = { text = 'Konfigurace' }
+patch_cycle = { text = 'Cyklus zvuků' }
+field = { text = 'Pole' }
+saved = { text = 'Uloženo' }
+song_read_failed = { text = 'Čtení skladby selhalo' }
+song_added = { text = 'Přidáno {name:.57s}' }
+not_saved = { text = 'Neuloženo' }
+saving_wait = { text = 'Ukládání...' }
+current_removed = { text = 'Aktuální (odebráno)' }
+current = { text = 'Aktuální' }
+next = { text = 'Další' }
+add_songs = { text = 'Přidat skladby' }
+end_of_set = { text = 'Konec seznamu' }
+next_patch = { text = 'Další zvuk' }
+perform_setlist = { text = 'Hrát seznam' }
+setlists = { text = 'Seznamy skladeb' }
+songs = { text = 'Skladby' }
+save_as_song = { text = 'Uložit jako skladbu' }
+save_reference = { text = 'Uložit odkaz' }
+add_next = { text = 'Přidat jako další' }
+add_to_end = { text = 'Přidat na konec' }
+remove_from_setlist = { text = 'Odebrat ze seznamu' }
+move = { text = 'Přesunout' }
+rename_setlist = { text = 'Přejmenovat seznam' }
+undo_edit = { text = 'Vrátit úpravu' }
+restart_setlist = { text = 'Začít seznam znovu' }
+done = { text = 'Hotovo' }
+rename = { text = 'Přejmenovat' }
+new_setlist = { text = 'Nový seznam' }
+character_number = { text = 'Znak {character:u}' }
+rename_song = { text = 'Přejmenovat skladbu' }
+use_selected_patch = { text = 'Použít vybraný zvuk' }
+edit_patches = { text = 'Upravit zvuky' }
+patch_position = { text = 'Zvuk {position:u}/{count:lu}' }
+replace_with_selected = { text = 'Nahradit vybraným' }
+insert_selected_after = { text = 'Vložit vybrané za' }
+remove_patch = { text = 'Odebrat zvuk' }
+move_earlier = { text = 'Posunout dříve' }
+move_later = { text = 'Posunout později' }
+save_song_first = { text = 'Nejprve uložte skladbu' }
+patches_count = { text = 'Zvuky: {count:lu}' }
+missing_song = { text = 'Chybějící skladba' }
+entry_action = { text = 'položka' }
+letter_action = { text = 'písmeno' }
+edit_action = { text = 'upravit' }
+position_action = { text = 'poz.' }
+jump_action = { text = 'skok' }
+next_action = { text = 'další' }
+add_action = { text = 'přidat' }
+menu_action = { text = 'menu' }
+done_action = { text = 'hotovo' }
+port_memory_unavailable = { text = 'Paměť portů nedostupná' }
+looper_command_rejected = { text = 'Příkaz MIDI looperu odmítnut' }
+looper_memory_unavailable = { text = 'Paměť MIDI looperu nedostupná' }
+banked_memory_unavailable = { text = 'Paměť banky zvuků nedostupná' }
+monitor_memory_unavailable = { text = 'Paměť MIDI monitoru nedostupná' }
+relay_reset_failed = { text = 'Reset relé selhal' }
+relay_pulse_restore_failed = { text = 'Obnovení impulzu relé selhalo' }
+firmware_switch_failed = { text = 'Přepnutí firmwaru selhalo' }
+language_change_rejected = { text = 'Změna jazyka odmítnuta' }
+global_setting_rejected = { text = 'Globální nastavení odmítnuto' }
+midi_input_memory_unavailable = { text = 'Paměť MIDI vstupu nedostupná' }
+midi_recording_write_failed = { text = 'Zápis MIDI záznamu selhal' }
+midi_cleanup_incomplete = { text = 'Uvolnění MIDI neúplné' }
+bank_page_memory_unavailable = { text = 'Paměť stránky banky nedostupná' }
+switch_state_unknown = { text = 'Neznámý stav spínače' }
+page_return_unavailable = { text = 'Návrat na stránku nedostupný' }
+patch_return_unavailable = { text = 'Návrat ke zvuku nedostupný' }
+patch_return_memory_unavailable = { text = 'Paměť návratu ke zvuku nedostupná' }
+selection_failed = { text = 'Výběr selhal' }
+snapshot_failed = { text = 'Snímek selhal' }
+cannot_compare_revision = { text = 'Nelze porovnat revizi' }
+restore_failed = { text = 'Obnovení selhalo' }
+controller_memory_unavailable = { text = 'Paměť kontroleru nedostupná' }
+relay_setup_failed = { text = 'Nastavení relé selhalo' }
+navigation_memory_unavailable = { text = 'Paměť navigace nedostupná' }
+remote_state_unknown = { text = 'Vzdálený stav neznámý' }
+switch_state_memory_exhausted = { text = 'Paměť stavu spínačů vyčerpána' }
+switch_delivery_memory_unavailable = { text = 'Paměť odesílání spínače nedostupná' }
+switch_ownership_memory_exhausted = { text = 'Paměť vlastnictví spínačů vyčerpána' }
+switches_overlap = { text = 'Spínače si rezervují stejné ovladače MIDI' }
+switch_event_memory_unavailable = { text = 'Paměť událostí spínače nedostupná' }
+switch_action_memory_unavailable = { text = 'Paměť akcí spínače nedostupná' }
+switch_gesture_queue_full = { text = 'Fronta gest spínače plná' }
+switch_action_queue_full = { text = 'Fronta akcí spínače plná' }
+switch_selection_queue_full = { text = 'Fronta výběrů spínače plná' }
+selected_patch_overlap = { text = 'Vybraný zvuk sdílí MIDI ovladače jiného spínače' }
+cannot_select_midi_streams = { text = 'Nelze vybrat MIDI proudy' }
+patch_memory_unavailable = { text = 'Paměť zvuku nedostupná' }
+invalid_patch_root = { text = 'Neplatný kořen zvuku' }
+persistent_switch_context = { text = 'Trvalé spínače nemohou opustit svůj kontext' }
+patch_sources_changed = { text = 'Zdroje zvuku se změnily při přepnutí firmwaru' }
+invalid_patch_continuation = { text = 'Neplatné pokračování zvuku' }
+midi_file_playback_failed = { text = 'Přehrávání MIDI souboru selhalo' }
+banked_patch_no_page = { text = 'Bankový zvuk nemá v konfiguraci stránku' }
+midi_output_unavailable = { text = 'MIDI výstup nedostupný' }
+counter_memory_unavailable = { text = 'Paměť čítače nedostupná' }
+cannot_change_midi_gate = { text = 'Nelze změnit bránu MIDI proudu' }
+relay_operation_failed = { text = 'Operace relé selhala' }
+cannot_install_patch_bindings = { text = 'Nelze nainstalovat vazby zvuku' }
+application_operation_failed = { text = 'Operace aplikace selhala' }
+cannot_open_midi_file = { text = 'Nelze otevřít MIDI soubor' }
+midi_recording_failed = { text = 'Záznam MIDI selhal' }
+invalid_executable_patch = { text = 'Neplatný spustitelný zvuk' }
+invalid_patch_node = { text = 'Neplatný uzel zvuku' }
+patch_reference_cycle = { text = 'Cyklus odkazů na zvuky' }
+patch_traversal_not_prepared = { text = 'Průchod zvukem nebyl připraven' }
+patch_traversal_memory_exhausted = { text = 'Paměť průchodu zvukem vyčerpána' }
+setup_table_changed = { text = 'Tabulka konfigurací změněna; znovu vytvořte zachycené zvuky', short = 'Změna tabulky; přestavte zachycené zvuky' }
+referenced_setup_missing = { text = 'Odkazovaná konfigurace chybí nebo je neplatná' }
+referenced_patch_missing = { text = 'Odkazovaný zvuk neexistuje' }
+invalid_application_operation = { text = 'Neplatná operace aplikace' }
+invalid_selected_patch_binding = { text = 'Neplatná vazba vybraného zvuku' }
+no_patch_selected = { text = 'Není vybrán zvuk k aktivaci' }
+patch_binding_memory_exhausted = { text = 'Paměť vazeb zvuku vyčerpána' }
+patch_ownership_memory_exhausted = { text = 'Paměť vlastnictví zvuku vyčerpána' }
+midi_state_memory_unavailable = { text = 'Paměť stavu MIDI nedostupná' }
+counter_reservation_memory_unavailable = { text = 'Paměť rezervace čítače nedostupná' }
+switch_cleanup_unknown = { text = 'Uvolnění spínače: neznámý vzdálený stav' }
+unknown_title = { text = 'Neznámé' }
+pending = { text = 'Čeká' }
+failed_unknown = { text = 'Chyba / neznámé' }
+unknown_remote_state = { text = 'Neznámý vzdálený stav' }
+partial_match = { text = 'Částečná shoda' }
+other_values = { text = 'Jiné hodnoty' }
+completed_locally = { text = 'Dokončeno místně' }
+closing_prefix = { text = 'Uzavírání: ' }
+shifted_prefix = { text = 'Posunuté | ' }
+abandon = { text = 'opustit' }
+no_switches = { text = 'Žádné spínače' }
+firmware_caption = { text = 'firmware' }
+expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
+no_pedal = { text = 'Žádný pedál' }
+travel_too_short = { text = 'Příliš malý rozsah' }
+raw_uncalibrated = { text = 'Surové {value:d} Nekalibrováno' }
+calibrated_position = { text = '{value:d}% Kalibrováno' }
+expression_step = { text = '{button:s}: {action:s}' }
+heel_down = { text = 'Pata dolů' }
+toe_down = { text = 'Špička dolů' }
+calibrate = { text = 'Kalibrovat' }
+monitor_connected = { text = 'Připojeno / změněno' }
+monitor_disconnected = { text = 'Odpojeno' }
+monitor_incomplete = { text = '{prefix:s}surové / neúplné' }
+monitor_sysex = { text = 'SysEx {part:s}{ending:s} {bytes:u}B' }
+monitor_sysex_start = { text = 'zač.' }
+monitor_sysex_continue = { text = 'pokr.' }
+monitor_sysex_end = { text = '/konec' }
+monitor_note_off = { text = 'Kan{channel:u} Vyp {note:u} v{velocity:u}' }
+monitor_note_on = { text = 'Kan{channel:u} Zap {note:u} v{velocity:u}' }
+monitor_poly_pressure = { text = 'Kan{channel:u} Poly {note:u} p{pressure:u}' }
+monitor_control = { text = 'Kan{channel:u} CC {controller:u} = {value:u}' }
+monitor_program = { text = 'Kan{channel:u} Program {program:u}' }
+monitor_pressure = { text = 'Kan{channel:u} Tlak {pressure:u}' }
+monitor_bend = { text = 'Kan{channel:u} Ohyb {value:d}' }
+monitor_time_code = { text = 'Časový kód' }
+monitor_song_position = { text = 'Pozice skladby' }
+monitor_song_select = { text = 'Výběr skladby' }
+monitor_tune_request = { text = 'Žádost o ladění' }
+monitor_clock = { text = 'Hodiny' }
+monitor_start = { text = 'Spustit' }
+monitor_continue = { text = 'Pokračovat' }
+monitor_stop = { text = 'Stop' }
+monitor_active_sensing = { text = 'Aktivní snímání' }
+monitor_reset = { text = 'Reset' }
+monitor_system_value = { text = '{name:s} {value:u}' }
+cue = { text = 'Pokyn' }
+warning = { text = 'Varování' }
+display_transfer_failed = { text = 'Přenos na displej selhal' }
+target_midi_memory_unavailable = { text = 'Paměť MIDI nedostupná' }
+target_animation_color_memory = { text = 'Paměť barev animace nedostupná' }
+target_usb_descriptor_failed = { text = 'Chyba deskriptoru USB MIDI' }
+target_auxiliary_memory = { text = 'Paměť pomocných spínačů nedostupná' }
+target_deployment_recovery = { text = 'Nutná obnova nasazení' }
+target_setup_bundle_invalid = { text = 'Neplatný balíček konfigurací' }
+target_global_recovery = { text = 'Nutná obnova globálního nastavení' }
+target_song_storage_invalid = { text = 'Neplatné úložiště skladeb' }

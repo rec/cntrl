@@ -1,0 +1,372 @@
+language = 'hu'
+name = 'Magyar'
+
+[messages]
+pages_and_tools = { text = 'Oldalak és eszközök' }
+browse = { text = 'böngészés' }
+ok = { text = 'OK' }
+back = { text = 'vissza' }
+setups = { text = 'Összeállítások' }
+songs_and_setlists = { text = 'Dalok és műsorlisták' }
+switches = { text = 'Kapcsolók' }
+language = { text = 'Nyelv' }
+control_action = { text = '{separator:s}{label:s} {action:s}' }
+setlist_number = { text = 'Műsorlista {number:u}' }
+true_value = { text = 'igaz' }
+false_value = { text = 'hamis' }
+no_configurable_ports = { text = 'Nincs beállítható port', short = 'Nincs port' }
+unavailable = { text = 'Nem érhető el' }
+driver_failed = { text = 'Illesztőprogramhiba' }
+busy = { text = 'Foglalt' }
+already_set = { text = 'Már beállítva' }
+cannot_apply = { text = 'Nem alkalmazható' }
+saving = { text = 'Mentés' }
+save_failed = { text = 'Sikertelen mentés' }
+save_confirm = { text = 'Mentés: megerősítés' }
+load_confirm = { text = 'Betöltés: megerősítés' }
+reverse_phrase_confirm = { text = 'Frázis megfordítása: megerősítés', short = 'Fordítás: megerősítés' }
+toggle_direction_confirm = { text = 'Irányváltás: megerősítés' }
+confirm_clear = { text = 'Biztosan törli?' }
+replace_unsaved_loop = { text = 'Lecseréli a nem mentett hurkot?' }
+scanning = { text = 'Keresés...' }
+no_midi_files = { text = 'Nincs MIDI-fájl' }
+storage_busy = { text = 'A tárhely foglalt' }
+stock_firmware_prompt = { text = '{button:s}: gyári firmware.' }
+cancel_prompt = { text = '{button:s}: mégse' }
+notes_off = { text = 'Hangok kikapcsolva' }
+all_off = { text = 'Minden kikapcsolva' }
+midi_clock = { text = 'MIDI-óra' }
+clock_tempo = { text = 'Óratempó' }
+tap_tempo = { text = 'Tempóbeütés' }
+status = { text = 'Állapot' }
+midi_cable_test = { text = 'MIDI-kábelteszt' }
+trs_ports = { text = 'TRS-portok' }
+keyboard = { text = 'Billentyűzet' }
+firmware = { text = 'Firmware' }
+external_receiving = { text = 'Külső: vétel' }
+external_waiting = { text = 'Külső: várakozás' }
+no_outputs_configured = { text = 'Nincs beállított kimenet', short = 'Nincs kimenet' }
+outputs_offline = { text = 'Kimenetek leválasztva' }
+internal_running = { text = 'Belső: fut' }
+internal_stopped = { text = 'Belső: leállítva' }
+start_continue_prompt = { text = '{start:s} Indítás {resume:s} Folytatás' }
+stop_source_prompt = { text = '{stop:s} Leállítás {source:s} Forrás' }
+tempo_slot = { text = '{slot:u}. memória: {tempo:u} BPM' }
+tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Memória' }
+clock_late_lost = { text = 'Késés {late:u}us Elveszett {lost:u}' }
+output_heading = { text = 'Ki' }
+input_heading = { text = 'Be' }
+input = { text = 'Bemenet' }
+no_shortcuts = { text = 'Nincs gyorsbillentyű' }
+held = { text = 'Nyomva tartva' }
+ready = { text = 'Kész' }
+select_pair_prompt = { text = '{previous:s}/{next:s}: választás' }
+hold_send_prompt = { text = '{button:s} nyomva: küldés' }
+off = { text = 'Ki' }
+on = { text = 'Be' }
+midi_type_a = { text = 'A típusú MIDI' }
+midi_type_b = { text = 'B típusú MIDI' }
+expression = { text = 'Expression' }
+aux_switch = { text = 'Kiegészítő kapcsoló' }
+jack_mode_prompt = { text = '{jack:s}: aljzat {mode:s}: mód' }
+apply_prompt = { text = '{button:s}: alkalmazás' }
+use_stock = { text = 'Gyári' }
+cycles_patches = { text = 'Ciklus:{cycles:u} Hangszín:{patches:u}' }
+clock_value = { text = 'Óra:{clock:s}' }
+disk_value = { text = 'Lemez:{whole:lu}.{fraction:lu}/{total:lu}G' }
+disk_unknown = { text = 'Lemez:--/--G' }
+uptime_value = { text = ' Üzem:{hours:lu}:{minutes:02u}:{seconds:02u}' }
+starts_value = { text = 'Indítások:{starts:s}' }
+error = { text = 'hiba' }
+tap_value = { text = 'Tempó:{tempo:s}' }
+player_score = { text = '{player:u}. JÁTÉKOS {score:u}' }
+up_down_prompt = { text = '{up:s} Fel / {down:s} Le' }
+serve_exit_prompt = { text = '{serve:s} Szerva/Szünet {exit:s} Kilépés' }
+paused = { text = 'SZÜNET' }
+player_one_wins = { text = 'AZ 1. JÁTÉKOS NYERT' }
+player_two_wins = { text = 'A 2. JÁTÉKOS NYERT' }
+press_to_serve = { text = 'NYOMJA MEG A SZERVÁHOZ' }
+arpeggiator = { text = 'Arpeggiátor' }
+waiting = { text = 'Várakozás' }
+playing = { text = 'Lejátszás' }
+record_armed = { text = 'Felvétel élesítve' }
+recording = { text = 'Felvétel' }
+finish_armed = { text = 'Befejezés élesítve' }
+forward = { text = 'Előre' }
+reverse = { text = 'Fordítva' }
+played = { text = 'Játék sorrendjében' }
+back_and_forth = { text = 'Oda-vissza' }
+random = { text = 'Véletlen' }
+random_walk = { text = 'Véletlen bolyongás' }
+mod = { text = 'Modulo' }
+shuffle = { text = 'Keverés' }
+outside_in = { text = 'Kívülről befelé' }
+capacity_exceeded = { text = 'Kapacitás túllépve' }
+clock_unavailable = { text = 'Az óra nem érhető el' }
+output_blocked = { text = 'Kimenet blokkolva' }
+entries_count = { text = 'Bejegyzések: {count:u}' }
+record_finish_play_stop_prompt = { text = '{record:s} Felv./Vége {play:s} Lej./Stop' }
+on_off_prompt = { text = '{button:s} Be/Ki' }
+midi_looper = { text = 'MIDI-looper' }
+empty = { text = 'Üres' }
+armed = { text = 'Élesítve' }
+closing = { text = 'Lezárás' }
+overdub_armed = { text = 'Ráfelvétel élesítve' }
+overdubbing = { text = 'Ráfelvétel' }
+preparing = { text = 'Előkészítés' }
+stopped = { text = 'Leállítva' }
+launch_armed = { text = 'Indítás élesítve' }
+undo_pending = { text = 'Visszavonás függőben' }
+loading = { text = 'Betöltés' }
+memory_unavailable = { text = 'Memória nem érhető el' }
+late_boundary = { text = 'Késői határ' }
+output_retired = { text = 'Kimenet kivonva' }
+file_error = { text = 'Fájlhiba' }
+input_changed = { text = 'Bemenet megváltozott' }
+loop_beats = { text = '{position:llu}.{fraction:02u} / {length:llu}.{end_fraction:02u} ütés' }
+loop_events = { text = '{events:u}/{capacity:u} esemény{state:s}{direction:s}' }
+clock_waiting_suffix = { text = ' Órára vár' }
+unsaved_suffix = { text = ' Nincs mentve' }
+backward_suffix = { text = ' Hátra' }
+forward_suffix = { text = ' Előre' }
+direction_change_pending = { text = 'Irányváltás függőben' }
+record_play_undo_prompt = { text = '{record:s} Felv. {play:s} Lej. {undo:s} Vissza' }
+clear_more_prompt = { text = '{clear:s} Törlés {more:s} További' }
+combined = { text = 'Egyesített' }
+incoming = { text = 'Bejövő' }
+outgoing = { text = 'Kimenő' }
+unavailable_memory = { text = 'Nem elérhető: memória' }
+monitor_history = { text = '{state:s}{advanced:s} Előz.-{history:llu} Elv.-{dropped:u}' }
+frozen = { text = 'Kimerevítve' }
+live = { text = 'Élő' }
+advanced_suffix = { text = ' részletes' }
+no_traffic = { text = 'Nincs forgalom' }
+no_input = { text = 'Nincs bemenet' }
+no_output = { text = 'Nincs kimenet' }
+unknown = { text = 'ismeretlen' }
+running_suffix = { text = ' (futó státusz)' }
+history_live_prompt = { text = '{previous:s}/{next:s} Előzmény {live:s} Élő' }
+freeze_prompt = { text = '{button:s} Kimerevítés' }
+over = { text = 'TÚLCSORDULÁS' }
+raw_uncalibrated_sample = { text = 'Nyers 8888 Kalibrálatlan' }
+select_expression_role = { text = 'Expression szerepének kiválasztása', short = 'Expression szerepe' }
+reconnect_heel = { text = 'Újracsatlakozás: sarok' }
+calibrate_prompt = { text = '{button:s}: kalibrálás' }
+unassigned_port = { text = '{port:.24s} Nincs hozzárendelve' }
+jack_cancel_prompt = { text = '{jack:s}: aljzat {cancel:s}: mégse' }
+working = { text = 'Feldolgozás...' }
+no_setups = { text = 'Nincs összeállítás' }
+action = { text = 'Művelet' }
+history = { text = 'Előzmények' }
+edit = { text = 'Szerkesztés' }
+select = { text = 'Kiválasztás' }
+patch = { text = 'Hangszín' }
+program = { text = 'Program' }
+bank = { text = 'Bank' }
+channel = { text = 'Csatorna' }
+volume = { text = 'Hangerő' }
+pan = { text = 'Panoráma' }
+brightness = { text = 'Fényerő' }
+idle_seconds = { text = 'Tétlenség (mp)' }
+usb_midi = { text = 'USB MIDI' }
+none = { text = 'Nincs' }
+value = { text = 'Érték' }
+unsaved_edits = { text = 'Nem mentett módosítások', short = 'Nem mentett' }
+save = { text = 'Mentés' }
+discard = { text = 'Elvetés' }
+cancel = { text = 'Mégse' }
+please_wait = { text = 'Kérem, várjon' }
+changing_setup = { text = 'Összeállítás váltása' }
+operation_failed = { text = 'Sikertelen művelet' }
+revision = { text = 'Verzió' }
+current_snapshot = { text = 'Jelenlegi: {prompt:.54s}' }
+snapshot = { text = 'pillanatkép' }
+compare_current = { text = 'Összevetés a jelenlegivel' }
+change = { text = 'Változás' }
+changed_patches = { text = 'Módosult hangszínek: {count:u}' }
+changed_routes = { text = 'Módosult útvonalak: {count:u}' }
+settings_change = { text = 'Beállítások: {state:s}' }
+authored_data_change = { text = 'Saját adatok: {state:s}' }
+changed = { text = 'módosult' }
+same = { text = 'azonos' }
+restore = { text = 'Visszaállítás' }
+back_title = { text = 'Vissza' }
+adjust = { text = 'állítás' }
+setup_menu = { text = 'Összeállítás menüje' }
+no_midi_sent = { text = 'Nem ment ki MIDI' }
+setup = { text = 'Összeállítás' }
+patch_cycle = { text = 'Hangszínciklus' }
+field = { text = 'Mező' }
+saved = { text = 'Mentve' }
+song_read_failed = { text = 'Dal olvasása sikertelen' }
+song_added = { text = 'Hozzáadva: {name:.57s}' }
+not_saved = { text = 'Nincs mentve' }
+saving_wait = { text = 'Mentés...' }
+current_removed = { text = 'Jelenlegi (eltávolítva)' }
+current = { text = 'Jelenlegi' }
+next = { text = 'Következő' }
+add_songs = { text = 'Dalok hozzáadása' }
+end_of_set = { text = 'Műsor vége' }
+next_patch = { text = 'Következő hangszín' }
+perform_setlist = { text = 'Műsorlista lejátszása' }
+setlists = { text = 'Műsorlisták' }
+songs = { text = 'Dalok' }
+save_as_song = { text = 'Mentés dalként' }
+save_reference = { text = 'Hivatkozás mentése' }
+add_next = { text = 'Hozzáadás következőként' }
+add_to_end = { text = 'Hozzáadás a végére' }
+remove_from_setlist = { text = 'Eltávolítás a műsorlistából', short = 'Eltávolítás a listából' }
+move = { text = 'Áthelyezés' }
+rename_setlist = { text = 'Műsorlista átnevezése' }
+undo_edit = { text = 'Szerkesztés visszavonása' }
+restart_setlist = { text = 'Műsorlista újrakezdése' }
+done = { text = 'Kész' }
+rename = { text = 'Átnevezés' }
+new_setlist = { text = 'Új műsorlista' }
+character_number = { text = '{character:u}. karakter' }
+rename_song = { text = 'Dal átnevezése' }
+use_selected_patch = { text = 'Kijelölt hangszín használata' }
+edit_patches = { text = 'Hangszínek szerkesztése' }
+patch_position = { text = 'Hangszín {position:u}/{count:lu}' }
+replace_with_selected = { text = 'Csere a kijelöltre' }
+insert_selected_after = { text = 'Kijelölt beszúrása utána' }
+remove_patch = { text = 'Hangszín eltávolítása' }
+move_earlier = { text = 'Mozgatás előrébb' }
+move_later = { text = 'Mozgatás hátrébb' }
+save_song_first = { text = 'Előbb mentsen egy dalt' }
+patches_count = { text = 'Hangszínek: {count:lu}' }
+missing_song = { text = 'Hiányzó dal' }
+entry_action = { text = 'bejegyzés' }
+letter_action = { text = 'betű' }
+edit_action = { text = 'szerkesztés' }
+position_action = { text = 'poz.' }
+jump_action = { text = 'ugrás' }
+next_action = { text = 'következő' }
+add_action = { text = 'hozzáadás' }
+menu_action = { text = 'menü' }
+done_action = { text = 'kész' }
+port_memory_unavailable = { text = 'Portmemória nem érhető el' }
+looper_command_rejected = { text = 'MIDI-looper parancsa elutasítva' }
+looper_memory_unavailable = { text = 'MIDI-looper memóriája nem érhető el' }
+banked_memory_unavailable = { text = 'Hangszínbank memóriája nem érhető el' }
+monitor_memory_unavailable = { text = 'MIDI-monitor memóriája nem érhető el' }
+relay_reset_failed = { text = 'Relé visszaállítása sikertelen' }
+relay_pulse_restore_failed = { text = 'Reléimpulzus visszaállítása sikertelen' }
+firmware_switch_failed = { text = 'Firmware-váltás sikertelen' }
+language_change_rejected = { text = 'Nyelvváltás elutasítva' }
+global_setting_rejected = { text = 'Globális beállítás elutasítva' }
+midi_input_memory_unavailable = { text = 'MIDI-bemenet memóriája nem érhető el' }
+midi_recording_write_failed = { text = 'MIDI-felvétel írása sikertelen' }
+midi_cleanup_incomplete = { text = 'MIDI-felszabadítás hiányos' }
+bank_page_memory_unavailable = { text = 'Bankoldal memóriája nem érhető el' }
+switch_state_unknown = { text = 'Kapcsoló állapota ismeretlen' }
+page_return_unavailable = { text = 'Visszatérés az oldalra nem érhető el' }
+patch_return_unavailable = { text = 'Visszatérés a hangszínhez nem érhető el' }
+patch_return_memory_unavailable = { text = 'Hangszín-visszatérés memóriája nem érhető el' }
+selection_failed = { text = 'Kiválasztás sikertelen' }
+snapshot_failed = { text = 'Pillanatkép sikertelen' }
+cannot_compare_revision = { text = 'A verzió nem hasonlítható össze' }
+restore_failed = { text = 'Visszaállítás sikertelen' }
+controller_memory_unavailable = { text = 'Vezérlő memóriája nem érhető el' }
+relay_setup_failed = { text = 'Relé beállítása sikertelen' }
+navigation_memory_unavailable = { text = 'Navigáció memóriája nem érhető el' }
+remote_state_unknown = { text = 'Távoli állapot ismeretlen' }
+switch_state_memory_exhausted = { text = 'Kapcsolóállapot memóriája elfogyott' }
+switch_delivery_memory_unavailable = { text = 'Kapcsolóküldés memóriája nem érhető el' }
+switch_ownership_memory_exhausted = { text = 'Kapcsolótulajdonlás memóriája elfogyott' }
+switches_overlap = { text = 'A kapcsolók azonos MIDI-vezérlőket foglalnak' }
+switch_event_memory_unavailable = { text = 'Kapcsolóesemény memóriája nem érhető el' }
+switch_action_memory_unavailable = { text = 'Kapcsolóművelet memóriája nem érhető el' }
+switch_gesture_queue_full = { text = 'Kapcsológesztusok sora megtelt' }
+switch_action_queue_full = { text = 'Kapcsolóműveletek sora megtelt' }
+switch_selection_queue_full = { text = 'Kapcsolókiválasztások sora megtelt' }
+selected_patch_overlap = { text = 'A kijelölt hangszín más kapcsoló MIDI-vezérlőit használja', short = 'A hangszín más kapcsoló MIDI-vezérlőit használja' }
+cannot_select_midi_streams = { text = 'MIDI-adatfolyamok nem választhatók ki' }
+patch_memory_unavailable = { text = 'Hangszín memóriája nem érhető el' }
+invalid_patch_root = { text = 'Érvénytelen hangszíngyökér' }
+persistent_switch_context = { text = 'A tartós kapcsolók nem hagyhatják el környezetüket' }
+patch_sources_changed = { text = 'A hangszínforrások firmware-váltás közben módosultak' }
+invalid_patch_continuation = { text = 'Érvénytelen hangszínfolytatás' }
+midi_file_playback_failed = { text = 'MIDI-fájl lejátszása sikertelen' }
+banked_patch_no_page = { text = 'A bankos hangszínnek nincs oldala ebben az összeállításban' }
+midi_output_unavailable = { text = 'MIDI-kimenet nem érhető el' }
+counter_memory_unavailable = { text = 'Számláló memóriája nem érhető el' }
+cannot_change_midi_gate = { text = 'MIDI-adatfolyam kapuja nem változtatható' }
+relay_operation_failed = { text = 'Reléművelet sikertelen' }
+cannot_install_patch_bindings = { text = 'Hangszínkötések nem telepíthetők' }
+application_operation_failed = { text = 'Alkalmazásművelet sikertelen' }
+cannot_open_midi_file = { text = 'MIDI-fájl nem nyitható meg' }
+midi_recording_failed = { text = 'MIDI-felvétel sikertelen' }
+invalid_executable_patch = { text = 'Érvénytelen végrehajtható hangszín' }
+invalid_patch_node = { text = 'Érvénytelen hangszíncsomópont' }
+patch_reference_cycle = { text = 'Körkörös hangszínhivatkozás' }
+patch_traversal_not_prepared = { text = 'Hangszínbejárás nincs előkészítve' }
+patch_traversal_memory_exhausted = { text = 'Hangszínbejárás memóriája elfogyott' }
+setup_table_changed = { text = 'Az összeállítástábla módosult; készítse újra a rögzített hangszíneket', short = 'Tábla módosult; rögzített hangszínek újraépítése' }
+referenced_setup_missing = { text = 'A hivatkozott összeállítás hiányzik vagy érvénytelen' }
+referenced_patch_missing = { text = 'A hivatkozott hangszín nem létezik' }
+invalid_application_operation = { text = 'Érvénytelen alkalmazásművelet' }
+invalid_selected_patch_binding = { text = 'Érvénytelen kijelölt hangszínkötés' }
+no_patch_selected = { text = 'Nincs aktiválandó hangszín kijelölve' }
+patch_binding_memory_exhausted = { text = 'Hangszínkötések memóriája elfogyott' }
+patch_ownership_memory_exhausted = { text = 'Hangszíntulajdonlás memóriája elfogyott' }
+midi_state_memory_unavailable = { text = 'MIDI-állapot memóriája nem érhető el' }
+counter_reservation_memory_unavailable = { text = 'Számlálófoglalás memóriája nem érhető el' }
+switch_cleanup_unknown = { text = 'Kapcsoló felszabadítása: ismeretlen távoli állapot' }
+unknown_title = { text = 'Ismeretlen' }
+pending = { text = 'Függőben' }
+failed_unknown = { text = 'Sikertelen / ismeretlen' }
+unknown_remote_state = { text = 'Ismeretlen távoli állapot' }
+partial_match = { text = 'Részleges egyezés' }
+other_values = { text = 'Más értékek' }
+completed_locally = { text = 'Helyben befejezve' }
+closing_prefix = { text = 'Lezárás: ' }
+shifted_prefix = { text = 'Eltolt | ' }
+abandon = { text = 'feladás' }
+no_switches = { text = 'Nincs kapcsoló' }
+firmware_caption = { text = 'firmware használata' }
+expression_assigned = { text = '{port:.20s} CC {controller:u} Cs {channel:u}' }
+no_pedal = { text = 'Nincs pedál' }
+travel_too_short = { text = 'Túl rövid mozgásút' }
+raw_uncalibrated = { text = 'Nyers {value:d} Kalibrálatlan' }
+calibrated_position = { text = '{value:d}% Kalibrált' }
+expression_step = { text = '{button:s}: {action:s}' }
+heel_down = { text = 'Sarok le' }
+toe_down = { text = 'Lábujj le' }
+calibrate = { text = 'Kalibrálás' }
+monitor_connected = { text = 'Csatlakoztatva / módosult' }
+monitor_disconnected = { text = 'Leválasztva' }
+monitor_incomplete = { text = '{prefix:s}nyers / hiányos' }
+monitor_sysex = { text = 'SysEx {part:s}{ending:s} {bytes:u}B' }
+monitor_sysex_start = { text = 'kezdet' }
+monitor_sysex_continue = { text = 'folyt.' }
+monitor_sysex_end = { text = '/vég' }
+monitor_note_off = { text = 'Cs{channel:u} Ki {note:u} v{velocity:u}' }
+monitor_note_on = { text = 'Cs{channel:u} Be {note:u} v{velocity:u}' }
+monitor_poly_pressure = { text = 'Cs{channel:u} Poli {note:u} p{pressure:u}' }
+monitor_control = { text = 'Cs{channel:u} CC {controller:u} = {value:u}' }
+monitor_program = { text = 'Cs{channel:u} Program {program:u}' }
+monitor_pressure = { text = 'Cs{channel:u} Nyomás {pressure:u}' }
+monitor_bend = { text = 'Cs{channel:u} Hajlítás {value:d}' }
+monitor_time_code = { text = 'Időkód' }
+monitor_song_position = { text = 'Dalpozíció' }
+monitor_song_select = { text = 'Dalválasztás' }
+monitor_tune_request = { text = 'Hangolási kérés' }
+monitor_clock = { text = 'Óra' }
+monitor_start = { text = 'Indítás' }
+monitor_continue = { text = 'Folytatás' }
+monitor_stop = { text = 'Leállítás' }
+monitor_active_sensing = { text = 'Aktív érzékelés' }
+monitor_reset = { text = 'Visszaállítás' }
+monitor_system_value = { text = '{name:s} {value:u}' }
+cue = { text = 'Jelzés' }
+warning = { text = 'Figyelmeztetés' }
+display_transfer_failed = { text = 'Kijelzőátvitel sikertelen' }
+target_midi_memory_unavailable = { text = 'MIDI-memória nem érhető el' }
+target_animation_color_memory = { text = 'Animációszínek memóriája nem érhető el' }
+target_usb_descriptor_failed = { text = 'USB MIDI-leíró hibája' }
+target_auxiliary_memory = { text = 'Kiegészítő kapcsoló memóriája nem érhető el' }
+target_deployment_recovery = { text = 'Telepítés helyreállítása szükséges' }
+target_setup_bundle_invalid = { text = 'Érvénytelen összeállításcsomag' }
+target_global_recovery = { text = 'Globális beállítások helyreállítása szükséges' }
+target_song_storage_invalid = { text = 'Érvénytelen daltárhely' }

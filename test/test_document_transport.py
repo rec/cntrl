@@ -300,8 +300,9 @@ def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
             ).global_settings() == global_overlay.Overlay(values={0: 80, 1: 30})
 
 
+@pytest.mark.parametrize('locale', ['fr', 'pt-PT'])
 def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
-    bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, locale: str
 ) -> None:
     from cntrl.patch_switcher import global_config
 
@@ -312,7 +313,7 @@ def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
     inputs = data_files.Sources(
         document=[f'Show={source}'], target=[str(ROOT / 'firmware/test/target.json')]
     )
-    pack = (ROOT / 'cntrl/localization/packs/fr.bin').read_bytes()
+    pack = (ROOT / f'cntrl/localization/packs/{locale}.bin').read_bytes()
     device = tmp_path / 'device'
     device.mkdir()
     with NativePeer([str(bundle_peer), str(device)]) as port:
@@ -322,14 +323,15 @@ def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             original = client.download('Show')
-            client.copy_language('fr', pack)
-            client.set_language('fr')
-            assert client.global_settings().language == 'fr'
-            assert client.download_language('fr') == pack
+            client.copy_language(locale, pack)
+            client.set_language(locale)
+            assert client.global_settings().language == locale
+            assert client.download_language(locale) == pack
             recovered = cli.download_files(client, ['Show'])
-            assert recovered[Path('languages/fr.bin')] == pack
+            assert recovered[Path(f'languages/{locale}.bin')] == pack
             assert any(
-                p.parts[0] == 'sessions' and p.parts[-2:] == ('languages', 'fr.bin')
+                p.parts[0] == 'sessions'
+                and p.parts[-2:] == ('languages', f'{locale}.bin')
                 for p in recovered
             )
             report = setup_sync.preview(inputs, client)
@@ -342,14 +344,14 @@ def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
             ].path == ['language']
             setup_sync.apply_review(report)
             overlay = tmp_path / 'device-globals.toml'
-            assert device_globals.load(overlay.read_bytes()).language == 'fr'
+            assert device_globals.load(overlay.read_bytes()).language == locale
             assert source.read_text() == '# A language-independent setup\n'
             assert client.download('Show') == original
-            (device / 'cntrl/languages/fr.bin').unlink()
+            (device / f'cntrl/languages/{locale}.bin').unlink()
             recovered = cli.download_files(client, ['Show'])
-            assert Path('languages/fr.bin') not in recovered
+            assert Path(f'languages/{locale}.bin') not in recovered
             assert all(
-                device_globals.load(d).language == 'fr'
+                device_globals.load(d).language == locale
                 for p, d in recovered.items()
                 if p.name == 'device-globals.toml'
             )
@@ -357,17 +359,17 @@ def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
             setup_sync.apply_review(setup_sync.preview(inputs, client))
             assert device_globals.load(overlay.read_bytes()).language is None
             assert client.download('Show') == original
-            client.copy_language('fr', pack)
-            client.set_language('fr')
-    (device / 'cntrl/languages/fr.bin').unlink()
+            client.copy_language(locale, pack)
+            client.set_language(locale)
+    (device / f'cntrl/languages/{locale}.bin').unlink()
     with (
         NativePeer([str(bundle_peer), str(device)]) as port,
         transport.SerialConnection(Path(port)) as connection,
     ):
         client = transport.SetupClient(connection)
-        assert client.global_settings().language == 'fr'
-        client.copy_language('fr', pack)
-        client.set_language('fr')
+        assert client.global_settings().language == locale
+        client.copy_language(locale, pack)
+        client.set_language(locale)
         client.clear_language()
         assert client.global_settings().language is None
 

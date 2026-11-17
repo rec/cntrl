@@ -1,4 +1,4 @@
-"""Validate bilingual UI messages and prepare firmware catalogues."""
+"""Validate reference messages and per-locale UI translations."""
 
 import re
 import struct
@@ -7,7 +7,6 @@ from string import Formatter
 from zlib import crc32
 
 import tomlkit
-import tyro
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from ..fonts import assets
@@ -15,12 +14,10 @@ from ..fonts import assets
 
 class Message(BaseModel, frozen=True):
     en: str
-    fr: str
     context: str
     short_en: str = ''
-    short_fr: str = ''
 
-    @field_validator('en', 'fr', 'context')
+    @field_validator('en', 'context')
     @classmethod
     def nonempty(cls, value: str) -> str:
         if not value:
@@ -32,11 +29,10 @@ class Message(BaseModel, frozen=True):
         expected = dict(fields(self.en))
         if len(expected) != len(fields(self.en)):
             raise ValueError('duplicate reference placeholder')
-        for text in (self.fr, self.short_en, self.short_fr):
-            if text and dict(fields(text)) != expected:
-                raise ValueError('translation placeholders differ from reference')
-            if text and len(fields(text)) != len(expected):
-                raise ValueError('duplicate translation placeholder')
+        if self.short_en and dict(fields(self.short_en)) != expected:
+            raise ValueError('short caption placeholders differ from reference')
+        if self.short_en and len(fields(self.short_en)) != len(expected):
+            raise ValueError('duplicate short caption placeholder')
         return self
 
     model_config = ConfigDict(extra='forbid')
@@ -55,8 +51,78 @@ class Catalogue(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Generate(BaseModel, frozen=True):
-    header: Path = Path('firmware/include/cntrl/ui/messages.h')
+class TranslationText(BaseModel, frozen=True):
+    text: str
+    short: str = ''
+
+    @field_validator('text')
+    @classmethod
+    def nonempty(cls, value: str) -> str:
+        if not value:
+            raise ValueError('translation text must not be empty')
+        return value
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class Translation(BaseModel, frozen=True):
+    language: str
+    name: str
+    messages: dict[str, TranslationText]
+
+    @field_validator('language')
+    @classmethod
+    def valid_language(cls, value: str) -> str:
+        if (
+            not re.fullmatch('[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*', value)
+            or len(value) > 15
+        ):
+            raise ValueError('invalid locale tag')
+        return value
+
+    @field_validator('name')
+    @classmethod
+    def valid_name(cls, value: str) -> str:
+        if not value or '\0' in value or len(value.encode()) > 31:
+            raise ValueError('native language name must occupy 1 to 31 UTF-8 bytes')
+        return value
+
+    @model_validator(mode='after')
+    def complete(self) -> 'Translation':
+        reference = load()
+        if self.messages.keys() != reference.messages.keys():
+            missing = sorted(reference.messages.keys() - self.messages.keys())
+            extra = sorted(self.messages.keys() - reference.messages.keys())
+            raise ValueError(
+                f'{self.language}: missing messages {missing}; unknown messages {extra}'
+            )
+        for name, message in self.messages.items():
+            expected = fields(reference.messages[name].en)
+            if (
+                not expected
+                and len(message.text.encode()) > 63
+                and (not message.short or len(message.short.encode()) > 63)
+            ):
+                raise ValueError(
+                    f'{self.language}.{name}: static caption needs '
+                    'a short form within 63 UTF-8 bytes'
+                )
+            for text in (message.text, message.short):
+                if not text:
+                    continue
+                actual = fields(text)
+                if dict(actual) != dict(expected) or len(actual) != len(expected):
+                    raise ValueError(
+                        f'{self.language}.{name}: translation placeholders '
+                        'differ from reference'
+                    )
+                if len(text.encode()) > 511:
+                    raise ValueError(
+                        f'{self.language}.{name}: translation exceeds 511 bytes'
+                    )
+        return self
+
+    model_config = ConfigDict(extra='forbid')
 
 
 class Pack(BaseModel, frozen=True):
@@ -147,6 +213,34 @@ def load() -> Catalogue:
     )
 
 
+def locales() -> list[str]:
+    return [
+        'en',
+        *sorted(
+            p.stem for p in Path(__file__).with_name('translations').glob('*.toml')
+        ),
+    ]
+
+
+def translation(locale: str) -> Translation:
+    if locale == 'en':
+        return Translation(
+            language='en',
+            name='English',
+            messages={
+                n: TranslationText(text=m.en, short=m.short_en)
+                for n, m in load().messages.items()
+            },
+        )
+    if locale not in locales():
+        raise ValueError(f'unsupported UI language {locale!r}')
+    source = Path(__file__).with_name('translations') / f'{locale}.toml'
+    result = Translation.model_validate(tomlkit.parse(source.read_text()).unwrap())
+    if result.language != locale:
+        raise ValueError('translation identity differs from its filename')
+    return result
+
+
 def schema(catalogue: Catalogue) -> int:
     value = '\n'.join(
         n + ':' + ','.join(k + ':' + s for k, s in fields(m.en))
@@ -156,17 +250,17 @@ def schema(catalogue: Catalogue) -> int:
 
 
 def compile_catalogue(locale: str, font: bytes) -> bytes:
-    if locale not in ('en', 'fr'):
-        raise ValueError(f'unsupported UI language {locale!r}')
+    translated = translation(locale)
     if font and not font.startswith(b'CFN2'):
         raise ValueError('language pack requires a CFN2 font')
     catalogue = load()
     table = bytearray()
     strings = bytearray()
     base = HEADER.size + len(catalogue.messages) * 8
-    for message in catalogue.messages.values():
-        text = getattr(message, locale)
-        short = getattr(message, f'short_{locale}')
+    for name in catalogue.messages:
+        message = translated.messages[name]
+        text = message.text
+        short = message.short
         first = base + len(strings)
         strings.extend(text.encode() + b'\0')
         second = base + len(strings) if short else 0
@@ -181,7 +275,7 @@ def compile_catalogue(locale: str, font: bytes) -> bytes:
         font_offset + len(font),
         0,
         locale.encode(),
-        {'en': 'English', 'fr': 'Français'}[locale].encode(),
+        translated.name.encode(),
         schema(catalogue),
         font_offset,
         len(font),
@@ -199,7 +293,7 @@ def literal(text: str) -> str:
 def generate(path: Path) -> None:
     catalogue = load()
     lines = [
-        '// Generated by python -m cntrl.localization.catalogue. Do not edit.',
+        '// Generated by cntrl language build. Do not edit.',
         '#pragma once',
         '#include "message_format.h"',
         'namespace cntrl::ui::i18n {',
@@ -306,12 +400,4 @@ def generate(path: Path) -> None:
     path.write_text('\n'.join(lines) + '\n')
 
 
-def main() -> None:
-    generate(tyro.cli(Generate).header)
-
-
 HEADER = struct.Struct('<4sHHII16s32sIII')
-
-
-if __name__ == '__main__':
-    main()
