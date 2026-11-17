@@ -405,8 +405,8 @@ public:
         }
         if (page_ == Page::firmware) {
             const unsigned label_height = std::min(title * 2, (viewport_.height - 2 * pad) / 4);
-            line(pane, 1, i18n::text(i18n::Message::use_stock), viewport_.height - pad - label_height * 2, label_height, 0, true);
-            line(pane, 2, i18n::text(i18n::Message::firmware_caption), viewport_.height - pad - label_height, label_height, 0, true);
+            line(pane, 1, i18n::text(i18n::Message::use_stock), viewport_.height - pad - label_height * 2, label_height, pane.graphics.font, true);
+            line(pane, 2, i18n::text(i18n::Message::firmware_caption), viewport_.height - pad - label_height, label_height, pane.graphics.font, true);
             return pane;
         }
         if (page_ == Page::tap) {
@@ -520,9 +520,13 @@ private:
         const char *hint = window == 0 ? prompt(i18n::Message::up_down_prompt, controls_.previous_section, controls_.previous)
             : window == 2 ? prompt(i18n::Message::up_down_prompt, controls_.back, controls_.confirm)
             : prompt(i18n::Message::serve_exit_prompt, controls_.next, controls_.next_section);
-        line(pane, 1, hint, vertical(115), vertical(11), font, true, nullptr, 0, 0, 10);
+        if (pong.engaged) line(pane, 1, hint, vertical(115), vertical(11), font, true, nullptr, 0, 0, 10);
         if (window == 1 && pong.state != Pong::State::playing) {
             const char *message = pong.state == Pong::State::paused ? i18n::text(i18n::Message::paused) : pong.state == Pong::State::finished ? (pong.left_score == 11 ? i18n::text(i18n::Message::player_one_wins) : i18n::text(i18n::Message::player_two_wins)) : i18n::text(i18n::Message::press_to_serve);
+            if (!pong.engaged) {
+                i18n::format(prompt_, sizeof(prompt_), i18n::Message::control_action, "", label(controls_.next), i18n::text(i18n::Message::press_to_serve));
+                message = prompt_;
+            }
             line(pane, 2, message, vertical(45), vertical(15), font, true, nullptr, 0, 0, 12);
         }
     }
@@ -597,7 +601,8 @@ private:
             const auto *endpoint = outputs_.route(e.route);
             const char *alias = endpoint ? endpoint->name : i18n::text(i18n::Message::unknown);
             const char *direction_label = e.direction == Direction::incoming ? "I" : e.direction == Direction::outgoing ? "O" : "-";
-            std::snprintf(text, sizeof(text), "%llu.%03u %s%s %.12s%s/%u", (unsigned long long)(e.time / 1000000), unsigned(e.time / 1000 % 1000), direction_label,
+            char seconds[21]; *std::to_chars(seconds, seconds + 20, e.time / 1000000).ptr = 0;
+            std::snprintf(text, sizeof(text), "%s.%03u %s%s %.12s%s/%u", seconds, unsigned(e.time / 1000 % 1000), direction_label,
                 e.flags & midi::Monitor::diagnostic ? "/test" : "", alias, std::strlen(alias) > 12 ? "~" : "", unsigned(e.cable));
             const unsigned first = 2 + i * 3, y = body_top + i * 3 * row_height;
             line(pane, first, text, y, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
@@ -670,16 +675,21 @@ private:
 #endif
         auto &l = pane.lines[index];
         utf8::copy(l.text, sizeof(l.text), text);
+        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::tap;
+        if (ordinary) {
+            face = 17;
+            maximum_size = std::min(maximum_size, index ? 12u : 16u);
+        } else if (!preview && page_ == Page::status && index) face = status_face;
         if (!preview && i18n::translated_ui && face != status_face) face = localized_face;
         l.graphics = pane.graphics; l.graphics.font = uint8_t(face);
         l.graphics.asset = preview ? 0 : i18n::identity(text);
         int left = 0, top = 0, width = 0, ink_height = 0;
         const char *fitting = sample ? sample : l.text;
         if (!right_edge) right_edge = viewport_.width;
-        unsigned minimum_size = 0;
-        for (unsigned size = 8; size <= 96; ++size)
+        unsigned minimum_size = ordinary && index ? std::min(12u, maximum_size) : 0;
+        if (!minimum_size) for (unsigned size = 8; size <= 96; ++size)
             if (fonts_.supports(face, size)) { minimum_size = size; break; }
-        for (unsigned size = 96; size >= 8; --size) {
+        for (unsigned size = std::max(minimum_size, std::min(96u, maximum_size)); size >= 8; --size) {
             // A fixed bitmap face may start above the requested size ceiling.
             if ((size > maximum_size && size != minimum_size) || !fonts_.supports(face, size)) continue;
             auto measure = [&](const char *value) {
@@ -732,6 +742,9 @@ private:
 #endif
     void prepare_expression_layout() {
         using R = cntrl::PageSettings;
+        // Configure may run while another page is selected.
+        const auto previous_page = page_;
+        page_ = Page::expression;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
@@ -759,6 +772,7 @@ private:
         }
         line(pane, 4, prompt(i18n::Message::jack_cancel_prompt, controls_.previous, controls_.next), vertical(105), vertical(18), font, true);
         std::copy_n(pane.lines, 5, expression_layout_);
+        page_ = previous_page;
     }
     TextLine expression_layout_[5]; // Heading, three live values, and control hint.
     char expression_lines_[3][40] = {};

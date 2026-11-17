@@ -183,6 +183,25 @@ static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Doc
     const auto none = host.pages_.view(0, 0, {});
     assert(std::strstr(none.lines[1].text, "No configurable") != nullptr && !none.lines[3].text[0] && !none.lines[4].text[0]);
 }
+static void pong_keeps_navigation_until_serve(cntrl::Documents &documents, cntrl::ui::Application &app) {
+    PagePlatform platform; PageFonts fonts; PageDisplay display;
+    uint16_t work[64 * 64] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64);
+    constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"},{3,"D"},{4,"E"},{5,"F"}};
+    cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0,1,2,3,4,5,5,3,2,bindings,6});
+    auto view = host.pages_.save_view(); view.page = cntrl::ui::Pages::Page::pong; host.pages_.restore_view(view);
+    host.enter_page();
+    assert(!host.looper_button(3, true) && !host.looper_button(5, true));
+    assert(!host.looper_button(3, false) && !host.looper_button(5, false));
+    assert(host.looper_button(1, true));
+    assert(host.pages_.pong.state == cntrl::ui::Pong::State::playing);
+    assert(host.looper_button(3, true) && host.looper_button(5, true));
+    const float left = host.pages_.pong.left, right = host.pages_.pong.right;
+    host.pages_.pong.advance(20);
+    assert(host.pages_.pong.left < left && host.pages_.pong.right < right);
+    host.leave_page(); host.enter_page();
+    assert(!host.looper_button(3, true) && !host.looper_button(5, true));
+}
 static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents &documents, cntrl::ui::Application &app) {
     PagePlatform platform; PageFonts fonts; PageDisplay display;
     uint16_t work[64 * 64] = {};
@@ -618,6 +637,7 @@ int main(int argc, char **argv) {
         assert(!source.activate(missing, {}, false));
         firmware_handoff_is_durable_and_corrupt_return_is_rejected(hardware, documents, app, songs, source);
         page_ports_follow_declared_sparse_ids_and_supported_modes(documents, app);
+        pong_keeps_navigation_until_serve(documents, app);
         monitor_page_controls_and_capture_follow_lifecycle(documents, app);
         looper_page_confirms_clear_but_explicit_bindings_execute_immediately(documents, app);
         assert(app.state(1, 91, hardware) && hardware.brightness == 91);

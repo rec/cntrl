@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 #include <type_traits>
+#include <charconv>
+#include <algorithm>
 #include "utf8.h"
 
 #if defined(__IMXRT1062__)
@@ -62,6 +64,48 @@ inline bool validate(const Definition &definition, const char *text) {
     return seen == ((1u << definition.count) - 1);
 }
 #ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(i18n_format_integer)
+#endif
+// The target's nano printf omits long-long integer conversions.
+inline bool format_integer(char *destination, unsigned capacity, const Argument &argument, const char *spec) {
+    if (!capacity || (argument.kind != Argument::Kind::signed_number && argument.kind != Argument::Kind::unsigned_number)) return false;
+    const char *p = spec;
+    bool left = false, plus = false, space = false, alternate = false, zero = false;
+    for (; *p && std::strchr("-+ #0", *p); ++p) {
+        left |= *p == '-'; plus |= *p == '+'; space |= *p == ' '; alternate |= *p == '#'; zero |= *p == '0';
+    }
+    unsigned width = 0, precision = 0; bool explicit_precision = false;
+    while (*p >= '0' && *p <= '9') width = std::min(capacity + 32, width * 10 + unsigned(*p++ - '0'));
+    if (*p == '.') {
+        explicit_precision = true; ++p;
+        while (*p >= '0' && *p <= '9') precision = std::min(capacity + 32, precision * 10 + unsigned(*p++ - '0'));
+    }
+    const char type = spec[std::strlen(spec) - 1];
+    const bool signed_type = type == 'd' || type == 'i', hex = type == 'x' || type == 'X';
+    const uint64_t raw = argument.kind == Argument::Kind::signed_number ? uint64_t(argument.signed_number) : argument.unsigned_number;
+    const bool negative = signed_type && int64_t(raw) < 0;
+    const uint64_t magnitude = negative ? uint64_t(0) - raw : raw;
+    char digits[32]; const auto converted = std::to_chars(digits, digits + sizeof(digits), magnitude, hex ? 16 : 10);
+    const unsigned length = explicit_precision && !precision && !magnitude ? 0 : unsigned(converted.ptr - digits);
+    if (type == 'X') for (unsigned i = 0; i < length; ++i) if (digits[i] >= 'a' && digits[i] <= 'f') digits[i] -= 'a' - 'A';
+    char prefix[3]; unsigned prefix_length = 0;
+    if (negative) prefix[prefix_length++] = '-';
+    else if (signed_type && (plus || space)) prefix[prefix_length++] = plus ? '+' : ' ';
+    if (alternate && hex && magnitude) { prefix[prefix_length++] = '0'; prefix[prefix_length++] = type; }
+    unsigned zeros = precision > length ? precision - length : 0;
+    const unsigned used = prefix_length + zeros + length, padding = width > used ? width - used : 0;
+    const unsigned spaces = zero && !left && !explicit_precision ? 0 : padding;
+    if (zero && !left && !explicit_precision) zeros += padding;
+    unsigned offset = 0;
+    auto append = [&](char value) { if (offset + 1 < capacity) destination[offset++] = value; };
+    if (!left) for (unsigned i = 0; i < spaces; ++i) append(' ');
+    for (unsigned i = 0; i < prefix_length; ++i) append(prefix[i]);
+    for (unsigned i = 0; i < zeros; ++i) append('0');
+    for (unsigned i = 0; i < length; ++i) append(digits[i]);
+    if (left) for (unsigned i = 0; i < spaces; ++i) append(' ');
+    destination[offset] = 0; return true;
+}
+#ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_render)
 #endif
 inline bool render(char *destination, unsigned capacity, const Definition &definition,
@@ -83,19 +127,12 @@ inline bool render(char *destination, unsigned capacity, const Definition &defin
         const unsigned n = unsigned(std::strlen(spec)); const char type = spec[n - 1];
         char result[96], pattern[32] = "%"; unsigned offset = 1;
         for (unsigned i = 0; i + 1 < n; ++i) if (spec[i] != 'l') pattern[offset++] = spec[i];
-        if (type != 's') { pattern[offset++] = 'l'; pattern[offset++] = 'l'; }
         pattern[offset++] = type; pattern[offset] = 0;
         if (type == 's') {
             if (argument.kind != Argument::Kind::text) return false;
             std::snprintf(result, sizeof(result), pattern, argument.text);
             utf8::copy(result, sizeof(result), result);
-        } else if (type == 'd' || type == 'i') {
-            if (argument.kind != Argument::Kind::signed_number && argument.kind != Argument::Kind::unsigned_number) return false;
-            std::snprintf(result, sizeof(result), pattern, (long long)(argument.kind == Argument::Kind::signed_number ? argument.signed_number : int64_t(argument.unsigned_number)));
-        } else {
-            if (argument.kind != Argument::Kind::signed_number && argument.kind != Argument::Kind::unsigned_number) return false;
-            std::snprintf(result, sizeof(result), pattern, (unsigned long long)(argument.kind == Argument::Kind::unsigned_number ? argument.unsigned_number : uint64_t(argument.signed_number)));
-        }
+        } else if (!format_integer(result, sizeof(result), argument, spec)) return false;
         append(result, unsigned(std::strlen(result))); p = end + 1;
     }
     // The formatter's byte bound must not leave a partial UTF-8 character.

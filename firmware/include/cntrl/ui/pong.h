@@ -11,6 +11,7 @@ struct Pong {
     float left = 69.5f, right = 69.5f, x = 240, y = 69.5f, vx = 150, vy = 45;
     uint16_t left_score = 0, right_score = 0;
     State state = State::ready;
+    bool engaged = false;
 
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pong_button)
@@ -20,6 +21,7 @@ struct Pong {
             const auto bit = uint8_t(1u << unsigned(input));
             if (pressed) held_ |= bit; else held_ &= uint8_t(~bit);
         } else if (pressed) {
+            engaged = true;
             if (state == State::playing) state = State::paused;
             else {
                 if (state == State::finished) { left_score = right_score = 0; round(1); }
@@ -29,6 +31,7 @@ struct Pong {
     }
     void clock(uint32_t now) { updated_ = now; }
     void leave() {
+        engaged = false;
         held_ = 0;
         if (state == State::playing) state = State::paused;
     }

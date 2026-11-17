@@ -168,7 +168,7 @@ struct Fonts : cntrl::ui::Fonts {
 void test_window_layouts_history_and_bounded_refresh() {
     constexpr cntrl::midi::OutputConnection endpoints[] = {{"keys", "Keys", 0, cntrl::midi::OutputTransport::physical, true}};
     Monitor monitor; assert(monitor.open(0)); receive(monitor, {0xc0,127});
-    monitor.packet(Direction::outgoing, 0, 0, {11,{0xb0,7,80}}, 20, true);
+    monitor.packet(Direction::outgoing, 0, 0, {11,{0xb0,7,80}}, 1234567, true);
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160,128,0,0});
     cntrl::PageSettings settings; settings.words[cntrl::PageSettings::title_height] = 8; pages.configure(settings);
     pages.outputs({endpoints, 1}); pages.monitor = &monitor;
@@ -184,6 +184,7 @@ void test_window_layouts_history_and_bounded_refresh() {
             for (const auto &line : pane.lines) { text += line.text; text += '\n'; }
             assert((text.find("Program 128") != std::string::npos) == (combined || window == 0));
             assert((text.find("CC 7 = 80") != std::string::npos) == (combined || window + 1 == count));
+            assert((text.find("1.234") != std::string::npos) == (combined || window + 1 == count));
             assert(!pages.due(199) && pages.due(200));
         }
     }

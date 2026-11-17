@@ -3,11 +3,40 @@
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from cntrl.maker.morningstar.mc import build_font_metrics
 from cntrl.maker.morningstar.mc.export_fonts import EmbeddedRaster
 from cntrl.maker.morningstar.mc.native_raster import NativeRaster
 from cntrl.patch_switcher import compiler, display, graphics, models
+from scripts import native_tests
+
+
+def test_utility_pages_render_with_the_embedded_fonts(tmp_path: Path) -> None:
+    root = Path(__file__).parents[1] / 'firmware'
+    executable = tmp_path / 'utility-pages'
+    native_tests.compile_native(
+        [
+            'c++',
+            '-std=c++17',
+            '-O1',
+            '-Wall',
+            '-Wextra',
+            '-Werror',
+            f'-I{Path(__file__).parents[5] / "firmware/include"}',
+            str(root / 'test_utility_pages.cpp'),
+            '-o',
+            str(executable),
+        ],
+        check=True,
+    )
+    ppm = tmp_path / 'utilities.ppm'
+    result = native_tests.run_native([str(executable), str(ppm)], check=False)
+    image = tmp_path / 'utilities.png'
+    with Image.open(ppm) as pixels:
+        pixels.save(image)
+    print(f'Utility-page rendering: {image}')
+    assert result.returncode == 0
 
 
 def test_page_lines_select_different_native_font_families() -> None:

@@ -55,6 +55,15 @@ def test_pong_spans_screens_and_releases_navigation_controls(
             for _ in range(9):
                 press('f')
             advance(500000)
+        press('f')  # Before serving, F must browse past Pong.
+        advance(500000)
+        assert not any(ball_on(s) for s in session.frames)
+        session.button('d', True)
+        advance(60000)
+        press('f')  # D + F must browse backwards to the unstarted game.
+        session.button('d', False)
+        advance(500000)
+        assert ball_on('lcd-2')
         cli.save(session, tmp_path / 'ready')
         image = Image.new('RGB', (480, 128))
         for i in range(3):

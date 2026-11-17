@@ -74,6 +74,7 @@ public:
 #endif
     bool looper_button(unsigned input, bool pressed) {
         if (pages_.page() == Pages::Page::pong) {
+            if (!pages_.pong.engaged && input != controls_.next) return false;
             if (input == controls_.next_section) { if (pressed) browse_page(false); return true; }
             if (input == controls_.previous_section) pages_.pong.button(Pong::Button::left_up, pressed);
             else if (input == controls_.previous) pages_.pong.button(Pong::Button::left_down, pressed);
