@@ -1,7 +1,7 @@
 format = 1
 controller = "mc6-pro"
-source_commit = "43362c97d270e2057f9baa951ae764326445beda"
-inputs_sha256 = "4fb9d288d55a2e74bc313b7bae090c8a1698cb60f8d4852de6fde5eb88bfe7fc"
+source_commit = "71599366773047329e16b4a27dafbcf094427c54"
+inputs_sha256 = "7d054afeb472c5852f0bd4f56b7382344b04d2aeeadef0c3d3957126bdceab57"
 application = "application.bin"
 application_origin = 1611661312
 application_entry = 1611665408
@@ -18,8 +18,8 @@ url = "https://github.com/Morningstar-Engineering/MC6-PRO-MIDI-Controller/releas
 sha256 = "228d73e768fad383bc205c8fc1ef52f3a49de08c754aca11d4a069ca1aab9fc8"
 
 [files]
-"application.bin" = "a471cf5821a35b8b0585c1cd3864ea95319e60fabc42f538fb653426168c2a63"
-"compiler-options.toml" = "65be614eb03c67399f539b9883aa6e86d5372361ca1d953d8690afe1eb5c2f6e"
+"application.bin" = "9e0973a1be5460795e237877f77802de298dbb6940dfc1186e94545d112779a9"
+"compiler-options.toml" = "5a777a8a3ce91de43a12e9c2da42f94c06b74b1f84556368d113a985ea45f68c"
 "fonts/Arimo-LICENSE.txt" = "c46fda6859efb80c0a3c1faa868908a3d2fcb26eb7fd9602d73bebeec21bca3a"
 "fonts/Arimo.cfont" = "3742cff8e8a3c2fa9ba95e3e3f512601ffb80daf251f49926f80232c254dedfd"
 "fonts/ArimoBold-LICENSE.txt" = "c46fda6859efb80c0a3c1faa868908a3d2fcb26eb7fd9602d73bebeec21bca3a"
