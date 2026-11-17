@@ -47,6 +47,12 @@ The adapter's export command regenerates the portable files and flash header;
 the target build calls it automatically. See the adapter font documentation
 for its commands. The firmware and emulator use the same portable resources.
 
+Always use FreeType's automatic hinting when generating shared outline-font
+assets, including performance fonts. Do not disable it or force native-only
+hinting. Font sizing must measure the same automatically hinted glyphs that are
+exported. The packaged-font tests compare their pixels, bearings and advances
+with automatically hinted source glyphs.
+
 ## Arimo UI trial
 
 `Arimo` and `ArimoBold` use the unmodified Regular and Bold TrueType outlines from
@@ -60,14 +66,8 @@ d7a8b187cf8444d4cfee102e8eae9e3043682fd5106d5d33ed677fe268a0e2ba  Arimo-Bold.ttf
 ```
 
 The portable monochrome UI asset is generated at sizes 8 through 32 and
-40, 48, 60, 72 and 96, using Arimo's native TrueType hinting rather than
-FreeType's automatic hinter. To regenerate the controller's assets from the
-repository root:
-
-```sh
-python -m cntrl.fonts.ui --name Arimo --hinting native --output cntrl/maker/morningstar/mc/font_sources/Arimo.cfont
-python -m cntrl.fonts.ui --name ArimoBold --hinting native --output cntrl/maker/morningstar/mc/font_sources/ArimoBold.cfont
-```
+40, 48, 60, 72 and 96. The shared asset exporter now uses FreeType's automatic
+hinting for Arimo along with the other outline families.
 
 Arimo Regular and Bold were previewed through the shared `page_settings.status_font`
 setting before selecting Tamzen Bold 7x13.

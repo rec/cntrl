@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
     assert(renderer.prepare(0, false)); renderer.finish(true);
     cntrl::Pane pane; pane.three_bands = true;
     pane.graphics.background = 0; pane.graphics.foreground = 0xffff;
-    const char *captions[] = {"BASS", "Slap", "gyp"};
+    const char *captions[] = {"synth", "Igneous", "TalkBox!"};
     for (unsigned i = 0; i < 3; ++i) {
         auto &line = pane.lines[i];
         line.graphics = pane.graphics;

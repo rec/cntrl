@@ -89,7 +89,7 @@ def export(options: FontExport) -> dict[str, str]:
                 prepared_runs=False,
             )
         else:
-            outline = Outline(bundled_sources()[name], hinting='native')
+            outline = Outline(bundled_sources()[name], hinting='auto')
             characters = ui.supported_characters(outline)
             sizes = (
                 SIZES
@@ -102,7 +102,7 @@ def export(options: FontExport) -> dict[str, str]:
                 name,
                 sizes,
                 characters=characters,
-                hinting='auto' if name == 'AtkinsonNextSemiBold' else 'native',
+                hinting='auto',
                 horizontal_scale=1.5 if name == 'StillTime' else 1.0,
             )
         resource = f'{name}.cfont'

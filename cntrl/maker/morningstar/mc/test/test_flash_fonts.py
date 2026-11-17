@@ -7,6 +7,7 @@ import pytest
 from PIL import Image
 
 from cntrl.fonts import assets, ui
+from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.catalogue import FONT_IDS, UI_FONTS, bundled_sources
 from cntrl.fonts.characters import printable_characters
 from cntrl.fonts.outline import Outline
@@ -22,14 +23,34 @@ def target() -> models.Target:
 
 
 @pytest.mark.parametrize('name', list(bundled_sources()))
-def test_exported_fonts_supply_every_supported_comparison_character(name: str) -> None:
-    data = (ROOT / 'font_sources' / f'{name}.cfont').read_bytes()
+def test_exported_fonts_preserve_automatically_hinted_supported_characters(
+    name: str,
+) -> None:
+    path = ROOT / 'font_sources' / f'{name}.cfont'
+    data = path.read_bytes()
     face = assets.decode(data, name, 0)
-    outline = Outline(bundled_sources()[name])
+    bitmap = BitmapRaster(path)
+    outline = Outline(
+        bundled_sources()[name],
+        horizontal_scale=1.5 if name == 'StillTime' else 1.0,
+        hinting='auto',
+    )
     expected = {
         c for c in printable_characters() if outline.face.get_char_index(ord(c))
     }
     assert all(set(m.characters) == expected for m in face.sizes.values())
+    for size in face.sizes:
+        for char in expected:
+            source = outline.glyph(size, outline.face.get_char_index(ord(char)))
+            actual = bitmap.glyph(size, ord(char))
+            assert (
+                actual.pixels,
+                actual.width,
+                actual.height,
+                actual.left,
+                actual.top,
+            ) == (source.pixels, source.width, source.height, source.left, source.top)
+            assert actual.advance == round(source.advance)
 
 
 @pytest.mark.parametrize('name', [n for n in FONT_IDS if n not in UI_FONTS])
@@ -41,7 +62,7 @@ def test_performance_fonts_use_the_largest_comfortable_single_size(
     size, metrics = next(iter(face.sizes.items()))
     assert metrics.line_height <= (target.display_height // 3) * 2 // 3
     if name in bundled_sources():
-        outline = Outline(bundled_sources()[name], hinting='native')
+        outline = Outline(bundled_sources()[name], hinting='auto')
         characters = ui.supported_characters(outline)
         glyphs = [
             outline.glyph(size + 1, outline.face.get_char_index(ord(c)))
