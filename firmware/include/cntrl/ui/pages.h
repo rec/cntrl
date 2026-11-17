@@ -510,7 +510,7 @@ private:
         };
         rectangle(0, 7, pong.left - Pong::paddle_height / 2, 4, Pong::paddle_height, 0x07ff);
         rectangle(1, 469, pong.right - Pong::paddle_height / 2, 4, Pong::paddle_height, 0xf81f);
-        rectangle(2, 240, Pong::top, 1, Pong::bottom - Pong::top, 0x4208, true);
+        rectangle(2, 240, Pong::top, 1, Pong::bottom - Pong::top, 0x8410);
         rectangle(3, pong.x - 2, pong.y - 2, 4, 4, 0xffe0);
         const unsigned font = settings_[cntrl::PageSettings::status_font];
         char score[32];
@@ -520,13 +520,9 @@ private:
         const char *hint = window == 0 ? prompt(i18n::Message::up_down_prompt, controls_.previous_section, controls_.previous)
             : window == 2 ? prompt(i18n::Message::up_down_prompt, controls_.back, controls_.confirm)
             : prompt(i18n::Message::serve_exit_prompt, controls_.next, controls_.next_section);
-        if (pong.engaged) line(pane, 1, hint, vertical(115), vertical(11), font, true, nullptr, 0, 0, 10);
-        if (window == 1 && pong.state != Pong::State::playing) {
-            const char *message = pong.state == Pong::State::paused ? i18n::text(i18n::Message::paused) : pong.state == Pong::State::finished ? (pong.left_score == 11 ? i18n::text(i18n::Message::player_one_wins) : i18n::text(i18n::Message::player_two_wins)) : i18n::text(i18n::Message::press_to_serve);
-            if (!pong.engaged) {
-                i18n::format(prompt_, sizeof(prompt_), i18n::Message::control_action, "", label(controls_.next), i18n::text(i18n::Message::press_to_serve));
-                message = prompt_;
-            }
+        if (pong.engaged || window == 1) line(pane, 1, hint, vertical(115), vertical(11), font, true, nullptr, 0, 0, 10);
+        if (window == 1 && pong.engaged && pong.state != Pong::State::playing) {
+            const char *message = pong.state == Pong::State::paused ? i18n::text(i18n::Message::paused) : (pong.left_score == 11 ? i18n::text(i18n::Message::player_one_wins) : i18n::text(i18n::Message::player_two_wins));
             line(pane, 2, message, vertical(45), vertical(15), font, true, nullptr, 0, 0, 12);
         }
     }
@@ -675,7 +671,7 @@ private:
 #endif
         auto &l = pane.lines[index];
         utf8::copy(l.text, sizeof(l.text), text);
-        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::tap;
+        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::tap && page_ != Page::pong;
         if (ordinary) {
             face = 17;
             maximum_size = std::min(maximum_size, index ? 12u : 16u);

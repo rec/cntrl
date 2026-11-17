@@ -65,7 +65,17 @@ int main(int argc, char **argv) {
         }
         if (types[page] == Page::status) for (unsigned i = 1; i < cntrl::max_lines; ++i)
             if (pane.lines[i].text[0]) assert(pane.lines[i].graphics.font == cntrl::ui::status_face && pane.lines[i].graphics.size == cntrl::ui::status_size);
-        if (types[page] != Page::status && types[page] != Page::cable)
+        if (types[page] == Page::pong) {
+            for (const auto &line : pane.lines) if (line.text[0])
+                assert(line.graphics.font == settings.words[R::status_font]);
+            const auto middle = pages.view(0, 0, status, {}, cntrl::Panic::Status::ready, 1, 3);
+            const auto &legend = middle.lines[1];
+            assert(std::strstr(legend.text, "Exit"));
+            const auto bounds = fonts.bounds(legend.graphics.font, legend.graphics.size, legend.graphics.asset, legend.text);
+            assert(legend.x + bounds.left >= 0 && legend.x + bounds.left + bounds.width <= 160);
+            assert(legend.y + bounds.top >= 115 && legend.y + bounds.top + bounds.height <= 128);
+        }
+        if (types[page] != Page::status && types[page] != Page::cable && types[page] != Page::pong)
             for (unsigned i = 1; i < cntrl::max_lines; ++i) if (pane.lines[i].text[0])
                 assert(pane.lines[i].graphics.font == 17 && pane.lines[i].graphics.size == 12);
         if (!lines) { std::cerr << "page " << page << ": no text\n"; valid = false; }
