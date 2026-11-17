@@ -374,9 +374,10 @@ enum class Message : uint16_t {
     language_scroll,
     language_select,
     language_next_page,
+    panic,
 };
-inline constexpr unsigned message_count = 371;
-inline constexpr uint32_t catalogue_schema = 0x8fefa62du;
+inline constexpr unsigned message_count = 372;
+inline constexpr uint32_t catalogue_schema = 0xfcde1e89u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char pages_and_tools_text[] CNTRL_I18N_STORAGE = "Pages and tools";
@@ -1585,6 +1586,8 @@ inline const char language_next_page_button_spec[] CNTRL_I18N_STORAGE = "s";
 inline const Field language_next_page_fields[] CNTRL_I18N_STORAGE = {
     {language_next_page_button_name, language_next_page_button_spec},
 };
+inline const char panic_text[] CNTRL_I18N_STORAGE = "Panic";
+inline const char panic_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
     {browse_text, browse_short, nullptr, 0},
@@ -1957,6 +1960,7 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {language_scroll_text, language_scroll_short, language_scroll_fields, 2},
     {language_select_text, language_select_short, language_select_fields, 1},
     {language_next_page_text, language_next_page_short, language_next_page_fields, 1},
+    {panic_text, panic_short, nullptr, 0},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

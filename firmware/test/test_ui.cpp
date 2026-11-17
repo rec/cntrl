@@ -267,7 +267,7 @@ static void pong_motion_only_changes_intersecting_windows() {
         assert((a.x != b.x || a.y != b.y || a.width != b.width || a.height != b.height) == (i == 1));
     }
 }
-static void panic_is_quiet_until_pressed_and_shows_only_its_current_phase() {
+static void panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed() {
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
     cntrl::PageSettings settings;
     settings.words[cntrl::PageSettings::background] = 0xff90;
@@ -278,14 +278,15 @@ static void panic_is_quiet_until_pressed_and_shows_only_its_current_phase() {
     auto layout = page_fixture(1, {unsigned(cntrl::ui::Pages::Page::panic)}, {{0}});
     pages.layout({layout.data()});
     const auto idle = pages.view(0, 0, {});
-    assert(!idle.heading_band && idle.graphics.background == 0xff90);
-    for (const auto &line : idle.lines) assert(!line.text[0]);
+    assert(idle.heading_band && idle.graphics.background == 0xff90);
+    assert(!std::strcmp(idle.lines[0].text, "Panic"));
+    for (unsigned i = 1; i < cntrl::max_lines; ++i) assert(!idle.lines[i].text[0]);
     const auto &button = idle.circles[0];
     assert(button.diameter == 25 && button.annulus == 5);
     assert(button.x == 140 && button.y == 108 && button.color == 0x6000 && !button.ring_color);
     for (auto phase : {cntrl::Panic::Status::all_off, cntrl::Panic::Status::notes_off}) {
         const auto pressed = pages.view(1, 1000, {}, {}, phase);
-        assert(!pressed.heading_band && !pressed.lines[0].text[0]);
+        assert(pressed.heading_band && !std::strcmp(pressed.lines[0].text, "Panic"));
         assert(!std::strcmp(pressed.lines[1].text, phase == cntrl::Panic::Status::all_off ? "All off" : "Notes off"));
         assert(pressed.lines[1].graphics.foreground == 0xf800 && pressed.circles[0].color == 0xf800);
         const auto bounds = fonts.bounds(pressed.lines[1].graphics.font, pressed.lines[1].graphics.size, 0, pressed.lines[1].text);
@@ -294,7 +295,8 @@ static void panic_is_quiet_until_pressed_and_shows_only_its_current_phase() {
         for (unsigned i = 2; i < cntrl::max_lines; ++i) assert(!pressed.lines[i].text[0]);
     }
     const auto released = pages.view(2, 2000, {}, {}, cntrl::Panic::Status::ready);
-    for (const auto &line : released.lines) assert(!line.text[0]);
+    assert(released.heading_band && !std::strcmp(released.lines[0].text, "Panic"));
+    for (unsigned i = 1; i < cntrl::max_lines; ++i) assert(!released.lines[i].text[0]);
     assert(released.circles[0].color == button.color && released.circles[0].diameter == 25);
 }
 static void cable_test_preserves_its_original_font_and_indicators() {
@@ -660,7 +662,7 @@ static void expression_reuses_its_initial_layout_and_redraws_only_changed_conten
 
 int main() {
     cable_test_preserves_its_original_font_and_indicators();
-    panic_is_quiet_until_pressed_and_shows_only_its_current_phase();
+    panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed();
     cntrl::memory_budget = 192 * 1024;
     moving_shapes_repaint_only_their_damage_and_restore_overlaps();
     pong_motion_only_changes_intersecting_windows();

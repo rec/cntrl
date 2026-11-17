@@ -2,6 +2,7 @@ language = 'ro'
 name = 'Română'
 
 [messages]
+panic = { text = 'Panică' }
 language_scroll = { text = '{up:s} și {down:s} pentru derulare' }
 language_select = { text = '{button:s} pentru selectare' }
 language_next_page = { text = '{button:s} pentru pagina următoare' }

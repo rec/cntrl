@@ -1,7 +1,7 @@
 # Panic page
 
-Panic follows MIDI Cable Test in the page cycle. On entry it has no text or
-heading, just a dark-red circular indicator at the bottom right. Its center is
+Panic follows MIDI Cable Test in the page cycle. Its caption remains visible
+above a dark-red circular indicator at the bottom right. Its center is
 25 pixels in diameter; it uses the shared annulus width and ring color (normally
 a five-pixel black ring), page padding and background. The other two displays
 stay in place.
@@ -10,7 +10,7 @@ Press C to start and temporarily set the screens to maximum brightness. Release
 C to restore the brightness that was active on entry. While C is held, the
 indicator is bright red and centered red text shows the current phase:
 `All off` for controller resets or `Notes off` for the individual Note Off sweep.
-Release immediately removes all text and returns the indicator to dark red,
+Release immediately removes the phase text and returns the indicator to dark red,
 including while the initial reset pass is still finishing. Browsing the page
 sends nothing and leaves normal MIDI routing unchanged.
 

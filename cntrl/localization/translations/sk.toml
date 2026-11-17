@@ -2,6 +2,7 @@ language = 'sk'
 name = 'Slovenčina'
 
 [messages]
+panic = { text = 'Panika' }
 language_scroll = { text = '{up:s} a {down:s}: posun' }
 language_select = { text = '{button:s}: vybrať' }
 language_next_page = { text = '{button:s}: ďalšia stránka' }

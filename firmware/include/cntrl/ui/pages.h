@@ -307,6 +307,7 @@ public:
             return pane;
         }
         if (page_ == Page::panic) {
+            page_heading(pane, i18n::text(i18n::Message::panic));
             constexpr uint16_t red = 0xf800, dark_red = 0x6000;
             const bool pressed = panic != cntrl::Panic::Status::ready;
             auto &button = pane.circles[0];

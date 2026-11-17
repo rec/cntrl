@@ -2,6 +2,7 @@ language = 'es'
 name = 'Español'
 
 [messages]
+panic = { text = 'Pánico' }
 language_scroll = { text = '{up:s} y {down:s} para desplazar' }
 language_select = { text = '{button:s} para seleccionar' }
 language_next_page = { text = '{button:s} para la página siguiente' }

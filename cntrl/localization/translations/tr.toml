@@ -2,6 +2,7 @@ language = 'tr'
 name = 'Türkçe'
 
 [messages]
+panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} ve {down:s} ile kaydırın' }
 language_select = { text = '{button:s} ile seçin' }
 language_next_page = { text = '{button:s} ile sonraki sayfa' }

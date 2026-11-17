@@ -1481,3 +1481,7 @@ context = 'Language page selection control'
 en = '{button:s} for next page'
 context = 'Language page navigation control'
 
+[messages.panic]
+en = 'Panic'
+context = 'Panic page heading'
+

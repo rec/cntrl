@@ -2,6 +2,7 @@ language = 'hu'
 name = 'Magyar'
 
 [messages]
+panic = { text = 'Pánik' }
 language_scroll = { text = '{up:s} és {down:s}: görgetés' }
 language_select = { text = '{button:s}: kiválasztás' }
 language_next_page = { text = '{button:s}: következő oldal' }

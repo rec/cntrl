@@ -1,6 +1,9 @@
 language = 'fr'
 name = 'Français'
 
+[messages.panic]
+text = 'Panique'
+
 [messages.language_scroll]
 text = '{up:s} et {down:s} pour défiler'
 

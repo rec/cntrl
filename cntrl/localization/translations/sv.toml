@@ -2,6 +2,7 @@ language = 'sv'
 name = 'Svenska'
 
 [messages]
+panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} och {down:s} för att bläddra' }
 language_select = { text = '{button:s} för att välja' }
 language_next_page = { text = '{button:s} för nästa sida' }
