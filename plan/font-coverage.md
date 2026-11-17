@@ -40,7 +40,7 @@ ASCII-only bitmap assets omit all 44 non-ASCII base extensions.
 Tamzen's selected UI asset includes every supported drawable comparison character;
 the other comparison samples retain their original ASCII-only purpose.
 
-Inspected working tree based on revision: `43362c97d270e2057f9baa951ae764326445beda`.
+Inspected working tree based on revision: `1e271a595cfe9d4b7553a884c13d5e30e90ef79d`.
 
 ## Outline sources
 
