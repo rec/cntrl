@@ -1469,3 +1469,15 @@ context = 'Device preferences recovery failure'
 en = 'Song storage invalid'
 context = 'Device storage initialization failure'
 
+[messages.language_scroll]
+en = '{up:s} and {down:s} to scroll'
+context = 'Language page scroll controls'
+
+[messages.language_select]
+en = '{button:s} to select'
+context = 'Language page selection control'
+
+[messages.language_next_page]
+en = '{button:s} for next page'
+context = 'Language page navigation control'
+

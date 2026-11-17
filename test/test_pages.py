@@ -38,8 +38,26 @@ def test_pong_reserves_three_windows_and_round_trips() -> None:
     assert compiler.compile_show(exported, {}, [], target()) == data
 
 
+@pytest.mark.parametrize('count', [2, 3])
+def test_language_page_reserves_two_windows_and_round_trips(count: int) -> None:
+    device = target().model_copy(update={'displays': target().displays[:count]})
+    source = {'pages': {'languages': {'type': 'language'}}, 'fill_in_styles': False}
+    data = compiler.compile_show(source, {}, [], device)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['pages']['languages']['min_windows'] == 2
+    assert compiler.compile_show(exported, {}, [], device) == data
+
+
+def test_language_page_requires_two_displays() -> None:
+    device = target().model_copy(update={'displays': target().displays[:1]})
+    with pytest.raises(compiler.CompilationError, match='target display count'):
+        compiler.compile_show(
+            {'pages': {'languages': {'type': 'language'}}}, {}, [], device
+        )
+
+
 @pytest.mark.parametrize('count', [1, 2, 3])
-def test_default_tools_end_with_pong_and_none_when_three_displays_fit(
+def test_default_tools_include_only_pages_that_fit_the_displays(
     count: int,
 ) -> None:
     device = target().model_copy(update={'displays': target().displays[:count]})
@@ -48,11 +66,18 @@ def test_default_tools_end_with_pong_and_none_when_three_displays_fit(
     pages = exported['pages']
     assert pages['patch-switcher']['min_windows'] == 0
     if count == 3:
-        assert exported['regions']['tools']['pages'][-2:] == ['pong', 'None']
+        assert exported['regions']['tools']['pages'][-3:] == [
+            'pong',
+            'language',
+            'None',
+        ]
         assert pages['pong']['min_windows'] == 3
     else:
         assert 'pong' not in pages
         assert 'None' in pages
+    assert ('language' in pages) == (count >= 2)
+    if count >= 2:
+        assert pages['language']['min_windows'] == 2
     assert compiler.compile_show(exported, {}, [], device) == data
 
 
@@ -150,7 +175,7 @@ def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
     [
         t
         for t in layout.PAGE_TYPES
-        if t not in ('None', 'patch-switcher', 'banked', 'pong')
+        if t not in ('None', 'patch-switcher', 'banked', 'pong', 'language')
     ],
 )
 @pytest.mark.parametrize('count', [0, 1, 3])

@@ -48,12 +48,20 @@ public:
             if (!installed_.resize(index + 1)) break;
             installed_[index] = info;
         }
+        // Directory order varies by filesystem; keep recovery English first.
+        for (unsigned i = 2; i < installed_.size(); ++i) {
+            const auto value = installed_[i]; unsigned j = i;
+            while (j > 1 && std::strcmp(installed_[j - 1].tag, value.tag) > 0) {
+                installed_[j] = installed_[j - 1]; --j;
+            }
+            installed_[j] = value;
+        }
         return installed_.size();
     }
     const char *tag(unsigned index) const { return index < installed_.size() ? installed_[index].tag : "en"; }
     const char *name(unsigned index) const {
         if (index >= installed_.size()) return "English";
-        return index && !active_.size ? installed_[index].tag : installed_[index].name;
+        return installed_[index].name;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(languages_prepare)

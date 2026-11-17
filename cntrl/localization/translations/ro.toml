@@ -2,6 +2,9 @@ language = 'ro'
 name = 'Română'
 
 [messages]
+language_scroll = { text = '{up:s} și {down:s} pentru derulare' }
+language_select = { text = '{button:s} pentru selectare' }
+language_next_page = { text = '{button:s} pentru pagina următoare' }
 pages_and_tools = { text = 'Pagini și instrumente' }
 browse = { text = 'răsfoire' }
 ok = { text = 'OK' }

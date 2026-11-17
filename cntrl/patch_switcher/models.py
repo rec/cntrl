@@ -1119,6 +1119,7 @@ class Page(BaseModel, frozen=True):
         'arpeggiator',
         'banked',
         'pong',
+        'language',
         'None',
     ] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
@@ -1136,6 +1137,8 @@ class Page(BaseModel, frozen=True):
             object.__setattr__(self, 'min_windows', 0)
         elif self.type in ('banked', 'pong'):
             object.__setattr__(self, 'min_windows', 3)
+        elif self.type == 'language':
+            object.__setattr__(self, 'min_windows', 2)
         elif self.type != 'patch-switcher':
             object.__setattr__(self, 'min_windows', 1)
         return self
@@ -1146,7 +1149,14 @@ class Page(BaseModel, frozen=True):
         return (
             available
             if self.type == 'patch-switcher'
-            else min(3 if self.type in ('banked', 'pong') else 1, available)
+            else min(
+                3
+                if self.type in ('banked', 'pong')
+                else 2
+                if self.type == 'language'
+                else 1,
+                available,
+            )
         )
 
     model_config = ConfigDict(extra='forbid')
@@ -1257,6 +1267,7 @@ class Setup(BaseModel, frozen=True):
                     'keyboard',
                     'tap-tempo',
                     'pong',
+                    'language',
                     'None',
                 )
             },

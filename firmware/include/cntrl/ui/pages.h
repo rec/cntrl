@@ -13,6 +13,7 @@
 #include "display.h"
 #include "controls.h"
 #include "pong.h"
+#include "flags.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -68,9 +69,9 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, confirm_firmware };
+    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language, confirm_firmware };
     struct ViewState {
-        unsigned index = 0, jack = 0, shortcut = 0;
+        unsigned index = 0, jack = 0, shortcut = 0, language = 0;
         Page page = Page::none;
         midi::TrsMode candidate = midi::TrsMode::off, active_port = midi::TrsMode::off;
         const char *port_message = nullptr, *port_name = i18n::definitions[unsigned(i18n::Message::no_configurable_ports)].text;
@@ -82,6 +83,7 @@ public:
     ViewState save_view() const {
         ViewState view;
         view.index = index_; view.page = page_; view.jack = jack; view.candidate = candidate;
+        view.language = language;
         view.shortcut = shortcut; view.shortcut_held = shortcut_held; view.active_port = active_port_;
         view.port_message = port_message_; view.port_name = port_name_; view.port_available = port_available_;
         view.dirty = dirty_; view.flashing = flashing_; view.held = held_; view.refreshed = refreshed_;
@@ -92,6 +94,7 @@ public:
     }
     void restore_view(const ViewState &view) {
         index_ = view.index; page_ = view.page; jack = view.jack; candidate = view.candidate;
+        language = view.language;
         shortcut = view.shortcut; shortcut_held = view.shortcut_held; active_port_ = view.active_port;
         port_message_ = view.port_message; port_name_ = view.port_name; port_available_ = view.port_available;
         dirty_ = view.dirty; flashing_ = view.flashing; held_ = view.held; refreshed_ = view.refreshed;
@@ -102,6 +105,8 @@ public:
     midi::MidiArpeggiator *arpeggiator = nullptr;
     Pong pong;
     midi::Monitor *monitor = nullptr;
+    Hardware *languages = nullptr;
+    unsigned language = 0;
     midi::MidiLooper *looper = nullptr;
     char looper_prompt[96] = {};
     void layout(cntrl::PageLayout layout) {
@@ -282,6 +287,7 @@ public:
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
+        if (page_ == Page::language) { language_view(pane, window); return pane; }
         if (page_ == Page::pong) { pong_view(pane, window); return pane; }
         if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
         if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
@@ -718,6 +724,60 @@ private:
         }
     }
 
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_language_view)
+#endif
+    void language_view(cntrl::Pane &pane, unsigned window) {
+        if (!languages) return;
+        if (window) {
+            page_heading(pane, i18n::text(i18n::Message::language));
+            const unsigned inputs[] = {controls_.next, controls_.next_section, controls_.confirm, controls_.back};
+            char labels[4][32];
+            for (unsigned i = 0; i < 4; ++i) {
+                utf8::copy(labels[i], sizeof(labels[i]), languages->input_label(inputs[i]));
+                // Letter switch IDs use the physical uppercase legend.
+                if (labels[i][0] >= 'a' && labels[i][0] <= 'z' && !labels[i][1]) labels[i][0] -= 'a' - 'A';
+            }
+            char text[64];
+            i18n::format(text, sizeof(text), i18n::Message::language_scroll,
+                labels[0], labels[1]);
+            line(pane, 1, text, vertical(40), vertical(20), 17, true, nullptr, 0, 0, 12);
+            i18n::format(text, sizeof(text), i18n::Message::language_select, labels[2]);
+            line(pane, 2, text, vertical(70), vertical(20), 17, true, nullptr, 0, 0, 12);
+            i18n::format(text, sizeof(text), i18n::Message::language_next_page, labels[3]);
+            line(pane, 3, text, vertical(100), vertical(20), 17, true, nullptr, 0, 0, 12);
+            return;
+        }
+        const unsigned count = languages->language_count();
+        if (!count) return;
+        language = std::min(language, count - 1);
+        const unsigned pad = pane.graphics.pad;
+        const unsigned row_height = std::max(16u, viewport_.height * 20 / 128);
+        const unsigned available = viewport_.height > 2 * pad ? viewport_.height - 2 * pad : 0;
+        const unsigned rows = std::min({count, max_lines, available / row_height});
+        const unsigned first = language > rows / 2 ? std::min(language - rows / 2, count - rows) : 0;
+        for (unsigned row = 0; row < rows; ++row) {
+            const unsigned item = first + row;
+            auto &text = pane.lines[row]; text.graphics = pane.graphics;
+            utf8::copy(text.text, sizeof(text.text), languages->language_name(item));
+            text.graphics.font = 17;
+            text.graphics.flag = flags::identifier(languages->language_tag(item));
+            text.x = uint16_t(pad + flags::width + 4);
+            unsigned size = 12;
+            for (; size > 8; --size) if (fonts_.bounds(17, size, 0, text.text).width <= int(viewport_.width - pad - text.x)) break;
+            text.graphics.size = uint8_t(size); text.graphics.line_height = uint16_t(row_height);
+            const auto bounds = fonts_.bounds(17, size, 0, text.text);
+            text.y = int16_t(pad + row * row_height + (int(row_height) - bounds.height) / 2 - bounds.top);
+            if (item == language) {
+                text.graphics.foreground = 0xffff; text.graphics.background = 0;
+                pane.rectangles[0] = {int16_t(pad), int16_t(pad + row * row_height), uint16_t(viewport_.width - 2 * pad), uint16_t(row_height), 0, false};
+            }
+        }
+    }
+
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_heading)
+#endif
     void page_heading(cntrl::Pane &pane, const char *text) {
         using R = cntrl::PageSettings;
         const unsigned pad = pane.graphics.pad;

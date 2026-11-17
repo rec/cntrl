@@ -2,6 +2,9 @@ language = 'fi'
 name = 'Suomi'
 
 [messages]
+language_scroll = { text = '{up:s} ja {down:s}: selaa' }
+language_select = { text = '{button:s}: valitse' }
+language_next_page = { text = '{button:s}: seuraava sivu' }
 pages_and_tools = { text = 'Sivut ja työkalut' }
 browse = { text = 'selaa' }
 ok = { text = 'OK' }

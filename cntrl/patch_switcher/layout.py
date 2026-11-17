@@ -229,7 +229,13 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             'min_windows': data[cursor + 33],
             'give_up_windows': [windows[i] for i in priority],
         }
-        if pages[name]['type'] not in ('None', 'patch-switcher', 'banked', 'pong'):
+        if pages[name]['type'] not in (
+            'None',
+            'patch-switcher',
+            'banked',
+            'pong',
+            'language',
+        ):
             # Stored minima remain readable, but tool pages now have fixed width.
             pages[name]['min_windows'] = 1
             canonical[cursor - offset + 33] = 1
@@ -287,4 +293,5 @@ PAGE_TYPES = (
     'arpeggiator',
     'banked',
     'pong',
+    'language',
 )

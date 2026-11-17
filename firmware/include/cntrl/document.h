@@ -198,8 +198,9 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!PageLayout::valid_name(p) || p[32] > PageLayout::pong
-                || p[33] > windows || (p[32] == 10 && p[33])) return false;
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::language
+                || p[33] > windows || (p[32] == 10 && p[33])
+                || (p[32] == PageLayout::language && p[33] != 2)) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < windows; ++j) {
                 if (p[34 + j] >= windows || seen[p[34 + j]]) return false;

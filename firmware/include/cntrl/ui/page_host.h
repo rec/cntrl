@@ -17,7 +17,7 @@ public:
     PageHost(Platform &platform, Application &application, Documents &documents,
              Display &display, const Fonts &fonts, Renderer &renderer, Controls controls)
         : pages_(fonts, display.viewport(display.count() - 1)), platform_(platform),
-          application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) { pages_.controls(controls); pages_.monitor = &platform_.midi_monitor(); }
+          application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) { pages_.controls(controls); pages_.monitor = &platform_.midi_monitor(); pages_.languages = &platform_; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_prepare_display)
 #endif
@@ -73,6 +73,21 @@ public:
     CNTRL_FLASH_ROUTINE(looper_button)
 #endif
     bool looper_button(unsigned input, bool pressed) {
+        if (pages_.page() == Pages::Page::language) {
+            if (input != controls_.next && input != controls_.next_section && input != controls_.confirm && input != controls_.back) return false;
+            if (!pressed) return true;
+            if (input == controls_.back) {
+                browse_page(controls_.reverse_page < 64 && (application_.held & (uint64_t(1) << controls_.reverse_page)));
+                return true;
+            }
+            const unsigned count = platform_.language_count();
+            if (count) {
+                pages_.language = std::min(pages_.language, count - 1);
+                if (input == controls_.confirm) platform_.request_language(platform_.language_tag(pages_.language));
+                else pages_.language = (pages_.language + count + (input == controls_.next ? -1 : 1)) % count;
+            }
+            pages_.revisit(); return true;
+        }
         if (pages_.page() == Pages::Page::pong) {
             if (!pages_.pong.engaged && input != controls_.next && input != controls_.next_section) return false;
             if (input == controls_.next_section) { if (pressed) browse_page(false); return true; }
@@ -260,6 +275,12 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_enter_page)
 #endif
     void enter_page() {
+        if (pages_.page() == Pages::Page::language) {
+            pages_.language = 0;
+            const unsigned count = platform_.language_count();
+            for (unsigned i = 0; i < count; ++i)
+                if (!std::strcmp(platform_.current_language(), platform_.language_tag(i))) { pages_.language = i; break; }
+        }
         if (pages_.page() == Pages::Page::pong) pages_.pong.clock(platform_.milliseconds());
         expression_bank_ = nullptr;
         if (auto *bank = application_.focused_bank()) {
@@ -570,7 +591,7 @@ public:
 #endif
                 , i, region.count
             );
-                if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong) content = Pages::window_view(content,i,region.count);
+                if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language) content = Pages::window_view(content,i,region.count);
                 content.focused = r == application_.allocation.focus() && pages_.page() != Pages::Page::pong; renderer_.show(screen,content);
             }
             save_view();

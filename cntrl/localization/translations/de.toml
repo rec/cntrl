@@ -2,6 +2,9 @@ language = 'de'
 name = 'Deutsch'
 
 [messages]
+language_scroll = { text = '{up:s} und {down:s} zum Blättern' }
+language_select = { text = '{button:s} zum Auswählen' }
+language_next_page = { text = '{button:s} zur nächsten Seite' }
 pages_and_tools = { text = 'Seiten und Werkzeuge', short = 'Seiten / Werkzeuge' }
 browse = { text = 'durchsuchen' }
 ok = { text = 'OK' }

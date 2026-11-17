@@ -62,7 +62,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         press('e')
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        for _ in range(10 if default_catalogue else 1):
+        for _ in range(11 if default_catalogue else 1):
             press('f')
         advance(500000)
         assert ball_on('lcd-2')
@@ -127,10 +127,10 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         assert session.frames['lcd-1'] != paused['lcd-1']
         assert session.frames['lcd-3'] != paused['lcd-3']
         assert session.frames['lcd-2'] == paused['lcd-2']
-        press('e')  # The default cycle exits to None, restoring all patch windows.
+        press('e')  # The default cycle advances to the Language page.
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        for _ in range(10 if default_catalogue else 1):
+        for _ in range(11 if default_catalogue else 1):
             press('f')  # Cycle back to the paused game.
         advance(500000)
         assert ball_on('lcd-1')

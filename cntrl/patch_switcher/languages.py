@@ -40,7 +40,7 @@ def run(command: Install | build.Build) -> None:
         return
     with transport.SerialConnection(devices.select_port(command.port)) as connection:
         client = transport.SetupClient(connection)
-        # Include English so the picker can show native names before switching.
+        # Install the matching English catalogue alongside the selected locale.
         for tag in dict.fromkeys(['en', command.language]):
             client.copy_language(tag, pack(tag))
         selected = client.global_settings().language

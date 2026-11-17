@@ -8,8 +8,25 @@ Language is a device-wide preference and
 remains selected when you change setups. Patch names, filenames, MIDI messages
 and authored text stay as written.
 
-Open **Pages and tools**, select **Language**, browse the installed languages and
-confirm your choice. The change applies without reloading the setup or stopping
+Open the **Language page** in the utility-page cycle, or select that page through
+**Pages and tools**. It uses exactly two windows: the first is a scrolling list
+of installed languages in their native names, with small country flags; the
+second has the Language caption and controls. On the default three-display
+layout these are the center and right windows. English uses the UK flag.
+
+Use **B** to scroll up, **E** to scroll down, **C** to select and **F** for the
+next page. Scrolling wraps at either end, and the initial highlight follows the
+active language. Browsing alone does not change the UI language. The existing
+reverse-page gesture still works. The old nested menu selector is removed.
+
+The page is included in the default catalogue on targets with at least two
+displays. A one-display target omits it by default and rejects an explicit
+`type = 'language'` page; USB language commands remain available.
+For explicit page catalogues, add a named page with `type = 'language'` and put
+it in the desired region. The page always claims two windows, regardless of
+`min_windows`, and uses only those two windows when more are available.
+
+Selecting a language applies without reloading the setup or stopping
 playing, recording or looping. English is the default when no preference is set.
 
 Install the supplied French pack over USB if it is not on the SD card:
@@ -20,8 +37,8 @@ cntrl global set language fr --port PORT
 cntrl global clear language --port PORT
 ```
 
-Installation also includes the English pack so the picker can display native
-language names. `cntrl global list` shows the saved preference. Clearing it
+Installation also includes the matching English pack. Native language names use
+the shared flash font even in recovery. `cntrl global list` shows the saved preference. Clearing it
 selects English. Installing a replacement pack refreshes the selected language
 without changing whether the preference was explicitly set.
 
@@ -48,7 +65,7 @@ loaded into RAM. Failed reads, invalid packs or insufficient memory leave the
 current language unchanged. If a selected pack is unavailable at boot, the
 pedal uses its built-in English recovery UI while retaining the saved preference.
 Reinstall the pack and select it again to restore that preference. The recovery
-picker may display a locale tag when native-name glyphs are unavailable.
+page retains native language names using the shared flash font.
 
 Backups retain installed packs and the separate device-global overlay. Setup
 downloads include the selected pack when available; recovered emulator sessions

@@ -2,6 +2,9 @@ language = 'cs'
 name = 'Čeština'
 
 [messages]
+language_scroll = { text = '{up:s} a {down:s}: posun' }
+language_select = { text = '{button:s}: vybrat' }
+language_next_page = { text = '{button:s}: další stránka' }
 pages_and_tools = { text = 'Stránky a nástroje' }
 browse = { text = 'procházet' }
 ok = { text = 'OK' }

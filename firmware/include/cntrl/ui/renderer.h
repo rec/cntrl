@@ -284,6 +284,13 @@ private:
         for (const auto &circle : painting_.circles) raster_.circle(circle);
         for (const auto &r : painting_.rectangles) raster_.rectangle(r.x, r.y, r.width, r.height, r.color, r.stippled);
         raster_.toggle(painting_.toggle); rendering_ = true; incoming_screen_ = -1;
+        for (unsigned i = 0; i < max_lines; ++i) {
+            const auto &line = painting_.lines[i];
+            if (!line.graphics.flag || !line.text[0]) continue;
+            const auto bounds = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);
+            raster_.flag(line.graphics.flag, int(line.x) - int(flags::width) - 4,
+                text_y(i) + bounds.top + (bounds.height - int(flags::height)) / 2);
+        }
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_fit_localized)

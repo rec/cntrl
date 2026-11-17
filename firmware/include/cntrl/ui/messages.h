@@ -371,9 +371,12 @@ enum class Message : uint16_t {
     target_setup_bundle_invalid,
     target_global_recovery,
     target_song_storage_invalid,
+    language_scroll,
+    language_select,
+    language_next_page,
 };
-inline constexpr unsigned message_count = 368;
-inline constexpr uint32_t catalogue_schema = 0x6b23646bu;
+inline constexpr unsigned message_count = 371;
+inline constexpr uint32_t catalogue_schema = 0x8fefa62du;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char pages_and_tools_text[] CNTRL_I18N_STORAGE = "Pages and tools";
@@ -1558,6 +1561,30 @@ inline const char target_global_recovery_text[] CNTRL_I18N_STORAGE = "Global set
 inline const char target_global_recovery_short[] CNTRL_I18N_STORAGE = "";
 inline const char target_song_storage_invalid_text[] CNTRL_I18N_STORAGE = "Song storage invalid";
 inline const char target_song_storage_invalid_short[] CNTRL_I18N_STORAGE = "";
+inline const char language_scroll_text[] CNTRL_I18N_STORAGE = "{up:s} and {down:s} to scroll";
+inline const char language_scroll_short[] CNTRL_I18N_STORAGE = "";
+inline const char language_scroll_up_name[] CNTRL_I18N_STORAGE = "up";
+inline const char language_scroll_up_spec[] CNTRL_I18N_STORAGE = "s";
+inline const char language_scroll_down_name[] CNTRL_I18N_STORAGE = "down";
+inline const char language_scroll_down_spec[] CNTRL_I18N_STORAGE = "s";
+inline const Field language_scroll_fields[] CNTRL_I18N_STORAGE = {
+    {language_scroll_up_name, language_scroll_up_spec},
+    {language_scroll_down_name, language_scroll_down_spec},
+};
+inline const char language_select_text[] CNTRL_I18N_STORAGE = "{button:s} to select";
+inline const char language_select_short[] CNTRL_I18N_STORAGE = "";
+inline const char language_select_button_name[] CNTRL_I18N_STORAGE = "button";
+inline const char language_select_button_spec[] CNTRL_I18N_STORAGE = "s";
+inline const Field language_select_fields[] CNTRL_I18N_STORAGE = {
+    {language_select_button_name, language_select_button_spec},
+};
+inline const char language_next_page_text[] CNTRL_I18N_STORAGE = "{button:s} for next page";
+inline const char language_next_page_short[] CNTRL_I18N_STORAGE = "";
+inline const char language_next_page_button_name[] CNTRL_I18N_STORAGE = "button";
+inline const char language_next_page_button_spec[] CNTRL_I18N_STORAGE = "s";
+inline const Field language_next_page_fields[] CNTRL_I18N_STORAGE = {
+    {language_next_page_button_name, language_next_page_button_spec},
+};
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
     {browse_text, browse_short, nullptr, 0},
@@ -1927,6 +1954,9 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {target_setup_bundle_invalid_text, target_setup_bundle_invalid_short, nullptr, 0},
     {target_global_recovery_text, target_global_recovery_short, nullptr, 0},
     {target_song_storage_invalid_text, target_song_storage_invalid_short, nullptr, 0},
+    {language_scroll_text, language_scroll_short, language_scroll_fields, 2},
+    {language_select_text, language_select_short, language_select_fields, 1},
+    {language_next_page_text, language_next_page_short, language_next_page_fields, 1},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

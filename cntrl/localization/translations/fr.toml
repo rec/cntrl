@@ -1,6 +1,15 @@
 language = 'fr'
 name = 'Français'
 
+[messages.language_scroll]
+text = '{up:s} et {down:s} pour défiler'
+
+[messages.language_select]
+text = '{button:s} pour choisir'
+
+[messages.language_next_page]
+text = '{button:s} pour la page suivante'
+
 [messages.pages_and_tools]
 text = 'Pages et outils'
 

@@ -2,6 +2,9 @@ language = 'pt-PT'
 name = 'Português'
 
 [messages]
+language_scroll = { text = '{up:s} e {down:s} para percorrer' }
+language_select = { text = '{button:s} para selecionar' }
+language_next_page = { text = '{button:s} para a página seguinte' }
 pages_and_tools = { text = 'Páginas e ferramentas' }
 browse = { text = 'procurar' }
 ok = { text = 'OK' }

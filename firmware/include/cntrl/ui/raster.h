@@ -2,6 +2,7 @@
 #include <cntrl/hardware.h>
 #include "display.h"
 #include "fonts.h"
+#include "flags.h"
 #include <algorithm>
 #include <cstring>
 #include <climits>
@@ -107,6 +108,17 @@ public:
         const int right = std::min(clip_.right, x + int(width)), bottom = std::min(clip_.bottom, y + int(height));
         for (int row = std::max(clip_.top, y); row < bottom; ++row) for (int col = std::max(clip_.left, x); col < right; ++col)
             if (!stipple || ((row + col) & 1)) pixel(col, row, color);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(raster_flag)
+#endif
+    void flag(unsigned identifier, int x, int y) {
+        if (!identifier || identifier > flags::count) return;
+        rectangle(x - 1, y - 1, flags::width + 2, flags::height + 2, 0x8410);
+        const auto &bitmap = flags::bitmaps[identifier - 1];
+        for (unsigned row = 0; row < flags::height; ++row)
+            for (unsigned col = 0; col < flags::width; ++col)
+                pixel(x + int(col), y + int(row), bitmap[row * flags::width + col]);
     }
     void circle(const Circle &c) {
         const int span = c.diameter + 2 * c.annulus;
