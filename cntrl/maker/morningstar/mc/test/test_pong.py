@@ -9,7 +9,7 @@ from pytest_regressions.file_regression import FileRegressionFixture
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_switcher import compiler, setup_bundle
+from cntrl.patch_switcher import compiler, models, setup_bundle
 
 
 @pytest.mark.parametrize('default_catalogue', [False, True])
@@ -23,6 +23,11 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         else compiler.read_document(BASE / 'emulator/pong.toml')
     )
     assert isinstance(source, dict)
+    utility_pages = [
+        p.type
+        for p in models.Setup.model_validate(source).pages.values()
+        if p.type != 'patch-switcher'
+    ]
     source['page_settings'] = {'status_font': 'TamzenBold7x13'}
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'
@@ -53,8 +58,8 @@ def test_pong_spans_screens_and_releases_navigation_controls(
 
         advance(1000000)
         if default_catalogue:
-            # The native adapter skips the hardware-only Panic page.
-            for _ in range(9):
+            # Every compiled utility page, including Panic, stays available.
+            for _ in range(utility_pages.index('pong')):
                 press('f')
             advance(500000)
         assert ball_on('lcd-2')
@@ -62,7 +67,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         press('e')
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        for _ in range(11 if default_catalogue else 1):
+        for _ in range(len(utility_pages) - 1 if default_catalogue else 1):
             press('f')
         advance(500000)
         assert ball_on('lcd-2')
@@ -130,7 +135,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         press('e')  # The default cycle advances to the Language page.
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        for _ in range(11 if default_catalogue else 1):
+        for _ in range(len(utility_pages) - 1 if default_catalogue else 1):
             press('f')  # Cycle back to the paused game.
         advance(500000)
         assert ball_on('lcd-1')

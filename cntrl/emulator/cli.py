@@ -17,14 +17,19 @@ from ..patch_switcher.models import Target
 from ..patch_switcher.setup_bundle import SetupBundle
 from .backend import Session, bind_target, build
 from .layout import EmulatorLayout
+from .mirror import download
 from .replay import Scenario
 
 
 class Emulate(BaseModel, frozen=True):
     """Compile and open a setup on a built-in or explicitly configured controller."""
 
-    setup: Annotated[Path, tyro.conf.Positional] = Field(
-        description='Setup source file or compiled setup bundle'
+    setup: Annotated[Path | None, tyro.conf.Positional] = Field(
+        default=None, description='Setup source file or compiled setup bundle'
+    )
+    port: Path | None = Field(
+        default=None,
+        description='Mirror compiled files and preferences from a connected pedal',
     )
     controller: str | None = Field(
         default=None, description='Built-in controller profile name'
@@ -49,10 +54,16 @@ class Emulate(BaseModel, frozen=True):
 
     @model_validator(mode='after')
     def profile_selection(self) -> Self:
+        if (self.setup is None) == (self.port is None):
+            raise ValueError('supply a setup file or --port, not both')
+        if self.port is not None and (
+            self.layout is not None or self.target is not None
+        ):
+            raise ValueError('--port uses the connected controller profile')
         if self.controller is not None:
             if self.layout is not None or self.target is not None:
                 raise ValueError('use --controller or --layout and --target, not both')
-        elif self.layout is None or self.target is None:
+        elif self.port is None and (self.layout is None or self.target is None):
             raise ValueError('choose --controller or supply both --layout and --target')
         return self
 
@@ -61,6 +72,14 @@ def prepare(
     command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
 ) -> tuple[EmulatorLayout, Target, Path, Path]:
     """Resolve a profile and compile source inputs without starting the runtime."""
+    if command.port is not None:
+        controller, setup, storage = download(
+            command.port, command.storage, command.controller
+        )
+        command = command.model_copy(
+            update=dict(controller=controller, setup=setup, storage=storage)
+        )
+    assert command.setup is not None
     if command.controller is None:
         assert command.layout is not None
         name = command.layout.stem
@@ -87,6 +106,7 @@ def prepare(
             target=None,
             controller=layout.controller,
             output=storage / '.emulator-build' / 'profile',
+            mirror=command.port is not None,
         )
     else:
         assert command.layout is not None and command.target is not None
@@ -95,16 +115,19 @@ def prepare(
     target = load_target(target_path)
     bind_target(layout, target)
     storage.mkdir(parents=True, exist_ok=True)
-    language_folder = storage / 'cntrl' / 'languages'
-    language_folder.mkdir(parents=True, exist_ok=True)
-    recovered_languages = command.setup.resolve().parent / 'languages'
-    for tag in catalogue.locales():
-        destination = language_folder / f'{tag}.bin'
-        if not destination.exists():
-            recovered = recovered_languages / f'{tag}.bin'
-            destination.write_bytes(
-                recovered.read_bytes() if recovered.exists() else languages.pack(tag)
-            )
+    if command.port is None:
+        language_folder = storage / 'cntrl' / 'languages'
+        language_folder.mkdir(parents=True, exist_ok=True)
+        recovered_languages = command.setup.resolve().parent / 'languages'
+        for tag in catalogue.locales():
+            destination = language_folder / f'{tag}.bin'
+            if not destination.exists():
+                recovered = recovered_languages / f'{tag}.bin'
+                destination.write_bytes(
+                    recovered.read_bytes()
+                    if recovered.exists()
+                    else languages.pack(tag)
+                )
     overlay = command.setup.resolve().parent / 'device-globals.toml'
     global_folder = storage / 'cntrl' / 'global'
     if overlay.is_file() and not any(
@@ -176,6 +199,12 @@ def emulate(
     command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
 ) -> None:
     layout, target, setup, storage = prepare(command, compile_setup)
+    print(
+        f'Pedal mirror: {command.port}\nSnapshot: {storage}'
+        if command.port is not None
+        else f'Setup preview: {command.setup}',
+        flush=True,
+    )
     for kind, suffix in [('fonts', '.cfont'), ('movies', '.cnsa')]:
         for asset in (setup.parent / kind).glob(f'*{suffix}'):
             destination = storage / 'cntrl' / kind / asset.name

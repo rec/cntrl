@@ -713,7 +713,9 @@ def compile_show(
         keyboard = page_settings.pack_keyboard(show, target)
         looper_settings = looper.pack(show, target)
         arpeggiator_settings = arpeggiator.pack(show, target)
-        page_layout = layout.pack(show, [d.id for d in target.displays])
+        page_layout = layout.pack(
+            show, [target.compiled_display_ids.get(d.id, d.id) for d in target.displays]
+        )
         banked_pages = banked.pack(show, named, compiler.nodes)
         relay_settings = relay_outputs.pack(show, target)
         counter_settings = counters.pack(compiler.counters, show, target)

@@ -1,6 +1,6 @@
 #define CNTRL_SWITCHES 1
 #define CNTRL_EMULATOR 1
-#define CNTRL_PANIC 0
+#define CNTRL_PANIC 1
 #define CNTRL_CABLE_TEST 1
 #define CNTRL_ORIGINAL_FIRMWARE 0
 #include "target_capabilities.h"
@@ -19,6 +19,7 @@
 #include <cntrl/ui/font_storage.h>
 #include <cntrl/midi_runtime.h>
 #include <cntrl/cable_test.h>
+#include <cntrl/panic.h>
 #include <cntrl/expression_pedals.h>
 #include <cntrl/auxiliary_switches.h>
 #include <cntrl/asset_storage.h>
@@ -63,20 +64,24 @@ class MovieDisplay final : public animation::Output {
 public:
     explicit MovieDisplay(Display &display) : display_(display) {}
     bool begin(unsigned width,unsigned height,unsigned streams) override {
-        if (streams != display_.count()) { error("Movie stream count does not match execution target"); return false; }
-        for (unsigned i = 0; i < streams; ++i) {
+        if (streams != target::animation_stream_count) { error("Movie stream count does not match execution target"); return false; }
+        for (unsigned i = 0; i < display_.count(); ++i) {
             const auto viewport = display_.viewport(i);
             if (viewport.width != width || viewport.height != height) { error("Movie geometry does not match execution target"); return false; }
         }
         return true;
     }
     bool ready() const override { return display_.ready(); }
-    bool pixels(unsigned stream,unsigned x,unsigned y,const uint8_t *data,unsigned count) override { return display_.submit(stream,x,y,count,1,data); }
+    bool pixels(unsigned stream,unsigned x,unsigned y,const uint8_t *data,unsigned count) override {
+        for (unsigned screen = 0; screen < display_.count(); ++screen)
+            if (target::animation_display_streams[screen] == stream && !display_.submit(screen,x,y,count,1,data)) return false;
+        return true;
+    }
 private:
     Display &display_;
 };
 
-class Board : public ui::ApplicationHardware<Board>, public Replies, public animation::Replies, public KeyboardSink,
+class Board : public ui::ApplicationHardware<Board>, public Replies, public animation::Replies, public KeyboardSink, public PanicOutputs,
               public midi::Sink, public PatchOutputs, public PatchSources,
               public ui::ApplicationServices, public SongResolver, public SongCapture {
 public:
@@ -120,6 +125,7 @@ public:
     animation::Player *movie_player = nullptr;
     uint64_t time = 0;
     uint64_t accepted_packets = 0;
+    bool stock_firmware = false, stock_pending = false;
     uint8_t held = 0;
     unsigned blocked = 0, connected = 0xffff;
     std::array<uint64_t,16> generations{};
@@ -130,6 +136,17 @@ public:
     midi::Runtime midi_runtime;
     midi::Bridge bridge{target::midi_connections};
     CableTest cable_test{*this,target::cable_connections,target::cable_connections.count};
+    Panic panic{*this,*this};
+    bool panic_owns_midi = false;
+    void leave_panic() {
+        panic.leave();
+        if (panic_owns_midi) bridge.configure(runtime.interface);
+        panic_owns_midi = false;
+    }
+    bool transmit(const char *output,const uint8_t *bytes) override {
+        const auto *connection = midi_outputs().find(output);
+        return connection && submit(connection->route,{uint8_t(bytes[0] >> 4),{bytes[0],bytes[1],bytes[2]}});
+    }
     void leave_cable_test() {
         if (cable_test.enabled()) bridge.configure(runtime.interface);
         cable_test.leave();
@@ -141,6 +158,7 @@ public:
     uint32_t application_time() const override { return milliseconds(); }
     unsigned input_count() const override { return target::button_count; }
     const char *input_label(unsigned i) const override { return i < target::button_count ? target::button_labels[i] : ""; }
+    const char *input_id(unsigned i) const override { return i < target::button_count ? target::button_ids[i] : ""; }
     unsigned control_input(ControlRole role) const override {
         const auto &c = target::controls;
         const unsigned indices[] = {c.previous,c.next,c.confirm,c.previous_section,c.next_section,c.back}; return indices[unsigned(role)];
@@ -177,20 +195,29 @@ public:
     bool begin_fonts(unsigned count) override { return font_assets::cache.begin(count); }
     bool stage_font(uint32_t asset,unsigned size) override { return font_storage && font_storage->stage(asset,size); }
     void finish_fonts(bool commit) override { font_assets::cache.finish(commit); }
-    bool supports_keyboard() const override { return false; }
-    bool keyboard_connected() const { return false; }
-    bool keyboard_report(const KeyboardReport &) override { return false; }
+    bool supports_keyboard() const override { return target::supports_keyboard; }
+    bool supports_function(unsigned function) const override { return function == 1 && target::supports_stock_firmware; }
+    bool keyboard_connected() const { return supports_keyboard() && !stock_firmware; }
+    bool keyboard_report(const KeyboardReport &report) override {
+        if (stock_firmware) return false;
+        std::vector<uint8_t> bytes{6}; integer(bytes,time,8);
+        bytes.push_back(report.modifiers); bytes.push_back(0);
+        bytes.insert(bytes.end(),report.keys,report.keys + 6); frame(bytes); return true;
+    }
     bool supports_trs_mode(unsigned port,midi::TrsMode mode) const override {
         return port < target::port_count && unsigned(mode) <= unsigned(midi::TrsMode::aux) && (target::trs_mode_masks[port] & (1u << unsigned(mode)));
     }
     bool supports_relay(const char *name) const override { for (const char *relay : target::relay_names) if (!std::strcmp(name,relay)) return true; return false; }
     bool relay_write(const char *name,bool engaged) override {
-        if (!supports_relay(name)) return false;
+        if (stock_firmware || !supports_relay(name)) return false;
         std::vector<uint8_t> bytes{4,uint8_t(engaged)}; bytes.insert(bytes.end(),name,name + std::strlen(name)); frame(bytes); return true;
     }
     midi::TrsMode port_mode(unsigned port) const { return port < 4 ? midi::TrsMode(modes[port]) : midi::TrsMode::off; }
     void configure_trs_ports(const uint8_t *value) override { std::memcpy(modes,value,4); }
-    void set_midi_interface(bool enabled) override { runtime.interface = enabled; bridge.configure(enabled); }
+    void set_midi_interface(bool enabled) override {
+        runtime.interface = enabled;
+        if (!panic_owns_midi && !cable_test.enabled()) bridge.configure(enabled);
+    }
     void set_usb_midi(bool device,bool host_enabled) override { bridge.configure_usb(device,host_enabled,milliseconds()); }
     void blank_performance() override { ui::ApplicationHardware<Board>::blank_performance(); }
     void error(const char *text) override { emulator::error(text); if (host) host->error(text); }
@@ -221,7 +248,17 @@ public:
     ExpressionPedals &expression_controls() { return *expression; }
     bool expression_available(unsigned port) const { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
     bool looper_storage_ready() const { return true; }
-    bool switch_firmware() { error("Stock firmware execution is not supported by the emulator"); return false; }
+    bool switch_firmware() {
+        if (!target::supports_stock_firmware || stock_firmware || stock_pending || documents->busy() || documents->dirty() || !output_idle() || !stop_clock()) return false;
+        stock_pending = true; return true;
+    }
+    void finish_firmware_switch() {
+        // The clock Stop queued by the request must leave before the simulated handoff.
+        if (!stock_pending || !output_idle()) return;
+        stock_pending = false;
+        stock_firmware = true;
+        std::vector<uint8_t> bytes{7}; integer(bytes,time,8); frame(bytes);
+    }
     unsigned midi_file_clock_outputs() const { return files->player.clock_outputs(); }
     ui::PerformanceStatus status() const { ui::PerformanceStatus value; value.ram_used[1] = memory_used; value.ram_free[1] = memory_budget > memory_used ? memory_budget - memory_used : 0; return value; }
     bool send(const char *name,const uint8_t *bytes,unsigned count) override { auto *endpoint = midi_outputs().find(name); return endpoint && bridge.pedal(endpoint->route,bytes,count); }
@@ -251,7 +288,7 @@ public:
     bool selection(unsigned operation,const Document *&document,unsigned &node) override { return app->controller().selection(operation,document,node); }
     void selection_complete(unsigned operation) override { app->controller().selection_complete(operation); }
     void validation(bool begin) override { app->controller().validation(begin); }
-    bool stock(uint8_t,PatchExecutor &) override { error("Stock firmware execution is not supported by the emulator"); return false; }
+    bool stock(uint8_t,PatchExecutor &) override { return switch_firmware(); }
     void begin() override { sources->begin(); }
     void end() override { sources->end(); }
     bool acquire(uint16_t index,const Document *&document,uint32_t &revision) override { return sources->acquire(index,document,revision); }
@@ -277,6 +314,7 @@ public:
     bool capture(Song &s,bool reference) override { return song_sources->capture(s,reference); }
     void recalled() override { song_sources->recalled(); }
     bool write_packet(unsigned route,const midi::Packet &packet) override {
+        if (stock_firmware) return false;
         if ((blocked & (1u << route)) || !(connected & (1u << route))) return false;
         // Exercise the tester without forwarding its probes to host MIDI ports.
         if (cable_test.enabled()) { ++accepted_packets; return true; }
@@ -349,7 +387,7 @@ struct Actions {
     bool setup_open() const { return board.app->setups.open(); }
     void invoke(ui::Operation operation) { board.app->controller().executor().invoke(StatePatch{unsigned(operation)}); }
     void browse(bool reverse) { board.browse_page(reverse); }
-    bool midi_reserved() const { return false; }
+    bool midi_reserved() const { return board.panic_owns_midi; }
     bool keyboard(unsigned i,bool pressed) { return board.keyboard_button(i,pressed); }
     bool monitor(unsigned i,bool pressed) { return board.monitor_button(i,pressed); }
     bool looper(unsigned i,bool pressed) { return board.looper_button(i,pressed); }
@@ -376,7 +414,7 @@ public:
           songs(song_storage,board), application(board,documents,primary,board,board,songs,board,true),
           song_sources(board,board,board,storage.setups(),documents,application,songs),
           midi_source(filesystem), midi_index(filesystem), recording(filesystem), midi_directory(filesystem),
-          midi_files(filesystem,midi_source,midi_index,recording,midi_directory,target::midi_connections.mask(true),"/midi","/index"),
+          midi_files(filesystem,midi_source,midi_index,recording,midi_directory,target::midi_connections.mask(true),"/cntrl/midi","/cntrl/midi/.playback-index"),
           calibrations(filesystem), expression(target::port_count,calibrations,ExpressionPedals::calibration_filename,"Confirm",1,1),
           switches(board,board,board), work(target::maximum_display_area),
           renderer(display,fonts,work.data(),unsigned(work.size())),
@@ -395,7 +433,7 @@ public:
         host.looper_files(midi_files,board); host.arpeggiator(board.midi_runtime.arpeggiator);
         board.bridge.prepare(); board.midi_runtime.prepare(board.midi_outputs());
         if (!auxiliary.prepare(board)) throw std::runtime_error("auxiliary switch memory unavailable");
-        filesystem.make_directory("/cntrl"); filesystem.make_directory("/midi"); filesystem.make_directory("/index");
+        filesystem.make_directory("/cntrl"); filesystem.make_directory("/cntrl/midi"); filesystem.make_directory("/cntrl/midi/.playback-index");
         import(setup,replace_setup); import_movies(); expression.load_calibrations(); midi_files.boot();
         if (!storage.boot()) throw std::runtime_error("emulator setup bundle failed validation");
         if (!global_settings.boot()) throw std::runtime_error("emulator global settings journal is invalid");
@@ -465,14 +503,14 @@ public:
     }
     std::optional<unsigned> debounce(unsigned index) const { return switches.debounce_ms(index); }
     void keyboard_release(unsigned index) { board.keyboard_button(index,false); }
-    bool panic_open() const { return false; }
-    void panic_release(uint32_t) {}
+    bool panic_open() const { return board.panic.open(); }
+    void panic_release(uint32_t) { board.panic.button(false); }
     bool animation_controls(uint8_t pressed,uint32_t now,bool replay) { return movie_session.controls(pressed,now,replay); }
     bool diagnostic_controls(const uint8_t *,uint8_t,uint32_t) { return false; }
     ui::FirmwareVisit *visit() { return nullptr; }
     Actions &actions() { return action_router; }
-    void pages(uint32_t now) { application.tick(now); documents.tick(now); }
-    void midi() { board.midi_runtime.poll(board); board.relays.tick(now()); }
+    void pages(uint32_t now) { if (!board.stock_firmware) { application.tick(now); documents.tick(now); } }
+    void midi() { if (!board.stock_firmware) { board.midi_runtime.poll(board); board.relays.tick(now()); } }
     void expression_poll(uint32_t now) {
         expression.poll(now,[&](unsigned i) { return board.expression_available(i); },
             [&](unsigned i,unsigned) { return board.readings[i]; },
@@ -483,21 +521,25 @@ public:
                 return connection && board.submit_live(connection->route,packet);
             });
     }
-    void navigation() { input.finish(action_router); global_commands.poll(application.patch_pending()); }
-    void display_poll(uint32_t now) { board.display(now,documents.busy() || application.feature_open(board) || application.patch_pending()); }
+    void navigation() { if (!board.stock_firmware) { input.finish(action_router); global_commands.poll(application.patch_pending()); } }
+    void display_poll(uint32_t now) { if (!board.stock_firmware) board.display(now,documents.busy() || application.feature_open(board) || application.patch_pending()); }
     void settle(unsigned budget = 4096) {
+        if (board.stock_firmware) return;
         unsigned quiet = 0;
         // Zero-duration looping files may remain productive at one timestamp.
         // Yield the command after a bounded amount of cooperative work.
-        for (unsigned iteration = 0; quiet < 16 && iteration < budget; ++iteration) {
+        for (unsigned iteration = 0; quiet < 16 && iteration < budget && !board.stock_firmware; ++iteration) {
             uint64_t accepted = board.accepted_packets;
             uint32_t preparation = board.midi_runtime.streams().diagnostics().preparation_visits;
-            application.tick(board.milliseconds()); board.midi_runtime.poll(board);
+            application.tick(board.milliseconds());
+            if (!board.stock_firmware) board.midi_runtime.poll(board);
+            board.finish_firmware_switch();
             bool incoming = false;
             for (const auto &source : board.incoming) incoming = incoming || !source.empty();
             quiet = incoming || accepted != board.accepted_packets
                 || preparation != board.midi_runtime.streams().diagnostics().preparation_visits ? 0 : quiet + 1;
         }
+        if (board.stock_firmware) return;
         display_poll(board.milliseconds());
         for (unsigned i = 0; i < 100000; ++i) {
             bool visible = movie_session.poll(board.milliseconds(),renderer.ready(),documents.busy() || application.feature_open(board) || application.patch_pending());
@@ -507,12 +549,16 @@ public:
     }
     void advance(uint64_t time) {
         if (time < board.time) throw std::runtime_error("virtual time cannot move backward");
-        while (board.time < time) { board.time += std::min(uint64_t(1000),time - board.time); tick(); }
+        while (board.time < time && !board.stock_firmware) { board.time += std::min(uint64_t(1000),time - board.time); tick(); }
         settle();
     }
     void tick();
     void cleanup() {
+        if (board.stock_firmware) return;
+        board.leave_panic();
         board.leave_cable_test();
+        for (unsigned i = 0; i < target::button_count; ++i) board.keyboard_button(i,false);
+        board.poll_keyboard();
         board.held = 0; std::fill(std::begin(board.contacts),std::end(board.contacts),uint8_t(0));
         for (unsigned i = 0; i < 32; ++i) if (application.held & (uint64_t(1) << i)) switches.button(i,false,board.milliseconds());
         application.held = 0; std::fill(buttons.begin(),buttons.end(),ButtonState{});
@@ -605,14 +651,21 @@ struct RuntimeServices {
     bool reply_ready() const { return true; }
     bool commands_allowed() const { return true; }
     void cancel_listing() {}
-    bool expression_allowed() const { return true; }
+    bool expression_allowed() const { return !s.board.stock_firmware; }
     void expression(uint32_t now) { s.expression_poll(now); }
     void navigation() { s.navigation(); }
     void display(uint32_t now) { s.display_poll(now); }
 };
-void Session::tick() { RuntimeServices services{*this}; cooperative.poll(services); }
+void Session::tick() {
+    if (!board.stock_firmware) {
+        RuntimeServices services{*this}; cooperative.poll(services);
+        board.finish_firmware_switch();
+    }
+}
 void Session::command(const std::vector<uint8_t> &bytes) {
     const auto *p = bytes.data(); unsigned length = unsigned(bytes.size());
+    if (board.stock_firmware && p[0] != 9 && p[0] != 12) return;
+    if (board.stock_pending && p[0] != 1 && p[0] != 4 && p[0] != 9 && p[0] != 12) return;
     if (p[0] == 1 && length == 9) advance(u64(p + 1));
     else if (p[0] == 2 && length == 3 && p[1] < target::button_count && p[2] <= 1) {
         board.held = uint8_t((board.held & ~(1u << p[1])) | (unsigned(p[2]) << p[1]));

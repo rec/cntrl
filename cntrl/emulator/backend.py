@@ -27,7 +27,7 @@ from .replay import Event
 
 
 class OutputEvent(BaseModel, frozen=True):
-    kind: Literal['midi', 'error', 'relay']
+    kind: Literal['midi', 'error', 'relay', 'keyboard', 'firmware']
     endpoint: str = ''
     data: bytes = b''
     time_us: int = 0
@@ -56,16 +56,19 @@ def bind_target(layout: EmulatorLayout, target: Target) -> models.Controller:
 
 
 def build(target: Target, directory: Path, source_root: Path) -> Path:
-    if target.animation is not None and (
-        len(target.animation.streams) != len(target.displays)
-        or any(
-            d.width != target.animation.width or d.height != target.animation.height
-            for d in target.displays
-        )
+    if (
+        target.animation is not None
+        and not target.animation_display_streams
+        and len(target.animation.streams) != len(target.displays)
     ):
         raise ValueError(
-            'emulator animations require one matching-size stream per display'
+            'emulator animations require a stream mapping for every display'
         )
+    if target.animation is not None and any(
+        d.width != target.animation.width or d.height != target.animation.height
+        for d in target.displays
+    ):
+        raise ValueError('emulator animations require matching-size displays')
     directory = directory.resolve()
     source_root = source_root.resolve()
     directory.mkdir(parents=True, exist_ok=True)
@@ -152,11 +155,15 @@ class Session:
     ) -> None:
         self.layout = layout
         self.target = target
+        self.mode = (
+            'pedal mirror' if (storage / 'mirror.toml').is_file() else 'setup preview'
+        )
         self.controller = bind_target(layout, target)
         self.time_us = 0
         self.random_seed = 1
         self.events: list[Event] = []
         self.failed = False
+        self.stock_firmware = False
         self.held: set[str] = set()
         self.font_samples: list[font_comparison.FontSample] = []
         self.font_sample_index = 0
@@ -355,6 +362,27 @@ class Session:
                         ('used', 'peak', 'failures'),
                         struct.unpack('<III', payload[1:]),
                         strict=True,
+                    )
+                )
+            elif payload[0] == 6 and len(payload) == 17:
+                self.messages.append(
+                    OutputEvent(
+                        kind='keyboard',
+                        data=payload[9:],
+                        time_us=struct.unpack_from('<Q', payload, 1)[0],
+                        message=f'Simulated keyboard HID: {payload[9:].hex(" ")}',
+                    )
+                )
+            elif payload[0] == 7 and len(payload) == 9:
+                self.stock_firmware = True
+                self.messages.append(
+                    OutputEvent(
+                        kind='firmware',
+                        time_us=struct.unpack_from('<Q', payload, 1)[0],
+                        message=(
+                            'Simulated stock firmware selected; '
+                            'restart the session to return to CNTRL.'
+                        ),
                     )
                 )
             else:

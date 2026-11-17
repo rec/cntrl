@@ -1428,6 +1428,12 @@ class Target(BaseModel, frozen=True):
     buttons: list[Annotated[str, Field(min_length=1, max_length=31)]] = Field(
         default_factory=list, max_length=8
     )
+    button_labels: dict[
+        str, Annotated[str, Field(min_length=1, max_length=31, pattern=r'^[ -~]+$')]
+    ] = Field(default_factory=dict)
+    compiled_button_ids: dict[
+        str, Annotated[str, Field(min_length=1, max_length=31, pattern=r'^[ -~]+$')]
+    ] = Field(default_factory=dict)
 
     @field_validator('buttons')
     @classmethod
@@ -1450,6 +1456,9 @@ class Target(BaseModel, frozen=True):
     usb_block_size: units.Bytes = Field(default=4096, ge=1, le=65535)
     max_switches: Annotated[int, Field(strict=True, ge=0, le=5)] = 5
     displays: list[TargetDisplay] = Field(min_length=1, max_length=255)
+    compiled_display_ids: dict[
+        str, Annotated[str, Field(min_length=1, max_length=31, pattern=r'^[ -~]+$')]
+    ] = Field(default_factory=dict)
     fonts: list[FontFace]
     ui_fonts: list[str]
 
@@ -1466,6 +1475,9 @@ class Target(BaseModel, frozen=True):
 
     font_sources: dict[str, str] = Field(default_factory=dict)
     animation: Geometry | None = None
+    animation_display_streams: list[Annotated[int, Field(strict=True, ge=0)]] = Field(
+        default_factory=list
+    )
     midi_endpoints: list[MidiEndpoint] = Field(max_length=16)
     default_midi_output: str
     trs_ports: dict[str, list[TrsMode]] = Field(default_factory=dict)
@@ -1520,10 +1532,30 @@ class Target(BaseModel, frozen=True):
     def distinct_displays(self) -> 'Target':
         if len({d.id for d in self.displays}) != len(self.displays):
             raise ValueError('display IDs must be unique')
+        if self.compiled_display_ids.keys() - {d.id for d in self.displays}:
+            raise ValueError('compiled display IDs must refer to declared displays')
+        if len(
+            {self.compiled_display_ids.get(d.id, d.id) for d in self.displays}
+        ) != len(self.displays):
+            raise ValueError('compiled display IDs must be unique')
+        if self.animation_display_streams and (
+            self.animation is None
+            or len(self.animation_display_streams) != len(self.displays)
+            or max(self.animation_display_streams) >= len(self.animation.streams)
+        ):
+            raise ValueError(
+                'animation display streams must map every display to a stream'
+            )
         return self
 
     @model_validator(mode='after')
     def declared_controls(self) -> 'Target':
+        if self.button_labels.keys() - set(self.buttons):
+            raise ValueError('button labels must refer to declared input IDs')
+        if self.compiled_button_ids.keys() - set(self.buttons):
+            raise ValueError('compiled button IDs must refer to declared input IDs')
+        compiled = [self.compiled_button_ids.get(b, b) for b in self.buttons]
+        self.input_identifiers(compiled)
         bindings = self.controls.model_dump(exclude_none=True, exclude={'app_actions'})
         if (set(bindings.values()) | set(self.controls.app_actions)) - set(
             self.buttons

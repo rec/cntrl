@@ -40,6 +40,27 @@ source file using `cntrl emulate SETUP --controller PROFILE`; the command export
 the controller target, compiles the setup and starts the native runtime.
 See the manufacturer profile guide below for the supported profile names.
 
+To inspect the session actually stored on a connected pedal, use:
+
+```sh
+cntrl emulate --port /dev/cu.usbmodem12345
+```
+
+This reads the controller model, compiled setup journals, selected setup,
+history, assets, language packs and device-global preferences from the pedal.
+It does not compile setup sources or install additional language packs. The
+pedal's persistent format must match the emulator. `--controller`, if supplied,
+must match the connected model. Mirroring reads the pedal without changing it;
+later emulator edits affect only the local snapshot.
+
+Each capture creates a fresh `mirror-<identifier>` subdirectory beneath
+`.cntrl-emulator/<profile>/`, or beneath `--storage DIRECTORY`. The snapshot's
+`mirror.toml` records the source status, selection and captured file hashes.
+Keep the pedal idle while capturing. A changing journal or selection aborts the
+capture rather than opening an inconsistent session. Failed captures remain
+available for diagnosis. Source-file launches print `Setup preview`, while
+connected-pedal launches print `Pedal mirror` and the snapshot path.
+
 Generated files and saved pedal state live in `.cntrl-emulator/<profile>/` by
 default. This directory is ignored by Git. Repeated launches preserve saved edits
 when the supplied compiled bundle is unchanged. A changed bundle replaces the
@@ -60,7 +81,8 @@ cntrl emulate setup.toml --layout controller-layout.toml --target target.toml
 The native executable and generated target header are built under the
 session's `.emulator-build` directory. Generated outputs can be recreated from the checkout
 and execution target. The session directory supplies the emulated filesystem;
-no SD card, formatting operation or connected pedal is involved. Reopen the same
+no SD card or formatting operation is involved. Source previews do not access a
+connected pedal. Reopen the same
 directory to retain its saved data; choose a new directory for a fresh session.
 
 The native executable is reused when its source and header contents, compiled
@@ -110,6 +132,17 @@ toggle and port indicators. Its probes run locally and are never sent to host
 MIDI ports or included in the accepted-output trace. Virtual MIDI injection can
 return probe messages to exercise the input indicators. Leaving the page stops
 the test and restores normal setup routing.
+
+Panic remains available and sends through the shared firmware's MIDI output
+path. When the selected controller supports USB keyboard output, its Keyboard
+page and patches emit inspectable eight-byte HID reports in the event log and
+saved trace. They do not type into other applications. Stock-firmware selection
+emits a visible simulated transition and suspends the CNTRL runtime; restart
+the session to return. The emulator cannot execute the pedal's stock ARM image.
+
+Captions and instructions use the physical control labels, independently of
+the logical IDs used by replay files and the controller catalogue. The window
+title distinguishes a setup preview from a pedal mirror.
 
 Built-in controller features that the selected execution backend cannot service
 are rejected explicitly. The generic layout model has no six/eight-switch or

@@ -31,6 +31,21 @@ def header(target: Target) -> str:
         f'inline constexpr unsigned scan_interval_ms = {scan_interval};',
         f'inline constexpr unsigned display_count = {len(target.displays)};',
         f'inline constexpr unsigned button_count = {len(target.buttons)};',
+        'inline constexpr bool supports_stock_firmware = '
+        f'{str("stock-firmware" in target.functions).lower()};',
+        'inline constexpr bool supports_keyboard = '
+        f'{str("usb-hid-keyboard" in target.functions).lower()};',
+        'inline constexpr unsigned animation_stream_count = '
+        f'{len(target.animation.streams) if target.animation else 0};',
+        'inline constexpr std::array<unsigned, display_count> '
+        'animation_display_streams = {{',
+        *[
+            f'    {s},'
+            for s in (
+                target.animation_display_streams or list(range(len(target.displays)))
+            )
+        ],
+        '}};',
         'inline constexpr std::array<ui::Viewport, display_count> viewports = {{',
         *[
             f'    {{{d.width}, {d.height}, {d.gap}, {d.corner_radius}}},'
@@ -38,13 +53,22 @@ def header(target: Target) -> str:
         ],
         '}};',
         'inline constexpr std::array<const char *, display_count> display_ids = {{',
-        *[f'    {json.dumps(d.id)},' for d in target.displays],
+        *[
+            f'    {json.dumps(target.compiled_display_ids.get(d.id, d.id))},'
+            for d in target.displays
+        ],
         '}};',
         'inline constexpr std::array<const char *, display_count> display_labels = {{',
         *[f'    {json.dumps(d.label)},' for d in target.displays],
         '}};',
+        'inline constexpr std::array<const char *, button_count> button_ids = {{',
+        *[
+            f'    {json.dumps(target.compiled_button_ids.get(n, n))},'
+            for n in target.buttons
+        ],
+        '}};',
         'inline constexpr std::array<const char *, button_count> button_labels = {{',
-        *[f'    {json.dumps(n)},' for n in target.buttons],
+        *[f'    {json.dumps(target.button_labels.get(n, n))},' for n in target.buttons],
         '}};',
         f'inline constexpr unsigned maximum_display_area = {maximum_area};',
         f'inline constexpr unsigned total_display_area = {total_area};',
@@ -112,7 +136,8 @@ def header(target: Target) -> str:
             if name in target.controls.app_actions
             else 'ui::Controls::absent'
         )
-        lines.append(f'    {{{action}, {json.dumps(name)}}},')
+        label = target.button_labels.get(name, name)
+        lines.append(f'    {{{action}, {json.dumps(label)}}},')
     lines.extend(['}};', 'inline constexpr ui::Controls controls{'])
     for name in CONTROL_ROLES:
         identity = getattr(target.controls, name)

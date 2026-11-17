@@ -12,6 +12,14 @@ inline constexpr unsigned max_switches = 5;
 inline constexpr unsigned scan_interval_ms = 1;
 inline constexpr unsigned display_count = 3;
 inline constexpr unsigned button_count = 6;
+inline constexpr bool supports_stock_firmware = true;
+inline constexpr bool supports_keyboard = true;
+inline constexpr unsigned animation_stream_count = 2;
+inline constexpr std::array<unsigned, display_count> animation_display_streams = {{
+    0,
+    1,
+    0,
+}};
 inline constexpr std::array<ui::Viewport, display_count> viewports = {{
     {160, 128, 72, 8},
     {160, 128, 72, 8},
@@ -26,6 +34,14 @@ inline constexpr std::array<const char *, display_count> display_labels = {{
     "Left",
     "Center",
     "Right",
+}};
+inline constexpr std::array<const char *, button_count> button_ids = {{
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
 }};
 inline constexpr std::array<const char *, button_count> button_labels = {{
     "A",

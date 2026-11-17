@@ -4,12 +4,17 @@
 #include <cstring>
 
 int main(int argc, char **argv) {
-    assert(argc == 6);
+    assert(argc >= 6);
     static_assert(cntrl::usb_block_size == 256);
     assert(cntrl::target::memory_capacity == std::strtoul(argv[1], nullptr, 10));
     assert(cntrl::target::viewports[0].width == std::strtoul(argv[2], nullptr, 10));
     assert(cntrl::target::display_count == std::strtoul(argv[3], nullptr, 10));
     assert(cntrl::target::button_count == std::strtoul(argv[4], nullptr, 10));
+    assert(argc == 6 + cntrl::target::button_count);
+    for (unsigned i = 0; i < cntrl::target::button_count; ++i) {
+        assert(std::strcmp(cntrl::target::button_labels[i], argv[6 + i]) == 0);
+        assert(std::strcmp(cntrl::target::control_bindings[i].label, argv[6 + i]) == 0);
+    }
     assert(cntrl::target::controls.previous_page == std::strtoul(argv[5], nullptr, 10));
     unsigned area = 0;
     for (unsigned i = 0; i < cntrl::target::display_count; ++i) {

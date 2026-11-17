@@ -51,6 +51,8 @@ class CapturedSession(Session):
         self.held: set[str] = set()
         self.closed = False
         self.failed = False
+        self.stock_firmware = False
+        self.mode = 'setup preview'
 
     def button(self, control_id: str, pressed: bool) -> None:
         self.inputs.append((control_id, pressed))
@@ -404,3 +406,21 @@ def test_failed_runtime_stops_polling_and_closes_without_failed_requests(
     assert window.canvas.active == set()
     window.close()
     assert session.closed
+
+
+def test_simulated_firmware_transition_is_visible_and_stops_controls(
+    application: QtWidgets.QApplication,
+) -> None:
+    session = CapturedSession()
+    window = EmulatorWindow(session)
+    session.stock_firmware = True
+    session.messages.append(
+        OutputEvent(kind='firmware', time_us=0, message='Simulated stock firmware')
+    )
+    window.display_updates()
+    assert window.log.toPlainText() == 'Simulated stock firmware'
+    assert window.clock_label.text() == 'Simulated stock firmware'
+    assert not window.timer.isActive()
+    assert not window.running.isChecked() and not window.running.isEnabled()
+    assert not window.canvas.isEnabled()
+    window.close()

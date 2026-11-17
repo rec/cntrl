@@ -301,6 +301,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.session = session
         self.setWindowTitle(
             session.controller.name
+            + f' [{session.mode}]'
             + (' [provisional geometry]' if session.layout.provisional else '')
         )
         self.log = QtWidgets.QPlainTextEdit()
@@ -596,6 +597,13 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 self.relay_labels[e.endpoint].setText('On' if e.value else 'Off')
             else:
                 self.log.appendPlainText(e.message)
+        if self.session.stock_firmware:
+            self.timer.stop()
+            self.running.setChecked(False)
+            self.running.setEnabled(False)
+            self.canvas.setEnabled(False)
+            self.clock_label.setText('Simulated stock firmware')
+            return
         self.clock_label.setText(f'{self.session.time_us / 1_000_000:.3f} s')
         self.canvas.update()
 

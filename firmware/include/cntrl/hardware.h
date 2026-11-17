@@ -78,6 +78,7 @@ struct Hardware : RelayDriver {
     virtual unsigned memory_runtime() const { return 0; }
     virtual unsigned input_count() const { return 0; }
     virtual const char *input_label(unsigned) const { return ""; }
+    virtual const char *input_id(unsigned index) const { return input_label(index); }
     virtual unsigned control_input(ControlRole) const { return ~0u; }
     virtual midi::Outputs midi_outputs() const { return {}; }
     // Accept the complete message sequence, or accept none of it.

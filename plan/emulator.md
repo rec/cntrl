@@ -284,10 +284,18 @@ properties.
   state when replaying a recording.
 - Route incoming MIDI only through explicit setup `[midi]` routes. Do not infer
   the physical adapter's legacy USB/DIN wiring, and do not echo injected input.
-- Original firmware execution and USB HID keyboard output remain unsupported
-  platform features. Other unsupported controller component kinds are reported
-  explicitly; the generic layout records retain their hardware-independent
-  shape for later execution adapters.
+- Preserve the selected controller's page availability and physical switch
+  labels. Panic uses the shared implementation. HID keyboard reports are
+  inspectable simulation events and never type into the host. Stock-firmware
+  switching emits a visible simulated transition and suspends CNTRL until the
+  session restarts; the native host cannot execute the stock ARM image.
+- Keep setup-file compilation separate from live pedal mirroring. Mirroring
+  downloads the compiled setups, selected setup, assets, available language
+  packs and device preferences without recompilation or local-default
+  substitution. Preserve physical movie stream-to-display mappings.
+- Other unsupported controller component kinds are reported explicitly; the
+  generic layout records retain their hardware-independent shape for later
+  execution adapters.
 
 ## Additional work beyond the prompt
 

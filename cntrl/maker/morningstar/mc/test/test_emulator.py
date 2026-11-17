@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from cntrl.animation import asset
 from cntrl.emulator import backend, cli
 from cntrl.emulator.backend import bind_target
 from cntrl.emulator.layout import EmulatorLayout
@@ -38,7 +39,8 @@ def test_profiles_place_every_declared_component(
     assert len(hardware.displays) == len(target.displays) == count // 2
     assert target.max_switches == base.max_switches == 5
     assert target.controls.app_actions['a'] == base.controls.app_actions['A']
-    assert not target.functions
+    assert target.functions == base.functions
+    assert target.button_labels == {b.lower(): b for b in 'ABCDEFGH'[:count]}
     assert target.animation is not None and base.animation is not None
     assert len(target.animation.streams) == count // 2
     assert target.animation.width == base.animation.width
@@ -211,3 +213,125 @@ def test_exported_profiles_build_without_the_physical_sdk(
             e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xb0\x07\x64'
             for e in session.messages
         ), session.messages
+
+
+def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[5]
+    target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
+    source = {
+        'pages': {
+            'status': {'type': 'status'},
+            'panic': {'type': 'panic'},
+            'keyboard': {'type': 'keyboard'},
+            'clock': {'type': 'clock-transport'},
+            'firmware': {'type': 'firmware'},
+        },
+        'page_settings': {
+            'keyboard': [{'name': 'Test shortcut', 'keys': [4], 'modifiers': 2}],
+            'clock_outputs': ['din'],
+        },
+    }
+    raw = compiler.compile_show(source, {}, [], target)
+    bundle = tmp_path / 'utilities.bin'
+    bundle.write_bytes(
+        setup_bundle.build(
+            {'utilities': raw}, {'utilities': source}, target.memory
+        ).pack()
+    )
+    executable = backend.build(target, tmp_path / 'native', root)
+    layout = EmulatorLayout.load(Path(__file__).parents[1] / 'emulator/mc6-pro.toml')
+    with backend.Session(
+        layout, target, executable, tmp_path / 'session', bundle
+    ) as session:
+
+        def press(button: str) -> None:
+            session.button(button, True)
+            session.advance(session.time_us + 60000)
+            session.button(button, False)
+            session.advance(session.time_us + 60000)
+
+        session.advance(1000000)
+        press('f')
+        press('c')
+        session.advance(session.time_us + 1000000)
+        assert any(
+            e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xb0\x7b\0'
+            for e in session.messages
+        ), session.messages
+        session.messages.clear()
+        press('f')
+        press('c')
+        assert [e.data for e in session.messages if e.kind == 'keyboard'] == [
+            b'\x02\0\x04\0\0\0\0\0',
+            bytes(8),
+        ]
+        press('f')
+        press('a')
+        assert any(
+            e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xf8'
+            for e in session.messages
+        )
+        press('f')
+        press('c')  # Confirm before the stock-firmware transition.
+        assert not any(e.kind == 'firmware' for e in session.messages)
+        press('f')
+        assert len([e for e in session.messages if e.kind == 'firmware']) == 1
+        assert session.stock_firmware
+        transition = next(
+            i for i, e in enumerate(session.messages) if e.kind == 'firmware'
+        )
+        assert any(
+            e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xfc'
+            for e in session.messages[:transition]
+        )
+        assert not any(
+            e.kind in ('midi', 'keyboard', 'relay')
+            for e in session.messages[transition + 1 :]
+        )
+        before = dict(session.frames)
+        press('f')
+        session.advance(session.time_us + 1000000)
+        assert session.frames == before
+        assert len([e for e in session.messages if e.kind == 'firmware']) == 1
+        assert not any(
+            e.kind in ('midi', 'keyboard', 'relay')
+            for e in session.messages[transition + 1 :]
+        )
+        assert not [e.message for e in session.messages if e.kind == 'error']
+
+
+def test_mirrored_movies_preserve_physical_stream_geometry(tmp_path: Path) -> None:
+    target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile', mirror=True))
+    assert target.animation_display_streams == [0, 1, 0]
+    geometry = target.animation
+    assert geometry is not None and len(geometry.streams) == 2
+    red, blue = b'\xf8\0', b'\0\x1f'
+    row = red * (geometry.width // 2) + blue * (geometry.width // 2)
+    pixels = row * geometry.height
+    movie = tmp_path / 'asymmetric.cnsa'
+    movie.write_bytes(asset.encode_frames(pixels, [1000], geometry))
+    source = {'splash_movie': [str(movie)]}
+    movies: dict[int, bytes] = {}
+    raw = compiler.compile_show(source, {}, [], target, movie_assets=movies)
+    bundle = tmp_path / 'movies.bin'
+    bundle.write_bytes(
+        setup_bundle.build({'movies': raw}, {'movies': source}, target.memory).pack()
+    )
+    storage = tmp_path / 'session'
+    folder = storage / 'cntrl/movies'
+    folder.mkdir(parents=True)
+    for key, data in movies.items():
+        (folder / f'{key:08x}.cnsa').write_bytes(data)
+    executable = backend.build(target, tmp_path / 'native', Path(__file__).parents[5])
+    layout = EmulatorLayout.load(Path(__file__).parents[1] / 'emulator/mc6-pro.toml')
+    with backend.Session(layout, target, executable, storage, bundle) as session:
+        session.advance(250000)
+        assert session.frames['lcd-1'] == session.frames['lcd-3'] == pixels
+        assert (
+            session.frames['lcd-2']
+            == (blue * (geometry.width // 2) + red * (geometry.width // 2))
+            * geometry.height
+        )
+        assert not [e.message for e in session.messages if e.kind == 'error']

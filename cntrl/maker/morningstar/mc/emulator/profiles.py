@@ -21,7 +21,7 @@ class Export(BaseModel, frozen=True):
     output: Path
 
 
-def adapt(base: models.Target, controller: str) -> models.Target:
+def adapt(base: models.Target, controller: str, mirror: bool = False) -> models.Target:
     """Keep physical target behavior while binding to catalogue identities.
 
     The MC6 Pro uses the physical adapter's usable viewports, not the unverified
@@ -29,6 +29,8 @@ def adapt(base: models.Target, controller: str) -> models.Target:
     """
     if controller not in ('mc6_pro', 'mc8_pro'):
         raise ValueError(f'no Morningstar emulator profile for {controller}')
+    if mirror and controller != 'mc6_pro':
+        raise ValueError('live mirroring requires a verified physical target profile')
     if base.buttons != list('ABCDEF') or len(base.displays) != 3:
         raise ValueError(
             'profile source must be the six-switch, three-display MC6 Pro target'
@@ -61,11 +63,21 @@ def adapt(base: models.Target, controller: str) -> models.Target:
     data = base.model_dump()
     data.update(
         buttons=list('abcdefgh' if controller == 'mc8_pro' else 'abcdef'),
+        button_labels={
+            n.lower(): base.button_labels.get(n, n)
+            for n in ('ABCDEFGH' if controller == 'mc8_pro' else 'ABCDEF')
+        },
+        compiled_button_ids={n.lower(): n for n in 'ABCDEF'} if mirror else {},
         controls=controls,
         displays=[d.model_dump() for d in displays],
-        functions=[],
+        compiled_display_ids={f'lcd-{i}': d.id for i, d in enumerate(base.displays, 1)}
+        if mirror
+        else {},
+        animation_display_streams=base.animation_display_streams if mirror else [],
         animation=(
-            {
+            base.animation.model_dump()
+            if mirror and base.animation is not None
+            else {
                 'width': base.animation.width,
                 'height': base.animation.height,
                 'streams': [{} for _ in displays],
@@ -77,7 +89,9 @@ def adapt(base: models.Target, controller: str) -> models.Target:
     return models.Target.model_validate(data)
 
 
-def export(target: Path | None, controller: str, output: Path) -> Path:
+def export(
+    target: Path | None, controller: str, output: Path, mirror: bool = False
+) -> Path:
     if target is None:
         target = Path(__file__).parents[1] / 'patch-switcher-target.json'
     errors: list[str] = []
@@ -86,7 +100,7 @@ def export(target: Path | None, controller: str, output: Path) -> Path:
     )
     if errors:
         raise ValueError('\n'.join(errors))
-    profile = adapt(models.Target.model_validate(data), controller)
+    profile = adapt(models.Target.model_validate(data), controller, mirror)
     layout = EmulatorLayout.load(
         Path(__file__).with_name(controller.replace('_', '-') + '.toml')
     )

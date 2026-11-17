@@ -25,7 +25,7 @@ def test_setup_change_stops_looping_file_and_lfo(tmp_path: Path) -> None:
     bundle = tmp_path / 'setup.bin'
     bundle.write_bytes(setup_bundle.build(compiled, sources, target.memory).pack())
     storage = tmp_path / 'session'
-    midi = storage / 'midi'
+    midi = storage / 'cntrl' / 'midi'
     midi.mkdir(parents=True)
     # Format 0, 480 PPQN: note 60 held for half a second at default 120 BPM.
     track = b'\x00\x90\x3c\x64\x83\x60\x80\x3c\x00\x00\xff\x2f\x00'

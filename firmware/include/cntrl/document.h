@@ -268,7 +268,7 @@ public:
         for (unsigned i = 0; i < inputs; ++i) {
             const uint8_t *id = bytes + names + 6 + i * 32;
             if (!text_valid(id, 32) || std::strchr(reinterpret_cast<const char *>(id), '+')
-                || (i < hardware.input_count() && std::strcmp(reinterpret_cast<const char *>(id), hardware.input_label(i)))) return false;
+                || (i < hardware.input_count() && std::strcmp(reinterpret_cast<const char *>(id), hardware.input_id(i)))) return false;
             for (unsigned j = 0; j < i; ++j)
                 if (!std::strcmp(reinterpret_cast<const char *>(id), reinterpret_cast<const char *>(bytes + names + 6 + j * 32))) return false;
         }

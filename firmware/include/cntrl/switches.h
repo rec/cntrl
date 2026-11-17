@@ -619,7 +619,8 @@ private:
                     line.centered = view[32] & 1;
                     char label[64];
                     document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
-                    if (view[32] & 2) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", document_.input_label(s.record[0]), label);
+                    const char *input = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : document_.input_label(s.record[0]);
+                    if (view[32] & 2) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", input, label);
                     else std::snprintf(line.text, sizeof(line.text), "%s", label);
                     if (last_pressed_ == int(i)) {
                         auto &detail = panes[0].lines[1];
@@ -639,7 +640,8 @@ private:
                 const char *state = s.unknown ? ui::i18n::text(ui::i18n::Message::unknown_title) : s.executor.busy() || s.queued ? ui::i18n::text(ui::i18n::Message::pending) : s.record[1] ? (s.active ? ui::i18n::text(ui::i18n::Message::on) : ui::i18n::text(ui::i18n::Message::off)) : "";
                 char label[64];
                 document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
-                std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", document_.input_label(s.record[0]), label, state[0] ? " | " : "", state);
+                const char *input = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : document_.input_label(s.record[0]);
+                std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", input, label, state[0] ? " | " : "", state);
                 if (ui::i18n::translated_ui) pane.lines[row].graphics.font = 253;
             }
             present(panes); dirty_ = false; return;

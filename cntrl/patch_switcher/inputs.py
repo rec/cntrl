@@ -7,7 +7,7 @@ from .models import Setup, Target
 
 
 def pack(target: Target) -> bytes:
-    names = labels(target)
+    names = [target.compiled_button_ids.get(n, n) for n in labels(target)]
     return HEADER.pack(b'CINP', len(names)) + b''.join(
         RECORD.pack(b.encode('ascii')) for b in names
     )

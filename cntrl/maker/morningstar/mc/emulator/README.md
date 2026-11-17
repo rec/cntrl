@@ -80,10 +80,24 @@ viewports. The catalogue's 200×200 declaration is not used to override the
 physical adapter's 160×128 execution viewports. It remains a hardware-data
 discrepancy requiring confirmation. The virtual MC8 Pro retains A–F actions and
 assigns G to previous page, H to next page; this does not increase the existing
-five configurable patch-slot limit. Physical firmware handoff and unsupported
-diagnostic/USB-keyboard functions are excluded from these desktop targets.
-Animations use one stream per virtual display, so compile their assets for the
-exported target rather than copying the physical adapter's two-stream movies.
+five configurable patch-slot limit. Panic uses the shared firmware service;
+USB keyboard reports and stock-firmware handoff are inspectable simulations.
+Logical control IDs remain lowercase while captions retain the physical A–H
+labels. Setup-file testing uses one movie stream per virtual display, so compile
+its assets for the exported target.
+
+To mirror a connected MC6 Pro, use:
+
+```sh
+cntrl emulate --port /dev/cu.usbmodem144682801
+```
+
+This takes a read-only snapshot of the pedal's compiled session and stored
+assets, including its selected setup, language packs and device preferences.
+It does not recompile the setup or add missing pages from newer defaults.
+Mirrored movies keep the physical two-stream mapping: stream 0 feeds the outer
+displays and stream 1 feeds the center. MC8 Pro mirroring is unavailable while
+its profile remains provisional.
 
 Session directories are independent. Switching profiles does not overwrite the
 other controller's data. See the [generic emulator guide](../../../../../doc/emulator.md)
