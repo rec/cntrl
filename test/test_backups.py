@@ -16,6 +16,8 @@ from cntrl.patch_switcher import (
     cli,
     compiler,
     device_globals,
+    display,
+    graphics,
     history,
     models,
     resolved,
@@ -42,6 +44,81 @@ def test_backup_reader_preserves_exact_setup_bytes(tmp_path: Path) -> None:
     (folder / 'Evening.bin').write_bytes(data)
     (tmp_path / 'songs.bin').write_bytes(b'unrelated library bytes')
     assert backups.read_setup_binaries(tmp_path) == {'Evening': data}
+
+
+@pytest.mark.parametrize('font', [0, 1, 2, 5, 9, 18])
+@pytest.mark.parametrize('wrapped', [False, True])
+def test_restore_replaces_removed_ui_fonts_without_changing_originals(
+    font: int, wrapped: bool, target: models.Target
+) -> None:
+    current = compiler.compile_show(
+        {
+            'page_settings': {
+                'tempo_font': 'Arimo',
+                'status_font': 'Arimo',
+                'title_font': 'Arimo',
+            }
+        },
+        {},
+        [],
+        target,
+    )
+    original = bytearray(current)
+    ni, nc, np = compiler.HEADER.unpack_from(current)[4:7]
+    settings = 76 + ni * 68 + nc * 68 + np * 82 + 16
+    original[28] = font
+    for index in (14, 15, 22):
+        struct.pack_into('<H', original, settings + index * 2, font)
+    struct.pack_into('<I', original, 20, crc32(original[28:]))
+    data = binary_format.wrap(bytes(original)) if wrapped else bytes(original)
+    baseline = binary_format.wrap(current) if wrapped else current
+
+    # Backup export can describe the old selection, while retaining its bytes.
+    assert resolved.upgrade(data) == data
+    pages = tomlkit.parse(resolved.export(data))['page_settings']
+    for name in ('tempo_font', 'status_font', 'title_font'):
+        assert pages[name] == 'Arimo'
+    restored = resolved.prepare_restore(data, {}, target=target)
+    assert restored == resolved.prepare_restore(baseline, {}, target=target)
+    assert binary_format.core(data)[28] == font
+    assert resolved.prepare_restore(restored, {}, target=target) == restored
+
+
+def test_unknown_ui_font_is_reported_as_invalid_data(target: models.Target) -> None:
+    data = bytearray(compiler.compile_show({}, {}, [], target))
+    ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
+    status_font = 76 + ni * 68 + nc * 68 + np * 82 + 16 + 15 * 2
+    struct.pack_into('<H', data, status_font, 99)
+    struct.pack_into('<I', data, 20, crc32(data[28:]))
+    with pytest.raises(ValueError, match='unknown UI font ID 99'):
+        resolved.upgrade(bytes(data))
+
+
+def test_restore_replaces_retired_fonts_in_compiled_display_styles(
+    target: models.Target,
+) -> None:
+    current = compiler.compile_show(
+        {
+            'patch_cycles': {'Show': [{'type': 'delay', 'duration': '1 ms'}]},
+            'fill_in_styles': False,
+        },
+        {},
+        [],
+        target,
+    )
+    graph = resolved.graph_offset(current)
+    presentation = graph + compiler.GRAPH.unpack_from(current, graph)[1]
+    styles = display.HEADER.unpack_from(current, presentation)[1]
+    assert styles
+    original = bytearray(current)
+    for index in range(styles):
+        address = presentation + display.HEADER.size + index * graphics.SCREEN.size
+        assert original[address] == 17
+        original[address] = 1
+    struct.pack_into('<I', original, 20, crc32(original[28:]))
+    assert resolved.prepare_restore(bytes(original), {}, target=target) == (
+        resolved.prepare_restore(current, {}, target=target)
+    )
 
 
 def test_backup_reader_rejects_an_old_document_format(tmp_path: Path) -> None:
@@ -173,9 +250,7 @@ def test_restore_preparation_upgrades_setups_and_history_without_changing_backup
         for p in original.rglob('*')
         if p.is_file()
     } == saved
-    expected = binary_format.wrap(
-        resolved.refresh_memory(resolved.upgrade(data), {}, target=target)
-    )
+    expected = binary_format.wrap(resolved.prepare_restore(data, {}, target=target))
     assert backups.read_setup_binaries(prepared) == {'Evening': expected}
     assert backups.read_history_binaries(prepared) == [
         (

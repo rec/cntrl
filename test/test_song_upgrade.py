@@ -48,9 +48,7 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     upgraded = songs.upgrade(library, {}, target=target)
     core = binary_format.core(upgraded, binary_format.Kind.songs)
     assert core[: len(prefix)] == prefix
-    expected = binary_format.wrap(
-        resolved.refresh_memory(resolved.upgrade(source), {}, target=target)
-    )
+    expected = binary_format.wrap(resolved.prepare_restore(source, {}, target=target))
     assert len(expected) > len(source)
     offset = len(prefix)
     for _ in range(2):

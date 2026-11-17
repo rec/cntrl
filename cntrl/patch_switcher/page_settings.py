@@ -97,9 +97,12 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     ]
     for i, n in enumerate(names):
         result[n] = w[i] / 1000 if i in (0, 1, 6, 7, 8) else w[i]
-    result['tempo_font'] = next(n for n, i in UI_FONTS.items() if i == w[14])
-    result['status_font'] = next(n for n, i in UI_FONTS.items() if i == w[15])
-    result['title_font'] = next(n for n, i in UI_FONTS.items() if i == w[22])
+    for name, index in (('tempo_font', 14), ('status_font', 15), ('title_font', 22)):
+        number = UI_FONTS['Arimo'] if w[index] in REMOVED_UI_FONTS else w[index]
+        font = next((n for n, i in UI_FONTS.items() if i == number), None)
+        if font is None:
+            raise ValueError(f'unknown UI font ID {number}')
+        result[name] = font
     for i, n in (
         (16, 'off_color'),
         (17, 'on_color'),
@@ -251,3 +254,6 @@ KEYBOARD = struct.Struct('<32s7B')
 
 CLOCK_FLAG = 1 << 13
 CLOCK = struct.Struct('<6H')
+
+# Retired embedded families in backups are replaced with Arimo on restoration.
+REMOVED_UI_FONTS = (0, 1, 2, 5, 9, 18)

@@ -18,7 +18,7 @@ struct ValidationHardware : cntrl::Hardware {
     const char *input_label(unsigned i) const override { return cntrl::target::button_labels[i]; }
     unsigned display_count() const override { return cntrl::target::display_count; }
     const char *display_id(unsigned i) const override { return cntrl::target::display_ids[i]; }
-    bool supports_font(unsigned, unsigned) const override { return true; }
+    bool supports_font(unsigned font, unsigned) const override { return cntrl::ui_font_valid(font); }
     bool supports_font_asset(uint32_t, unsigned) const override { return true; }
     bool supports_function(unsigned value) const override { return value == 1; }
     bool supports_keyboard() const override { return true; }

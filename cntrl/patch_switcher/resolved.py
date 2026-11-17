@@ -6,6 +6,7 @@ from zlib import crc32
 
 import tomlkit
 
+from ..fonts.catalogue import UI_FONTS
 from . import (
     arpeggiator,
     banked,
@@ -115,7 +116,7 @@ def prepare_restore(
     preserve_memory_estimates: bool = False,
 ) -> bytes:
     """Prepare a backup for current firmware or retain same-format accounting."""
-    upgraded = upgrade(data)
+    upgraded = _replace_removed_ui_fonts(upgrade(data))
     if preserve_memory_estimates:
         if upgraded != data:
             raise ValueError(
@@ -208,6 +209,54 @@ def upgrade(data: bytes) -> bytes:
     result = bytes(converted)
     export(result)
     return result
+
+
+def _replace_removed_ui_fonts(data: bytes) -> bytes:
+    if data.startswith(binary_format.MAGIC):
+        original = binary_format.core(data)
+        converted = _replace_removed_ui_fonts(original)
+        if converted != original:
+            binary_format.require_structural_edit(data)
+        return binary_format.replace_core(data, converted)
+    ni, nc, np = HEADER.unpack_from(data)[4:7]
+    settings = 76 + ni * 68 + nc * 68 + np * 82 + 16
+    converted = bytearray(data)
+    graph = graph_offset(data)
+    _, size, count, *_ = GRAPH.unpack_from(data, graph)
+    presentation = graph + size
+    _, styles, *_ = display.HEADER.unpack_from(data, presentation)
+    addresses = list(range(28, 76, graphics.SCREEN.size))
+    addresses.extend(
+        presentation + display.HEADER.size + i * graphics.SCREEN.size
+        for i in range(styles)
+    )
+    for index in range(count):
+        node = graph + struct.unpack_from('<I', data, graph + GRAPH.size + index * 4)[0]
+        payload = node + 4
+        if data[node] != 10 or not data[payload + 67]:
+            continue
+        bindings = data[payload + 66]
+        view = payload + 220 + bindings * BINDING_RECORD_SIZE
+        addresses.extend((view, view + graphics.SCREEN.size))
+        for binding in range(bindings):
+            style = (
+                view
+                + 2 * graphics.SCREEN.size
+                + 65
+                + binding * (2 * graphics.SCREEN.size + 64)
+            )
+            addresses.extend((style, style + graphics.SCREEN.size))
+    for address in addresses:
+        if data[address] in page_settings.REMOVED_UI_FONTS:
+            converted[address] = UI_FONTS['Arimo']
+    for index in (14, 15, 22):
+        address = settings + index * 2
+        if struct.unpack_from('<H', data, address)[0] in page_settings.REMOVED_UI_FONTS:
+            struct.pack_into('<H', converted, address, UI_FONTS['Arimo'])
+    if converted == data:
+        return data
+    struct.pack_into('<I', converted, 20, crc32(converted[28:]))
+    return bytes(converted)
 
 
 def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
